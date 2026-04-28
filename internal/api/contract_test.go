@@ -6399,7 +6399,6 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodGet, path: "/api/logs/level"},
 			{method: http.MethodPost, path: "/api/logs/level"},
 			{method: http.MethodGet, path: licensePurchaseStartPath},
-			{method: http.MethodGet, path: "/auth/trial-activate"},
 		}
 
 		for _, tc := range testCases {

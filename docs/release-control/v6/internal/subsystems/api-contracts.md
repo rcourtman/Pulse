@@ -672,12 +672,11 @@ the canonical monitored-system blocked payload.
 28. Keep local trial-start transport retired from self-hosted v6 GA runtime
     paths. `POST /api/license/trial/start` must not be registered as an ordinary
     in-app acquisition endpoint; browser API clients, route inventory, demo
-    mode, and feature gates must all treat it as absent. Signed hosted/support
-    handoffs may still return through `/auth/trial-activate`, but trial
-    acquisition must not start from the self-hosted app. Hosted self-serve
-    verification failures may render owned HTML, but they must preserve
-    originating Pulse context instead of collapsing into generic control-plane
-    failures.
+    mode, and feature gates must all treat it as absent. The retired
+    `/auth/trial-activate` self-hosted return path must also stay absent from
+    the ordinary router and settings UI; signed hosted entitlement leases may
+    refresh cached hosted/cloud entitlement state, but they must not create a
+    local Pro trial acquisition callback.
 29. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
     unauthenticated: when the dev reset route clears first-run auth it must
     also clear any env-backed auth state that feeds `/api/security/status`, so

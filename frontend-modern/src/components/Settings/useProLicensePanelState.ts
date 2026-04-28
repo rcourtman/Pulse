@@ -23,7 +23,6 @@ import {
   getSelfHostedCurrentPlanStatusPresentation,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
-  getTrialActivationNotice,
   getDisplayableMonitoredSystemContinuity,
   hasActiveUncappedSelfHostedContinuity,
   isDisplayableLicenseFeature,
@@ -91,12 +90,11 @@ export function useProLicensePanelState() {
   );
   const [activating, setActivating] = createSignal(false);
   const [clearing, setClearing] = createSignal(false);
-  const [trialActivationResult, setTrialActivationResult] = createSignal('');
   const [purchaseActivationResult, setPurchaseActivationResult] = createSignal('');
   const [purchaseActivationIntent, setPurchaseActivationIntent] =
     createSignal<SelfHostedBillingPlanIntent | null>(null);
   const [activationSuccessSource, setActivationSuccessSource] = createSignal<
-    'manual' | 'purchase' | 'trial' | null
+    'manual' | 'purchase' | null
   >(null);
 
   const entitlements = createMemo(() => licenseEntitlements());
@@ -116,15 +114,7 @@ export function useProLicensePanelState() {
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
-    const trialResult = params.get('trial')?.trim().toLowerCase() ?? '';
     const purchaseResult = getSelfHostedBillingPurchaseArrival(location.search) ?? '';
-    if (trialResult) {
-      setTrialActivationResult(trialResult);
-      if (trialResult === 'activated') {
-        setActivationSuccessSource('trial');
-      }
-      params.delete('trial');
-    }
     if (purchaseResult) {
       setPurchaseActivationResult(purchaseResult);
       setPurchaseActivationIntent(getSelfHostedBillingPlanIntent(location.search));
@@ -145,7 +135,7 @@ export function useProLicensePanelState() {
         );
       }
     }
-    if (trialResult || purchaseResult) {
+    if (purchaseResult) {
       const nextSearch = params.toString();
       const nextPath = `${location.pathname}${nextSearch ? `?${nextSearch}` : ''}${location.hash ?? ''}`;
       navigate(nextPath, { replace: true, scroll: false });
@@ -443,12 +433,6 @@ export function useProLicensePanelState() {
       entitlements()?.trial_eligibility_reason === 'already_used',
   );
 
-  const trialActivationNotice = createMemo(() => {
-    if (trialActivationResult().trim().toLowerCase() === 'activated') {
-      return null;
-    }
-    return getTrialActivationNotice(trialActivationResult());
-  });
   const purchaseActivationNotice = createMemo(() => {
     if (purchaseActivationResult().trim().toLowerCase() === 'activated') {
       return null;
@@ -684,7 +668,6 @@ export function useProLicensePanelState() {
     showCountingRulesByDefault,
     showRecoveryByDefault,
     statusPresentation,
-    trialActivationNotice,
     trialEnded,
   };
 }

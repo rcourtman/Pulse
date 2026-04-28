@@ -88,7 +88,6 @@ interface ProLicensePlanSectionProps {
     destination: UpgradeDestination;
   } | null;
   onPurchaseActivationActionClick: () => void;
-  trialActivationNotice: Notice | null;
   trialEnded: boolean;
 }
 
@@ -260,14 +259,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             )}
           </Show>
         </div>
-      </Show>
-      <Show when={props.trialActivationNotice}>
-        {(notice) => (
-          <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
-            <p class="font-medium">{notice().title}</p>
-            <p class="mt-1 text-xs opacity-90">{notice().body}</p>
-          </div>
-        )}
       </Show>
       <Show when={props.commercialMigrationNotice}>
         {(notice) => (

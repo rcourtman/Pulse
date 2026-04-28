@@ -985,10 +985,12 @@ The self-hosted trial-start boundary is now retired for ordinary v6 GA
 runtimes. Local `POST /api/license/trial/start` must not be registered as an
 in-app acquisition route, and it must not return the old
 hosted-signup or trial-rate-limit payloads from a normal self-hosted instance.
-Signed activation handoffs may still return through
-`/auth/trial-activate`, but the user must not be prompted into a paid trial
-from the self-hosted app. Browser and shell coverage now guard that retired
-boundary: `tests/integration/tests/07-trial-signup-return.spec.ts` and
+The retired `/auth/trial-activate` return path must also stay out of the
+ordinary self-hosted router and Pro settings UI. Hosted/cloud entitlement lease
+refresh may still validate signed leases for already-approved hosted state, but
+ordinary self-hosted Pulse must not create a local trial acquisition callback.
+Browser and shell coverage now guard that retired boundary:
+`tests/integration/tests/07-trial-signup-return.spec.ts` and
 `tests/integration/scripts/trial-signup-contract.sh` must expect `404` from the
 retired route and prove entitlements remain unchanged. The paid-prompt browser
 proof in `tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
@@ -1026,14 +1028,10 @@ than falling back to a form with missing Pulse initiation context.
 Hosted service/configuration failures during verification, hosted checkout
 preparation, or checkout-session creation must also render as owned
 "temporarily unavailable" outcome UX rather than inline form errors.
-The self-hosted activation return notice on `/settings/system-pro` is part of
-that same boundary: the `trial` query result is a one-shot handoff outcome and
-must be consumed into owned UI state, then removed from the URL rather than
-becoming sticky page state across refresh and sharing.
-That same shared notice owner must also keep activation-result framing
-customer-facing: replayed handoffs should confirm the current entitlement state
-rather than reading like a fresh failure, while invalid and unavailable states
-should direct the operator back to the secure trial handoff on this instance.
+The old self-hosted trial activation return notice on `/settings/system-pro` is
+retired with that callback: the `trial` query result must not produce owned
+activation UI, a success banner, or retry copy in v6 GA. Purchase activation
+continues through the Pulse Account return contract instead.
 That same hosted owner also applies after Stripe returns to
 `/trial-signup/complete`: customer-facing completion failures must stay inside
 owned trial UX rather than dropping raw control-plane error strings, and they
@@ -1748,7 +1746,7 @@ verified that the 13 canonical Cloud/MSP v6 `price_*` IDs are present in the
 governed `pulse-pro` operational docs and license-server env template, and that
 each ID resolves to an active live recurring Stripe price object.
 Activation service runtime, license-server transport, encrypted activation
-persistence, and hosted trial activation now follow the same ratchet. Changes
+persistence, and hosted entitlement lease signing now follow the same ratchet. Changes
 to `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`,
 `pkg/licensing/revocation_poll.go`, `pkg/licensing/license_server_client.go`,
 `pkg/licensing/persistence.go`, `pkg/licensing/activation_store.go`, and

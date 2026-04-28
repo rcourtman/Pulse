@@ -137,8 +137,6 @@ func TestPublicDemoCommercialPolicyForRequestHidesUsagePreviewRoutes(t *testing.
 
 func routeBelongsToPublicDemoCommercialBoundary(route string) bool {
 	switch {
-	case route == "/auth/trial-activate":
-		return true
 	case route == licensePurchaseStartPath:
 		return true
 	case route == "GET "+licensePurchaseStartPath:

@@ -66,7 +66,6 @@ type conversionInfrastructureOnboardingDayBreakdown = pkglicensing.Infrastructur
 type conversionInfrastructureOnboardingPathBreakdown = pkglicensing.InfrastructureOnboardingPathBreakdown
 type conversionInfrastructureOnboardingPlatformBreakdown = pkglicensing.InfrastructureOnboardingPlatformBreakdown
 type conversionInfrastructureOnboardingReport = pkglicensing.InfrastructureOnboardingReport
-type trialActivationClaimsModel = pkglicensing.TrialActivationClaims
 type purchaseReturnClaimsModel = pkglicensing.PurchaseReturnClaims
 type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
 type licenseTier = pkglicensing.Tier
@@ -316,10 +315,6 @@ func parseOptionalTimeParamFromLicensing(raw string, defaultValue time.Time) (ti
 
 func trialActivationPublicKeyFromLicensing() (ed25519.PublicKey, error) {
 	return pkglicensing.TrialActivationPublicKey()
-}
-
-func verifyTrialActivationTokenFromLicensing(token string, key ed25519.PublicKey, expectedInstanceHost string, now time.Time) (*trialActivationClaimsModel, error) {
-	return pkglicensing.VerifyTrialActivationToken(token, key, expectedInstanceHost, now)
 }
 
 func signPurchaseReturnTokenFromLicensing(signingKey []byte, claims purchaseReturnClaimsModel) (string, error) {

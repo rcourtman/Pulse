@@ -2280,7 +2280,7 @@
           },
           {
             "id": "hosted-trial-activation",
-            "label": "hosted trial activation proof",
+            "label": "hosted entitlement lease signing proof",
             "match_prefixes": [],
             "match_files": [
               "pkg/licensing/trial_activation.go",

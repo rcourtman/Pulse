@@ -128,11 +128,6 @@ var publicDemoCommercialPolicies = []publicDemoCommercialRoutePolicy{
 		exposure: publicDemoCommercialExposureHidden,
 		matches:  exactDemoCommercialOrgBillingStatePath(http.MethodPut),
 	},
-	{
-		route:    "/auth/trial-activate",
-		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialPath("/auth/trial-activate"),
-	},
 }
 
 func publicDemoCommercialPolicyForRequest(

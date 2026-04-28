@@ -3484,7 +3484,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/server/info",                // Server info for installer script
 				"/api/ai/oauth/callback",          // OAuth callback from Anthropic for Claude subscription auth
 				"/auth/cloud-handoff",             // Cloud control plane handoff (token-authenticated)
-				"/auth/trial-activate",            // Hosted trial signup callback (token-authenticated)
 				"/auth/license-purchase-activate", // Self-hosted checkout return (session-authenticated via commercial backend)
 			}
 
@@ -3642,10 +3641,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip CSRF for cloud handoff (GET with token param, no prior session).
 		if req.URL.Path == "/auth/cloud-handoff" {
-			skipCSRF = true
-		}
-		// Skip CSRF for hosted trial activation callback (GET with signed token).
-		if req.URL.Path == "/auth/trial-activate" {
 			skipCSRF = true
 		}
 		// Skip CSRF for self-hosted checkout activation return (POST from Pulse Account, no prior session required).

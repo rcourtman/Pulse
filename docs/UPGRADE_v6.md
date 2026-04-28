@@ -128,12 +128,11 @@ monitoring stays available across Community, Relay, and Pro, while Relay and
 Pro sell convenience, history, AI operations, and advanced administration.
 Relay raises history to 14 days, while Pro raises it to 90 days.
 
-Self-hosted v6 does not expose a general in-app trial or hosted AI quickstart
-path. If support deliberately issues a trial or hosted handoff for a specific
-case, Pulse only reflects that lifecycle after the hosted control plane returns
-a signed activation token to `/auth/trial-activate`; ordinary upgraded
-self-hosted installs should use activation, recovery, or BYOK/local AI setup
-instead.
+Self-hosted v6 does not expose a general in-app trial, trial-return callback,
+or hosted AI quickstart path. Ordinary upgraded self-hosted installs should use
+activation, recovery, or BYOK/local AI setup instead; any exceptional
+support-issued entitlement is reflected through hosted entitlement state rather
+than a local in-app trial acquisition flow.
 
 #### v5 License Migration
 

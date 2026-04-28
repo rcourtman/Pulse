@@ -421,9 +421,11 @@ Assertion design rules:
 3. Trial acquisition is retired from ordinary self-hosted v6 GA.
    `POST /api/license/trial/start` must not be registered as an in-app route
    and must return `404` when probed on a normal self-hosted runtime. The local
-   runtime may redeem signed trial activations through `/auth/trial-activate`,
-   but it must not mint local trial state directly or prompt users into paid
-   trial entry from default self-hosted surfaces.
+   runtime must also keep the retired `/auth/trial-activate` callback out of
+   the ordinary router and settings UI. Hosted/cloud entitlement leases may
+   refresh already-approved hosted state, but local self-hosted Pulse must not
+   mint trial state directly or prompt users into paid trial entry from default
+   self-hosted surfaces.
 4. Hosted AI quickstart is retired from ordinary v6 GA runtime paths.
    Self-hosted and hosted app settings must stay BYOK/local-provider first unless
    an operator explicitly configures a provider. The runtime must not auto-grant

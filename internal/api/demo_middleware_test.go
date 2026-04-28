@@ -73,7 +73,6 @@ func TestDemoModeMiddleware(t *testing.T) {
 		{"demo on hidden checkout start", true, http.MethodGet, "/auth/license-purchase-start", "", false, http.StatusNotFound, true},
 		{"demo on hidden license activate", true, http.MethodPost, "/api/license/activate", "", false, http.StatusNotFound, true},
 		{"demo on hidden purchase start", true, http.MethodGet, licensePurchaseStartPath, "", false, http.StatusNotFound, true},
-		{"demo on hidden trial activation", true, http.MethodGet, "/auth/trial-activate", "", false, http.StatusNotFound, true},
 		{"demo on runtime capabilities", true, http.MethodGet, "/api/license/runtime-capabilities", "", true, http.StatusOK, true},
 
 		// Demo mode enabled - modification requests blocked

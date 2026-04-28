@@ -762,33 +762,6 @@ describe('ProLicensePanel', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the hosted activation success banner on the Pro settings route', async () => {
-    mockEntitlements = {
-      capabilities: ['ai_patrol', 'ai_autofix', 'ai_alerts'],
-      limits: [],
-      subscription_state: 'trial',
-      upgrade_reasons: [],
-      tier: 'pro',
-      trial_eligible: false,
-    };
-    useLocationMock.mockReturnValue({
-      search: '?trial=activated',
-      pathname: '/settings/system/billing/plan',
-      hash: '',
-    });
-
-    renderPanel();
-
-    expect(screen.getByText('Pulse Pro trial is now active')).toBeInTheDocument();
-    expect(screen.getByText(/this instance now has Pulse Pro trial access/i)).toBeInTheDocument();
-    expect(screen.getByText('Available during this trial')).toBeInTheDocument();
-    expect(screen.getAllByText('Safe Remediation Workflows').length).toBeGreaterThan(0);
-    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
-      replace: true,
-      scroll: false,
-    });
-  });
-
   it.each([
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,

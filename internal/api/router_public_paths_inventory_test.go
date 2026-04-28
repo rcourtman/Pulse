@@ -125,6 +125,5 @@ var publicPathsAllowlist = []string{
 	"/api/server/info",
 	"/api/ai/oauth/callback",
 	"/auth/cloud-handoff",
-	"/auth/trial-activate",
 	licensePurchaseActivationPath,
 }

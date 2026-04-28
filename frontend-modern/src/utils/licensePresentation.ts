@@ -111,7 +111,7 @@ export interface SelfHostedActivationSuccessPresentation extends LicenseInlineNo
   highlights: string[];
 }
 
-export type SelfHostedActivationSuccessSource = 'manual' | 'purchase' | 'trial';
+export type SelfHostedActivationSuccessSource = 'manual' | 'purchase';
 
 export interface SelfHostedPlanComparisonCardPresentation {
   title: string;
@@ -519,7 +519,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
       body:
         unlockedFeatures.length > 0
           ? `${planLabel} trial capabilities are active on this instance right now.`
-          : `${planLabel} trial activation is in progress on this instance.`,
+          : `${planLabel} trial entitlement is being confirmed for this instance.`,
       unlockedFeaturesLabel,
       unlockedFeatures,
       includedExtrasLabel: includedExtras.length > 0 ? 'Included extras' : undefined,
@@ -589,11 +589,7 @@ export const getSelfHostedActivationSuccessPresentation = ({
     return null;
   }
 
-  if (source === 'trial') {
-    if (normalizedState !== 'trial') {
-      return null;
-    }
-  } else if (normalizedState !== 'active' && normalizedState !== 'grace') {
+  if (normalizedState !== 'active' && normalizedState !== 'grace') {
     return null;
   }
 
@@ -602,16 +598,6 @@ export const getSelfHostedActivationSuccessPresentation = ({
     entitlements: current,
     displayableCapabilities,
   });
-
-  if (source === 'trial') {
-    return {
-      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
-      title: `${planLabel} trial is now active`,
-      body: `The trial handoff completed and this instance now has ${planLabel} trial access.`,
-      highlightsLabel: 'Available during this trial',
-      highlights,
-    };
-  }
 
   return {
     tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
@@ -696,43 +682,6 @@ export const getCommercialMigrationNotice = (
     title: 'v5 license migration needs attention',
     body: `${body} ${actionText} ${blockedText}`,
   };
-};
-
-export const getTrialActivationNotice = (result?: string | null): LicenseInlineNotice | null => {
-  switch ((result || '').trim().toLowerCase()) {
-    case 'activated':
-      return {
-        tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
-        title: 'Trial activated',
-        body: 'Pulse activated the Pro trial for this instance. The entitlement state below is live.',
-      };
-    case 'invalid':
-      return {
-        tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
-        title: 'Activation link invalid',
-        body: 'That activation handoff is invalid or expired. Return to Plans on this instance and start a fresh secure trial handoff.',
-      };
-    case 'replayed':
-      return {
-        tone: 'border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-900 text-sky-900 dark:text-sky-100',
-        title: 'Trial already activated',
-        body: 'This activation handoff was already redeemed for this instance. Use the current entitlement state below as the source of truth.',
-      };
-    case 'unavailable':
-      return {
-        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-        title: 'Activation unavailable',
-        body: 'Pulse could not finish activation right now. Refresh the billing state below, then retry the return link or start the secure trial handoff again from this instance if needed.',
-      };
-    case 'ineligible':
-      return {
-        tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
-        title: 'Trial not available',
-        body: 'This organization is not eligible for another Pro trial. Review the current license state below or upgrade instead.',
-      };
-    default:
-      return null;
-  }
 };
 
 export const getPurchaseActivationNotice = (result?: string | null): LicenseInlineNotice | null => {

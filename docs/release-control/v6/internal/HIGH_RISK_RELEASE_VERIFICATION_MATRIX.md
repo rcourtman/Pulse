@@ -49,8 +49,9 @@ Companion drill:
   The self-hosted proof must keep the retired trial-start transport contract:
   `POST /api/license/trial/start` returns `404` on an ordinary self-hosted v6
   runtime and does not mutate entitlements. Ordinary self-hosted runtime
-  surfaces must still suppress trial prompts; signed support handoffs may return
-  through `/auth/trial-activate` only.
+  surfaces must still suppress trial prompts, and the retired
+  `/auth/trial-activate` callback must remain absent from the ordinary router
+  and settings UI.
   The same proof slice must keep retired hosted-AI quickstart out of normal GA
   runtime paths: `/api/settings/ai` and `/api/ai/patrol/status` must not expose
   quickstart credit/status fields, missing AI config in hosted mode must not

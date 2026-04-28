@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Retired trial-start contract probe for self-hosted Pulse.
+# Retired trial-acquisition contract probe for self-hosted Pulse.
 # This verifies ordinary self-hosted v6 runtimes do not expose in-app trial
-# acquisition. Signed activation handoffs still use /auth/trial-activate.
+# acquisition or the retired trial-return callback.
 
 PULSE_BASE_URL="${PULSE_BASE_URL:-http://127.0.0.1:7655}"
 PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}"
@@ -27,6 +27,7 @@ login_body="${tmp_dir}/login.json"
 entitlements_before_body="${tmp_dir}/entitlements_before.json"
 entitlements_after_body="${tmp_dir}/entitlements_after.json"
 trial_start_body="${tmp_dir}/trial_start.json"
+trial_activate_body="${tmp_dir}/trial_activate.txt"
 
 wait_for_http() {
   local url="$1"
@@ -53,10 +54,10 @@ assert_code() {
   fi
 }
 
-echo "[1/5] Waiting for Pulse API readiness at ${PULSE_BASE_URL}"
+echo "[1/6] Waiting for Pulse API readiness at ${PULSE_BASE_URL}"
 wait_for_http "${PULSE_BASE_URL}/api/login"
 
-echo "[2/5] Login with configured test credentials"
+echo "[2/6] Login with configured test credentials"
 login_code="$(
   curl -sS -o "${login_body}" -w '%{http_code}' \
     -c "${cookies_file}" \
@@ -72,7 +73,7 @@ if [ -z "${csrf_token}" ]; then
   exit 1
 fi
 
-echo "[3/5] Capture entitlements before retired route probe"
+echo "[3/6] Capture entitlements before retired route probe"
 entitlements_before_code="$(
   curl -sS -o "${entitlements_before_body}" -w '%{http_code}' \
     -b "${cookies_file}" \
@@ -80,7 +81,7 @@ entitlements_before_code="$(
 )"
 assert_code "200" "${entitlements_before_code}" "GET /api/license/entitlements"
 
-echo "[4/5] Verify ordinary self-hosted trial start route is not exposed"
+echo "[4/6] Verify ordinary self-hosted trial start route is not exposed"
 trial_start_code="$(
   curl -sS -o "${trial_start_body}" -w '%{http_code}' \
     -X POST \
@@ -95,7 +96,15 @@ if jq -e '.code == "trial_signup_required" or .code == "trial_rate_limited"' "${
   exit 1
 fi
 
-echo "[5/5] Verify entitlements remain unchanged"
+echo "[5/6] Verify retired self-hosted trial activation callback is not exposed"
+trial_activate_code="$(
+  curl -sS -o "${trial_activate_body}" -w '%{http_code}' \
+    -b "${cookies_file}" \
+    "${PULSE_BASE_URL}/auth/trial-activate?token=retired_probe"
+)"
+assert_code "404" "${trial_activate_code}" "GET /auth/trial-activate"
+
+echo "[6/6] Verify entitlements remain unchanged"
 entitlements_after_code="$(
   curl -sS -o "${entitlements_after_body}" -w '%{http_code}' \
     -b "${cookies_file}" \
@@ -112,8 +121,9 @@ if [ "${before_summary}" != "${after_summary}" ]; then
   exit 1
 fi
 
-echo "PASS: self-hosted trial-start route is retired"
+echo "PASS: self-hosted trial acquisition routes are retired"
 echo "  login_code=${login_code}"
 echo "  entitlements_before_code=${entitlements_before_code}"
 echo "  trial_start_code=${trial_start_code}"
+echo "  trial_activate_code=${trial_activate_code}"
 echo "  entitlements_after_code=${entitlements_after_code}"

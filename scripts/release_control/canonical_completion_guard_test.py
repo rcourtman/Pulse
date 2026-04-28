@@ -3792,7 +3792,7 @@ index 1111111..2222222 100644
             [
                 {
                     "id": "hosted-trial-activation",
-                    "label": "hosted trial activation proof",
+                    "label": "hosted entitlement lease signing proof",
                     "touched_runtime_files": ["pkg/licensing/trial_activation.go"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],

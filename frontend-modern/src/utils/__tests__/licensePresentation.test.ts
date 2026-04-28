@@ -24,7 +24,6 @@ import {
   getInactiveProUpsellNotice,
   getPurchaseActivationNotice,
   getTrialEndedProLicenseNotice,
-  getTrialActivationNotice,
   isDisplayableLicenseFeature,
   isGrandfatheredRecurringV5PlanVersion,
   isUncappedGrandfatheredPlanVersion,
@@ -434,7 +433,7 @@ describe('licensePresentation', () => {
     ).toEqual({ cards: [] });
   });
 
-  it('builds activation-success summaries for purchase, pasted-key, and trial activation paths', () => {
+  it('builds activation-success summaries for purchase and pasted-key paths', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements: {
@@ -503,19 +502,9 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
         },
         displayableCapabilities: ['Pulse Patrol', 'Safe Remediation Workflows'],
-        source: 'trial',
+        source: 'purchase',
       }),
-    ).toEqual({
-      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
-      title: 'Pulse Pro trial is now active',
-      body: 'The trial handoff completed and this instance now has Pulse Pro trial access.',
-      highlightsLabel: 'Available during this trial',
-      highlights: [
-        'Alert Root-Cause Analysis',
-        'Safe Remediation Workflows',
-        '90-day metric history',
-      ],
-    });
+    ).toBeNull();
 
     expect(
       getSelfHostedActivationSuccessPresentation({
@@ -653,30 +642,6 @@ describe('licensePresentation', () => {
       title: 'Grandfathered monitored-system floor',
       tone: expect.stringContaining('green'),
     });
-  });
-
-  it('returns canonical trial activation notices', () => {
-    expect(getTrialActivationNotice('activated')).toMatchObject({
-      title: 'Trial activated',
-      tone: expect.stringContaining('green'),
-    });
-    expect(getTrialActivationNotice('replayed')).toMatchObject({
-      title: 'Trial already activated',
-      tone: expect.stringContaining('sky'),
-    });
-    expect(getTrialActivationNotice('invalid')).toMatchObject({
-      title: 'Activation link invalid',
-      body: expect.stringContaining('Return to Plans'),
-    });
-    expect(getTrialActivationNotice('unavailable')).toMatchObject({
-      title: 'Activation unavailable',
-      body: expect.stringContaining('Refresh the billing state below'),
-    });
-    expect(getTrialActivationNotice('ineligible')).toMatchObject({
-      title: 'Trial not available',
-      tone: expect.stringContaining('red'),
-    });
-    expect(getTrialActivationNotice('')).toBeNull();
   });
 
   it('returns canonical purchase activation notices', () => {

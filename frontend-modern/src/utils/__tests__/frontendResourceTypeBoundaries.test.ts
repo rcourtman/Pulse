@@ -2501,7 +2501,7 @@ describe('frontend resource type boundaries', () => {
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
     expect(proLicensePanelStateSource).toContain('getLicenseSubscriptionStatusPresentation');
     expect(proLicensePanelStateSource).toContain('formatLicensePlanVersion');
-    expect(proLicensePanelStateSource).toContain('getTrialActivationNotice');
+    expect(proLicensePanelStateSource).not.toContain('getTrialActivationNotice');
     expect(proLicensePanelStateSource).toContain('getCommercialMigrationNotice');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
@@ -2533,7 +2533,7 @@ describe('frontend resource type boundaries', () => {
     expect(licensePresentationSource).toContain('export const formatLicensePlanVersion');
     expect(licensePresentationSource).toContain('titleCaseDelimitedLabel');
     expect(licensePresentationSource).toContain('export const getCommercialMigrationNotice');
-    expect(licensePresentationSource).toContain('export const getTrialActivationNotice');
+    expect(licensePresentationSource).not.toContain('export const getTrialActivationNotice');
     expect(securityPostureSummarySource).toContain('getSecurityScorePresentation');
     expect(securityPostureSummarySource).toContain('getSecurityScoreIconComponent');
     expect(securityPostureSummarySource).toContain('getSecurityFeatureCardPresentation');

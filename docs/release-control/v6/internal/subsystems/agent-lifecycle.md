@@ -492,7 +492,7 @@ the manifest's support-floor row.
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.
 2. Agent profile or fleet-control behavior implemented outside the canonical agent settings/profile surfaces.
 3. Installer or update flows that depend on branch-tip, dev-only, or non-release asset behavior for supported RC/stable paths.
-4. Lifecycle setup, install, or fleet surfaces that invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` must stay closed on the ordinary self-hosted router, and approved support/hosted activation belongs to signed `/auth/trial-activate` rather than lifecycle-local CTAs.
+4. Lifecycle setup, install, or fleet surfaces that invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and the retired `/auth/trial-activate` callback must stay closed on the ordinary self-hosted router rather than reappearing as lifecycle-local CTAs or retry paths.
 
 ## Completion Obligations
 
@@ -1627,9 +1627,9 @@ That same shared `internal/api/` dependency also assumes ordinary self-hosted
 commercial-trial acquisition is retired: lifecycle-adjacent setup, install, and
 fleet surfaces must not expose direct trial CTAs or depend on
 `POST /api/license/trial/start`, and the normal router must fail that path as
-`404` without mutating entitlements. Approved support or hosted handoff remains
-owned by signed `/auth/trial-activate` redemption, not by lifecycle-local retry
-or backoff behavior.
+`404` without mutating entitlements. The retired `/auth/trial-activate`
+self-hosted callback must also stay absent from lifecycle retry and backoff
+behavior.
 That same shared `internal/api/` dependency also assumes session-carried OIDC
 refresh tokens stay fail-closed at rest: `session_store.go` may only persist
 or recover those tokens through encrypted-at-rest session payloads, and any

@@ -4857,7 +4857,7 @@
     },
     {
       "id": "trial-authority-saas-controlled",
-      "summary": "Trial authority for v6 is SaaS-controlled; hosted signup initiates trial start and local runtime may only redeem signed trial activations.",
+      "summary": "Trial acquisition for ordinary self-hosted v6 is retired: SaaS/cloud may own hosted trial/signup state, but the local runtime must not expose local trial start or the retired trial activation return path.",
       "kind": "contract",
       "decided_at": "2026-03-06",
       "subsystem_ids": [

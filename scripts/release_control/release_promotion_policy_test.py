@@ -163,8 +163,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("manual reinstall or other explicit trust migration", normalize_ws(upgrade_guide))
         self.assertIn("### License and Entitlements", upgrade_guide)
         self.assertNotIn("### License, Trial, and Entitlements", upgrade_guide)
-        self.assertIn("does not expose a general in-app trial or hosted AI quickstart", normalize_ws(upgrade_guide))
+        self.assertIn("does not expose a general in-app trial, trial-return callback, or hosted AI quickstart", normalize_ws(upgrade_guide))
         self.assertNotIn("`POST /api/license/trial/start`", upgrade_guide)
+        self.assertNotIn("signed activation token to `/auth/trial-activate`", upgrade_guide)
         self.assertNotIn("25 hosted Patrol", upgrade_guide)
         if current_version == "6.0.0":
             self.assertIn("docs/releases/RELEASE_NOTES_v6.md", upgrade_guide)

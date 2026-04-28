@@ -288,6 +288,12 @@ non-shell installer/update scripts explicit inside the current self-hosted
 release-confidence lane instead of leaving them as implied behavior around the
 core runtime.
 
+The canonical v6 upgrade guide now follows the free-first self-hosted GA
+posture for install and support guidance: it describes activation, recovery,
+and BYOK/local AI setup, while explicitly keeping general in-app trials,
+trial-return callbacks, and hosted AI quickstart acquisition out of the
+ordinary upgrade path.
+
 That same release-confidence lane now also owns the shipped Helm chart path,
 so release automation, packaged chart metadata, and chart-runtime smoke no
 longer depend on unowned `deploy/helm/pulse/` files while the governed

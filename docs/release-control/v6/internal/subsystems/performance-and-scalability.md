@@ -164,6 +164,10 @@ regression protection.
    process version once, but they must not add per-request release lookups,
    filesystem walks, or other heavy work just to compute whether an attached
    agent is current.
+   Retiring self-hosted trial acquisition follows that same rule: removing
+   `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
+   and CSRF inventories must stay as constant-time route-table absence rather
+   than replacing the old callback with persistence-backed router probes.
 5. Extend dashboard hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Dashboard/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
    Dashboard landing-page estate orientation is part of that same hot-path
    discipline. First-viewport system count, health, source coverage, and

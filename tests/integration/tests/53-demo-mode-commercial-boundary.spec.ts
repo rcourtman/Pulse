@@ -145,7 +145,6 @@ async function probeDemoCommercialBoundaryFromBrowser(
       vmwareDraftPreview: await probe('/api/vmware/connections/preview', postEmptyJSON),
       vmwareSavedPreview: await probe('/api/vmware/connections/conn-1/preview', postEmptyJSON),
       checkoutStart: await probe('/auth/license-purchase-start'),
-      trialActivate: await probe('/auth/trial-activate'),
     };
   });
 }
@@ -405,7 +404,6 @@ base.describe('Demo mode commercial boundary', () => {
       await hiddenNotFound('**/api/vmware/connections/preview');
       await hiddenNotFound('**/api/vmware/connections/*/preview');
       await hiddenNotFound('**/auth/license-purchase-start**');
-      await hiddenNotFound('**/auth/trial-activate');
 
       await page.goto('/settings/infrastructure/install', { waitUntil: 'domcontentloaded' });
 
@@ -433,7 +431,7 @@ base.describe('Managed demo runtime commercial boundary', () => {
 
       const hiddenCommercialRequests = trackBrowserRequests(
         page,
-        /\/api\/license\/(?!runtime-capabilities)|\/api\/admin\/orgs\/[^/]+\/billing-state|\/api\/upgrade-metrics\/|\/auth\/license-purchase-start|\/auth\/trial-activate/,
+        /\/api\/license\/(?!runtime-capabilities)|\/api\/admin\/orgs\/[^/]+\/billing-state|\/api\/upgrade-metrics\/|\/auth\/license-purchase-start/,
       );
       try {
         await page.goto('/settings/system/billing/usage?details=counting-rules', {
