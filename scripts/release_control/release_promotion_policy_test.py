@@ -134,6 +134,22 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("docs/releases/V6_CHANGELOG_RC2_DRAFT.md", release_index)
         self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
 
+    def test_operator_support_packs_keep_free_first_paid_continuity_wording(self) -> None:
+        for rel in (
+            "docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md",
+            "docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md",
+        ):
+            with self.subTest(rel=rel):
+                support_pack = read(rel)
+                self.assertIn(
+                    "current recurring price plus uncapped self-hosted monitoring and",
+                    support_pack,
+                )
+                self.assertIn("child-resource volume while the subscription remains continuously active", support_pack)
+                self.assertNotIn("uncapped monitored-system plus guest", support_pack)
+                self.assertNotIn("uncapped monitored-system and guest capacity", support_pack)
+                self.assertNotIn("guest-capacity continuity", support_pack)
+
     def test_rc1_changelog_keeps_current_free_first_licensing_posture(self) -> None:
         changelog = read("docs/releases/V6_CHANGELOG_RC1.md")
         normalized = normalize_ws(changelog)

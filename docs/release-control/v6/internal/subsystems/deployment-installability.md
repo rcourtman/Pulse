@@ -145,11 +145,11 @@ server-side update execution surfaces.
    The same guide must treat bounded monitored-system, guest, or
    child-resource volume caps after self-hosted v6 activation or migration as
    regressions, not as upgrade outcomes or paid-plan differentiators.
-   Release notes and changelog packets under `docs/releases/` must follow the
-   same rule when they mention licensing: historical RC context may be
-   preserved, but current self-hosted v6 guidance must not present
-   monitored-system volume, child-resource volume, or trial eligibility as the
-   active paid model.
+   Release notes, changelog packets, and operator support packets under
+   `docs/releases/` must follow the same rule when they mention licensing:
+   historical RC context may be preserved, but current self-hosted v6 guidance
+   must not present monitored-system volume, child-resource volume, guest
+   capacity, or trial eligibility as the active paid model.
    The active prerelease cut must keep the repo-root `VERSION` file aligned
    with the current RC packet itself: when the governed line moves from `rc.1`
    to `rc.2` or later, the staged release-notes packet, changelog packet, and

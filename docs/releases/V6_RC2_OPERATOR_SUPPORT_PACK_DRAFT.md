@@ -54,8 +54,8 @@ Use this cohort breakdown:
 
 - Legacy recurring monthly or annual subscribers from v5 or earlier who were
   already active before the public v6 pricing cutover:
-  keep the current recurring price and uncapped monitored-system plus guest
-  capacity while the subscription remains continuously active.
+  keep the current recurring price plus uncapped self-hosted monitoring and
+  child-resource volume while the subscription remains continuously active.
 - Existing lifetime customers:
   remain permanently valid and uncapped.
 - Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered
