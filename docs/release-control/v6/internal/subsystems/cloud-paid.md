@@ -509,9 +509,10 @@ Community limit enforcement.
 
 ## Current State
 
-`frontend-modern/src/utils/pricingHandoff.ts` now routes pro-feature paywall
-keys (`ai_alerts`, `ai_autofix`, `relay`, `rbac`, `audit_logging`,
-`advanced_sso`, `agent_profiles`, `long_term_metrics`) to the
+`frontend-modern/src/utils/pricingHandoff.ts` now routes displayable paid
+self-hosted feature keys (`relay`, `mobile_app`, `push_notifications`,
+`ai_alerts`, `ai_autofix`, `long_term_metrics`, `advanced_sso`, `rbac`,
+`audit_logging`, `advanced_reporting`, `agent_profiles`) to the
 self-hosted billing plan page instead of the Pulse Account purchase-start
 handoff. The purchase-start handoff requires a `PublicURL` and fails on local
 instances; routing these keys to the in-product billing plan keeps upgrades

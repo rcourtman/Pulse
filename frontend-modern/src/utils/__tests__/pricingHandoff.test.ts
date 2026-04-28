@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SELF_HOSTED_FEATURE_CATALOG } from '@/utils/selfHostedFeatureCatalog.generated';
 import {
   getSelfHostedPurchaseStartUrl,
   getSelfHostedBillingHref,
@@ -40,10 +41,43 @@ describe('pricingHandoff', () => {
     expect(getUpgradeFallbackDestination('cloud')).toBe('/cloud');
   });
 
-  it('routes Pro feature upgrades to the in-product billing plan page', () => {
+  it('routes paid self-hosted feature upgrades to the in-product billing plan page', () => {
     expect(getUpgradeFallbackDestination('relay')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getUpgradeFallbackDestination('mobile_app')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getUpgradeFallbackDestination('push_notifications')).toBe(
+      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+    );
     expect(getUpgradeFallbackDestination('ai_alerts')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
     expect(getUpgradeFallbackDestination('rbac')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getUpgradeFallbackDestination('advanced_reporting')).toBe(
+      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+    );
+  });
+
+  it('keeps all displayable paid self-hosted catalog features on the owned Plans surface', () => {
+    const paidCatalogFeatureKeys = SELF_HOSTED_FEATURE_CATALOG.filter(
+      (entry) =>
+        entry.displayableInSelfHostedPlan &&
+        !entry.includedIn.community &&
+        (entry.includedIn.relay || entry.includedIn.pro),
+    ).map((entry) => entry.key);
+
+    expect(paidCatalogFeatureKeys).toEqual([
+      'relay',
+      'mobile_app',
+      'push_notifications',
+      'ai_alerts',
+      'ai_autofix',
+      'long_term_metrics',
+      'advanced_sso',
+      'rbac',
+      'audit_logging',
+      'advanced_reporting',
+      'agent_profiles',
+    ]);
+    for (const key of paidCatalogFeatureKeys) {
+      expect(getUpgradeFallbackDestination(key)).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    }
   });
 
   it('does not keep retired trial-expired as an owned in-product billing intent', () => {
