@@ -304,6 +304,47 @@ func TestSelfHostedFeatureMetadataKeepsCanonicalPlanLabelsAndVisibility(t *testi
 	}
 }
 
+func TestSelfHostedFeatureMetadataMatchesRuntimeTierFeatures(t *testing.T) {
+	for _, tier := range []Tier{TierFree, TierRelay, TierPro, TierProPlus, TierProAnnual, TierLifetime} {
+		tier := tier
+		t.Run(string(tier), func(t *testing.T) {
+			got := sortedFeatureSet(TierFeatures[tier])
+			want := selfHostedMetadataFeatureKeysForTier(tier)
+			if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+				t.Fatalf("TierFeatures[%q]=%v, want self-hosted metadata features %v", tier, got, want)
+			}
+		})
+	}
+}
+
+func selfHostedMetadataFeatureKeysForTier(tier Tier) []string {
+	out := make([]string, 0)
+	for _, entry := range AllFeatureMetadata() {
+		if GetSelfHostedFeatureRole(entry.Key, tier) == SelfHostedFeatureRoleHidden {
+			continue
+		}
+		out = append(out, entry.Key)
+	}
+	return sortedFeatureSet(out)
+}
+
+func sortedFeatureSet(features []string) []string {
+	seen := make(map[string]struct{}, len(features))
+	for _, feature := range features {
+		feature = strings.TrimSpace(feature)
+		if feature == "" {
+			continue
+		}
+		seen[feature] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for feature := range seen {
+		out = append(out, feature)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func TestTierMonitoredSystemLimits(t *testing.T) {
 	tests := []struct {
 		tier Tier
