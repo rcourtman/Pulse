@@ -533,7 +533,13 @@ Community limit enforcement.
     entitlement refresh paths may preserve historical billing fields for old
     state, but new trial or hosted workspaces must not mint quickstart credits
     or imply a managed-model allowance as part of the commercial contract.
-18. Keep the `unlimited` feature key neutral in shared metadata. It is a
+18. Keep Cloud signup acquisition owned by the Cloud control plane and public
+    account surfaces, not by the ordinary self-hosted app shell. The default
+    self-hosted frontend must not register unauthenticated `/cloud` or
+    `/cloud/signup` routes, and self-hosted pricing fallbacks must route Cloud
+    interest to Pulse Account/public Cloud ownership rather than rendering an
+    in-product trial or checkout page.
+19. Keep the `unlimited` feature key neutral in shared metadata. It is a
     hosted/MSP capacity-policy marker, not a self-hosted monitoring-volume
     product promise. Runtime and generated feature catalogs must label it as
     hosted capacity policy, keep it hidden from self-hosted plan cards, and

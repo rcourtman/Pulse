@@ -33,7 +33,8 @@ describe('HostedSignup', () => {
       ok: true,
       status: 202,
       data: {
-        message: "If that email can finish signup, you'll receive a Pulse Account sign-in link shortly.",
+        message:
+          "If that email can finish signup, you'll receive a Pulse Account sign-in link shortly.",
       },
     });
     requestMagicLinkMock.mockResolvedValue({
@@ -41,7 +42,8 @@ describe('HostedSignup', () => {
       status: 200,
       data: {
         success: true,
-        message: "If that email is registered, you'll receive a Pulse Account sign-in link shortly.",
+        message:
+          "If that email is registered, you'll receive a Pulse Account sign-in link shortly.",
       },
     });
     window.history.replaceState({}, '', '/cloud/signup?tier=power');
@@ -62,15 +64,13 @@ describe('HostedSignup', () => {
     expect(await screen.findByText('Workspace')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Start your 14-day Pulse Cloud trial with no upfront charge. Stripe collects a payment method before provisioning.',
+        'Create a hosted Pulse workspace. Stripe handles billing before provisioning.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Plan')).toBeInTheDocument();
     expect(screen.getByText('How it works')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Choose a Cloud plan, add a payment method, and start the 14-day trial with no upfront charge in secure checkout.',
-      ),
+      screen.getByText('Choose a Cloud plan and confirm billing in secure checkout.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Already signed up?')).toBeInTheDocument();
     expect(screen.getByText('Request a fresh Pulse Account sign-in link.')).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe('HostedSignup', () => {
     fireEvent.input(screen.getByLabelText('Organization Name'), {
       target: { value: 'Pulse Labs' },
     });
-    fireEvent.submit(screen.getByRole('button', { name: 'Start Trial in Checkout' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: 'Continue to Checkout' }).closest('form')!);
 
     await waitFor(() => {
       expect(signupMock).toHaveBeenCalledWith({

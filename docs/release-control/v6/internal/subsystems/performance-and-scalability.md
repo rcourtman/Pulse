@@ -300,6 +300,10 @@ regression protection.
     render work to ordinary monitoring sessions. The authenticated app shell
     must also avoid background commercial-posture bootstrap while
     `presentationPolicy.hideUpgrade` suppresses upgrade prompts.
+    Cloud signup retirement follows the same route-table rule: `/cloud` and
+    `/cloud/signup` must stay absent from the ordinary self-hosted app shell
+    rather than being replaced with public-route wrappers that preload checkout
+    or hosted-account state.
     Invitation accept/revoke and other org-membership changes follow that same
     hot-path contract: `frontend-modern/src/useAppRuntimeState.ts` may reload
     the org list from the shared `organizations_changed` event, but that refresh

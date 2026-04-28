@@ -20,18 +20,18 @@ describe('CloudPricing', () => {
       </Router>
     ));
 
-    expect(await screen.findByRole('link', { name: 'Start Starter Trial' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Choose Starter' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=starter',
     );
     expect(screen.getByText('Founding rate')).toBeInTheDocument();
     expect(screen.getByText('$19')).toBeInTheDocument();
     expect(screen.getByText('$29/month')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Start Power Trial' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Choose Power' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=power',
     );
-    expect(screen.getByRole('link', { name: 'Start Max Trial' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Choose Max' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=max',
     );
@@ -39,9 +39,7 @@ describe('CloudPricing', () => {
     expect(screen.getAllByText('All Pro features')).toHaveLength(1);
     expect(screen.getByText('Managed hosting')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Choose a Cloud plan, add a payment method, and start the 14-day trial with no upfront charge in secure checkout.',
-      ),
+      screen.getByText('Choose a Cloud plan and confirm billing in secure checkout.'),
     ).toBeInTheDocument();
     expect(screen.getByText('How it works')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Pulse Account' })).toHaveAttribute(
@@ -52,9 +50,7 @@ describe('CloudPricing', () => {
       'href',
       'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade',
     );
-    expect(
-      screen.queryByText(/provisioned in under 60 seconds/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/provisioned in under 60 seconds/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/no maintenance ever/i)).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SELF_HOSTED_FEATURE_CATALOG } from '@/utils/selfHostedFeatureCatalog.generated';
 import {
+  getCloudAccountPortalUrl,
   getSelfHostedPurchaseStartUrl,
   getSelfHostedBillingHref,
   getSelfHostedBillingPlanDetail,
@@ -39,8 +40,9 @@ describe('pricingHandoff', () => {
     );
   });
 
-  it('routes product-owned cloud pricing links to the in-product cloud page', () => {
-    expect(getUpgradeFallbackDestination('cloud')).toBe('/cloud');
+  it('routes cloud pricing links out to Pulse Account instead of an in-product trial page', () => {
+    expect(getUpgradeFallbackDestination('cloud')).toBe(getCloudAccountPortalUrl());
+    expect(getInProductPricingDestination('cloud')).toBeUndefined();
   });
 
   it('routes paid self-hosted feature upgrades to the in-product billing plan page', () => {
@@ -237,7 +239,7 @@ describe('pricingHandoff', () => {
   it('detects external pricing destinations', () => {
     expect(isExternalPricingDestination(getPublicPricingUrl('relay'))).toBe(true);
     expect(isExternalPricingDestination(getSelfHostedPurchaseStartUrl('relay'))).toBe(false);
-    expect(isExternalPricingDestination('/cloud')).toBe(false);
+    expect(isExternalPricingDestination(getCloudAccountPortalUrl())).toBe(true);
   });
 
   it('detects the internal self-hosted purchase start destination', () => {

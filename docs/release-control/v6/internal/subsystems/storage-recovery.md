@@ -380,6 +380,10 @@ querying, and the operator-facing storage health presentation layer.
     managed-model acquisition banners out of shared app chrome: storage and
     recovery routes must not inherit commercial nudges simply because
     `frontend-modern/src/App.tsx` owns the authenticated shell.
+    Cloud signup follows the same boundary: `/cloud` and `/cloud/signup` must
+    not return through storage/recovery preview framing or any other ordinary
+    self-hosted app route when Cloud acquisition belongs to the account/control
+    plane boundary.
     Authenticated `/login` must follow that same shared app-shell contract:
     once login succeeds, `frontend-modern/src/App.tsx` must hand the browser
     back to the governed dashboard landing route instead of leaving

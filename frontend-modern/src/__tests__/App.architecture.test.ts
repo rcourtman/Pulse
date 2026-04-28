@@ -49,6 +49,14 @@ describe('App architecture', () => {
       "const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));",
     );
     expect(appSource).toContain('<Route path="/pricing" component={PricingHandoffPage} />');
+    expect(appSource).not.toContain(
+      "const CloudPricingPage = lazy(() => import('./pages/CloudPricing'));",
+    );
+    expect(appSource).not.toContain(
+      "const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));",
+    );
+    expect(appSource).not.toContain('<Route path="/cloud" component=');
+    expect(appSource).not.toContain('<Route path="/cloud/signup" component=');
     expect(appSource).toContain("const StoragePage = lazy(() => import('./pages/Storage'));");
     expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
     expect(appSource).toContain("const WorkloadsPage = lazy(() => import('./pages/Workloads'));");

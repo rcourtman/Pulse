@@ -207,6 +207,10 @@ work extends shared components instead of creating new local variants.
    minimal handoff shells that defer destination truth to the owning subsystem
    instead of embedding a second copy of public marketing or checkout UI inside
    the product runtime.
+   Cloud acquisition follows that same app-shell rule: ordinary self-hosted
+   frontend primitives must not register `/cloud` or `/cloud/signup` as public
+   product-runtime routes, because Cloud signup belongs to Pulse Account and
+   the Cloud control plane rather than a local in-product trial page.
    The same settings-shell boundary owns read-only landing posture: when the
    session presentation policy says the operator cannot manage setup, `/settings`
    and sidebar navigation must land on the canonical reporting/control surface
@@ -848,7 +852,9 @@ work extends shared components instead of creating new local variants.
     activation/recovery routes may render their owned content, but sidebar
     discovery, trial CTAs, plan upsells, monitored-system limit pressure, and
     feature upgrade links must require hosted mode, explicit handoff, or active
-    entitlement.
+    entitlement. Cloud interest links from self-hosted plan surfaces must hand
+    off to Pulse Account/public Cloud ownership rather than route to an
+    in-product Cloud trial/signup page.
 
 ## Current State
 

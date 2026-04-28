@@ -1,12 +1,4 @@
-import {
-  Show,
-  lazy,
-  createSignal,
-  createEffect,
-  createMemo,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { Show, lazy, createSignal, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Router, Route, Navigate, useNavigate, useLocation } from '@solidjs/router';
 import { ToastContainer } from './components/Toast/Toast';
@@ -51,12 +43,7 @@ import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appR
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
   // Keep the list small and explicit.
-  return (
-    pathname === '/pricing' ||
-    pathname === '/cloud' ||
-    pathname === '/cloud/signup' ||
-    pathname === '/preview/setup-complete'
-  );
+  return pathname === '/pricing' || pathname === '/preview/setup-complete';
 }
 
 const StoragePage = lazy(() => import('./pages/Storage'));
@@ -74,8 +61,6 @@ const AIIntelligencePage = lazy(() =>
 );
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));
-const CloudPricingPage = lazy(() => import('./pages/CloudPricing'));
-const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));
 const OperationsPage = lazy(() => import('./pages/Operations'));
 const SetupCompletionPreviewPage = lazy(() =>
   import('./components/SetupWizard/SetupCompletionPreview').then((module) => ({
@@ -469,8 +454,6 @@ function App() {
   return (
     <Router root={RootLayout}>
       <Route path="/pricing" component={PricingHandoffPage} />
-      <Route path="/cloud" component={CloudPricingPage} />
-      <Route path="/cloud/signup" component={HostedSignupPage} />
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
       <Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />
       <Route path="/login" component={RuntimeHomePage} />

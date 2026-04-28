@@ -119,6 +119,9 @@ runtime cost control, and shared AI transport surfaces.
    ordinary self-hosted installs use BYOK or local providers, and the runtime
    must not surface retired managed-model credits, trial prompts, account-backed
    AI activation, or general hosted chat entitlement in the normal app.
+   The shared app shell must also keep `/cloud` and `/cloud/signup` out of
+   ordinary self-hosted public routes so Cloud acquisition cannot reappear as a
+   proxy for retired hosted-model or AI quickstart activation.
    The public AI overview must likewise use productized context language such
    as alert history, Patrol runs, and resource timelines instead of presenting
    `incident memory` as a standalone feature.

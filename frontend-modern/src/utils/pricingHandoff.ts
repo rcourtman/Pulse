@@ -6,6 +6,7 @@ import {
 
 const DEFAULT_PUBLIC_PRICING_URL =
   'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade';
+const DEFAULT_CLOUD_ACCOUNT_PORTAL_URL = 'https://cloud.pulserelay.pro/portal';
 export const SELF_HOSTED_PURCHASE_START_PATH = '/auth/license-purchase-start';
 
 export const SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/system/billing';
@@ -52,7 +53,6 @@ export const SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF = `${SELF_HOSTED_PRO_BI
 const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
   max_monitored_systems: SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
-  cloud: '/cloud',
   // Paid self-hosted feature keys: route to the owned billing plan page instead
   // of the Pulse Account purchase-start handoff, which fails for local instances
   // without PublicURL.
@@ -170,8 +170,15 @@ export function getPublicPricingUrl(feature?: string | null): string {
   return url.toString();
 }
 
+export function getCloudAccountPortalUrl(): string {
+  return DEFAULT_CLOUD_ACCOUNT_PORTAL_URL;
+}
+
 export function getUpgradeFallbackDestination(feature?: string | null): string | undefined {
   if (isRetiredPricingFeature(feature)) return undefined;
+  if (normalizeFeatureKey(feature) === 'cloud') {
+    return getCloudAccountPortalUrl();
+  }
   return getInProductPricingDestination(feature) || getSelfHostedPurchaseStartUrl(feature);
 }
 
