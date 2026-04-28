@@ -6,19 +6,20 @@
     <title>Pulse Monitoring Prototype</title>
     <style>
       :root {
-        --bg: #f7f8fb;
-        --surface: #ffffff;
-        --surface-soft: #f1f4f8;
-        --line: #d8e0ec;
-        --text: #172033;
-        --muted: #667085;
-        --blue: #2563eb;
-        --green: #15803d;
-        --amber: #a16207;
-        --red: #c2410c;
-        --purple: #6d28d9;
-        --cyan: #0e7490;
-        --slate: #475569;
+        --bg: #0d1627;
+        --surface: #172236;
+        --surface-soft: #24334b;
+        --surface-row: #18243a;
+        --line: #33445d;
+        --text: #e8eef8;
+        --muted: #9aa8bd;
+        --blue: #5aa2ff;
+        --green: #36c275;
+        --amber: #f2b84b;
+        --red: #ef6f61;
+        --purple: #a78bfa;
+        --cyan: #22d3ee;
+        --slate: #94a3b8;
       }
 
       * {
@@ -29,7 +30,7 @@
         margin: 0;
         background: var(--bg);
         color: var(--text);
-        font: 14px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font: 12px/1.25 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
       button,
@@ -41,29 +42,29 @@
         border: 1px solid var(--line);
         background: var(--surface);
         color: var(--text);
-        border-radius: 6px;
-        padding: 7px 10px;
+        border-radius: 4px;
+        padding: 5px 9px;
         cursor: pointer;
       }
 
       button:hover,
       button.active {
         border-color: var(--blue);
-        background: #eef4ff;
+        background: #123159;
         color: var(--blue);
       }
 
       .page {
-        max-width: 1580px;
+        max-width: 1700px;
         margin: 0 auto;
-        padding: 18px;
+        padding: 12px;
       }
 
       .header {
         display: flex;
         justify-content: space-between;
         gap: 14px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
       }
 
       h1,
@@ -72,77 +73,79 @@
       }
 
       h1 {
-        font-size: 24px;
+        font-size: 21px;
         letter-spacing: 0;
       }
 
       .subtitle {
-        margin-top: 4px;
+        margin-top: 3px;
         color: var(--muted);
       }
 
       .summary {
         display: grid;
         grid-template-columns: repeat(6, minmax(130px, 1fr));
-        gap: 10px;
-        margin-bottom: 12px;
+        gap: 8px;
+        margin-bottom: 8px;
       }
 
       .card {
         background: var(--surface);
         border: 1px solid var(--line);
-        border-radius: 8px;
-        box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+        border-radius: 6px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
       }
 
       .summary-card {
-        padding: 10px 12px;
+        padding: 7px 10px;
       }
 
       .label {
         color: var(--muted);
-        font-size: 12px;
+        font-size: 11px;
       }
 
       .big-number {
         display: flex;
         align-items: baseline;
         gap: 6px;
-        margin-top: 4px;
-        font-size: 23px;
+        margin-top: 3px;
+        font-size: 20px;
         font-weight: 750;
       }
 
       .note {
         color: var(--muted);
-        font-size: 12px;
+        font-size: 11px;
       }
 
       .toolbar {
         display: grid;
-        gap: 9px;
-        padding: 10px;
-        margin-bottom: 12px;
+        gap: 6px;
+        padding: 8px;
+        margin-bottom: 8px;
       }
 
       .toolbar input {
         border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 8px 10px;
+        border-radius: 4px;
+        padding: 6px 9px;
         width: 100%;
+        background: #111c2f;
+        color: var(--text);
       }
 
       .filter-row {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 7px;
         flex-wrap: wrap;
       }
 
       .filter-label {
-        width: 84px;
+        width: 72px;
         color: var(--muted);
-        font-size: 12px;
+        font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
       }
@@ -150,7 +153,7 @@
       .filter-buttons {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         flex-wrap: wrap;
       }
 
@@ -164,16 +167,21 @@
 
       table {
         width: 100%;
-        min-width: 1240px;
+        min-width: 1540px;
         border-collapse: collapse;
+        table-layout: fixed;
       }
 
       th,
       td {
         border-bottom: 1px solid var(--line);
-        padding: 7px 9px;
+        height: 25px;
+        padding: 3px 8px;
         vertical-align: middle;
         text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       th {
@@ -188,54 +196,131 @@
       }
 
       tbody tr {
-        background: var(--surface);
+        background: var(--surface-row);
       }
 
       tbody tr:hover {
-        background: #eef4ff;
+        background: #203454;
+      }
+
+      tr[data-domain="host"] {
+        --domain-color: #6f9dd7;
+        --domain-soft: #17263d;
+        --domain-mid: #43546c;
+        --domain-text: var(--text);
+      }
+
+      tr[data-domain="workload"] {
+        --domain-color: #8a96a8;
+        --domain-soft: #202a3a;
+        --domain-mid: #43546c;
+        --domain-text: var(--text);
+      }
+
+      tr[data-domain="storage"] {
+        --domain-color: #8a96a8;
+        --domain-soft: #202a3a;
+        --domain-mid: #43546c;
+        --domain-text: var(--text);
+      }
+
+      tr[data-domain="recovery"] {
+        --domain-color: #8a96a8;
+        --domain-soft: #202a3a;
+        --domain-mid: #43546c;
+        --domain-text: var(--text);
       }
 
       tr.host-row {
-        background: #fbfcfe;
+        background: #17263d;
       }
 
       tr.host-row td {
-        padding-top: 10px;
-        padding-bottom: 10px;
+        height: 40px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        border-top: 2px solid #42536a;
       }
 
       tr.group-row {
-        background: #f8fafc;
+        background: #202a3a;
+      }
+
+      tr.group-row td {
+        height: 30px;
+        border-top: 1px solid #43546c;
+        border-bottom-color: #43546c;
+      }
+
+      tr.leaf-row[data-domain="workload"],
+      tr.leaf-row[data-domain="storage"],
+      tr.leaf-row[data-domain="recovery"] {
+        background: var(--surface-row);
       }
 
       tr.leaf-row td {
-        padding-top: 5px;
-        padding-bottom: 5px;
-        font-size: 12px;
+        height: 23px;
+        padding-top: 2px;
+        padding-bottom: 2px;
+        font-size: 11px;
+      }
+
+      tr.context-row {
+        opacity: 0.48;
+      }
+
+      tr.context-row.host-row td {
+        height: 30px;
+      }
+
+      tr.context-row.group-row td,
+      tr.context-row.leaf-row td {
+        height: 22px;
+      }
+
+      tr.focus-row {
+        background: #20304a;
+      }
+
+      tr.focus-row td {
+        height: 34px;
+        border-top-color: #4b617c;
       }
 
       .resource-cell {
         display: grid;
-        grid-template-columns: 8px minmax(0, 1fr);
+        grid-template-columns: 5px minmax(0, 1fr);
         align-items: center;
-        gap: 9px;
+        gap: 7px;
         min-width: 0;
       }
 
       .rail {
+        width: 3px;
+        height: 16px;
+        border-radius: 4px;
+        background: var(--domain-color);
+      }
+
+      .host-row .rail {
         width: 4px;
-        height: 32px;
-        border-radius: 999px;
-        background: var(--blue);
+        height: 27px;
+      }
+
+      .group-row .rail {
+        width: 4px;
+        height: 20px;
       }
 
       .depth-1 .rail {
-        height: 24px;
-        background: var(--slate);
+        width: 4px;
+        height: 20px;
       }
 
       .depth-2 .rail {
-        height: 18px;
+        width: 3px;
+        height: 13px;
+        opacity: 0.82;
       }
 
       .resource-main {
@@ -261,24 +346,35 @@
       }
 
       .group-row .name {
-        font-size: 13px;
+        font-size: 12px;
+        color: var(--domain-text);
+        text-transform: uppercase;
       }
 
       .leaf-row .name {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 650;
       }
 
+      .focus-row .name {
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      .focus-row .rail {
+        width: 4px;
+        height: 22px;
+      }
+
+      .focus-row.host-row .name {
+        font-size: 15px;
+      }
+
       .meta {
-        margin-top: 2px;
         color: var(--muted);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-      }
-
-      .leaf-row .meta {
-        font-size: 11px;
       }
 
       .indent-0 {
@@ -286,11 +382,11 @@
       }
 
       .indent-1 {
-        padding-left: 24px;
+        padding-left: 18px;
       }
 
       .indent-2 {
-        padding-left: 50px;
+        padding-left: 38px;
       }
 
       .pill {
@@ -298,16 +394,21 @@
         align-items: center;
         gap: 5px;
         border: 1px solid var(--line);
-        border-radius: 999px;
-        padding: 2px 7px;
-        font-size: 12px;
-        line-height: 1.25;
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 9px;
+        line-height: 1.15;
         white-space: nowrap;
       }
 
+      .host-row .pill,
+      .focus-row .pill {
+        font-size: 10px;
+      }
+
       .platform-label {
-        display: block;
-        margin-top: 3px;
+        display: inline-block;
+        margin-left: 4px;
         color: var(--muted);
         font-size: 10px;
         font-weight: 650;
@@ -315,71 +416,71 @@
       }
 
       .host {
-        color: var(--blue);
-        background: #eff6ff;
-        border-color: #bfdbfe;
+        color: #b9c8dd;
+        background: #1a273b;
+        border-color: #3b4b63;
       }
 
       .workload {
-        color: var(--purple);
-        background: #f5f3ff;
-        border-color: #ddd6fe;
+        color: #b9c8dd;
+        background: #1a273b;
+        border-color: #3b4b63;
       }
 
       .storage {
-        color: var(--cyan);
-        background: #ecfeff;
-        border-color: #a5f3fc;
+        color: #b9c8dd;
+        background: #1a273b;
+        border-color: #3b4b63;
       }
 
       .recovery {
-        color: var(--slate);
-        background: #f8fafc;
-        border-color: #cbd5e1;
+        color: #b9c8dd;
+        background: #1a273b;
+        border-color: #3b4b63;
       }
 
       .ok {
         color: var(--green);
-        background: #f0fdf4;
-        border-color: #bbf7d0;
+        background: #0e3523;
+        border-color: #23764d;
       }
 
       .warning {
         color: var(--amber);
-        background: #fffbeb;
-        border-color: #fde68a;
+        background: #3a2c12;
+        border-color: #8a6419;
       }
 
       .critical {
         color: var(--red);
-        background: #fff7ed;
-        border-color: #fed7aa;
+        background: #44201d;
+        border-color: #9c3c34;
       }
 
       .metric {
-        min-width: 88px;
+        display: grid;
+        grid-template-columns: 31px minmax(0, 1fr);
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
       }
 
       .metric-label {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 3px;
-        font-size: 12px;
-      }
-
-      .leaf-row .metric-label {
+        margin-bottom: 0;
         font-size: 11px;
+        font-weight: 650;
       }
 
       .track {
-        height: 6px;
-        border-radius: 999px;
-        background: #e6ebf2;
+        height: 5px;
+        border-radius: 2px;
+        background: #2d3b51;
         overflow: hidden;
       }
 
-      .leaf-row .track {
-        height: 5px;
+      .host-row .track,
+      .focus-row .track {
+        height: 7px;
       }
 
       .fill {
@@ -397,47 +498,95 @@
       }
 
       .rollup-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(58px, 1fr));
+        display: flex;
+        align-items: center;
         gap: 5px;
       }
 
       .rollup {
         border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 3px 5px;
-        background: #fbfcfe;
+        border-radius: 4px;
+        padding: 1px 4px;
+        background: #111c2f;
+        white-space: nowrap;
       }
 
       .rollup strong {
-        display: block;
-        font-size: 12px;
+        font-size: 11px;
       }
 
       .rollup span {
         color: var(--muted);
-        font-size: 10px;
+        font-size: 9px;
       }
 
       .signals {
         display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-        max-width: 300px;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 5px;
+        max-width: 100%;
+        overflow: hidden;
       }
 
       .signal {
-        max-width: 210px;
+        display: block;
+        max-width: 168px;
         overflow: hidden;
         text-overflow: ellipsis;
+        color: #c6d0df;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .signal-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 16px;
+        height: 15px;
+        border-radius: 3px;
+        background: #2a3446;
+        color: #d8e1ee;
+        font-size: 10px;
+        font-weight: 700;
       }
 
       .change {
         color: var(--muted);
-        max-width: 230px;
+        max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      tr.context-row .rail {
+        background: #5c6878;
+      }
+
+      tr.context-row .pill,
+      tr.context-row .signal-count {
+        color: #8794a6;
+        background: #1d2735;
+        border-color: #334257;
+      }
+
+      tr.context-row .platform-label,
+      tr.context-row .meta,
+      tr.context-row .metric-label,
+      tr.context-row .signal,
+      tr.context-row .change {
+        color: #788699;
+      }
+
+      tr.context-row .track {
+        background: #273244;
+      }
+
+      tr.context-row .fill,
+      tr.context-row .fill.warning,
+      tr.context-row .fill.critical {
+        background: #657184;
       }
 
       .empty-state {
@@ -521,12 +670,12 @@
         <div class="filter-row">
           <span class="filter-label">Layer</span>
           <div class="filter-buttons">
-            <button class="view active" type="button" data-view="all">All</button>
-            <button class="view" type="button" data-view="host">Hosts</button>
-            <button class="view" type="button" data-view="workload">Workloads</button>
-            <button class="view" type="button" data-view="storage">Storage</button>
-            <button class="view" type="button" data-view="recovery">Recovery</button>
-            <button class="view" type="button" data-view="problems">Problems</button>
+            <button class="view active" type="button" data-view="all" aria-pressed="true">All</button>
+            <button class="view" type="button" data-view="host" aria-pressed="false">Hosts</button>
+            <button class="view" type="button" data-view="workload" aria-pressed="false">Workloads</button>
+            <button class="view" type="button" data-view="storage" aria-pressed="false">Storage</button>
+            <button class="view" type="button" data-view="recovery" aria-pressed="false">Recovery</button>
+            <button class="view" type="button" data-view="problems" aria-pressed="false">Problems</button>
           </div>
         </div>
         <div class="filter-row">
@@ -537,6 +686,7 @@
             <button class="platform" type="button" data-platform="docker">Docker</button>
             <button class="platform" type="button" data-platform="kubernetes">Kubernetes</button>
             <button class="platform" type="button" data-platform="truenas">TrueNAS</button>
+            <button class="platform" type="button" data-platform="vsphere">vSphere</button>
           </div>
         </div>
         <div class="filter-row">
@@ -556,10 +706,24 @@
       <article class="card table-card">
         <div class="table-wrap">
           <table>
+            <colgroup>
+              <col style="width: 210px" />
+              <col style="width: 130px" />
+              <col style="width: 210px" />
+              <col style="width: 78px" />
+              <col style="width: 104px" />
+              <col style="width: 104px" />
+              <col style="width: 104px" />
+              <col style="width: 150px" />
+              <col style="width: 84px" />
+              <col style="width: 230px" />
+              <col style="width: 236px" />
+            </colgroup>
             <thead>
               <tr>
                 <th>Resource</th>
                 <th>Platform / Kind</th>
+                <th>Info</th>
                 <th>Status</th>
                 <th>CPU</th>
                 <th>Memory</th>
@@ -627,6 +791,18 @@
             item("velero-prod", "velero-production", "Namespace backup policy", "recovery", "Backup Job", "warning", null, null, null, "Partial", ["One PVC snapshot skipped"], ["Policy changed to include secrets"]),
           ]),
         ]),
+        host("vsphere-lab", "vsphere-lab", "VMware vSphere cluster / first-lab-ready", "vsphere", "warning", 46, 67, 58, "Partial", ["vCenter proof pending deeper recovery coverage"], ["New vSphere inventory discovered 22 minutes ago"], [
+          group("vsphere-workloads", "Workloads", "vSphere virtual machines", "workload", [
+            item("vmware-vm-ad", "vmware/ad-01", "Directory services", "workload", "VM", "ok", 29, 57, 46, "Protected", [], ["Guest tools heartbeat current"]),
+            item("vmware-vm-files", "vmware/files-02", "File service", "workload", "VM", "warning", 67, 73, 72, "Partial", ["Snapshot policy not confirmed"], ["Datastore latency rose 9 minutes ago"]),
+          ]),
+          group("vsphere-storage", "Storage", "Datastores and VMFS capacity", "storage", [
+            item("datastore-fast-01", "datastore-fast-01", "VMFS datastore", "storage", "Datastore", "warning", null, null, 76, "N/A", ["Capacity trend above normal"], ["Datastore latency rose 9 minutes ago"]),
+          ]),
+          group("vsphere-recovery", "Recovery", "vSphere backup and restore posture", "recovery", [
+            item("veeam-vsphere", "veeam-vsphere-nightly", "vSphere backup job", "recovery", "Backup Job", "warning", null, null, null, "Partial", ["Restore verification not yet exercised"], ["Last backup completed with warnings"]),
+          ]),
+        ]),
         host("docker-host-01", "docker-host-01", "Agent host / Docker", "docker", "ok", 24, 45, 57, "Protected", [], ["Agent upgraded to 6.0.0-rc"], [
           group("docker-workloads", "Workloads", "Docker containers", "workload", [
             item("container-immich", "container/immich", "Photo service", "workload", "Container", "ok", 33, 66, 58, "Protected", [], ["Image updated 3 days ago"]),
@@ -643,7 +819,7 @@
 
       assignInheritedPlatforms(tree);
 
-      let view = "all";
+      const selectedViews = new Set();
       let platformView = "any";
       let typeView = "any";
       let query = "";
@@ -725,10 +901,13 @@
         return ownMatchesSearch(node) || hasMatchingDescendant(node, ownMatchesSearch);
       }
 
+      function hasLayerFocus() {
+        return selectedViews.size > 0;
+      }
+
       function ownMatchesView(node) {
-        if (view === "all") return true;
-        if (view === "problems") return hasSignal(node);
-        return node.domain === view;
+        if (!hasLayerFocus()) return true;
+        return selectedViews.has(node.domain) || (selectedViews.has("problems") && hasSignal(node));
       }
 
       function matchesViewContext(node) {
@@ -741,7 +920,7 @@
 
       function ownMatchesPlatform(node) {
         if (platformView === "any") return true;
-        if (["proxmox", "docker", "kubernetes", "truenas"].includes(platformView)) {
+        if (["proxmox", "docker", "kubernetes", "truenas", "vsphere"].includes(platformView)) {
           return node.platform === platformView;
         }
         return false;
@@ -797,7 +976,24 @@
 
       function signalCell(node) {
         if (!hasSignal(node)) return '<span class="note">None</span>';
-        return `<div class="signals">${node.signals.slice(0, 2).map((signal) => `<span class="pill critical signal">${escapeHtml(signal)}</span>`).join("")}</div>`;
+        const suffix = node.signals.length > 1 ? ` +${node.signals.length - 1}` : "";
+        return `
+          <div class="signals">
+            <span class="signal-count">${node.signals.length}</span>
+            <span class="signal">${escapeHtml(node.signals[0])}${suffix}</span>
+          </div>
+        `;
+      }
+
+      function platformLabel(platform) {
+        const labels = {
+          proxmox: "Proxmox",
+          docker: "Docker",
+          kubernetes: "Kubernetes",
+          truenas: "TrueNAS",
+          vsphere: "vSphere",
+        };
+        return labels[platform] || platform || "Unknown";
       }
 
       function childRollup(node) {
@@ -808,9 +1004,9 @@
         const recovery = all.filter((child) => child.domain === "recovery").length;
         return `
           <div class="rollup-grid">
-            <div class="rollup"><strong>${workloads}</strong><span>workloads</span></div>
-            <div class="rollup"><strong>${storage}</strong><span>storage</span></div>
-            <div class="rollup"><strong>${recovery}</strong><span>recovery</span></div>
+            <div class="rollup"><strong>${workloads}</strong><span> work</span></div>
+            <div class="rollup"><strong>${storage}</strong><span> store</span></div>
+            <div class="rollup"><strong>${recovery}</strong><span> rec</span></div>
           </div>
         `;
       }
@@ -836,16 +1032,6 @@
         return node.domain === "host" ? "host" : node.domain;
       }
 
-      function platformLabel(platform) {
-        const labels = {
-          proxmox: "Proxmox",
-          docker: "Docker",
-          kubernetes: "Kubernetes",
-          truenas: "TrueNAS",
-        };
-        return labels[platform] || platform || "Unknown";
-      }
-
       function kindCell(node) {
         return `
           <span class="pill ${domainPillClass(node)}">${escapeHtml(node.kind)}</span>
@@ -855,13 +1041,14 @@
 
       function renderRows() {
         const rows = visibleRows(tree);
+        const hasActiveFocus = hasLayerFocus() || platformView !== "any" || typeView !== "any" || query !== "";
         document.getElementById("rows").innerHTML = rows
           .map(({ node, depth, contextOnly }) => {
-            const faded = contextOnly ? ' style="opacity:.62"' : "";
+            const rowClasses = [rowClass(node), contextOnly ? "context-row" : "", hasActiveFocus && !contextOnly ? "focus-row" : ""].filter(Boolean).join(" ");
             const indentClass = `indent-${Math.min(depth, 2)}`;
             const depthClass = `depth-${Math.min(depth, 2)}`;
             return `
-              <tr class="${rowClass(node)}" data-id="${node.id}"${faded}>
+              <tr class="${rowClasses}" data-id="${node.id}" data-domain="${node.domain}" data-platform="${node.platform}">
                 <td>
                   <div class="resource-cell ${indentClass} ${depthClass}">
                     <span class="rail"></span>
@@ -869,11 +1056,11 @@
                       <div class="resource-line">
                         <span class="name">${escapeHtml(node.name)}</span>
                       </div>
-                      <div class="meta">${escapeHtml(node.subtitle || "")}</div>
                     </div>
                   </div>
                 </td>
                 <td>${kindCell(node)}</td>
+                <td><div class="meta">${escapeHtml(node.subtitle || "")}</div></td>
                 <td><span class="pill ${node.status}">${escapeHtml(node.status)}</span></td>
                 <td>${metric(node.cpu, "CPU")}</td>
                 <td>${metric(node.memory, "Memory")}</td>
@@ -914,12 +1101,27 @@
 
       document.querySelectorAll(".view").forEach((button) => {
         button.addEventListener("click", () => {
-          view = button.getAttribute("data-view");
-          document.querySelectorAll(".view").forEach((other) => other.classList.remove("active"));
-          button.classList.add("active");
+          const nextView = button.getAttribute("data-view");
+          if (nextView === "all") {
+            selectedViews.clear();
+          } else if (selectedViews.has(nextView)) {
+            selectedViews.delete(nextView);
+          } else {
+            selectedViews.add(nextView);
+          }
+          syncLayerButtons();
           render();
         });
       });
+
+      function syncLayerButtons() {
+        document.querySelectorAll(".view").forEach((button) => {
+          const buttonView = button.getAttribute("data-view");
+          const isActive = buttonView === "all" ? !hasLayerFocus() : selectedViews.has(buttonView);
+          button.classList.toggle("active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+      }
 
       document.querySelectorAll(".platform").forEach((button) => {
         button.addEventListener("click", () => {
