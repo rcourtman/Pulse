@@ -803,7 +803,7 @@ export const getLicenseStatusLoadingState = (): LicenseLoadingStateCopy => ({
 });
 
 export const getNoActiveSelfHostedActivationState = (): LicenseLoadingStateCopy => ({
-  text: 'No paid self-hosted activation is active on this instance.',
+  text: 'No activation key is active on this instance.',
 });
 
 export const SELF_HOSTED_RECOVERY_PRESENTATION: SelfHostedRecoveryPresentation = {

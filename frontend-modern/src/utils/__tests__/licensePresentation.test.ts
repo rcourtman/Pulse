@@ -46,7 +46,7 @@ describe('licensePresentation', () => {
       text: 'Loading license status...',
     });
     expect(getNoActiveSelfHostedActivationState()).toEqual({
-      text: 'No paid self-hosted activation is active on this instance.',
+      text: 'No activation key is active on this instance.',
     });
     expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({
       disclosureLabel: 'Redeem existing key',

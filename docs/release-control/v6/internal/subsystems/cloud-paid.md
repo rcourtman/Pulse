@@ -1496,9 +1496,11 @@ it as a current public Pulse Pro+ package. When direct plan-selection intent
 opens the explicit self-hosted comparison surface, the shared presentation
 helpers must show Pro's operations, admin, and reporting extras together while
 still framing Community, Relay, and Pro as unlimited core monitoring rather
-than monitored-system capacity tiers. The same factual plan surface must use
-neutral inactive-state copy such as paid self-hosted activation rather than
-v5-era "No Pro license" language.
+than monitored-system capacity tiers. The same factual plan surface must keep
+inactive-state copy neutral: default Community installs may say no activation
+key is active, but they must not foreground paid self-hosted activation or
+v5-era "No Pro license" language before the operator opens an explicit
+comparison, checkout, activation, or recovery path.
 The shared license presentation owner also holds self-hosted Pro settings
 trial-ended notice copy for `ProLicensePlanSection.tsx`; that surface must
 consume canonical helper notices instead of carrying inline upgrade copy or
