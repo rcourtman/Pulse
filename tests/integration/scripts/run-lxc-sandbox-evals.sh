@@ -20,7 +20,7 @@ PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-adminadminadmin}"
 PULSE_E2E_BOOTSTRAP_TOKEN="${PULSE_E2E_BOOTSTRAP_TOKEN:-}"
 
 MULTI_TENANT_SCENARIO="${MULTI_TENANT_SCENARIO:-multi-tenant}"
-TRIAL_SCENARIO="${TRIAL_SCENARIO:-trial-signup}"
+RETIRED_TRIAL_ACQUISITION_SCENARIO="${RETIRED_TRIAL_ACQUISITION_SCENARIO:-retired-trial-acquisition}"
 CLOUD_SCENARIOS="${CLOUD_SCENARIOS:-cloud-hosting,cloud-billing-lifecycle}"
 TRUENAS_SCENARIO="${TRUENAS_SCENARIO:-truenas-node-add}"
 RELAY_SCENARIO="${RELAY_SCENARIO:-relay-pairing}"
@@ -232,11 +232,11 @@ seed_multi_tenant_entitlement
 wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 run_eval_scenarios "${MULTI_TENANT_SCENARIO}"
 
-echo "[6/${TOTAL_STEPS}] Restoring clean baseline and running ${TRIAL_SCENARIO}"
+echo "[6/${TOTAL_STEPS}] Restoring clean baseline and running ${RETIRED_TRIAL_ACQUISITION_SCENARIO}"
 rollback_and_start_services
 wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 wait_http_ready "http://127.0.0.1:${LOCAL_CP_PORT}/healthz"
-run_eval_scenarios "${TRIAL_SCENARIO}"
+run_eval_scenarios "${RETIRED_TRIAL_ACQUISITION_SCENARIO}"
 
 echo "[7/${TOTAL_STEPS}] Restoring clean baseline for cloud lifecycle"
 rollback_and_start_services

@@ -27,7 +27,7 @@ End-to-end Playwright tests that validate critical user flows against a running 
 - `tests/06-theme-visual.spec.ts` — visual regression baselines for light/dark auth surfaces:
   - Logged-out login page (full page + form card)
   - Authenticated Settings → Authentication page
-- `tests/07-trial-signup-return.spec.ts` — retired self-hosted trial-start route contract:
+- `tests/07-retired-trial-acquisition.spec.ts` — retired self-hosted trial acquisition route contract:
   - Probe `POST /api/license/trial/start` and verify ordinary self-hosted v6 returns `404`
   - Verify local entitlements remain unchanged after the retired route probe
 - `tests/58-self-hosted-trial-rate-limit-ui.spec.ts` — paid prompt visibility contract:
@@ -73,7 +73,7 @@ npm test
 ```
 
 ### Eval Packs (No Manual Steps)
-Run the curated scenario pack (multi-tenant, trial-signup, cloud-hosting, cloud-billing-lifecycle) and emit a report:
+Run the curated scenario pack (multi-tenant, retired-trial-acquisition, cloud-hosting, cloud-billing-lifecycle) and emit a report:
 ```bash
 cd tests/integration
 npm run evals
@@ -81,7 +81,7 @@ npm run evals
 
 Filter to one scenario:
 ```bash
-npm run evals -- --scenario trial-signup
+npm run evals -- --scenario retired-trial-acquisition
 ```
 
 Reports are written to:
@@ -188,17 +188,17 @@ The harness understands these profiles:
 - `PULSE_E2E_ENTITLEMENT_PROFILE=multi-tenant` for Enterprise/MSP multi-tenant coverage.
 - `PULSE_E2E_ENTITLEMENT_PROFILE=infra` for Pro/relay/reporting-style journeys.
 
-### Snapshot-Clean Proxmox LXC Trial SAT
+### Snapshot-Clean Proxmox LXC Retired Trial Acquisition SAT
 For retired self-hosted trial-start validation against a fresh LXC each run:
 
-- Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
-- Probe script: `tests/integration/scripts/trial-signup-contract.sh`
+- Runbook: `docs/operations/RETIRED_TRIAL_ACQUISITION_LXC_SNAPSHOT_RUNBOOK.md`
+- Probe script: `tests/integration/scripts/retired-trial-acquisition-contract.sh`
   - Exercises `POST /api/license/trial/start` from a clean snapshot and proves
     ordinary self-hosted v6 returns `404` without mutating entitlements
 - Pulse Pro browser proof: `tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
   - Exercises `/settings/system/billing` on the real browser shell and proves
     trial CTAs and paid-only navigation stay out of the default self-hosted UI
-- Full sandbox orchestration (multi-tenant + trial + cloud, with per-scenario snapshot reset):
+- Full sandbox orchestration (multi-tenant + retired trial acquisition + cloud, with per-scenario snapshot reset):
   - `tests/integration/scripts/run-lxc-sandbox-evals.sh`
   - Includes retired self-hosted trial-start validation and cloud subscription cancellation lifecycle verification
 

@@ -2,7 +2,7 @@
 #
 # Run Pulse integration tests with different suites
 # Usage: ./run-tests.sh [suite]
-#   suite: all, core, diagnostic, perf, visual, multi-tenant, trial, cloud-hosting, cloud-lifecycle, demo-contract, evals, updates-api
+#   suite: all, core, diagnostic, perf, visual, multi-tenant, retired-trial-acquisition, cloud-hosting, cloud-lifecycle, demo-contract, evals, updates-api
 #
 
 set -e
@@ -134,8 +134,8 @@ run_suite() {
         multi-tenant)
             npx playwright test "tests/03-multi-tenant.spec.ts" --project=chromium --reporter=list
             ;;
-        trial)
-            npx playwright test "tests/07-trial-signup-return.spec.ts" --project=chromium --reporter=list
+        retired-trial-acquisition)
+            npx playwright test "tests/07-retired-trial-acquisition.spec.ts" --project=chromium --reporter=list
             ;;
         cloud-hosting)
             npx playwright test "tests/08-cloud-hosting.spec.ts" --project=chromium --reporter=list
@@ -188,7 +188,7 @@ case "$SUITE" in
         run_suite "Diagnostic Smoke" "diagnostic" || FAILED_TESTS+=("Diagnostic Smoke")
         run_suite "Core E2E" "core" || FAILED_TESTS+=("Core E2E")
         run_suite "Multi-tenant E2E" "multi-tenant" "false" "false" "false" "false" "true" || FAILED_TESTS+=("Multi-tenant E2E")
-        run_suite "Trial Signup E2E" "trial" || FAILED_TESTS+=("Trial Signup E2E")
+        run_suite "Retired Trial Acquisition E2E" "retired-trial-acquisition" || FAILED_TESTS+=("Retired Trial Acquisition E2E")
         run_suite "Cloud Hosting E2E" "cloud-hosting" || FAILED_TESTS+=("Cloud Hosting E2E")
         run_suite "Cloud Billing Lifecycle E2E" "cloud-lifecycle" || FAILED_TESTS+=("Cloud Billing Lifecycle E2E")
         run_suite "Public Demo Contract" "demo-contract" || FAILED_TESTS+=("Public Demo Contract")
@@ -217,8 +217,8 @@ case "$SUITE" in
         run_suite "Multi-tenant E2E" "multi-tenant" "false" "false" "false" "false" "true" || FAILED_TESTS+=("Multi-tenant E2E")
         ;;
 
-    trial)
-        run_suite "Trial Signup E2E" "trial" || FAILED_TESTS+=("Trial Signup E2E")
+    retired-trial-acquisition)
+        run_suite "Retired Trial Acquisition E2E" "retired-trial-acquisition" || FAILED_TESTS+=("Retired Trial Acquisition E2E")
         ;;
 
     cloud-hosting)
@@ -243,7 +243,7 @@ case "$SUITE" in
 
     *)
         echo "Unknown suite: $SUITE"
-        echo "Available suites: all, diagnostic, core, perf, visual, multi-tenant, trial, cloud-hosting, cloud-lifecycle, demo-contract, evals, updates-api"
+        echo "Available suites: all, diagnostic, core, perf, visual, multi-tenant, retired-trial-acquisition, cloud-hosting, cloud-lifecycle, demo-contract, evals, updates-api"
         exit 1
         ;;
 esac

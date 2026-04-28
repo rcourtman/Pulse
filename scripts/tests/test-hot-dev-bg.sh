@@ -760,7 +760,7 @@ test_integration_readme_documents_retired_trial_start_contract() {
   local output
   output="$(
     awk '
-      /^### Snapshot-Clean Proxmox LXC Trial SAT$/ { capture=1 }
+      /^### Snapshot-Clean Proxmox LXC Retired Trial Acquisition SAT$/ { capture=1 }
       capture { print }
       /^### Run Theme Visual Regression Suite$/ {
         exit
@@ -771,7 +771,7 @@ test_integration_readme_documents_retired_trial_start_contract() {
   assert_contains "integration readme names trial-start route" "${output}" "POST /api/license/trial/start"
   assert_contains "integration readme documents retired route status" "${output}" "404"
   assert_contains "integration readme documents unchanged entitlements" "${output}" "without mutating entitlements"
-  assert_contains "integration readme references retired trial probe script" "${output}" "tests/integration/scripts/trial-signup-contract.sh"
+  assert_contains "integration readme references retired trial probe script" "${output}" "tests/integration/scripts/retired-trial-acquisition-contract.sh"
   assert_contains "integration readme references paid prompt proof" "${output}" "tests/58-self-hosted-trial-rate-limit-ui.spec.ts"
   assert_contains "integration readme documents no trial CTAs" "${output}" "trial CTAs"
   assert_not_contains "integration readme no longer documents hosted-signup redirect code" "${output}" "409 trial_signup_required"

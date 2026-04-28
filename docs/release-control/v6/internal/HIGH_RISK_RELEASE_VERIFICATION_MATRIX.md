@@ -44,7 +44,7 @@ Companion drill:
   `go test ./internal/cloudcp/... -count=1`
   `go test ./internal/hosted/... -count=1`
   `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx`
-  `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/07-trial-signup-return.spec.ts --project=chromium`
+  `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/07-retired-trial-acquisition.spec.ts --project=chromium`
   `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/58-self-hosted-trial-rate-limit-ui.spec.ts --project=chromium`
   The self-hosted proof must keep the retired trial-start transport contract:
   `POST /api/license/trial/start` returns `404` on an ordinary self-hosted v6

@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RUNBOOK="${ROOT_DIR}/docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md"
+RUNBOOK="${ROOT_DIR}/docs/operations/RETIRED_TRIAL_ACQUISITION_LXC_SNAPSHOT_RUNBOOK.md"
 UPGRADE_DOC="${ROOT_DIR}/docs/UPGRADE_v6.md"
 INTEGRATION_README="${ROOT_DIR}/tests/integration/README.md"
-EVAL_TASK_DOC="${ROOT_DIR}/tests/integration/evals/tasks/trial-signup.md"
+EVAL_TASK_DOC="${ROOT_DIR}/tests/integration/evals/tasks/retired-trial-acquisition.md"
 EVAL_SCENARIOS_DOC="${ROOT_DIR}/tests/integration/evals/scenarios.json"
 SOURCE_OF_TRUTH_DOC="${ROOT_DIR}/docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
 HIGH_RISK_MATRIX_DOC="${ROOT_DIR}/docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
@@ -104,11 +104,11 @@ main() {
   done
 
   if (( failures > 0 )); then
-    echo "trial-start retired docs smoke tests failed: ${failures}" >&2
+    echo "retired trial acquisition docs smoke tests failed: ${failures}" >&2
     exit 1
   fi
 
-  echo "trial-start retired docs smoke tests passed."
+  echo "retired trial acquisition docs smoke tests passed."
 }
 
 main "$@"

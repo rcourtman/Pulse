@@ -1,4 +1,4 @@
-# Scenario: Retired Pro Trial Signup
+# Scenario: Retired Trial Acquisition
 
 ## Goal
 Prove the self-hosted Pulse instance no longer initiates a hosted Pro trial from the ordinary in-app runtime and does not mutate local entitlements when the retired route is probed.

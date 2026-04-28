@@ -847,7 +847,7 @@ traffic, so split browser/backend proof can target fresh frontend code without
 rewiring the API-side contract.
 That same integration-README ownership includes the retired local commercial
 trial probe guidance. The snapshot-clean trial instructions for
-`tests/integration/scripts/trial-signup-contract.sh` must describe
+`tests/integration/scripts/retired-trial-acquisition-contract.sh` must describe
 `POST /api/license/trial/start` as retired in ordinary self-hosted v6 and must
 expect `404` plus unchanged entitlements. The reused-instance browser-proof
 entry in `tests/integration/README.md` must carry that same retired-route
@@ -858,7 +858,7 @@ browser proof, `tests/58-self-hosted-trial-rate-limit-ui.spec.ts`, on the
 owned paid-prompt surface so the user-facing no-trial-CTA proof does not drift
 into an orphaned integration spec. The eval-pack metadata in
 `tests/integration/evals/scenarios.json` must carry those same anchors for the
-`trial-signup` scenario description, so deterministic and agentic trial runs
+`retired-trial-acquisition` scenario description, so deterministic and agentic trial runs
 inherit the same canonical contract wording instead of teaching a drifted
 summary path.
 Playwright-driven public/commercial specs that support scenario-specific

@@ -10,7 +10,7 @@ type EntitlementPayload = {
   is_lifetime?: boolean;
 };
 
-test.describe.serial('Retired self-hosted trial start route', () => {
+test.describe.serial('Retired self-hosted trial acquisition routes', () => {
   test('does not expose in-app trial acquisition and preserves local entitlements', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only commercial route coverage');
 

@@ -1005,12 +1005,12 @@ The matching control-plane acquisition routes are retired too:
 unregistered. `/api/entitlements/refresh` remains the only hosted entitlement
 refresh endpoint for already-issued hosted leases.
 Browser and shell coverage now guard that retired boundary:
-`tests/integration/tests/07-trial-signup-return.spec.ts` and
-`tests/integration/scripts/trial-signup-contract.sh` must expect `404` from the
+`tests/integration/tests/07-retired-trial-acquisition.spec.ts` and
+`tests/integration/scripts/retired-trial-acquisition-contract.sh` must expect `404` from the
 retired route and prove entitlements remain unchanged. The paid-prompt browser
 proof in `tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
 must keep trial CTAs and paid-only navigation out of the default self-hosted UI.
-`scripts/tests/test-trial-signup-docs.sh` guards the same documentation posture
+`scripts/tests/test-retired-trial-acquisition-docs.sh` guards the same documentation posture
 so active operator docs and eval metadata describe the retired route instead of
 the old hosted-signup acquisition contract.
 Hosted tenant organization seeding and hosted handoff role mapping now belong

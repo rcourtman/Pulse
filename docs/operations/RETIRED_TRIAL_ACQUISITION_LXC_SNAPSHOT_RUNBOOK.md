@@ -1,4 +1,4 @@
-# Trial-Retirement + Cloud E2E on Proxmox LXC (Snapshot-Clean)
+# Retired Trial Acquisition + Cloud E2E on Proxmox LXC (Snapshot-Clean)
 
 This runbook defines a clean, repeatable validation loop for retired self-hosted trial acquisition and Pulse Cloud signup behavior on a Pulse binary running in Proxmox LXC.
 
@@ -50,7 +50,7 @@ pct start <ctid>
 Create a baseline snapshot once the container is in known-good state:
 
 ```bash
-pct snapshot <ctid> pre-eval-baseline --description "Pulse trial e2e baseline"
+pct snapshot <ctid> pre-eval-baseline --description "Pulse retired trial acquisition e2e baseline"
 pct listsnapshot <ctid>
 ```
 
@@ -72,7 +72,7 @@ pct exec <ctid> -- sh -lc 'ss -lntp | grep -E ":(7655|8443)\\b"'
 
 Use:
 
-- `tests/integration/scripts/trial-signup-contract.sh`
+- `tests/integration/scripts/retired-trial-acquisition-contract.sh`
 
 This script asserts:
 
@@ -85,8 +85,8 @@ This script asserts:
 Run inside container:
 
 ```bash
-pct push <ctid> tests/integration/scripts/trial-signup-contract.sh /tmp/trial-signup-contract.sh
-pct exec <ctid> -- sh -lc 'chmod +x /tmp/trial-signup-contract.sh && PULSE_E2E_USERNAME=admin PULSE_E2E_PASSWORD=adminadminadmin /tmp/trial-signup-contract.sh'
+pct push <ctid> tests/integration/scripts/retired-trial-acquisition-contract.sh /tmp/retired-trial-acquisition-contract.sh
+pct exec <ctid> -- sh -lc 'chmod +x /tmp/retired-trial-acquisition-contract.sh && PULSE_E2E_USERNAME=admin PULSE_E2E_PASSWORD=adminadminadmin /tmp/retired-trial-acquisition-contract.sh'
 ```
 
 ## Clean Eval Loop (Rollback -> Run)
@@ -96,11 +96,11 @@ Use this loop for repeatable runs:
 ```bash
 for i in 1 2 3; do
   pct rollback <ctid> pre-eval-baseline --start 1
-  pct exec <ctid> -- sh -lc 'PULSE_E2E_USERNAME=admin PULSE_E2E_PASSWORD=adminadminadmin /tmp/trial-signup-contract.sh'
+  pct exec <ctid> -- sh -lc 'PULSE_E2E_USERNAME=admin PULSE_E2E_PASSWORD=adminadminadmin /tmp/retired-trial-acquisition-contract.sh'
 done
 ```
 
-If each run prints `PASS: self-hosted trial-start route is retired`, state pollution between runs is eliminated.
+If each run prints `PASS: self-hosted trial acquisition routes are retired`, state pollution between runs is eliminated.
 On a fresh rollback the probe should show `trial_start_code=404` and matching entitlement summaries before and after the route probe.
 
 ## Full Sandbox E2E (Playwright)

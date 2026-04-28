@@ -24,22 +24,22 @@
       }
     },
     {
-      "id": "trial-signup",
-      "name": "Pro Trial Signup Return",
+      "id": "retired-trial-acquisition",
+      "name": "Retired Trial Acquisition",
       "description": "Ensures self-hosted Pulse no longer initiates hosted Pro trial acquisition from the ordinary runtime: POST /api/license/trial/start returns 404 and preserves local entitlements.",
       "deterministic": {
         "command": [
           "npx",
           "playwright",
           "test",
-          "tests/07-trial-signup-return.spec.ts",
+          "tests/07-retired-trial-acquisition.spec.ts",
           "--project=chromium",
           "--reporter=list",
           "--retries=1"
         ]
       },
       "agentic": {
-        "task_file": "evals/tasks/trial-signup.md"
+        "task_file": "evals/tasks/retired-trial-acquisition.md"
       }
     },
     {
