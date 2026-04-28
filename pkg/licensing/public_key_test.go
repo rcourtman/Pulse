@@ -18,32 +18,32 @@ func TestInitPublicKey(t *testing.T) {
 		envKey         string
 		embeddedKey    string
 		devMode        bool
-		expectedLoaded bool
+		expectedLoaded func() bool
 	}{
 		{
 			name:           "load from environment",
 			envKey:         base64Pub,
-			expectedLoaded: true,
+			expectedLoaded: allowPublicKeyEnvOverride,
 		},
 		{
 			name:           "load from embedded",
 			embeddedKey:    base64Pub,
-			expectedLoaded: true,
+			expectedLoaded: func() bool { return true },
 		},
 		{
 			name:           "dev mode",
 			devMode:        true,
-			expectedLoaded: false,
+			expectedLoaded: func() bool { return false },
 		},
 		{
 			name:           "no key available",
-			expectedLoaded: false,
+			expectedLoaded: func() bool { return false },
 		},
 		{
 			name:           "malformed env key falls back",
 			envKey:         "not-base64",
 			embeddedKey:    base64Pub,
-			expectedLoaded: true,
+			expectedLoaded: func() bool { return true },
 		},
 	}
 
@@ -60,8 +60,9 @@ func TestInitPublicKey(t *testing.T) {
 			})
 
 			loaded := loadedKey != nil
-			if loaded != tt.expectedLoaded {
-				t.Errorf("expectedLoaded = %v, got %v", tt.expectedLoaded, loaded)
+			expectedLoaded := tt.expectedLoaded()
+			if loaded != expectedLoaded {
+				t.Errorf("expectedLoaded = %v, got %v", expectedLoaded, loaded)
 			}
 		})
 	}
@@ -148,10 +149,14 @@ func TestInitPublicKeyEnvironmentPrecedence(t *testing.T) {
 	})
 
 	if loadedKey == nil {
-		t.Fatal("expected key to be loaded from env")
+		t.Fatal("expected key to be loaded")
 	}
-	if string(loadedKey) != string(envPub) {
-		t.Fatal("expected environment key to take precedence over embedded key")
+	want := embeddedPub
+	if allowPublicKeyEnvOverride() {
+		want = envPub
+	}
+	if string(loadedKey) != string(want) {
+		t.Fatal("loaded key does not match expected build-mode precedence")
 	}
 }
 

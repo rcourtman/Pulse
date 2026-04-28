@@ -30,8 +30,12 @@ func TestNewLicenseServerClient(t *testing.T) {
 	t.Run("env override", func(t *testing.T) {
 		t.Setenv("PULSE_LICENSE_SERVER_URL", "https://env.example.com")
 		c := NewLicenseServerClient("")
-		if c.BaseURL() != "https://env.example.com" {
-			t.Errorf("BaseURL = %q, want env override", c.BaseURL())
+		want := DefaultLicenseServerURL
+		if allowLicenseServerURLEnvOverride() {
+			want = "https://env.example.com"
+		}
+		if c.BaseURL() != want {
+			t.Errorf("BaseURL = %q, want %q", c.BaseURL(), want)
 		}
 	})
 

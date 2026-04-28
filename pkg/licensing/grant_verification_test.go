@@ -93,7 +93,7 @@ func TestVerifyAndParseGrantJWT_WrongKey(t *testing.T) {
 	}
 }
 
-func TestVerifyAndParseGrantJWT_NoPublicKey_DevMode(t *testing.T) {
+func TestVerifyAndParseGrantJWT_NoPublicKey_DevModeHonorsBuildMode(t *testing.T) {
 	// Clear public key and enable dev mode.
 	prev := currentPublicKey()
 	SetPublicKey(nil)
@@ -112,6 +112,12 @@ func TestVerifyAndParseGrantJWT_NoPublicKey_DevMode(t *testing.T) {
 	})
 
 	gc, err := verifyAndParseGrantJWT(jwt)
+	if !isLicenseValidationDevMode() {
+		if !errors.Is(err, ErrNoPublicKey) {
+			t.Fatalf("expected release build to reject dev-mode signature bypass, got: %v", err)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("expected success in dev mode, got: %v", err)
 	}

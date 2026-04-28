@@ -2,7 +2,6 @@ package licensing
 
 import (
 	"crypto/ed25519"
-	"encoding/base64"
 	"errors"
 	"reflect"
 	"sync"
@@ -370,10 +369,7 @@ func TestDatabaseSourceLeaseOnlyStateResolvesTrialEntitlement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	embeddedBefore := EmbeddedPublicKey
-	EmbeddedPublicKey = ""
-	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
-	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	installHostedEntitlementPublicKeyForTest(t, pub)
 
 	now := time.Now().UTC()
 	trialState := BuildTrialBillingState(now, []string{"ai_autofix"})
@@ -425,10 +421,7 @@ func TestDatabaseSourceLeaseOnlyStatePreservesMissingPlanVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	embeddedBefore := EmbeddedPublicKey
-	EmbeddedPublicKey = ""
-	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
-	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	installHostedEntitlementPublicKeyForTest(t, pub)
 
 	now := time.Now().UTC()
 	token, err := SignEntitlementLeaseToken(priv, EntitlementLeaseClaims{
@@ -469,10 +462,7 @@ func TestDatabaseSourceLeaseHostMismatchFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	embeddedBefore := EmbeddedPublicKey
-	EmbeddedPublicKey = ""
-	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
-	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	installHostedEntitlementPublicKeyForTest(t, pub)
 
 	now := time.Now().UTC()
 	trialState := BuildTrialBillingState(now, []string{FeatureAIAutoFix})

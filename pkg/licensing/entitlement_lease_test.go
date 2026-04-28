@@ -2,7 +2,6 @@ package licensing
 
 import (
 	"crypto/ed25519"
-	"encoding/base64"
 	"errors"
 	"testing"
 	"time"
@@ -62,10 +61,7 @@ func TestResolveEntitlementLeaseBillingStateExpired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	embeddedBefore := EmbeddedPublicKey
-	EmbeddedPublicKey = ""
-	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
-	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	installHostedEntitlementPublicKeyForTest(t, pub)
 
 	start := time.Unix(1710000000, 0).UTC().Add(-15 * 24 * time.Hour)
 	startedAt, endsAt := TrialWindow(start, DefaultTrialDuration)
@@ -229,10 +225,7 @@ func TestResolveEntitlementLeaseBillingStatePreservesMissingPlanVersion(t *testi
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	embeddedBefore := EmbeddedPublicKey
-	EmbeddedPublicKey = ""
-	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
-	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	installHostedEntitlementPublicKeyForTest(t, pub)
 
 	token, err := SignEntitlementLeaseToken(priv, EntitlementLeaseClaims{
 		OrgID:             "default",
