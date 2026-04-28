@@ -147,19 +147,19 @@ Pulse v6 uses the activation/grant model for active licensing, but it can migrat
 - The exchanged v6 entitlement depends on the original cohort. Lifetime,
   active pre-cutover recurring Pro, and other migrated legacy paid installs do
   not all land on the same commercial continuity posture.
-- Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation. If they cancel and later return, current v6 pricing applies.
+- Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price until cancellation. Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy. If they cancel and later return, current v6 pricing applies for paid features.
 
 #### Paid Upgrade Truth Table
 
 When an existing paid user asks what changes for them specifically, use this rule set:
 
-- Legacy recurring Pulse Pro subscriptions from v5 or earlier that were already active before the public v6 pricing cutover keep their current recurring price and uncapped monitored-system plus guest capacity while the subscription remains continuously active.
-- Existing lifetime customers remain permanently valid and uncapped.
+- Legacy recurring Pulse Pro subscriptions from v5 or earlier that were already active before the public v6 pricing cutover keep their current recurring price while the subscription remains continuously active. Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy.
+- Existing lifetime customers remain permanently valid, with uncapped self-hosted monitoring and child-resource volume.
 - Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered path can still exchange into the v6 activation model without repurchasing. Migration records can preserve the original cohort for support and audit, but self-hosted monitoring volume is no longer the paid gate.
-- Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing or uncapped capacity automatically; they re-enter on current public v6 pricing.
+- Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing automatically; they re-enter on current public v6 pricing for paid features while self-hosted monitoring remains unlimited.
 - New self-hosted v6 purchases use the current Community / Relay / Pro plan model with unlimited core monitoring.
 
-If a self-hosted v6 install sees a new monitored-system cap after moving to v6, treat that as a regression, not as expected upgrade behavior.
+If a self-hosted v6 install sees a new monitored-system, guest, or child-resource volume cap after moving to v6, treat that as a regression, not as expected upgrade behavior.
 
 Practical recommendation:
 

@@ -62,7 +62,7 @@ Runtime rules:
 - Deduplication follows canonical unified-resource identity rather than transport-specific state.
 
 Migration policy:
-- Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation.
+- Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price until cancellation. Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy.
 - Existing lifetime license holders remain valid and uncapped.
 - Supported legacy paid v5 migrations outside that recurring grandfathered path can still exchange into the v6 activation model without losing self-hosted monitoring access. Migration metadata can preserve the original cohort for support and audit, but monitored-system volume is no longer the paid gate.
 
@@ -70,14 +70,14 @@ Migration policy:
 
 | Customer cohort | What happens in v6 | Pricing and capacity outcome |
 |---|---|---|
-| Legacy recurring subscriber from a v5 or earlier Pulse Pro monthly/annual plan, already active before the public v6 pricing cutover | The install can migrate into the v6 activation model without forcing a repurchase. | The existing recurring price stays in place and monitored-system plus guest capacity remain uncapped while the subscription remains continuously active. |
-| Existing lifetime license holder | The license remains valid through the v6 licensing transition. | Lifetime remains permanently valid and monitored-system plus guest capacity stay uncapped. |
+| Legacy recurring subscriber from a v5 or earlier Pulse Pro monthly/annual plan, already active before the public v6 pricing cutover | The install can migrate into the v6 activation model without forcing a repurchase. | The existing recurring price stays in place while the subscription remains continuously active; self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy. |
+| Existing lifetime license holder | The license remains valid through the v6 licensing transition. | Lifetime remains permanently valid; self-hosted monitoring and child-resource volume stay uncapped. |
 | Legacy paid v5 license migrated into v6 outside the recurring grandfathered path | The install can still exchange into the v6 activation model without forcing a repurchase. Migration records can still preserve the original cohort for support and audit. | Self-hosted monitoring stays available; monitored-system volume is no longer sold as a paid gate on current v6 self-hosted plans. |
-| Former recurring subscriber who already canceled or later lapses/cancels | A later return is treated as a new paid purchase, not as a grandfathered renewal. | The old grandfathered price and uncapped capacity do not resume automatically; current public v6 pricing applies. |
+| Former recurring subscriber who already canceled or later lapses/cancels | A later return is treated as a new paid purchase, not as a grandfathered renewal. | The old grandfathered price does not resume automatically; current public v6 pricing applies for paid features while self-hosted monitoring remains unlimited. |
 | New self-hosted v6 purchase | The purchase uses the current Community / Relay / Pro self-hosted plans. | Core monitoring stays unlimited; paid value comes from convenience, AI, history, and advanced admin features. |
 
 Support rule:
-- If any self-hosted v6 install shows a bounded monitored-system cap after activation or migration, treat it as a bug rather than as intended policy. Guest limits still follow the active tier or continuity contract.
+- If any self-hosted v6 install shows a bounded monitored-system, guest, or child-resource volume cap after activation or migration, treat it as a bug rather than as intended policy.
 
 ## V6 Product Classification
 

@@ -413,13 +413,12 @@ Community limit enforcement.
    they keep the Pro feature set, but they must not inherit monitored-system or
    guest caps from recurring Pro contracts anywhere in runtime, issuance, or
    migrated-license storage.
-6. Treat active recurring v5 Pulse Pro customers as uncapped grandfathered
-   commercial entitlements until cancellation: migrated and renewing v5/v1
-   recurring plans keep their existing recurring price plus uncapped
-   monitored-system and guest capacity while the subscription remains
-   continuous, and only new v6 retail purchases or post-cancellation re-entry
-   may take the current Community / Relay / Pro no-cap self-hosted packaging,
-   with Pro+ remaining legacy continuity only.
+6. Treat active recurring v5 Pulse Pro customers as grandfathered commercial
+   entitlements until cancellation: migrated and renewing v5/v1 recurring
+   plans keep their existing recurring price while the subscription remains
+   continuous. The current Community / Relay / Pro self-hosted packaging also
+   stays no-cap for monitored systems, guests, and child-resource volume, with
+   Pro+ remaining legacy continuity only.
 7. Keep Pro+ app presentation continuity-only: customer-facing tier, plan, and
    plan-version labels for `pro_plus` must include legacy framing while still
    mapping the entitlement to the Pro runtime feature set.
@@ -1393,8 +1392,9 @@ resolves to `v5_pro_monthly_grandfathered` or
 That Pro-license presentation rule is explicit UX, not only hidden metadata:
 when a migrated recurring v5 plan is active or in grace, the settings surface
 must render plan terms and a continuity notice that makes it clear the
-existing recurring price plus uncapped monitored-system and guest capacity
-remain in force until cancellation.
+existing recurring price remains in force until cancellation, while
+self-hosted monitoring and child-resource volume stay uncapped under the
+current v6 policy.
 The self-hosted commercial presentation on that same surface is now locked to
 the no-cap monitored-system model as well. `ProLicensePanel.tsx`,
 `CommercialBillingSections.tsx`, and
@@ -1408,8 +1408,9 @@ continuity only. Cloud/MSP pricing semantics stay separate, and grandfathered
 v5 continuity copy remains an explicit boundary policy.
 That same settings-owned presentation must distinguish between active
 grandfathered recurring v5 continuity and bounded legacy fallbacks. Active
-grandfathered recurring v5 plans must render uncapped monitored-system and
-guest capacity directly and must not show a pending or captured floor banner.
+grandfathered recurring v5 plans must render the existing recurring price
+continuity directly and must not show a pending or captured floor banner or
+any finite self-hosted volume cap.
 Only bounded legacy fallback migrations may render the base plan limit, the
 effective monitored-system limit, any grandfathered floor, and whether
 continuity capture is still pending. When monitored-system usage is

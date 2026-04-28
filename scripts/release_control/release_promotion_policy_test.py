@@ -176,6 +176,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("### License and Entitlements", upgrade_guide)
         self.assertNotIn("### License, Trial, and Entitlements", upgrade_guide)
         self.assertIn("does not expose a general in-app trial, trial-return callback, or hosted AI quickstart", normalize_ws(upgrade_guide))
+        self.assertIn(
+            "Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy",
+            upgrade_guide,
+        )
+        self.assertIn("monitored-system, guest, or child-resource volume cap", upgrade_guide)
+        self.assertNotIn("uncapped monitored-system and guest capacity", upgrade_guide)
+        self.assertNotIn("uncapped capacity automatically", upgrade_guide)
         self.assertNotIn("`POST /api/license/trial/start`", upgrade_guide)
         self.assertNotIn("signed activation token to `/auth/trial-activate`", upgrade_guide)
         self.assertNotIn("25 hosted Patrol", upgrade_guide)
