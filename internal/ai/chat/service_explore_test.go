@@ -360,7 +360,7 @@ func TestResolveExploreProvider_FallsBackToNextExplicitModel(t *testing.T) {
 	}
 }
 
-func TestResolveExploreProvider_SupportsQuickstartModel(t *testing.T) {
+func TestResolveExploreProvider_RetiresQuickstartModel(t *testing.T) {
 	svc := NewService(Config{
 		AIConfig: &config.AIConfig{
 			Enabled:        true,
@@ -372,14 +372,11 @@ func TestResolveExploreProvider_SupportsQuickstartModel(t *testing.T) {
 	svc.orgID = "t-hosted"
 
 	provider, model := svc.resolveExploreProvider("", "", nil)
-	if provider == nil {
-		t.Fatal("expected explore provider resolution to succeed for quickstart")
+	if provider != nil {
+		t.Fatalf("expected retired quickstart explore provider to be unavailable, got %q", provider.Name())
 	}
-	if model != "quickstart:pulse-hosted" {
-		t.Fatalf("expected quickstart explore model, got %q", model)
-	}
-	if provider.Name() != config.AIProviderQuickstart {
-		t.Fatalf("expected quickstart provider, got %q", provider.Name())
+	if model != "" {
+		t.Fatalf("expected retired quickstart explore model to clear, got %q", model)
 	}
 }
 

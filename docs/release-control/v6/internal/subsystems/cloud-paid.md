@@ -495,6 +495,11 @@ Community limit enforcement.
     limit pressure, paid-only settings navigation, and feature upsells unless
     hosted mode, direct intent, activation/recovery state, or active entitlement
     makes them relevant.
+17. Keep hosted and trial billing construction separate from retired hosted-AI
+    quickstart inventory: `pkg/licensing/trial_start.go` and hosted
+    entitlement refresh paths may preserve historical billing fields for old
+    state, but new trial or hosted workspaces must not mint quickstart credits
+    or imply a managed-model allowance as part of the commercial contract.
 
 ## Current State
 
@@ -1637,11 +1642,12 @@ prior email usage through `201` versus `429` drift.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.
-Hosted trial bootstrap and hosted entitlement refresh may still preserve legacy
-quickstart inventory fields as persisted billing compatibility while those
-fields exist. New user-facing hosted or self-hosted acquisition work should not
-depend on that inventory as a product promise, and lease-refresh rewrites must
-avoid turning legacy fields into a renewed customer-facing hosted-model offer.
+Hosted trial bootstrap and hosted entitlement refresh must not mint new
+quickstart inventory. Historical quickstart fields may remain parseable as
+persisted billing compatibility while those fields exist, but new user-facing
+hosted or self-hosted acquisition work must not depend on that inventory as a
+product promise, and lease-refresh rewrites must avoid turning legacy fields
+into a renewed customer-facing hosted-model offer.
 Hosted AI runtime defaults are part of the same boundary as well: when a cloud
 tenant falls back to provider defaults, the persisted model identifier must
 remain canonical `provider:model` data rather than a bare provider-local alias,

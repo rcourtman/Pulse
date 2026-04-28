@@ -20,7 +20,7 @@ describe('ActionRequiredPanel', () => {
         severity: 'warning',
         resourceId: 'ai-service',
         resourceName: 'Pulse Patrol Service',
-        title: 'Pulse Patrol: Insufficient API credits',
+        title: 'Pulse Patrol: Provider billing or quota issue',
       }),
     ).toEqual({
       label: 'Runtime issue',
@@ -67,16 +67,16 @@ describe('ActionRequiredPanel', () => {
       getFindingTitlePresentation({
         resourceId: 'ai-service',
         resourceName: 'Pulse Patrol Service',
-        title: 'Pulse Patrol: Insufficient API credits',
+        title: 'Pulse Patrol: Provider billing or quota issue',
       }),
     ).toEqual({
-      label: 'Insufficient API credits',
+      label: 'Provider billing or quota issue',
     });
     expect(
       getFindingPrimaryActionPresentation({
         resourceId: 'ai-service',
         resourceName: 'Pulse Patrol Service',
-        title: 'Pulse Patrol: Insufficient API credits',
+        title: 'Pulse Patrol: Provider billing or quota issue',
       }),
     ).toEqual({
       label: 'Open Patrol provider settings',
@@ -86,7 +86,7 @@ describe('ActionRequiredPanel', () => {
       getFindingManualControlsPresentation({
         resourceId: 'ai-service',
         resourceName: 'Pulse Patrol Service',
-        title: 'Pulse Patrol: Insufficient API credits',
+        title: 'Pulse Patrol: Provider billing or quota issue',
       }),
     ).toEqual({
       acknowledge: false,

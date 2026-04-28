@@ -165,16 +165,12 @@ export interface PatrolStatus {
   healthy: boolean;
   interval_ms: number; // Patrol interval in milliseconds
   fixed_count: number; // Number of issues remediated by Patrol
-  blocked_reason?: string; // Canonical server-authored Patrol block reason, including quickstart activation/exhaustion state.
+  blocked_reason?: string; // Canonical server-authored Patrol block reason.
   blocked_at?: string;
   license_required?: boolean;
   license_status?: LicenseStatus;
   upgrade_url?: string;
   summary: FindingsSummary;
-  // Server-authoritative Patrol quickstart inventory and runtime source for activated installs only.
-  quickstart_credits_remaining?: number;
-  quickstart_credits_total?: number;
-  using_quickstart?: boolean;
 }
 
 /**

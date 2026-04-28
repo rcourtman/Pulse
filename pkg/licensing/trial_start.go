@@ -86,7 +86,7 @@ func BuildTrialBillingStateWithPlan(now time.Time, capabilities []string, planVe
 		planVersion = string(SubStateTrial)
 	}
 
-	state := &BillingState{
+	return &BillingState{
 		Capabilities:      append([]string(nil), capabilities...),
 		Limits:            map[string]int64{},
 		MetersEnabled:     []string{},
@@ -95,6 +95,4 @@ func BuildTrialBillingStateWithPlan(now time.Time, capabilities []string, planVe
 		TrialStartedAt:    &startedAt,
 		TrialEndsAt:       &endsAt,
 	}
-	state.GrantQuickstartCredits()
-	return state
 }

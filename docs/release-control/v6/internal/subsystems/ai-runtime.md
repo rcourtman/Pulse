@@ -182,8 +182,8 @@ runtime AI selection rules must stay canonical in the shared AI config model
 instead of drifting into handler-local fallbacks or frontend-only assumptions.
 That same provider-model ownership now explicitly forbids Pulse from baking
 vendor model IDs into BYOK default selection. `internal/config/ai.go` may
-persist an explicit operator-chosen model or the Pulse-owned quickstart alias,
-but when a BYOK provider is configured without a concrete model selection,
+persist an explicit operator-chosen model, but when a BYOK provider is
+configured without a concrete model selection,
 `internal/ai/model_resolution.go` must resolve the effective model from the
 provider's live catalog at runtime using the shared provider metadata policy
 instead of reviving static vendor constants in config defaults, service
@@ -296,11 +296,10 @@ setup surface must not reintroduce vendor-default model IDs in modal payloads
 just to make the backend accept the request.
 That same provider-model contract applies to the chat explore pre-pass in
 `internal/ai/chat/service_explore.go`: any runtime model that is valid for the
-main chat execution path, including the Pulse-owned hosted quickstart alias
-`quickstart:pulse-hosted`, must resolve
-through the dedicated explore provider path as well. Explore must not reject
-the canonical quickstart provider while the main chat loop accepts it, because
-hosted tenants rely on the same governed quickstart model before BYOK exists.
+main chat execution path must resolve through the dedicated explore provider
+path as well. Retired quickstart model strings such as
+`quickstart:pulse-hosted` must fail closed and route the operator back to
+BYOK/local-provider setup instead of being accepted as managed-model runtime.
 
 The same runtime ownership now includes the customer-facing AI usage and cost
 surface. `frontend-modern/src/components/AI/AICostDashboard.tsx` is the
@@ -341,27 +340,20 @@ mobile tokens. Broader AI runtime surfaces must stay on their canonical AI
 scopes instead of treating the mobile relay capability as a general-purpose
 AI permission, and any new mobile-compatible AI route must land by extending
 that governed backend inventory and proof set in the same slice.
-That same shared AI transport boundary now also owns hosted AI bootstrap.
-When Pulse Cloud runs in hosted mode and no explicit `ai.enc` exists yet,
-`internal/api/ai_hosted_runtime.go`, `internal/api/ai_handler.go`, and
-`internal/api/ai_handlers.go` must derive the initial runtime config from the
-canonical hosted billing state instead of falling back to a synthetic
-`enabled=false` default. Entitled hosted tenants that carry AI capabilities
-must persist one machine-owned quickstart-backed AI config with the canonical
-Pulse-owned alias `quickstart:pulse-hosted` so Chat and Patrol can start before
-the operator visits AI Settings, while any explicitly written AI config
-remains authoritative and must not be overwritten by hosted bootstrap. When
-the request runs under a hosted tenant org with no org-local billing lease,
-the same AI runtime path must inherit the default hosted lease for bootstrap
-and quickstart-credit reads so tenant-scoped Chat, Patrol, and AI Settings
-stay aligned with the machine-owned hosted entitlement state.
-That same hosted and self-hosted settings boundary must also normalize legacy
+That same shared AI transport boundary now also owns hosted AI bootstrap
+retirement. When Pulse Cloud runs in hosted mode and no explicit `ai.enc`
+exists yet, `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handler.go`,
+and `internal/api/ai_handlers.go` must return the same unconfigured
+BYOK/local-provider default as self-hosted settings instead of deriving a
+quickstart-backed managed-model config from hosted billing state. Any
+explicitly written AI config remains authoritative, and hosted billing state
+must not be converted into quickstart credits or a managed-model runtime.
+That same hosted and self-hosted settings boundary must also retire legacy
 hosted quickstart model aliases on read and write. Persisted values such as
 `quickstart:minimax-2.5m` are historical implementation detail, not governed
 runtime truth, so `internal/config/ai.go`,
-`internal/config/persistence.go`, and `internal/api/ai_handlers.go` must
-rewrite them to `quickstart:pulse-hosted` before the runtime, API payloads,
-or structured logs consume those fields.
+`internal/config/persistence.go`, and `internal/api/ai_handlers.go` must clear
+them before the runtime, API payloads, or structured logs consume those fields.
 That same runtime boundary also owns approval-store lifecycle in
 `internal/api/ai_handler.go`. Settings-driven enablement and restart must be
 able to cold-start the direct AI runtime, initialize approval persistence, and

@@ -958,9 +958,7 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 		baseURL := s.cfg.GetBaseURLForProvider(config.AIProviderOllama)
 		return providers.NewOllamaClient(modelName, baseURL, s.cfg.OllamaUsername, s.cfg.OllamaPassword, timeout)
 	case config.AIProviderQuickstart:
-		// Quickstart uses the hosted proxy — no API key needed.
-		// The licenseID is embedded in the client via orgID.
-		return providers.NewQuickstartClient(s.orgID), nil
+		return nil, fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerName)
 	}

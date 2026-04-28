@@ -420,9 +420,9 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 				description = "Pulse Patrol cannot reach the quickstart proxy server. Quickstart credits require an internet connection."
 				recommendation = patrolQuickstartUnavailableReason
 			} else if strings.Contains(errMsg, "Insufficient Balance") || strings.Contains(errMsg, "402") {
-				title = "Pulse Patrol: Insufficient API credits"
-				description = "Pulse Patrol cannot analyze your infrastructure because your provider account has insufficient credits."
-				recommendation = "Add credits to your provider account (DeepSeek, OpenAI, etc.) or switch to a different provider in Pulse Assistant settings."
+				title = "Pulse Patrol: Provider billing or quota issue"
+				description = "Pulse Patrol cannot analyze your infrastructure because the configured AI provider rejected the request for billing or quota reasons."
+				recommendation = "Resolve the billing or quota issue with your AI provider, or switch to a different provider or local model in Pulse Assistant settings."
 			} else if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "Unauthorized") {
 				title = "Pulse Patrol: Invalid API key"
 				description = "Pulse Patrol cannot analyze your infrastructure because the API key is invalid or expired."

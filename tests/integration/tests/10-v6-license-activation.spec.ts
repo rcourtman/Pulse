@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { apiRequest, ensureAuthenticated } from './helpers';
+import { test, expect } from "@playwright/test";
+import { apiRequest, ensureAuthenticated } from "./helpers";
 
 /**
  * V6 License Activation E2E Test
@@ -14,10 +14,10 @@ import { apiRequest, ensureAuthenticated } from './helpers';
  */
 
 const LICENSE_SERVER_URL = (
-  process.env.PULSE_LICENSE_SERVER_URL || 'https://license.pulserelay.pro'
-).replace(/\/+$/, '');
+  process.env.PULSE_LICENSE_SERVER_URL || "https://license.pulserelay.pro"
+).replace(/\/+$/, "");
 
-const ADMIN_TOKEN = process.env.PULSE_LICENSE_ADMIN_TOKEN || '';
+const ADMIN_TOKEN = process.env.PULSE_LICENSE_ADMIN_TOKEN || "";
 
 type IssuedLicense = {
   license: { license_id: string };
@@ -31,31 +31,29 @@ type EntitlementPayload = {
   is_lifetime?: boolean;
   licensed_email?: string;
   days_remaining?: number;
-  limits?: Array<{ key: string; limit: number; current: number; state: string }>;
+  limits?: Array<{
+    key: string;
+    limit: number;
+    current: number;
+    state: string;
+  }>;
 };
 
 type AISettingsPayload = {
   enabled?: boolean;
   model?: string;
   patrol_model?: string;
-  quickstart_credits_total?: number;
-  quickstart_credits_remaining?: number;
-  quickstart_credits_available?: boolean;
-  quickstart_blocked_reason?: string;
 };
 
 type PatrolStatusPayload = {
-  using_quickstart?: boolean;
-  quickstart_credits_total?: number;
-  quickstart_credits_remaining?: number;
   runtime_state?: string;
 };
 
-test.describe.serial('V6 license activation flow', () => {
+test.describe.serial("V6 license activation flow", () => {
   /** Issued license ID — used for cleanup/revocation. */
-  let issuedLicenseId = '';
+  let issuedLicenseId = "";
   /** The activation key string (ppk_live_*). */
-  let activationKey = '';
+  let activationKey = "";
 
   test.afterAll(async ({ browser }) => {
     // Best-effort cleanup: clear license in Pulse and revoke on the server.
@@ -66,7 +64,9 @@ test.describe.serial('V6 license activation flow', () => {
       await ensureAuthenticated(page);
 
       // Clear the license in Pulse (ignore errors — may already be cleared).
-      await apiRequest(page, '/api/license/clear', { method: 'POST' }).catch(() => {});
+      await apiRequest(page, "/api/license/clear", { method: "POST" }).catch(
+        () => {},
+      );
     } catch {
       // If Pulse is unreachable, nothing to clean up locally.
     }
@@ -77,12 +77,12 @@ test.describe.serial('V6 license activation flow', () => {
         await page.request.fetch(
           `${LICENSE_SERVER_URL}/v1/licenses/${issuedLicenseId}/revoke`,
           {
-            method: 'POST',
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json',
-              'X-API-Token': ADMIN_TOKEN,
+              "Content-Type": "application/json",
+              "X-API-Token": ADMIN_TOKEN,
             },
-            data: { reason: 'E2E test cleanup', reason_code: 'test_cleanup' },
+            data: { reason: "E2E test cleanup", reason_code: "test_cleanup" },
           },
         );
       } catch {
@@ -93,29 +93,38 @@ test.describe.serial('V6 license activation flow', () => {
     await context.close();
   });
 
-  test('issues a v6 test license via admin API', async ({ page }, testInfo) => {
-    test.skip(!ADMIN_TOKEN, 'PULSE_LICENSE_ADMIN_TOKEN not set — skipping v6 activation tests');
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only license workflow');
+  test("issues a v6 test license via admin API", async ({ page }, testInfo) => {
+    test.skip(
+      !ADMIN_TOKEN,
+      "PULSE_LICENSE_ADMIN_TOKEN not set — skipping v6 activation tests",
+    );
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only license workflow",
+    );
 
-    const response = await page.request.fetch(`${LICENSE_SERVER_URL}/v1/licenses/issue`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Token': ADMIN_TOKEN,
+    const response = await page.request.fetch(
+      `${LICENSE_SERVER_URL}/v1/licenses/issue`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Token": ADMIN_TOKEN,
+        },
+        data: {
+          generation: "v6",
+          email: "e2e-playwright@test.local",
+          tier: "pro",
+          plan_key: "pro_monthly",
+          billing_model: "manual",
+          duration_days: 1,
+          max_monitored_systems: 0,
+          max_guests: 5,
+          max_installations: 3,
+          send_email: false,
+        },
       },
-      data: {
-        generation: 'v6',
-        email: 'e2e-playwright@test.local',
-        tier: 'pro',
-        plan_key: 'pro_monthly',
-        billing_model: 'manual',
-        duration_days: 1,
-        max_monitored_systems: 0,
-        max_guests: 5,
-        max_installations: 3,
-        send_email: false,
-      },
-    });
+    );
 
     expect(
       [200, 201].includes(response.status()),
@@ -131,192 +140,231 @@ test.describe.serial('V6 license activation flow', () => {
     activationKey = body.activation_key.activation_key;
   });
 
-  test('clears any existing license for a clean slate', async ({ page }, testInfo) => {
-    test.skip(!ADMIN_TOKEN, 'PULSE_LICENSE_ADMIN_TOKEN not set');
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only');
+  test("clears any existing license for a clean slate", async ({
+    page,
+  }, testInfo) => {
+    test.skip(!ADMIN_TOKEN, "PULSE_LICENSE_ADMIN_TOKEN not set");
+    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only");
 
     await ensureAuthenticated(page);
 
-    const clearRes = await apiRequest(page, '/api/license/clear', { method: 'POST' });
-    expect(clearRes.ok(), `Clear license failed: ${clearRes.status()}`).toBeTruthy();
+    const clearRes = await apiRequest(page, "/api/license/clear", {
+      method: "POST",
+    });
+    expect(
+      clearRes.ok(),
+      `Clear license failed: ${clearRes.status()}`,
+    ).toBeTruthy();
 
     // Verify we're on the free tier now.
-    const entRes = await apiRequest(page, '/api/license/entitlements');
+    const entRes = await apiRequest(page, "/api/license/entitlements");
     expect(entRes.ok()).toBeTruthy();
     const ent = (await entRes.json()) as EntitlementPayload;
-    expect(ent.tier).toBe('free');
+    expect(ent.tier).toBe("free");
   });
 
-  test('activates v6 license via the Settings UI', async ({ page }, testInfo) => {
-    test.skip(!ADMIN_TOKEN, 'PULSE_LICENSE_ADMIN_TOKEN not set');
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only');
-    test.skip(!activationKey, 'No activation key from previous step');
+  test("activates v6 license via the Settings UI", async ({
+    page,
+  }, testInfo) => {
+    test.skip(!ADMIN_TOKEN, "PULSE_LICENSE_ADMIN_TOKEN not set");
+    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only");
+    test.skip(!activationKey, "No activation key from previous step");
 
     await ensureAuthenticated(page);
-    await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Activation & Recovery' })).toBeVisible();
+    await page.goto("/settings/system/billing");
+    await expect(
+      page.getByRole("heading", { name: "Plans & Activation" }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Activation & Recovery" }),
+    ).toBeVisible();
 
     // Fill in the activation key.
-    const textarea = page.locator('#pulse-pro-license-key');
+    const textarea = page.locator("#pulse-pro-license-key");
     await expect(textarea).toBeVisible();
     await textarea.fill(activationKey);
 
     // Click Activate.
-    const activateButton = page.getByRole('button', { name: 'Activate License' });
+    const activateButton = page.getByRole("button", {
+      name: "Activate License",
+    });
     await expect(activateButton).toBeEnabled();
     await activateButton.click();
 
     // Wait for activation to complete: poll entitlements until active, which is
     // more reliable than matching a transient toast.
-    await expect.poll(async () => {
-      const res = await apiRequest(page, '/api/license/entitlements');
-      if (!res.ok()) return '';
-      const ent = (await res.json()) as EntitlementPayload;
-      return ent.subscription_state;
-    }, { timeout: 30_000, message: 'License did not activate within timeout' }).toBe('active');
+    await expect
+      .poll(
+        async () => {
+          const res = await apiRequest(page, "/api/license/entitlements");
+          if (!res.ok()) return "";
+          const ent = (await res.json()) as EntitlementPayload;
+          return ent.subscription_state;
+        },
+        { timeout: 30_000, message: "License did not activate within timeout" },
+      )
+      .toBe("active");
   });
 
-  test('verifies activated license in UI and API', async ({ page }, testInfo) => {
-    test.skip(!ADMIN_TOKEN, 'PULSE_LICENSE_ADMIN_TOKEN not set');
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only');
-    test.skip(!activationKey, 'No activation key from previous step');
+  test("verifies activated license in UI and API", async ({
+    page,
+  }, testInfo) => {
+    test.skip(!ADMIN_TOKEN, "PULSE_LICENSE_ADMIN_TOKEN not set");
+    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only");
+    test.skip(!activationKey, "No activation key from previous step");
 
     await ensureAuthenticated(page);
-    await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Current plan' })).toBeVisible();
-    await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible();
-    await expect(page.getByText(/^Active$/).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('No Pro license is active.')).toHaveCount(0);
-    await expect(page.getByText('Unlimited').first()).toBeVisible();
+    await page.goto("/settings/system/billing");
+    await expect(
+      page.getByRole("heading", { name: "Plans & Activation" }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Current plan" }),
+    ).toBeVisible();
+    await expect(page.getByText("Current plan: Pulse Pro")).toBeVisible();
+    await expect(page.getByText(/^Active$/).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText("No Pro license is active.")).toHaveCount(0);
+    await expect(page.getByText("Unlimited").first()).toBeVisible();
 
     // Verify entitlements API agrees.
-    const entRes = await apiRequest(page, '/api/license/entitlements');
-    expect(entRes.ok(), `Entitlements request failed: ${entRes.status()}`).toBeTruthy();
+    const entRes = await apiRequest(page, "/api/license/entitlements");
+    expect(
+      entRes.ok(),
+      `Entitlements request failed: ${entRes.status()}`,
+    ).toBeTruthy();
 
     const ent = (await entRes.json()) as EntitlementPayload;
-    expect(ent.tier).toBe('pro');
-    expect(ent.subscription_state).toBe('active');
+    expect(ent.tier).toBe("pro");
+    expect(ent.subscription_state).toBe("active");
     expect(ent.valid).toBe(true);
-    expect(ent.licensed_email).toBe('e2e-playwright@test.local');
+    expect(ent.licensed_email).toBe("e2e-playwright@test.local");
 
     // Core monitoring is unlimited for self-hosted v6 plans.
-    const agentLimit = ent.limits?.find((l) => l.key === 'max_monitored_systems');
+    const agentLimit = ent.limits?.find(
+      (l) => l.key === "max_monitored_systems",
+    );
     expect(agentLimit).toBeUndefined();
 
     // Check max_guests limit.
-    const guestLimit = ent.limits?.find((l) => l.key === 'max_guests');
-    expect(guestLimit, 'max_guests limit not found in entitlements').toBeTruthy();
+    const guestLimit = ent.limits?.find((l) => l.key === "max_guests");
+    expect(
+      guestLimit,
+      "max_guests limit not found in entitlements",
+    ).toBeTruthy();
     expect(guestLimit!.limit).toBe(5);
   });
 
-  test('surfaces activated-install quickstart readiness without requiring BYOK', async ({
+  test("keeps activated installs on BYOK or local AI setup without quickstart", async ({
     page,
   }, testInfo) => {
-    test.skip(!ADMIN_TOKEN, 'PULSE_LICENSE_ADMIN_TOKEN not set');
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only');
-    test.skip(!activationKey, 'No activation key from previous step');
+    test.skip(!ADMIN_TOKEN, "PULSE_LICENSE_ADMIN_TOKEN not set");
+    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only");
+    test.skip(!activationKey, "No activation key from previous step");
 
     await ensureAuthenticated(page);
 
-    const entRes = await apiRequest(page, '/api/license/entitlements');
-    expect(entRes.ok(), `Entitlements request failed: ${entRes.status()}`).toBeTruthy();
+    const entRes = await apiRequest(page, "/api/license/entitlements");
+    expect(
+      entRes.ok(),
+      `Entitlements request failed: ${entRes.status()}`,
+    ).toBeTruthy();
     const ent = (await entRes.json()) as EntitlementPayload;
-    expect(ent.subscription_state).toBe('active');
+    expect(ent.subscription_state).toBe("active");
 
-    await page.goto('/settings/system-ai');
-    await expect(page.getByRole('heading', { name: 'Assistant & Patrol' }).first()).toBeVisible();
+    await page.goto("/settings/system-ai");
+    await expect(
+      page.getByRole("heading", { name: "Assistant & Patrol" }).first(),
+    ).toBeVisible();
 
-    const preSettingsRes = await apiRequest(page, '/api/settings/ai');
-    expect(preSettingsRes.ok(), `AI settings request failed: ${preSettingsRes.status()}`).toBeTruthy();
+    const preSettingsRes = await apiRequest(page, "/api/settings/ai");
+    expect(
+      preSettingsRes.ok(),
+      `AI settings request failed: ${preSettingsRes.status()}`,
+    ).toBeTruthy();
     const preSettings = (await preSettingsRes.json()) as AISettingsPayload;
-    expect(preSettings.quickstart_credits_available).toBe(true);
-    expect(preSettings.quickstart_credits_total).toBe(25);
-    expect(preSettings.quickstart_credits_remaining).toBe(25);
-    expect(preSettings.quickstart_blocked_reason || '').toBe('');
+    expect(preSettings).not.toHaveProperty("quickstart_credits_available");
+    expect(preSettings).not.toHaveProperty("quickstart_credits_total");
+    expect(preSettings).not.toHaveProperty("quickstart_credits_remaining");
+    expect(preSettings).not.toHaveProperty("quickstart_blocked_reason");
 
-    const enableAI = page.getByRole('button', { name: 'Enable Assistant and Patrol' });
+    const enableAI = page.getByRole("button", {
+      name: "Enable Assistant and Patrol",
+    });
     await expect(enableAI).toBeVisible();
     if (await page.getByText(/^Disabled$/).isVisible()) {
       await enableAI.click();
     }
 
-    await expect
-      .poll(async () => {
-        const res = await apiRequest(page, '/api/settings/ai');
-        if (!res.ok()) return null;
-        const body = (await res.json()) as AISettingsPayload;
-        return {
-          enabled: body.enabled === true,
-          model: body.model || '',
-          quickstart_credits_available: body.quickstart_credits_available === true,
-          quickstart_credits_remaining: body.quickstart_credits_remaining ?? -1,
-        };
-      }, { timeout: 30_000 })
-      .toEqual({
-        enabled: true,
-        model: 'quickstart:pulse-hosted',
-        quickstart_credits_available: true,
-        quickstart_credits_remaining: 25,
-      });
-
     await expect(
-      page.getByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
+      page.getByText("Connect a provider to power Pulse Assistant and Patrol."),
     ).toBeVisible();
+    await expect(page.getByText(/Patrol quickstart/i)).toHaveCount(0);
 
-    await page.goto('/ai');
-    await expect(page.getByRole('heading', { name: 'Patrol' }).first()).toBeVisible();
-    await expect(page.getByText('Patrol quickstart: 25/25 runs left')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Run Patrol' })).toBeEnabled();
+    await page.goto("/ai");
+    await expect(
+      page.getByRole("heading", { name: "Patrol" }).first(),
+    ).toBeVisible();
+    await expect(page.getByText(/Patrol quickstart/i)).toHaveCount(0);
 
-    const patrolStatusRes = await apiRequest(page, '/api/ai/patrol/status');
+    const patrolStatusRes = await apiRequest(page, "/api/ai/patrol/status");
     expect(
       patrolStatusRes.ok(),
       `Patrol status request failed: ${patrolStatusRes.status()}`,
     ).toBeTruthy();
     const patrolStatus = (await patrolStatusRes.json()) as PatrolStatusPayload;
-    expect(patrolStatus.using_quickstart).toBe(true);
-    expect(patrolStatus.quickstart_credits_total).toBe(25);
-    expect(patrolStatus.quickstart_credits_remaining).toBe(25);
-    expect(patrolStatus.runtime_state).toBe('active');
+    expect(patrolStatus).not.toHaveProperty("using_quickstart");
+    expect(patrolStatus).not.toHaveProperty("quickstart_credits_total");
+    expect(patrolStatus).not.toHaveProperty("quickstart_credits_remaining");
   });
 
-  test('clears license via UI and verifies free tier', async ({ page }, testInfo) => {
-    test.skip(!ADMIN_TOKEN, 'PULSE_LICENSE_ADMIN_TOKEN not set');
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only');
-    test.skip(!activationKey, 'No activation key from previous step');
+  test("clears license via UI and verifies free tier", async ({
+    page,
+  }, testInfo) => {
+    test.skip(!ADMIN_TOKEN, "PULSE_LICENSE_ADMIN_TOKEN not set");
+    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only");
+    test.skip(!activationKey, "No activation key from previous step");
 
     await ensureAuthenticated(page);
-    await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Activation & Recovery' })).toBeVisible();
+    await page.goto("/settings/system/billing");
+    await expect(
+      page.getByRole("heading", { name: "Plans & Activation" }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Activation & Recovery" }),
+    ).toBeVisible();
 
     // Set up one-shot dialog handler for the native confirm() prompt.
-    page.once('dialog', (dialog) => dialog.accept());
+    page.once("dialog", (dialog) => dialog.accept());
 
     // Click Clear License.
-    const clearButton = page.getByRole('button', { name: 'Clear License' });
+    const clearButton = page.getByRole("button", { name: "Clear License" });
     await expect(clearButton).toBeEnabled({ timeout: 5_000 });
     await clearButton.click();
 
     // Wait for success toast.
-    await expect(
-      page.locator('text=/License cleared/i').first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("text=/License cleared/i").first()).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Verify entitlements API reverts to free tier.
-    await expect.poll(async () => {
-      const res = await apiRequest(page, '/api/license/entitlements');
-      if (!res.ok()) return '';
-      const ent = (await res.json()) as EntitlementPayload;
-      return ent.tier;
-    }, { timeout: 10_000 }).toBe('free');
+    await expect
+      .poll(
+        async () => {
+          const res = await apiRequest(page, "/api/license/entitlements");
+          if (!res.ok()) return "";
+          const ent = (await res.json()) as EntitlementPayload;
+          return ent.tier;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe("free");
 
     // Verify UI shows "No Pro license is active" or free-tier state.
     await page.reload();
     await expect(
-      page.locator('text=/No Pro license is active/i').first(),
+      page.locator("text=/No Pro license is active/i").first(),
     ).toBeVisible({ timeout: 10_000 });
   });
 });

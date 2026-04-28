@@ -13,7 +13,7 @@ import (
 	entitlements "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
-func TestRefreshHostedEntitlementLeaseOnce_GrantsQuickstartCredits(t *testing.T) {
+func TestRefreshHostedEntitlementLeaseOnce_DoesNotGrantQuickstartCredits(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 
@@ -66,10 +66,10 @@ func TestRefreshHostedEntitlementLeaseOnce_GrantsQuickstartCredits(t *testing.T)
 	if state == nil {
 		t.Fatal("expected billing state after hosted entitlement refresh")
 	}
-	if !state.QuickstartCreditsGranted {
-		t.Fatal("expected hosted entitlement refresh to grant quickstart credits")
+	if state.QuickstartCreditsGranted {
+		t.Fatal("expected hosted entitlement refresh not to grant quickstart credits")
 	}
-	if state.QuickstartCreditsGrantedAt == nil {
-		t.Fatal("expected hosted entitlement refresh to record quickstart grant timestamp")
+	if state.QuickstartCreditsGrantedAt != nil {
+		t.Fatal("expected hosted entitlement refresh not to record quickstart grant timestamp")
 	}
 }

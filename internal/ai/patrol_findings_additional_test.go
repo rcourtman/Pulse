@@ -100,7 +100,7 @@ func TestPatrolService_DismissFinding_RejectsPatrolRuntimeFinding(t *testing.T) 
 		ResourceID:   patrolRuntimeResourceID,
 		ResourceName: "Pulse Patrol Service",
 		ResourceType: "service",
-		Title:        "Pulse Patrol: Insufficient API credits",
+		Title:        "Pulse Patrol: Provider billing or quota issue",
 	}
 	ps.findings.Add(f)
 

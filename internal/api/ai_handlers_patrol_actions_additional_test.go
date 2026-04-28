@@ -86,8 +86,8 @@ func addPatrolRuntimeFinding(t *testing.T, patrol *ai.PatrolService, id string, 
 		Key:          "ai-patrol-error",
 		Severity:     ai.FindingSeverityWarning,
 		Category:     ai.FindingCategoryReliability,
-		Title:        "Pulse Patrol: Insufficient API credits",
-		Description:  "Patrol could not complete because provider credits are exhausted",
+		Title:        "Pulse Patrol: Provider billing or quota issue",
+		Description:  "Patrol could not complete because provider billing or quota needs attention",
 		ResourceID:   "ai-service",
 		ResourceName: "Pulse Patrol Service",
 		ResourceType: "service",
@@ -107,8 +107,8 @@ func addUnifiedRuntimeFinding(store *unified.UnifiedStore, id string, detectedAt
 		ResourceID:   "ai-service",
 		ResourceName: "Pulse Patrol Service",
 		ResourceType: "service",
-		Title:        "Pulse Patrol: Insufficient API credits",
-		Description:  "Patrol could not complete because provider credits are exhausted",
+		Title:        "Pulse Patrol: Provider billing or quota issue",
+		Description:  "Patrol could not complete because provider billing or quota needs attention",
 		DetectedAt:   detectedAt,
 	}
 	store.AddFromAI(finding)
@@ -141,7 +141,7 @@ func (m *stubQuickstartCreditManager) GetProvider() providers.Provider {
 	return providers.NewQuickstartClientWithToken("qst_live_test", nil, nil)
 }
 
-func TestHandleGetPatrolStatus_IncludesQuickstartFields(t *testing.T) {
+func TestHandleGetPatrolStatus_DoesNotExposeQuickstartFields(t *testing.T) {
 	handler, _, _, _ := setupAIHandlerWithPatrol(t)
 
 	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 7})
@@ -161,18 +161,13 @@ func TestHandleGetPatrolStatus_IncludesQuickstartFields(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if resp.QuickstartCreditsRemaining != 7 {
-		t.Fatalf("quickstart credits remaining = %d, want 7", resp.QuickstartCreditsRemaining)
-	}
-	if resp.QuickstartCreditsTotal != pkglicensing.QuickstartCreditsTotal {
-		t.Fatalf("quickstart credits total = %d, want %d", resp.QuickstartCreditsTotal, pkglicensing.QuickstartCreditsTotal)
-	}
-	if !resp.UsingQuickstart {
-		t.Fatal("expected using_quickstart to be true")
+	body := rec.Body.String()
+	if strings.Contains(body, "quickstart_credits") || strings.Contains(body, "using_quickstart") {
+		t.Fatalf("patrol status must not expose retired quickstart fields: %s", body)
 	}
 }
 
-func TestHandleGetPatrolStatus_DerivesBlockedRuntimeStateForExhaustedQuickstartCredits(t *testing.T) {
+func TestHandleGetPatrolStatus_DoesNotSurfaceExhaustedQuickstartCredits(t *testing.T) {
 	handler, _, _, _ := setupAIHandlerWithPatrol(t)
 
 	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 0})
@@ -191,14 +186,14 @@ func TestHandleGetPatrolStatus_DerivesBlockedRuntimeStateForExhaustedQuickstartC
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if resp.RuntimeState != ai.PatrolRuntimeStateBlocked {
-		t.Fatalf("runtime_state = %q, want %q", resp.RuntimeState, ai.PatrolRuntimeStateBlocked)
+	if resp.RuntimeState == ai.PatrolRuntimeStateBlocked {
+		t.Fatalf("runtime_state = %q, want non-blocked for retired quickstart", resp.RuntimeState)
 	}
-	if resp.BlockedReason != "Quickstart credits exhausted. Connect your API key to continue using AI Patrol." {
-		t.Fatalf("blocked_reason = %q", resp.BlockedReason)
+	if strings.Contains(strings.ToLower(resp.BlockedReason), "quickstart") {
+		t.Fatalf("blocked_reason must not expose retired quickstart copy, got %q", resp.BlockedReason)
 	}
-	if resp.Healthy {
-		t.Fatal("expected blocked patrol response to report healthy=false")
+	if !resp.Healthy {
+		t.Fatal("expected retired quickstart state to remain healthy on the public status surface")
 	}
 }
 

@@ -254,70 +254,35 @@ func TestContract_ChatServiceAdapterPatrolForwardsExecutionID(t *testing.T) {
 	}
 }
 
-func TestContract_AIQuickstartPayloadFieldsRemainCanonical(t *testing.T) {
+func TestContract_AIQuickstartPayloadFieldsAreRetired(t *testing.T) {
 	settingsBody, err := json.Marshal(AISettingsResponse{
-		QuickstartCreditsRemaining: 7,
-		QuickstartCreditsTotal:     25,
-		UsingQuickstart:            true,
+		Enabled:    true,
+		Configured: false,
 	})
 	if err != nil {
 		t.Fatalf("marshal AI settings response: %v", err)
 	}
-	if !bytes.Contains(settingsBody, []byte(`"quickstart_credits_remaining":7`)) {
-		t.Fatalf("expected AI settings payload to expose quickstart_credits_remaining, got %s", settingsBody)
-	}
-	if !bytes.Contains(settingsBody, []byte(`"quickstart_credits_total":25`)) {
-		t.Fatalf("expected AI settings payload to expose quickstart_credits_total, got %s", settingsBody)
-	}
-	if !bytes.Contains(settingsBody, []byte(`"using_quickstart":true`)) {
-		t.Fatalf("expected AI settings payload to expose using_quickstart, got %s", settingsBody)
+	if bytes.Contains(settingsBody, []byte(`quickstart`)) {
+		t.Fatalf("expected AI settings payload not to expose retired quickstart fields, got %s", settingsBody)
 	}
 
 	statusBody, err := json.Marshal(PatrolStatusResponse{
-		QuickstartCreditsRemaining: 7,
-		QuickstartCreditsTotal:     25,
-		UsingQuickstart:            true,
+		RuntimeState: ai.PatrolRuntimeStateActive,
+		Healthy:      true,
 	})
 	if err != nil {
 		t.Fatalf("marshal patrol status response: %v", err)
 	}
-	if !bytes.Contains(statusBody, []byte(`"quickstart_credits_remaining":7`)) {
-		t.Fatalf("expected patrol status payload to expose quickstart_credits_remaining, got %s", statusBody)
-	}
-	if !bytes.Contains(statusBody, []byte(`"quickstart_credits_total":25`)) {
-		t.Fatalf("expected patrol status payload to expose quickstart_credits_total, got %s", statusBody)
-	}
-	if !bytes.Contains(statusBody, []byte(`"using_quickstart":true`)) {
-		t.Fatalf("expected patrol status payload to expose using_quickstart, got %s", statusBody)
+	if bytes.Contains(statusBody, []byte(`quickstart`)) {
+		t.Fatalf("expected patrol status payload not to expose retired quickstart fields, got %s", statusBody)
 	}
 }
 
-func TestContract_AISettingsUpdateQuickstartBootstrapJSONSnapshot(t *testing.T) {
+func TestContract_AISettingsUpdateRequiresProviderBeforeEnable(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	persistQuickstartActivationState(t, persistence)
-	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer pit_live_test" {
-			t.Fatalf("authorization=%q want Bearer pit_live_test", got)
-		}
-		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
-		if instanceFingerprint != "fp-live-test" {
-			t.Fatalf("instance_fingerprint=%q want fp-live-test", instanceFingerprint)
-		}
-		if reqBody["use_case"] != "patrol" {
-			t.Fatalf("use_case=%v want patrol", reqBody["use_case"])
-		}
-	})
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
-		persistence,
-		"default",
-		func() *config.AIConfig {
-			cfg, _ := persistence.LoadAIConfig()
-			return cfg
-		},
-	))
 
 	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(`{
 		"enabled": true
@@ -326,48 +291,15 @@ func TestContract_AISettingsUpdateQuickstartBootstrapJSONSnapshot(t *testing.T) 
 	rec := httptest.NewRecorder()
 	handler.HandleUpdateAISettings(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-
-	const want = `{
-		"enabled":true,
-		"model":"quickstart:pulse-hosted",
-		"chat_model":"quickstart:pulse-hosted",
-		"patrol_model":"quickstart:pulse-hosted",
-		"configured":true,
-		"custom_context":"",
-		"auth_method":"api_key",
-		"oauth_connected":false,
-		"patrol_interval_minutes":360,
-		"patrol_enabled":true,
-		"patrol_auto_fix":false,
-		"alert_triggered_analysis":true,
-		"patrol_event_triggers_enabled":true,
-		"patrol_alert_triggers_enabled":true,
-		"patrol_anomaly_triggers_enabled":true,
-		"use_proactive_thresholds":false,
-		"available_models":[],
-		"anthropic_configured":false,
-		"openai_configured":false,
-		"openrouter_configured":false,
-		"deepseek_configured":false,
-		"gemini_configured":false,
-		"ollama_configured":false,
-		"ollama_base_url":"http://localhost:11434",
-		"ollama_password_set":false,
-		"configured_providers":[],
-		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
-		"quickstart_credits_total":25,
-		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":25,
-		"quickstart_credits_available":true,
-		"using_quickstart":true
-	}`
-
-	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+	if strings.Contains(strings.ToLower(rec.Body.String()), "quickstart") {
+		t.Fatalf("provider-required response must not mention retired quickstart, got %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Please configure a provider") {
+		t.Fatalf("expected provider-required response, got %s", rec.Body.String())
+	}
 }
 
 func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
@@ -427,21 +359,16 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		"ollama_configured":true,
 		"ollama_base_url":%q,
 		"ollama_password_set":false,
-		"configured_providers":["ollama"],
-		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
-		"quickstart_credits_total":0,
-		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":0,
-		"quickstart_credits_available":false,
-		"using_quickstart":false
-	}`, ollama.URL)
+			"configured_providers":["ollama"],
+			"control_level":"read_only",
+			"protected_guests":[],
+			"discovery_enabled":false
+		}`, ollama.URL)
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
-func TestContract_PatrolStatusActivationRequiredSurface(t *testing.T) {
+func TestContract_PatrolStatusDoesNotSurfaceQuickstartActivation(t *testing.T) {
 	handler, _, _, _ := setupAIHandlerWithPatrol(t)
 	persistence := handler.defaultPersistence
 	aiCfg := config.NewDefaultAIConfig()
@@ -474,27 +401,21 @@ func TestContract_PatrolStatusActivationRequiredSurface(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode patrol status: %v", err)
 	}
-	if resp.RuntimeState != ai.PatrolRuntimeStateBlocked {
-		t.Fatalf("runtime_state=%q want %q", resp.RuntimeState, ai.PatrolRuntimeStateBlocked)
+	if resp.RuntimeState == ai.PatrolRuntimeStateBlocked {
+		t.Fatalf("runtime_state=%q, want non-blocked for retired quickstart", resp.RuntimeState)
 	}
 	if !resp.Enabled {
 		t.Fatal("expected patrol status to remain enabled while activation is required")
 	}
-	if resp.Healthy {
-		t.Fatal("expected activation-required patrol status to report healthy=false")
+	if !resp.Healthy {
+		t.Fatal("expected retired quickstart activation state to stay healthy on the public status surface")
 	}
-	if resp.BlockedReason != ai.QuickstartActivationRequiredReason() {
-		t.Fatalf("blocked_reason=%q want %q", resp.BlockedReason, ai.QuickstartActivationRequiredReason())
-	}
-	if resp.QuickstartCreditsRemaining != 0 || resp.QuickstartCreditsTotal != 0 {
-		t.Fatalf("quickstart credits=%d/%d want 0/0", resp.QuickstartCreditsRemaining, resp.QuickstartCreditsTotal)
-	}
-	if resp.UsingQuickstart {
-		t.Fatal("expected using_quickstart=false while activation is required")
+	if strings.Contains(strings.ToLower(resp.BlockedReason), "quickstart") {
+		t.Fatalf("blocked_reason must not expose retired quickstart copy, got %q", resp.BlockedReason)
 	}
 }
 
-func TestContract_AISettingsActivationRequiredSurface(t *testing.T) {
+func TestContract_AISettingsDoesNotExposeQuickstartActivation(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -517,25 +438,15 @@ func TestContract_AISettingsActivationRequiredSurface(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode ai settings: %v", err)
 	}
-	if resp.QuickstartBlockedReason != ai.QuickstartActivationRequiredReason() {
-		t.Fatalf(
-			"quickstart_blocked_reason=%q want %q",
-			resp.QuickstartBlockedReason,
-			ai.QuickstartActivationRequiredReason(),
-		)
+	if resp.Configured {
+		t.Fatal("expected AI settings to remain unconfigured without BYOK/local provider")
 	}
-	if resp.QuickstartCreditsRemaining != 0 || resp.QuickstartCreditsTotal != 0 {
-		t.Fatalf("quickstart credits=%d/%d want 0/0", resp.QuickstartCreditsRemaining, resp.QuickstartCreditsTotal)
-	}
-	if resp.QuickstartCreditsAvailable {
-		t.Fatal("expected quickstart_credits_available=false while activation is required")
-	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte(`"quickstart_blocked_reason":"`+ai.QuickstartActivationRequiredReason()+`"`)) {
-		t.Fatalf("expected AI settings payload to expose quickstart_blocked_reason, got %s", rec.Body.Bytes())
+	if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("quickstart")) {
+		t.Fatalf("AI settings payload must not expose retired quickstart fields, got %s", rec.Body.Bytes())
 	}
 }
 
-func TestContract_AISettingsBYOKOverrideRetainsQuickstartInventoryJSONSnapshot(t *testing.T) {
+func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnapshot(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -586,16 +497,11 @@ func TestContract_AISettingsBYOKOverrideRetainsQuickstartInventoryJSONSnapshot(t
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
-		"configured_providers":["openai"],
-		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
-		"quickstart_credits_total":25,
-		"quickstart_credits_used":13,
-		"quickstart_credits_remaining":12,
-		"quickstart_credits_available":true,
-		"using_quickstart":false
-	}`
+			"configured_providers":["openai"],
+			"control_level":"read_only",
+			"protected_guests":[],
+			"discovery_enabled":false
+		}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
@@ -2382,23 +2288,8 @@ func TestContract_BillingStateQuickstartJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
-func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
+func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
-	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			t.Fatalf("expected Bearer auth, got %q", authHeader)
-		}
-		if parts := strings.Split(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")), "."); len(parts) != 3 {
-			t.Fatalf("expected entitlement JWT bearer token, got %q", authHeader)
-		}
-		if _, hasFingerprint := reqBody["instance_fingerprint"]; hasFingerprint {
-			t.Fatalf("expected hosted quickstart bootstrap to omit instance_fingerprint, got %v", reqBody)
-		}
-		if got := reqBody["use_case"]; got != "patrol" {
-			t.Fatalf("use_case=%v want patrol", got)
-		}
-	})
 
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -2419,16 +2310,14 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if !persistence.HasAIConfig() {
-		t.Fatal("expected hosted AI settings contract to persist canonical ai.enc bootstrap")
+	if persistence.HasAIConfig() {
+		t.Fatal("expected hosted AI settings contract not to persist implicit quickstart bootstrap")
 	}
 
 	const want = `{
-		"enabled":true,
-		"model":"quickstart:pulse-hosted",
-		"chat_model":"quickstart:pulse-hosted",
-		"patrol_model":"quickstart:pulse-hosted",
-		"configured":true,
+		"enabled":false,
+		"model":"",
+		"configured":false,
 		"custom_context":"",
 		"auth_method":"api_key",
 		"oauth_connected":false,
@@ -2452,18 +2341,13 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
-		"discovery_enabled":false,
-		"quickstart_credits_total":25,
-		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":25,
-		"quickstart_credits_available":true,
-		"using_quickstart":true
+		"discovery_enabled":false
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
-func TestContract_AISettingsLegacyQuickstartAliasJSONSnapshot(t *testing.T) {
+func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -2491,10 +2375,7 @@ func TestContract_AISettingsLegacyQuickstartAliasJSONSnapshot(t *testing.T) {
 
 	const want = `{
 		"enabled":true,
-		"model":"quickstart:pulse-hosted",
-		"chat_model":"quickstart:pulse-hosted",
-		"patrol_model":"quickstart:pulse-hosted",
-		"auto_fix_model":"quickstart:pulse-hosted",
+		"model":"",
 		"configured":false,
 		"custom_context":"",
 		"auth_method":"api_key",
@@ -2519,16 +2400,11 @@ func TestContract_AISettingsLegacyQuickstartAliasJSONSnapshot(t *testing.T) {
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
-		"discovery_enabled":false,
-		"quickstart_credits_total":0,
-		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":0,
-		"quickstart_credits_available":false,
-		"using_quickstart":false
+		"discovery_enabled":false
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
-	if bytes.Contains(rec.Body.Bytes(), []byte("quickstart:minimax-2.5m")) {
+	if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("quickstart")) {
 		t.Fatalf("expected AI settings payload to suppress legacy hosted quickstart aliases, got %s", rec.Body.Bytes())
 	}
 }
@@ -2585,16 +2461,11 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 		"ollama_base_url":"http://ollama.example:11434",
 		"ollama_username":"unai",
 		"ollama_password_set":true,
-		"configured_providers":["ollama"],
-		"control_level":"read_only",
-		"protected_guests":[],
-		"discovery_enabled":false,
-		"quickstart_credits_total":0,
-		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":0,
-		"quickstart_credits_available":false,
-		"using_quickstart":false
-	}`
+			"configured_providers":["ollama"],
+			"control_level":"read_only",
+			"protected_guests":[],
+			"discovery_enabled":false
+		}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
@@ -3001,23 +2872,8 @@ func TestContract_ReportingInvalidFormatErrorsUseCatalogDefinitions(t *testing.T
 	}
 }
 
-func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
+func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
-	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			t.Fatalf("expected Bearer auth, got %q", authHeader)
-		}
-		if parts := strings.Split(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")), "."); len(parts) != 3 {
-			t.Fatalf("expected entitlement JWT bearer token, got %q", authHeader)
-		}
-		if _, hasFingerprint := reqBody["instance_fingerprint"]; hasFingerprint {
-			t.Fatalf("expected hosted quickstart bootstrap to omit instance_fingerprint, got %v", reqBody)
-		}
-		if got := reqBody["use_case"]; got != "patrol" {
-			t.Fatalf("use_case=%v want patrol", got)
-		}
-	})
 
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -3039,16 +2895,14 @@ func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if !persistence.HasAIConfig() {
-		t.Fatal("expected hosted tenant AI settings contract to persist tenant ai.enc bootstrap")
+	if persistence.HasAIConfig() {
+		t.Fatal("expected hosted tenant AI settings contract not to persist implicit quickstart bootstrap")
 	}
 
 	const want = `{
-		"enabled":true,
-		"model":"quickstart:pulse-hosted",
-		"chat_model":"quickstart:pulse-hosted",
-		"patrol_model":"quickstart:pulse-hosted",
-		"configured":true,
+		"enabled":false,
+		"model":"",
+		"configured":false,
 		"custom_context":"",
 		"auth_method":"api_key",
 		"oauth_connected":false,
@@ -3072,12 +2926,7 @@ func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
-		"discovery_enabled":false,
-		"quickstart_credits_total":25,
-		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":25,
-		"quickstart_credits_available":true,
-		"using_quickstart":true
+		"discovery_enabled":false
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
@@ -9417,22 +9266,19 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 			AlertTriggersEnabled:   true,
 			AnomalyTriggersEnabled: false,
 		},
-		NextPatrolAt:               &nextPatrolAt,
-		LastDurationMs:             12345,
-		ResourcesChecked:           18,
-		FindingsCount:              3,
-		ErrorCount:                 1,
-		Healthy:                    false,
-		IntervalMs:                 21600000,
-		FixedCount:                 2,
-		BlockedReason:              "Awaiting AI provider configuration",
-		BlockedAt:                  &blockedAt,
-		QuickstartCreditsRemaining: 7,
-		QuickstartCreditsTotal:     pkglicensing.QuickstartCreditsTotal,
-		UsingQuickstart:            true,
-		LicenseRequired:            true,
-		LicenseStatus:              "none",
-		UpgradeURL:                 "https://pulserelay.pro/upgrade?feature=ai_autofix",
+		NextPatrolAt:     &nextPatrolAt,
+		LastDurationMs:   12345,
+		ResourcesChecked: 18,
+		FindingsCount:    3,
+		ErrorCount:       1,
+		Healthy:          false,
+		IntervalMs:       21600000,
+		FixedCount:       2,
+		BlockedReason:    "Awaiting AI provider configuration",
+		BlockedAt:        &blockedAt,
+		LicenseRequired:  true,
+		LicenseStatus:    "none",
+		UpgradeURL:       "https://pulserelay.pro/upgrade?feature=ai_autofix",
 	}
 	payload.Summary.Critical = 1
 	payload.Summary.Warning = 2
@@ -9461,9 +9307,6 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 		"fixed_count":2,
 		"blocked_reason":"Awaiting AI provider configuration",
 		"blocked_at":"2026-03-12T09:45:00Z",
-		"quickstart_credits_remaining":7,
-		"quickstart_credits_total":25,
-		"using_quickstart":true,
 		"license_required":true,
 		"license_status":"none",
 		"upgrade_url":"https://pulserelay.pro/upgrade?feature=ai_autofix",

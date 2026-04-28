@@ -57,7 +57,7 @@ func ResolveConfiguredProviderModel(ctx context.Context, cfg *config.AIConfig, p
 		return "", fmt.Errorf("provider is required")
 	}
 	if provider == config.AIProviderQuickstart {
-		return config.DefaultModelForProvider(provider), nil
+		return "", fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
 	}
 	if !cfg.HasProvider(provider) {
 		return "", fmt.Errorf("%s provider is not configured", provider)
@@ -151,7 +151,7 @@ func isModelUsableWithConfig(cfg *config.AIConfig, model string) bool {
 	}
 	provider, _ := config.ParseModelString(model)
 	if provider == config.AIProviderQuickstart {
-		return true
+		return false
 	}
 	return cfg != nil && cfg.HasProvider(provider)
 }

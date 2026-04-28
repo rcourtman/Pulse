@@ -36,10 +36,7 @@ import {
   doesFindingNeedAttention,
 } from '@/utils/aiFindingPresentation';
 
-const findingsPanelSource = readFileSync(
-  resolve(__dirname, '..', 'FindingsPanel.tsx'),
-  'utf-8',
-);
+const findingsPanelSource = readFileSync(resolve(__dirname, '..', 'FindingsPanel.tsx'), 'utf-8');
 const patrolWorkspaceSource = readFileSync(
   resolve(__dirname, '..', '..', '..', 'features', 'patrol', 'PatrolIntelligenceWorkspace.tsx'),
   'utf-8',
@@ -69,7 +66,7 @@ describe('aiFindingPresentation', () => {
           status: 'active',
           resourceId: 'ai-service',
           resourceName: 'Pulse Patrol Service',
-          title: 'Pulse Patrol: Insufficient API credits',
+          title: 'Pulse Patrol: Provider billing or quota issue',
         }),
       ).toBe(0);
       expect(
@@ -161,7 +158,7 @@ describe('aiFindingPresentation', () => {
           severity: 'warning',
           resourceId: 'ai-service',
           resourceName: 'Pulse Patrol Service',
-          title: 'Pulse Patrol: Insufficient API credits',
+          title: 'Pulse Patrol: Provider billing or quota issue',
         }),
       ).toEqual({
         label: 'Runtime issue',
@@ -179,7 +176,7 @@ describe('aiFindingPresentation', () => {
             severity: 'warning',
             resourceId: 'ai-service',
             resourceName: 'Pulse Patrol Service',
-            title: 'Pulse Patrol: Insufficient API credits',
+            title: 'Pulse Patrol: Provider billing or quota issue',
           },
         ]),
       ).toEqual({
@@ -254,7 +251,7 @@ describe('aiFindingPresentation', () => {
         getPatrolFindingClassification({
           resourceId: 'ai-service',
           resourceName: 'Pulse Patrol Service',
-          title: 'Pulse Patrol: Insufficient API credits',
+          title: 'Pulse Patrol: Provider billing or quota issue',
         }),
       ).toEqual({
         kind: 'runtime',
@@ -286,7 +283,7 @@ describe('aiFindingPresentation', () => {
           resourceId: 'ai-service',
           resourceName: 'Pulse Patrol Service',
           resourceType: 'service',
-          title: 'Pulse Patrol: Insufficient API credits',
+          title: 'Pulse Patrol: Provider billing or quota issue',
         }),
       ).toEqual({
         label: 'Patrol runtime',
@@ -313,7 +310,7 @@ describe('aiFindingPresentation', () => {
         getFindingPrimaryActionPresentation({
           resourceId: 'ai-service',
           resourceName: 'Pulse Patrol Service',
-          title: 'Pulse Patrol: Insufficient API credits',
+          title: 'Pulse Patrol: Provider billing or quota issue',
         }),
       ).toEqual({
         label: 'Open Patrol provider settings',
@@ -336,7 +333,7 @@ describe('aiFindingPresentation', () => {
         getFindingPrimaryActionPresentation({
           resourceId: 'ai-service',
           resourceName: 'Pulse Patrol Service',
-          title: 'Insufficient API credits',
+          title: 'Provider billing or quota issue',
         }),
       ).toEqual({
         label: 'Open Patrol provider settings',
@@ -346,7 +343,7 @@ describe('aiFindingPresentation', () => {
   });
 
   describe('findingTitlePresentation', () => {
-    it('strips the product prefix from Patrol runtime finding titles', () => {
+    it('normalizes legacy Patrol runtime credit titles', () => {
       expect(
         getFindingTitlePresentation({
           resourceId: 'ai-service',
@@ -354,7 +351,7 @@ describe('aiFindingPresentation', () => {
           title: 'Pulse Patrol: Insufficient API credits',
         }),
       ).toEqual({
-        label: 'Insufficient API credits',
+        label: 'Provider billing or quota issue',
       });
     });
 
@@ -377,7 +374,7 @@ describe('aiFindingPresentation', () => {
         getFindingManualControlsPresentation({
           resourceId: 'ai-service',
           resourceName: 'Pulse Patrol Service',
-          title: 'Pulse Patrol: Insufficient API credits',
+          title: 'Pulse Patrol: Provider billing or quota issue',
         }),
       ).toEqual({
         acknowledge: false,
@@ -453,7 +450,7 @@ describe('aiFindingPresentation', () => {
     it('exposes the canonical primary action for Patrol runtime findings inside the expanded row', () => {
       expect(findingsPanelSource).toContain('getFindingPrimaryActionPresentation');
       expect(findingsPanelSource).toContain('{action().label}');
-      expect(findingsPanelSource).toContain("href={action().href}");
+      expect(findingsPanelSource).toContain('href={action().href}');
     });
 
     it('resolves unified resources and shared route links for expanded finding handoffs', () => {
@@ -464,7 +461,7 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('const { get: getResource } = useResources();');
       expect(findingsPanelSource).toContain('buildResolvedResourceSurfaceLinks({');
       expect(findingsPanelSource).toContain('resource: getResource(finding.resourceId)');
-      expect(findingsPanelSource).toContain("{link.compactLabel}");
+      expect(findingsPanelSource).toContain('{link.compactLabel}');
     });
 
     it('routes generic finding controls through the shared manual-controls helper', () => {
@@ -516,7 +513,7 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('if (hasUnknownRunSnapshot()) {');
       expect(findingsPanelSource).toContain('return [];');
       expect(findingsPanelSource).toContain(
-        "() => props.runSnapshot !== undefined && props.filterFindingIds === undefined",
+        '() => props.runSnapshot !== undefined && props.filterFindingIds === undefined',
       );
     });
 
@@ -527,7 +524,7 @@ describe('aiFindingPresentation', () => {
     });
 
     it('uses explicit textual separators for patrol tab badges instead of css-only spacing', () => {
-      expect(patrolWorkspaceSource).toContain("aria-hidden=\"true\"");
+      expect(patrolWorkspaceSource).toContain('aria-hidden="true"');
       expect(patrolWorkspaceSource).toContain("{' '}");
       expect(patrolWorkspaceSource).toContain('{state.findingsTabBadgeCount()}');
       expect(patrolWorkspaceSource).toContain('{state.displayRunHistory().length}');
@@ -546,7 +543,9 @@ describe('aiFindingPresentation', () => {
     });
 
     it('uses canonical finding recency presentation instead of raw detected timestamps for active rows', () => {
-      expect(findingsPanelSource).toContain('const recency = getFindingRecencyPresentation(finding);');
+      expect(findingsPanelSource).toContain(
+        'const recency = getFindingRecencyPresentation(finding);',
+      );
       expect(findingsPanelSource).toContain('{subject.label} - {recency.label} ');
       expect(findingsPanelSource).toContain('{formatTime(recency.timestamp)}');
     });
@@ -568,7 +567,9 @@ describe('aiFindingPresentation', () => {
     });
 
     it('uses the shared finding subject presentation instead of raw patrol service resource tokens', () => {
-      expect(findingsPanelSource).toContain('const subject = getFindingSubjectPresentation(finding);');
+      expect(findingsPanelSource).toContain(
+        'const subject = getFindingSubjectPresentation(finding);',
+      );
       expect(findingsPanelSource).toContain('{subject.label} - {recency.label}');
       expect(findingsPanelSource).not.toContain('{finding.resourceName} ({finding.resourceType})');
     });
@@ -671,13 +672,13 @@ describe('aiFindingPresentation', () => {
     it('promotes queued fixes without a pending approval into the needs-attention bucket', () => {
       expect(
         hasPendingInvestigationFixApproval('finding-1', [
-            {
-              status: 'pending',
-              toolId: 'investigation_fix',
-              targetId: 'finding-1',
-	              expiresAt: '2026-04-30T00:06:00Z',
-            },
-          ] as never),
+          {
+            status: 'pending',
+            toolId: 'investigation_fix',
+            targetId: 'finding-1',
+            expiresAt: '2026-04-30T00:06:00Z',
+          },
+        ] as never),
       ).toBe(true);
 
       expect(
@@ -703,7 +704,7 @@ describe('aiFindingPresentation', () => {
               status: 'pending',
               toolId: 'investigation_fix',
               targetId: 'finding-1',
-	              expiresAt: '2026-04-30T00:06:00Z',
+              expiresAt: '2026-04-30T00:06:00Z',
             },
           ] as never,
         ),
@@ -724,9 +725,7 @@ describe('aiFindingPresentation', () => {
         ),
       ).toBe(false);
 
-      expect(isPatrolInvestigationFixApproval({ toolId: 'investigation_fix' } as never)).toBe(
-        true,
-      );
+      expect(isPatrolInvestigationFixApproval({ toolId: 'investigation_fix' } as never)).toBe(true);
       expect(isPatrolInvestigationFixApproval({ toolId: 'run_command' } as never)).toBe(false);
     });
   });

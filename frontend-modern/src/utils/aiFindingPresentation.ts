@@ -301,18 +301,34 @@ export const getPatrolFindingsBadgePresentation = (
   findings: Pick<UnifiedFinding, 'status' | 'severity' | 'resourceId' | 'resourceName' | 'title'>[],
 ): PatrolFindingsBadgePresentation => {
   const activeFindings = findings.filter((finding) => finding.status === 'active');
-  if (activeFindings.some((finding) => finding.severity === 'critical' && !isPatrolRuntimeFinding(finding))) {
+  if (
+    activeFindings.some(
+      (finding) => finding.severity === 'critical' && !isPatrolRuntimeFinding(finding),
+    )
+  ) {
     return { toneClasses: getFindingSeverityToneClasses('critical') };
   }
-  if (activeFindings.some((finding) => finding.severity === 'critical' && isPatrolRuntimeFinding(finding))) {
+  if (
+    activeFindings.some(
+      (finding) => finding.severity === 'critical' && isPatrolRuntimeFinding(finding),
+    )
+  ) {
     return {
       toneClasses: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
     };
   }
-  if (activeFindings.some((finding) => finding.severity === 'warning' && !isPatrolRuntimeFinding(finding))) {
+  if (
+    activeFindings.some(
+      (finding) => finding.severity === 'warning' && !isPatrolRuntimeFinding(finding),
+    )
+  ) {
     return { toneClasses: getFindingSeverityToneClasses('warning') };
   }
-  if (activeFindings.some((finding) => finding.severity === 'warning' && isPatrolRuntimeFinding(finding))) {
+  if (
+    activeFindings.some(
+      (finding) => finding.severity === 'warning' && isPatrolRuntimeFinding(finding),
+    )
+  ) {
     return {
       toneClasses: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
     };
@@ -345,15 +361,32 @@ export const getFindingCompactBadgePresentation = (
 export const isPatrolRuntimeFinding = (
   finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
 ): boolean => {
-  const resourceId = String(finding.resourceId || '').trim().toLowerCase();
-  const resourceName = String(finding.resourceName || '').trim().toLowerCase();
-  const title = String(finding.title || '').trim().toLowerCase();
+  const resourceId = String(finding.resourceId || '')
+    .trim()
+    .toLowerCase();
+  const resourceName = String(finding.resourceName || '')
+    .trim()
+    .toLowerCase();
+  const title = String(finding.title || '')
+    .trim()
+    .toLowerCase();
 
   return (
     resourceId === 'ai-service' ||
     resourceName === 'pulse patrol service' ||
     title.startsWith('pulse patrol:')
   );
+};
+
+export const normalizePatrolRuntimeFindingLabel = (title: string | undefined): string => {
+  const rawTitle = String(title || '').trim();
+  const normalizedTitle = rawTitle.replace(/^Pulse Patrol:\s*/i, '').trim();
+
+  if (/^insufficient api credits$/i.test(normalizedTitle)) {
+    return 'Provider billing or quota issue';
+  }
+
+  return normalizedTitle || rawTitle;
 };
 
 export const getPatrolFindingClassification = (
@@ -379,7 +412,8 @@ export const getFindingSubjectPresentation = (
     return { label: 'Patrol runtime' };
   }
 
-  const resourceName = String(finding.resourceName || '').trim() || String(finding.resourceId || '').trim();
+  const resourceName =
+    String(finding.resourceName || '').trim() || String(finding.resourceId || '').trim();
   const resourceType = String(finding.resourceType || '').trim();
 
   if (!resourceType) {
@@ -399,7 +433,7 @@ export const getFindingTitlePresentation = (
     return { label: rawTitle };
   }
 
-  const normalizedTitle = rawTitle.replace(/^Pulse Patrol:\s*/i, '').trim();
+  const normalizedTitle = normalizePatrolRuntimeFindingLabel(rawTitle);
   return {
     label: normalizedTitle || rawTitle || 'Patrol runtime issue',
   };
@@ -433,9 +467,7 @@ export const getFindingManualControlsPresentation = (
         dismiss: true,
       };
 
-export const sortFindingsForAttentionQueue = (
-  findings: UnifiedFinding[],
-): UnifiedFinding[] =>
+export const sortFindingsForAttentionQueue = (findings: UnifiedFinding[]): UnifiedFinding[] =>
   [...findings].sort((a, b) => {
     const aOutcome =
       a.status === 'active' && a.investigationOutcome
@@ -484,11 +516,11 @@ export const getInvestigationStatusLabel = (status: InvestigationStatus | string
 
 export const getInvestigationOutcomeBadgeClasses = (
   outcome: InvestigationOutcome | string,
-): string => INVESTIGATION_OUTCOME_CLASSES[outcome as InvestigationOutcome] || DEFAULT_BADGE_CLASSES;
+): string =>
+  INVESTIGATION_OUTCOME_CLASSES[outcome as InvestigationOutcome] || DEFAULT_BADGE_CLASSES;
 
-export const getInvestigationOutcomeLabel = (
-  outcome: InvestigationOutcome | string,
-): string => INVESTIGATION_OUTCOME_LABELS[outcome as InvestigationOutcome] || String(outcome);
+export const getInvestigationOutcomeLabel = (outcome: InvestigationOutcome | string): string =>
+  INVESTIGATION_OUTCOME_LABELS[outcome as InvestigationOutcome] || String(outcome);
 
 export const getInvestigationOutcomeSortOrder = (
   outcome: InvestigationOutcome | string | undefined,
@@ -502,14 +534,17 @@ export const getInvestigationOutcomeSortOrder = (
 export const hasFindingInvestigationDetails = (
   finding: Pick<
     UnifiedFinding,
-    'investigationSessionId' | 'investigationStatus' | 'investigationOutcome' | 'investigationAttempts'
+    | 'investigationSessionId'
+    | 'investigationStatus'
+    | 'investigationOutcome'
+    | 'investigationAttempts'
   >,
 ): boolean =>
   Boolean(
     finding.investigationSessionId?.trim() ||
-      finding.investigationStatus ||
-      finding.investigationOutcome ||
-      (finding.investigationAttempts ?? 0) > 0,
+    finding.investigationStatus ||
+    finding.investigationOutcome ||
+    (finding.investigationAttempts ?? 0) > 0,
   );
 
 const ATTENTION_OUTCOMES = new Set([
@@ -565,10 +600,7 @@ export const formatFindingLifecycleType = (value: string): string =>
   FINDING_LIFECYCLE_LABELS[value] || formatIdentifierLabel(value);
 
 export const getFindingResolutionReason = (
-  finding: Pick<
-    UnifiedFinding,
-    'isThreshold' | 'source' | 'alertType' | 'investigationOutcome'
-  >,
+  finding: Pick<UnifiedFinding, 'isThreshold' | 'source' | 'alertType' | 'investigationOutcome'>,
   resolvedTime: string,
 ): string => {
   if (finding.isThreshold || finding.source === 'threshold') {

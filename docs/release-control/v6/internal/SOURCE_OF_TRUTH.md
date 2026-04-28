@@ -424,11 +424,16 @@ Assertion design rules:
    runtime may redeem signed trial activations through `/auth/trial-activate`,
    but it must not mint local trial state directly or prompt users into paid
    trial entry from default self-hosted surfaces.
-4. v5 to v6 commercial migration must preserve unresolved paid-license state
+4. Hosted AI quickstart is retired from ordinary v6 GA runtime paths.
+   Self-hosted and hosted app settings must stay BYOK/local-provider first unless
+   an operator explicitly configures a provider. The runtime must not auto-grant
+   quickstart credits, auto-bootstrap `quickstart:pulse-hosted`, or expose
+   quickstart credit/status fields as a normal AI Settings or Patrol contract.
+5. v5 to v6 commercial migration must preserve unresolved paid-license state
    and downgrade safety.
-5. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not
+6. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not
    architectural blockers.
-6. Stable or GA promotion for v6 must come from an exercised RC and stay
+7. Stable or GA promotion for v6 must come from an exercised RC and stay
    blocked until the RC-to-GA promotion gate is cleared and the published v5
    maintenance-policy notice is ready.
 7. v6 and later releases use a promotion model, not a direct broad-rollout

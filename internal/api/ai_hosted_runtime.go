@@ -17,65 +17,20 @@ func loadHostedAwareAIConfig(hostedMode bool, billingBaseDir, orgID string, pers
 	if err != nil {
 		return nil, err
 	}
-	if !shouldAutoBootstrapHostedAIConfig(hostedMode, persistence) {
-		return cfg, nil
-	}
-
-	state, err := ensureHostedAIQuickstartBillingState(billingBaseDir, orgID)
-	if err != nil {
-		return nil, err
-	}
-	if !hostedAIAutoBootstrapEligible(state) {
-		return cfg, nil
-	}
-
-	bootstrapped := config.NewDefaultAIConfig()
-	bootstrapped.Enabled = true
-	quickstartModel := config.DefaultModelForProvider(config.AIProviderQuickstart)
-	bootstrapped.Model = quickstartModel
-	bootstrapped.ChatModel = quickstartModel
-	bootstrapped.PatrolModel = quickstartModel
-	if err := persistence.SaveAIConfig(*bootstrapped); err != nil {
-		return nil, fmt.Errorf("persist hosted Pulse Assistant bootstrap config: %w", err)
-	}
-	return bootstrapped, nil
+	return cfg, nil
 }
 
 func shouldAutoBootstrapHostedAIConfig(hostedMode bool, persistence *config.ConfigPersistence) bool {
-	return hostedMode && persistence != nil && !persistence.HasAIConfig()
+	return false
 }
 
 func ensureHostedAIQuickstartBillingState(billingBaseDir, orgID string) (*billingState, error) {
-	state, effectiveOrgID, err := config.LoadEffectiveEntitlementBillingState(billingBaseDir, orgID)
-	if err != nil || state == nil {
-		return state, err
-	}
-	if !hostedAIAutoBootstrapEligible(state) || state.QuickstartCreditsGranted {
-		return state, nil
-	}
-
-	updated := normalizeBillingStateFromLicensing(state)
-	billingStore := config.NewFileBillingStore(strings.TrimSpace(billingBaseDir))
-	updated.GrantQuickstartCredits()
-	if err := billingStore.SaveBillingState(effectiveOrgID, updated); err != nil {
-		return nil, fmt.Errorf("save hosted Pulse Assistant quickstart billing state: %w", err)
-	}
-	return updated, nil
+	state, _, err := config.LoadEffectiveEntitlementBillingState(billingBaseDir, orgID)
+	return state, err
 }
 
 func hostedAIAutoBootstrapEligible(state *billingState) bool {
-	if state == nil {
-		return false
-	}
-	if strings.TrimSpace(state.EntitlementJWT) == "" && strings.TrimSpace(state.EntitlementRefreshToken) == "" {
-		return false
-	}
-	switch state.SubscriptionState {
-	case subscriptionStateActiveValue, subscriptionStateGraceValue, subscriptionStateTrialValue:
-	default:
-		return false
-	}
-	return hasBillingCapability(state, featureAIPatrolValue) || hasBillingCapability(state, featureAIAutoFixValue)
+	return false
 }
 
 func hasBillingCapability(state *billingState, feature string) bool {

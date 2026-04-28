@@ -251,7 +251,7 @@ the canonical monitored-system blocked payload.
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
-   and the Patrol runtime-remediation destination shared with `/api/settings/ai`, so summary actions and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination to Patrol operators as Patrol provider configuration instead of generic `AI Settings` copy
+   and the Patrol runtime-remediation destination shared with the AI settings endpoint, so summary actions and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination to Patrol operators as Patrol provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and preserving `/ai` only as a compatibility redirect
    and the Patrol route-shell accessibility boundary, so brand icons in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx` stay decorative when the same heading already exposes visible Patrol text, preventing duplicate accessible names such as `Pulse Patrol Patrol`
 9. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
@@ -272,7 +272,7 @@ the canonical monitored-system blocked payload.
 12. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
 13. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
 14. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
-15. Keep legacy Patrol quickstart transport semantics explicit while those fields remain parseable: zero remaining quickstart credits are compatibility inventory data, not a standalone runtime-state override, and ordinary self-hosted frontend consumers must normalize retired hosted-model copy back to provider/local-model setup rather than presenting credit badges or acquisition prompts.
+15. Keep legacy Patrol quickstart transport semantics retired from the public v6 GA contract: ordinary AI settings and Patrol status payloads must not expose quickstart credit/status fields, and any stale hosted-model blocked copy that survives from compatibility state must normalize back to provider/local-model setup rather than presenting credit badges or acquisition prompts.
 16. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary summary card.
 17. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
 18. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
@@ -330,9 +330,8 @@ the canonical monitored-system blocked payload.
     as compatibility input into that same canonical `agent-<hostname>`
     binding, and unbound agent-exec tokens must fail closed instead of being
     treated as global command authority.
-21. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
-22. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config with the Pulse-owned alias `quickstart:pulse-hosted` when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume instead of embedding a third-party model ID in the transport contract.
-    That same hosted bootstrap surface must also preserve the secure quickstart-identity contract: hosted entitlement-backed AI settings reads and enablement may bootstrap Patrol quickstart from the effective signed entitlement lease when no self-hosted installation token exists, but they must not fabricate installation-scoped activation state or anonymous client identity to satisfy `/v1/quickstart/bootstrap`.
+21. Keep hosted billing-state quickstart grants retired from new shared API flows: `internal/api/hosted_entitlement_refresh.go`, hosted signup, and trial-state construction must not auto-grant or refresh quickstart inventory for new workspaces, while low-level billing-state readers may still preserve historical fields that already exist on disk.
+22. Keep hosted AI settings bootstrap on the shared API contract as a retired path: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as an unconfigured BYOK/local-provider state, not as a machine-owned `quickstart:pulse-hosted` bootstrap condition. Hosted tenant reads may inherit billing state for commercial authorization, but they must not create quickstart-backed AI config or call the quickstart bootstrap upstream route.
 23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.
 24. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
 25. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
@@ -525,32 +524,28 @@ the canonical monitored-system blocked payload.
 6. Keep Patrol status payloads explicit enough that the frontend can present blocked runtime state without treating a previously healthy summary snapshot as current runtime truth, and keep Patrol recency semantics explicit in transport by reserving `last_patrol_at` for completed full patrols while exposing any Patrol activity separately through `last_activity_at`
    and the scoped-trigger status payload on that same Patrol status surface, so queued scoped work, busy-mode state, and per-source enablement (`alert` versus `anomaly`) stay transport-backed instead of being inferred by page-local heuristics
    and the split Patrol trigger settings contract, so `patrol_alert_triggers_enabled` and `patrol_anomaly_triggers_enabled` are the canonical AI settings fields while legacy `patrol_event_triggers_enabled` remains a compatibility aggregate rather than the primary control surface
-   and the legacy quickstart compatibility contract, so `/api/settings/ai` and
-   `/api/patrol/status` may continue to carry `quickstart_credits_remaining`,
-   `quickstart_credits_total`, and `using_quickstart` while mixed-version
-   runtimes still emit them, but those fields are no longer a normal
-   self-hosted GA acquisition surface and shared handlers must not invent
-   client-authored commercial identity or synthetic credits when the legacy
-   server path is unavailable
+   and the retired quickstart compatibility contract, so `/api/settings/ai` and
+   `/api/ai/patrol/status` no longer carry `quickstart_credits_remaining`,
+   `quickstart_credits_total`, `quickstart_credits_available`,
+   `quickstart_blocked_reason`, or `using_quickstart` as ordinary v6 GA fields,
+   and shared handlers must not invent client-authored commercial identity,
+   synthetic credits, or quickstart-backed config when the legacy server path is
+   unavailable
    and the provider-first availability rule, so missing managed-model activation
    identity must not block ordinary BYOK/local setup and must not silently
    attempt anonymous bootstrap
-   and the Pulse-owned hosted model alias compatibility rule, so persisted
-   legacy hosted quickstart model IDs such as `quickstart:minimax-2.5m` are
-   rewritten to `quickstart:pulse-hosted` before `/api/settings/ai` responds,
-   instead of leaking stale vendor identifiers back into governed payloads
+   and the hosted model alias retirement rule, so persisted legacy hosted
+   quickstart model IDs such as `quickstart:minimax-2.5m` are cleared before
+   `/api/settings/ai` responds, instead of leaking stale vendor identifiers or a
+   managed-model promise back into governed payloads
    and the AI settings blocked-reason contract, so stale
    `quickstart_blocked_reason` values are cleared or interpreted as
    compatibility metadata when a provider-backed path is active or the
    self-hosted app is routing the operator to provider/local-model setup
-   and the public interpretation rule, so those fields must not become generic
-   hosted AI quota, anonymous Community entitlement, trial CTA, account-backed
-   activation support, or full-chat entitlement in normal self-hosted v6 GA UI
-   and the legacy Patrol execution billing rule, so retained compatibility
-   bridges that still call the hosted quickstart contract preserve the stable
-   Patrol execution identifier used to charge once per higher-level Patrol run
-   rather than once per internal provider
-   turn
+   and the public interpretation rule, so compatibility state must not become
+   generic hosted AI quota, anonymous Community entitlement, trial CTA,
+   account-backed activation support, or full-chat entitlement in normal
+   self-hosted v6 GA UI
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the main Patrol page composition boundary, so once that governed
@@ -2636,28 +2631,15 @@ That same frontend run-history path must also preserve and expose
 `triage_flags` and `triage_skipped_llm` from canonical patrol run records so
 deterministic triage-only runs do not collapse into generic "no analysis"
 history entries.
-Patrol status payloads may still carry quickstart credit state as legacy API
-compatibility data while mixed-version runtimes exist:
-`quickstart_credits_remaining`, `quickstart_credits_total`, and
-`using_quickstart` must remain backend-owned when present, but the frontend must
-not turn them into normal self-hosted GA credit badges, trial prompts, or
-hosted-model acquisition copy.
-That compatibility contract must also preserve the distinction between credit
-inventory and live runtime path: zero remaining credits alone must not force a
-blocked or exhausted operator presentation while Patrol is active on a
-configured provider or local-model path.
-Those same transport fields no longer define a public self-hosted promise:
+Patrol status payloads no longer carry quickstart credit state as an ordinary
+v6 GA API contract. `quickstart_credits_remaining`,
+`quickstart_credits_total`, and `using_quickstart` are retired public fields;
 pricing, README, Patrol header copy, and AI settings copy must present
 provider/local-model setup and paid operational extras instead of managed
 credits, anonymous bootstrap, trial CTAs, account-backed AI activation, or
-hosted-chat access.
-Hosted billing-state payloads now also carry the canonical quickstart grant
-metadata used by hosted bootstrap and refresh flows. Billing reads and contract
-proofs must preserve `quickstart_credits_granted`,
-`quickstart_credits_used`, and `quickstart_credits_granted_at` as backend-
-owned fields, so hosted entitlement refresh cannot silently drop a workspace
-back to "no quickstart inventory" just because the lease or trial state was
-rewritten.
+hosted-chat access. Historical billing-state fields may remain parseable for
+old data, but hosted signup, hosted entitlement refresh, and trial-state
+construction must not mint new quickstart inventory.
 That same Patrol status contract now also carries a canonical `runtime_state`
 field, so the frontend can distinguish blocked, running, disabled, active,
 and unavailable Patrol runtime states without deriving operator status from
@@ -3146,19 +3128,17 @@ generated relay identity metadata instead of requiring a prior manual
 only public relay fields while omitting the hosted instance secret and
 private key.
 That same shared backend API contract now also owns hosted AI bootstrap
-reads. `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handler.go`,
+retirement. `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handler.go`,
 `internal/api/ai_handlers.go`, and `internal/api/contract_test.go` must derive
 `/api/settings/ai` and the initial hosted AI runtime from the same runtime
-helper. In hosted mode, when no explicit `ai.enc` exists but the default
-hosted billing lease grants AI capability and carries hosted entitlement
-proof, those read surfaces must persist a canonical quickstart-backed AI
-config with the governed Pulse-owned alias `quickstart:pulse-hosted` instead of returning a synthetic
-`enabled=false` payload that leaves Chat and Patrol unavailable until the
-operator manually saves settings. Hosted tenant-org reads must also inherit
-the default hosted billing lease whenever no org-local billing state exists,
-so AI bootstrap and quickstart-credit surfaces stay aligned with the same
-machine-owned entitlement source. Once a real AI config exists, that explicit
-operator-owned state must remain authoritative over hosted bootstrap.
+helper. In hosted mode, when no explicit `ai.enc` exists, those read surfaces
+must return the same unconfigured BYOK/local-provider default used by
+self-hosted settings instead of persisting a quickstart-backed AI config with
+the old `quickstart:pulse-hosted` alias. Hosted tenant-org reads may still
+inherit the default hosted billing lease for commercial authorization, but they
+must not turn that lease into AI quickstart credits or a managed-model runtime.
+Once a real AI config exists, that explicit operator-owned state remains
+authoritative.
 The same hosted contract now also requires tenant Pulse Assistant runtime
 startup to consume that hosted-aware config path and to refuse caching a
 failed tenant chat service, so tenant-org `/api/ai/status` and

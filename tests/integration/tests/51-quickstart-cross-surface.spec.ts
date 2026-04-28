@@ -2,18 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { ensureAuthenticated } from "./helpers";
 
-const QUICKSTART_EXHAUSTED_REASON =
-  "Quickstart credits exhausted. Connect your API key to continue using Patrol.";
-const QUICKSTART_ACTIVATION_REQUIRED_REASON =
-  "Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.";
-const QUICKSTART_OFFLINE_REASON =
-  "Quickstart credits require internet access. Connect your API key to use Patrol offline.";
-
 type AISettingsPayload = {
   enabled: boolean;
   model: string;
-  chat_model?: string;
-  patrol_model?: string;
   configured: boolean;
   custom_context: string;
   auth_method: string;
@@ -39,20 +30,14 @@ type AISettingsPayload = {
   control_level: string;
   protected_guests: string[];
   discovery_enabled: boolean;
-  quickstart_credits_total: number;
-  quickstart_credits_used: number;
-  quickstart_credits_remaining: number;
-  quickstart_credits_available: boolean;
-  using_quickstart: boolean;
-  quickstart_blocked_reason?: string;
 };
 
 type PatrolStatusPayload = {
   runtime_state: string;
   running: boolean;
   enabled: boolean;
-  last_patrol_at: string;
-  next_patrol_at: string;
+  last_patrol_at?: string;
+  next_patrol_at?: string;
   last_duration_ms: number;
   resources_checked: number;
   findings_count: number;
@@ -60,8 +45,8 @@ type PatrolStatusPayload = {
   healthy: boolean;
   interval_ms: number;
   fixed_count: number;
-  blocked_reason: string;
-  blocked_at: string;
+  blocked_reason?: string;
+  blocked_at?: string;
   license_required: boolean;
   license_status: string;
   summary: {
@@ -70,23 +55,12 @@ type PatrolStatusPayload = {
     watch: number;
     info: number;
   };
-  using_quickstart: boolean;
-  quickstart_credits_total: number;
-  quickstart_credits_remaining: number;
-};
-
-type PatrolSurfaceOverrides = {
-  settings?: Partial<AISettingsPayload>;
-  patrolStatus?: Partial<PatrolStatusPayload>;
-  intelligenceSummary?: Record<string, unknown>;
 };
 
 const baseAISettings = (): AISettingsPayload => ({
-  enabled: true,
-  model: "quickstart:pulse-hosted",
-  chat_model: "quickstart:pulse-hosted",
-  patrol_model: "quickstart:pulse-hosted",
-  configured: true,
+  enabled: false,
+  model: "",
+  configured: false,
   custom_context: "",
   auth_method: "api_key",
   oauth_connected: false,
@@ -111,28 +85,20 @@ const baseAISettings = (): AISettingsPayload => ({
   control_level: "read_only",
   protected_guests: [],
   discovery_enabled: false,
-  quickstart_credits_total: 25,
-  quickstart_credits_used: 0,
-  quickstart_credits_remaining: 25,
-  quickstart_credits_available: true,
-  using_quickstart: true,
 });
 
 const basePatrolStatus = (): PatrolStatusPayload => ({
-  runtime_state: "active",
+  runtime_state: "blocked",
   running: false,
-  enabled: true,
-  last_patrol_at: "2026-03-25T08:55:00Z",
-  next_patrol_at: "2026-03-25T14:55:00Z",
-  last_duration_ms: 42000,
-  resources_checked: 24,
+  enabled: false,
+  last_duration_ms: 0,
+  resources_checked: 0,
   findings_count: 0,
   error_count: 0,
   healthy: true,
   interval_ms: 21600000,
   fixed_count: 0,
-  blocked_reason: "",
-  blocked_at: "",
+  blocked_reason: "Connect a provider to power Pulse Assistant and Patrol.",
   license_required: false,
   license_status: "active",
   summary: {
@@ -141,70 +107,7 @@ const basePatrolStatus = (): PatrolStatusPayload => ({
     watch: 0,
     info: 0,
   },
-  using_quickstart: true,
-  quickstart_credits_total: 25,
-  quickstart_credits_remaining: 25,
 });
-
-const healthyIntelligenceSummary = () => ({
-  timestamp: "2026-03-25T09:05:00Z",
-  overall_health: {
-    score: 100,
-    grade: "A",
-    trend: "stable",
-    factors: [],
-    prediction: "Infrastructure is healthy with no significant issues detected.",
-  },
-  findings_count: {
-    critical: 0,
-    warning: 0,
-    watch: 0,
-    info: 0,
-    total: 0,
-  },
-  predictions_count: 0,
-  recent_changes_count: 0,
-  recent_changes: [],
-  learning: {
-    resources_with_knowledge: 0,
-    total_notes: 0,
-    resources_with_baselines: 0,
-    patterns_detected: 0,
-    correlations_learned: 0,
-    incidents_tracked: 0,
-  },
-});
-
-const baseRunHistory = () => [
-  {
-    id: "run-healthy-before-quickstart",
-    started_at: "2026-03-25T08:55:00Z",
-    completed_at: "2026-03-25T08:55:42Z",
-    duration_ms: 42000,
-    type: "full",
-    trigger_reason: "scheduled",
-    resources_checked: 24,
-    nodes_checked: 2,
-    guests_checked: 8,
-    docker_checked: 4,
-    storage_checked: 3,
-    hosts_checked: 2,
-    pbs_checked: 1,
-    pmg_checked: 0,
-    kubernetes_checked: 4,
-    new_findings: 0,
-    existing_findings: 0,
-    rejected_findings: 0,
-    resolved_findings: 0,
-    auto_fix_count: 0,
-    findings_summary: "No active findings",
-    finding_ids: [],
-    error_count: 0,
-    status: "healthy",
-    triage_flags: 0,
-    tool_call_count: 0,
-  },
-];
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -235,7 +138,8 @@ async function browserApiRequest(
       const response = await fetch(path, {
         method: httpMethod,
         headers,
-        body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
+        body:
+          requestBody === undefined ? undefined : JSON.stringify(requestBody),
       });
       const text = await response.text();
       let body: unknown = text;
@@ -252,7 +156,13 @@ async function browserApiRequest(
   );
 }
 
-async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceOverrides = {}) {
+async function mockRetiredQuickstartSurface(
+  page: Page,
+  overrides: {
+    settings?: Partial<AISettingsPayload>;
+    patrolStatus?: Partial<PatrolStatusPayload>;
+  } = {},
+) {
   const settings = {
     ...baseAISettings(),
     ...clone(overrides.settings ?? {}),
@@ -261,13 +171,7 @@ async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceO
     ...basePatrolStatus(),
     ...clone(overrides.patrolStatus ?? {}),
   };
-  const intelligenceSummary = {
-    ...healthyIntelligenceSummary(),
-    ...clone(overrides.intelligenceSummary ?? {}),
-  };
-  const runHistory = baseRunHistory();
   const updateRequests: Array<Record<string, unknown>> = [];
-  const patrolRunRequests: Array<Record<string, unknown>> = [];
 
   await page.route("**/api/settings/ai", async (route) => {
     await route.fulfill({
@@ -278,46 +182,13 @@ async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceO
   });
 
   await page.route("**/api/settings/ai/update", async (route) => {
-    const body = (route.request().postDataJSON() as Record<string, unknown> | null) ?? {};
+    const body =
+      (route.request().postDataJSON() as Record<string, unknown> | null) ?? {};
     updateRequests.push(body);
-
-    if (typeof body.enabled === "boolean") {
-      settings.enabled = body.enabled;
-      settings.patrol_enabled = body.enabled;
-      patrolStatus.enabled = body.enabled;
-      if (body.enabled && settings.quickstart_credits_available && settings.configured_providers.length === 0) {
-        settings.configured = true;
-        settings.model = "quickstart:pulse-hosted";
-        settings.chat_model = "quickstart:pulse-hosted";
-        settings.patrol_model = "quickstart:pulse-hosted";
-        settings.using_quickstart = true;
-        patrolStatus.runtime_state = "active";
-        patrolStatus.using_quickstart = true;
-        patrolStatus.blocked_reason = "";
-        patrolStatus.blocked_at = "";
-        patrolStatus.healthy = true;
-      }
-    }
-
-    if (typeof body.openai_api_key === "string" && body.openai_api_key.trim().length > 0) {
-      settings.configured = true;
-      settings.model = "openai:gpt-4o";
-      settings.chat_model = "";
-      settings.patrol_model = "";
-      settings.openai_configured = true;
-      settings.configured_providers = ["openai"];
-      settings.using_quickstart = false;
-      patrolStatus.using_quickstart = false;
-      patrolStatus.runtime_state = "active";
-      patrolStatus.blocked_reason = "";
-      patrolStatus.blocked_at = "";
-      patrolStatus.healthy = true;
-    }
-
     await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(settings),
+      status: 400,
+      contentType: "text/plain",
+      body: "Please configure a provider (API key or Ollama URL) before enabling Pulse Assistant\n",
     });
   });
 
@@ -329,46 +200,11 @@ async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceO
     });
   });
 
-  await page.route("**/api/ai/patrol/run", async (route) => {
-    const body = (route.request().postDataJSON() as Record<string, unknown> | null) ?? {};
-    patrolRunRequests.push(body);
-
-    if (!patrolStatus.enabled || patrolStatus.runtime_state === "blocked") {
-      await route.fulfill({
-        status: 403,
-        contentType: "application/json",
-        body: JSON.stringify({ success: false, message: patrolStatus.blocked_reason }),
-      });
-      return;
-    }
-
-    if (patrolStatus.using_quickstart && patrolStatus.quickstart_credits_remaining > 0) {
-      patrolStatus.quickstart_credits_remaining -= 1;
-      settings.quickstart_credits_remaining = patrolStatus.quickstart_credits_remaining;
-      settings.quickstart_credits_used =
-        settings.quickstart_credits_total - patrolStatus.quickstart_credits_remaining;
-    }
-
-    runHistory.unshift({
-      ...baseRunHistory()[0],
-      id: `run-manual-${patrolRunRequests.length}`,
-      started_at: "2026-03-25T09:15:00Z",
-      completed_at: "2026-03-25T09:15:36Z",
-      trigger_reason: "manual",
-    });
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ success: true, message: "Patrol started" }),
-    });
-  });
-
   await page.route("**/api/ai/patrol/runs*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(runHistory),
+      body: JSON.stringify([]),
     });
   });
 
@@ -386,13 +222,10 @@ async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceO
   });
 
   await page.route("**/api/ai/models", async (route) => {
-    const models = settings.openai_configured
-      ? [{ id: "openai:gpt-4o", name: "GPT-4o" }]
-      : [];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ models }),
+      body: JSON.stringify({ models: [] }),
     });
   });
 
@@ -416,7 +249,35 @@ async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceO
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(intelligenceSummary),
+      body: JSON.stringify({
+        timestamp: "2026-03-25T09:05:00Z",
+        overall_health: {
+          score: 100,
+          grade: "A",
+          trend: "stable",
+          factors: [],
+          prediction:
+            "Infrastructure is healthy with no significant issues detected.",
+        },
+        findings_count: {
+          critical: 0,
+          warning: 0,
+          watch: 0,
+          info: 0,
+          total: 0,
+        },
+        predictions_count: 0,
+        recent_changes_count: 0,
+        recent_changes: [],
+        learning: {
+          resources_with_knowledge: 0,
+          total_notes: 0,
+          resources_with_baselines: 0,
+          patterns_detected: 0,
+          correlations_learned: 0,
+          incidents_tracked: 0,
+        },
+      }),
     });
   });
 
@@ -426,9 +287,9 @@ async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceO
       contentType: "application/json",
       body: JSON.stringify({
         state: "closed",
-        can_patrol: patrolStatus.runtime_state !== "blocked",
+        can_patrol: false,
         consecutive_failures: 0,
-        total_successes: 42,
+        total_successes: 0,
         total_failures: 0,
       }),
     });
@@ -450,169 +311,70 @@ async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceO
     });
   });
 
-  return { settings, patrolStatus, updateRequests, patrolRunRequests };
+  return { settings, patrolStatus, updateRequests };
 }
 
-test.describe("Quickstart cross-surface browser contract", () => {
-  test("activated install first AI enable surfaces quickstart-backed Patrol without BYOK", async ({
+test.describe("Retired quickstart browser contract", () => {
+  test("first enable stays on provider setup and does not create quickstart state", async ({
     page,
   }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only quickstart coverage");
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only AI settings coverage",
+    );
 
     await ensureAuthenticated(page);
-    const surface = await mockQuickstartPatrolSurface(page, {
-      settings: {
-        enabled: false,
-        configured: false,
-        model: "",
-        chat_model: "",
-        patrol_model: "",
-        using_quickstart: false,
-      },
-      patrolStatus: {
-        runtime_state: "blocked",
-        enabled: false,
-        healthy: false,
-        using_quickstart: false,
-        blocked_reason: "Awaiting AI provider configuration",
-      },
-    });
+    const surface = await mockRetiredQuickstartSurface(page);
 
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Assistant & Patrol", level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Assistant & Patrol", level: 1 }),
+    ).toBeVisible();
 
-    const response = await browserApiRequest(page, "/api/settings/ai/update", "PUT", {
-      enabled: true,
-    });
-    expect(response.ok).toBe(true);
+    await page
+      .getByRole("button", { name: "Enable Assistant and Patrol" })
+      .click();
+    await expect.poll(() => surface.updateRequests.length).toBe(0);
+    await expect(page.getByText("Set Up Assistant & Patrol")).toBeVisible();
+    await expect(
+      page.getByText("Connect a provider to power Pulse Assistant and Patrol."),
+    ).toBeVisible();
+    await expect(page.getByText(/quickstart/i)).toHaveCount(0);
+
+    const response = await browserApiRequest(
+      page,
+      "/api/settings/ai/update",
+      "PUT",
+      {
+        enabled: true,
+      },
+    );
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(400);
+    expect(String(response.body).toLowerCase()).not.toContain("quickstart");
     expect(surface.updateRequests).toHaveLength(1);
-
-    await page.goto("/ai", { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Patrol enabled")).toBeVisible();
-    await expect(page.getByText("Patrol quickstart: 25/25 runs left")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Run Patrol" })).toBeEnabled();
   });
 
-  test("unactivated Community surfaces activation-or-BYOK messaging instead of quickstart", async ({
+  test("AI and Patrol surfaces suppress legacy hosted blocked copy", async ({
     page,
   }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only quickstart coverage");
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only Patrol coverage",
+    );
 
     await ensureAuthenticated(page);
-    await mockQuickstartPatrolSurface(page, {
+    await mockRetiredQuickstartSurface(page, {
       settings: {
         enabled: true,
-        configured: false,
-        model: "",
-        chat_model: "",
-        patrol_model: "",
-        quickstart_credits_total: 0,
-        quickstart_credits_used: 0,
-        quickstart_credits_remaining: 0,
-        quickstart_credits_available: false,
-        using_quickstart: false,
+        patrol_enabled: true,
       },
       patrolStatus: {
         runtime_state: "blocked",
         enabled: true,
         healthy: false,
-        using_quickstart: false,
-        quickstart_credits_total: 0,
-        quickstart_credits_remaining: 0,
-        blocked_reason: QUICKSTART_ACTIVATION_REQUIRED_REASON,
-        blocked_at: "2026-03-25T09:00:00Z",
-      },
-    });
-
-    await page.goto("/ai", { waitUntil: "domcontentloaded" });
-
-    await expect(page.getByText("Patrol paused").first()).toBeVisible();
-    await expect(page.getByText(QUICKSTART_ACTIVATION_REQUIRED_REASON).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Run Patrol" })).toBeDisabled();
-    await expect(page.getByText(/Patrol quickstart:/)).toHaveCount(0);
-  });
-
-  test("successful quickstart Patrol run refreshes the credit badge from server state", async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only quickstart coverage");
-
-    await ensureAuthenticated(page);
-    const surface = await mockQuickstartPatrolSurface(page, {
-      settings: {
-        quickstart_credits_remaining: 12,
-        quickstart_credits_used: 13,
-      },
-      patrolStatus: {
-        quickstart_credits_remaining: 12,
-      },
-    });
-
-    await page.goto("/ai", { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Patrol quickstart: 12/25 runs left")).toBeVisible();
-
-    const response = await browserApiRequest(page, "/api/ai/patrol/run", "POST", {});
-    expect(response.ok).toBe(true);
-    expect(surface.patrolRunRequests).toHaveLength(1);
-
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(page.getByText("Patrol quickstart: 11/25 runs left")).toBeVisible();
-  });
-
-  test("BYOK override suppresses exhausted quickstart copy once Patrol is no longer using quickstart", async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only quickstart coverage");
-
-    await ensureAuthenticated(page);
-    await mockQuickstartPatrolSurface(page, {
-      settings: {
-        model: "openai:gpt-4o",
-        chat_model: "",
-        patrol_model: "",
-        openai_configured: true,
-        configured_providers: ["openai"],
-        using_quickstart: false,
-        quickstart_credits_remaining: 0,
-        quickstart_credits_used: 25,
-      },
-      patrolStatus: {
-        using_quickstart: false,
-        quickstart_credits_remaining: 0,
-        healthy: true,
-      },
-    });
-
-    await page.goto("/ai", { waitUntil: "domcontentloaded" });
-
-    await expect(page.getByText("Patrol enabled")).toBeVisible();
-    await expect(page.getByText("Health A · 100/100")).toBeVisible();
-    await expect(page.getByText("Patrol quickstart exhausted")).toHaveCount(0);
-    await expect(page.getByText(QUICKSTART_EXHAUSTED_REASON)).toHaveCount(0);
-  });
-
-  test("unreachable quickstart proxy pauses Patrol with accurate offline guidance", async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only quickstart coverage");
-
-    await ensureAuthenticated(page);
-    await mockQuickstartPatrolSurface(page, {
-      settings: {
-        enabled: true,
-        configured: false,
-        model: "",
-        chat_model: "",
-        patrol_model: "",
-        using_quickstart: false,
-        quickstart_credits_remaining: 25,
-        quickstart_credits_used: 0,
-      },
-      patrolStatus: {
-        runtime_state: "blocked",
-        healthy: false,
-        using_quickstart: false,
-        blocked_reason: QUICKSTART_OFFLINE_REASON,
+        blocked_reason:
+          "Quickstart credits exhausted. Connect your API key to continue using Patrol.",
         blocked_at: "2026-03-25T09:00:00Z",
       },
     });
@@ -620,46 +382,16 @@ test.describe("Quickstart cross-surface browser contract", () => {
     await page.goto("/ai", { waitUntil: "domcontentloaded" });
 
     await expect(page.getByText("Patrol Paused").first()).toBeVisible();
-    await expect(page.getByText("Patrol paused").first()).toBeVisible();
-    await expect(page.getByText(QUICKSTART_OFFLINE_REASON).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Run Patrol" })).toBeDisabled();
-    await expect(page.getByText("Patrol quickstart exhausted")).toHaveCount(0);
-    await expect(page.getByText("Health A · 100/100")).toHaveCount(0);
-  });
-
-  test("activated-install first AI enable toggle should not force BYOK setup when quickstart credits are available", async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only quickstart coverage");
-
-    await ensureAuthenticated(page);
-    const surface = await mockQuickstartPatrolSurface(page, {
-      settings: {
-        enabled: false,
-        configured: false,
-        model: "",
-        chat_model: "",
-        patrol_model: "",
-        using_quickstart: false,
-      },
-      patrolStatus: {
-        runtime_state: "blocked",
-        enabled: false,
-        healthy: false,
-        using_quickstart: false,
-        blocked_reason: "Awaiting AI provider configuration",
-      },
-    });
-
-    await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Assistant & Patrol", level: 1 })).toBeVisible();
-
-    await page.getByRole("button", { name: "Enable Assistant and Patrol" }).click();
-
-    await expect.poll(() => surface.updateRequests.length).toBe(1);
-    expect(surface.updateRequests[0]).toMatchObject({ enabled: true });
     await expect(
-      page.getByText("Connect a provider to power Pulse Assistant and Patrol."),
-    ).toHaveCount(0);
+      page
+        .getByText(
+          "Connect your own AI provider or local model to use Pulse Patrol.",
+        )
+        .first(),
+    ).toBeVisible();
+    await expect(page.getByText(/Quickstart credits exhausted/i)).toHaveCount(
+      0,
+    );
+    await expect(page.getByText(/Patrol quickstart/i)).toHaveCount(0);
   });
 });

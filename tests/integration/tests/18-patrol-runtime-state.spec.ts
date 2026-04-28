@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { ensureAuthenticated, trackBrowserRequests } from "./helpers";
 
 const PATROL_BLOCK_REASON =
-  "Quickstart credits exhausted. Connect your API key to continue using Patrol.";
+  "Connect a provider to power Pulse Assistant and Patrol.";
 
 function todayAt(hours: number, minutes: number): string {
   const value = new Date();
@@ -34,9 +34,6 @@ const blockedPatrolStatus = {
     watch: 0,
     info: 0,
   },
-  using_quickstart: true,
-  quickstart_credits_total: 25,
-  quickstart_credits_remaining: 0,
 };
 
 const staleHealthySummary = {
@@ -222,9 +219,6 @@ const scopedTriggerPatrolStatus = {
     watch: 0,
     info: 0,
   },
-  using_quickstart: true,
-  quickstart_credits_total: 25,
-  quickstart_credits_remaining: 12,
 };
 
 async function mockBlockedPatrolRuntimeState(page: Page): Promise<void> {
@@ -506,7 +500,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(
       page.getByRole("button", { name: "Run Patrol" }),
     ).toBeDisabled();
-    await expect(page.getByText("Patrol quickstart exhausted")).toBeVisible();
+    await expect(page.getByText(/Patrol quickstart/i)).toHaveCount(0);
     await expect(page.getByText("Health A · 100/100")).toHaveCount(0);
     expect(commercialPostureRequests.count()).toBe(0);
     expect(entitlementsRequests.count()).toBe(0);

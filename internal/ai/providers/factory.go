@@ -92,12 +92,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 		return NewGeminiClient(apiKey, model, baseURL, timeout), nil
 
 	case config.AIProviderQuickstart:
-		// Quickstart uses the hosted proxy — no API key needed.
-		// Note: license_id is empty here; the primary quickstart paths
-		// (chat/service.go and quickstart.go) inject the real org ID.
-		// This factory fallback is used by ListModels/TestConnection where
-		// workspace attribution is not critical.
-		return NewQuickstartClient(""), nil
+		return nil, fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
 
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider)

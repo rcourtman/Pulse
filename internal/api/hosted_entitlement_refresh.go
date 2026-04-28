@@ -380,7 +380,6 @@ func (h *LicenseHandlers) refreshHostedEntitlementLeaseOnce(orgID string, servic
 	updated.TrialStartedAt = leaseClaims.TrialStartedAt
 	updated.TrialEndsAt = nil
 	updated.TrialExtendedAt = nil
-	updated.GrantQuickstartCredits()
 	if err := billingStore.SaveBillingState(effectiveOrgID, updated); err != nil {
 		return false, false, fmt.Errorf("save refreshed entitlement lease: %w", err)
 	}

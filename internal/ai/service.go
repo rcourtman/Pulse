@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -1515,7 +1514,6 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 func (s *Service) LoadConfig() error {
 	s.mu.RLock()
 	persistence := s.persistence
-	quickstartCredits := s.quickstartCredits
 	orgID := s.orgID
 	s.mu.RUnlock()
 
@@ -1540,31 +1538,6 @@ func (s *Service) LoadConfig() error {
 
 	// Don't initialize provider if AI is not enabled or not configured
 	if cfg == nil || !cfg.Enabled || !cfg.IsConfigured() {
-		// Check if quickstart can fill the Patrol gap (enabled but no BYOK).
-		if cfg != nil && cfg.Enabled && quickstartCredits != nil {
-			if err := quickstartCredits.EnsureBootstrap(context.Background()); err != nil {
-				blockedReason = quickstartBlockedReasonFromError(err)
-				log.Warn().Err(err).Str("orgID", orgID).Msg("Quickstart bootstrap failed during AI service load")
-			}
-			qp := quickstartCredits.GetProvider()
-			if qp != nil {
-				providerClient = qp
-				usingQuickstart = true
-				// Force all model strings to quickstart so chat.Service creates the right provider.
-				quickstartModelStr := config.DefaultModelForProvider(config.AIProviderQuickstart)
-				cfg.Model = quickstartModelStr
-				cfg.PatrolModel = quickstartModelStr
-				cfg.ChatModel = quickstartModelStr
-				log.Info().
-					Int("credits_remaining", quickstartCredits.CreditsRemaining()).
-					Msg("AI service initialized via quickstart credits (no BYOK)")
-			}
-			if providerClient == nil && blockedReason == "" && !quickstartCredits.HasCredits() {
-				blockedReason = patrolQuickstartCreditsExhaustedReason
-			} else if providerClient == nil && blockedReason == "" {
-				blockedReason = patrolQuickstartUnavailableReason
-			}
-		}
 	} else {
 		selectedModel, resolveErr := ResolveConfiguredModel(modelResolutionCtx, cfg)
 		if resolveErr != nil {
@@ -1572,27 +1545,6 @@ func (s *Service) LoadConfig() error {
 		} else {
 			cfg.Model = selectedModel
 			selectedProvider, _ := config.ParseModelString(selectedModel)
-
-			// BYOK transition: if the user added their own API key while the model
-			// was still set to quickstart, switch to the BYOK provider's default.
-			if selectedProvider == config.AIProviderQuickstart && cfg.IsConfigured() {
-				var byokDefault string
-				configuredProviders := cfg.GetConfiguredProviders()
-				if len(configuredProviders) > 0 {
-					byokDefault, _ = ResolveConfiguredProviderModel(modelResolutionCtx, cfg, configuredProviders[0])
-				}
-				if byokDefault != "" {
-					log.Info().
-						Str("from", selectedModel).
-						Str("to", byokDefault).
-						Msg("AI service: BYOK configured, switching from quickstart model")
-					selectedModel = byokDefault
-					selectedProvider, _ = config.ParseModelString(selectedModel)
-					cfg.Model = selectedModel
-					cfg.PatrolModel = "" // Let it inherit from Model
-					cfg.ChatModel = ""   // Let it inherit from Model
-				}
-			}
 
 			nextProvider, providerErr := providers.NewForModel(cfg, selectedModel)
 			if providerErr != nil {
@@ -1669,18 +1621,6 @@ func (s *Service) IsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.cfg != nil && s.cfg.Enabled && s.provider != nil {
-		// When running on quickstart credits, verify credits still remain.
-		if s.usingQuickstart && s.quickstartCredits != nil && !s.quickstartCredits.HasCredits() {
-			return false
-		}
-		return true
-	}
-	// Also enabled if quickstart credits are available (even without BYOK)
-	if s.cfg != nil &&
-		s.cfg.Enabled &&
-		s.quickstartCredits != nil &&
-		s.quickstartCredits.HasCredits() &&
-		strings.TrimSpace(s.quickstartBlockedReason) == "" {
 		return true
 	}
 	return false
@@ -1734,54 +1674,25 @@ func (s *Service) configurePatrolQuickstartProviderFactoryLocked() {
 func (s *Service) createPatrolProviderForModel(modelStr string) (providers.StreamingProvider, error) {
 	s.mu.RLock()
 	cfg := s.cfg
-	quickstartMgr := s.quickstartCredits
 	defaultProvider := s.provider
 	s.mu.RUnlock()
 
 	providerName, _ := config.ParseModelString(modelStr)
-	if providerName != config.AIProviderQuickstart {
-		provider, err := providers.NewForModel(cfg, modelStr)
-		if err != nil {
-			if streaming, ok := defaultProvider.(providers.StreamingProvider); ok {
-				return streaming, nil
-			}
-			return nil, err
-		}
-		streaming, ok := provider.(providers.StreamingProvider)
-		if !ok {
-			return nil, fmt.Errorf("patrol provider %q does not support streaming", provider.Name())
-		}
-		return streaming, nil
+	if providerName == config.AIProviderQuickstart {
+		return nil, fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
 	}
 
-	if quickstartMgr == nil {
-		return nil, fmt.Errorf("quickstart is not configured")
-	}
-	if err := quickstartMgr.EnsureBootstrap(context.Background()); err != nil {
-		s.mu.Lock()
-		s.quickstartBlockedReason = quickstartBlockedReasonFromError(err)
-		s.mu.Unlock()
-		return nil, err
-	}
-	provider := quickstartMgr.GetProvider()
-	if provider == nil {
-		reason := patrolQuickstartUnavailableReason
-		if !quickstartMgr.HasCredits() {
-			reason = patrolQuickstartCreditsExhaustedReason
+	provider, err := providers.NewForModel(cfg, modelStr)
+	if err != nil {
+		if streaming, ok := defaultProvider.(providers.StreamingProvider); ok {
+			return streaming, nil
 		}
-		s.mu.Lock()
-		s.quickstartBlockedReason = reason
-		s.mu.Unlock()
-		return nil, errors.New(reason)
+		return nil, err
 	}
 	streaming, ok := provider.(providers.StreamingProvider)
 	if !ok {
-		return nil, fmt.Errorf("quickstart provider does not support streaming")
+		return nil, fmt.Errorf("patrol provider %q does not support streaming", provider.Name())
 	}
-
-	s.mu.Lock()
-	s.quickstartBlockedReason = ""
-	s.mu.Unlock()
 	return streaming, nil
 }
 

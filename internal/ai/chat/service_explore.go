@@ -249,9 +249,7 @@ func (s *Service) createProviderForExplore(modelStr string) (providers.Streaming
 		baseURL := s.cfg.GetBaseURLForProvider(config.AIProviderOllama)
 		return providers.NewOllamaClient(modelName, baseURL, s.cfg.OllamaUsername, s.cfg.OllamaPassword, exploreHTTPTimeout)
 	case config.AIProviderQuickstart:
-		// Quickstart uses the hosted proxy and does not require a BYOK key.
-		// The orgID carries the hosted workspace identity for credit accounting.
-		return providers.NewQuickstartClient(s.orgID), nil
+		return nil, fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerName)
 	}

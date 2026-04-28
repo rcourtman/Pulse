@@ -101,7 +101,7 @@ const (
 	AIProviderOllama     = "ollama"
 	AIProviderDeepSeek   = "deepseek"
 	AIProviderGemini     = "gemini"
-	AIProviderQuickstart = "quickstart" // Pulse-hosted proxy for free quickstart credits
+	AIProviderQuickstart = "quickstart" // Retired Pulse-hosted proxy marker retained only for legacy config migration.
 )
 
 // AI Control Level constants
@@ -136,8 +136,8 @@ const (
 )
 
 const (
-	// DefaultAIModelQuickstart is a Pulse-owned stable alias. The hosted
-	// quickstart backend chooses the real upstream vendor model server-side.
+	// DefaultAIModelQuickstart is retained only to recognize and retire legacy
+	// Pulse-hosted model aliases from pre-GA config.
 	DefaultAIModelQuickstart = "pulse-hosted"
 	DefaultOllamaBaseURL     = "http://localhost:11434"
 	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1/chat/completions"
@@ -325,19 +325,19 @@ func FormatModelString(provider, modelName string) string {
 	return provider + ":" + modelName
 }
 
-// NormalizeQuickstartModelString canonicalizes legacy quickstart model strings to
-// Pulse's owned hosted alias. The server chooses the real upstream vendor model.
+// NormalizeQuickstartModelString retires legacy Pulse-hosted quickstart model
+// strings. Self-hosted v6 GA requires BYOK or a local model for AI runtime use.
 func NormalizeQuickstartModelString(model string) string {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		return ""
 	}
 	if strings.EqualFold(model, DefaultAIModelQuickstart) || strings.EqualFold(model, AIProviderQuickstart) {
-		return DefaultModelForProvider(AIProviderQuickstart)
+		return ""
 	}
 	provider, _ := ParseModelString(model)
 	if provider == AIProviderQuickstart {
-		return DefaultModelForProvider(AIProviderQuickstart)
+		return ""
 	}
 	return model
 }
@@ -359,7 +359,7 @@ func DefaultModelForProvider(provider string) string {
 	case AIProviderOllama:
 		return FormatModelString(AIProviderOllama, "llama3.2")
 	case AIProviderQuickstart:
-		return FormatModelString(AIProviderQuickstart, DefaultAIModelQuickstart)
+		return ""
 	default:
 		return ""
 	}
@@ -373,8 +373,8 @@ func (c *AIConfig) GetModel() string {
 	return NormalizeQuickstartModelString(c.Model)
 }
 
-// NormalizeQuickstartModelAliases rewrites any legacy quickstart model strings in-place
-// to the owned Pulse alias. Returns true when a field changed.
+// NormalizeQuickstartModelAliases removes retired quickstart model strings in-place.
+// Self-hosted v6 GA does not silently fall back to Pulse-hosted AI.
 func (c *AIConfig) NormalizeQuickstartModelAliases() bool {
 	if c == nil {
 		return false
@@ -400,8 +400,8 @@ func (c *AIConfig) NormalizeQuickstartModelAliases() bool {
 }
 
 // GetPreferredModelForProvider returns the most relevant configured model for a provider.
-// It prefers explicitly selected models for that provider before falling back to the
-// provider-owned quickstart alias when applicable.
+// It prefers explicitly selected models for that provider and does not invent a model
+// for retired providers.
 func (c *AIConfig) GetPreferredModelForProvider(provider string) string {
 	for _, candidate := range []string{c.Model, c.ChatModel, c.PatrolModel, c.AutoFixModel, c.DiscoveryModel} {
 		candidate = NormalizeQuickstartModelString(candidate)
@@ -414,9 +414,6 @@ func (c *AIConfig) GetPreferredModelForProvider(provider string) string {
 		}
 	}
 
-	if provider == AIProviderQuickstart {
-		return DefaultModelForProvider(provider)
-	}
 	return ""
 }
 

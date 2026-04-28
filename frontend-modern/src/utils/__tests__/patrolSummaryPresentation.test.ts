@@ -136,14 +136,14 @@ describe('getPatrolSummaryPresentation', () => {
             severity: 'warning',
             resourceId: 'ai-service',
             resourceName: 'Pulse Patrol Service',
-            title: 'Pulse Patrol: Insufficient API credits',
+            title: 'Pulse Patrol: Provider billing or quota issue',
           },
         ] as never,
       }),
     ).toEqual({
       title: 'Patrol runtime issue',
       description:
-        'Patrol has an active runtime issue: Insufficient API credits. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+        'Patrol has an active runtime issue: Provider billing or quota issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
       eyebrow: 'Patrol assessment',
       compactLabel: 'Patrol runtime issue',
       tone: 'warning',
@@ -173,7 +173,7 @@ describe('getPatrolSummaryPresentation', () => {
             severity: 'warning',
             resourceId: 'ai-service',
             resourceName: 'Pulse Patrol Service',
-            title: 'Pulse Patrol: Insufficient API credits',
+            title: 'Pulse Patrol: Provider billing or quota issue',
           },
         ] as never,
       }),
@@ -189,7 +189,7 @@ describe('getPatrolSummaryPresentation', () => {
             severity: 'warning',
             resourceId: 'ai-service',
             resourceName: 'Pulse Patrol Service',
-            title: 'Pulse Patrol: Insufficient API credits',
+            title: 'Pulse Patrol: Provider billing or quota issue',
           },
         ] as never,
       }),
@@ -205,8 +205,7 @@ describe('getPatrolSummaryPresentation', () => {
       badgeClass:
         'border-amber-200 bg-amber-100/80 text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
       iconClass: 'text-amber-600 dark:text-amber-300',
-      iconContainerClass:
-        'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40',
+      iconContainerClass: 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40',
     });
   });
 
@@ -216,8 +215,7 @@ describe('getPatrolSummaryPresentation', () => {
       badgeClass:
         'border-blue-200 bg-blue-100/80 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
       iconClass: 'text-blue-600 dark:text-blue-300',
-      iconContainerClass:
-        'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
+      iconContainerClass: 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
     });
   });
 
@@ -246,7 +244,7 @@ describe('getPatrolSummaryPresentation', () => {
             severity: 'warning',
             resourceId: 'ai-service',
             resourceName: 'Pulse Patrol Service',
-            title: 'Pulse Patrol: Insufficient API credits',
+            title: 'Pulse Patrol: Provider billing or quota issue',
           },
         ] as never,
         fixedCount: 0,

@@ -9,10 +9,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
-	"github.com/stretchr/testify/mock"
 )
 
-func TestLoadHostedAwareAIConfig_AutoBootstrapsHostedQuickstart(t *testing.T) {
+func TestLoadHostedAwareAIConfig_DoesNotAutoBootstrapHostedQuickstart(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	persistence, err := mtp.GetPersistence("default")
@@ -27,17 +26,16 @@ func TestLoadHostedAwareAIConfig_AutoBootstrapsHostedQuickstart(t *testing.T) {
 		t.Fatalf("loadHostedAwareAIConfig(): %v", err)
 	}
 	if loaded == nil {
-		t.Fatal("expected hosted Pulse Assistant config")
+		t.Fatal("expected default Pulse Assistant config")
 	}
-	if !loaded.Enabled {
-		t.Fatal("expected hosted Pulse Assistant config to be enabled")
+	if loaded.Enabled {
+		t.Fatal("expected hosted Pulse Assistant config to stay disabled until BYOK/local setup")
 	}
-	quickstartModel := config.DefaultModelForProvider(config.AIProviderQuickstart)
-	if loaded.Model != quickstartModel || loaded.ChatModel != quickstartModel || loaded.PatrolModel != quickstartModel {
-		t.Fatalf("expected quickstart models, got model=%q chat=%q patrol=%q", loaded.Model, loaded.ChatModel, loaded.PatrolModel)
+	if loaded.Model != "" || loaded.ChatModel != "" || loaded.PatrolModel != "" {
+		t.Fatalf("expected no quickstart models, got model=%q chat=%q patrol=%q", loaded.Model, loaded.ChatModel, loaded.PatrolModel)
 	}
-	if !persistence.HasAIConfig() {
-		t.Fatal("expected hosted AI bootstrap to persist ai config")
+	if persistence.HasAIConfig() {
+		t.Fatal("expected hosted AI loader not to persist an implicit quickstart config")
 	}
 
 	billingStore := config.NewFileBillingStore(mtp.BaseDataDir())
@@ -45,8 +43,11 @@ func TestLoadHostedAwareAIConfig_AutoBootstrapsHostedQuickstart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBillingState(default): %v", err)
 	}
-	if state == nil || !state.QuickstartCreditsGranted {
-		t.Fatal("expected hosted AI bootstrap to backfill quickstart credits")
+	if state == nil {
+		t.Fatal("expected hosted billing state to remain readable")
+	}
+	if state.QuickstartCreditsGranted {
+		t.Fatal("expected hosted AI loader not to grant quickstart credits")
 	}
 }
 
@@ -96,11 +97,14 @@ func TestLoadHostedAwareAIConfig_HostedTenantFallsBackToDefaultBillingState(t *t
 	if err != nil {
 		t.Fatalf("loadHostedAwareAIConfig(): %v", err)
 	}
-	if loaded == nil || !loaded.Enabled {
-		t.Fatalf("expected hosted tenant AI config to auto-bootstrap, got %#v", loaded)
+	if loaded == nil {
+		t.Fatal("expected default tenant AI config")
 	}
-	if !persistence.HasAIConfig() {
-		t.Fatal("expected hosted tenant AI bootstrap to persist tenant ai config")
+	if loaded.Enabled {
+		t.Fatalf("expected hosted tenant AI config to stay disabled until BYOK/local setup, got %#v", loaded)
+	}
+	if persistence.HasAIConfig() {
+		t.Fatal("expected hosted tenant AI loader not to persist an implicit quickstart config")
 	}
 
 	billingStore := config.NewFileBillingStore(mtp.BaseDataDir())
@@ -108,8 +112,11 @@ func TestLoadHostedAwareAIConfig_HostedTenantFallsBackToDefaultBillingState(t *t
 	if err != nil {
 		t.Fatalf("GetBillingState(default): %v", err)
 	}
-	if defaultState == nil || !defaultState.QuickstartCreditsGranted {
-		t.Fatal("expected hosted tenant AI bootstrap to reuse default hosted billing state")
+	if defaultState == nil {
+		t.Fatal("expected hosted tenant AI loader to keep default hosted billing state readable")
+	}
+	if defaultState.QuickstartCreditsGranted {
+		t.Fatal("expected hosted tenant AI loader not to grant quickstart credits")
 	}
 	tenantState, err := billingStore.GetBillingState("t-tenant")
 	if err != nil {
@@ -120,13 +127,13 @@ func TestLoadHostedAwareAIConfig_HostedTenantFallsBackToDefaultBillingState(t *t
 	}
 }
 
-func TestAIHandlerStart_HostedAutoBootstrapStartsService(t *testing.T) {
+func TestAIHandlerStart_DoesNotAutoBootstrapHostedQuickstartService(t *testing.T) {
 	oldNewService := newChatService
 	defer func() { newChatService = oldNewService }()
 
-	mockSvc := new(MockAIService)
-	newChatService = func(cfg chat.Config) AIService {
-		return mockSvc
+	newChatService = func(chat.Config) AIService {
+		t.Fatal("newChatService must not be called without explicit BYOK/local AI config")
+		return nil
 	}
 
 	baseDir := t.TempDir()
@@ -141,13 +148,11 @@ func TestAIHandlerStart_HostedAutoBootstrapStartsService(t *testing.T) {
 	handler.defaultPersistence = persistence
 	handler.hostedMode = true
 
-	mockSvc.On("Start", mock.Anything).Return(nil).Once()
-
 	if err := handler.Start(context.Background(), nil); err != nil {
 		t.Fatalf("Start(): %v", err)
 	}
-	if handler.defaultService != mockSvc {
-		t.Fatal("expected hosted auto-bootstrap to start AI service")
+	if handler.defaultService != nil {
+		t.Fatal("expected hosted start not to create a quickstart-backed service")
 	}
 }
 

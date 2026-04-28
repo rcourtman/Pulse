@@ -63,7 +63,7 @@ func TestServiceLoadConfig_PrefersBYOKProviderOverQuickstart(t *testing.T) {
 	}
 }
 
-func TestServiceLoadConfig_TracksQuickstartBootstrapFailure(t *testing.T) {
+func TestServiceLoadConfig_IgnoresQuickstartBootstrapFailureWhenNoBYOK(t *testing.T) {
 	dir := t.TempDir()
 	persistence := config.NewConfigPersistence(dir)
 	cfg := config.NewDefaultAIConfig()
@@ -80,15 +80,15 @@ func TestServiceLoadConfig_TracksQuickstartBootstrapFailure(t *testing.T) {
 	if err := svc.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig(): %v", err)
 	}
-	if svc.QuickstartBlockedReason() != patrolQuickstartUnavailableReason {
-		t.Fatalf("QuickstartBlockedReason() = %q, want %q", svc.QuickstartBlockedReason(), patrolQuickstartUnavailableReason)
+	if svc.QuickstartBlockedReason() != "" {
+		t.Fatalf("QuickstartBlockedReason() = %q, want empty for retired quickstart", svc.QuickstartBlockedReason())
 	}
 	if svc.IsEnabled() {
-		t.Fatal("expected AI service to remain disabled when bootstrap failed and no BYOK exists")
+		t.Fatal("expected AI service to remain disabled when no BYOK/local provider exists")
 	}
 }
 
-func TestServiceLoadConfig_TracksQuickstartActivationRequirement(t *testing.T) {
+func TestServiceLoadConfig_IgnoresQuickstartActivationRequirementWhenNoBYOK(t *testing.T) {
 	dir := t.TempDir()
 	persistence := config.NewConfigPersistence(dir)
 	cfg := config.NewDefaultAIConfig()
@@ -105,10 +105,10 @@ func TestServiceLoadConfig_TracksQuickstartActivationRequirement(t *testing.T) {
 	if err := svc.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig(): %v", err)
 	}
-	if svc.QuickstartBlockedReason() != patrolQuickstartActivationRequiredReason {
-		t.Fatalf("QuickstartBlockedReason() = %q, want %q", svc.QuickstartBlockedReason(), patrolQuickstartActivationRequiredReason)
+	if svc.QuickstartBlockedReason() != "" {
+		t.Fatalf("QuickstartBlockedReason() = %q, want empty for retired quickstart", svc.QuickstartBlockedReason())
 	}
 	if svc.IsEnabled() {
-		t.Fatal("expected AI service to remain disabled when activation is required and no BYOK exists")
+		t.Fatal("expected AI service to remain disabled when no BYOK/local provider exists")
 	}
 }

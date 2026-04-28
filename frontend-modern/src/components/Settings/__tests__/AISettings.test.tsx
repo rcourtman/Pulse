@@ -467,15 +467,12 @@ describe('AISettings provider setup flow', () => {
     cleanup();
   });
 
-  it('keeps quickstart-only installs on the provider setup path', async () => {
+  it('keeps legacy quickstart-only installs on the provider setup path', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
       configured: true,
       enabled: false,
       model: 'quickstart:pulse-hosted',
-      quickstart_credits_total: 25,
-      quickstart_credits_remaining: 25,
-      quickstart_credits_available: true,
     });
 
     renderComponent();
@@ -497,16 +494,11 @@ describe('AISettings provider setup flow', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps activation-required quickstart guidance out of default provider setup', async () => {
+  it('keeps retired hosted quickstart guidance out of default provider setup', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
       configured: false,
       enabled: false,
-      quickstart_credits_total: 0,
-      quickstart_credits_remaining: 0,
-      quickstart_credits_available: false,
-      quickstart_blocked_reason:
-        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
     });
 
     renderComponent();
@@ -528,17 +520,12 @@ describe('AISettings provider setup flow', () => {
     expect(screen.queryByRole('button', { name: /open hosted handoff/i })).not.toBeInTheDocument();
   });
 
-  it('keeps activation-required quickstart guidance hidden when upgrade prompts are disabled', async () => {
+  it('keeps retired hosted quickstart guidance hidden when upgrade prompts are disabled', async () => {
     presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
       configured: false,
       enabled: false,
-      quickstart_credits_total: 0,
-      quickstart_credits_remaining: 0,
-      quickstart_credits_available: false,
-      quickstart_blocked_reason:
-        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
     });
 
     renderComponent();

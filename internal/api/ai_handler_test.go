@@ -1100,7 +1100,7 @@ func TestGetService_MultiTenantUsesTenantReadState(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
-func TestGetService_HostedTenantAutoBootstrapsAndStartsService(t *testing.T) {
+func TestGetService_HostedTenantDoesNotAutoBootstrapQuickstartService(t *testing.T) {
 	oldNewService := newChatService
 	defer func() { newChatService = oldNewService }()
 
@@ -1115,32 +1115,20 @@ func TestGetService_HostedTenantAutoBootstrapsAndStartsService(t *testing.T) {
 	h := NewAIHandler(mtp, nil, nil)
 	h.hostedMode = true
 
-	mockSvc := new(MockAIService)
-	mockSvc.On("Start", mock.Anything).Return(nil).Once()
-
-	var gotCfg chat.Config
 	newChatService = func(cfg chat.Config) AIService {
-		gotCfg = cfg
-		return mockSvc
+		t.Fatalf("newChatService must not be called without explicit BYOK/local AI config: %#v", cfg.AIConfig)
+		return nil
 	}
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "t-tenant")
 	svc := h.GetService(ctx)
-	assert.Same(t, mockSvc, svc)
-
-	if gotCfg.AIConfig == nil {
-		t.Fatal("expected tenant chat service to receive hosted-aware AI config")
-	}
-	assert.True(t, gotCfg.AIConfig.Enabled)
-	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), gotCfg.AIConfig.GetChatModel())
+	assert.Nil(t, svc)
 
 	persistence, err := mtp.GetPersistence("t-tenant")
 	if err != nil {
 		t.Fatalf("GetPersistence(t-tenant): %v", err)
 	}
-	assert.True(t, persistence.HasAIConfig())
-
-	mockSvc.AssertExpectations(t)
+	assert.False(t, persistence.HasAIConfig())
 }
 
 func TestGetService_MultiTenantStartFailureDoesNotCacheDeadService(t *testing.T) {

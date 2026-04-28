@@ -310,9 +310,6 @@ vi.mock('@/components/Brand/PulsePatrolLogo', () => ({
 const defaultPatrolStatus = (overrides: Record<string, unknown> = {}) => ({
   runtime_state: 'active',
   running: false,
-  using_quickstart: false,
-  quickstart_credits_total: 0,
-  quickstart_credits_remaining: 0,
   license_required: false,
   blocked_reason: '',
   blocked_at: '',
@@ -742,9 +739,6 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolStatusMock.mockResolvedValue(
       defaultPatrolStatus({
         runtime_state: 'blocked',
-        using_quickstart: true,
-        quickstart_credits_total: 25,
-        quickstart_credits_remaining: 0,
         blocked_reason:
           'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
         last_patrol_at: '2026-03-12T09:57:00Z',
@@ -801,9 +795,6 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolStatusMock.mockResolvedValue(
       defaultPatrolStatus({
         runtime_state: 'active',
-        using_quickstart: false,
-        quickstart_credits_total: 25,
-        quickstart_credits_remaining: 0,
         last_patrol_at: '2026-03-12T09:57:00Z',
       }),
     );
@@ -852,9 +843,6 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolStatusMock.mockResolvedValue(
       defaultPatrolStatus({
         runtime_state: 'blocked',
-        using_quickstart: false,
-        quickstart_credits_total: 25,
-        quickstart_credits_remaining: 0,
         blocked_reason:
           'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
       }),
@@ -880,9 +868,6 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolStatusMock.mockResolvedValue(
       defaultPatrolStatus({
         runtime_state: 'active',
-        using_quickstart: true,
-        quickstart_credits_total: 25,
-        quickstart_credits_remaining: 12,
         last_patrol_at: '2026-03-12T09:57:00Z',
       }),
     );
@@ -1128,7 +1113,7 @@ describe('AIIntelligence entitlement gating', () => {
         resourceId: 'ai-service',
         resourceName: 'Pulse Patrol Service',
         resourceType: 'service',
-        title: 'Pulse Patrol: Insufficient API credits',
+        title: 'Pulse Patrol: Provider billing or quota issue',
         detectedAt: '2026-03-12T09:57:00Z',
       },
     ];
@@ -1175,7 +1160,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText('Patrol runtime issue')).toBeInTheDocument();
       expect(
         screen.getByText(
-          'Patrol has an active runtime issue: Insufficient API credits. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+          'Patrol has an active runtime issue: Provider billing or quota issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
         ),
       ).toBeInTheDocument();
       expect(screen.getByText('Runtime issues')).toBeInTheDocument();
@@ -1354,7 +1339,7 @@ describe('AIIntelligence entitlement gating', () => {
         severity: 'warning',
         resourceId: 'ai-service',
         resourceName: 'Pulse Patrol Service',
-        title: 'Pulse Patrol: Insufficient API credits',
+        title: 'Pulse Patrol: Provider billing or quota issue',
       },
     ];
     runHistoryState.selection = {
@@ -1490,7 +1475,7 @@ describe('AIIntelligence entitlement gating', () => {
         severity: 'warning',
         resourceId: 'ai-service',
         resourceName: 'Pulse Patrol Service',
-        title: 'Pulse Patrol: Insufficient API credits',
+        title: 'Pulse Patrol: Provider billing or quota issue',
       },
     ];
     runHistoryState.selection = {

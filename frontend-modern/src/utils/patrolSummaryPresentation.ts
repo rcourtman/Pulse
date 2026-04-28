@@ -1,7 +1,10 @@
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
-import { isPatrolRuntimeFinding } from '@/utils/aiFindingPresentation';
+import {
+  isPatrolRuntimeFinding,
+  normalizePatrolRuntimeFindingLabel,
+} from '@/utils/aiFindingPresentation';
 import {
   formatPatrolActivityBreakdown,
   getPatrolActivityBreakdown,
@@ -112,24 +115,21 @@ const ASSESSMENT_SHELL_PRESENTATION: Record<SemanticTone, PatrolAssessmentShellP
     badgeClass:
       'border-amber-200 bg-amber-100/80 text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
     iconClass: 'text-amber-600 dark:text-amber-300',
-    iconContainerClass:
-      'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40',
+    iconContainerClass: 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40',
   },
   error: {
     headerClass: 'bg-red-50/70 dark:bg-red-950/30',
     badgeClass:
       'border-red-200 bg-red-100/80 text-red-700 dark:border-red-800 dark:bg-red-900/40 dark:text-red-200',
     iconClass: 'text-red-600 dark:text-red-300',
-    iconContainerClass:
-      'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
+    iconContainerClass: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
   },
   info: {
     headerClass: 'bg-blue-50/70 dark:bg-blue-950/30',
     badgeClass:
       'border-blue-200 bg-blue-100/80 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
     iconClass: 'text-blue-600 dark:text-blue-300',
-    iconContainerClass:
-      'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
+    iconContainerClass: 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
   },
 };
 
@@ -174,8 +174,7 @@ function getRuntimeFindingSummaryLabel(finding: PatrolAssessmentFinding | undefi
     return 'a Patrol runtime issue';
   }
 
-  const trimmedTitle = title.replace(/^pulse patrol:\s*/i, '').trim();
-  return trimmedTitle || title;
+  return normalizePatrolRuntimeFindingLabel(title) || title;
 }
 
 function classifyActiveFindings(activeFindings: PatrolAssessmentFinding[] | undefined) {

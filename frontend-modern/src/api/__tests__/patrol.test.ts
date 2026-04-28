@@ -62,74 +62,14 @@ describe('patrol api', () => {
   it('preserves the canonical patrol runtime state payload', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'blocked',
-      blocked_reason:
-        'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
+      blocked_reason: 'Connect a provider to power Pulse Assistant and Patrol.',
       healthy: false,
     } as any);
 
     await expect(getPatrolStatus()).resolves.toMatchObject({
       runtime_state: 'blocked',
-      blocked_reason:
-        'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
+      blocked_reason: 'Connect a provider to power Pulse Assistant and Patrol.',
       healthy: false,
-    });
-  });
-
-  it('preserves the activation-required quickstart blocked reason payload', async () => {
-    const activationRequiredReason =
-      'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.';
-
-    apiFetchJSONMock.mockResolvedValueOnce({
-      runtime_state: 'blocked',
-      blocked_reason: activationRequiredReason,
-      healthy: false,
-    } as any);
-
-    await expect(getPatrolStatus()).resolves.toMatchObject({
-      runtime_state: 'blocked',
-      blocked_reason: activationRequiredReason,
-      healthy: false,
-    });
-    expect(activationRequiredReason.toLowerCase()).not.toContain('trial');
-  });
-
-  it('preserves activation-gated quickstart status without inventing inventory', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({
-      runtime_state: 'blocked',
-      blocked_reason:
-        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
-      healthy: false,
-      quickstart_credits_total: 0,
-      quickstart_credits_remaining: 0,
-      using_quickstart: false,
-    } as any);
-
-    await expect(getPatrolStatus()).resolves.toMatchObject({
-      runtime_state: 'blocked',
-      blocked_reason:
-        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
-      healthy: false,
-      quickstart_credits_total: 0,
-      quickstart_credits_remaining: 0,
-      using_quickstart: false,
-    });
-  });
-
-  it('preserves the canonical patrol quickstart transport fields', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({
-      runtime_state: 'active',
-      healthy: true,
-      quickstart_credits_total: 25,
-      quickstart_credits_remaining: 12,
-      using_quickstart: true,
-    } as any);
-
-    await expect(getPatrolStatus()).resolves.toMatchObject({
-      runtime_state: 'active',
-      healthy: true,
-      quickstart_credits_total: 25,
-      quickstart_credits_remaining: 12,
-      using_quickstart: true,
     });
   });
 

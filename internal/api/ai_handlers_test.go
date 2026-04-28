@@ -250,16 +250,8 @@ func TestAISettingsResponse_UsesCanonicalEmptyCollections(t *testing.T) {
 	}
 }
 
-func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing.T) {
+func TestAISettingsHandler_GetHostedSettings_DoesNotBootstrapQuickstart(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
-	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-		assert.True(t, strings.HasPrefix(authHeader, "Bearer "))
-		assert.Len(t, strings.Split(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")), "."), 3)
-		_, hasFingerprint := reqBody["instance_fingerprint"]
-		assert.False(t, hasFingerprint)
-		assert.Equal(t, "patrol", reqBody["use_case"])
-	})
 
 	tmp := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tmp)
@@ -279,27 +271,14 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 
 	var resp AISettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.True(t, resp.Enabled)
-	assert.True(t, resp.Configured)
-	assert.Equal(t, "quickstart:pulse-hosted", resp.Model)
-	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
-	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
-	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
-	assert.True(t, resp.QuickstartCreditsAvailable)
-	assert.Empty(t, resp.QuickstartBlockedReason)
-	assert.True(t, persistence.HasAIConfig())
+	assert.False(t, resp.Enabled)
+	assert.False(t, resp.Configured)
+	assert.Empty(t, resp.Model)
+	assert.False(t, persistence.HasAIConfig())
 }
 
-func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingState(t *testing.T) {
+func TestAISettingsHandler_GetHostedTenantSettings_DoesNotBootstrapQuickstartFromDefaultBillingState(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
-	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-		assert.True(t, strings.HasPrefix(authHeader, "Bearer "))
-		assert.Len(t, strings.Split(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")), "."), 3)
-		_, hasFingerprint := reqBody["instance_fingerprint"]
-		assert.False(t, hasFingerprint)
-		assert.Equal(t, "patrol", reqBody["use_case"])
-	})
 
 	tmp := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tmp)
@@ -320,18 +299,13 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 
 	var resp AISettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.True(t, resp.Enabled)
-	assert.True(t, resp.Configured)
-	assert.Equal(t, "quickstart:pulse-hosted", resp.Model)
-	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
-	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
-	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
-	assert.True(t, resp.QuickstartCreditsAvailable)
-	assert.Empty(t, resp.QuickstartBlockedReason)
-	assert.True(t, persistence.HasAIConfig())
+	assert.False(t, resp.Enabled)
+	assert.False(t, resp.Configured)
+	assert.Empty(t, resp.Model)
+	assert.False(t, persistence.HasAIConfig())
 }
 
-func TestAISettingsHandler_GetSettings_NormalizesLegacyQuickstartAliases(t *testing.T) {
+func TestAISettingsHandler_GetSettings_RetiresLegacyQuickstartAliases(t *testing.T) {
 	tmp := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tmp)
 	persistence, err := mtp.GetPersistence("default")
@@ -358,14 +332,13 @@ func TestAISettingsHandler_GetSettings_NormalizesLegacyQuickstartAliases(t *test
 
 	var resp AISettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	want := config.DefaultModelForProvider(config.AIProviderQuickstart)
-	assert.Equal(t, want, resp.Model)
-	assert.Equal(t, want, resp.ChatModel)
-	assert.Equal(t, want, resp.PatrolModel)
-	assert.Equal(t, want, resp.AutoFixModel)
+	assert.Empty(t, resp.Model)
+	assert.Empty(t, resp.ChatModel)
+	assert.Empty(t, resp.PatrolModel)
+	assert.Empty(t, resp.AutoFixModel)
 }
 
-func TestAISettingsHandler_GetSettings_QuickstartActivationRequiredSurface(t *testing.T) {
+func TestAISettingsHandler_GetSettings_DoesNotExposeQuickstartSurface(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -384,22 +357,16 @@ func TestAISettingsHandler_GetSettings_QuickstartActivationRequiredSurface(t *te
 
 	var resp AISettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.False(t, resp.QuickstartCreditsAvailable)
-	assert.Equal(t, 0, resp.QuickstartCreditsTotal)
-	assert.Equal(t, 0, resp.QuickstartCreditsRemaining)
-	assert.Equal(t, ai.QuickstartActivationRequiredReason(), resp.QuickstartBlockedReason)
+	assert.False(t, resp.Configured)
+	assert.NotContains(t, rec.Body.String(), "quickstart_")
+	assert.NotContains(t, rec.Body.String(), "using_quickstart")
 }
 
-func TestAISettingsHandler_UpdateSettings_QuickstartRequiresActivationBeforeEnable(t *testing.T) {
+func TestAISettingsHandler_UpdateSettings_RequiresProviderBeforeEnable(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
-		persistence,
-		"default",
-		func() *config.AIConfig { return &config.AIConfig{Enabled: true} },
-	))
 
 	body, _ := json.Marshal(AISettingsUpdateRequest{
 		Enabled: ptr(true),
@@ -408,31 +375,17 @@ func TestAISettingsHandler_UpdateSettings_QuickstartRequiresActivationBeforeEnab
 	rec := httptest.NewRecorder()
 	handler.HandleUpdateAISettings(rec, req)
 
-	require.Equal(t, http.StatusConflict, rec.Code, "body=%s", rec.Body.String())
-	assert.Contains(t, rec.Body.String(), ai.QuickstartActivationRequiredReason())
+	require.Equal(t, http.StatusBadRequest, rec.Code, "body=%s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "Please configure a provider")
 }
 
-func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesActivationIdentity(t *testing.T) {
+func TestAISettingsHandler_UpdateSettings_DoesNotBootstrapQuickstartWithActivationIdentity(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	persistQuickstartActivationState(t, persistence)
-	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		assert.Equal(t, "Bearer pit_live_test", strings.TrimSpace(r.Header.Get("Authorization")))
-		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
-		assert.Equal(t, "fp-live-test", instanceFingerprint)
-		assert.Equal(t, "patrol", reqBody["use_case"])
-	})
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
-		persistence,
-		"default",
-		func() *config.AIConfig {
-			cfg, _ := persistence.LoadAIConfig()
-			return cfg
-		},
-	))
 
 	body, _ := json.Marshal(AISettingsUpdateRequest{
 		Enabled: ptr(true),
@@ -441,17 +394,8 @@ func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesAct
 	rec := httptest.NewRecorder()
 	handler.HandleUpdateAISettings(rec, req)
 
-	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
-
-	var resp AISettingsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.True(t, resp.Enabled)
-	assert.Equal(t, "quickstart:pulse-hosted", resp.Model)
-	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
-	assert.True(t, resp.UsingQuickstart)
-	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
-	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
-	assert.Empty(t, resp.QuickstartBlockedReason)
+	require.Equal(t, http.StatusBadRequest, rec.Code, "body=%s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "Please configure a provider")
 }
 
 func TestAISettingsHandler_UpdateSettings_ResolvesProviderModelWhenOmitted(t *testing.T) {

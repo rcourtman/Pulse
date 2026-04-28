@@ -664,7 +664,7 @@ func TestSeedFindingsAndContext_KeepsSyntheticPatrolServiceFindings(t *testing.T
 		ResourceID:   "ai-service",
 		ResourceName: "Pulse Patrol Service",
 		ResourceType: "service",
-		Title:        "Pulse Patrol: Insufficient API credits",
+		Title:        "Pulse Patrol: Provider billing or quota issue",
 		Severity:     FindingSeverityWarning,
 		Category:     FindingCategoryReliability,
 		DetectedAt:   time.Now().Add(-2 * time.Hour),

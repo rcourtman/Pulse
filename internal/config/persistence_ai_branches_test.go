@@ -69,7 +69,7 @@ func TestLoadAIConfig_Branches(t *testing.T) {
 	assert.NotContains(t, string(rewritten), "secret-key")
 }
 
-func TestLoadAIConfig_MigratesLegacyQuickstartAlias(t *testing.T) {
+func TestLoadAIConfig_RetiresLegacyQuickstartAlias(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := NewConfigPersistence(tempDir)
 	aiFile := filepath.Join(tempDir, "ai.enc")
@@ -92,11 +92,10 @@ func TestLoadAIConfig_MigratesLegacyQuickstartAlias(t *testing.T) {
 	settings, err := cp.LoadAIConfig()
 	assert.NoError(t, err)
 
-	want := DefaultModelForProvider(AIProviderQuickstart)
-	assert.Equal(t, want, settings.Model)
-	assert.Equal(t, want, settings.ChatModel)
-	assert.Equal(t, want, settings.PatrolModel)
-	assert.Equal(t, want, settings.AutoFixModel)
+	assert.Empty(t, settings.Model)
+	assert.Empty(t, settings.ChatModel)
+	assert.Empty(t, settings.PatrolModel)
+	assert.Empty(t, settings.AutoFixModel)
 
 	rewritten, err := os.ReadFile(aiFile)
 	assert.NoError(t, err)

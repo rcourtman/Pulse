@@ -247,7 +247,7 @@ provider-credit failure, the top assessment should read as a Patrol runtime
 issue rather than implying infrastructure issues were detected across the
 estate. When there is exactly one active Patrol runtime finding, that same
 assessment copy should name the concrete runtime failure, such as
-`Insufficient API credits`, instead of reducing the state to a generic count of
+`Provider billing or quota issue`, instead of reducing the state to a generic count of
 runtime findings.
 That same runtime-owned assessment must expose the fix path directly. When the
 primary Patrol issue is a Patrol runtime/provider problem rather than an
@@ -268,9 +268,9 @@ subject labels, so Patrol-owned synthetic service findings render as
 handoff prompts.
 That same title presentation contract should normalize Patrol-owned finding
 titles too. The primary findings row, assistant handoff copy, and inline
-approval surfaces should present runtime findings as `Insufficient API credits`
-rather than repeating the product prefix as `Pulse Patrol: Insufficient API
-credits` once the surrounding UI already makes the Patrol context explicit.
+approval surfaces should present runtime findings as `Provider billing or quota issue`
+rather than repeating the product prefix or legacy `Insufficient API credits`
+wording once the surrounding UI already makes the Patrol context explicit.
 That same finding presentation contract should own the primary remediation path
 for Patrol-owned runtime findings as well. Expanded runtime-finding rows should
 offer the same direct `Open Patrol provider settings` action that the top

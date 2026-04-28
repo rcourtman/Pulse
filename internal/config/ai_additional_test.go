@@ -175,9 +175,9 @@ func TestDefaultModelForProvider(t *testing.T) {
 			want:     FormatModelString(AIProviderOllama, "llama3.2"),
 		},
 		{
-			name:     "quickstart",
+			name:     "retired quickstart",
 			provider: AIProviderQuickstart,
-			want:     FormatModelString(AIProviderQuickstart, DefaultAIModelQuickstart),
+			want:     "",
 		},
 		{
 			name:     "unknown provider",

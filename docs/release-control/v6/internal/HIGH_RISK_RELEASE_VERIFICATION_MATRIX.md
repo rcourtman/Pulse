@@ -51,6 +51,12 @@ Companion drill:
   runtime and does not mutate entitlements. Ordinary self-hosted runtime
   surfaces must still suppress trial prompts; signed support handoffs may return
   through `/auth/trial-activate` only.
+  The same proof slice must keep retired hosted-AI quickstart out of normal GA
+  runtime paths: `/api/settings/ai` and `/api/ai/patrol/status` must not expose
+  quickstart credit/status fields, missing AI config in hosted mode must not
+  auto-bootstrap `quickstart:pulse-hosted`, and enabling Assistant without a
+  BYOK/local provider must fail with provider setup guidance rather than managed
+  credits.
 - Live rehearsal helper:
   `python3 scripts/release_control/hosted_signup_billing_replay_rehearsal.py --base-url <hosted-url> --signup-email <email> --org-name <org> ...`
 - Manual scenario:
