@@ -134,6 +134,18 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("docs/releases/V6_CHANGELOG_RC2_DRAFT.md", release_index)
         self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
 
+    def test_rc1_changelog_keeps_current_free_first_licensing_posture(self) -> None:
+        changelog = read("docs/releases/V6_CHANGELOG_RC1.md")
+        normalized = normalize_ws(changelog)
+        self.assertIn("Pricing/limit note", changelog)
+        self.assertIn("core monitoring unlimited", normalized)
+        self.assertIn("not a monitoring-volume paywall", normalized)
+        self.assertNotIn(
+            "monitored-system limits, commercial posture, and trial eligibility",
+            changelog,
+        )
+        self.assertNotIn("Limits are applied to canonical top-level monitored systems", changelog)
+
     def test_version_file_matches_current_rc_packet(self) -> None:
         current_version = read("VERSION").strip()
         if current_version == "6.0.0":

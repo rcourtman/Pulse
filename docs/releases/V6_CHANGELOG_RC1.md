@@ -23,7 +23,7 @@ For existing Pulse v5 operators, this is not just a visual refresh. The default 
 
 - **Adding infrastructure is more structured.** The shipped RC includes cluster agent deployment workflows with candidate discovery, preflights, jobs, event streams, cancel, and retry paths. That is a real workflow change from v5's more manual install-command model.
 
-- **Licensing and activation behave differently.** V6 tracks entitlement state, monitored-system limits, commercial posture, and trial eligibility more explicitly. It also has dedicated behavior for upgrading supported paid v5 licenses into v6 entitlements.
+- **Licensing and activation behave differently.** V6 tracks entitlement state, commercial posture, and paid-license continuity more explicitly. Later v6 branch work removed the early self-hosted monitored-system capacity ladder and retired ordinary self-hosted trial acquisition; current Community, Relay, and Pro self-hosted plans keep core monitoring unlimited.
 
 - **Hosted, org, and relay/mobile capabilities are also part of the shipped RC.** They are present in `v6.0.0-rc.1`, but most existing self-hosted v5 operators can treat them as second-wave testing rather than the first things to validate.
 
@@ -65,7 +65,7 @@ For existing Pulse v5 operators, this is not just a visual refresh. The default 
 
 - **Paid v5 licenses are handled explicitly.** Supported v5 paid licenses can auto-exchange into v6 entitlements, while unresolved paid-license migration states are recorded and surfaced instead of being silently ignored.
 
-- **Monitored-system counting is more deliberate.** Limits are applied to canonical top-level monitored systems, including cases where Pulse sees the same machine through more than one collection path.
+- **Monitored-system counting is more deliberate.** Pulse counts canonical top-level monitored systems so upgrade, support, and migration views describe the estate consistently, including cases where Pulse sees the same machine through more than one collection path. For current self-hosted v6 Community, Relay, and Pro plans, that counting is not a monitoring-volume paywall.
 
 - **Grandfathering is explicit rather than implied.** In `rc.1`, migrated paid installs could carry a higher monitored-system floor than the early capped self-hosted policy. Later v6 branch work replaced that public self-hosted capacity ladder with unlimited core monitoring while keeping paid-license continuity explicit.
 
