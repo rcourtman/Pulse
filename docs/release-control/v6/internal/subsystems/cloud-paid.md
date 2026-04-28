@@ -475,6 +475,11 @@ Community limit enforcement.
    entitlement, grant, or warning-banner payloads are built, while leaving
    bounded hosted Cloud/MSP contracts available for top-level hosted
    monitored-system ceilings.
+   The same boundary must merge sparse legacy, configured-plan, or manually
+   supplied feature lists with canonical recognized-tier defaults before
+   storage, API response, or grant signing so Lifetime, Pro, Pro+, and
+   grandfathered recurring customers cannot be downgraded to the partial
+   feature list carried by an old JWT or legacy plan row.
 14. Keep self-hosted commercial funnel stage ownership explicit:
     `pkg/licensing/conversion_events.go`,
     `pkg/licensing/conversion_store.go`, and
