@@ -119,7 +119,7 @@ test.describe.serial("V6 license activation flow", () => {
           billing_model: "manual",
           duration_days: 1,
           max_monitored_systems: 0,
-          max_guests: 5,
+          max_guests: 0,
           max_installations: 3,
           send_email: false,
         },
@@ -247,13 +247,9 @@ test.describe.serial("V6 license activation flow", () => {
     );
     expect(agentLimit).toBeUndefined();
 
-    // Check max_guests limit.
+    // Self-hosted v6 plans do not gate child resources like guests either.
     const guestLimit = ent.limits?.find((l) => l.key === "max_guests");
-    expect(
-      guestLimit,
-      "max_guests limit not found in entitlements",
-    ).toBeTruthy();
-    expect(guestLimit!.limit).toBe(5);
+    expect(guestLimit).toBeUndefined();
   });
 
   test("keeps activated installs on BYOK or local AI setup without quickstart", async ({

@@ -383,7 +383,7 @@ func TestServiceRestoreActivation_CallsActivationStateChangeCallback(t *testing.
 	}
 }
 
-func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesStatus(t *testing.T) {
+func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorSkipsUncappedSelfHosted(t *testing.T) {
 	setupTestPublicKey(t)
 
 	tmpDir, err := os.MkdirTemp("", "pulse-service-floor-*")
@@ -432,19 +432,16 @@ func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesSt
 	if err := svc.CaptureLegacyMonitoredSystemGrandfatherFloor(23); err != nil {
 		t.Fatalf("CaptureLegacyMonitoredSystemGrandfatherFloor: %v", err)
 	}
-	if callbackState == nil {
-		t.Fatal("expected activation-state callback after monitored-system capture")
-	}
-	if callbackState.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
-		t.Fatalf("callback GrandfatheredMaxMonitoredSystems=%d, want 23", callbackState.Continuity.GrandfatheredMaxMonitoredSystems)
-	}
-	if callbackState.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
-		t.Fatal("expected callback capture timestamp")
+	if callbackState != nil {
+		t.Fatalf("expected no activation-state callback for uncapped self-hosted capture, got %+v", callbackState)
 	}
 
 	status := svc.Status()
 	if status.MaxMonitoredSystems != 0 {
 		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 (uncapped self-hosted)", status.MaxMonitoredSystems)
+	}
+	if status.MonitoredSystemContinuity != nil {
+		t.Fatalf("expected no monitored-system continuity banner for uncapped self-hosted migration, got %+v", status.MonitoredSystemContinuity)
 	}
 
 	current := svc.Current()
@@ -454,23 +451,9 @@ func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesSt
 	if got, ok := current.Claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
 		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d present, want absent (uncapped self-hosted)", got)
 	}
-
-	loaded, err := p.LoadActivationState()
-	if err != nil {
-		t.Fatalf("LoadActivationState: %v", err)
-	}
-	if loaded == nil {
-		t.Fatal("expected persisted activation state")
-	}
-	if loaded.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
-		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", loaded.Continuity.GrandfatheredMaxMonitoredSystems)
-	}
-	if loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
-		t.Fatal("expected persisted capture timestamp")
-	}
 }
 
-func TestServiceStatus_ExposesMonitoredSystemContinuityForFallbackMigrations(t *testing.T) {
+func TestServiceStatus_HidesMonitoredSystemContinuityForSelfHostedFallbackMigrations(t *testing.T) {
 	setupTestPublicKey(t)
 
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
@@ -484,24 +467,16 @@ func TestServiceStatus_ExposesMonitoredSystemContinuityForFallbackMigrations(t *
 	})
 
 	tests := []struct {
-		name               string
-		continuity         ActivationContinuity
-		wantPlanLimit      int
-		wantEffectiveLimit int
-		wantFloor          int
-		wantCapturePending bool
-		wantMaxSystems     int
+		name           string
+		continuity     ActivationContinuity
+		wantMaxSystems int
 	}{
 		{
 			name: "pending capture",
 			continuity: ActivationContinuity{
 				LegacyMigration: true,
 			},
-			wantPlanLimit:      10,
-			wantEffectiveLimit: 0,
-			wantFloor:          0,
-			wantCapturePending: true,
-			wantMaxSystems:     0,
+			wantMaxSystems: 0,
 		},
 		{
 			name: "captured floor",
@@ -510,11 +485,7 @@ func TestServiceStatus_ExposesMonitoredSystemContinuityForFallbackMigrations(t *
 				GrandfatheredMaxMonitoredSystems:        23,
 				GrandfatheredMonitoredSystemsCapturedAt: 123,
 			},
-			wantPlanLimit:      10,
-			wantEffectiveLimit: 0,
-			wantFloor:          23,
-			wantCapturePending: false,
-			wantMaxSystems:     0,
+			wantMaxSystems: 0,
 		},
 	}
 
@@ -537,20 +508,8 @@ func TestServiceStatus_ExposesMonitoredSystemContinuityForFallbackMigrations(t *
 			if status.MaxMonitoredSystems != tt.wantMaxSystems {
 				t.Fatalf("status.MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, tt.wantMaxSystems)
 			}
-			if status.MonitoredSystemContinuity == nil {
-				t.Fatal("expected monitored-system continuity in status")
-			}
-			if status.MonitoredSystemContinuity.PlanLimit != tt.wantPlanLimit {
-				t.Fatalf("PlanLimit=%d, want %d", status.MonitoredSystemContinuity.PlanLimit, tt.wantPlanLimit)
-			}
-			if status.MonitoredSystemContinuity.EffectiveLimit != tt.wantEffectiveLimit {
-				t.Fatalf("EffectiveLimit=%d, want %d", status.MonitoredSystemContinuity.EffectiveLimit, tt.wantEffectiveLimit)
-			}
-			if status.MonitoredSystemContinuity.GrandfatheredFloor != tt.wantFloor {
-				t.Fatalf("GrandfatheredFloor=%d, want %d", status.MonitoredSystemContinuity.GrandfatheredFloor, tt.wantFloor)
-			}
-			if status.MonitoredSystemContinuity.CapturePending != tt.wantCapturePending {
-				t.Fatalf("CapturePending=%v, want %v", status.MonitoredSystemContinuity.CapturePending, tt.wantCapturePending)
+			if status.MonitoredSystemContinuity != nil {
+				t.Fatalf("expected no monitored-system continuity banner for uncapped self-hosted migration, got %+v", status.MonitoredSystemContinuity)
 			}
 		})
 	}

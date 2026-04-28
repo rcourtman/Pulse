@@ -394,6 +394,16 @@ func CommercialPosturePayloadFromEntitlementPayload(
 	return sanitized
 }
 
+func licenseStatusUsesUncappedCoreMonitoring(status *LicenseStatus) bool {
+	if status == nil {
+		return false
+	}
+	if status.PlanVersion != "" {
+		return IsSelfHostedCoreMonitoringUncappedPlanVersion(status.PlanVersion)
+	}
+	return IsSelfHostedCoreMonitoringUncappedTier(status.Tier)
+}
+
 // BuildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
 func BuildEntitlementPayloadWithUsage(
 	status *LicenseStatus,
@@ -434,14 +444,22 @@ func BuildEntitlementPayloadWithUsage(
 		LegacyConnections: usage.LegacyConnections,
 		HasMigrationGap:   false,
 	}
+	uncappedCoreMonitoring := licenseStatusUsesUncappedCoreMonitoring(status)
 	if status.MonitoredSystemContinuity != nil {
 		continuity := *status.MonitoredSystemContinuity
 		payload.MonitoredSystemContinuity = &continuity
 	}
+	monitoredSystemLimit := int64(status.MaxMonitoredSystems)
+	capacityContinuity := status.MonitoredSystemContinuity
+	if uncappedCoreMonitoring {
+		monitoredSystemLimit = 0
+		payload.MonitoredSystemContinuity = nil
+		capacityContinuity = nil
+	}
 	payload.MonitoredSystemCapacity = buildMonitoredSystemCapacityStatus(
-		int64(status.MaxMonitoredSystems),
+		monitoredSystemLimit,
 		usage,
-		status.MonitoredSystemContinuity,
+		capacityContinuity,
 	)
 
 	if payload.Capabilities == nil {
@@ -470,7 +488,7 @@ func BuildEntitlementPayloadWithUsage(
 	}
 
 	// Build limits.
-	if status.MaxMonitoredSystems > 0 {
+	if status.MaxMonitoredSystems > 0 && !uncappedCoreMonitoring {
 		currentSystems := usage.monitoredSystemCount()
 		limit := LimitStatus{
 			Key:              MaxMonitoredSystemsLicenseGateKey,
@@ -484,7 +502,7 @@ func BuildEntitlementPayloadWithUsage(
 		}
 		payload.Limits = append(payload.Limits, limit)
 	}
-	if status.MaxGuests > 0 {
+	if status.MaxGuests > 0 && !uncappedCoreMonitoring {
 		payload.Limits = append(payload.Limits, LimitStatus{
 			Key:     "max_guests",
 			Limit:   int64(status.MaxGuests),

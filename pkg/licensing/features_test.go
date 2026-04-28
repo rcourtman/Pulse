@@ -695,6 +695,12 @@ func TestIsSelfHostedCoreMonitoringUncappedPlanVersion(t *testing.T) {
 	}{
 		{plan: "community", want: true},
 		{plan: "free", want: true},
+		{plan: "relay", want: true},
+		{plan: "pro", want: true},
+		{plan: "pro_plus", want: true},
+		{plan: "pro_annual", want: true},
+		{plan: "lifetime", want: true},
+		{plan: "v5_lifetime_grandfathered", want: true},
 		{plan: "v5_pro_monthly_grandfathered", want: true},
 		{plan: "v5_pro_annual_grandfathered", want: true},
 		{plan: "cloud_starter", want: false},
@@ -707,6 +713,33 @@ func TestIsSelfHostedCoreMonitoringUncappedPlanVersion(t *testing.T) {
 		t.Run(tt.plan, func(t *testing.T) {
 			if got := IsSelfHostedCoreMonitoringUncappedPlanVersion(tt.plan); got != tt.want {
 				t.Fatalf("IsSelfHostedCoreMonitoringUncappedPlanVersion(%q) = %v, want %v", tt.plan, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsSelfHostedCoreMonitoringUncappedTier(t *testing.T) {
+	tests := []struct {
+		tier Tier
+		want bool
+	}{
+		{tier: TierFree, want: true},
+		{tier: TierRelay, want: true},
+		{tier: TierPro, want: true},
+		{tier: TierProPlus, want: true},
+		{tier: TierProAnnual, want: true},
+		{tier: TierLifetime, want: true},
+		{tier: TierCloud, want: false},
+		{tier: TierMSP, want: false},
+		{tier: TierEnterprise, want: false},
+		{tier: Tier(" pro "), want: true},
+		{tier: Tier("unknown"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.tier), func(t *testing.T) {
+			if got := IsSelfHostedCoreMonitoringUncappedTier(tt.tier); got != tt.want {
+				t.Fatalf("IsSelfHostedCoreMonitoringUncappedTier(%q) = %v, want %v", tt.tier, got, tt.want)
 			}
 		})
 	}

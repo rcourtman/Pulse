@@ -78,7 +78,7 @@ func (c Claims) shouldScrubLegacyCommercialCaps() bool {
 	if c.CoreMonitoringUncapped {
 		return true
 	}
-	if c.Tier == TierLifetime {
+	if IsSelfHostedCoreMonitoringUncappedTier(c.Tier) {
 		return true
 	}
 	if IsSelfHostedCoreMonitoringUncappedPlanVersion(c.PlanVersion) {

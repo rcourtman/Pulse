@@ -5403,7 +5403,8 @@ func TestContract_SelfHostedCommunityRuntimeCapabilitiesJSONSnapshot(t *testing.
 func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
 		Valid:               true,
-		Tier:                pkglicensing.TierPro,
+		Tier:                pkglicensing.TierCloud,
+		PlanVersion:         "cloud_starter",
 		Features:            append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
 		MaxMonitoredSystems: 15,
 		MonitoredSystemContinuity: &pkglicensing.MonitoredSystemContinuityStatus{
@@ -5425,7 +5426,8 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 		"limits":[{"key":"max_monitored_systems","limit":15,"current":0,"current_available":false,"current_unavailable_reason":"supplemental_inventory_unsettled","state":"ok"}],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
-		"tier":"pro",
+		"plan_version":"cloud_starter",
+		"tier":"cloud",
 		"hosted_mode":false,
 		"valid":true,
 		"is_lifetime":false,
@@ -5514,7 +5516,7 @@ func TestContract_EntitlementUsageSnapshotWaitsForSettledSupplementalInventory(t
 	}
 }
 
-func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing.T) {
+func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	const expectedClientVersion = "6.0.0-rc.1"
 
@@ -5689,15 +5691,13 @@ func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing
 			"tier":"pro",
 			"plan_version":"legacy_migration_fallback",
 			"max_monitored_systems":0,
-			"valid":true,
-			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":0,"capture_pending":false,"captured_at":123}
+			"valid":true
 		},
 		"entitlements":{
 			"tier":"pro",
 			"plan_version":"legacy_migration_fallback",
 			"subscription_state":"active",
 			"limits":[],
-			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":0,"capture_pending":false,"captured_at":123},
 			"monitored_system_capacity":{"mode":"unlimited","urgency":"ok","current":23,"limit":0,"current_available":true,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":true}
 		}
 	}`

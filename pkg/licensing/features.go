@@ -162,10 +162,7 @@ func IsGrandfatheredRecurringV5PlanVersion(planVersion string) bool {
 }
 
 // IsSelfHostedCommunityPlanVersion reports whether a persisted billing-state
-// plan version denotes the uncapped self-hosted Community/free posture. This
-// is narrower than tier-based self-hosted licensing: billing-state plan labels
-// like "pro" can still carry explicit continuity limits in hosted and legacy
-// migration paths, so only community/free variants are safe to scrub here.
+// plan version denotes the uncapped self-hosted Community/free posture.
 func IsSelfHostedCommunityPlanVersion(planVersion string) bool {
 	switch strings.ToLower(CanonicalizePlanVersion(planVersion)) {
 	case "community", string(TierFree):
@@ -175,9 +172,32 @@ func IsSelfHostedCommunityPlanVersion(planVersion string) bool {
 	}
 }
 
+// IsSelfHostedCoreMonitoringUncappedTier reports whether a tier is part of the
+// self-hosted v6 contract where core monitoring volume is not monetized.
+func IsSelfHostedCoreMonitoringUncappedTier(tier Tier) bool {
+	switch Tier(strings.ToLower(strings.TrimSpace(string(tier)))) {
+	case TierFree, TierRelay, TierPro, TierProPlus, TierProAnnual, TierLifetime:
+		return true
+	default:
+		return false
+	}
+}
+
 func IsSelfHostedCoreMonitoringUncappedPlanVersion(planVersion string) bool {
-	return IsSelfHostedCommunityPlanVersion(planVersion) ||
-		IsGrandfatheredRecurringV5PlanVersion(planVersion)
+	normalized := strings.ToLower(CanonicalizePlanVersion(planVersion))
+	switch normalized {
+	case "community",
+		string(TierFree),
+		string(TierRelay),
+		string(TierPro),
+		string(TierProPlus),
+		string(TierProAnnual),
+		string(TierLifetime),
+		"v5_lifetime_grandfathered":
+		return true
+	default:
+		return IsGrandfatheredRecurringV5PlanVersion(normalized)
+	}
 }
 
 func stripLegacyCommercialCaps(limits map[string]int64) {

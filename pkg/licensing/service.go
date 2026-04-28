@@ -464,6 +464,10 @@ func (s *Service) CaptureLegacyMonitoredSystemGrandfatherFloor(count int) error 
 		s.mu.Unlock()
 		return nil
 	}
+	if s.legacyMigrationUsesUncappedCoreMonitoringLocked() {
+		s.mu.Unlock()
+		return nil
+	}
 
 	currentLimit := 0
 	if s.license != nil {
@@ -514,7 +518,7 @@ func (s *Service) needsLegacyMonitoredSystemCaptureLocked() bool {
 	if s == nil || s.activationState == nil {
 		return false
 	}
-	if s.legacyMigrationUsesUncappedRecurringPlanLocked() {
+	if s.legacyMigrationUsesUncappedCoreMonitoringLocked() {
 		return false
 	}
 	return normalizeActivationContinuity(s.activationState.Continuity).needsLegacyMonitoredSystemCapture()
@@ -540,7 +544,7 @@ func (s *Service) monitoredSystemContinuityStatusLocked() *MonitoredSystemContin
 	if !continuity.LegacyMigration {
 		return nil
 	}
-	if s.legacyMigrationUsesUncappedRecurringPlanLocked() {
+	if s.legacyMigrationUsesUncappedCoreMonitoringLocked() {
 		return nil
 	}
 
@@ -977,18 +981,19 @@ func monitoredSystemLimitFromClaims(claims Claims) int {
 	return 0
 }
 
-func (s *Service) legacyMigrationUsesUncappedRecurringPlanLocked() bool {
+func (s *Service) legacyMigrationUsesUncappedCoreMonitoringLocked() bool {
 	if s == nil || s.activationState == nil {
 		return false
 	}
-	if s.license != nil && IsGrandfatheredRecurringV5PlanVersion(s.license.Claims.PlanVersion) {
+	if s.license != nil && s.license.Claims.shouldScrubLegacyCommercialCaps() {
 		return true
 	}
 	gc, err := verifyAndParseGrantJWT(s.activationState.GrantJWT)
 	if err != nil || gc == nil {
 		return false
 	}
-	return IsGrandfatheredRecurringV5PlanVersion(gc.PlanKey)
+	return IsSelfHostedCoreMonitoringUncappedTier(Tier(gc.Tier)) ||
+		IsSelfHostedCoreMonitoringUncappedPlanVersion(gc.PlanKey)
 }
 
 func remainingDaysCeil(expiresAtUnix, nowUnix int64) int {

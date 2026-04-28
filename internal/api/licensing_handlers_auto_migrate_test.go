@@ -323,7 +323,7 @@ func TestGetTenantComponents_PersistsCommercialMigrationState_WhenAutoExchangeFa
 	handlers.StopAllBackgroundLoops()
 }
 
-func TestGetTenantComponents_AutoExchangeGrandfathersObservedMonitoredSystems(t *testing.T) {
+func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
@@ -411,18 +411,18 @@ func TestGetTenantComponents_AutoExchangeGrandfathersObservedMonitoredSystems(t 
 		if !activationState.Continuity.LegacyMigration {
 			t.Fatal("expected legacy migration continuity flag")
 		}
-		if activationState.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
-			t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", activationState.Continuity.GrandfatheredMaxMonitoredSystems)
+		if activationState.Continuity.GrandfatheredMaxMonitoredSystems != 0 {
+			t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMaxMonitoredSystems)
 		}
-		if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
-			t.Fatal("expected grandfather capture timestamp")
+		if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
+			t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
 		}
 	}
 
 	handlers.StopAllBackgroundLoops()
 }
 
-func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArrivesLate(t *testing.T) {
+func TestGetTenantComponents_DoesNotBackfillGrandfatherFloorForUncappedSelfHostedRestore(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
@@ -481,23 +481,7 @@ func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArr
 	}
 
 	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
-
-	deadline := time.Now().Add(8 * time.Second)
-	for {
-		loaded, err := persistence.LoadActivationState()
-		if err != nil {
-			t.Fatalf("load activation state: %v", err)
-		}
-		if loaded != nil &&
-			loaded.Continuity.GrandfatheredMaxMonitoredSystems == 23 &&
-			loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected async grandfather capture after late monitor restore, last activation state=%+v", loaded)
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	loaded, err := persistence.LoadActivationState()
 	if err != nil {
@@ -506,14 +490,17 @@ func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArr
 	if loaded == nil {
 		t.Fatal("expected activation state")
 	}
-	if loaded.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
-		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", loaded.Continuity.GrandfatheredMaxMonitoredSystems)
+	if loaded.Continuity.GrandfatheredMaxMonitoredSystems != 0 {
+		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 0 for uncapped self-hosted restore", loaded.Continuity.GrandfatheredMaxMonitoredSystems)
 	}
-	if loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
-		t.Fatal("expected captured timestamp after late monitor restore")
+	if loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
+		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 for uncapped self-hosted restore", loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
 	}
 	if got := svc.Status().MaxMonitoredSystems; got != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 after late monitor capture for uncapped self-hosted continuity", got)
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped self-hosted restore", got)
+	}
+	if svc.Status().MonitoredSystemContinuity != nil {
+		t.Fatalf("expected no monitored-system continuity for uncapped self-hosted restore, got %+v", svc.Status().MonitoredSystemContinuity)
 	}
 
 	handlers.StopAllBackgroundLoops()
@@ -576,22 +563,9 @@ func TestBillingReads_DoNotRestartLegacyGrandfatherReconcileLoop(t *testing.T) {
 		t.Fatal("expected non-nil service")
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if value, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
-			if loop, ok := value.(*legacyGrandfatherReconcileLoop); ok && loop.isRunning() {
-				break
-			}
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("expected restore-owned grandfather reconcile loop to start")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	handlers.stopLegacyGrandfatherReconcileLoop("default")
+	time.Sleep(100 * time.Millisecond)
 	if _, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
-		t.Fatal("expected grandfather reconcile loop to stop before read-only check")
+		t.Fatal("uncapped self-hosted restore started grandfather reconcile loop")
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
@@ -617,7 +591,7 @@ func TestBillingReads_DoNotRestartLegacyGrandfatherReconcileLoop(t *testing.T) {
 	}
 }
 
-func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigration(t *testing.T) {
+func TestActivateLicenseKey_KeepsLegacySelfHostedMigrationUncapped(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
@@ -692,7 +666,7 @@ func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigrati
 	}
 }
 
-func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySettles(t *testing.T) {
+func TestGetTenantComponents_DoesNotCaptureGrandfatherFloorWhenSupplementalInventorySettlesForUncappedSelfHosted(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
@@ -798,16 +772,13 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 	if got := status.MaxMonitoredSystems; got != 0 {
 		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 0 while supplemental inventory is unsettled for uncapped self-hosted continuity", got)
 	}
-	if status.MonitoredSystemContinuity == nil || !status.MonitoredSystemContinuity.CapturePending {
-		t.Fatalf("expected pending continuity in status payload, got %+v", status.MonitoredSystemContinuity)
-	}
-	if status.MonitoredSystemContinuity.PlanLimit != 10 || status.MonitoredSystemContinuity.EffectiveLimit != 0 {
-		t.Fatalf("unexpected pending continuity status payload: %+v", status.MonitoredSystemContinuity)
+	if status.MonitoredSystemContinuity != nil {
+		t.Fatalf("expected no continuity in status payload for uncapped self-hosted migration, got %+v", status.MonitoredSystemContinuity)
 	}
 
 	payload := readEntitlements()
-	if payload.MonitoredSystemContinuity == nil || !payload.MonitoredSystemContinuity.CapturePending {
-		t.Fatalf("expected pending continuity in entitlements payload, got %+v", payload.MonitoredSystemContinuity)
+	if payload.MonitoredSystemContinuity != nil {
+		t.Fatalf("expected no continuity in entitlements payload for uncapped self-hosted migration, got %+v", payload.MonitoredSystemContinuity)
 	}
 	if len(payload.Limits) != 0 {
 		t.Fatalf("expected no enforced monitored-system limit for uncapped continuity, got %+v", payload.Limits)
@@ -836,7 +807,7 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 		t.Fatal("expected activation state after legacy exchange")
 	}
 	if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
-		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 before supplemental baseline settles", activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
+		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
 	}
 
 	provider.settle(23)
@@ -851,37 +822,32 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 		t.Fatalf("status read should not reintroduce a monitored-system cap directly after canonical store rebuild, got %d", got)
 	}
 
-	deadline := time.Now().Add(8 * time.Second)
-	for {
-		activationState, err = persistence.LoadActivationState()
-		if err != nil {
-			t.Fatalf("reload activation state: %v", err)
-		}
-		if activationState != nil &&
-			activationState.Continuity.GrandfatheredMaxMonitoredSystems == 23 &&
-			activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected async grandfather capture after canonical store rebuild, last activation state=%+v", activationState)
-		}
-		time.Sleep(100 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+	activationState, err = persistence.LoadActivationState()
+	if err != nil {
+		t.Fatalf("reload activation state: %v", err)
+	}
+	if activationState == nil {
+		t.Fatal("expected activation state after canonical store rebuild")
+	}
+	if activationState.Continuity.GrandfatheredMaxMonitoredSystems != 0 {
+		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMaxMonitoredSystems)
+	}
+	if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
+		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
 	}
 
 	status = readStatus()
 	if got := status.MaxMonitoredSystems; got != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 after async grandfather capture for uncapped self-hosted continuity", got)
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 after canonical store rebuild for uncapped self-hosted continuity", got)
 	}
-	if status.MonitoredSystemContinuity == nil || status.MonitoredSystemContinuity.CapturePending {
-		t.Fatalf("expected settled continuity in status payload after async capture, got %+v", status.MonitoredSystemContinuity)
-	}
-	if status.MonitoredSystemContinuity.GrandfatheredFloor != 23 || status.MonitoredSystemContinuity.EffectiveLimit != 0 {
-		t.Fatalf("unexpected settled continuity status payload: %+v", status.MonitoredSystemContinuity)
+	if status.MonitoredSystemContinuity != nil {
+		t.Fatalf("expected no continuity in status payload after canonical store rebuild, got %+v", status.MonitoredSystemContinuity)
 	}
 
 	payload = readEntitlements()
-	if payload.MonitoredSystemContinuity == nil || payload.MonitoredSystemContinuity.CapturePending {
-		t.Fatalf("expected settled continuity in entitlements payload after async capture, got %+v", payload.MonitoredSystemContinuity)
+	if payload.MonitoredSystemContinuity != nil {
+		t.Fatalf("expected no continuity in entitlements payload after canonical store rebuild, got %+v", payload.MonitoredSystemContinuity)
 	}
 	if len(payload.Limits) != 0 {
 		t.Fatalf("expected no enforced monitored-system limit in entitlements payload after async capture, got %+v", payload.Limits)
@@ -890,7 +856,7 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 		t.Fatal("expected monitored-system capacity payload after async capture")
 	}
 	if payload.MonitoredSystemCapacity.Mode != "unlimited" || payload.MonitoredSystemCapacity.Current != 23 {
-		t.Fatalf("expected unlimited monitored-system capacity with current=23 after async capture, got %+v", payload.MonitoredSystemCapacity)
+		t.Fatalf("expected unlimited monitored-system capacity with current=23 after canonical store rebuild, got %+v", payload.MonitoredSystemCapacity)
 	}
 }
 

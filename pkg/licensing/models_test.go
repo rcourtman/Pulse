@@ -140,9 +140,18 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 			expected: map[string]int64{},
 		},
 		{
-			name: "generic_self_hosted_claims_preserve_explicit_limits_without_uncapped_marker",
+			name: "self_hosted_pro_claims_strip_legacy_volume_caps",
 			claims: Claims{
 				Tier:                TierPro,
+				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
+				MaxMonitoredSystems: 15,
+				MaxGuests:           100,
+			},
+			expected: map[string]int64{},
+		},
+		{
+			name: "generic_non_self_hosted_claims_preserve_explicit_limits_without_uncapped_marker",
+			claims: Claims{
 				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
 				MaxMonitoredSystems: 15,
 				MaxGuests:           100,

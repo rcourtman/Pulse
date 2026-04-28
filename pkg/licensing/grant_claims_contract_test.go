@@ -112,6 +112,28 @@ func TestDatabaseSourceCanonicalBoundaryContract(t *testing.T) {
 			t.Fatalf("Limits() = %v, want no grandfathered recurring caps", got)
 		}
 	})
+
+	t.Run("self_hosted_paid_plans_stay_uncapped", func(t *testing.T) {
+		store := &mockBillingStore{
+			state: &BillingState{
+				PlanVersion: "pro",
+				Limits: map[string]int64{
+					"max_monitored_systems": 10,
+					"max_guests":            50,
+				},
+				SubscriptionState: SubStateActive,
+			},
+		}
+
+		source := NewDatabaseSource(store, "org-1", time.Hour)
+
+		if got := source.PlanVersion(); got != "pro" {
+			t.Fatalf("PlanVersion() = %q, want %q", got, "pro")
+		}
+		if got := source.Limits(); len(got) != 0 {
+			t.Fatalf("Limits() = %v, want no self-hosted paid volume caps", got)
+		}
+	})
 }
 
 // grantContractJSONTags lists the JSON field names that MUST exist with

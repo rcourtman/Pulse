@@ -332,7 +332,7 @@ func TestNormalizeBillingState_GrandfatheredRecurringPlanStripsLegacyCommercialC
 	}
 }
 
-func TestNormalizeBillingState_PreservesNonCloudPlanLimits(t *testing.T) {
+func TestNormalizeBillingState_PreservesUnknownNonCloudPlanLimits(t *testing.T) {
 	state := &BillingState{
 		PlanVersion: "pro-v2",
 		Limits: map[string]int64{
@@ -349,7 +349,39 @@ func TestNormalizeBillingState_PreservesNonCloudPlanLimits(t *testing.T) {
 	}
 }
 
-func TestNormalizeBillingState_SelfHostedCommunityPlanStripsLegacyCommercialCaps(t *testing.T) {
+func TestNormalizeBillingState_SelfHostedPlansStripLegacyCommercialCaps(t *testing.T) {
+	plans := []string{" community ", "free", "relay", "pro", "pro_plus", "pro_annual", "lifetime", "v5_lifetime_grandfathered"}
+	for _, plan := range plans {
+		t.Run(plan, func(t *testing.T) {
+			state := &BillingState{
+				PlanVersion: plan,
+				Limits: map[string]int64{
+					"max_monitored_systems": 1,
+					"max_guests":            5,
+					"max_nodes":             99,
+					"max_reports":           7,
+				},
+				SubscriptionState: SubStateActive,
+			}
+
+			normalized := NormalizeBillingState(state)
+			if _, ok := normalized.Limits["max_monitored_systems"]; ok {
+				t.Fatalf("expected max_monitored_systems to be scrubbed, got %v", normalized.Limits)
+			}
+			if _, ok := normalized.Limits["max_guests"]; ok {
+				t.Fatalf("expected max_guests to be scrubbed, got %v", normalized.Limits)
+			}
+			if _, ok := normalized.Limits["max_nodes"]; ok {
+				t.Fatalf("expected max_nodes to be removed during normalization, got %v", normalized.Limits)
+			}
+			if got := normalized.Limits["max_reports"]; got != 7 {
+				t.Fatalf("limits[max_reports]=%d, want %d", got, 7)
+			}
+		})
+	}
+}
+
+func TestNormalizeBillingState_SelfHostedCommunityPlanCanonicalizesLegacyCommercialCaps(t *testing.T) {
 	state := &BillingState{
 		PlanVersion: " community ",
 		Limits: map[string]int64{

@@ -110,8 +110,8 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 		}
 	}
 
-	if guestLimit == nil {
-		t.Fatalf("expected max_guests limit")
+	if guestLimit != nil {
+		t.Fatalf("expected self-hosted pro to omit max_guests limit, got %+v", guestLimit)
 	}
 	if agentLimit != nil {
 		t.Fatalf("expected no max_monitored_systems limit for self-hosted pro, got %+v", agentLimit)
@@ -121,9 +121,6 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 	if payload.MonitoredSystemCapacity.Mode != "unlimited" || payload.MonitoredSystemCapacity.Current != 12 {
 		t.Fatalf("expected unlimited monitored-system capacity with current=12, got %+v", payload.MonitoredSystemCapacity)
-	}
-	if guestLimit.Current != 44 {
-		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
 	}
 	if payload.LegacyConnections.ProxmoxNodes != 2 {
 		t.Fatalf("expected proxmox_nodes 2, got %d", payload.LegacyConnections.ProxmoxNodes)
@@ -355,7 +352,7 @@ func TestBuildEntitlementPayload_PreservesPlanVersionForSelfHostedJWT(t *testing
 	}
 }
 
-func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
+func TestEntitlementHandler_HostedEvaluatorKeepsCloudLimitsWhenNoLicense(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 
@@ -373,7 +370,7 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 		Limits: map[string]int64{
 			"max_monitored_systems": 5,
 		},
-		PlanVersion:       "pro",
+		PlanVersion:       "cloud_starter",
 		SubscriptionState: entitlements.SubStateActive,
 	}); err != nil {
 		t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
@@ -398,8 +395,8 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 	if payload.SubscriptionState != string(license.SubStateActive) {
 		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateActive)
 	}
-	if payload.PlanVersion != "pro" {
-		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "pro")
+	if payload.PlanVersion != "cloud_starter" {
+		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "cloud_starter")
 	}
 
 	contains := func(values []string, key string) bool {
@@ -428,8 +425,8 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 	if maxMonitoredSystems == nil {
 		t.Fatalf("expected max_monitored_systems limit in payload, got %v", payload.Limits)
 	}
-	if maxMonitoredSystems.Limit != 5 {
-		t.Fatalf("max_monitored_systems.limit=%d, want %d", maxMonitoredSystems.Limit, 5)
+	if maxMonitoredSystems.Limit != 10 {
+		t.Fatalf("max_monitored_systems.limit=%d, want %d", maxMonitoredSystems.Limit, 10)
 	}
 
 	// Parity: every advertised capability must be enforced by HasFeature.
@@ -441,6 +438,57 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 	for _, cap := range payload.Capabilities {
 		if !svc.HasFeature(cap) {
 			t.Fatalf("parity mismatch: HasFeature(%q)=false but capability present in payload", cap)
+		}
+	}
+}
+
+func TestEntitlementHandler_SelfHostedPaidEvaluatorStateIsUncapped(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	orgID := "test-self-hosted-paid-entitlements"
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s) failed: %v", orgID, err)
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureAIPatrol,
+			license.FeatureAIAutoFix,
+		},
+		Limits: map[string]int64{
+			"max_monitored_systems": 5,
+			"max_guests":            50,
+		},
+		PlanVersion:       "pro",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
+	}
+
+	h := NewLicenseHandlers(mtp, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+
+	if payload.PlanVersion != "pro" {
+		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "pro")
+	}
+	for _, limit := range payload.Limits {
+		if limit.Key == "max_monitored_systems" || limit.Key == "max_guests" {
+			t.Fatalf("expected self-hosted paid evaluator payload to omit volume caps, got %+v", payload.Limits)
 		}
 	}
 }

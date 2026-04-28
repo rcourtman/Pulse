@@ -147,29 +147,34 @@ func TestDatabaseSourceGrandfatheredRecurringPlanStripsCappedLimits(t *testing.T
 	}
 }
 
-func TestDatabaseSourceSelfHostedCommunityPlanStripsLegacyCommercialCaps(t *testing.T) {
-	store := &mockBillingStore{
-		state: &BillingState{
-			PlanVersion: "community",
-			Limits: map[string]int64{
-				"max_monitored_systems": 1,
-				"max_guests":            5,
-				"max_reports":           7,
-			},
-			SubscriptionState: SubStateActive,
-		},
-	}
+func TestDatabaseSourceSelfHostedPlansStripLegacyCommercialCaps(t *testing.T) {
+	plans := []string{"community", "free", "relay", "pro", "pro_plus", "pro_annual", "lifetime", "v5_lifetime_grandfathered"}
+	for _, plan := range plans {
+		t.Run(plan, func(t *testing.T) {
+			store := &mockBillingStore{
+				state: &BillingState{
+					PlanVersion: plan,
+					Limits: map[string]int64{
+						"max_monitored_systems": 1,
+						"max_guests":            5,
+						"max_reports":           7,
+					},
+					SubscriptionState: SubStateActive,
+				},
+			}
 
-	source := NewDatabaseSource(store, "org-1", time.Hour)
+			source := NewDatabaseSource(store, "org-1", time.Hour)
 
-	if got := source.PlanVersion(); got != "community" {
-		t.Fatalf("expected plan_version %q, got %q", "community", got)
-	}
-	if got := source.SubscriptionState(); got != SubStateActive {
-		t.Fatalf("expected subscription_state %q, got %q", SubStateActive, got)
-	}
-	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_reports": 7}) {
-		t.Fatalf("expected community plan to scrub legacy commercial caps, got limits %v", got)
+			if got := source.PlanVersion(); got != plan {
+				t.Fatalf("expected plan_version %q, got %q", plan, got)
+			}
+			if got := source.SubscriptionState(); got != SubStateActive {
+				t.Fatalf("expected subscription_state %q, got %q", SubStateActive, got)
+			}
+			if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_reports": 7}) {
+				t.Fatalf("expected self-hosted plan to scrub legacy commercial caps, got limits %v", got)
+			}
+		})
 	}
 }
 

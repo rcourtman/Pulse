@@ -454,19 +454,28 @@ Community limit enforcement.
    value must come from optional extras, hosted convenience, business
    workflow, support, or similar non-core surfaces rather than using
    monitored-system volume itself as the primary paid gate.
+   Child-resource volume, including guest capacity, must follow the same
+   self-hosted rule instead of becoming a replacement paid gate for core
+   monitoring.
    Monitored-system admission-preview copy must follow the same rule: ordinary
    connection previews may describe count impact and active policy checks, but
    they must not use capacity-style titles or slash-style quota summaries that
    imply self-hosted monitoring volume is the product being sold.
-13. Keep migrated self-hosted Community/free billing state uncapped even when
-   the persisted file still carries legacy v5 commercial limit keys:
-   `pkg/licensing/billing_state_normalization.go` and
-   `pkg/licensing/database_source.go` must scrub stale
-   `max_monitored_systems` and `max_guests` values for community/free
-   billing-state plan labels before runtime-capability, entitlement, or
-   warning-banner payloads are built, while leaving non-community plan labels
-   available for bounded hosted or legacy continuity contracts that still
-   carry explicit monitored-system ceilings.
+13. Keep self-hosted v6 billing state uncapped even when persisted state still
+   carries legacy v5 commercial volume-limit keys:
+   `pkg/licensing/models.go`,
+   `pkg/licensing/service.go`,
+   `pkg/licensing/entitlement_payload.go`,
+   `pkg/licensing/billing_state_normalization.go`,
+   `pkg/licensing/database_source.go`,
+   `pulse-pro:license-server/v6_store.go`, and
+   `pulse-pro:license-server/v6_schema.go` must scrub stale
+   `max_monitored_systems` and `max_guests` values for self-hosted
+   Community/free, Relay, Pro, Pro+, Pro Annual, lifetime, and eligible
+   grandfathered recurring plan labels before runtime-capability,
+   entitlement, grant, or warning-banner payloads are built, while leaving
+   bounded hosted Cloud/MSP contracts available for top-level hosted
+   monitored-system ceilings.
 14. Keep self-hosted commercial funnel stage ownership explicit:
     `pkg/licensing/conversion_events.go`,
     `pkg/licensing/conversion_store.go`, and

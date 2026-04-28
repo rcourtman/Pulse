@@ -20,7 +20,8 @@ func containsString(values []string, want string) bool {
 func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:               true,
-		Tier:                TierPro,
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
 		Features:            append([]string(nil), TierFeatures[TierPro]...),
 		MaxMonitoredSystems: 50,
 	}
@@ -102,7 +103,8 @@ func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
 func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:               true,
-		Tier:                TierPro,
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
 		Features:            append([]string(nil), TierFeatures[TierPro]...),
 		MaxMonitoredSystems: 50,
 		MaxGuests:           100,
@@ -199,7 +201,8 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 func TestBuildEntitlementPayloadWithUsage_RequiresCanonicalMonitoredSystemAvailability(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:               true,
-		Tier:                TierPro,
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
 		Features:            append([]string(nil), TierFeatures[TierPro]...),
 		MaxMonitoredSystems: 50,
 	}
@@ -227,7 +230,8 @@ func TestBuildEntitlementPayloadWithUsage_RequiresCanonicalMonitoredSystemAvaila
 func TestBuildEntitlementPayloadWithUsage_MonitoredSystemUsageUnavailable(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:               true,
-		Tier:                TierPro,
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
 		Features:            append([]string(nil), TierFeatures[TierPro]...),
 		MaxMonitoredSystems: 50,
 	}
@@ -261,7 +265,8 @@ func TestBuildEntitlementPayloadWithUsage_MonitoredSystemUsageUnavailable(t *tes
 func TestBuildEntitlementPayloadWithUsage_CopiesMonitoredSystemContinuity(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:               true,
-		Tier:                TierPro,
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
 		Features:            append([]string(nil), TierFeatures[TierPro]...),
 		MaxMonitoredSystems: 23,
 		MonitoredSystemContinuity: &MonitoredSystemContinuityStatus{
@@ -433,8 +438,9 @@ func TestBuildEntitlementPayload_NilStatus_MaxHistoryDays(t *testing.T) {
 func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:               true,
-		Tier:                TierFree,
-		Features:            append([]string(nil), TierFeatures[TierFree]...),
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
+		Features:            append([]string(nil), TierFeatures[TierPro]...),
 		MaxMonitoredSystems: 5,
 	}
 
@@ -447,14 +453,14 @@ func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 		},
 	}, nil)
 
-	if payload.Tier != string(TierFree) {
-		t.Fatalf("expected tier=%q, got %q", TierFree, payload.Tier)
+	if payload.Tier != string(TierCloud) {
+		t.Fatalf("expected tier=%q, got %q", TierCloud, payload.Tier)
 	}
 	if payload.SubscriptionState != string(SubStateActive) {
 		t.Fatalf("expected subscription_state=%q, got %q", SubStateActive, payload.SubscriptionState)
 	}
-	if len(payload.UpgradeReasons) == 0 {
-		t.Fatal("expected commercial posture to preserve upgrade reasons")
+	if len(payload.UpgradeReasons) != 0 {
+		t.Fatalf("expected hosted paid posture to omit upgrade reasons, got %v", payload.UpgradeReasons)
 	}
 	if payload.LegacyConnections.ProxmoxNodes != 2 || payload.LegacyConnections.DockerHosts != 1 {
 		t.Fatalf("expected legacy connection counts to be preserved, got %+v", payload.LegacyConnections)
@@ -479,7 +485,8 @@ func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 func TestBuildEntitlementPayloadWithUsage_MarksLegacyContinuityCapturePendingOverage(t *testing.T) {
 	payload := BuildEntitlementPayloadWithUsage(&LicenseStatus{
 		Valid:               true,
-		Tier:                TierPro,
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
 		Features:            append([]string(nil), TierFeatures[TierPro]...),
 		MaxMonitoredSystems: 10,
 		MonitoredSystemContinuity: &MonitoredSystemContinuityStatus{
@@ -510,8 +517,8 @@ func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFie
 	expiresAt := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
 	payload := BuildEntitlementPayloadWithUsage(&LicenseStatus{
 		Valid:               true,
-		Tier:                TierPro,
-		PlanVersion:         "v5_lifetime_grandfathered",
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
 		Email:               "owner@example.com",
 		ExpiresAt:           &expiresAt,
 		IsLifetime:          false,
@@ -528,8 +535,8 @@ func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFie
 
 	posture := CommercialPosturePayloadFromEntitlementPayload(payload)
 
-	if posture.Tier != string(TierPro) {
-		t.Fatalf("expected tier=%q, got %q", TierPro, posture.Tier)
+	if posture.Tier != string(TierCloud) {
+		t.Fatalf("expected tier=%q, got %q", TierCloud, posture.Tier)
 	}
 	if posture.SubscriptionState != string(SubStateActive) {
 		t.Fatalf("expected subscription_state=%q, got %q", SubStateActive, posture.SubscriptionState)
@@ -567,7 +574,8 @@ func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFie
 func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:               true,
-		Tier:                TierRelay,
+		Tier:                TierCloud,
+		PlanVersion:         "cloud_starter",
 		Features:            append([]string(nil), TierFeatures[TierRelay]...),
 		MaxMonitoredSystems: 12,
 	}
@@ -580,8 +588,8 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	if !reflect.DeepEqual(payload.Capabilities, status.Features) {
 		t.Fatalf("expected capabilities to match status features")
 	}
-	if payload.MaxHistoryDays != TierHistoryDays[TierRelay] {
-		t.Fatalf("expected relay max history days %d, got %d", TierHistoryDays[TierRelay], payload.MaxHistoryDays)
+	if payload.MaxHistoryDays != TierHistoryDays[TierCloud] {
+		t.Fatalf("expected cloud max history days %d, got %d", TierHistoryDays[TierCloud], payload.MaxHistoryDays)
 	}
 	if len(payload.Limits) != 1 {
 		t.Fatalf("expected one runtime limit, got %d", len(payload.Limits))

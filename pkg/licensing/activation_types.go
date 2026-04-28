@@ -2,7 +2,6 @@ package licensing
 
 import (
 	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -100,12 +99,7 @@ func grantClaimsUseUncappedCoreMonitoring(gc *GrantClaims) bool {
 		return false
 	}
 
-	switch Tier(strings.TrimSpace(gc.Tier)) {
-	case TierFree, TierRelay, TierPro, TierProPlus, TierProAnnual, TierLifetime:
-		return true
-	default:
-		return false
-	}
+	return IsSelfHostedCoreMonitoringUncappedTier(Tier(gc.Tier))
 }
 
 // GrantClaims are the claims parsed from a relay grant JWT payload.
