@@ -2,7 +2,9 @@ package entitlements
 
 import (
 	"crypto/ed25519"
+	"database/sql"
 	"encoding/base64"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -15,20 +17,26 @@ func newTestService(t *testing.T) (*Service, ed25519.PublicKey, *registry.Tenant
 }
 
 func newTestServiceWithBaseURL(t *testing.T, baseURL string) (*Service, ed25519.PublicKey, *registry.TenantRegistry) {
+	svc, pub, reg, _ := newTestServiceWithBaseURLAndDir(t, baseURL)
+	return svc, pub, reg
+}
+
+func newTestServiceWithBaseURLAndDir(t *testing.T, baseURL string) (*Service, ed25519.PublicKey, *registry.TenantRegistry, string) {
 	t.Helper()
 
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	reg, err := registry.NewTenantRegistry(t.TempDir())
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
 	if err != nil {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
 
 	svc := NewService(reg, baseURL, base64.StdEncoding.EncodeToString(priv))
-	return svc, pub, reg
+	return svc, pub, reg, dir
 }
 
 func TestIssueTenantBillingStateReturnsLeaseOnlyState(t *testing.T) {
@@ -241,31 +249,15 @@ func TestRefreshPaidEntitlementCanonicalizesBaseURLForExpectedHost(t *testing.T)
 	}
 }
 
-func TestRedeemTrialEntitlementAndRefresh(t *testing.T) {
-	svc, pub, reg := newTestServiceWithBaseURL(t, "https://cloud.example.com")
+func TestRefreshLegacyTrialEntitlementReturnsLease(t *testing.T) {
+	svc, pub, reg, dir := newTestServiceWithBaseURLAndDir(t, "https://cloud.example.com")
 
 	now := time.Unix(1710000000, 0).UTC()
 	svc.SetNow(func() time.Time { return now })
 
-	redemption, err := svc.RedeemTrialEntitlement(TrialEntitlementInput{
-		RequestID:      "trial_request_1",
-		OrgID:          "default",
-		Email:          "owner@example.com",
-		ReturnURL:      "https://pulse.example.com/auth/trial-activate",
-		InstanceToken:  "tsi_test",
-		InstanceHost:   "pulse.example.com",
-		TrialStartedAt: now,
-		IssuedAt:       now,
-		RedeemedAt:     now,
-	})
-	if err != nil {
-		t.Fatalf("RedeemTrialEntitlement: %v", err)
-	}
-	if redemption.EntitlementJWT == "" || redemption.EntitlementRefreshToken == "" {
-		t.Fatalf("expected lease and refresh token, got %#v", redemption)
-	}
+	seedLegacyTrialHostedEntitlement(t, dir, now, "etr_legacy_trial")
 
-	loaded, err := reg.GetHostedEntitlementByRefreshToken(redemption.EntitlementRefreshToken)
+	loaded, err := reg.GetHostedEntitlementByRefreshToken("etr_legacy_trial")
 	if err != nil {
 		t.Fatalf("GetHostedEntitlementByRefreshToken: %v", err)
 	}
@@ -273,7 +265,7 @@ func TestRedeemTrialEntitlementAndRefresh(t *testing.T) {
 		t.Fatalf("expected trial entitlement record, got %#v", loaded)
 	}
 
-	refreshResult, err := svc.RefreshEntitlement(redemption.EntitlementRefreshToken, "pulse.example.com")
+	refreshResult, err := svc.RefreshEntitlement("etr_legacy_trial", "pulse.example.com")
 	if err != nil {
 		t.Fatalf("RefreshEntitlement: %v", err)
 	}
@@ -291,5 +283,37 @@ func TestRedeemTrialEntitlementAndRefresh(t *testing.T) {
 			got,
 			pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro],
 		)
+	}
+}
+
+func seedLegacyTrialHostedEntitlement(t *testing.T, registryDir string, now time.Time, refreshToken string) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", filepath.Join(registryDir, "tenants.db"))
+	if err != nil {
+		t.Fatalf("open registry db: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+		INSERT INTO hosted_entitlements (
+			id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+			trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
+		) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, NULL, NULL, ?, NULL)`,
+		"trial:trial_request_1",
+		string(registry.HostedEntitlementKindTrial),
+		"trial_request_1",
+		"default",
+		"owner@example.com",
+		"https://pulse.example.com/auth/trial-activate",
+		"tsi_test",
+		"pulse.example.com",
+		now.Unix(),
+		refreshToken,
+		now.Unix(),
+		now.Unix(),
+	)
+	if err != nil {
+		t.Fatalf("seed legacy trial hosted entitlement: %v", err)
 	}
 }

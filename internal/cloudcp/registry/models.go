@@ -139,32 +139,6 @@ type HostedEntitlement struct {
 	RevokedAt          *time.Time            `json:"revoked_at,omitempty"`
 }
 
-type TrialHostedEntitlementInput struct {
-	RequestID      string
-	OrgID          string
-	Email          string
-	ReturnURL      string
-	InstanceToken  string
-	InstanceHost   string
-	TrialStartedAt time.Time
-	IssuedAt       time.Time
-	RedeemedAt     time.Time
-	RefreshToken   string
-}
-
-type TrialHostedActivationInput struct {
-	RequestID       string
-	OrgID           string
-	Email           string
-	ReturnURL       string
-	InstanceToken   string
-	InstanceHost    string
-	TrialStartedAt  time.Time
-	IssuedAt        time.Time
-	ActivationToken string
-	RefreshToken    string
-}
-
 // StripeAccount maps a control-plane account to a single Stripe customer +
 // subscription for consolidated (MSP-style) billing.
 type StripeAccount struct {

@@ -31,7 +31,7 @@ func TestLoad_EnvOverrides_Detailed(t *testing.T) {
 		"DISCOVERY_DIAL_TIMEOUT_MS":      "2000",
 		"ALLOWED_ORIGINS":                "https://allowed.com",
 		"PULSE_PUBLIC_URL":               "https://public.pulse.com",
-		"PULSE_PRO_TRIAL_SIGNUP_URL":     "https://billing.example.com/start-pro-trial?source=test",
+		"PULSE_PRO_TRIAL_SIGNUP_URL":     "https://billing.example.com/commercial-base?source=test",
 		"NODE_ENV":                       "production", // Ensure valid origins not defaulted to localhost
 	}
 
@@ -69,7 +69,7 @@ func TestLoad_EnvOverrides_Detailed(t *testing.T) {
 	// Misc
 	assert.Equal(t, "https://allowed.com", cfg.AllowedOrigins)
 	assert.Equal(t, "https://public.pulse.com", cfg.PublicURL)
-	assert.Equal(t, "https://billing.example.com/start-pro-trial?source=test", cfg.ProTrialSignupURL)
+	assert.Equal(t, "https://billing.example.com/commercial-base?source=test", cfg.ProTrialSignupURL)
 	assert.True(t, cfg.EnvOverrides["PULSE_PRO_TRIAL_SIGNUP_URL"])
 }
 
@@ -88,7 +88,7 @@ func TestLoad_EnvOverrides_Invalid(t *testing.T) {
 	assert.NotEqual(t, "invalid_env", cfg.Discovery.EnvironmentOverride)
 }
 
-func TestLoad_EnvOverrides_InvalidProTrialSignupURL(t *testing.T) {
+func TestLoad_EnvOverrides_InvalidHostedCommercialBaseURL(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 	t.Setenv("PULSE_PRO_TRIAL_SIGNUP_URL", "javascript:alert(1)")

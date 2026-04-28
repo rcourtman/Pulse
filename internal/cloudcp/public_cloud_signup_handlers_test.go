@@ -3,6 +3,7 @@ package cloudcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -75,7 +76,7 @@ func TestPublicCloudSignupHandleSignupPageRendersForm(t *testing.T) {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "<form") || !strings.Contains(body, "Start your 14-day Pulse Cloud trial") {
+	if !strings.Contains(body, "<form") || !strings.Contains(body, fmt.Sprintf("Start your %d-day Pulse Cloud trial", publicCloudTrialDays)) {
 		t.Fatalf("expected signup form markup in response body")
 	}
 	if !strings.Contains(body, "no upfront charge") {
@@ -100,7 +101,7 @@ func TestPublicCloudSignupHandleSignupCompleteRendersPulseAccountHandoff(t *test
 	if !strings.Contains(body, "Trial checkout complete") {
 		t.Fatalf("expected trial checkout completion heading")
 	}
-	if !strings.Contains(body, "14-day Pulse Cloud trial") {
+	if !strings.Contains(body, fmt.Sprintf("%d-day Pulse Cloud trial", publicCloudTrialDays)) {
 		t.Fatalf("expected trial duration in completion copy")
 	}
 	if !strings.Contains(body, "Pulse Account sign-in link") {
@@ -210,7 +211,7 @@ func TestPublicCloudSignupHandlePublicSignupCreatesCheckout(t *testing.T) {
 	if got := strings.TrimSpace(asString(payload["checkout_url"])); got != "https://checkout.stripe.com/c/pay/cs_live" {
 		t.Fatalf("checkout_url=%q, want stripe URL", got)
 	}
-	if got := strings.TrimSpace(asString(payload["message"])); !strings.Contains(got, "14-day Pulse Cloud trial") {
+	if got := strings.TrimSpace(asString(payload["message"])); !strings.Contains(got, fmt.Sprintf("%d-day Pulse Cloud trial", publicCloudTrialDays)) {
 		t.Fatalf("message=%q, want trial copy", got)
 	}
 }

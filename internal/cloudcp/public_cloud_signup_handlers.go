@@ -21,7 +21,10 @@ import (
 	stripesession "github.com/stripe/stripe-go/v82/checkout/session"
 )
 
-const publicCloudSignupRequestBodyLimit = 64 * 1024
+const (
+	publicCloudSignupRequestBodyLimit = 64 * 1024
+	publicCloudTrialDays              = 14
+)
 
 // cloudTier represents a Cloud plan tier for public signup.
 type cloudTier string
@@ -271,7 +274,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 			Cancelled:  strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
 			HasPower:   h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 			HasMax:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
-			TrialDays:  trialSignupTrialDays,
+			TrialDays:  publicCloudTrialDays,
 		}
 		h.renderSignupPage(w, r, http.StatusOK, data)
 	case http.MethodPost:
@@ -293,7 +296,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "Invalid plan tier selected.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
-				TrialDays:    trialSignupTrialDays,
+				TrialDays:    publicCloudTrialDays,
 			})
 			return
 		}
@@ -307,7 +310,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "A valid email address is required.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
-				TrialDays:    trialSignupTrialDays,
+				TrialDays:    publicCloudTrialDays,
 			})
 			return
 		}
@@ -320,7 +323,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "Organization name must be 3-64 characters and cannot contain slashes.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
-				TrialDays:    trialSignupTrialDays,
+				TrialDays:    publicCloudTrialDays,
 			})
 			return
 		}
@@ -333,7 +336,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "The selected plan tier is not currently available.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
-				TrialDays:    trialSignupTrialDays,
+				TrialDays:    publicCloudTrialDays,
 			})
 			return
 		}
@@ -349,7 +352,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "Unable to create checkout session. Please try again.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
-				TrialDays:    trialSignupTrialDays,
+				TrialDays:    publicCloudTrialDays,
 			})
 			return
 		}
@@ -367,7 +370,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupComplete(w http.ResponseWriter, 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := publicCloudSignupCompleteTemplate.Execute(w, publicCloudSignupCompleteData{
 		Nonce:     cpsec.NonceFromContext(r.Context()),
-		TrialDays: trialSignupTrialDays,
+		TrialDays: publicCloudTrialDays,
 	}); err != nil {
 		log.Error().Err(err).Msg("public cloud signup complete page render failed")
 	}
@@ -416,7 +419,7 @@ func (h *PublicCloudSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r 
 
 	writePublicSignupJSON(w, http.StatusCreated, map[string]any{
 		"checkout_url": checkoutURL,
-		"message":      fmt.Sprintf("Checkout session created. Continue in Stripe to start your %d-day Pulse Cloud trial and provision your workspace.", trialSignupTrialDays),
+		"message":      fmt.Sprintf("Checkout session created. Continue in Stripe to start your %d-day Pulse Cloud trial and provision your workspace.", publicCloudTrialDays),
 	})
 }
 
@@ -530,7 +533,7 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier c
 			},
 		},
 		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
-			TrialPeriodDays: stripe.Int64(trialSignupTrialDays),
+			TrialPeriodDays: stripe.Int64(publicCloudTrialDays),
 		},
 		Metadata: h.buildCheckoutMetadata(priceID, orgName),
 	}
@@ -563,7 +566,7 @@ func (h *PublicCloudSignupHandlers) buildCheckoutMetadata(priceID, orgName strin
 func (h *PublicCloudSignupHandlers) renderSignupPage(w http.ResponseWriter, r *http.Request, status int, data publicCloudSignupPageData) {
 	data.Nonce = cpsec.NonceFromContext(r.Context())
 	if data.TrialDays <= 0 {
-		data.TrialDays = trialSignupTrialDays
+		data.TrialDays = publicCloudTrialDays
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)

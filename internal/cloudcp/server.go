@@ -77,12 +77,6 @@ func Run(ctx context.Context, version string) error {
 	}
 	defer magicLinkSvc.Close()
 
-	trialSignupStore, err := NewTrialSignupStore(cfg.ControlPlaneDir())
-	if err != nil {
-		return fmt.Errorf("init trial signup store: %w", err)
-	}
-	defer trialSignupStore.Close()
-
 	// Initialize email sender
 	var emailSender email.Sender
 	if cfg.ResendAPIKey != "" {
@@ -129,7 +123,6 @@ func Run(ctx context.Context, version string) error {
 		Registry:           reg,
 		Docker:             dockerMgr,
 		MagicLinks:         magicLinkSvc,
-		TrialSignupStore:   trialSignupStore,
 		Provisioner:        provisioner,
 		HostedEntitlements: hostedEntitlements,
 		Version:            version,

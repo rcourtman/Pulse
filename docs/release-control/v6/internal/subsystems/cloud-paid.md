@@ -102,7 +102,7 @@ cloud-specific enforcement rules.
 79. `pulse-pro:license-server/self_hosted_feature_catalog.generated.go`
 80. `internal/cloudcp/server.go`, `internal/cloudcp/authz.go`, `internal/cloudcp/commercial_identity.go`, `internal/cloudcp/security.go`
 81. `internal/cloudcp/health_monitor.go`, `internal/cloudcp/health_stuck_provisioning.go`, `internal/cloudcp/tenant_state_metrics.go`, `internal/cloudcp/ratelimit.go`
-82. `internal/cloudcp/trial_signup_handlers.go`, `internal/cloudcp/trial_signup_store.go`, `internal/cloudcp/hosted_entitlement_handlers.go`
+82. `internal/cloudcp/hosted_entitlement_handlers.go`, `internal/cloudcp/url_helpers.go`
 83. `internal/cloudcp/admin/handlers.go`, `internal/cloudcp/admin/status.go`, `internal/cloudcp/auditlog/auditlog.go`
 84. `internal/cloudcp/cpmetrics/metrics.go`, `internal/cloudcp/cpsec/nonce.go`, `internal/cloudcp/static_assets.go`, `internal/cloudcp/favicon.svg`
 85. `internal/cloudcp/email/sender.go`, `internal/cloudcp/email/templates.go`
@@ -818,30 +818,32 @@ and `frontend-modern/src/utils/upgradePresentation.ts`. Commercial tier labels,
 feature minimum-tier messaging, migration/trial notices, billing-admin status
 labels, and upgrade CTA styling must extend those helpers instead of being
 forked into per-surface status-code branches that drift from backend error
-truth. Trial initiation surfaces must preserve backend denial messages when the
-request is blocked for migration, active commercial state, or other operational
-reasons, and only map the explicit canonical cases (`trial_already_used`,
-rate-limit retry) to fixed copy.
+truth. The old self-hosted trial-start acquisition path is not a current v6
+commercial surface; denial and retry copy for ordinary self-hosted runtimes
+must be limited to owned purchase, recovery, portal, Cloud signup, or support
+handoff paths.
 That same helper boundary also owns generic settings-paywall CTA labels. Under
 the v6 free-first self-hosted policy, non-billing feature gates must stay
 factual and route deliberate commercial intent to Plans with neutral "View
 plans" copy; they must not start a Pro trial directly or embed local
 `Upgrade to Pro` / `Start free trial` strings. Direct trial-start actions stay
-owned by explicit billing, hosted, activation, recovery, and support handoff
-surfaces where the operator has already chosen the commercial path.
+retired for ordinary self-hosted v6; explicit commercial intent routes through
+plan comparison, purchase activation, recovery, Cloud, or support handoff
+surfaces where the operator has already chosen that path.
 The same shared self-hosted commercial presentation boundary also owns the
 recovery-surface copy for `SelfHostedCommercialRecoverySection.tsx`,
 including the existing-key field label/help text and legacy-key exchange
 notice, while `selfHostedBillingPresentation.ts` owns the first-class plan and
-trial copy that belongs on the primary billing surface. That split prevents
-manual key redemption from drifting back into the main purchase or trial path.
+license-state copy that belongs on the primary billing surface. That split
+prevents manual key redemption from drifting back into the main purchase path.
 That same recovery boundary also owns the linked legal surface:
 `SelfHostedCommercialRecoverySection.tsx` must route its Terms-of-Service link
 through the shipped `TERMS.md` docs asset instead of sending operators to
 GitHub `main`, so the recovery trust surface stays version-matched and
 available on restricted installs.
-Hosted self-serve trial leases are also part of that same contract. A redeemed
-hosted trial must carry the canonical Pro capability set and the authoritative
+Already-issued legacy hosted trial leases are also part of that same
+compatibility contract. If such a lease is refreshed, it must carry the
+canonical Pro capability set and the authoritative
 `limits.max_monitored_systems` cap inside the signed lease rather than relying
 on downstream runtime fallback to infer a limit from trial state alone.
 The top-level authenticated shell is part of that same customer-facing
@@ -989,6 +991,10 @@ The retired `/auth/trial-activate` return path must also stay out of the
 ordinary self-hosted router and Pro settings UI. Hosted/cloud entitlement lease
 refresh may still validate signed leases for already-approved hosted state, but
 ordinary self-hosted Pulse must not create a local trial acquisition callback.
+The matching control-plane acquisition routes are retired too:
+`/start-pro-trial`, `/trial-signup/*`, and `/api/trial-signup/*` must remain
+unregistered. `/api/entitlements/refresh` remains the only hosted entitlement
+refresh endpoint for already-issued hosted leases.
 Browser and shell coverage now guard that retired boundary:
 `tests/integration/tests/07-trial-signup-return.spec.ts` and
 `tests/integration/scripts/trial-signup-contract.sh` must expect `404` from the
@@ -1006,46 +1012,15 @@ when older workspaces need membership continuity repaired at open time. Cloud,
 MSP, and commercial account roles therefore have one canonical translation into
 tenant org permissions instead of drifting between provisioning-time seeds and
 handoff-time access repair.
-For the hosted self-serve flow, that also means the public trial pages and form
-posts must render the owned Pulse trial experience with preserved instance/form
-state when rate limited, rather than dropping users onto a generic control-plane
-`Too Many Requests` response.
-The same owned hosted-trial failure experience applies to invalid or expired
-verification links. The customer must stay inside the Pulse-owned retry path
-with the originating-instance context preserved, rather than landing on a
-generic hosted error page that reads like a detached SaaS funnel.
-The hosted trial handoff page is part of that same boundary as well. It may
-still use a secure hosted Stripe-backed session internally, but the customer
-copy must present the flow as starting a trial for the originating Pulse
-instance, not as a generic purchase funnel. Recovery-contact fields such as
-work email and optional company name must remain clearly secondary to the
-instance-bound entitlement handoff. Hosted form-stage issuance conflicts must
-also preserve the canonical reason shape: duplicate recovery-email usage must
-not be flattened into an organization-level message, and terminal conflicts
-must render as owned hosted outcome UX rather than editable inline form state.
-Expired or invalid hosted backup-link states must follow that same rule rather
-than falling back to a form with missing Pulse initiation context.
-Hosted service/configuration failures during verification, hosted checkout
-preparation, or checkout-session creation must also render as owned
-"temporarily unavailable" outcome UX rather than inline form errors.
 The old self-hosted trial activation return notice on `/settings/system-pro` is
 retired with that callback: the `trial` query result must not produce owned
 activation UI, a success banner, or retry copy in v6 GA. Purchase activation
 continues through the Pulse Account return contract instead.
-That same hosted owner also applies after Stripe returns to
-`/trial-signup/complete`: customer-facing completion failures must stay inside
-owned trial UX rather than dropping raw control-plane error strings, and they
-may only offer a direct "Start Trial Again" restart path when the original
-Pulse return target and initiation binding are still known. Terminal conflicts
-such as "trial already used" must not present restart as the recommended next
-step.
-That same rule applies to the self-hosted Pro settings panel. Trial start
-errors in `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-must route through the shared cloud-paid presentation helper so backend denial
-reasons, explicit already-used conflicts, and retry-later states stay aligned
-with the rest of the commercial surfaces.
-redefined inline in settings feature gates, Pro license panels, or trial
-upgrade nudges.
+That same retirement applies to the old hosted control-plane completion and
+redeem routes: `/trial-signup/complete` and `/api/trial-signup/redeem` must
+not return customer-facing trial UX or raw acquisition errors in v6 GA.
+Commercial plan disclosure copy must not be redefined inline in settings
+feature gates, Pro license panels, or upgrade nudges.
 That same disclosure copy must stay professional and customer-facing. The
 settings ledger may expose counting details and included collection paths, but
 it must avoid informal debug-style labels or ad hoc wording that makes the

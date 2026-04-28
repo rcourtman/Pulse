@@ -1,6 +1,9 @@
 package licensing
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestResolveProTrialSignupURL_DefaultWhenUnset(t *testing.T) {
 	if got := ResolveProTrialSignupURL(""); got != DefaultProTrialSignupURL {
@@ -8,8 +11,14 @@ func TestResolveProTrialSignupURL_DefaultWhenUnset(t *testing.T) {
 	}
 }
 
+func TestResolveProTrialSignupURL_DefaultIsHostedCommercialBase(t *testing.T) {
+	if strings.Contains(DefaultProTrialSignupURL, "start-pro-trial") {
+		t.Fatalf("DefaultProTrialSignupURL=%q must not point at retired trial signup route", DefaultProTrialSignupURL)
+	}
+}
+
 func TestResolveProTrialSignupURL_UsesValidOverride(t *testing.T) {
-	const override = "https://example.com/start-pro-trial?src=test"
+	const override = "https://example.com/commercial-base?src=test"
 
 	if got := ResolveProTrialSignupURL(override); got != override {
 		t.Fatalf("ResolveProTrialSignupURL() = %q, want %q", got, override)
@@ -17,7 +26,7 @@ func TestResolveProTrialSignupURL_UsesValidOverride(t *testing.T) {
 }
 
 func TestResolveProTrialSignupURL_AllowsLoopbackHTTPOverride(t *testing.T) {
-	const override = "http://127.0.0.1:8080/start-pro-trial?src=test"
+	const override = "http://127.0.0.1:8080/commercial-base?src=test"
 
 	if got := ResolveProTrialSignupURL(override); got != override {
 		t.Fatalf("ResolveProTrialSignupURL() = %q, want %q", got, override)
@@ -29,8 +38,8 @@ func TestResolveProTrialSignupURL_RejectsInvalidOverrides(t *testing.T) {
 		"relative/path",
 		"javascript:alert(1)",
 		"https://",
-		"http://192.168.1.20/start-pro-trial",
-		"ftp://example.com/start-pro-trial",
+		"http://192.168.1.20/commercial-base",
+		"ftp://example.com/commercial-base",
 	}
 
 	for _, tc := range testCases {

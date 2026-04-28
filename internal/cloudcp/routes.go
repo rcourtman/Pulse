@@ -25,7 +25,6 @@ type Deps struct {
 	Registry           *registry.TenantRegistry
 	Docker             *docker.Manager // nil if Docker is unavailable
 	MagicLinks         *cpauth.Service // control plane magic link service
-	TrialSignupStore   *TrialSignupStore
 	Provisioner        *cpstripe.Provisioner
 	HostedEntitlements *entitlements.Service
 	Version            string
@@ -47,12 +46,6 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	adminLimiter := NewCPRateLimiter(deps.Config.AdminRateLimitPerMinute, time.Minute)
 	accountAPILimiter := NewCPRateLimiter(deps.Config.AccountAPIRateLimitPerMinute, time.Minute)
 	portalAPILimiter := NewCPRateLimiter(deps.Config.PortalAPIRateLimitPerMinute, time.Minute)
-	trialSignupPageLimiter := NewCPRateLimiter(30, time.Minute)
-	trialSignupVerificationLimiter := NewCPRateLimiter(6, time.Hour)
-	trialSignupVerifyLimiter := NewCPRateLimiter(30, time.Minute)
-	trialSignupCheckoutLimiter := NewCPRateLimiter(12, time.Hour)
-	trialSignupCompleteLimiter := NewCPRateLimiter(30, time.Minute)
-	trialSignupRedeemLimiter := NewCPRateLimiter(30, time.Minute)
 	hostedEntitlementRefreshLimiter := NewCPRateLimiter(60, time.Hour)
 	publicSignupLimiter := NewCPRateLimiter(30, time.Minute)
 	publicMagicLinkLimiter := NewCPRateLimiter(20, time.Minute)
@@ -142,17 +135,9 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		mux.Handle(portal.PortalLogoutPath, sessionAuthLimiter.Middleware(sessionAuth(cpauth.HandleLogout(deps.Registry))))
 	}
 
-	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
-	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore, hostedEntitlements)
+	// Hosted entitlement refresh stays available for already-issued hosted leases.
 	hostedEntitlementHandlers := NewHostedEntitlementHandlers(hostedEntitlements)
-	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
-	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
-	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))
-	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
-	mux.Handle("/trial-signup/complete", trialSignupCompleteLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
-	mux.Handle("/api/trial-signup/redeem", trialSignupRedeemLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRedeem)))
 	mux.Handle("/api/entitlements/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
-	mux.Handle("/api/trial-signup/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
 
 	// Public commercial magic-link requests stay available for existing hosted
 	// accounts even while public v6 Cloud signup remains prelaunch-disabled.

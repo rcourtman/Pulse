@@ -204,7 +204,7 @@ type Config struct {
 	TelemetryEnabled           bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                      // Anonymous outbound usage telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled         bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`          // Enable multi-tenant support
 	MetricsToken               string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`             // Bearer token for /metrics endpoint (empty = unauthenticated)
-	ProTrialSignupURL          string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`               // Hosted signup/checkout URL for starting Pulse Pro trials
+	ProTrialSignupURL          string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`               // Legacy hosted commercial base URL used for entitlement refresh compatibility
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -1071,7 +1071,7 @@ func load(initLogging bool) (*Config, error) {
 			cfg.ProTrialSignupURL = resolved
 			cfg.EnvOverrides[pkglicensing.ProTrialSignupURLEnvVar] = true
 			cfg.EnvOverrides["proTrialSignupURL"] = true
-			log.Info().Str("url", resolved).Msg("Overriding Pulse Pro trial signup URL from environment")
+			log.Info().Str("url", resolved).Msg("Overriding hosted commercial base URL from environment")
 		} else {
 			log.Warn().Str("value", trialSignupURL).Msg("Invalid PULSE_PRO_TRIAL_SIGNUP_URL value, ignoring")
 		}

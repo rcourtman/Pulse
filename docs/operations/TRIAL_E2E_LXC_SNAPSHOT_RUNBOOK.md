@@ -1,17 +1,16 @@
-# Trial + Cloud E2E on Proxmox LXC (Snapshot-Clean)
+# Trial-Retirement + Cloud E2E on Proxmox LXC (Snapshot-Clean)
 
-This runbook defines a clean, repeatable end-to-end trial validation loop for a Pulse binary running in Proxmox LXC.
+This runbook defines a clean, repeatable validation loop for retired self-hosted trial acquisition and Pulse Cloud signup behavior on a Pulse binary running in Proxmox LXC.
 
 Goal: every eval run starts from the exact same filesystem and runtime state, so previous runs cannot pollute new results.
 
 ## Scope
 
-- Validates hosted trial initiation from a self-hosted Pulse instance
-- Validates initiation does not mint local entitlements before activation
-- Validates initiation rate limiting and idempotent redirect behavior
+- Validates ordinary self-hosted v6 does not expose in-app trial acquisition
+- Validates probing retired trial acquisition routes does not mutate local entitlements
+- Validates default self-hosted UI does not show trial CTAs or paid-only navigation
 - Validates real Stripe sandbox checkout completion for Pulse Cloud signup
 - Validates cloud post-checkout lifecycle transition to canceled state
-- Validates post-checkout trial activation state in Pulse (`/settings?trial=activated`)
 
 ## Prerequisites
 

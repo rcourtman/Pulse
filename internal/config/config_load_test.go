@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,18 @@ func TestLoad_Defaults(t *testing.T) {
 
 	assert.Equal(t, 7655, cfg.FrontendPort)
 	assert.Equal(t, tmpDefault, cfg.DataPath)
+}
+
+func TestLoad_DefaultHostedCommercialBaseURLAvoidsRetiredTrialPath(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("PULSE_PRO_TRIAL_SIGNUP_URL", "")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	if strings.Contains(cfg.ProTrialSignupURL, "start-pro-trial") {
+		t.Fatalf("ProTrialSignupURL=%q must not default to retired trial signup route", cfg.ProTrialSignupURL)
+	}
 }
 
 func TestResolveRuntimeDataDir(t *testing.T) {

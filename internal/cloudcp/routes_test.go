@@ -16,11 +16,6 @@ func TestRegisterRoutes_AccountAndTenantMethodDispatch(t *testing.T) {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
-	trialStore, err := NewTrialSignupStore(dir)
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -31,9 +26,8 @@ func TestRegisterRoutes_AccountAndTenantMethodDispatch(t *testing.T) {
 			StripeWebhookSecret:      "whsec_test",
 			PublicCloudSignupEnabled: true,
 		},
-		Registry:         reg,
-		TrialSignupStore: trialStore,
-		Version:          "test",
+		Registry: reg,
+		Version:  "test",
 	})
 
 	tests := []struct {
@@ -100,11 +94,6 @@ func TestRegisterRoutes_FaviconRouteParity(t *testing.T) {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
-	trialStore, err := NewTrialSignupStore(dir)
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -115,9 +104,8 @@ func TestRegisterRoutes_FaviconRouteParity(t *testing.T) {
 			StripeWebhookSecret:      "whsec_test",
 			PublicCloudSignupEnabled: true,
 		},
-		Registry:         reg,
-		TrialSignupStore: trialStore,
-		Version:          "test",
+		Registry: reg,
+		Version:  "test",
 	})
 
 	svgReq := httptest.NewRequest(http.MethodGet, "/favicon.svg", nil)
@@ -148,18 +136,13 @@ func TestRegisterRoutes_FaviconRouteParity(t *testing.T) {
 	}
 }
 
-func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
+func TestRegisterRoutes_RetiredTrialSignupRoutes(t *testing.T) {
 	dir := t.TempDir()
 	reg, err := registry.NewTenantRegistry(dir)
 	if err != nil {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
-	trialStore, err := NewTrialSignupStore(dir)
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -170,54 +153,28 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 			StripeWebhookSecret:      "whsec_test",
 			PublicCloudSignupEnabled: true,
 		},
-		Registry:         reg,
-		TrialSignupStore: trialStore,
-		Version:          "test",
+		Registry: reg,
+		Version:  "test",
 	})
 
-	pageReq := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com/auth/trial-activate&instance_token=tsi_test", nil)
-	pageRec := httptest.NewRecorder()
-	mux.ServeHTTP(pageRec, pageReq)
-	if pageRec.Code != http.StatusOK {
-		t.Fatalf("GET /start-pro-trial status=%d, want %d", pageRec.Code, http.StatusOK)
-	}
-	if !strings.Contains(pageRec.Body.String(), "Continue To Secure Trial Setup") {
-		t.Fatalf("expected trial signup page body")
-	}
-
-	verifyReq := httptest.NewRequest(http.MethodGet, "/trial-signup/verify", nil)
-	verifyRec := httptest.NewRecorder()
-	mux.ServeHTTP(verifyRec, verifyReq)
-	if verifyRec.Code != http.StatusBadRequest {
-		t.Fatalf("GET /trial-signup/verify status=%d, want %d", verifyRec.Code, http.StatusBadRequest)
-	}
-
-	requestVerificationReq := httptest.NewRequest(http.MethodGet, "/api/trial-signup/request-verification", nil)
-	requestVerificationRec := httptest.NewRecorder()
-	mux.ServeHTTP(requestVerificationRec, requestVerificationReq)
-	if requestVerificationRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET /api/trial-signup/request-verification status=%d, want %d", requestVerificationRec.Code, http.StatusMethodNotAllowed)
-	}
-
-	checkoutReq := httptest.NewRequest(http.MethodGet, "/api/trial-signup/checkout", nil)
-	checkoutRec := httptest.NewRecorder()
-	mux.ServeHTTP(checkoutRec, checkoutReq)
-	if checkoutRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET /api/trial-signup/checkout status=%d, want %d", checkoutRec.Code, http.StatusMethodNotAllowed)
-	}
-
-	redeemReq := httptest.NewRequest(http.MethodGet, "/api/trial-signup/redeem", nil)
-	redeemRec := httptest.NewRecorder()
-	mux.ServeHTTP(redeemRec, redeemReq)
-	if redeemRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET /api/trial-signup/redeem status=%d, want %d", redeemRec.Code, http.StatusMethodNotAllowed)
-	}
-
-	refreshReq := httptest.NewRequest(http.MethodGet, "/api/trial-signup/refresh", nil)
-	refreshRec := httptest.NewRecorder()
-	mux.ServeHTTP(refreshRec, refreshReq)
-	if refreshRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET /api/trial-signup/refresh status=%d, want %d", refreshRec.Code, http.StatusMethodNotAllowed)
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/start-pro-trial?org_id=default&return_url=https://pulse.example.com/auth/trial-activate&instance_token=tsi_test"},
+		{method: http.MethodPost, path: "/api/trial-signup/request-verification"},
+		{method: http.MethodGet, path: "/trial-signup/verify"},
+		{method: http.MethodPost, path: "/api/trial-signup/checkout"},
+		{method: http.MethodGet, path: "/trial-signup/complete"},
+		{method: http.MethodPost, path: "/api/trial-signup/redeem"},
+		{method: http.MethodPost, path: "/api/trial-signup/refresh"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s %s status=%d, want %d", tc.method, tc.path, rec.Code, http.StatusNotFound)
+		}
 	}
 
 	hostedRefreshReq := httptest.NewRequest(http.MethodGet, "/api/entitlements/refresh", nil)
@@ -228,51 +185,6 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 	}
 }
 
-func TestRegisterRoutes_TrialSignupVerificationRateLimit(t *testing.T) {
-	dir := t.TempDir()
-	reg, err := registry.NewTenantRegistry(dir)
-	if err != nil {
-		t.Fatalf("NewTenantRegistry: %v", err)
-	}
-	t.Cleanup(func() { _ = reg.Close() })
-	trialStore, err := NewTrialSignupStore(dir)
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { trialStore.Close() })
-
-	mux := http.NewServeMux()
-	RegisterRoutes(mux, &Deps{
-		Config: &CPConfig{
-			DataDir:             dir,
-			AdminKey:            "test-admin-key",
-			BaseURL:             "https://cloud.example.com",
-			StripeWebhookSecret: "whsec_test",
-		},
-		Registry:         reg,
-		TrialSignupStore: trialStore,
-		Version:          "test",
-	})
-
-	for i := 0; i < 6; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/api/trial-signup/request-verification", nil)
-		req.RemoteAddr = "198.51.100.25:7777"
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
-		if rec.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("attempt %d status=%d, want %d", i+1, rec.Code, http.StatusMethodNotAllowed)
-		}
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/trial-signup/request-verification", nil)
-	req.RemoteAddr = "198.51.100.25:7777"
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("rate-limited status=%d, want %d body=%q", rec.Code, http.StatusTooManyRequests, rec.Body.String())
-	}
-}
-
 func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 	dir := t.TempDir()
 	reg, err := registry.NewTenantRegistry(dir)
@@ -280,11 +192,6 @@ func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
-	trialStore, err := NewTrialSignupStore(dir)
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -295,9 +202,8 @@ func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 			StripeWebhookSecret:      "whsec_test",
 			PublicCloudSignupEnabled: true,
 		},
-		Registry:         reg,
-		TrialSignupStore: trialStore,
-		Version:          "test",
+		Registry: reg,
+		Version:  "test",
 	})
 
 	signupPageReq := httptest.NewRequest(http.MethodGet, "/signup", nil)
@@ -340,11 +246,6 @@ func TestRegisterRoutes_PublicCloudSignupRoutesDisabledByDefault(t *testing.T) {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
-	trialStore, err := NewTrialSignupStore(dir)
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -354,9 +255,8 @@ func TestRegisterRoutes_PublicCloudSignupRoutesDisabledByDefault(t *testing.T) {
 			BaseURL:             "https://cloud.example.com",
 			StripeWebhookSecret: "whsec_test",
 		},
-		Registry:         reg,
-		TrialSignupStore: trialStore,
-		Version:          "test",
+		Registry: reg,
+		Version:  "test",
 	})
 
 	for _, tc := range []struct {

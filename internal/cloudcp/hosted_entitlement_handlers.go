@@ -20,6 +20,8 @@ type hostedEntitlementRefreshResponse struct {
 	EntitlementJWT string `json:"entitlement_jwt"`
 }
 
+const hostedEntitlementDefaultOrgID = "default"
+
 type HostedEntitlementHandlers struct {
 	entitlements *entitlements.Service
 }
@@ -43,14 +45,14 @@ func (h *HostedEntitlementHandlers) HandleRefresh(w http.ResponseWriter, r *http
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	orgID := normalizeTrialOrgID(reqBody.OrgID)
+	orgID := normalizeHostedEntitlementOrgID(reqBody.OrgID)
 	instanceHost := strings.ToLower(strings.TrimSpace(reqBody.InstanceHost))
 	refreshToken := strings.TrimSpace(reqBody.EntitlementRefreshToken)
 	if instanceHost == "" || refreshToken == "" {
 		http.Error(w, "instance_host and entitlement_refresh_token are required", http.StatusBadRequest)
 		return
 	}
-	if orgID != trialSignupDefaultOrgID {
+	if orgID != hostedEntitlementDefaultOrgID {
 		http.Error(w, "invalid entitlement refresh token", http.StatusUnauthorized)
 		return
 	}
@@ -76,4 +78,12 @@ func (h *HostedEntitlementHandlers) HandleRefresh(w http.ResponseWriter, r *http
 	if err := json.NewEncoder(w).Encode(hostedEntitlementRefreshResponse{EntitlementJWT: result.EntitlementJWT}); err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Msg("failed to encode hosted entitlement refresh response")
 	}
+}
+
+func normalizeHostedEntitlementOrgID(raw string) string {
+	orgID := strings.TrimSpace(raw)
+	if orgID == "" {
+		return hostedEntitlementDefaultOrgID
+	}
+	return orgID
 }

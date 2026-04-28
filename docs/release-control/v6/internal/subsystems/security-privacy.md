@@ -92,7 +92,12 @@ visibility, and privacy controls to operators.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
-8. Change auth-env password normalization or shared TLS fingerprint verification defaults through `internal/config/config.go`, `internal/config/watcher.go`, and `pkg/tlsutil/fingerprint.go` together so startup auth ingestion, live auth-env reloads, and pinned-fingerprint TLS clients keep one fail-closed security floor.
+8. Change auth-env password normalization, hosted commercial base URL
+   normalization, or shared TLS fingerprint verification defaults through
+   `internal/config/config.go`, `internal/config/watcher.go`, and
+   `pkg/tlsutil/fingerprint.go` together so startup auth ingestion, live
+   auth-env reloads, hosted entitlement refresh origins, and
+   pinned-fingerprint TLS clients keep one fail-closed security floor.
 9. Change operator-facing data-handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, and redaction copy stays governed as a trust surface.
 
 ## Forbidden Paths
@@ -109,7 +114,11 @@ visibility, and privacy controls to operators.
 4. Keep the checked-in telemetry adoption report aligned with the same release-identity rules used by the runtime telemetry payload.
 5. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
-7. Keep auth-env ingestion and shared fingerprint-verifier TLS defaults aligned whenever runtime auth loading or pinned-certificate transport behavior changes.
+7. Keep auth-env ingestion, hosted commercial base URL validation, and shared
+   fingerprint-verifier TLS defaults aligned whenever runtime auth loading,
+   hosted entitlement refresh origin handling, or pinned-certificate transport
+   behavior changes. Hosted commercial URL overrides must remain absolute
+   HTTP(S) URLs, with plain HTTP limited to loopback development origins.
 8. Keep the Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits.
 9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, and any retained legacy managed-model compatibility text must use the shared resource-policy redaction helper before leaving the local trust boundary. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
 10. Keep the canonical and frontend-served privacy disclosures aligned with

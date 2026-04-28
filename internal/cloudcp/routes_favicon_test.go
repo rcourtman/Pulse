@@ -16,11 +16,6 @@ func TestRegisterRoutes_ControlPlaneFavicons(t *testing.T) {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
-	trialStore, err := NewTrialSignupStore(dir)
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -30,9 +25,8 @@ func TestRegisterRoutes_ControlPlaneFavicons(t *testing.T) {
 			BaseURL:             "https://cloud.example.com",
 			StripeWebhookSecret: "whsec_test",
 		},
-		Registry:         reg,
-		TrialSignupStore: trialStore,
-		Version:          "test",
+		Registry: reg,
+		Version:  "test",
 	})
 
 	svgReq := httptest.NewRequest(http.MethodGet, "/favicon.svg", nil)

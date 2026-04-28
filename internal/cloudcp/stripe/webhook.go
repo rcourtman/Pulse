@@ -141,7 +141,7 @@ func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) er
 		if isSelfHostedProTrialCheckout(session) {
 			log.Info().
 				Str("session_id", strings.TrimSpace(session.ID)).
-				Msg("Stripe webhook ignored self-hosted Pro trial checkout; activation is owned by trial signup completion")
+				Msg("Stripe webhook ignored retired self-hosted Pro trial checkout")
 			return nil
 		}
 		return h.provisioner.HandleCheckout(ctx, session)
