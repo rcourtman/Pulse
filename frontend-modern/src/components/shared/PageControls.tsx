@@ -79,6 +79,11 @@ export const PageControls: Component<PageControlsProps> = (props) => {
   const activeMobileTrailing = () => (mobileControlsEnabled() ? local.mobileTrailing : undefined);
   const activeUtilityActions = () => (mobileControlsEnabled() ? undefined : local.utilityActions);
   const activeSearchTrailing = () => (mobileControlsEnabled() ? undefined : local.searchTrailing);
+  const showColumnVisibility = () =>
+    Boolean(local.columnVisibility && local.columnVisibility.availableToggles().length > 0);
+  const showResetAction = () => local.resetAction?.show === true;
+  const hasTrailingActions = () =>
+    Boolean(activeUtilityActions() || showColumnVisibility() || showResetAction());
 
   return (
     <FilterHeader
@@ -97,33 +102,35 @@ export const PageControls: Component<PageControlsProps> = (props) => {
     >
       {local.children}
 
-      <Show when={activeUtilityActions()}>
-        <FilterDivider />
-        {activeUtilityActions()}
-      </Show>
+      <Show when={hasTrailingActions()}>
+        <div class="ml-auto inline-flex flex-wrap items-center gap-2">
+          <Show when={activeUtilityActions()}>
+            <FilterDivider />
+            {activeUtilityActions()}
+          </Show>
 
-      <Show
-        when={local.columnVisibility && local.columnVisibility.availableToggles().length > 0}
-      >
-        <FilterDivider />
-        <ColumnPicker
-          columns={local.columnVisibility!.availableToggles()}
-          isHidden={local.columnVisibility!.isHiddenByUser}
-          onToggle={local.columnVisibility!.toggle}
-          onReset={local.columnVisibility!.resetToDefaults}
-        />
-      </Show>
+          <Show when={showColumnVisibility()}>
+            <FilterDivider />
+            <ColumnPicker
+              columns={local.columnVisibility!.availableToggles()}
+              isHidden={local.columnVisibility!.isHiddenByUser}
+              onToggle={local.columnVisibility!.toggle}
+              onReset={local.columnVisibility!.resetToDefaults}
+            />
+          </Show>
 
-      <Show when={local.resetAction?.show}>
-        <FilterDivider />
-        <FilterActionButton
-          onClick={() => local.resetAction?.onClick()}
-          title={local.resetAction?.title}
-          class={local.resetAction?.class}
-        >
-          {local.resetAction?.icon}
-          {local.resetAction?.label ?? 'Reset'}
-        </FilterActionButton>
+          <Show when={showResetAction()}>
+            <FilterDivider />
+            <FilterActionButton
+              onClick={() => local.resetAction?.onClick()}
+              title={local.resetAction?.title}
+              class={local.resetAction?.class}
+            >
+              {local.resetAction?.icon}
+              {local.resetAction?.label ?? 'Reset'}
+            </FilterActionButton>
+          </Show>
+        </div>
       </Show>
     </FilterHeader>
   );

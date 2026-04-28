@@ -13,6 +13,7 @@ describe('ColumnPicker', () => {
   it('keeps column picker on shell, runtime, and model owners', () => {
     expect(columnPickerSource).toContain('useColumnPickerState');
     expect(columnPickerSource).toContain('COLUMN_PICKER_PANEL_TITLE');
+    expect(columnPickerSource).toContain('widthClass="w-56 max-w-[calc(100vw-2rem)]"');
     expect(columnPickerSource).not.toContain('createSignal');
     expect(columnPickerSource).not.toContain('createEffect');
     expect(columnPickerSource).not.toContain('document.addEventListener');
@@ -69,9 +70,7 @@ describe('ColumnPicker', () => {
       />
     ));
 
-    expect(
-      screen.getByRole('button', { name: /columns 2 hidden/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /columns 2 hidden/i })).toBeInTheDocument();
     expect(screen.getByText('2 hidden')).toBeInTheDocument();
   });
 

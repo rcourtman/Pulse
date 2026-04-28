@@ -17,7 +17,8 @@ export const filterSelectClass =
   'rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500';
 export const filterDividerClass = 'hidden h-5 w-px bg-surface-hover sm:block';
 export const filterPanelClass =
-  'absolute right-0 top-[calc(100%+0.5rem)] z-[80] w-[min(40rem,calc(100vw-2rem))] rounded-md border border-border bg-surface p-3 shadow-lg';
+  'absolute right-0 top-[calc(100%+0.5rem)] z-[80] rounded-md border border-border bg-surface p-3 shadow-lg';
+export const filterPanelDefaultWidthClass = 'w-[min(40rem,calc(100vw-2rem))]';
 export const filterPanelTitleClass = 'text-sm font-medium text-base-content';
 export const filterPanelDescriptionClass = 'text-xs text-muted';
 export const mobileFiltersButtonClass =
@@ -319,12 +320,18 @@ export const FilterActionButton: Component<FilterActionButtonProps> = (props) =>
 
 interface FilterToolbarPanelProps extends JSX.HTMLAttributes<HTMLDivElement> {
   children: JSX.Element;
+  widthClass?: string;
 }
 
 export const FilterToolbarPanel: Component<FilterToolbarPanelProps> = (props) => {
-  const [local, divProps] = splitProps(props, ['children', 'class']);
+  const [local, divProps] = splitProps(props, ['children', 'class', 'widthClass']);
   return (
-    <div {...divProps} class={`${filterPanelClass} ${local.class ?? ''}`.trim()}>
+    <div
+      {...divProps}
+      class={`${filterPanelClass} ${local.widthClass ?? filterPanelDefaultWidthClass} ${
+        local.class ?? ''
+      }`.trim()}
+    >
       {local.children}
     </div>
   );

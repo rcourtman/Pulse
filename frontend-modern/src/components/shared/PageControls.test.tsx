@@ -31,8 +31,13 @@ describe('PageControls', () => {
 
     expect(screen.getByTestId('search')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /filters/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /columns/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reset all/i })).toBeInTheDocument();
+    const columnsButton = screen.getByRole('button', { name: /columns/i });
+    const resetButton = screen.getByRole('button', { name: /reset all/i });
+    expect(columnsButton).toBeInTheDocument();
+    expect(resetButton).toBeInTheDocument();
+    const trailingActions = columnsButton.closest('.ml-auto');
+    expect(trailingActions).not.toBeNull();
+    expect(trailingActions!).toContainElement(resetButton);
 
     fireEvent.click(screen.getByRole('button', { name: /filters/i }));
     expect(onToggleFilters).toHaveBeenCalledTimes(1);

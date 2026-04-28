@@ -3,8 +3,10 @@ import { For, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FilterHeader,
+  FilterToolbarPanel,
   FilterSegmentedControl,
   LabeledFilterSelect,
+  filterPanelDefaultWidthClass,
   filterPanelClass,
 } from './FilterToolbar';
 import toggleSource from './Toggle.tsx?raw';
@@ -84,7 +86,9 @@ describe('FilterHeader', () => {
           Load options
         </button>
         <LabeledFilterSelect label="Platform" value="truenas" data-testid="platform-filter">
-          <For each={options()}>{(option) => <option value={option.value}>{option.label}</option>}</For>
+          <For each={options()}>
+            {(option) => <option value={option.value}>{option.label}</option>}
+          </For>
         </LabeledFilterSelect>
       </>
     ));
@@ -103,6 +107,20 @@ describe('FilterHeader', () => {
   it('keeps shared filter popovers above nested table and card shells', () => {
     expect(filterPanelClass).toContain('absolute');
     expect(filterPanelClass).toContain('z-[80]');
-    expect(filterPanelClass).toContain('w-[min(40rem,calc(100vw-2rem))]');
+    expect(filterPanelClass).not.toContain('w-[min(40rem,calc(100vw-2rem))]');
+    expect(filterPanelDefaultWidthClass).toContain('w-[min(40rem,calc(100vw-2rem))]');
+  });
+
+  it('allows narrow shared popovers to opt out of the default wide panel width', () => {
+    render(() => (
+      <FilterToolbarPanel widthClass="w-56 max-w-[calc(100vw-2rem)]" data-testid="panel">
+        Panel
+      </FilterToolbarPanel>
+    ));
+
+    const panel = screen.getByTestId('panel');
+    expect(panel).toHaveClass('w-56');
+    expect(panel).toHaveClass('max-w-[calc(100vw-2rem)]');
+    expect(panel).not.toHaveClass('w-[min(40rem,calc(100vw-2rem))]');
   });
 });

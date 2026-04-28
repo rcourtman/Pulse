@@ -273,7 +273,14 @@ work extends shared components instead of creating new local variants.
    adjacent product vocabulary. Table-mode segmented controls that expose a
    grouping accessible label must use the shared `Group by` casing, while
    visible options describe the mode itself (`Grouped`, `List`, or the
-   owning surface's equivalent) instead of resource-specific concepts.
+   owning surface's equivalent) instead of resource-specific concepts. Shared
+   `PageControls` owns trailing filter-row actions such as utility buttons,
+   Columns, and Reset; those controls must stay grouped at the row end when
+   dense toolbars wrap so popovers remain viewport-safe instead of drifting
+   off-screen from page-local flex behavior. Shared `FilterToolbarPanel` owns
+   default filter-popover geometry, while narrow consumers such as
+   `ColumnPicker` must opt into their panel width through that primitive rather
+   than layering competing width classes page by page.
 4. Add guardrail tests when a new shared pattern is introduced.
    Shared monitored-system warning primitives must prove their admission-freeze
    posture through the canonical `frontend-modern/src/utils/monitoredSystemPresentation.ts`

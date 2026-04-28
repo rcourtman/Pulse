@@ -44,7 +44,10 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
       </FilterActionButton>
 
       <Show when={state.isOpen()}>
-        <FilterToolbarPanel class="top-[calc(100%+0.25rem)] z-50 w-56 p-0">
+        <FilterToolbarPanel
+          widthClass="w-56 max-w-[calc(100vw-2rem)]"
+          class="top-[calc(100%+0.25rem)] z-50 p-0"
+        >
           <div class="px-3 py-2 border-b border-border-subtle">
             <div class="flex items-center justify-between">
               <span class="text-xs font-medium text-base-content">{COLUMN_PICKER_PANEL_TITLE}</span>
@@ -79,9 +82,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
           </div>
 
           <Show when={props.columns.length === 0}>
-            <div class="px-3 py-4 text-xs text-muted text-center">
-              {COLUMN_PICKER_EMPTY_LABEL}
-            </div>
+            <div class="px-3 py-4 text-xs text-muted text-center">{COLUMN_PICKER_EMPTY_LABEL}</div>
           </Show>
         </FilterToolbarPanel>
       </Show>
