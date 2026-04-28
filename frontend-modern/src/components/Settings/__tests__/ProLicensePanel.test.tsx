@@ -1113,7 +1113,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePanelStateSource).toContain("'A license or activation key is required'");
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
-    expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
+    expect(proLicensePlanSectionSource).toContain('getNoActiveSelfHostedActivationState');
     expect(proLicensePlanSectionSource).not.toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.title');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.supplementalBadges');

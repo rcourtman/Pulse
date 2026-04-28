@@ -2526,11 +2526,12 @@ describe('frontend resource type boundaries', () => {
     expect(proLicensePanelStateSource).not.toContain('getTrialActivationNotice');
     expect(proLicensePanelStateSource).toContain('getCommercialMigrationNotice');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
-    expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
+    expect(proLicensePlanSectionSource).toContain('getNoActiveSelfHostedActivationState');
     expect(proLicensePlanSectionSource).not.toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
     expect(proLicensePanelSource).not.toContain('Loading license status...');
     expect(proLicensePanelSource).not.toContain('No Pro license is active.');
+    expect(proLicensePanelSource).not.toContain('No paid self-hosted activation is active');
     expect(proLicensePanelSource).not.toContain('const statusLabel =');
     expect(proLicensePanelStateSource).not.toContain('const statusTone =');
     expect(proLicensePanelStateSource).not.toContain('const formatTitleCase =');
@@ -2540,7 +2541,9 @@ describe('frontend resource type boundaries', () => {
       'export const getLicenseSubscriptionStatusPresentation',
     );
     expect(licensePresentationSource).toContain('export const getLicenseStatusLoadingState');
-    expect(licensePresentationSource).toContain('export const getNoActiveProLicenseState');
+    expect(licensePresentationSource).toContain(
+      'export const getNoActiveSelfHostedActivationState',
+    );
     expect(licensePresentationSource).not.toContain('export const getTrialEndedProLicenseNotice');
     expect(licensePresentationSource).not.toContain('export const getInactiveProUpsellNotice');
     expect(licensePresentationSource).toContain(

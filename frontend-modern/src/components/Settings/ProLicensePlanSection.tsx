@@ -4,7 +4,7 @@ import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
   getLicenseStatusLoadingState,
-  getNoActiveProLicenseState,
+  getNoActiveSelfHostedActivationState,
 } from '@/utils/licensePresentation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
@@ -340,7 +340,11 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         >
           <Show
             when={props.hasLicenseDetails}
-            fallback={<div class="text-sm text-muted">{getNoActiveProLicenseState().text}</div>}
+            fallback={
+              <div class="text-sm text-muted">
+                {getNoActiveSelfHostedActivationState().text}
+              </div>
+            }
           >
             <CommercialStatGrid items={props.commercialPlanModel.summary} />
 

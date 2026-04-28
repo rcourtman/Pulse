@@ -800,8 +800,8 @@ export const getLicenseStatusLoadingState = (): LicenseLoadingStateCopy => ({
   text: 'Loading license status...',
 });
 
-export const getNoActiveProLicenseState = (): LicenseLoadingStateCopy => ({
-  text: 'No Pro license is active.',
+export const getNoActiveSelfHostedActivationState = (): LicenseLoadingStateCopy => ({
+  text: 'No paid self-hosted activation is active on this instance.',
 });
 
 export const SELF_HOSTED_RECOVERY_PRESENTATION: SelfHostedRecoveryPresentation = {

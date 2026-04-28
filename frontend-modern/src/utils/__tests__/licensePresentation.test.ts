@@ -19,7 +19,7 @@ import {
   getLicenseTierLabel,
   getDisplayableMonitoredSystemContinuity,
   getMonitoredSystemContinuityNotice,
-  getNoActiveProLicenseState,
+  getNoActiveSelfHostedActivationState,
   getOrganizationBillingLicenseStatusLabel,
   getPurchaseActivationNotice,
   isDisplayableLicenseFeature,
@@ -45,8 +45,8 @@ describe('licensePresentation', () => {
     expect(getLicenseStatusLoadingState()).toEqual({
       text: 'Loading license status...',
     });
-    expect(getNoActiveProLicenseState()).toEqual({
-      text: 'No Pro license is active.',
+    expect(getNoActiveSelfHostedActivationState()).toEqual({
+      text: 'No paid self-hosted activation is active on this instance.',
     });
     expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({
       disclosureLabel: 'Redeem existing key',
