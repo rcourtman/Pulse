@@ -329,6 +329,38 @@ describe('AISettings model loading error states', () => {
 
     expect(screen.getByText('Legacy Model V1')).toBeInTheDocument();
   });
+
+  it('hides autonomous controls when auto-fix is locked and upgrade prompts are hidden', async () => {
+    hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.queryByRole('option', { name: /Autonomous/i })).not.toBeInTheDocument();
+    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps an existing autonomous setting visible even when upgrade prompts are hidden', async () => {
+    hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      control_level: 'autonomous',
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.getByRole('option', { name: /Autonomous/i })).toBeInTheDocument();
+    expect(screen.queryByText('(Pro)')).not.toBeInTheDocument();
+  });
 });
 
 describe('AISettings load failure error state', () => {

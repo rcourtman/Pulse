@@ -573,6 +573,11 @@ work extends shared components instead of creating new local variants.
     the shared settings shell. Shared/default model choices may remain on the
     combined shell only when Assistant and Patrol overrides are presented as
     explicit per-surface overrides instead of a generic advanced AI bucket.
+    The shared shell must not show Pro-only autonomous execution as a default
+    free-user control when upgrade prompts are suppressed; it may surface that
+    option only when the entitlement is present, commercial prompts are
+    explicitly allowed, or the current saved setting already uses autonomous
+    mode and needs to remain visible for operator review.
     Provider model catalogs must remain curated on that same shell:
     `frontend-modern/src/components/shared/AIModelPicker.tsx` owns the
     searchable, notable-first model picker pattern, and

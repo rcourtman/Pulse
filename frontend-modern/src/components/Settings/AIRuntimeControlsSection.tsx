@@ -24,6 +24,8 @@ interface AIRuntimeControlsSectionProps {
 
 export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> = (props) => {
   const { state } = props;
+  const showAutonomousControlOption = () =>
+    !state.autoFixLocked() || state.showUpgradePrompts() || state.form.controlLevel === 'autonomous';
 
   return (
     <>
@@ -245,9 +247,12 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             <option value="controlled">
               Controlled - Pulse Assistant executes with your approval
             </option>
-            <option value="autonomous">
-              Autonomous - Pulse Assistant executes without approval (Pro)
-            </option>
+            <Show when={showAutonomousControlOption()}>
+              <option value="autonomous">
+                Autonomous - Pulse Assistant executes without approval
+                {state.autoFixLocked() && state.showUpgradePrompts() ? ' (Pro)' : ''}
+              </option>
+            </Show>
           </select>
         </div>
         <p class="text-[10px] text-muted ml-[7.5rem]">

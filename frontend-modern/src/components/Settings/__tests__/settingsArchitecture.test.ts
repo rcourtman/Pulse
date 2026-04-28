@@ -4,6 +4,7 @@ import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
 import aiModelSelectionSectionSource from '../AIModelSelectionSection.tsx?raw';
+import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
@@ -150,6 +151,9 @@ describe('settings architecture guardrails', () => {
     expect(dataHandlingPanelSource).not.toContain('higher limits');
     expect(dataHandlingPanelSource).not.toContain('Upgrade');
     expect(dataHandlingPanelSource).not.toContain('Pro');
+    expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
+    expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
+    expect(aiRuntimeControlsSectionSource).not.toContain('without approval (Pro)');
   });
 
   it('keeps system AI model catalogs on the shared searchable picker boundary', () => {
