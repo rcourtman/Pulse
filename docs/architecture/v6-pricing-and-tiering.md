@@ -175,7 +175,7 @@ profiles) are included, but they are supporting value rather than the headline.
 Existing Pro+ entitlements remain supported for continuity, but Pro+ is no longer part of
 the public v6 self-hosted ladder because monitored-system volume is not the paid boundary.
 Runtime feature access matches Pro, while grandfathered recurring or lifetime continuity can
-still preserve uncapped monitored-system and guest capacity where applicable.
+still preserve uncapped self-hosted monitoring and child-resource volume where applicable.
 
 ---
 

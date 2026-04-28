@@ -16,7 +16,7 @@ User-facing plans map to internal tiers as follows:
 - **Cloud**: `msp` or `enterprise`
 
 Notes:
-- `lifetime` keeps the same runtime feature set as Pro, but lifetime and grandfathered recurring legacy entitlements remain uncapped for monitored systems and guest access. Other migrated legacy paid installs can still carry cohort continuity metadata for support and audit, but self-hosted monitoring volume is no longer the paid gate.
+- `lifetime` keeps the same runtime feature set as Pro, but lifetime and grandfathered recurring legacy entitlements remain uncapped for self-hosted monitoring and child-resource volume. Other migrated legacy paid installs can still carry cohort continuity metadata for support and audit, but self-hosted monitoring volume is no longer the paid gate.
 - `pro_plus` remains a legacy compatibility tier for existing holders. It is not a current public self-hosted plan because monitored-system volume is no longer the paid boundary.
 - Items marked **Cloud*** require the `enterprise` tier rather than the base `msp` tier.
 - If you are self-hosting, you can use capability keys and `GET /api/license/features` to discover exactly what is active in your instance.
