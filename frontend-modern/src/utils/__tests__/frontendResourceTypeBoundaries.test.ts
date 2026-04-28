@@ -2520,7 +2520,7 @@ describe('frontend resource type boundaries', () => {
     expect(licensePresentationSource).toContain('export const getLicenseStatusLoadingState');
     expect(licensePresentationSource).toContain('export const getNoActiveProLicenseState');
     expect(licensePresentationSource).not.toContain('export const getTrialEndedProLicenseNotice');
-    expect(licensePresentationSource).toContain('export const getInactiveProUpsellNotice');
+    expect(licensePresentationSource).not.toContain('export const getInactiveProUpsellNotice');
     expect(licensePresentationSource).toContain(
       'export const getOrganizationBillingLicenseStatusLabel',
     );

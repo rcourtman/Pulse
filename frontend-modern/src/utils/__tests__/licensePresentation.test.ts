@@ -21,7 +21,6 @@ import {
   getMonitoredSystemContinuityNotice,
   getNoActiveProLicenseState,
   getOrganizationBillingLicenseStatusLabel,
-  getInactiveProUpsellNotice,
   getPurchaseActivationNotice,
   isDisplayableLicenseFeature,
   isGrandfatheredRecurringV5PlanVersion,
@@ -48,12 +47,6 @@ describe('licensePresentation', () => {
     });
     expect(getNoActiveProLicenseState()).toEqual({
       text: 'No Pro license is active.',
-    });
-    expect(getInactiveProUpsellNotice()).toEqual({
-      tone: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
-      title: 'Pro options available',
-      body: 'Pro adds root-cause analysis, safe remediation workflows, and 90-day history without changing the free self-hosted monitoring scope.',
-      actionLabel: 'View Pro plans',
     });
     expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({
       disclosureLabel: 'Redeem existing key',

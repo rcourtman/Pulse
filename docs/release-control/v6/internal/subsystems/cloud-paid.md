@@ -1452,8 +1452,9 @@ That same plan-section boundary also owns the rule that Community (non-paid)
 users must not be funneled through upgrade CTAs inside Settings -> Plan.
 `ProLicensePlanSection.tsx` must not render the monitored-system upgrade
 arrival banner, the trial-start CTA, or the inactive-Pro upsell notice to
-users without paid features, and the capacity-section `Upgrade plan` button
-must be gated on `hasPaidFeatures`. Self-hosted Pro marketing lives at
+users without paid features, `licensePresentation.ts` must not retain a dead
+inactive-Pro upsell helper for that surface, and the capacity-section `Upgrade
+plan` button must be gated on `hasPaidFeatures`. Self-hosted Pro marketing lives at
 `pulserelay.pro/pricing`; the Settings plan surface must show factual
 license state for Community users and leave discovery of paid tiers to
 surfaces outside the plan page.

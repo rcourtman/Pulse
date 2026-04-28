@@ -779,13 +779,6 @@ export const getNoActiveProLicenseState = (): LicenseLoadingStateCopy => ({
   text: 'No Pro license is active.',
 });
 
-export const getInactiveProUpsellNotice = (): LicenseActionNotice => ({
-  tone: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
-  title: 'Pro options available',
-  body: 'Pro adds root-cause analysis, safe remediation workflows, and 90-day history without changing the free self-hosted monitoring scope.',
-  actionLabel: 'View Pro plans',
-});
-
 export const SELF_HOSTED_RECOVERY_PRESENTATION: SelfHostedRecoveryPresentation = {
   disclosureLabel: 'Redeem existing key',
   disclosureDescription:
