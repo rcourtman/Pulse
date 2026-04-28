@@ -521,11 +521,11 @@
           <div id="platformButtons" class="filter-buttons"></div>
         </div>
         <div class="filter-row">
-          <span class="filter-label">View</span>
+          <span class="filter-label">Focus</span>
           <div id="viewButtons" class="filter-buttons"></div>
         </div>
         <div class="filter-row">
-          <span class="filter-label">Show</span>
+          <span class="filter-label">Include</span>
           <div id="layerButtons" class="filter-buttons"></div>
         </div>
       </section>
@@ -543,52 +543,17 @@
     </main>
 
     <script>
-      const views = {
-        global: [
-          { id: "overview", label: "Overview" },
-          { id: "recovery", label: "Recovery" },
-          { id: "problems", label: "Problems" },
-        ],
-        proxmox: [
-          { id: "overview", label: "Overview" },
-          { id: "guests", label: "Guests" },
-          { id: "storage", label: "Storage" },
-          { id: "backups", label: "Backups" },
-          { id: "problems", label: "Problems" },
-        ],
-        docker: [
-          { id: "overview", label: "Overview" },
-          { id: "containers", label: "Containers" },
-          { id: "volumes", label: "Volumes" },
-          { id: "backups", label: "Backups" },
-          { id: "problems", label: "Problems" },
-        ],
-        kubernetes: [
-          { id: "overview", label: "Overview" },
-          { id: "workloads", label: "Workloads" },
-          { id: "storage", label: "Storage" },
-          { id: "backups", label: "Backups" },
-          { id: "problems", label: "Problems" },
-        ],
-        truenas: [
-          { id: "overview", label: "Overview" },
-          { id: "pools", label: "Pools" },
-          { id: "datasets", label: "Datasets" },
-          { id: "disks", label: "Disks" },
-          { id: "replication", label: "Replication" },
-          { id: "problems", label: "Problems" },
-        ],
-        vsphere: [
-          { id: "overview", label: "Overview" },
-          { id: "vms", label: "VMs" },
-          { id: "datastores", label: "Datastores" },
-          { id: "backups", label: "Backups" },
-          { id: "problems", label: "Problems" },
-        ],
-      };
+      const focusOptions = [
+        { id: "overview", label: "Everything", layers: ["top", "workload", "storage", "recovery"] },
+        { id: "hosts", label: "Top Level", layers: ["top"] },
+        { id: "workloads", label: "Workloads", layers: ["top", "workload"] },
+        { id: "storage", label: "Storage", layers: ["top", "workload", "storage"] },
+        { id: "recovery", label: "Recovery", layers: ["top", "workload", "recovery"] },
+        { id: "problems", label: "Problems", layers: ["top", "workload", "storage", "recovery"] },
+      ];
 
       const layerOptions = [
-        { id: "top", label: "Hosts" },
+        { id: "top", label: "Top Level" },
         { id: "workload", label: "Workloads" },
         { id: "storage", label: "Storage" },
         { id: "recovery", label: "Recovery" },
@@ -772,7 +737,7 @@
       const state = {
         view: "overview",
         selectedPlatforms: new Set(),
-        layers: new Set(layerOptions.map((layer) => layer.id)),
+        layers: new Set(focusOptions[0].layers),
         query: "",
       };
 
@@ -780,26 +745,35 @@
         return Object.keys(data);
       }
 
-      function currentViews() {
-        const focusedPlatform = focusedPlatformScope();
-        if (focusedPlatform) return views[focusedPlatform];
-        return views.global;
+      function focusOption(view) {
+        return focusOptions.find((option) => option.id === view) || focusOptions[0];
       }
 
-      function requiredLayerForView(view) {
-        if (["guests", "containers", "workloads", "vms"].includes(view)) return "workload";
-        if (["storage", "volumes", "pools", "datasets", "disks", "datastores"].includes(view)) return "storage";
-        if (["recovery", "backups", "replication"].includes(view)) return "recovery";
+      function primaryLayerForView(view) {
+        if (view === "hosts") return "top";
+        if (view === "workloads") return "workload";
+        if (view === "storage") return "storage";
+        if (view === "recovery") return "recovery";
         return "";
       }
 
-      function ensureRequiredLayer() {
-        const required = requiredLayerForView(state.view);
-        if (required) state.layers.add(required);
+      function applyFocusDefaults(view) {
+        state.view = view;
+        state.layers = new Set(focusOption(view).layers);
+      }
+
+      function ensureFocusState() {
+        if (!focusOptions.some((option) => option.id === state.view)) {
+          applyFocusDefaults("overview");
+          return;
+        }
+        const primary = primaryLayerForView(state.view);
+        if (primary) state.layers.add(primary);
+        if (state.layers.size === 0) applyFocusDefaults("overview");
       }
 
       function layerEnabled(layer) {
-        return state.layers.has(layer) || requiredLayerForView(state.view) === layer;
+        return state.layers.has(layer);
       }
 
       function selectedPlatformIds() {
@@ -865,7 +839,6 @@
 
       function rowsForScope() {
         const focusedPlatform = focusedPlatformScope();
-        if (state.view === "recovery" && !focusedPlatform) return recoveryRows();
         if (focusedPlatform) return platformRows(focusedPlatform);
         return globalRows();
       }
@@ -873,17 +846,29 @@
       function globalRows() {
         if (state.view === "overview") return segmentedOverviewRows(selectedPlatformIds(), true);
         if (state.view === "problems") return globalProblemRows();
+        if (state.view === "recovery") return recoveryRows();
 
         const rows = [];
         for (const platformId of selectedPlatformIds()) {
-          const platform = data[platformId];
-          const platformRows = platform.top.map((row) => normalizeRow(platformId, "top", row)).filter(matchesGlobalView).filter(matchesSearch);
-          const extraProblems = state.view === "problems" ? allRows(platformId).filter((row) => row.area !== "top").filter(hasProblem).filter(matchesSearch) : [];
-          const visible = state.view === "problems" ? [...platformRows, ...extraProblems] : platformRows;
-          if (!visible.length) continue;
-          rows.push(section(platform.label, `${platform.top.length} ${platform.topLabel}`, "platform"), ...visible);
+          const result = platformRows(platformId);
+          if (!result.rows.length) continue;
+          rows.push(section(data[platformId].label, "", "platform"), ...result.rows);
         }
-        return { columns: state.view === "problems" ? columns.problems : columns.overview, rows };
+        return { columns: columnsForFocus(), rows };
+      }
+
+      function topLevelRows(platformId) {
+        const rows = data[platformId].top
+          .map((row) => normalizeRow(platformId, "top", row))
+          .filter(matchesSearch);
+        return { columns: columns.overview, rows };
+      }
+
+      function columnsForFocus() {
+        if (state.view === "storage") return columns.storage;
+        if (state.view === "recovery") return columns.backups;
+        if (state.view === "problems") return columns.problems;
+        return columns.overview;
       }
 
       function segmentedOverviewRows(platforms, includePlatformSections) {
@@ -1057,15 +1042,12 @@
         return `${rows.length} ${rows.length === 1 ? noun : `${noun}s`}`;
       }
 
-      function matchesGlobalView(row) {
-        return state.view === "problems" ? hasProblem(row) : true;
-      }
-
       function platformRows(platformId) {
         if (state.view === "overview") return segmentedOverviewRows([platformId], false);
-        if (["guests", "containers", "workloads", "vms"].includes(state.view)) return workloadIntentRows(platformId);
-        if (["storage", "volumes", "pools", "datasets", "disks", "datastores"].includes(state.view)) return storageIntentRows(platformId);
-        if (["backups", "replication"].includes(state.view)) return recoveryIntentRows(platformId);
+        if (state.view === "hosts") return topLevelRows(platformId);
+        if (state.view === "workloads") return workloadIntentRows(platformId);
+        if (state.view === "storage") return storageIntentRows(platformId);
+        if (state.view === "recovery") return recoveryIntentRows(platformId);
         if (state.view === "problems") return problemIntentRows(platformId);
         return segmentedOverviewRows([platformId], false);
       }
@@ -1190,62 +1172,15 @@
       }
 
       function workloadMatchesIntent(row) {
-        if (state.view === "vms") return row.kind === "VM";
-        if (state.view === "containers") return row.kind === "Container";
         return true;
       }
 
       function storageMatchesIntent(row) {
-        if (state.view === "volumes") return ["Volume", "Bind Mount"].includes(row.kind);
-        if (state.view === "pools") return row.kind === "Pool";
-        if (state.view === "datasets") return row.kind === "Dataset";
-        if (state.view === "disks") return row.kind === "Disk";
-        if (state.view === "datastores") return row.kind === "Datastore";
         return true;
       }
 
       function recoveryMatchesIntent(row) {
-        if (state.view === "replication") return row.kind === "Replication";
         return true;
-      }
-
-      function platformColumnSet(platformId, view) {
-        if (view === "overview") return columns.overview;
-        if (view === "problems") return columns.problems;
-        if (["backups", "replication"].includes(view)) return columns.backups;
-        if (["storage", "volumes", "pools", "datasets", "disks", "datastores"].includes(view)) return columns.storage;
-        return columns.workloads;
-      }
-
-      function platformGroups(platformId, view) {
-        const platform = data[platformId];
-        if (view === "overview") {
-          return platform.top.map((top) => ({
-            title: top.name,
-            meta: top.info,
-            rows: [
-              normalizeRow(platformId, "top", top),
-              ...platform.workloads.filter((row) => row.placement && row.placement.includes(top.name)).map((row) => normalizeRow(platformId, "workload", row)),
-              ...platform.storage.filter((row) => row.placement && row.placement.includes(top.name)).map((row) => normalizeRow(platformId, "storage", row)),
-              ...platform.backups.map((row) => normalizeRow(platformId, "recovery", row)).filter((row) => belongsToTop(row, top.name)),
-            ],
-          }));
-        }
-        if (view === "problems") {
-          return groupByProblemState(allRows(platformId).filter(hasProblem));
-        }
-        if (["backups", "replication"].includes(view)) {
-          return [{ title: `${platform.label} recovery`, meta: `${platform.backups.length} policies`, rows: platform.backups.map((row) => normalizeRow(platformId, "recovery", row)) }];
-        }
-        if (platformId === "truenas") {
-          if (view === "pools") return [{ title: "Pools", meta: "capacity and health", rows: platform.storage.filter((row) => row.kind === "Pool").map((row) => normalizeRow(platformId, "storage", row)) }];
-          if (view === "datasets") return [{ title: "Datasets", meta: "dataset usage and snapshots", rows: platform.storage.filter((row) => row.kind === "Dataset").map((row) => normalizeRow(platformId, "storage", row)) }];
-          if (view === "disks") return [{ title: "Disks", meta: "physical media", rows: platform.storage.filter((row) => row.kind === "Disk").map((row) => normalizeRow(platformId, "storage", row)) }];
-        }
-        if (["storage", "volumes", "datastores"].includes(view)) {
-          return groupByPlacement(platform.storage.map((row) => normalizeRow(platformId, "storage", row)));
-        }
-        return groupByPlacement(platform.workloads.map((row) => normalizeRow(platformId, "workload", row)));
       }
 
       function belongsToTop(row, topName) {
@@ -1253,26 +1188,6 @@
         if (rootPlacement === topName) return true;
         const text = [row.name, row.target, row.placement, row.info].join(" ").toLowerCase();
         return text.includes(topName.toLowerCase());
-      }
-
-      function groupByPlacement(rows) {
-        const groups = new Map();
-        for (const row of rows) {
-          const key = (row.placement || row.platformLabel || "Unassigned").split(" / ")[0];
-          if (!groups.has(key)) groups.set(key, []);
-          groups.get(key).push(row);
-        }
-        return Array.from(groups, ([title, groupedRows]) => ({ title, meta: `${groupedRows.length} resources`, rows: groupedRows }));
-      }
-
-      function groupByProblemState(rows) {
-        const groups = new Map();
-        for (const row of rows) {
-          const key = row.runtimeState === "off" ? "Off" : row.status === "critical" ? "Critical" : "Issue";
-          if (!groups.has(key)) groups.set(key, []);
-          groups.get(key).push(row);
-        }
-        return Array.from(groups, ([title, groupedRows]) => ({ title, meta: `${groupedRows.length} resources`, rows: groupedRows }));
       }
 
       function recoveryRows() {
@@ -1333,24 +1248,22 @@
       }
 
       function renderControls() {
-        ensureRequiredLayer();
+        ensureFocusState();
 
         document.getElementById("platformButtons").innerHTML = [
           `<button class="platform ${state.selectedPlatforms.size === 0 ? "active" : ""}" type="button" data-platform="any">All Platforms</button>`,
           ...platformIds().map((id) => `<button class="platform ${state.selectedPlatforms.has(id) ? "active" : ""}" type="button" data-platform="${id}">${data[id].label}</button>`),
         ].join("");
 
-        const availableViews = currentViews();
-        if (!availableViews.some((view) => view.id === state.view)) state.view = availableViews[0].id;
-        document.getElementById("viewButtons").innerHTML = availableViews
+        document.getElementById("viewButtons").innerHTML = focusOptions
           .map((view) => `<button class="view ${state.view === view.id ? "active" : ""}" type="button" data-view="${view.id}">${view.label}</button>`)
           .join("");
 
-        const requiredLayer = requiredLayerForView(state.view);
+        const primaryLayer = primaryLayerForView(state.view);
         document.getElementById("layerButtons").innerHTML = layerOptions
           .map((layer) => {
             const active = layerEnabled(layer.id);
-            const required = requiredLayer === layer.id;
+            const required = primaryLayer === layer.id;
             return `<button class="layer ${active ? "active" : ""}" type="button" data-layer="${layer.id}" aria-pressed="${active}" ${required ? 'aria-disabled="true"' : ""}>${layer.label}</button>`;
           })
           .join("");
@@ -1421,20 +1334,20 @@
         });
         document.querySelectorAll(".view").forEach((button) => {
           button.addEventListener("click", () => {
-            state.view = button.dataset.view;
-            ensureRequiredLayer();
+            applyFocusDefaults(button.dataset.view);
             render();
           });
         });
         document.querySelectorAll(".layer").forEach((button) => {
           button.addEventListener("click", () => {
             const layer = button.dataset.layer;
-            if (requiredLayerForView(state.view) === layer) return;
+            if (primaryLayerForView(state.view) === layer) return;
             if (state.layers.has(layer) && state.layers.size > 1) {
               state.layers.delete(layer);
             } else {
               state.layers.add(layer);
             }
+            ensureFocusState();
             render();
           });
         });
