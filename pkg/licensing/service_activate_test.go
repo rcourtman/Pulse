@@ -615,7 +615,7 @@ func TestServiceStatusMissingJWTCloudPlanFailsClosed(t *testing.T) {
 	}
 }
 
-func TestServiceStatus_DevModeAdvertisesOnlyRuntimeEnabledFeaturesWithoutLicense(t *testing.T) {
+func TestServiceStatus_DevModeKeepsCustomerFacingStatusCommunityWithoutLicense(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "")
 
@@ -629,10 +629,18 @@ func TestServiceStatus_DevModeAdvertisesOnlyRuntimeEnabledFeaturesWithoutLicense
 		t.Fatalf("status.Tier=%q, want %q", status.Tier, TierFree)
 	}
 
-	for _, feature := range devModeFeatures() {
+	for _, feature := range TierFeatures[TierFree] {
 		if !containsStringValue(status.Features, feature) {
-			t.Fatalf("status.Features missing %q in dev mode: %v", feature, status.Features)
+			t.Fatalf("status.Features missing community feature %q in dev mode: %v", feature, status.Features)
 		}
+	}
+	for _, feature := range []string{FeatureAdvancedReporting, FeatureRelay, FeatureRBAC} {
+		if containsStringValue(status.Features, feature) {
+			t.Fatalf("status.Features exposed synthetic dev feature %q: %v", feature, status.Features)
+		}
+	}
+	if !svc.HasFeature(FeatureAdvancedReporting) {
+		t.Fatalf("HasFeature(%q)=false, want true for dev-mode backend gate bypass", FeatureAdvancedReporting)
 	}
 	if svc.HasFeature(FeatureMultiTenant) {
 		t.Fatalf("HasFeature(%q)=true, want false when runtime flag is disabled", FeatureMultiTenant)
@@ -650,18 +658,39 @@ func TestServiceStatus_DevModeAdvertisesOnlyRuntimeEnabledFeaturesWithoutLicense
 	}
 }
 
-func TestServiceStatus_DevModeIncludesMultiTenantWhenRuntimeEnabled(t *testing.T) {
+func TestServiceStatus_DevModeMultiTenantBypassDoesNotChangeCustomerFacingStatus(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "true")
 
 	svc := NewService()
 	status := svc.Status()
 
-	if !containsStringValue(status.Features, FeatureMultiTenant) {
-		t.Fatalf("status.Features missing %q when runtime flag is enabled: %v", FeatureMultiTenant, status.Features)
+	if containsStringValue(status.Features, FeatureMultiTenant) {
+		t.Fatalf("status.Features exposed synthetic dev feature %q: %v", FeatureMultiTenant, status.Features)
 	}
 	if !svc.HasFeature(FeatureMultiTenant) {
 		t.Fatalf("HasFeature(%q)=false, want true when runtime flag is enabled", FeatureMultiTenant)
+	}
+}
+
+func TestServiceStatus_MockModeDoesNotAdvertiseSyntheticCapabilities(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	svc := NewService()
+	status := svc.Status()
+
+	for _, feature := range TierFeatures[TierFree] {
+		if !containsStringValue(status.Features, feature) {
+			t.Fatalf("status.Features missing community feature %q in mock mode: %v", feature, status.Features)
+		}
+	}
+	for _, feature := range []string{FeatureAdvancedReporting, FeatureRelay, FeatureDemoFixtures} {
+		if containsStringValue(status.Features, feature) {
+			t.Fatalf("status.Features exposed synthetic mock feature %q: %v", feature, status.Features)
+		}
+	}
+	if !svc.HasFeature(FeatureDemoFixtures) {
+		t.Fatalf("HasFeature(%q)=false, want true for mock fixture gate bypass", FeatureDemoFixtures)
 	}
 }
 

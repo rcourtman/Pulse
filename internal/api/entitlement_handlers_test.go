@@ -679,7 +679,7 @@ func TestEntitlementHandler_OverflowOnlyBillingStateReportsActiveCommunity(t *te
 	}
 }
 
-func TestEntitlementHandler_DevModeMirrorsFeatureGateCapabilities(t *testing.T) {
+func TestEntitlementHandler_DevModeDoesNotExposeSyntheticFeatureGateCapabilities(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "")
 
@@ -701,8 +701,13 @@ func TestEntitlementHandler_DevModeMirrorsFeatureGateCapabilities(t *testing.T) 
 		t.Fatalf("unmarshal payload failed: %v", err)
 	}
 
-	if !containsCapability(payload.Capabilities, license.FeatureAdvancedReporting) {
-		t.Fatalf("expected dev entitlements to include %q, got %v", license.FeatureAdvancedReporting, payload.Capabilities)
+	for _, feature := range []string{license.FeatureUpdateAlerts, license.FeatureSSO, license.FeatureAIPatrol} {
+		if !containsCapability(payload.Capabilities, feature) {
+			t.Fatalf("expected community entitlement payload to include %q, got %v", feature, payload.Capabilities)
+		}
+	}
+	if containsCapability(payload.Capabilities, license.FeatureAdvancedReporting) {
+		t.Fatalf("dev entitlement payload exposed synthetic feature %q: %v", license.FeatureAdvancedReporting, payload.Capabilities)
 	}
 	if containsCapability(payload.Capabilities, license.FeatureMultiTenant) {
 		t.Fatalf("expected dev entitlements to omit %q while runtime flag is disabled, got %v", license.FeatureMultiTenant, payload.Capabilities)
@@ -716,22 +721,17 @@ func TestEntitlementHandler_DevModeMirrorsFeatureGateCapabilities(t *testing.T) 
 			t.Fatalf("expected dev entitlements to omit non-runtime capability %q, got %v", feature, payload.Capabilities)
 		}
 	}
-	if len(payload.UpgradeReasons) != 0 {
-		t.Fatalf("expected no upgrade reasons in dev mode, got %v", payload.UpgradeReasons)
-	}
 
 	svc, _, err := h.getTenantComponents(ctx)
 	if err != nil {
 		t.Fatalf("getTenantComponents failed: %v", err)
 	}
-	for _, cap := range payload.Capabilities {
-		if !svc.HasFeature(cap) {
-			t.Fatalf("parity mismatch: HasFeature(%q)=false but capability present in payload", cap)
-		}
+	if !svc.HasFeature(license.FeatureAdvancedReporting) {
+		t.Fatalf("HasFeature(%q)=false, want true for dev-mode backend gate bypass", license.FeatureAdvancedReporting)
 	}
 }
 
-func TestEntitlementHandler_DevModeIncludesMultiTenantWhenRuntimeEnabled(t *testing.T) {
+func TestEntitlementHandler_DevModeRuntimeFlagDoesNotExposeMultiTenantInPayload(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "true")
 
@@ -753,8 +753,57 @@ func TestEntitlementHandler_DevModeIncludesMultiTenantWhenRuntimeEnabled(t *test
 		t.Fatalf("unmarshal payload failed: %v", err)
 	}
 
-	if !containsCapability(payload.Capabilities, license.FeatureMultiTenant) {
-		t.Fatalf("expected dev entitlements to include %q when runtime flag is enabled, got %v", license.FeatureMultiTenant, payload.Capabilities)
+	if containsCapability(payload.Capabilities, license.FeatureMultiTenant) {
+		t.Fatalf("dev entitlement payload exposed synthetic feature %q: %v", license.FeatureMultiTenant, payload.Capabilities)
+	}
+
+	svc, _, err := h.getTenantComponents(ctx)
+	if err != nil {
+		t.Fatalf("getTenantComponents failed: %v", err)
+	}
+	if !svc.HasFeature(license.FeatureMultiTenant) {
+		t.Fatalf("HasFeature(%q)=false, want true when runtime flag is enabled", license.FeatureMultiTenant)
+	}
+}
+
+func TestRuntimeCapabilitiesHandler_MockModeDoesNotExposeSyntheticCapabilities(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodGet, "/api/license/runtime-capabilities", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleRuntimeCapabilities(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload RuntimeCapabilitiesPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+
+	for _, feature := range []string{license.FeatureUpdateAlerts, license.FeatureSSO, license.FeatureAIPatrol} {
+		if !containsCapability(payload.Capabilities, feature) {
+			t.Fatalf("expected community runtime capabilities to include %q, got %v", feature, payload.Capabilities)
+		}
+	}
+	for _, feature := range []string{license.FeatureAdvancedReporting, license.FeatureRelay, license.FeatureDemoFixtures} {
+		if containsCapability(payload.Capabilities, feature) {
+			t.Fatalf("mock runtime capabilities exposed synthetic feature %q: %v", feature, payload.Capabilities)
+		}
+	}
+
+	svc, _, err := h.getTenantComponents(ctx)
+	if err != nil {
+		t.Fatalf("getTenantComponents failed: %v", err)
+	}
+	if !svc.HasFeature(license.FeatureDemoFixtures) {
+		t.Fatalf("HasFeature(%q)=false, want true for mock fixture gate bypass", license.FeatureDemoFixtures)
 	}
 }
 

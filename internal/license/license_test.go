@@ -106,7 +106,7 @@ func TestLicenseHasFeature_UsesExplicitCapabilities(t *testing.T) {
 	}
 }
 
-func TestServiceStatus_UsesEffectiveClaimsEntitlements(t *testing.T) {
+func TestServiceStatus_UsesEffectiveClaimsCapabilitiesAndScrubsSelfHostedCommercialCaps(t *testing.T) {
 	t.Setenv("PULSE_DEV", "false")
 	t.Setenv("PULSE_MOCK_MODE", "false")
 
@@ -137,11 +137,11 @@ func TestServiceStatus_UsesEffectiveClaimsEntitlements(t *testing.T) {
 	if !reflect.DeepEqual(status.Features, []string{FeatureAIAutoFix}) {
 		t.Fatalf("Status().Features=%v, want %v", status.Features, []string{FeatureAIAutoFix})
 	}
-	if status.MaxMonitoredSystems != 99 {
-		t.Fatalf("Status().MaxMonitoredSystems=%d, want 99", status.MaxMonitoredSystems)
+	if status.MaxMonitoredSystems != 0 {
+		t.Fatalf("Status().MaxMonitoredSystems=%d, want 0 for uncapped self-hosted Pro", status.MaxMonitoredSystems)
 	}
-	if status.MaxGuests != 7 {
-		t.Fatalf("Status().MaxGuests=%d, want 7", status.MaxGuests)
+	if status.MaxGuests != 0 {
+		t.Fatalf("Status().MaxGuests=%d, want 0 for uncapped self-hosted Pro", status.MaxGuests)
 	}
 }
 

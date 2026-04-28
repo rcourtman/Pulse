@@ -590,6 +590,12 @@ enabling mock fixture runtime state, but browser-visible licensing and
 commercial payloads must still filter that capability back out and must not
 let cloud-paid surfaces treat dev/test fixture toggles as plan, billing, or
 upgrade truth.
+`PULSE_DEV` and `PULSE_MOCK_MODE` may remain backend-only development or
+fixture gate bypasses for local/runtime operations, but
+`pkg/licensing.Service.Status()` must not use either flag to synthesize
+customer-facing capabilities, limits, plan state, upgrade reasons, or paid
+settings navigation in `/api/license/status`,
+`/api/license/runtime-capabilities`, or `/api/license/entitlements`.
 That same resolved presentation policy also governs hosted organization chrome
 inside the demo/browser shell: app bootstrap may retain an internal default
 org context for hosted API routing, but `frontend-modern/src/useAppRuntimeState.ts`,

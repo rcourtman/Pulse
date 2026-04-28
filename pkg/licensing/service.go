@@ -809,9 +809,6 @@ func (s *Service) Status() *LicenseStatus {
 				status.MaxMonitoredSystems = defaultSystems
 			}
 		}
-		if isDemoMode() || isDevMode() {
-			status.Features = devModeFeatures()
-		}
 		status.MonitoredSystemContinuity = s.monitoredSystemContinuityStatusLocked()
 		return status
 	}
@@ -867,10 +864,6 @@ func (s *Service) Status() *LicenseStatus {
 			status.MaxMonitoredSystems = 0
 		}
 		status.MaxGuests = 0
-	}
-
-	if isDemoMode() || isDevMode() {
-		status.Features = devModeFeatures()
 	}
 
 	return status
