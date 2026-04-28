@@ -376,7 +376,10 @@ Community limit enforcement.
     and `pulse-pro:license-server/self_hosted_feature_catalog.generated.go`
     are generated projections of that source for app and public-pricing
     consumers; those projections must not drift through hand-maintained
-    parallel lists or page-local renaming.
+    parallel lists or page-local renaming. `pkg/licensing/upgrade.go` must
+    also treat `compatibility_only` entries as non-marketed compatibility
+    capabilities by returning only the generic pricing destination rather than
+    a feature-specific paid upgrade URL.
 26. Keep hosted trial-activation verifier source selection compile-time owned.
     `pkg/licensing/trial_activation.go`,
     `pkg/licensing/trial_activation_public_key_override_dev.go`, and

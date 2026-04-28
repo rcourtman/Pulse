@@ -119,6 +119,24 @@ func TestCompatibilityOnlyFeaturesStayOutOfGenericUpgradeReasons(t *testing.T) {
 	}
 }
 
+func TestCompatibilityOnlyFeatureUpgradeURLsFallBackToGenericPricing(t *testing.T) {
+	foundCompatibilityOnlyFeature := false
+
+	for _, entry := range AllFeatureMetadata() {
+		if !IsCompatibilityOnlyFeature(entry.Key) {
+			continue
+		}
+		foundCompatibilityOnlyFeature = true
+		if got := UpgradeURLForFeature(entry.Key); got != DefaultUpgradeURL {
+			t.Fatalf("UpgradeURLForFeature(%q) = %q, want generic pricing URL %q", entry.Key, got, DefaultUpgradeURL)
+		}
+	}
+
+	if !foundCompatibilityOnlyFeature {
+		t.Fatal("expected at least one compatibility-only feature in metadata")
+	}
+}
+
 func TestUpgradeReasonMatrixDerivesFromCanonicalFeatureMetadata(t *testing.T) {
 	expectedOrder := []string{
 		FeatureMobileApp,

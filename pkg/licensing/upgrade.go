@@ -73,6 +73,10 @@ func validateExternalUpgradeURLOverride(raw string) (string, bool) {
 
 // UpgradeURLForFeature returns the canonical upgrade URL for a capability key.
 func UpgradeURLForFeature(feature string) string {
+	if IsCompatibilityOnlyFeature(feature) {
+		return DefaultUpgradeURL
+	}
+
 	switch feature {
 	case FeatureRelay:
 		return DefaultUpgradeURL + "&feature=relay"
@@ -86,8 +90,6 @@ func UpgradeURLForFeature(feature string) string {
 		return DefaultUpgradeURL + "&feature=ai_autofix"
 	case FeatureAIAlerts:
 		return DefaultUpgradeURL + "&feature=ai_alerts"
-	case FeatureKubernetesAI:
-		return DefaultUpgradeURL + "&feature=kubernetes_ai"
 	case FeatureRBAC:
 		return DefaultUpgradeURL + "&feature=rbac"
 	case FeatureAgentProfiles:
