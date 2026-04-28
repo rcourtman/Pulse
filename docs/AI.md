@@ -33,7 +33,7 @@ Pulse Patrol is a **multi-layered intelligence platform** that:
 - **Learns** what's normal for your environment (baseline engine)
 - **Predicts** issues before they become critical (pattern detection + forecasting)
 - **Correlates** events across your entire infrastructure (root cause analysis)
-- **Remembers** past incidents and successful remediations (incident memory)
+- **Uses prior context** from alert history, Patrol runs, and resource timelines
 - **Investigates** issues autonomously when configured (investigation orchestrator)
 - **Verifies** fixes and tracks remediation effectiveness (verification loops)
 
@@ -97,7 +97,7 @@ Beyond raw metrics, Patrol enriches the context with intelligence:
 - **Resource correlations** — Pattern detection across related resources
 - **User notes** — Your annotations explaining expected behavior
 - **Dismissed findings** — Respects your feedback and suppressed alerts
-- **Incident memory** — Learns from past investigations and successful remediations
+- **Investigation context** — Uses prior alert context, Patrol run history, and resource timelines
 
 ### Deterministic Signal Detection
 
@@ -367,7 +367,7 @@ Pulse includes a unified intelligence system that aggregates data from all AI su
 | **Baseline Engine** | Learns normal behavior, detects anomalies via z-score |
 | **Pattern Detector** | Identifies recurring issues and trends |
 | **Correlation Engine** | Links related issues across resources |
-| **Incident Memory** | Tracks past incidents and successful remediations |
+| **Investigation Context** | Uses alert history, Patrol runs, and resource timelines |
 | **Knowledge Store** | Persists user annotations and learned preferences |
 | **Forecast Engine** | Predicts capacity issues and resource exhaustion |
 
@@ -471,7 +471,7 @@ Pulse tracks token usage and costs:
 ### Deep Dives (Recommended for Technical Audiences)
 
 - **[Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)** — Complete technical breakdown of the agentic architecture: context prefetching, knowledge accumulation, FSM enforcement, parallel execution, phantom detection, auto-recovery
-- **[Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)** — Full intelligence layer documentation: baseline learning, pattern detection, forecasting, correlation analysis, incident memory, investigation orchestration
+- **[Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)** — Full intelligence layer documentation: baseline learning, pattern detection, forecasting, correlation analysis, investigation context, investigation orchestration
 
 ### Reference Documentation
 

@@ -40,6 +40,7 @@ runtime cost control, and shared AI transport surfaces.
 18. `frontend-modern/src/utils/textPresentation.ts`
 19. `frontend-modern/src/stores/aiRuntimeState.ts`
 20. `frontend-modern/src/stores/aiChat.ts`
+21. `docs/AI.md`
 
 ## Shared Boundaries
 
@@ -71,6 +72,9 @@ runtime cost control, and shared AI transport surfaces.
    standalone, but `frontend-modern/src/AppLayout.tsx` must treat them as
    decorative inside tabs so the announced tab name comes from product chrome
    and meaningful badge text.
+9. Add or change public AI overview wording through `docs/AI.md`; it may
+   describe Assistant and Patrol capabilities, but it must not revive legacy
+   commercial shorthand such as `incident memory` as a current product promise.
 
 ## Forbidden Paths
 
@@ -115,6 +119,9 @@ runtime cost control, and shared AI transport surfaces.
    ordinary self-hosted installs use BYOK or local providers, and the runtime
    must not surface retired managed-model credits, trial prompts, account-backed
    AI activation, or general hosted chat entitlement in the normal app.
+   The public AI overview must likewise use productized context language such
+   as alert history, Patrol runs, and resource timelines instead of presenting
+   `incident memory` as a standalone feature.
 10. Keep discovery-analysis prompt bounds and response budgets aligned across
    `internal/ai/service.go` and the shared service-discovery prompt builders:
    the runtime must reserve enough output tokens for structured discovery JSON,
