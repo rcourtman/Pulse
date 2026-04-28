@@ -52,7 +52,6 @@ export const SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF = `${SELF_HOSTED_PRO_BI
 const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
   max_monitored_systems: SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
-  trial_expired: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   cloud: '/cloud',
   // Paid self-hosted feature keys: route to the owned billing plan page instead
   // of the Pulse Account purchase-start handoff, which fails for local instances
@@ -69,6 +68,8 @@ const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   agent_profiles: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   long_term_metrics: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
 };
+
+const RETIRED_TRIAL_PRICING_FEATURES = new Set(['trial_expired']);
 
 const INTERNAL_HREF_BASE = 'https://pulse.invalid';
 
@@ -155,6 +156,11 @@ export function getInProductPricingDestination(
   return IN_PRODUCT_PRICING_DESTINATIONS[normalizedFeature];
 }
 
+export function isRetiredPricingFeature(feature: string | null | undefined): boolean {
+  const normalizedFeature = normalizeFeatureKey(feature);
+  return normalizedFeature ? RETIRED_TRIAL_PRICING_FEATURES.has(normalizedFeature) : false;
+}
+
 export function getPublicPricingUrl(feature?: string | null): string {
   const url = new URL(DEFAULT_PUBLIC_PRICING_URL);
   const normalizedFeature = normalizeFeatureKey(feature);
@@ -164,7 +170,8 @@ export function getPublicPricingUrl(feature?: string | null): string {
   return url.toString();
 }
 
-export function getUpgradeFallbackDestination(feature?: string | null): string {
+export function getUpgradeFallbackDestination(feature?: string | null): string | undefined {
+  if (isRetiredPricingFeature(feature)) return undefined;
   return getInProductPricingDestination(feature) || getSelfHostedPurchaseStartUrl(feature);
 }
 
@@ -350,6 +357,10 @@ export function scopeSelfHostedBillingDestination(
 export function getPricingRouteDestination(search: string): string {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
   const feature = params.get('feature');
+  if (isRetiredPricingFeature(feature)) {
+    return SELF_HOSTED_PRO_BILLING_PLAN_HREF;
+  }
+
   const inProductDestination = getInProductPricingDestination(feature);
   if (inProductDestination) {
     return inProductDestination;

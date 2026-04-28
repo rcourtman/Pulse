@@ -533,7 +533,10 @@ pricing handoff destinations; no ordinary self-hosted runtime path should emit
 them as an upgrade reason or plan-page CTA.
 Legacy browser arrivals carrying that stale feature may land on the neutral
 Plans & Activation surface, but must not preserve `trial_expired` into a Pulse
-Account purchase-start handoff or trial-shaped checkout feature.
+Account purchase-start handoff or trial-shaped checkout feature. The shared
+upgrade-action fallback must therefore return no action for retired trial keys,
+while the legacy `/pricing?feature=trial_expired` browser route may strip the
+stale feature and route to `/settings/system/billing/plan`.
 The monitored-system app-shell warning CTA now follows that same commercial
 boundary by rendering only in hosted mode. Ordinary self-hosted installs must
 not see finite monitored-system pressure in the global app shell; when hosted

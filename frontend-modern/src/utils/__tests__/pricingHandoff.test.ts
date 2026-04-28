@@ -10,7 +10,9 @@ import {
   getPricingRouteDestination,
   getPublicPricingUrl,
   getUpgradeFallbackDestination,
+  getInProductPricingDestination,
   isExternalPricingDestination,
+  isRetiredPricingFeature,
   isSelfHostedPurchaseStartDestination,
   resolveCanonicalSelfHostedBillingHref,
   resolveSelfHostedBillingSection,
@@ -80,11 +82,16 @@ describe('pricingHandoff', () => {
     }
   });
 
-  it('does not keep retired trial-expired as an owned in-product billing intent', () => {
+  it('keeps retired trial-expired out of upgrade fallbacks while preserving neutral legacy arrival', () => {
     expect(getPricingRouteDestination('?feature=trial_expired')).toBe(
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
-    expect(getUpgradeFallbackDestination('trial_expired')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getInProductPricingDestination('trial_expired')).toBeUndefined();
+    expect(getUpgradeFallbackDestination('trial_expired')).toBeUndefined();
+    expect(isRetiredPricingFeature('trial_expired')).toBe(true);
+    expect(
+      isSelfHostedPurchaseStartDestination(getPricingRouteDestination('?feature=trial_expired')),
+    ).toBe(false);
   });
 
   it('routes unknown feature upgrades to Pulse Account purchase start', () => {

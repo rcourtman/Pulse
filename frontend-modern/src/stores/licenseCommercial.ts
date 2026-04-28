@@ -8,6 +8,7 @@ import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
 import {
   getUpgradeFallbackDestination,
+  isRetiredPricingFeature,
   isSelfHostedPurchaseStartDestination,
 } from '@/utils/pricingHandoff';
 import { resolveUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
@@ -142,11 +143,16 @@ export function getFirstUpgradeActionUrl(): string | undefined {
 
 export function getUpgradeActionDestination(key: string): UpgradeDestination {
   const productOwnedHref = key ? getUpgradeFallbackDestination(key) : undefined;
+  if (isRetiredPricingFeature(key)) {
+    return resolveUpgradeDestination(undefined);
+  }
+
   const href =
     productOwnedHref ||
     getUpgradeActionUrl(key) ||
     getFirstUpgradeActionUrl() ||
-    getUpgradeFallbackDestination(key);
+    getUpgradeFallbackDestination(key) ||
+    '';
 
   if (isSelfHostedPurchaseStartDestination(href)) {
     return resolveUpgradeDestination(href, {

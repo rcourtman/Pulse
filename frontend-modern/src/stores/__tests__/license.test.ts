@@ -451,6 +451,21 @@ describe('license stores', () => {
       );
     });
 
+    it('drops retired trial upgrade actions instead of reviving a paid prompt', async () => {
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
+        ...mockCommercialPosture,
+        upgrade_reasons: [
+          {
+            key: 'trial_expired',
+            reason: 'Trial expired',
+            action_url: '/auth/license-purchase-start?feature=trial_expired',
+          },
+        ],
+      });
+      await loadCommercialPosture(true);
+      expect(getUpgradeActionUrlOrFallback('trial_expired')).toBe('');
+    });
+
     it('keeps specific monitored-system upgrade actions on usage review', async () => {
       vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
         ...mockCommercialPosture,

@@ -83,4 +83,21 @@ describe('PricingHandoff', () => {
     expect(await screen.findByText('Billing destination')).toBeInTheDocument();
     expect(handoffToExternalPricingMock).not.toHaveBeenCalled();
   });
+
+  it('keeps retired trial pricing handoffs on the neutral Plans surface', async () => {
+    window.history.replaceState({}, '', '/pricing?feature=trial_expired');
+
+    render(() => (
+      <Router>
+        <Route path="/pricing" component={PricingHandoff} />
+        <Route
+          path="/settings/system/billing/plan"
+          component={() => <div>Plans destination</div>}
+        />
+      </Router>
+    ));
+
+    expect(await screen.findByText('Plans destination')).toBeInTheDocument();
+    expect(handoffToExternalPricingMock).not.toHaveBeenCalled();
+  });
 });
