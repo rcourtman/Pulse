@@ -11,7 +11,9 @@ describe('InfrastructurePageSurface guardrails', () => {
   it('keeps the feature shell separate from route-sync and page-model ownership', () => {
     expect(infrastructurePageSurfaceSource).toContain('useInfrastructurePageState');
     expect(infrastructurePageSurfaceSource).toContain('useNavigate');
-    expect(infrastructurePageSurfaceSource).toContain("import { PageHeader } from '@/components/shared/PageHeader';");
+    expect(infrastructurePageSurfaceSource).toContain(
+      "import { PageHeader } from '@/components/shared/PageHeader';",
+    );
     expect(infrastructurePageSurfaceSource).toContain('<PageHeader');
     expect(infrastructurePageSurfaceSource).toContain('title="Infrastructure"');
     expect(infrastructurePageSurfaceSource).not.toContain('useLocation(');
@@ -36,7 +38,9 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageRouteStateSource).toContain('buildInfrastructurePath');
     expect(infrastructurePageRouteStateSource).toContain('areSearchParamsEquivalent');
 
-    expect(infrastructurePageModelSource).toContain('export function buildInfrastructurePageFilterDerivation');
+    expect(infrastructurePageModelSource).toContain(
+      'export function buildInfrastructurePageFilterDerivation',
+    );
     expect(infrastructurePageModelSource).toContain('collectAvailableSources');
     expect(infrastructurePageModelSource).toContain('collectAvailableStatuses');
     expect(infrastructurePageModelSource).toContain('buildStatusOptions');
@@ -45,20 +49,41 @@ describe('InfrastructurePageSurface guardrails', () => {
   });
 
   it('keeps summary-to-table coordination on the page-state owner', () => {
-    expect(infrastructurePageSurfaceSource).toContain('showJumpToActiveRow={shouldShowJumpToActiveResourceRow()}');
-    expect(infrastructurePageSurfaceSource).toContain('onJumpToActiveRow={jumpToActiveResourceRow}');
-    expect(infrastructurePageSurfaceSource).toContain('hoveredGroupScope={hoveredSummaryResourceGroupScope()}');
-    expect(infrastructurePageSurfaceSource).toContain('focusedGroupScope={focusedSummaryResourceGroupScope()}');
-    expect(infrastructurePageSurfaceSource).toContain('activeSummaryGroupScope={activeSummaryResourceGroupScope()}');
-    expect(infrastructurePageSurfaceSource).toContain('hoveredSummaryGroupScope={hoveredSummaryResourceGroupScope()}');
-    expect(infrastructurePageSurfaceSource).toContain('focusedSummaryGroupScope={focusedSummaryResourceGroupScope()}');
-    expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
+    expect(infrastructurePageSurfaceSource).toContain(
+      'showJumpToActiveRow={shouldShowJumpToActiveResourceRow()}',
+    );
+    expect(infrastructurePageSurfaceSource).toContain(
+      'onJumpToActiveRow={jumpToActiveResourceRow}',
+    );
+    expect(infrastructurePageSurfaceSource).toContain(
+      'hoveredGroupScope={hoveredSummaryResourceGroupScope()}',
+    );
+    expect(infrastructurePageSurfaceSource).toContain(
+      'focusedGroupScope={focusedSummaryResourceGroupScope()}',
+    );
+    expect(infrastructurePageSurfaceSource).toContain(
+      'activeSummaryGroupScope={activeSummaryResourceGroupScope()}',
+    );
+    expect(infrastructurePageSurfaceSource).toContain(
+      'hoveredSummaryGroupScope={hoveredSummaryResourceGroupScope()}',
+    );
+    expect(infrastructurePageSurfaceSource).toContain(
+      'focusedSummaryGroupScope={focusedSummaryResourceGroupScope()}',
+    );
+    expect(infrastructurePageSurfaceSource).toContain(
+      'onGroupHoverChange={setHoveredResourceGroupScope}',
+    );
     expect(infrastructurePageSurfaceSource).toContain('setSummaryClearSurfaceRootRef');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
     expect(infrastructurePageSurfaceSource).toContain('data-testid="infrastructure-page"');
     expect(infrastructurePageSurfaceSource).toContain('ref={setSummaryClearSurfaceRootRef}');
-    expect(infrastructurePageSurfaceSource).toContain('data-testid="infrastructure-interaction-surface"');
+    expect(infrastructurePageSurfaceSource).toContain(
+      'data-testid="infrastructure-interaction-surface"',
+    );
     expect(infrastructurePageSurfaceSource).toContain('data-summary-clear-ignore');
+    expect(infrastructurePageSurfaceSource).toContain("title: 'Grouped table view'");
+    expect(infrastructurePageSurfaceSource).toContain('Grouped');
+    expect(infrastructurePageSurfaceSource).not.toContain("title: 'Group by cluster'");
     expect(infrastructurePageSurfaceSource).not.toContain('SummaryScopeBar');
     expect(infrastructurePageSurfaceSource).not.toContain('searchTrailing={pinnedScopeFallback()}');
     expect(infrastructurePageSurfaceSource).not.toContain('mobileTrailing={pinnedScopeFallback()}');
@@ -80,7 +105,9 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageStateSource).not.toContain('consumeNextFocusedRevealSkip');
     expect(infrastructurePageStateSource).not.toContain('setSkipNextFocusedReveal(true)');
     expect(infrastructurePageStateSource).not.toContain('querySelector<HTMLElement>(');
-    expect(infrastructurePageStateSource).not.toContain('scrollIntoView({ behavior: \'smooth\', block: \'center\' })');
+    expect(infrastructurePageStateSource).not.toContain(
+      "scrollIntoView({ behavior: 'smooth', block: 'center' })",
+    );
     expect(unifiedResourceTableSource).toContain('data-summary-clear-surface');
     expect(unifiedResourceTableSource).toContain('data-testid="infrastructure-table-surface"');
 

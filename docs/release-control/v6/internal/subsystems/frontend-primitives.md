@@ -188,6 +188,11 @@ work extends shared components instead of creating new local variants.
    grouped resource labels operator-readable: count-led labels may aggregate
    repeated resources, but uncountable or category-like resource types such as
    storage must use resource wording instead of naive pluralization.
+   Infrastructure filter chrome under `frontend-modern/src/features/infrastructure/`
+   must use mode-oriented labels for table presentation controls: grouped table
+   mode is `Grouped`, not `Cluster`, because cluster remains a
+   platform/resource concept for Proxmox, Kubernetes, and similar inventory
+   details.
 2. Route new top-level settings surfaces through the canonical settings shell
    instead of introducing page-local framing.
    Shared shells and primitives that need websocket or dark-mode context must

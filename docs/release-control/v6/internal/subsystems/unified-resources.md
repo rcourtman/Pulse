@@ -137,6 +137,11 @@ cross-source deduplication.
    infrastructure platform first, while full merged-source detail remains
    available for tooltips, accessibility metadata, and routing. Agent telemetry
    is collection-method detail when a provider/API platform is also present.
+   Infrastructure table presentation controls must describe the table mode
+   rather than a platform-specific resource concept: the grouped/flat toggle
+   uses operator-facing `Grouped` and `List` wording, while Proxmox,
+   Kubernetes, and other platform clusters stay reserved for actual resource
+   identity, filters, and detail surfaces.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
