@@ -48,6 +48,7 @@ describe('StorageGroupRow', () => {
     ));
 
     expect(screen.getByText('tower')).toBeInTheDocument();
+    expect(screen.getByText('tower').closest('tr')).toHaveClass('grouped-table-row');
     expect(screen.getByText('2 pools')).toBeInTheDocument();
     expect(screen.getByText('40%')).toBeInTheDocument();
     expect(container.querySelector('.bg-green-500')).toBeInTheDocument();

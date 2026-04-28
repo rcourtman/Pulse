@@ -575,7 +575,9 @@ describe('Dashboard performance contract', () => {
         makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }) as any,
       );
 
-      const { container } = render(() => <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      const { container } = render(() => (
+        <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
+      ));
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -624,16 +626,22 @@ describe('Dashboard performance contract', () => {
       expect(dashboardStateSource).not.toContain('useGroupedTableWindowing');
       expect(dashboardGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
       expect(dashboardGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
-      expect(dashboardGuestMetadataStateSource).toContain("window.addEventListener('pulse:metadata-changed'");
+      expect(dashboardGuestMetadataStateSource).toContain(
+        "window.addEventListener('pulse:metadata-changed'",
+      );
       expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
       expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadFilterOptions');
       expect(dashboardWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
       expect(dashboardWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
-      expect(dashboardWorkloadRouteStateSource).not.toContain('const [handledTypeParam, setHandledTypeParam]');
       expect(dashboardWorkloadRouteStateSource).not.toContain(
-        "const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)",
+        'const [handledTypeParam, setHandledTypeParam]',
       );
-      expect(dashboardWorkloadRouteStateSource).not.toContain('const workloadNodeOptions = createMemo');
+      expect(dashboardWorkloadRouteStateSource).not.toContain(
+        'const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)',
+      );
+      expect(dashboardWorkloadRouteStateSource).not.toContain(
+        'const workloadNodeOptions = createMemo',
+      );
       expect(dashboardWorkloadRouteStateSource).not.toContain(
         'const containerRuntimeFilterConfig = createMemo',
       );
@@ -643,9 +651,7 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadRouteStateSource).toContain(
         'resolveDashboardWorkloadNodeSelection({',
       );
-      expect(dashboardWorkloadRouteStateSource).toContain(
-        'DASHBOARD_WORKLOAD_ROUTE_RESET_STATE',
-      );
+      expect(dashboardWorkloadRouteStateSource).toContain('DASHBOARD_WORKLOAD_ROUTE_RESET_STATE');
       expect(dashboardWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
       expect(dashboardWorkloadFilterOptionsSource).toContain(
         "from './dashboardWorkloadFilterConfigModel'",
@@ -699,12 +705,8 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
       expect(dashboardWorkloadUrlSyncSource).not.toContain('normalizeWorkloadViewModeParam');
       expect(dashboardWorkloadUrlSyncSource).not.toContain('parseWorkloadsLinkSearch');
-      expect(dashboardWorkloadUrlSyncSource).toContain(
-        "from './dashboardWorkloadRouteModel'",
-      );
-      expect(dashboardWorkloadUrlSyncSource).toContain(
-        "from './dashboardWorkloadUrlSyncModel'",
-      );
+      expect(dashboardWorkloadUrlSyncSource).toContain("from './dashboardWorkloadRouteModel'");
+      expect(dashboardWorkloadUrlSyncSource).toContain("from './dashboardWorkloadUrlSyncModel'");
       expect(dashboardWorkloadUrlSyncSource).toContain(
         'const [handledTypeParam, setHandledTypeParam]',
       );
@@ -717,9 +719,7 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadUrlSyncModelSource).toContain(
         'resolveDashboardManagedWorkloadsNavigateTarget',
       );
-      expect(dashboardWorkloadUrlSyncModelSource).toContain(
-        'resolveDashboardWorkloadRuntimeParam',
-      );
+      expect(dashboardWorkloadUrlSyncModelSource).toContain('resolveDashboardWorkloadRuntimeParam');
       expect(dashboardWorkloadUrlSyncModelSource).toContain(
         'normalizeWorkloadViewModeParam(params.type)',
       );
@@ -746,8 +746,12 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadRouteModelSource).toContain("from './workloadTopology'");
       expect(dashboardWorkloadRouteModelSource).toContain('workloadNodeScopeId');
       expect(dashboardWorkloadRouteModelSource).toContain('getKubernetesContextKey');
-      expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
-      expect(dashboardSelectionStateSource).toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
+      expect(dashboardSelectionStateSource).toContain(
+        'const [selectedGuestId, setSelectedGuestIdRaw]',
+      );
+      expect(dashboardSelectionStateSource).toContain(
+        'const [hoveredWorkloadId, setHoveredWorkloadId]',
+      );
       expect(dashboardSelectionStateSource).toContain('setHandledResourceId(null)');
       expect(dashboardSelectionStateSource).toContain("from './dashboardSelectionModel'");
       expect(dashboardSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
@@ -766,12 +770,12 @@ describe('Dashboard performance contract', () => {
       expect(dashboardStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
       expect(dashboardStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
       expect(dashboardSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
-      expect(workloadPanelSource).toContain(
-        'createMemo(() => getCanonicalWorkloadId(guest()))',
-      );
+      expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(workloadPanelSource).toContain('buildWorkloadSummaryGroupScope');
       expect(workloadPanelSource).toContain('data-summary-group-id');
       expect(workloadPanelSource).toContain('setHoveredWorkloadGroupScope');
+      expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(workloadPanelSource).not.toContain('cursor-pointer bg-surface-alt');
       expect(dashboardWorkloadTableSource).not.toContain(
         'createMemo(() => getCanonicalWorkloadId(guest()))',
       );
@@ -804,7 +808,9 @@ describe('Dashboard performance contract', () => {
       expect(dashboardFilterStateSource).toContain('DEFAULT_DASHBOARD_SORT_KEY');
       expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
       expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
-      expect(dashboardFilterModelSource).toContain("DEFAULT_DASHBOARD_SORT_KEY: DashboardSortKey = 'type'");
+      expect(dashboardFilterModelSource).toContain(
+        "DEFAULT_DASHBOARD_SORT_KEY: DashboardSortKey = 'type'",
+      );
       expect(dashboardFilterModelSource).toContain('searchTrailing?: JSX.Element;');
       expect(dashboardFilterModelSource).toContain('utilityActions?: JSX.Element;');
       expect(dashboardFilterModelSource).toContain('mobileTrailing?: JSX.Element;');
@@ -843,7 +849,9 @@ describe('Dashboard performance contract', () => {
       expect(stackedDiskBarSource).not.toContain('const SEGMENT_COLORS =');
       expect(stackedDiskBarStateSource).toContain('new ResizeObserver');
       expect(stackedDiskBarStateSource).toContain('useTooltip');
-      expect(stackedDiskBarModelSource).toContain('export function buildStackedDiskBarPresentation');
+      expect(stackedDiskBarModelSource).toContain(
+        'export function buildStackedDiskBarPresentation',
+      );
       expect(stackedDiskBarModelSource).toContain('const SEGMENT_COLORS');
       expect(stackedDiskBarModelSource).toContain('tooltipTitle');
     });
@@ -908,7 +916,7 @@ describe('Dashboard performance contract', () => {
       expect(guestRowStateSource).toContain('buildMetricKey');
       expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
       expect(guestRowStateSource).toContain("from './workloadTopology'");
-      expect(guestRowStateSource).not.toContain("./infrastructureLink");
+      expect(guestRowStateSource).not.toContain('./infrastructureLink');
       expect(guestRowStateSource).not.toContain('rowStyle');
       expect(guestRowStateSource).not.toContain('box-shadow');
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
@@ -929,7 +937,7 @@ describe('Dashboard performance contract', () => {
       expect(guestDrawerStateSource).toContain('buildInfrastructureHrefForWorkload');
       expect(guestDrawerStateSource).toContain("from '@/routing/resourceLinks'");
       expect(guestDrawerStateSource).toContain("from './workloadTopology'");
-      expect(guestDrawerStateSource).not.toContain("./infrastructureLink");
+      expect(guestDrawerStateSource).not.toContain('./infrastructureLink');
       expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
       expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
       expect(guestDrawerStateSource).toContain('guestOsSummary');
@@ -962,7 +970,7 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadTableSource).not.toContain('NodeGroupHeader');
       expect(dashboardWorkloadTableSource).not.toContain('GuestDrawer');
       expect(workloadTableHeaderSource).toContain('TableHead');
-      expect(workloadTableHeaderSource).toContain("col.sortKey as WorkloadSortKey");
+      expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
       expect(workloadTableHeaderSource).toContain('style={getGuestColumnStyle(');
       expect(workloadTableHeaderSource).toContain('props.workloadTableLayoutMode()');
       expect(workloadTableHeaderSource).toContain('props.workloadTableVisibleColumnIds()');
@@ -973,6 +981,7 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(workloadPanelSource).toContain('resolveSummaryGroupMemberInteractionState');
+      expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
       expect(workloadPanelSource).not.toContain('style={{');
       expect(workloadPanelSource).not.toContain('style={');
       expect(workloadPanelSource).not.toContain('kind="scope"');
@@ -982,8 +991,12 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSelectionStateSource).toContain('setHoveredWorkloadGroupScope');
       expect(dashboardWorkloadTableSource).toContain('focusedSummaryWorkloadGroupScope');
       expect(dashboardWorkloadTableSource).toContain('hoveredSummaryWorkloadGroupScope');
-      expect(dashboardSource).toContain('hoveredGroupScope={state.hoveredSummaryWorkloadGroupScope()}');
-      expect(dashboardSource).toContain('focusedGroupScope={state.focusedSummaryWorkloadGroupScope()}');
+      expect(dashboardSource).toContain(
+        'hoveredGroupScope={state.hoveredSummaryWorkloadGroupScope()}',
+      );
+      expect(dashboardSource).toContain(
+        'focusedGroupScope={state.focusedSummaryWorkloadGroupScope()}',
+      );
       expect(workloadPanelSource).not.toContain('TableHead');
       expect(dashboardStateCardsSource).toContain('dashboardInfrastructureEmptyState().title');
       expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');

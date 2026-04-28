@@ -3,6 +3,7 @@ import type { Node } from '@/types/api';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator } from '@/utils/status';
+import { getGroupedTableRowClass } from './groupedTableRowPresentation';
 
 interface NodeGroupHeaderProps {
   node: Node;
@@ -81,7 +82,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
         </div>
       }
     >
-      <tr class={`bg-surface-alt ${props.trClass ?? ''}`.trim()} {...props.trProps}>
+      <tr class={getGroupedTableRowClass(props.trClass)} {...props.trProps}>
         <td
           colspan={props.colspan}
           class="py-0.5 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"

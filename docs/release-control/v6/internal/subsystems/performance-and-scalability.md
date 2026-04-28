@@ -218,6 +218,12 @@ regression protection.
     is previewed or pinned, member rows should take a restrained shared
     preview/pinned wash via `data-summary-group-member-active` rather than
     per-surface outlines, secondary buttons, or full-strength row fills.
+    Static grouped-row header emphasis on the same workload and infrastructure
+    tables must route through
+    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and
+    the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
+    rather than local `bg-surface-alt` or hover-fill variants that drift between
+    pages.
     Infrastructure table responsive behavior belongs to that same hot-path
     owner. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
     must derive column visibility from the measured table surface width, with

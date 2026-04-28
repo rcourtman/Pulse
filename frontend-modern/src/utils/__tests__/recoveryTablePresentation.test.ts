@@ -29,7 +29,7 @@ import {
 
 describe('recoveryTablePresentation', () => {
   it('exposes shared recovery table classes', () => {
-    expect(RECOVERY_GROUP_HEADER_ROW_CLASS).toContain('bg-surface-alt');
+    expect(RECOVERY_GROUP_HEADER_ROW_CLASS).toContain('grouped-table-row');
     expect(RECOVERY_GROUP_HEADER_TEXT_CLASS).toContain('font-medium');
     expect(RECOVERY_ADVANCED_FILTER_LABEL_CLASS).toContain('text-muted');
     expect(RECOVERY_ADVANCED_FILTER_FIELD_CLASS).toContain('focus:border-blue-500');

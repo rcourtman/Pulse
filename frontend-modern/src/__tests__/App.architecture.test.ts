@@ -21,7 +21,7 @@ describe('App architecture', () => {
     expect(appSource).toContain(
       "import { dialogStackHasBlockingDialog } from './components/shared/useDialogState';",
     );
-    expect(appSource).toContain("import {");
+    expect(appSource).toContain('import {');
     expect(appSource).toContain("} from '@/utils/appShellScrollRestoration';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
     expect(appSource).toContain('pendingAppShellRestoreTop');
@@ -41,7 +41,9 @@ describe('App architecture', () => {
     expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");
     expect(appSource).toContain('<Route path="/login" component={RuntimeHomePage} />');
     expect(appSource).toContain('<Route path="/" component={RuntimeHomePage} />');
-    expect(appSource).toContain('<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />');
+    expect(appSource).toContain(
+      '<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />',
+    );
     expect(appSource).toContain('<Route path="/ai/*" component={LegacyPatrolRouteRedirect} />');
     expect(appSource).toContain(
       "const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));",
@@ -59,7 +61,9 @@ describe('App architecture', () => {
     expect(appSource).not.toContain(
       "const WorkloadsView = lazy(() => import('./components/Dashboard/Dashboard'));",
     );
-    expect(appSource).not.toContain("const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));");
+    expect(appSource).not.toContain(
+      "const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));",
+    );
     expect(appSource).not.toContain("const PricingPage = lazy(() => import('./pages/PricingV6'));");
     expect(appSource).not.toContain('function ConnectionStatusBadge(');
     expect(appSource).not.toContain('function AppLayout(');
@@ -70,7 +74,9 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
     expect(appSource).not.toContain("import('./api/ai')");
     expect(appSource).not.toContain('AIAPI.getSettings()');
-    expect(appSource).toContain('if (dialogStackHasBlockingDialog() && aiChatStore.isOpenSignal()) {');
+    expect(appSource).toContain(
+      'if (dialogStackHasBlockingDialog() && aiChatStore.isOpenSignal()) {',
+    );
     expect(appSource).toContain("if (e.key === 'Escape' && aiChatStore.isOpen) {");
     expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
     expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
@@ -79,14 +85,18 @@ describe('App architecture', () => {
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
     expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
-    expect(appLayoutSource).toContain("import { preloadRouteModule } from '@/routing/routePreload';");
+    expect(appLayoutSource).toContain(
+      "import { preloadRouteModule } from '@/routing/routePreload';",
+    );
     expect(appLayoutSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
     expect(appLayoutSource).toContain(
       "import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';",
     );
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
-    expect(appLayoutSource).toContain("status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'");
+    expect(appLayoutSource).toContain(
+      "status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'",
+    );
     expect(appLayoutSource).toContain("props.connectionStatus().tone === 'healthy'");
     expect(appLayoutSource).toContain('const brandMotionActive = createMemo(');
     expect(appLayoutSource).toContain('pulse-brand-lockup');
@@ -110,6 +120,9 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain(
       'animation: pulse-brand-ring var(--pulse-brand-cycle) ease-in-out infinite;',
     );
+    expect(appStylesSource).toContain('tr.grouped-table-row > td');
+    expect(appStylesSource).toContain('--color-grouped-table-row-bg');
+    expect(appStylesSource).toContain('--color-grouped-table-row-accent');
     expect(appStylesSource).not.toContain('@keyframes pulse-brand-wordmark');
     expect(appStylesSource).not.toContain('text-shadow');
     expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");
@@ -128,7 +141,7 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appLayoutSource).toContain(
-      "type MobileNavBarPlatformTab as PlatformTab,\n  type MobileNavBarUtilityTab as UtilityTab,",
+      'type MobileNavBarPlatformTab as PlatformTab,\n  type MobileNavBarUtilityTab as UtilityTab,',
     );
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
     expect(appLayoutSource).toContain('function getDesktopUtilityTabAriaLabel(tab: UtilityTab)');
@@ -138,13 +151,17 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('aria-label={platform.label}');
     expect(appLayoutSource).toContain('aria-label={getDesktopUtilityTabAriaLabel(tab)}');
-    expect(appLayoutSource).toContain('<span aria-hidden="true" class="inline-flex items-center justify-center">');
+    expect(appLayoutSource).toContain(
+      '<span aria-hidden="true" class="inline-flex items-center justify-center">',
+    );
     expect(appLayoutSource).toContain('<Icon class={NAV_TAB_ICON_CLASS} />');
     expect(appLayoutSource).not.toContain('type PlatformTab = {');
     expect(appLayoutSource).not.toContain('type UtilityTab = {');
     expect(appLayoutSource).not.toContain('const platformTabsDesktop = createMemo(() =>');
     expect(appLayoutSource).not.toContain('const platformTabsMobile = createMemo(() =>');
-    expect(appLayoutSource).not.toContain("import { isMultiTenantEnabled } from '@/stores/license';");
+    expect(appLayoutSource).not.toContain(
+      "import { isMultiTenantEnabled } from '@/stores/license';",
+    );
     expect(appLayoutSource).not.toContain('loadCommercialPosture');
     expect(appLayoutSource).not.toContain('buildReleaseNotesUrl');
     expect(appLayoutSource).not.toContain('buildV6RcFeedbackUrl');
@@ -155,16 +172,12 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('await preloadRouteModule(targetRoute);');
     expect(appLayoutSource).toContain('await preloadRouteModule(tab.route);');
     expect(appLayoutSource).toContain('onMouseEnter={() => warmNavigationTarget(');
-    expect(appLayoutSource).toContain(
-      'aiChatStore.enabled === true &&',
-    );
+    expect(appLayoutSource).toContain('aiChatStore.enabled === true &&');
     expect(appLayoutSource).toContain('!dialogStackHasBlockingDialog()');
     expect(appLayoutSource).toContain('onClick={() => aiChatStore.toggle()}');
     expect(appLayoutSource).toContain('getAIChatLauncherTitle');
     expect(appLayoutSource).toContain('const AI_CHAT_LAUNCHER_BUTTON_CLASS =');
-    expect(appLayoutSource).toContain(
-      'bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]',
-    );
+    expect(appLayoutSource).toContain('bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]');
     expect(appLayoutSource).toContain('lg:top-1/2');
     expect(appLayoutSource).toContain('lg:bottom-auto');
     expect(appLayoutSource).not.toContain('sm:top-1/2');
@@ -176,11 +189,15 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain("apiFetch('/api/security/status')");
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
     expect(appRuntimeStateSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
-    expect(appRuntimeStateSource).toContain('const connectionStatus = createMemo<AppConnectionStatus>(() => {');
+    expect(appRuntimeStateSource).toContain(
+      'const connectionStatus = createMemo<AppConnectionStatus>(() => {',
+    );
     expect(appRuntimeStateSource).toContain('const showOrgSwitcher = createMemo(() => {');
     expect(appRuntimeStateSource).toContain('const beginAuthenticatedRuntime = async () =>');
-    expect(appRuntimeStateSource).toContain("const [backendHealthy, setBackendHealthy] = createSignal(false);");
-    expect(appRuntimeStateSource).toContain("const checkBackendHealth = async () => {");
+    expect(appRuntimeStateSource).toContain(
+      'const [backendHealthy, setBackendHealthy] = createSignal(false);',
+    );
+    expect(appRuntimeStateSource).toContain('const checkBackendHealth = async () => {');
     expect(appRuntimeStateSource).toContain('const loadOrganizations = async () =>');
     expect(appRuntimeStateSource).toContain('const handleOrgSwitch = (nextOrgID: string) =>');
     expect(appRuntimeStateSource).toContain('const handleOrganizationsChanged = () => {');
@@ -197,33 +214,37 @@ describe('App architecture', () => {
       "import { loadCommercialPosture } from '@/stores/licenseCommercial';",
     );
     expect(appRuntimeStateSource).toContain('presentationPolicyHidesOrganizationSurfaces');
-    expect(appRuntimeStateSource).toContain(
-      'const [activeOrgID, setActiveOrgID] = createSignal(',
-    );
+    expect(appRuntimeStateSource).toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
     expect(appRuntimeStateSource).toContain('onMount(() => {');
     expect(appRuntimeStateSource).toContain('onMount(async () => {');
     expect(appRuntimeStateSource).toContain('void loadCommercialPosture();');
     expect(appRuntimeStateSource).toContain('const hasLocalAuthBootstrapHint = (): boolean => {');
     expect(appRuntimeStateSource).toContain(
-      "const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>",
+      'const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>',
     );
     expect(appRuntimeStateSource).toContain(
-      "if (isPreAuthLoginBootstrapPath(window.location.pathname) && !hasLocalAuthBootstrapHint()) {",
+      'if (isPreAuthLoginBootstrapPath(window.location.pathname) && !hasLocalAuthBootstrapHint()) {',
     );
     expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
-    expect(appRuntimeStateSource).toContain("eventBus.on('theme_changed', handleRemoteThemeChange);");
+    expect(appRuntimeStateSource).toContain(
+      "eventBus.on('theme_changed', handleRemoteThemeChange);",
+    );
     expect(appRuntimeStateSource).toContain(
       "eventBus.on('websocket_reconnected', handleWebSocketReconnected);",
     );
     expect(appRuntimeStateSource).toContain("const ROOT_DASHBOARD_PATH = '/dashboard';");
     expect(appRuntimeStateSource).toContain('if (pathname === ROOT_DASHBOARD_PATH) return false;');
-    expect(appRuntimeStateSource).not.toContain("import { startMetricsCollector } from '@/stores/metricsCollector';");
+    expect(appRuntimeStateSource).not.toContain(
+      "import { startMetricsCollector } from '@/stores/metricsCollector';",
+    );
     expect(appRuntimeStateSource).not.toContain('startMetricsCollector();');
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');
     expect(routePreloadSource).toContain('const ROUTE_PRELOADERS: readonly RoutePreloader[] = [');
     expect(routePreloadSource).toContain("id: 'recovery',");
     expect(routePreloadSource).toContain("id: 'patrol',");
-    expect(routePreloadSource).toContain('const routePreloadCache = new Map<string, Promise<void>>();');
+    expect(routePreloadSource).toContain(
+      'const routePreloadCache = new Map<string, Promise<void>>();',
+    );
     expect(routePreloadSource).toContain("import('@/pages/Workloads')");
     expect(routePreloadSource).toContain("import('@/pages/Recovery')");
     expect(routePreloadSource).not.toContain("import('@/components/Dashboard/Dashboard')");

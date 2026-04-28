@@ -1,3 +1,4 @@
+import { GROUPED_TABLE_ROW_BASE_CLASS } from '@/components/shared/groupedTableRowPresentation';
 import type { ProtectionRollup, RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
 import {
   getRecoveryItemTypeBadgeClass,
@@ -14,7 +15,7 @@ import type { RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
 export const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 export const AGING_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000;
 
-export const RECOVERY_GROUP_HEADER_ROW_CLASS = 'bg-surface-alt/55 hover:bg-surface-alt/55';
+export const RECOVERY_GROUP_HEADER_ROW_CLASS = GROUPED_TABLE_ROW_BASE_CLASS;
 export const RECOVERY_GROUP_HEADER_TEXT_CLASS =
   'py-1 pr-3 pl-4 text-[11px] font-medium text-base-content';
 export const RECOVERY_ADVANCED_FILTER_LABEL_CLASS = 'text-[11px] font-medium text-muted';
@@ -24,8 +25,7 @@ export const RECOVERY_GROUP_NO_TIMESTAMP_LABEL = 'No Timestamp';
 export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...';
 export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
 export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
-export const RECOVERY_ARTIFACT_METADATA_TEXT_CLASS =
-  'text-[11px] font-medium text-base-content/80';
+export const RECOVERY_ARTIFACT_METADATA_TEXT_CLASS = 'text-[11px] font-medium text-base-content/80';
 export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
   cluster: getRecoveryLocationFacetLabel('cluster'),
   nodeAgent: getRecoveryLocationFacetLabel('node'),
@@ -44,22 +44,23 @@ export type RecoveryRollupInventoryStatus =
   | 'never-succeeded'
   | 'unknown';
 
-const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minWidthPx: number }> = {
-  time: { headerClass: 'w-[76px] text-right', minWidthPx: 76 },
-  type: { headerClass: 'w-[96px] text-center', minWidthPx: 96 },
-  item: { headerClass: 'w-[248px]', minWidthPx: 248 },
-  platform: { headerClass: 'w-[78px] text-center', minWidthPx: 78 },
-  entityId: { headerClass: 'w-[84px]', minWidthPx: 84 },
-  cluster: { headerClass: 'w-[120px]', minWidthPx: 120 },
-  nodeAgent: { headerClass: 'w-[120px]', minWidthPx: 120 },
-  namespace: { headerClass: 'w-[120px]', minWidthPx: 120 },
-  verified: { headerClass: 'w-[56px] text-center', minWidthPx: 56 },
-  size: { headerClass: 'w-[92px] text-right', minWidthPx: 92 },
-  method: { headerClass: 'w-[84px] text-center', minWidthPx: 84 },
-  repository: { headerClass: 'w-[160px]', minWidthPx: 160 },
-  details: { headerClass: 'w-[220px]', minWidthPx: 220 },
-  outcome: { headerClass: 'w-[88px] text-center', minWidthPx: 88 },
-};
+const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minWidthPx: number }> =
+  {
+    time: { headerClass: 'w-[76px] text-right', minWidthPx: 76 },
+    type: { headerClass: 'w-[96px] text-center', minWidthPx: 96 },
+    item: { headerClass: 'w-[248px]', minWidthPx: 248 },
+    platform: { headerClass: 'w-[78px] text-center', minWidthPx: 78 },
+    entityId: { headerClass: 'w-[84px]', minWidthPx: 84 },
+    cluster: { headerClass: 'w-[120px]', minWidthPx: 120 },
+    nodeAgent: { headerClass: 'w-[120px]', minWidthPx: 120 },
+    namespace: { headerClass: 'w-[120px]', minWidthPx: 120 },
+    verified: { headerClass: 'w-[56px] text-center', minWidthPx: 56 },
+    size: { headerClass: 'w-[92px] text-right', minWidthPx: 92 },
+    method: { headerClass: 'w-[84px] text-center', minWidthPx: 84 },
+    repository: { headerClass: 'w-[160px]', minWidthPx: 160 },
+    details: { headerClass: 'w-[220px]', minWidthPx: 220 },
+    outcome: { headerClass: 'w-[88px] text-center', minWidthPx: 88 },
+  };
 
 export function getRecoveryEventTimeTextClass(
   timestamp: number,
@@ -173,9 +174,7 @@ export function getRecoveryRollupInventoryStatus(
   const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
   const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
   const neverSucceeded =
-    (!Number.isFinite(successMs) || successMs <= 0) &&
-    Number.isFinite(attemptMs) &&
-    attemptMs > 0;
+    (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
   const outcome: RecoveryOutcome = normalizeRecoveryOutcome(rollup.lastOutcome);
 
   if (neverSucceeded) return 'never-succeeded';
@@ -209,10 +208,7 @@ export function getRecoveryRollupInventoryPriority(
   }
 }
 
-export function getRecoveryRollupAgeTextClass(
-  rollup: ProtectionRollup,
-  nowMs: number,
-): string {
+export function getRecoveryRollupAgeTextClass(rollup: ProtectionRollup, nowMs: number): string {
   const ts = getRecoveryRollupTimestampMs(rollup);
   if (!ts || ts <= 0) return 'text-muted';
   const ageMs = nowMs - ts;

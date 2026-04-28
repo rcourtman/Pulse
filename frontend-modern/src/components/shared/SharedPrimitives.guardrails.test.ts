@@ -64,6 +64,7 @@ import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionBu
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
 import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHeader.tsx?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
+import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
@@ -121,10 +122,12 @@ import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/Un
 import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
 import nodeGroupHeaderSource from '@/components/shared/NodeGroupHeader.tsx?raw';
 import storageGroupRowSource from '@/components/Storage/StorageGroupRow.tsx?raw';
+import storageGroupPresentationSource from '@/features/storageBackups/groupPresentation.ts?raw';
 import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
+import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
@@ -382,6 +385,9 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain("tr[data-summary-group-member-active='preview'] > td");
     expect(frontendIndexCssSource).toContain("tr[data-summary-group-member-active='pinned'] > td");
     expect(frontendIndexCssSource).toContain('--color-summary-group-member-pinned-accent');
+    expect(frontendIndexCssSource).toContain('tr.grouped-table-row > td');
+    expect(frontendIndexCssSource).toContain('--color-grouped-table-row-bg');
+    expect(groupedTableRowPresentationSource).toContain('GROUPED_TABLE_ROW_CLASS');
 
     expect(guestRowSource).toContain('data-summary-row-active');
     expect(guestRowSource).toContain('data-summary-group-member-active');
@@ -403,6 +409,12 @@ describe('shared primitive guardrails', () => {
     }
 
     expect(storagePoolRowSource).toContain('data-summary-group-member-active');
+    expect(storageGroupRowSource).toContain('STORAGE_GROUP_ROW_CLASS');
+    expect(storageGroupPresentationSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(nodeGroupHeaderSource).toContain('getGroupedTableRowClass');
+    expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(recoveryTablePresentationSource).toContain('GROUPED_TABLE_ROW_BASE_CLASS');
     expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
   });
 
@@ -893,7 +905,9 @@ describe('shared primitive guardrails', () => {
     expect(historyChartOverlaySource).toContain(
       'Historical data beyond {props.chart.lockDays()} days is not enabled on this instance.',
     );
-    expect(historyChartOverlaySource).not.toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).not.toContain(
+      'Unlock {props.chart.lockTierLabel()} Features',
+    );
     expect(historyChartOverlaySource).not.toContain('free 14-day trial');
     expect(historyChartOverlaySource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');

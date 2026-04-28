@@ -491,6 +491,8 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
       expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
       expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
+      expect(frontendIndexCssSource).toContain('tr.grouped-table-row > td');
+      expect(frontendIndexCssSource).toContain('--color-grouped-table-row-bg');
       expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(summaryInteractionA11ySource).toContain(
         'createSummaryInteractiveActionKeydownHandler',
@@ -513,6 +515,8 @@ describe('UnifiedResourceTable performance contract', () => {
       }
 
       expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
+      expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(unifiedResourceHostTableCardSource).not.toContain('cursor-pointer bg-surface-alt');
       expect(unifiedResourceHostTableCardSource).toContain('SummaryTableCardHeader');
       expect(unifiedResourceHostTableCardSource).toContain(
         'onClear={tableProps.clearPinnedSummaryScope}',

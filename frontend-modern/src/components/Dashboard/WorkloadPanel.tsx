@@ -1,10 +1,9 @@
 import { createMemo, Index, Show } from 'solid-js';
 
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
+import { getInteractiveGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
-import {
-  createSummaryInteractiveRowPreviewHandlers,
-} from '@/components/shared/summaryInteractionA11y';
+import { createSummaryInteractiveRowPreviewHandlers } from '@/components/shared/summaryInteractionA11y';
 import { buildSummaryDisclosureControlsId } from '@/components/shared/summaryInteractionA11y';
 import { TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import { getAlertStyles } from '@/utils/alerts';
@@ -109,9 +108,11 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   when={node()}
                   fallback={
                     <TableRow
-                      class="cursor-pointer bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
+                      class={getInteractiveGroupedTableRowClass()}
                       data-summary-group-id={groupKey()}
-                      data-summary-group-series-count={String(groupSummaryScope()?.seriesIds.length ?? 0)}
+                      data-summary-group-series-count={String(
+                        groupSummaryScope()?.seriesIds.length ?? 0,
+                      )}
                       data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
                       onClick={handleGroupFocusToggle}
                       {...groupRowInteraction}
@@ -137,21 +138,21 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     </TableRow>
                   }
                 >
-                    <NodeGroupHeader
-                      node={node()!}
-                      renderAs="tr"
-                      colspan={props.totalColumns()}
-                      trClass="cursor-pointer transition-colors duration-150 hover:bg-surface-hover"
-                      trProps={{
-                        'data-summary-group-id': groupKey(),
-                        'data-summary-group-series-count': String(
-                          groupSummaryScope()?.seriesIds.length ?? 0,
-                        ),
-                        'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
-                        onClick: handleGroupFocusToggle,
-                        ...groupRowInteraction,
-                      }}
-                    />
+                  <NodeGroupHeader
+                    node={node()!}
+                    renderAs="tr"
+                    colspan={props.totalColumns()}
+                    trClass="cursor-pointer select-none duration-150"
+                    trProps={{
+                      'data-summary-group-id': groupKey(),
+                      'data-summary-group-series-count': String(
+                        groupSummaryScope()?.seriesIds.length ?? 0,
+                      ),
+                      'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
+                      onClick: handleGroupFocusToggle,
+                      ...groupRowInteraction,
+                    }}
+                  />
                 </Show>
               </Show>
               <Index each={groupGuests()} fallback={<></>}>

@@ -720,9 +720,7 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
     expect(dashboardSource).not.toContain('workloadSummaryGuestId');
     expect(dashboardSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
-    expect(workloadPanelSource).toContain(
-      'createMemo(() => getCanonicalWorkloadId(guest()))',
-    );
+    expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
     expect(dashboardWorkloadTableSource).not.toContain(
       'createMemo(() => getCanonicalWorkloadId(guest()))',
     );
@@ -742,20 +740,22 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardStateSource).not.toContain('buildNodeByInstance(');
     expect(dashboardStateSource).not.toContain('buildGuestParentNodeMap(');
     expect(dashboardWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
-    expect(dashboardWorkloadRouteStateSource).not.toContain('const workloadNodeOptions = createMemo');
+    expect(dashboardWorkloadRouteStateSource).not.toContain(
+      'const workloadNodeOptions = createMemo',
+    );
     expect(dashboardWorkloadRouteStateSource).not.toContain(
       'const containerRuntimeFilterConfig = createMemo',
     );
-    expect(dashboardWorkloadRouteStateSource).not.toContain('const [handledTypeParam, setHandledTypeParam]');
     expect(dashboardWorkloadRouteStateSource).not.toContain(
-      "const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)",
+      'const [handledTypeParam, setHandledTypeParam]',
+    );
+    expect(dashboardWorkloadRouteStateSource).not.toContain(
+      'const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)',
     );
     expect(dashboardWorkloadRouteStateSource).toContain(
       "from './dashboardWorkloadRouteStateModel'",
     );
-    expect(dashboardWorkloadRouteStateSource).toContain(
-      'resolveDashboardWorkloadNodeSelection({',
-    );
+    expect(dashboardWorkloadRouteStateSource).toContain('resolveDashboardWorkloadNodeSelection({');
     expect(dashboardWorkloadRouteStateSource).toContain('DASHBOARD_WORKLOAD_ROUTE_RESET_STATE');
     expect(dashboardWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
     expect(dashboardWorkloadUrlSyncSource).not.toContain('normalizeWorkloadViewModeParam');
@@ -774,9 +774,7 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadUrlSyncModelSource).toContain(
       'resolveDashboardManagedWorkloadsNavigateTarget',
     );
-    expect(dashboardWorkloadUrlSyncModelSource).toContain(
-      'resolveDashboardWorkloadRuntimeParam',
-    );
+    expect(dashboardWorkloadUrlSyncModelSource).toContain('resolveDashboardWorkloadRuntimeParam');
     expect(dashboardWorkloadUrlSyncModelSource).toContain(
       'normalizeWorkloadViewModeParam(params.type)',
     );
@@ -799,9 +797,7 @@ describe('frontend resource type boundaries', () => {
       'buildDashboardContainerRuntimeFilterConfig({',
     );
     expect(dashboardWorkloadFilterOptionsSource).toContain('buildDashboardHostFilterConfig({');
-    expect(dashboardWorkloadFilterOptionsSource).toContain(
-      'buildDashboardNamespaceFilterConfig({',
-    );
+    expect(dashboardWorkloadFilterOptionsSource).toContain('buildDashboardNamespaceFilterConfig({');
     expect(dashboardWorkloadFilterConfigModelSource).toContain(
       'export const buildDashboardContainerRuntimeFilterConfig',
     );
@@ -846,8 +842,12 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadRouteModelSource).toContain('workloadNodeScopeId');
     expect(dashboardWorkloadRouteModelSource).toContain('getKubernetesContextKey');
     expect(dashboardWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
-    expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
-    expect(dashboardSelectionStateSource).toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
+    expect(dashboardSelectionStateSource).toContain(
+      'const [selectedGuestId, setSelectedGuestIdRaw]',
+    );
+    expect(dashboardSelectionStateSource).toContain(
+      'const [hoveredWorkloadId, setHoveredWorkloadId]',
+    );
     expect(dashboardSelectionStateSource).toContain('setHandledResourceId(null)');
     expect(dashboardSelectionStateSource).toContain("from './dashboardSelectionModel'");
     expect(dashboardSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
@@ -867,7 +867,9 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardFilterStateSource).toContain('DEFAULT_DASHBOARD_SORT_KEY');
     expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
     expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
-    expect(dashboardFilterModelSource).toContain("DEFAULT_DASHBOARD_SORT_KEY: DashboardSortKey = 'type'");
+    expect(dashboardFilterModelSource).toContain(
+      "DEFAULT_DASHBOARD_SORT_KEY: DashboardSortKey = 'type'",
+    );
     expect(dashboardStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
     expect(dashboardStateSource).not.toContain('useGroupedTableWindowing');
     expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
@@ -906,7 +908,9 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdSliderStateSource).toContain('document.addEventListener');
     expect(thresholdSliderStateSource).toContain('onCleanup');
     expect(thresholdSliderModelSource).toContain('export function getThresholdSliderPosition');
-    expect(thresholdSliderModelSource).toContain('export function getThresholdSliderThumbTransform');
+    expect(thresholdSliderModelSource).toContain(
+      'export function getThresholdSliderThumbTransform',
+    );
     expect(thresholdSliderModelSource).toContain('export function getThresholdSliderTitle');
     expect(thresholdSliderModelSource).toContain('export function getThresholdSliderLabel');
     expect(stackedDiskBarSource).toContain('useStackedDiskBarState');
@@ -961,7 +965,7 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSummaryStateSource).not.toContain(
       'const match = allSeries.find((series) => series.id === focused);',
     );
-    expect(infrastructureSummaryStateSource).not.toContain("displaySeries().map((series) => ({");
+    expect(infrastructureSummaryStateSource).not.toContain('displaySeries().map((series) => ({');
     expect(infrastructureSummaryStateSource).not.toContain(
       "isAwaitingFirstSample() ? 'Gathering first sample…' : 'Building trend history…'",
     );
@@ -977,7 +981,7 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowSource).not.toContain('function OSInfoCell(');
     expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
     expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
-    expect(guestRowStateSource).not.toContain("./infrastructureLink");
+    expect(guestRowStateSource).not.toContain('./infrastructureLink');
     expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
     expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
     expect(guestRowCellsSource).toContain('function OSInfoCell(');
@@ -988,12 +992,14 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );
-    expect(resourceDetailDrawerShellSource).toContain(
-      "from './ResourceDetailDrawerOverviewTab'",
-    );
+    expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerOverviewTab'");
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
-    expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerHistoryState'");
-    expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerDerivedState'");
+    expect(resourceDetailDrawerStateSource).toContain(
+      "from './useResourceDetailDrawerHistoryState'",
+    );
+    expect(resourceDetailDrawerStateSource).toContain(
+      "from './useResourceDetailDrawerDerivedState'",
+    );
     expect(resourceDetailDrawerStateSource).toContain(
       "from './useResourceDetailDrawerDockerActionsState'",
     );
@@ -1032,7 +1038,9 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateAll');
-    expect(resourceDetailDrawerDockerActionsStateSource).toContain('MonitoringAPI.checkDockerUpdates');
+    expect(resourceDetailDrawerDockerActionsStateSource).toContain(
+      'MonitoringAPI.checkDockerUpdates',
+    );
     expect(resourceDetailDrawerDockerActionsStateSource).toContain(
       'MonitoringAPI.updateAllDockerContainers',
     );
@@ -1040,7 +1048,7 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerSource).toContain('GuestDrawerOverview');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
     expect(guestDrawerStateSource).toContain("from '@/routing/resourceLinks'");
-    expect(guestDrawerStateSource).not.toContain("./infrastructureLink");
+    expect(guestDrawerStateSource).not.toContain('./infrastructureLink');
     expect(guestDrawerStateSource).toContain('guestOsSummary');
     expect(guestDrawerSource).not.toContain('const guestId = () => {');
     expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
@@ -1053,7 +1061,7 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadTableSource).not.toContain('NodeGroupHeader');
     expect(dashboardWorkloadTableSource).not.toContain('GuestDrawer');
     expect(workloadTableHeaderSource).toContain('TableHead');
-    expect(workloadTableHeaderSource).toContain("col.sortKey as WorkloadSortKey");
+    expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
     expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
     expect(workloadPanelSource).toContain('NodeGroupHeader');
     expect(workloadPanelSource).toContain('GuestDrawer');
@@ -1248,6 +1256,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryTablePresentationSource).toContain(
       'export function getRecoveryArtifactColumnHeaderClass',
     );
+    expect(recoveryTablePresentationSource).toContain('GROUPED_TABLE_ROW_BASE_CLASS');
     expect(recoveryTablePresentationSource).toContain('getRecoveryItemTypeLabel');
     expect(recoveryTablePresentationSource).toContain('getRecoveryLocationFacetLabel');
     expect(recoveryTablePresentationSource).not.toContain('const titleize =');
@@ -1463,7 +1472,9 @@ describe('frontend resource type boundaries', () => {
     expect(settingsSystemPanelsSource).toContain('backupPollingEnabled:');
     expect(settingsInfrastructurePanelPropsSource).toContain('pbsInstanceFromResource');
     expect(settingsInfrastructurePanelPropsSource).toContain('pmgInstanceFromResource');
-    expect(settingsInfrastructurePanelPropsSource).toContain('const agentStateResources = createMemo');
+    expect(settingsInfrastructurePanelPropsSource).toContain(
+      'const agentStateResources = createMemo',
+    );
     expect(settingsInfrastructurePanelPropsSource).toContain('getInfrastructurePanelProps');
     expect(discoverySettingsStateSource).toContain('export function useDiscoverySettingsState');
     expect(discoverySettingsStateSource).toContain('normalizeSubnetList');
@@ -1507,13 +1518,13 @@ describe('frontend resource type boundaries', () => {
     expect(organizationAccessMembersSectionSource).toContain(
       '@/utils/organizationRolePresentation',
     );
-    expect(organizationAccessManagementSectionSource).toContain(
-      'ORGANIZATION_MEMBER_ROLE_OPTIONS',
-    );
+    expect(organizationAccessManagementSectionSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
     expect(organizationAccessPanelSource).not.toContain(
       'const roleOptions: Array<{ value: OrganizationRole; label: string }> = [',
     );
-    expect(organizationSharingCreateSectionSource).toContain('@/utils/organizationRolePresentation');
+    expect(organizationSharingCreateSectionSource).toContain(
+      '@/utils/organizationRolePresentation',
+    );
     expect(organizationSharingCreateSectionSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
     expect(organizationOutgoingSharesSectionSource).toContain('normalizeOrganizationShareRole');
     expect(organizationIncomingSharesSectionSource).toContain('normalizeOrganizationShareRole');
@@ -1864,6 +1875,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageGroupRowSource).toContain('buildStorageGroupRowPresentation');
     expect(storageGroupRowSource).toContain('STORAGE_GROUP_ROW_CLASS');
     expect(storageGroupRowSource).not.toContain('cursor-pointer select-none bg-surface-alt');
+    expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
     expect(storageGroupPresentationSource).toContain(
       'export const getStorageGroupHealthCountPresentation',
     );
@@ -2764,7 +2776,9 @@ describe('frontend resource type boundaries', () => {
     expect(pulseDataGridModelSource).toContain('target.closest(');
     expect(searchFieldSource).toContain('useSearchFieldState');
     expect(searchFieldSource).not.toContain('let inputEl: HTMLInputElement');
-    expect(searchFieldSource).not.toContain("if (props.hasTrailingControls) return 'pr-14 sm:pr-20'");
+    expect(searchFieldSource).not.toContain(
+      "if (props.hasTrailingControls) return 'pr-14 sm:pr-20'",
+    );
     expect(searchFieldSource).not.toContain("if (e.key === 'Escape'");
     expect(searchFieldStateSource).toContain('let inputEl: HTMLInputElement');
     expect(searchFieldStateSource).toContain("if (event.key === 'Escape'");
@@ -3045,9 +3059,7 @@ describe('frontend resource type boundaries', () => {
     expect(collapsibleSearchInputStateSource).toContain('useTypeToSearch');
     expect(collapsibleSearchInputStateSource).toContain('queueMicrotask');
     expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchTriggerLabel');
-    expect(collapsibleSearchInputModelSource).toContain(
-      'shouldShowCollapsibleSearchExpanded',
-    );
+    expect(collapsibleSearchInputModelSource).toContain('shouldShowCollapsibleSearchExpanded');
     expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchRootClass');
     expect(infrastructureSummaryModelSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | null => {',
@@ -3082,15 +3094,9 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSelectorStateSource).toContain('createSignal');
     expect(infrastructureSelectorStateSource).toContain('document.addEventListener');
     expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorAgents');
-    expect(infrastructureSelectorModelSource).toContain(
-      'buildInfrastructureSelectorBackupCounts',
-    );
-    expect(infrastructureSelectorModelSource).toContain(
-      'buildInfrastructureSelectorUnifiedNodes',
-    );
-    expect(infrastructureSelectorModelSource).toContain(
-      'isAgentFacetInfrastructureResource',
-    );
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorBackupCounts');
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorUnifiedNodes');
+    expect(infrastructureSelectorModelSource).toContain('isAgentFacetInfrastructureResource');
     expect(infrastructureSelectorModelSource).not.toContain("resource.type === 'truenas'");
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
@@ -3099,9 +3105,7 @@ describe('frontend resource type boundaries', () => {
     expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
     expect(interactiveSparklineStateSource).toContain('createSignal');
     expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
-    expect(interactiveSparklineModelSource).toContain(
-      'computeInteractiveSparklineHoverState',
-    );
+    expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(densityMapSource).toContain('useDensityMapState');
     expect(densityMapSource).not.toContain('timeRangeToMs');
     expect(densityMapSource).not.toContain('createSignal');
@@ -3132,7 +3136,9 @@ describe('frontend resource type boundaries', () => {
     expect(historyChartHeaderSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
     expect(historyChartOverlaySource).not.toContain('presentationPolicyHidesUpgradePrompts');
-    expect(historyChartOverlaySource).not.toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).not.toContain(
+      'Unlock {props.chart.lockTierLabel()} Features',
+    );
     expect(historyChartOverlaySource).toContain('is not enabled on this');
     expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
     expect(containerUpdateBadgeSource).toContain('useContainerUpdateButtonState');
@@ -3172,9 +3178,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(infrastructureDetailsDrawerSource).not.toContain('createSignal');
     expect(infrastructureDetailsDrawerSource).not.toContain('getInfrastructureMetadataId');
-    expect(infrastructureDetailsDrawerSource).not.toContain(
-      'getInfrastructureDiscoveryHostname',
-    );
+    expect(infrastructureDetailsDrawerSource).not.toContain('getInfrastructureDiscoveryHostname');
     expect(infrastructureDetailsDrawerStateSource).toContain('createSignal');
     expect(infrastructureDetailsDrawerStateSource).toContain(
       "type InfrastructureDetailsDrawerTab = 'overview' | 'discovery'",
@@ -3186,9 +3190,7 @@ describe('frontend resource type boundaries', () => {
       'resolveInfrastructureDetailsDrawerDiscoveryHostname',
     );
     expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureMetadataId');
-    expect(infrastructureDetailsDrawerModelSource).toContain(
-      'getInfrastructureDiscoveryHostname',
-    );
+    expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureDiscoveryHostname');
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicyAISafeSummary(');
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');
@@ -3204,19 +3206,27 @@ describe('frontend resource type boundaries', () => {
     expect(unifiedResourceTableSource).toContain('UnifiedResourceServiceInfrastructureCard');
     expect(unifiedResourceTableSource).not.toContain('const split = createMemo(() =>');
     expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
-    expect(unifiedResourceTableSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
+    expect(unifiedResourceTableSource).not.toContain(
+      'const resourceColumnStyle = createMemo(() =>',
+    );
     expect(unifiedResourceTableSource).not.toContain('getServiceHealthSummaryPresentation');
     expect(unifiedResourceTableSource).not.toContain('const getOutlierEmphasis =');
     expect(unifiedResourceTableSource).not.toContain('const summarizeServiceHealthTone =');
-    expect(unifiedResourceTableStateSource).toContain('export function useUnifiedResourceTableState');
+    expect(unifiedResourceTableStateSource).toContain(
+      'export function useUnifiedResourceTableState',
+    );
     expect(unifiedResourceTableStateSource).toContain("from './unifiedResourceTableStateModel'");
     expect(unifiedResourceTableStateSource).toContain('buildHostTableItems');
     expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnPresentations');
     expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableShellClass');
     expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
     expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
-    expect(unifiedResourceTableStateSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
-    expect(unifiedResourceTableStateSource).not.toContain("const showGroupHeaders = props.groupingMode === 'grouped'");
+    expect(unifiedResourceTableStateSource).not.toContain(
+      'const resourceColumnStyle = createMemo(() =>',
+    );
+    expect(unifiedResourceTableStateSource).not.toContain(
+      "const showGroupHeaders = props.groupingMode === 'grouped'",
+    );
     expect(unifiedResourceTableStateSource).not.toContain('const items: HostTableItem[] = [];');
     expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
     expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
@@ -3545,7 +3555,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertDestinationsModelSource).toContain('export function buildAppriseConfigPayload');
     expect(alertDestinationsModelSource).toContain('formatAppriseTargets');
     expect(alertDestinationsModelSource).toContain('parseAppriseTargets');
-    expect(alertDestinationsTabStateSource).toContain('export function useAlertDestinationsTabState');
+    expect(alertDestinationsTabStateSource).toContain(
+      'export function useAlertDestinationsTabState',
+    );
     expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.testNotification');
     expect(alertDestinationsTabStateSource).toContain('useAlertWebhookDestinationsState');
     expect(alertDestinationsTabStateSource).not.toContain('NotificationsAPI.getWebhooks');
@@ -3555,9 +3567,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertWebhookDestinationsStateSource).toContain('NotificationsAPI.getWebhooks');
     expect(alertWebhookDestinationsStateSource).toContain('NotificationsAPI.createWebhook');
-    expect(alertWebhookDestinationsStateSource).toContain(
-      'getAlertDestinationsWebhookLoadError',
-    );
+    expect(alertWebhookDestinationsStateSource).toContain('getAlertDestinationsWebhookLoadError');
     expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
     expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadingState');
     expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadErrorCard');
@@ -3605,9 +3615,15 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
     expect(alertResourceIncidentsPanelSource).toContain('getAlertResourceIncidentCardClass');
     expect(alertResourceIncidentsPanelSource).toContain('getAlertResourceIncidentSummaryRowClass');
-    expect(alertResourceIncidentsPanelSource).toContain('getAlertResourceIncidentToggleButtonClass');
-    expect(alertResourceIncidentsPanelSource).toContain('getAlertResourceIncidentTruncatedEventsLabel');
-    expect(alertResourceIncidentsPanelSource).not.toContain('getAlertIncidentTimelineEventCardClass');
+    expect(alertResourceIncidentsPanelSource).toContain(
+      'getAlertResourceIncidentToggleButtonClass',
+    );
+    expect(alertResourceIncidentsPanelSource).toContain(
+      'getAlertResourceIncidentTruncatedEventsLabel',
+    );
+    expect(alertResourceIncidentsPanelSource).not.toContain(
+      'getAlertIncidentTimelineEventCardClass',
+    );
     expect(alertResourceIncidentsPanelSource).not.toContain('getAlertIncidentTimelineDetailClass');
     expect(alertResourceIncidentsPanelSource).not.toContain('getAlertIncidentTimelineCommandClass');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
@@ -3673,24 +3689,36 @@ describe('frontend resource type boundaries', () => {
     expect(alertThresholdsTabSource).toContain('guestDefaults={props.guestDefaults()}');
     expect(thresholdsTabModelSource).toContain('export interface ThresholdsTabProps');
     expect(thresholdsTabModelSource).not.toContain('export function buildThresholdsTableProps');
-    expect(thresholdsTabModelSource).toContain("guestDefaults: Accessor<ThresholdsTableProps['guestDefaults']>");
+    expect(thresholdsTabModelSource).toContain(
+      "guestDefaults: Accessor<ThresholdsTableProps['guestDefaults']>",
+    );
     expect(thresholdsTabModelSource).not.toContain('hasUnsavedChanges');
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",
     );
-    expect(thresholdsTableSource).toContain("import { ThresholdsTableProxmoxTab } from './ThresholdsTableProxmoxTab';");
-    expect(thresholdsTableSource).toContain("import { ThresholdsTablePMGTab } from './ThresholdsTablePMGTab';");
-    expect(thresholdsTableSource).toContain("import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';");
-    expect(thresholdsTableSource).toContain("import { ThresholdsTableDockerTab } from './ThresholdsTableDockerTab';");
+    expect(thresholdsTableSource).toContain(
+      "import { ThresholdsTableProxmoxTab } from './ThresholdsTableProxmoxTab';",
+    );
+    expect(thresholdsTableSource).toContain(
+      "import { ThresholdsTablePMGTab } from './ThresholdsTablePMGTab';",
+    );
+    expect(thresholdsTableSource).toContain(
+      "import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';",
+    );
+    expect(thresholdsTableSource).toContain(
+      "import { ThresholdsTableDockerTab } from './ThresholdsTableDockerTab';",
+    );
     expect(thresholdsTableSource).not.toContain('const [searchTerm, setSearchTerm] = createSignal');
     expect(thresholdsTableSource).not.toContain('const handleTabClick =');
-    expect(thresholdsTableSource).not.toContain("groupedResources={state.guestsGroupedByNode()}");
+    expect(thresholdsTableSource).not.toContain('groupedResources={state.guestsGroupedByNode()}');
     expect(thresholdsTableSource).not.toContain('dockerIgnoredPrefixesPresentation.title');
     expect(thresholdsTableProxmoxTabSource).toContain('export function ThresholdsTableProxmoxTab');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxNodesSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxPBSSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxGuestsSection');
-    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxGuestFilteringSection');
+    expect(thresholdsTableProxmoxTabSource).toContain(
+      'ThresholdsTableProxmoxGuestFilteringSection',
+    );
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxBackupsSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxSnapshotsSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxStorageSection');
@@ -3731,7 +3759,9 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdsTableDockerContainersSectionSource).toContain(
       'export function ThresholdsTableDockerContainersSection',
     );
-    expect(thresholdsTableSectionPropsSource).toContain('export interface ThresholdsTableSectionProps');
+    expect(thresholdsTableSectionPropsSource).toContain(
+      'export interface ThresholdsTableSectionProps',
+    );
     expect(thresholdsTableProxmoxNodesSectionSource).toContain(
       'export function ThresholdsTableProxmoxNodesSection',
     );
@@ -3760,7 +3790,9 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdsDataHookSource).toContain('useThresholdsGuestData(inputs)');
     expect(thresholdsDataHookSource).toContain('useThresholdsInfrastructureData(inputs)');
     expect(thresholdsDataHookSource).not.toContain('const hostOverrideIdCandidates =');
-    expect(thresholdsDataHookSource).not.toContain('const dockerContainersGroupedByHost = createMemo');
+    expect(thresholdsDataHookSource).not.toContain(
+      'const dockerContainersGroupedByHost = createMemo',
+    );
     expect(thresholdsHostDataHookSource).toContain('export function useThresholdsHostData');
     expect(thresholdsDockerDataHookSource).toContain('export function useThresholdsDockerData');
     expect(thresholdsGuestDataHookSource).toContain('export function useThresholdsGuestData');
@@ -3772,11 +3804,15 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdsResourceModelSource).toContain('export const normalizeStorageStatus');
     expect(thresholdsTableStateHookSource).toContain('export function useThresholdsTableState');
     expect(thresholdsTableStateHookSource).toContain('useCollapsedSections()');
-    expect(thresholdsTableStateHookSource).toContain('useThresholdsData(props, editingId, searchTerm)');
+    expect(thresholdsTableStateHookSource).toContain(
+      'useThresholdsData(props, editingId, searchTerm)',
+    );
     expect(thresholdsTableStateHookSource).toContain('useThresholdsRecoveryDefaultsState(props)');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsOverrideMutations');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsAvailabilityMutations');
-    expect(thresholdsTableStateHookSource).not.toContain('const saveEdit = (resourceId: string) => {');
+    expect(thresholdsTableStateHookSource).not.toContain(
+      'const saveEdit = (resourceId: string) => {',
+    );
     expect(thresholdsTableStateHookSource).not.toContain(
       'const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {',
     );
@@ -3790,7 +3826,9 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdsOverrideMutationsHookSource).toContain(
       'export function useThresholdsOverrideMutations',
     );
-    expect(thresholdsOverrideMutationsHookSource).toContain('const saveEdit = (resourceId: string) => {');
+    expect(thresholdsOverrideMutationsHookSource).toContain(
+      'const saveEdit = (resourceId: string) => {',
+    );
     expect(thresholdsOverrideMutationsHookSource).toContain(
       'const handleSaveBulkEdit = (thresholds: Record<string, number | undefined>) => {',
     );
@@ -3809,9 +3847,7 @@ describe('frontend resource type boundaries', () => {
       'const setOfflineState = (resourceId: string, state: OfflineState) => {',
     );
     expect(thresholdsOverrideMutationModelSource).toContain('export const upsertOverride =');
-    expect(thresholdsOverrideMutationModelSource).toContain(
-      'export const withThresholdEntries =',
-    );
+    expect(thresholdsOverrideMutationModelSource).toContain('export const withThresholdEntries =');
     expect(thresholdsOverrideMutationModelSource).toContain('export const stripStateKeys =');
     expect(alertsPageSource).not.toContain('getAlertConfigUnsavedChangesLabel');
     expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigUnsavedChangesLabel');
@@ -4242,7 +4278,7 @@ describe('frontend resource type boundaries', () => {
     expect(updateInstallGuideSource).toContain('@/components/Settings/CopyCommandBlock');
     expect(updateInstallGuideSource).toContain('buildUpdateInstallGuide');
     expect(copyCommandBlockSource).toContain('export function CopyCommandBlock');
-    expect(copyCommandBlockSource).toContain("aria-label=\"Copy to clipboard\"");
+    expect(copyCommandBlockSource).toContain('aria-label="Copy to clipboard"');
     expect(updatesSettingsModelSource).toContain('export function getUpdateChannelCardOptions');
     expect(updatesSettingsModelSource).toContain('export function buildUpdateInstallGuide');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
@@ -4298,7 +4334,9 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsSource).not.toContain("'Failed to save Pulse Assistant settings'");
     expect(aiSettingsSource).not.toContain("'Failed to clear credentials'");
     expect(aiSettingsSource).not.toContain("'Failed to update Pulse Assistant setting'");
-    expect(aiSettingsShellSource).not.toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsShellSource).not.toContain(
+      'const [loading, setLoading] = createSignal(false);',
+    );
     expect(aiSettingsShellSource).not.toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsShellSource).not.toContain('Chat Session Maintenance');
     expect(aiSettingsShellSource).not.toContain('Discovery Settings');
@@ -4310,13 +4348,15 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsStateSource).toContain('export type AISettingsState =');
     expect(aiSettingsStateSource).toContain('const [loading, setLoading] = createSignal(false);');
     expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
-    expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');
+    expect(aiSettingsStateSource).toContain(
+      'const handleEnabledToggle = async (newValue: boolean) =>',
+    );
     expect(aiIntelligenceSource).toContain(
       "import { PatrolIntelligenceSurface } from '@/features/patrol/PatrolIntelligenceSurface';",
     );
     expect(aiIntelligenceSource).not.toContain('getPatrolSummaryPresentation');
     expect(aiIntelligenceSource).not.toContain('getAIQuickstartCreditsPresentation');
-    expect(patrolIntelligenceSurfaceSource).toContain("./usePatrolIntelligenceState");
+    expect(patrolIntelligenceSurfaceSource).toContain('./usePatrolIntelligenceState');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceHeader');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceBanners');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceSummary');
@@ -4335,7 +4375,9 @@ describe('frontend resource type boundaries', () => {
       "import { Navigate, useLocation } from '@solidjs/router';",
     );
     expect(operationsPageRouteSource).toContain('buildLegacyOperationsSettingsPath');
-    expect(operationsPageRouteSource).toContain('<Navigate href={`${canonicalPath}${location.search ?? \'\'}`} />');
+    expect(operationsPageRouteSource).toContain(
+      "<Navigate href={`${canonicalPath}${location.search ?? ''}`} />",
+    );
     expect(operationsPageRouteSource).not.toContain('OperationsPageSurface');
     expect(settingsNavigationModelSource).toContain(
       'export function buildLegacyOperationsSettingsPath',
@@ -4483,10 +4525,16 @@ describe('frontend resource type boundaries', () => {
     expect(aiCostPresentationSource).toContain('export const AI_COST_PANEL_TITLE');
     expect(aiCostPresentationSource).toContain('export const AI_COST_PANEL_DESCRIPTION');
     expect(aiCostPresentationSource).toContain('export function getAICostRefreshErrorMessage');
-    expect(aiCostPresentationSource).toContain('export function getAICostResetHistoryConfirmationMessage');
-    expect(aiCostPresentationSource).toContain('export function getAICostResetHistorySuccessMessage');
+    expect(aiCostPresentationSource).toContain(
+      'export function getAICostResetHistoryConfirmationMessage',
+    );
+    expect(aiCostPresentationSource).toContain(
+      'export function getAICostResetHistorySuccessMessage',
+    );
     expect(aiCostPresentationSource).toContain('export function getAICostResetHistoryErrorMessage');
-    expect(aiCostPresentationSource).toContain('export function getAICostExportHistoryErrorMessage');
+    expect(aiCostPresentationSource).toContain(
+      'export function getAICostExportHistoryErrorMessage',
+    );
     expect(modelSelectorSource).toContain('AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');
     expect(modelSelectorSource).not.toContain('No matching models.');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');
@@ -4712,7 +4760,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewAlertCardSource).toContain('getAlertOverviewStartedAtClass');
     expect(alertOverviewAlertCardSource).toContain('getAlertOverviewPrimaryActionClass');
     expect(alertOverviewAlertCardSource).toContain('getAlertOverviewSecondaryActionClass');
-    expect(alertAcknowledgementStateSource).toContain('export function useAlertAcknowledgementState');
+    expect(alertAcknowledgementStateSource).toContain(
+      'export function useAlertAcknowledgementState',
+    );
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.bulkAcknowledge');
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.acknowledge');
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.unacknowledge');
@@ -4942,24 +4992,20 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
     expect(alertResourceTableStateSource).toContain('toggleAll');
     expect(alertResourceTableStateSource).toContain('clearSelectedIds');
-    expect(alertResourceGroupHeaderSource).toContain(
-      'export function AlertResourceGroupHeader',
-    );
+    expect(alertResourceGroupHeaderSource).toContain('export function AlertResourceGroupHeader');
     expect(alertResourceGroupHeaderSource).toContain('meta?.clusterName');
-    expect(alertResourceTableDesktopSource).toContain(
-      'export function AlertResourceTableDesktop',
-    );
+    expect(alertResourceTableDesktopSource).toContain('export function AlertResourceTableDesktop');
     expect(alertResourceTableDesktopSource).toContain('AlertResourceTableRow');
     expect(alertResourceTableDesktopSource).toContain('AlertResourceGroupHeader');
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableCustomBadgeLabel');
-    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableResetFactoryDefaultsLabel');
+    expect(alertResourceTableDesktopSource).toContain(
+      'getAlertResourceTableResetFactoryDefaultsLabel',
+    );
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableAlertDelayLabel');
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableMetricInputTitle');
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableEmptyState');
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableNoResultsState');
-    expect(alertResourceTableMobileSource).toContain(
-      'export function AlertResourceTableMobile',
-    );
+    expect(alertResourceTableMobileSource).toContain('export function AlertResourceTableMobile');
     expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
     expect(alertResourceTableMobileSource).toContain('buildAlertResourceEditPayload');
     expect(alertResourceTableMobileSource).toContain('getAlertResourceTableCustomBadgeLabel');
@@ -4976,9 +5022,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableModelSource).toContain(
       'export function getAlertResourceMetricDisplayValue',
     );
-    expect(alertResourceTableModelSource).toContain(
-      'export function alertResourceSupportsMetric',
-    );
+    expect(alertResourceTableModelSource).toContain('export function alertResourceSupportsMetric');
     expect(alertResourceTableModelSource).toContain(
       'export function buildAlertResourceEditPayload',
     );
@@ -5036,9 +5080,7 @@ describe('frontend resource type boundaries', () => {
     expect(webhookConfigSource).not.toContain('NotificationsAPI.getWebhookTemplates');
     expect(webhookConfigSource).not.toContain('const saveWebhook = () => {');
     expect(webhookConfigSource).not.toContain('const editWebhook = (webhook: Webhook) => {');
-    expect(webhookConfigSource).not.toContain(
-      'const toggleAllWebhooks = (enabled: boolean) => {',
-    );
+    expect(webhookConfigSource).not.toContain('const toggleAllWebhooks = (enabled: boolean) => {');
     expect(webhookConfigSource).not.toContain('Custom webhook endpoint');
     expect(webhookConfigSource).not.toContain('Discord server webhook');
     expect(webhookConfigSource).not.toContain('My Webhook');
@@ -5064,9 +5106,7 @@ describe('frontend resource type boundaries', () => {
     expect(webhookConfigFormSource).toContain('getAlertWebhookServices');
     expect(webhookConfigFormSource).toContain('getAlertWebhookNamePlaceholder');
     expect(webhookConfigFormSource).toContain('getAlertWebhookUrlPlaceholder');
-    expect(webhookConfigFormSource).toContain(
-      'getAlertWebhookMentionPlaceholderFromTemplates',
-    );
+    expect(webhookConfigFormSource).toContain('getAlertWebhookMentionPlaceholderFromTemplates');
     expect(webhookConfigFormSource).toContain('getAlertWebhookMentionHelpFromTemplates');
     expect(webhookConfigFormSource).toContain('hasAlertWebhookMentionSupportFromTemplates');
     expect(webhookConfigFormSource).toContain('getAlertWebhookTestLabel');
@@ -5100,5 +5140,4 @@ describe('frontend resource type boundaries', () => {
     expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookTestLabel');
     expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookSubmitLabel');
   });
-
 });

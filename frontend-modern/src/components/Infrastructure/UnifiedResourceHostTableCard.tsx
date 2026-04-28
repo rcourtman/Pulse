@@ -4,6 +4,7 @@ import type { Disk } from '@/types/api';
 import { formatBytes, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import { Card } from '@/components/shared/Card';
+import { getInteractiveGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
 import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
 import {
   Table,
@@ -180,7 +181,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     });
                     return (
                       <TableRow
-                        class="cursor-pointer bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
+                        class={getInteractiveGroupedTableRowClass()}
                         data-summary-group-id={groupSummaryScope()?.id ?? undefined}
                         data-summary-group-series-count={String(
                           groupSummaryScope()?.seriesIds.length ?? 0,

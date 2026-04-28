@@ -358,6 +358,10 @@ AI-only summary payloads, or page-local heuristics.
     emphasis through `data-summary-group-member-active`, so the whole cluster
     block reads as the active scope without inventing a second infrastructure-
     local outline or banner treatment.
+    Static grouped cluster-header emphasis must route through
+    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and
+    the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
+    rather than infrastructure-local background or hover-fill classes.
     Summary-linked infrastructure rows and cluster headers must also route
     pointer preview and focus preview through
     `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, while
