@@ -230,10 +230,17 @@ regression protection.
     responsive workload column priority and width model. `DashboardWorkloadTable`,
     `WorkloadTableHeader`, and `WorkloadPanel` must consume one shared
     layout-visible column set so headers, colgroups, and rows stay aligned during
-    live resize. Tablet and compact workload stages must normalize active column
-    widths against the currently visible column IDs, show higher-priority workload
-    information before exposing detail-heavy Net I/O and Disk I/O columns, and
-    avoid horizontal overflow at mobile, tablet, compact, and full desktop widths.
+    live resize. View-mode-specific column sets in
+    `frontend-modern/src/components/Dashboard/guestRowModel.tsx` must retain
+    core monitoring metrics when narrowing scope: app-container mode keeps CPU,
+    memory, disk, and the responsive Net I/O and Disk I/O columns available,
+    while the layout priority model decides when detail-heavy I/O columns are
+    rendered. Filtering to a workload type must not silently remove capacity or
+    I/O observability that remains available in the all-workloads table. Tablet
+    and compact workload stages must normalize active column widths against the
+    currently visible column IDs, show higher-priority workload information
+    before exposing detail-heavy Net I/O and Disk I/O columns, and avoid
+    horizontal overflow at mobile, tablet, compact, and full desktop widths.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 29. Keep public self-hosted checkout handoff endpoints on the adjacent
     commercial/router boundary, not the summary-chart hot path. When

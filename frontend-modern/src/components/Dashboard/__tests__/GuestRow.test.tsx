@@ -940,9 +940,10 @@ describe('VIEW_MODE_COLUMNS', () => {
     expect(VIEW_MODE_COLUMNS['app-container']!.has('context')).toBe(true);
   });
 
-  it('app-container mode does not include disk or netIo', () => {
-    expect(VIEW_MODE_COLUMNS['app-container']!.has('disk')).toBe(false);
-    expect(VIEW_MODE_COLUMNS['app-container']!.has('netIo')).toBe(false);
+  it('app-container mode keeps capacity and I/O metrics available', () => {
+    expect(VIEW_MODE_COLUMNS['app-container']!.has('disk')).toBe(true);
+    expect(VIEW_MODE_COLUMNS['app-container']!.has('netIo')).toBe(true);
+    expect(VIEW_MODE_COLUMNS['app-container']!.has('diskIo')).toBe(true);
   });
 
   it('pod mode includes namespace and image', () => {

@@ -181,6 +181,52 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('preserves connected infrastructure when raw updates omit that projection', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [
+            {
+              id: 'primary:agent:pve1',
+              name: 'pve1',
+              displayName: 'pve1',
+              status: 'active',
+              healthStatus: 'online',
+              surfaces: [{ id: 'pve:pve1', kind: 'proxmox', label: 'PVE data' }],
+            },
+          ],
+          resources: [{ id: 'node-1', type: 'agent', name: 'pve1', status: 'online' }],
+          lastUpdate: 1739059200000,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      emitMessage({
+        type: 'rawData',
+        data: {
+          resources: [
+            { id: 'node-1', type: 'agent', name: 'pve1', status: 'online' },
+            { id: 'vm-101', type: 'vm', name: 'web-server', status: 'running' },
+          ],
+          lastUpdate: 1739059260000,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      expect(store.state.connectedInfrastructure).toHaveLength(1);
+      expect(store.state.connectedInfrastructure[0]?.id).toBe('primary:agent:pve1');
+      expect(store.state.resources).toHaveLength(2);
+    } finally {
+      dispose();
+    }
+  });
+
   it('preserves canonical resource details when realtime payloads are thinner', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

@@ -354,13 +354,15 @@ export function createWebSocketStore(url: string) {
               // Canonical resource contract:
               // `state.resources` is the authoritative frontend model.
               // `state.connectedInfrastructure` is the authoritative reporting projection.
-              const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
-                ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
-                : [];
-              setState(
-                'connectedInfrastructure',
-                reconcile(connectedInfrastructure, { key: 'id' }),
-              );
+              if (message.data.connectedInfrastructure !== undefined) {
+                const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
+                  ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
+                  : [];
+                setState(
+                  'connectedInfrastructure',
+                  reconcile(connectedInfrastructure, { key: 'id' }),
+                );
+              }
               if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
               if (message.data.performance !== undefined)
                 setState('performance', message.data.performance);
