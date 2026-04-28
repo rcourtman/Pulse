@@ -259,6 +259,31 @@ describe('licensePresentation', () => {
         entitlements: {
           tier: 'pro',
           subscription_state: 'active',
+          plan_version: 'legacy_migration_fallback',
+          capabilities: ['relay', 'ai_autofix'],
+          limits: [{ key: 'max_monitored_systems', limit: 10, current: 23, state: 'enforced' }],
+          upgrade_reasons: [],
+          monitored_system_continuity: {
+            plan_limit: 10,
+            grandfathered_floor: 23,
+            effective_limit: 23,
+            capture_pending: false,
+          },
+        },
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
+      }),
+    ).toMatchObject({
+      title: 'Current plan: Pulse Pro',
+      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
+      supplementalBadges: [],
+      supplementalSummary: '',
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
           capabilities: ['relay', 'mobile_app', 'ai_autofix'],
           limits: [],
           upgrade_reasons: [],

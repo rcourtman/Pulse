@@ -24,7 +24,6 @@ import {
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
   getDisplayableMonitoredSystemContinuity,
-  hasActiveUncappedSelfHostedContinuity,
   isDisplayableLicenseFeature,
 } from '@/utils/licensePresentation';
 import {
@@ -149,31 +148,34 @@ export function useProLicensePanelState() {
 
   const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
   const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
-  const uncappedGrandfatheredPlan = createMemo(() =>
-    hasActiveUncappedSelfHostedContinuity({
-      planVersion: entitlements()?.plan_version,
-      isLifetime: entitlements()?.is_lifetime,
-      subscriptionState: entitlements()?.subscription_state,
-    }),
+  const selfHostedPlanDefinition = createMemo(() =>
+    getSelfHostedPlanDefinitionForBillingTier(entitlements()?.tier),
   );
+  const usesCanonicalSelfHostedPlan = createMemo(() => Boolean(selfHostedPlanDefinition()));
   const monitoredSystemLimitStatus = createMemo(() =>
-    uncappedGrandfatheredPlan() ? undefined : limitStatus('max_monitored_systems'),
+    usesCanonicalSelfHostedPlan() ? undefined : limitStatus('max_monitored_systems'),
   );
   const monitoredSystemCapacity = createMemo(() =>
-    uncappedGrandfatheredPlan() ? undefined : entitlements()?.monitored_system_capacity,
+    usesCanonicalSelfHostedPlan() ? undefined : entitlements()?.monitored_system_capacity,
   );
-  const displayableMonitoredSystemContinuity = createMemo(() =>
-    getDisplayableMonitoredSystemContinuity({
+  const displayableMonitoredSystemContinuity = createMemo(() => {
+    if (usesCanonicalSelfHostedPlan()) {
+      return null;
+    }
+    return getDisplayableMonitoredSystemContinuity({
       continuity: monitoredSystemContinuity(),
       planVersion: entitlements()?.plan_version,
       isLifetime: entitlements()?.is_lifetime,
       subscriptionState: entitlements()?.subscription_state,
-    }),
-  );
+    });
+  });
 
   const showUsageSection = createMemo(() => {
     if (!panelDataSettled()) {
       return true;
+    }
+    if (usesCanonicalSelfHostedPlan()) {
+      return false;
     }
 
     const continuity = displayableMonitoredSystemContinuity();
@@ -364,7 +366,7 @@ export function useProLicensePanelState() {
   const monitoredSystemUsageSummary = createMemo(() => {
     const limit = monitoredSystemLimitStatus();
     const capacity = monitoredSystemCapacity();
-    if (!limit && !capacity && uncappedGrandfatheredPlan()) {
+    if (!limit && !capacity && usesCanonicalSelfHostedPlan()) {
       return 'Unlimited';
     }
     return getMonitoredSystemLimitUsageSummary(limit, capacity);
@@ -372,29 +374,19 @@ export function useProLicensePanelState() {
   const monitoredSystemCapacityStatusSummary = createMemo(() => {
     const limit = monitoredSystemLimitStatus();
     const capacity = monitoredSystemCapacity();
-    if (!limit && !capacity && uncappedGrandfatheredPlan()) {
+    if (!limit && !capacity && usesCanonicalSelfHostedPlan()) {
       return 'Unlimited';
     }
     return getMonitoredSystemLimitCapacityStatusSummary(limit, capacity);
   });
-  const monitoredSystemCapacityPosture = createMemo(() =>
-    resolveMonitoredSystemCapacityStatus(monitoredSystemCapacity(), monitoredSystemLimitStatus()),
-  );
-  const currentRetailPlanDefinition = createMemo(() => {
-    if (displayableMonitoredSystemContinuity()) {
+  const currentRetailPlanDefinition = createMemo(() => selfHostedPlanDefinition());
+  const monitoredSystemContinuityNotice = createMemo(() => {
+    const continuity = displayableMonitoredSystemContinuity();
+    if (!continuity) {
       return null;
     }
-    if (uncappedGrandfatheredPlan()) {
-      return null;
-    }
-    if ((monitoredSystemCapacityPosture()?.limit ?? 0) > 0) {
-      return null;
-    }
-    return getSelfHostedPlanDefinitionForBillingTier(entitlements()?.tier);
-  });
-  const monitoredSystemContinuityNotice = createMemo(() =>
-    getMonitoredSystemContinuityNotice(
-      monitoredSystemContinuity(),
+    return getMonitoredSystemContinuityNotice(
+      continuity,
       monitoredSystemLimitStatus(),
       monitoredSystemCapacity(),
       {
@@ -402,8 +394,8 @@ export function useProLicensePanelState() {
         isLifetime: entitlements()?.is_lifetime,
         subscriptionState: entitlements()?.subscription_state,
       },
-    ),
-  );
+    );
+  });
   const monitoredSystemCapacitySection = createMemo(() => {
     const section = buildMonitoredSystemCapacitySectionModel(
       monitoredSystemLimitStatus(),

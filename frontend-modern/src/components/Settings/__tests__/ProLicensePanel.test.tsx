@@ -422,9 +422,7 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Grandfathered v5 pricing')).toBeInTheDocument();
       expect(screen.getByText('Grandfathered price')).toBeInTheDocument();
       expect(
-        screen.getAllByText(
-          /keeps its existing recurring price until/i,
-        ).length,
+        screen.getAllByText(/keeps its existing recurring price until/i).length,
       ).toBeGreaterThan(0);
       expect(
         screen.queryByText(/keeps its existing recurring price and uncapped guest capacity/i),
@@ -524,7 +522,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
   });
 
-  it('shows continuity verification while a bounded fallback migration is still pending', async () => {
+  it('keeps pending fallback migration volume metadata audit-only on self-hosted Pro', async () => {
     mockEntitlements = {
       capabilities: ['relay'],
       limits: [
@@ -566,23 +564,27 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     await waitFor(() => {
-      expect(screen.getByText('Migration continuity verification pending')).toBeInTheDocument();
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     });
 
+    expect(screen.getByText('Legacy Migration Fallback')).toBeInTheDocument();
+    expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(
-      screen.getAllByText(/verifying the grandfathered monitored-system floor/i).length,
-    ).toBeGreaterThan(0);
-    expect(screen.getByText('Continuity pending')).toBeInTheDocument();
-    expect(screen.getAllByText('Verifying…').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
-    expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
-    expect(screen.getByText('Effective Monitored System Limit')).toBeInTheDocument();
-    expect(screen.getByText('Continuity Capture')).toBeInTheDocument();
-    expect(screen.getByText('Pending')).toBeInTheDocument();
+      within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
+        'Unlimited',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Migration continuity verification pending')).not.toBeInTheDocument();
+    expect(screen.queryByText('Continuity pending')).not.toBeInTheDocument();
+    expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Effective Monitored System Limit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Continuity Capture')).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(screen.queryByText('0 / 10')).not.toBeInTheDocument();
   });
 
-  it('explains why an over-policy migrated installation is still monitoring above the finite policy', async () => {
+  it('hides over-policy fallback migration volume warnings on recognized self-hosted plans', async () => {
     mockEntitlements = {
       capabilities: ['relay'],
       limits: [
@@ -622,18 +624,26 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     await waitFor(() => {
-      expect(screen.getByText('Migration continuity verification pending')).toBeInTheDocument();
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText(/already monitoring 23/i).length).toBeGreaterThan(0);
-    expect(screen.getByText('Monitored-system policy')).toBeInTheDocument();
-    expect(screen.getByText('Why is continuity still pending?')).toBeInTheDocument();
+    expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
+    expect(
+      within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
+        'Unlimited',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/already monitoring 23/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Migration continuity verification pending')).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Why is continuity still pending?')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
       screen.queryByText('Monitoring continues above the current policy boundary'),
     ).not.toBeInTheDocument();
   });
 
-  it('shows monitored-system continuity once a bounded fallback migration floor is captured', async () => {
+  it('does not surface captured fallback migration floors as self-hosted plan limits', async () => {
     mockEntitlements = {
       capabilities: ['relay'],
       limits: [
@@ -675,23 +685,33 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     await waitFor(() => {
-      expect(screen.getByText('Grandfathered monitored-system floor')).toBeInTheDocument();
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     });
 
+    expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(
-      screen.getAllByText(/keeps an effective monitored-system limit of 23/i).length,
-    ).toBeGreaterThan(0);
-    expect(screen.getByText('Grandfathered floor')).toBeInTheDocument();
-    expect(screen.getAllByText('23 monitored systems').length).toBeGreaterThan(0);
-    expect(screen.getByText('Monitored-system policy')).toBeInTheDocument();
-    expect(
-      screen.getByText('Existing monitoring continues. Additional monitored systems are paused.'),
+      within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
+        'Unlimited',
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Review monitored systems' })).toBeInTheDocument();
-    expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
-    expect(screen.getByText('Effective Monitored System Limit')).toBeInTheDocument();
-    expect(screen.getByText('Grandfathered Floor')).toBeInTheDocument();
+    expect(screen.queryByText('Grandfathered monitored-system floor')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/keeps an effective monitored-system limit of 23/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Grandfathered floor')).not.toBeInTheDocument();
+    expect(screen.queryByText('23 monitored systems')).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Existing monitoring continues. Additional monitored systems are paused.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Review monitored systems' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Effective Monitored System Limit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Grandfathered Floor')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
   });
 
   it('renders all capability strings as human-readable labels (no raw snake_case)', async () => {
@@ -894,7 +914,7 @@ describe('ProLicensePanel', () => {
     expect(recoveryDisclosure).toHaveAttribute('open');
   });
 
-  it('focuses the usage billing section when a bounded legacy billing route requests counting rules', async () => {
+  it('redirects stale bounded billing usage routes back to the plan surface', async () => {
     mockEntitlements = {
       capabilities: ['relay'],
       limits: [{ key: 'max_monitored_systems', limit: 10, current: 5, state: 'ok' }],
@@ -914,14 +934,20 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'true');
-      expect(
-        document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID),
-      ).not.toBeInTheDocument();
-      expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
-    expect(screen.getByText('Monitored Systems')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Hide counting rules' })).toBeInTheDocument();
+
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
+    expect(
+      document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID),
+    ).not.toBeInTheDocument();
+    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, {
+      replace: true,
+      scroll: false,
+    });
+    expect(screen.queryByRole('button', { name: 'Hide counting rules' })).not.toBeInTheDocument();
   });
 
   it('redirects uncapped self-hosted billing usage routes back to the plan surface', async () => {
@@ -979,7 +1005,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
   });
 
-  it('navigates between plan and usage focus states through the billing subtabs when legacy capacity handling is active', async () => {
+  it('does not expose billing usage subtabs for stale legacy capacity on recognized plans', async () => {
     mockEntitlements = {
       capabilities: ['relay'],
       limits: [{ key: 'max_monitored_systems', limit: 10, current: 5, state: 'ok' }],
@@ -998,9 +1024,13 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Usage' }));
+    await waitFor(() => {
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
+    });
 
-    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_USAGE_HREF, {
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_USAGE_HREF, {
       replace: false,
       scroll: false,
     });

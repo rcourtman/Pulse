@@ -299,18 +299,28 @@ Community limit enforcement.
     surface instead of reviving a separate overview panel, summary strip, or
     metric deck ahead of the real workspace list.
 23. Keep self-hosted monitored-system capacity review informational and
-    non-commercial. Any monitored-system limit, continuity, or legacy
-    `max_monitored_systems` handoff must land on the usage-focused billing
-    state (`/settings/system/billing/usage?details=counting-rules`) so the
-    operator can inspect counting rules and any support/audit policy context
-    without being pushed toward a purchase. Monitored-system warnings must not
-    surface `Upgrade to add more`, `Compare self-hosted plans`, or the
+    non-commercial. Recognized self-hosted v6 tiers must treat legacy
+    monitored-system limit, continuity, or `max_monitored_systems` handoff data
+    as support/audit metadata rather than as the customer-facing plan model:
+    Community, Relay, Pro, Pro+, lifetime, and eligible grandfathered recurring
+    plan labels render through the normal plan surface as unlimited core
+    monitoring plus tier-specific extras, with no standing Usage subtab, finite
+    policy banner, monitored-system limit row, or pause-new-admissions copy from
+    stale volume metadata. Any genuinely bounded monitored-system support
+    context outside those recognized plan labels must remain informational and
+    land on the usage-focused billing state
+    (`/settings/system/billing/usage?details=counting-rules`) so the operator
+    can inspect counting rules and any support/audit policy context without
+    being pushed toward a purchase. Monitored-system warnings must not surface
+    `Upgrade to add more`, `Compare self-hosted plans`, or the
     `intent=self_hosted_plan` plan-selection arrival. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`,
     `frontend-modern/src/components/Settings/useProLicensePanelState.ts`, and
     `frontend-modern/src/utils/pricingHandoff.ts` therefore own a two-state
-    billing focus model where monitored-system aliases resolve to `usage`, and
-    plan selection is reserved for explicit self-hosted Pro/commercial-extra
-    arrivals. That same self-hosted commercial boundary also owns legacy
+    billing focus model where monitored-system aliases only resolve to `usage`
+    when a displayable bounded support context remains after recognized
+    self-hosted plans have been normalized, and plan selection is reserved for
+    explicit self-hosted Pro/commercial-extra arrivals. That same self-hosted
+    commercial boundary also owns legacy
     migration continuity semantics: `legacy_migration_fallback` may preserve
     `plan_limit` and `grandfathered_floor` for support/audit context, but
     self-hosted v6 monitoring remains uncapped. The canonical contract is
@@ -440,7 +450,13 @@ Community limit enforcement.
    The canonical contract is `status.max_monitored_systems = 0`, no enforced
    `max_monitored_systems` entitlement row, and
    `monitored_system_capacity.mode = unlimited` once runtime usage is
-   available.
+   available. The in-app self-hosted Plans surface must apply the same rule:
+   recognized Community, Relay, Pro, Pro+, lifetime, and eligible grandfathered
+   recurring plans must ignore stale legacy volume metadata for customer-facing
+   plan presentation, must render the current plan ladder, and must not show a
+   Usage tab, monitored-system policy banner, `Plan Monitored System Limit`,
+   `Effective Monitored System Limit`, grandfathered-floor summary, or
+   pause-new-admissions copy from that metadata.
 10. Keep Stripe webhook idempotency state bounded in the control-plane
    registry: `internal/cloudcp/registry/registry.go` may retain `stripe_events`
    rows long enough to suppress duplicate deliveries and reclaim stale
@@ -1204,17 +1220,20 @@ shared shell/model first instead of letting self-hosted Pulse Pro and hosted
 organization billing drift back into parallel local layouts or vocabularies.
 For self-hosted Pulse Pro specifically, the plan/usage split is now also a
 router contract: `/settings/system/billing/plan` is the canonical plan state,
-`/settings/system/billing/usage` is the canonical monitored-system usage state
-only when Pulse is still reconciling or enforcing a finite monitored-system
-limit, and `/settings/system/billing` remains a compatibility handoff rather
-than the primary owned destination. Uncapped current self-hosted Pulse Pro
+and `/settings/system/billing` remains a compatibility handoff rather than the
+primary owned destination. `/settings/system/billing/usage` is only a
+compatibility support state for a displayable bounded monitored-system context
+that remains after recognized self-hosted v6 plan labels have been normalized.
+Community, Relay, Pro, Pro+, lifetime, and eligible grandfathered recurring
 plans must not keep a standing Usage subtab alive just to restate counted-unit
-totals; direct `/usage` arrivals on those no-cap plans should canonicalize back
-to `/plan`. Arrival-specific UI affordances belong to that same owned billing
-surface: legacy usage arrivals may open counting rules by default, and plan
-arrivals may surface an upgrade callout that hands off into `Pulse Account`
-for self-hosted plan comparison and checkout before returning to the owned
-plan state through the runtime-owned activation callback. Pulse product routes
+totals or stale migration volume metadata; direct `/usage` arrivals on those
+no-cap plans should canonicalize back to `/plan`. Arrival-specific UI
+affordances belong to that same owned billing surface: legacy usage arrivals
+may open counting rules by default only when a bounded support context is still
+displayable, and plan arrivals may surface an upgrade callout that hands off
+into `Pulse Account` for self-hosted plan comparison and checkout before
+returning to the owned plan state through the runtime-owned activation
+callback. Pulse product routes
 keep ownership of license status, usage, and activation state; `Pulse Account`
 owns the commerce flow itself. That same self-hosted settings surface is
 plan-owned rather than tier-owned: the navigation label is `Plans`, the
@@ -1223,9 +1242,9 @@ the current unlocked tier plus capabilities immediately obvious so existing
 paid upgrades can confirm what their new key enabled without hunting through
 generic billing details. That entitlement-first summary must stay tier-
 specific and continuity-aware: Relay and Pulse Pro should describe the actual
-paid capabilities unlocked on this instance, while grandfathered pricing or
-captured monitored-system continuity must be visible in that same top summary
-instead of only in secondary billing detail blocks further down the page.
+paid capabilities unlocked on this instance, while grandfathered pricing must
+make existing-price protection explicit without reviving finite monitored-
+system continuity copy for normalized no-cap self-hosted plans.
 That top card is plan-owned, not raw subscription-state-owned: Community copy
 should describe what is included on this instance in plain language, and the
 current-plan badge must not present the fallback Community state as `Expired`
@@ -1429,18 +1448,19 @@ history, while Pro+ remains legacy
 continuity only. Cloud/MSP pricing semantics stay separate, and grandfathered
 v5 continuity copy remains an explicit boundary policy.
 That same settings-owned presentation must distinguish between active
-grandfathered recurring v5 continuity and bounded legacy fallbacks. Active
-grandfathered recurring v5 plans must render the existing recurring price
-continuity directly and must not show a pending or captured floor banner or
-any finite self-hosted volume cap.
-Only bounded legacy fallback migrations may render the base plan limit, the
-effective monitored-system limit, any grandfathered floor, and whether
-continuity capture is still pending. When monitored-system usage is
-unavailable during fallback continuity verification, the shell must present a
-verification state rather than implying `0 / limit`. If the effective
-monitored-system limit is `0`/unlimited, the self-hosted fallback continuity is
-audit-only and must not render plan-limit, finite-policy, or grandfathered-floor
-copy to ordinary self-hosted users.
+grandfathered recurring v5 continuity and stale bounded legacy fallback
+metadata. Active grandfathered recurring v5 plans must render the existing
+recurring price continuity directly and must not show a pending or captured
+floor banner or any finite self-hosted volume cap. Recognized self-hosted v6
+plan labels must follow the same customer-facing no-cap rule even if a
+`legacy_migration_fallback` entitlement still carries `plan_limit`,
+`effective_limit`, `grandfathered_floor`, or capture-pending telemetry:
+`useProLicensePanelState.ts` must suppress the Usage tab, monitored-system
+policy section, continuity notice, plan-limit detail rows, and
+pause-new-admissions copy, while `licensePresentation.ts` must keep current
+plan summaries focused on unlimited core monitoring plus the actual tier
+extras. Bounded fallback continuity may only be displayed for a support context
+that is not already normalized to a recognized self-hosted v6 package.
 That same pricing boundary now also owns the shared frontend plan-definition
 models. `frontend-modern/src/utils/cloudPlans.ts` and
 `frontend-modern/src/utils/selfHostedPlans.ts` are the canonical frontend

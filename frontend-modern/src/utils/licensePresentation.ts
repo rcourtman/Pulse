@@ -515,12 +515,14 @@ export const getSelfHostedCurrentPlanPresentation = ({
     );
   }
 
-  const continuity = getDisplayableMonitoredSystemContinuity({
-    continuity: current.monitored_system_continuity,
-    planVersion: current.plan_version,
-    isLifetime: current.is_lifetime,
-    subscriptionState: current.subscription_state,
-  });
+  const continuity = planDefinition
+    ? null
+    : getDisplayableMonitoredSystemContinuity({
+        continuity: current.monitored_system_continuity,
+        planVersion: current.plan_version,
+        isLifetime: current.is_lifetime,
+        subscriptionState: current.subscription_state,
+      });
   if (continuity?.capture_pending) {
     supplementalBadges.push('Continuity pending');
     supplementalDetails.push(
