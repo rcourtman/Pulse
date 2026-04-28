@@ -1554,7 +1554,7 @@ remaining unowned consumers of relay licensing state.
 That relay settings owner is intentionally split by role:
 `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` is the
 settings shell, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-owns relay config/status polling, trial, and pairing runtime, and
+owns relay config/status polling and pairing runtime, and
 `frontend-modern/src/components/Settings/RelayPairingSection.tsx` owns the QR
 pairing surface. Future relay settings work must extend that split instead of
 pulling polling and QR-generation lifecycle back into the shell component.

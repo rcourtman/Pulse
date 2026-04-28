@@ -171,7 +171,7 @@ describe('RelaySettingsPanel runtime', () => {
 
     expect(
       screen.getByText(
-        'Remote access via Pulse Relay requires a Relay license or above. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.',
+        'Remote access is available with Relay or Pro. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(

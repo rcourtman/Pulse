@@ -29,18 +29,12 @@ export const RELAY_DIAGNOSTICS_TITLE_CLASS = 'text-xs font-semibold text-base-co
 export const RELAY_SETTINGS_DESCRIPTION =
   'Configure Pulse relay connectivity for secure remote access and Pulse Mobile pairing.';
 export const RELAY_LICENSE_REQUIRED_MESSAGE =
-  'Remote access via Pulse Relay requires a Relay license or above. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.';
+  'Remote access is available with Relay or Pro. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.';
 export const RELAY_PAIRING_AVAILABILITY_TITLE = 'Pair Pulse Mobile through Relay';
 export const RELAY_PAIRING_AVAILABILITY_MESSAGE =
   'Supported Pulse Mobile clients connect to this Pulse instance with a QR code or deep link over end-to-end encrypted relay connectivity.';
 export const RELAY_ENABLE_HELP_TEXT =
   'Connect this Pulse instance to the relay server for secure remote access and Pulse Mobile pairing.';
-export const RELAY_ONBOARDING_TITLE = 'Pair Your Mobile Device';
-export const RELAY_ONBOARDING_DESCRIPTION =
-  'Pulse Relay lets your phone securely connect to this Pulse instance for remote monitoring.';
-export const RELAY_ONBOARDING_UPGRADE_LABEL = 'Get Relay — $39/yr';
-export const RELAY_ONBOARDING_SETUP_LABEL = 'Set Up Relay';
-export const RELAY_ONBOARDING_DISCONNECTED_LABEL = 'Relay is currently disconnected.';
 
 export function getRelayDiagnosticClass(severity: 'warning' | 'error'): string {
   return severity === 'error'

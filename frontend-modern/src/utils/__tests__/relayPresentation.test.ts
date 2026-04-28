@@ -9,11 +9,6 @@ import {
   RELAY_INLINE_ACTION_CLASS,
   RELAY_LAST_ERROR_CLASS,
   RELAY_LICENSE_REQUIRED_MESSAGE,
-  RELAY_ONBOARDING_DESCRIPTION,
-  RELAY_ONBOARDING_DISCONNECTED_LABEL,
-  RELAY_ONBOARDING_SETUP_LABEL,
-  RELAY_ONBOARDING_TITLE,
-  RELAY_ONBOARDING_UPGRADE_LABEL,
   RELAY_PAIRING_AVAILABILITY_MESSAGE,
   RELAY_PAIRING_AVAILABILITY_TITLE,
   RELAY_PRIMARY_BUTTON_CLASS,
@@ -23,6 +18,7 @@ import {
   RELAY_SECONDARY_BUTTON_CLASS,
   RELAY_SETTINGS_DESCRIPTION,
 } from '@/utils/relayPresentation';
+import relayPresentationSource from '@/utils/relayPresentation.ts?raw';
 
 describe('relayPresentation', () => {
   it('returns muted not-enabled presentation when relay is disabled', () => {
@@ -71,16 +67,18 @@ describe('relayPresentation', () => {
   it('centralizes relay availability copy', () => {
     expect(RELAY_SETTINGS_DESCRIPTION).toContain('Pulse Mobile pairing');
     expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('supported Pulse Mobile clients');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('available with Relay or Pro');
     expect(RELAY_PAIRING_AVAILABILITY_TITLE).toBe('Pair Pulse Mobile through Relay');
     expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('QR code or deep link');
     expect(RELAY_ENABLE_HELP_TEXT).toContain('Pulse Mobile pairing');
   });
 
-  it('centralizes relay onboarding copy', () => {
-    expect(RELAY_ONBOARDING_TITLE).toBe('Pair Your Mobile Device');
-    expect(RELAY_ONBOARDING_DESCRIPTION).toContain('remote monitoring');
-    expect(RELAY_ONBOARDING_UPGRADE_LABEL).toBe('Get Relay — $39/yr');
-    expect(RELAY_ONBOARDING_SETUP_LABEL).toBe('Set Up Relay');
-    expect(RELAY_ONBOARDING_DISCONNECTED_LABEL).toBe('Relay is currently disconnected.');
+  it('does not retain retired Relay price or trial-era onboarding copy', () => {
+    expect(relayPresentationSource).not.toContain('RELAY_ONBOARDING_UPGRADE_LABEL');
+    expect(relayPresentationSource).not.toContain('Get Relay');
+    expect(relayPresentationSource).not.toContain('$39');
+    expect(relayPresentationSource).not.toContain('$49');
+    expect(relayPresentationSource).not.toContain('$99');
+    expect(relayPresentationSource).not.toContain('Start free trial');
   });
 });
