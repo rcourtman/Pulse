@@ -168,6 +168,12 @@ work extends shared components instead of creating new local variants.
 ## Extension Points
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
+   Framed product table surfaces must consume the shared
+   `TableCard` primitive instead of composing page-local `Card` border,
+   background, and overflow classes. Feature owners may own the table data,
+   filters, columns, and row behavior, but the outer product-table frame and
+   its light/dark border treatment belong to frontend primitives so
+   Infrastructure, Workloads, Storage, and Recovery do not drift visually.
    Shared monitored-system warning primitives under that path must stay compact
    app-shell pointers into the owned Pulse Pro billing surface. The shared
    banner may announce posture and route to the relevant billing tab, but

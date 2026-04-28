@@ -1,9 +1,9 @@
 import { For } from 'solid-js';
 
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
-import { Card } from '@/components/shared/Card';
 import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
 import { Table } from '@/components/shared/Table';
+import { TableCard } from '@/components/shared/TableCard';
 
 import { getGuestColumnWidthStyle } from './guestRowModel';
 import type { DashboardState } from './useDashboardState';
@@ -60,10 +60,8 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
 
   return (
     <ComponentErrorBoundary name="Guest Table">
-      <Card
+      <TableCard
         ref={props.setTableRootRef}
-        padding="none"
-        tone="card"
         class="mb-4 rounded-md"
         data-summary-clear-surface
         data-testid="workloads-table-surface"
@@ -136,7 +134,7 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
             workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
           />
         </Table>
-      </Card>
+      </TableCard>
     </ComponentErrorBoundary>
   );
 }

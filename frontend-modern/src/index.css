@@ -85,9 +85,10 @@
     --color-summary-group-member-pinned-bg: rgba(14, 165, 233, 0.04);
     --color-summary-group-member-pinned-bg-hover: rgba(14, 165, 233, 0.055);
     --color-summary-group-member-pinned-accent: rgba(14, 165, 233, 0.22);
-    --color-grouped-table-row-bg: theme('colors.slate.200');
-    --color-grouped-table-row-bg-hover: theme('colors.slate.300');
-    --color-grouped-table-row-border: theme('colors.slate.300');
+    /* Shared product-table subgroup band. It should read as body segmentation, not table chrome. */
+    --color-grouped-table-row-bg: rgba(226, 232, 240, 0.72);
+    --color-grouped-table-row-bg-hover: rgba(203, 213, 225, 0.82);
+    --color-grouped-table-row-border: rgba(203, 213, 225, 0.9);
   }
 
   .dark {
@@ -110,9 +111,9 @@
     --color-summary-group-member-pinned-bg: rgba(56, 189, 248, 0.07);
     --color-summary-group-member-pinned-bg-hover: rgba(56, 189, 248, 0.09);
     --color-summary-group-member-pinned-accent: rgba(56, 189, 248, 0.28);
-    --color-grouped-table-row-bg: theme('colors.slate.900');
-    --color-grouped-table-row-bg-hover: theme('colors.slate.800');
-    --color-grouped-table-row-border: theme('colors.slate.700');
+    --color-grouped-table-row-bg: rgba(51, 65, 85, 0.58);
+    --color-grouped-table-row-bg-hover: rgba(51, 65, 85, 0.82);
+    --color-grouped-table-row-border: rgba(71, 85, 105, 0.85);
   }
 
   body {

@@ -68,6 +68,11 @@ querying, and the operator-facing storage health presentation layer.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
+   Recovery table surfaces must consume the frontend-primitives-owned
+   `TableCard` frame for protected-item, recovery-event, and adjacent
+   table-fallback chrome. Storage/recovery may own table content, filters,
+   columns, and rows, but it must not fork border/background/overflow table
+   shells or reintroduce lighter open-sided Recovery table frames.
    Recovery inventory protection posture and recovery-event outcome filtering
    must stay separate in that owner: protected inventory uses the route-backed
    `state` query for health, stale, failed, warning, running, unknown, and

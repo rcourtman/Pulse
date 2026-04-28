@@ -3,9 +3,9 @@ import type { Component } from 'solid-js';
 import type { Disk } from '@/types/api';
 import { formatBytes, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
-import { Card } from '@/components/shared/Card';
 import { getInteractiveGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
 import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
+import { TableCard } from '@/components/shared/TableCard';
 import {
   Table,
   TableBody,
@@ -63,7 +63,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
 
   return (
     <Show when={table.showHostTable()}>
-      <Card padding="none" tone="card" class="mb-0 overflow-hidden">
+      <TableCard class="mb-0">
         <SummaryTableCardHeader
           title="Agent Infrastructure"
           showClearAction={table.showHostClearAction()}
@@ -676,7 +676,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
             </TableBody>
           </Table>
         </div>
-      </Card>
+      </TableCard>
     </Show>
   );
 };

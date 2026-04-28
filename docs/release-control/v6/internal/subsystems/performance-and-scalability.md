@@ -224,6 +224,11 @@ regression protection.
     the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
     rather than local `bg-surface-alt` or hover-fill variants that drift between
     pages.
+    Framed product-table cards on the same hot-path surfaces must consume the
+    frontend-primitives-owned `TableCard` wrapper so Workloads,
+    Infrastructure, Storage, and Recovery keep one border/background/overflow
+    frame instead of introducing page-local table shells with different
+    light/dark contrast.
     Infrastructure table responsive behavior belongs to that same hot-path
     owner. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
     must derive column visibility from the measured table surface width, with

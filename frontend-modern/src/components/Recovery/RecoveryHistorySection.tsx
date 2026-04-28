@@ -12,6 +12,7 @@ import {
 } from '@/components/shared/FilterToolbar';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { TableCard } from '@/components/shared/TableCard';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
@@ -469,7 +470,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
         </Card>
       </Show>
 
-      <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+      <TableCard>
         <RecoveryHistoryTable
           clearSelectedPoint={clearSelectedPoint}
           currentPage={props.currentPage}
@@ -488,7 +489,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
           toggleSelectedPoint={toggleSelectedPoint}
           totalPages={props.totalPages}
         />
-      </Card>
+      </TableCard>
     </div>
   );
 };

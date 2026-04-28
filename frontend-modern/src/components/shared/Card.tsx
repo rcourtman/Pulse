@@ -3,7 +3,7 @@ import { JSX, splitProps, mergeProps } from 'solid-js';
 type Tone = 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger' | 'card' | 'glass';
 type Padding = 'none' | 'sm' | 'md' | 'lg';
 
-type CardProps = {
+export type CardProps = {
   tone?: Tone;
   padding?: Padding;
   hoverable?: boolean;

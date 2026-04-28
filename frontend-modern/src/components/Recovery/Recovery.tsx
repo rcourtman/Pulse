@@ -5,10 +5,10 @@ import { RecoveryActivitySection } from '@/components/Recovery/RecoveryActivityS
 import { RecoveryHistorySection } from '@/components/Recovery/RecoveryHistorySection';
 import { RecoveryProtectedInventorySection } from '@/components/Recovery/RecoveryProtectedInventorySection';
 import { RecoverySummary } from '@/components/Recovery/RecoverySummary';
-import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
+import { TableCard } from '@/components/shared/TableCard';
 import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';
 import type { ProtectedStateFilter } from '@/features/recovery/useRecoverySurfaceState';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -669,11 +669,7 @@ const Recovery: Component = () => {
                 {eventsActivity()}
 
                 <Show when={!recoveryPointsLoading() && recoveryPoints.response.error}>
-                  <Card
-                    padding="none"
-                    tone="card"
-                    class="overflow-hidden border-border-subtle bg-surface"
-                  >
+                  <TableCard>
                     <div class="p-6">
                       <EmptyState
                         title={getRecoveryPointsFailureState().title}
@@ -683,7 +679,7 @@ const Recovery: Component = () => {
                         )}
                       />
                     </div>
-                  </Card>
+                  </TableCard>
                 </Show>
 
                 <Show when={!recoveryPoints.response.error}>

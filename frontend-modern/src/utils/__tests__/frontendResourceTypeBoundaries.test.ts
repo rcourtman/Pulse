@@ -1107,8 +1107,17 @@ describe('frontend resource type boundaries', () => {
       "import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';",
     );
     expect(recoveryComponentSource).toContain('useRecoverySurfaceState');
+    expect(recoveryComponentSource).toContain('TableCard');
     expect(recoveryHistorySectionSource).toContain('useRecoveryHistorySectionState');
     expect(recoveryHistorySectionSource).toContain('RecoveryHistoryTable');
+    expect(recoveryHistorySectionSource).toContain('TableCard');
+    expect(recoveryHistorySectionSource).not.toContain(
+      'overflow-hidden border-border-subtle bg-surface',
+    );
+    expect(recoveryProtectedInventorySectionSource).toContain('TableCard');
+    expect(recoveryProtectedInventorySectionSource).not.toContain(
+      'overflow-hidden border-border-subtle bg-surface',
+    );
     expect(recoveryHistorySectionStateSource).toContain(
       'export function useRecoveryHistorySectionState',
     );
@@ -2050,6 +2059,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageContentCardSource).toContain('useStorageContentCardModel');
     expect(storageContentCardSource).toContain('DiskList');
     expect(storageContentCardSource).toContain('StoragePoolsTable');
+    expect(storageContentCardSource).toContain('TableCard');
     expect(storageContentCardSource).toContain('SummaryTableCardHeader');
     expect(storageContentCardSource).toContain('STORAGE_CONTENT_CARD_BODY_CLASS');
     expect(storageContentCardSource).not.toContain(

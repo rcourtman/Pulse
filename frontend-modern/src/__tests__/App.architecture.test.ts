@@ -122,6 +122,9 @@ describe('App architecture', () => {
     );
     expect(appStylesSource).toContain('tr.grouped-table-row > td');
     expect(appStylesSource).toContain('--color-grouped-table-row-bg');
+    expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(226, 232, 240, 0.72);');
+    expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(51, 65, 85, 0.58);');
+    expect(appStylesSource).not.toContain('--color-grouped-table-row-bg: theme(');
     expect(appStylesSource).not.toContain('@keyframes pulse-brand-wordmark');
     expect(appStylesSource).not.toContain('text-shadow');
     expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");

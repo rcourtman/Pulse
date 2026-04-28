@@ -64,6 +64,7 @@ import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionBu
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
 import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHeader.tsx?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
+import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
@@ -118,15 +119,20 @@ import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSe
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
+import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
 import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
 import nodeGroupHeaderSource from '@/components/shared/NodeGroupHeader.tsx?raw';
 import storageGroupRowSource from '@/components/Storage/StorageGroupRow.tsx?raw';
 import storageGroupPresentationSource from '@/features/storageBackups/groupPresentation.ts?raw';
 import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
+import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
+import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
+import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
+import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
@@ -278,6 +284,28 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolRowSource).not.toContain('Clear selection');
   });
 
+  it('keeps framed product table surfaces on the shared TableCard owner', () => {
+    expect(tableCardSource).toContain("export const TABLE_CARD_FRAME_CLASS = 'overflow-hidden'");
+    expect(tableCardSource).toContain("Omit<CardProps, 'border' | 'padding' | 'tone'>");
+    expect(tableCardSource).toContain('border={true}');
+    expect(tableCardSource).toContain('padding="none"');
+    expect(tableCardSource).toContain('tone="card"');
+    expect(tableCardSource).toContain('<Card');
+
+    for (const source of [
+      dashboardWorkloadTableSource,
+      unifiedResourceHostTableCardSource,
+      unifiedResourceServiceInfrastructureCardSource,
+      storageContentCardSource,
+      recoveryComponentSource,
+      recoveryHistorySectionSource,
+      recoveryProtectedInventorySectionSource,
+    ]) {
+      expect(source).toContain('TableCard');
+      expect(source).not.toContain('overflow-hidden border-border-subtle bg-surface');
+    }
+  });
+
   it('keeps shared subtabs as one primitive and leaves shell styling to owning surfaces', () => {
     expect(subtabsSource).not.toContain("variant?: 'default' | 'control'");
     expect(subtabsSource).not.toContain('subtabsControlShellClass');
@@ -387,6 +415,13 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain('--color-summary-group-member-pinned-accent');
     expect(frontendIndexCssSource).toContain('tr.grouped-table-row > td');
     expect(frontendIndexCssSource).toContain('--color-grouped-table-row-bg');
+    expect(frontendIndexCssSource).toContain(
+      '--color-grouped-table-row-bg: rgba(226, 232, 240, 0.72);',
+    );
+    expect(frontendIndexCssSource).toContain(
+      '--color-grouped-table-row-bg: rgba(51, 65, 85, 0.58);',
+    );
+    expect(frontendIndexCssSource).not.toContain('--color-grouped-table-row-bg: theme(');
     expect(groupedTableRowPresentationSource).toContain('GROUPED_TABLE_ROW_CLASS');
     expect(groupedTableRowPresentationSource).not.toContain('GROUPED_TABLE_ROW_DIVIDER_CLASS');
 

@@ -337,7 +337,11 @@ AI-only summary payloads, or page-local heuristics.
     plus `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
     must consume that scope through the shared page/group/entity interaction
     contract rather than inventing infrastructure-local summary filters or
-    route-backed cluster hover state. Deliberate cluster focus must also stay
+    route-backed cluster hover state. Host and service infrastructure table
+    card frames must consume the frontend-primitives-owned `TableCard` wrapper;
+    unified-resource ownership remains on resource identity, grouping, and row
+    semantics rather than forking a table border/background shell. Deliberate
+    cluster focus must also stay
     on the canonical infrastructure route through the shared `summaryGroup`
     query state, so pinned scope is shareable, reversible, and owned by the
     same route-backed summary contract as row focus. Infrastructure must stay

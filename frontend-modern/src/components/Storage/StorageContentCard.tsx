@@ -1,6 +1,6 @@
 import { Component, Show } from 'solid-js';
-import { Card } from '@/components/shared/Card';
 import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
+import { TableCard } from '@/components/shared/TableCard';
 import { DiskList } from '@/components/Storage/DiskList';
 import StoragePoolsTable from '@/components/Storage/StoragePoolsTable';
 import { STORAGE_CONTENT_CARD_BODY_CLASS } from '@/features/storageBackups/storagePagePresentation';
@@ -59,11 +59,8 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
     Boolean(props.focusedSummaryGroupId() || props.expandedPoolId() || props.selectedDiskId());
 
   return (
-    <Card
+    <TableCard
       ref={props.setTableRootRef}
-      padding="none"
-      tone="card"
-      class="overflow-hidden"
       data-summary-clear-surface
       data-testid="storage-content-surface"
     >
@@ -115,7 +112,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           onHoverChange={props.setHoveredStorageResourceId}
         />
       </Show>
-    </Card>
+    </TableCard>
   );
 };
 
