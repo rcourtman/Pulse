@@ -148,7 +148,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	FeatureAIAlerts: {
 		Key:                   FeatureAIAlerts,
 		DisplayName:           "Alert Analysis",
-		ComparisonName:        "Pulse Alert Analysis",
+		ComparisonName:        "Alert Root-Cause Analysis",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -161,8 +161,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureAIAutoFix: {
 		Key:                   FeatureAIAutoFix,
-		DisplayName:           "Pulse Patrol Auto-Fix",
-		ComparisonName:        "Patrol Auto-Fix",
+		DisplayName:           "Safe Remediation Workflows",
+		ComparisonName:        "Safe Remediation Workflows",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -170,7 +170,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRoleHidden,
 			Pro:       SelfHostedFeatureRolePrimaryPillar,
 		},
-		UpgradeReason:   "Upgrade to Pro so Pulse can move from finding issues to applying safe remediation with your approval or in autonomous mode.",
+		UpgradeReason:   "Upgrade to Pro so Pulse can move from finding issues to governed remediation with your approval or autonomy policy.",
 		UpgradePriority: 3,
 	},
 	FeatureKubernetesAI: {

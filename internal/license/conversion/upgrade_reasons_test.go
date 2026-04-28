@@ -96,7 +96,7 @@ func TestUpgradeReasonMatrix_OperatorOutcomeCopyRemainsCanonical(t *testing.T) {
 		license.FeatureRelay:           "Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.",
 		license.FeatureLongTermMetrics: "Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.",
 		license.FeatureAIAlerts:        "Upgrade to Pro so alerts arrive with root-cause analysis instead of a stack of symptoms.",
-		license.FeatureAIAutoFix:       "Upgrade to Pro so Pulse can move from finding issues to applying safe remediation with your approval or in autonomous mode.",
+		license.FeatureAIAutoFix:       "Upgrade to Pro so Pulse can move from finding issues to governed remediation with your approval or autonomy policy.",
 	}
 
 	for _, entry := range UpgradeReasonMatrix {

@@ -240,14 +240,14 @@ describe('services view', function() {
       title: 'Pricing',
       description: 'Canonical pricing model',
       explainer:
-        'Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day history.',
+        'Community keeps monitoring free and unlimited. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       plans: [
         {
           tierKicker: 'Pro',
           title: 'Pro',
           price: '$8.99',
           period: '$79/year available too',
-          blurb: 'The operator tier for root-cause answers, safe remediation, and 90-day history.',
+          blurb: 'The operator tier for root-cause analysis, safe remediation workflows, and 90-day history.',
           features: [{ tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' }],
           buttons: [
             {
@@ -273,7 +273,7 @@ describe('services view', function() {
       'Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right Plans page automatically.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day history.',
+      'Community keeps monitoring free and unlimited. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('Continue to Plans');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('ppk_live_preview');

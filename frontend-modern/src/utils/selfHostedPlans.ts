@@ -54,7 +54,9 @@ const getTierEntitlementHighlights = (
   metricHistoryDays: number,
 ): readonly string[] => {
   const highlights = getSelfHostedFeaturesForRole(tier, 'primary_pillar').map((entry) =>
-    entry.key === 'long_term_metrics' ? `${metricHistoryDays}-day metric history` : entry.comparisonName,
+    entry.key === 'long_term_metrics'
+      ? `${metricHistoryDays}-day metric history`
+      : entry.comparisonName,
   );
   const metricHistoryHighlight = getTierMetricHistoryHighlight(tier, metricHistoryDays);
   if (!metricHistoryHighlight || highlights.includes(metricHistoryHighlight)) {
@@ -92,13 +94,13 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       'Update alerts',
     ],
     includedExtras: [],
-    comparisonSummary: 'Community covers self-hosted monitoring and core operations on this instance.',
+    comparisonSummary:
+      'Community covers self-hosted monitoring and core operations on this instance.',
     highlights: [
       'Real-time monitoring',
       'Unlimited self-hosted monitoring',
       '7-day metric history',
       'Pulse Patrol (BYOK)',
-      'Hosted Patrol quickstart with activated entitlement: 25 runs, no API key',
       'Update alerts',
       'Basic SSO (OIDC)',
       'Community support',
@@ -132,17 +134,17 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: '$8.99/month',
     subline: 'or $79/year',
     metricHistoryDays: 90,
-    billingExtrasSummary: 'Root-cause analysis, remediation, and admin extras',
+    billingExtrasSummary: 'Analysis, remediation, and admin controls',
     entitlementSummary:
-      'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
+      'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:
-      'Move from monitoring into operations with root-cause answers, safe remediation, and 90-day history. Pulse Pro also includes SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
+      'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
     highlights: [
       'Everything in Relay',
-      'Pulse Alert Analysis',
-      'Patrol Auto-Fix',
+      'Alert root-cause analysis',
+      'Safe remediation workflows',
       '90-day metric history',
       'RBAC, audit logging, SAML SSO',
       'Agent profiles · PDF/CSV reports',
@@ -179,7 +181,7 @@ export function getSelfHostedPlanDefinitionForBillingTier(
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
   pageDescription:
-    'Core monitoring is free for self-hosted Pulse. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation, 90-day history, and admin/reporting extras.',
+    'Core monitoring is free and unlimited for self-hosted Pulse. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',

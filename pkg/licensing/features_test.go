@@ -224,7 +224,7 @@ func TestGetFeatureDisplayName(t *testing.T) {
 	}{
 		{FeatureAIPatrol, "Pulse Patrol (Background Health Checks)"},
 		{FeatureAIAlerts, "Alert Analysis"},
-		{FeatureAIAutoFix, "Pulse Patrol Auto-Fix"},
+		{FeatureAIAutoFix, "Safe Remediation Workflows"},
 		{FeatureKubernetesAI, "Kubernetes AI Analysis (Compatibility)"},
 		{FeatureUpdateAlerts, "Update Alerts (Container/Package Updates)"},
 		{FeatureRBAC, "Role-Based Access Control (RBAC)"},

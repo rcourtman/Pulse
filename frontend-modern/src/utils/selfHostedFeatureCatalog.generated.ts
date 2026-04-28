@@ -132,7 +132,7 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   {
     "key": "ai_alerts",
     "displayName": "Alert Analysis",
-    "comparisonName": "Pulse Alert Analysis",
+    "comparisonName": "Alert Root-Cause Analysis",
     "showInComparisonTable": true,
     "displayableInSelfHostedPlan": true,
     "roles": {
@@ -148,8 +148,8 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   },
   {
     "key": "ai_autofix",
-    "displayName": "Pulse Patrol Auto-Fix",
-    "comparisonName": "Patrol Auto-Fix",
+    "displayName": "Safe Remediation Workflows",
+    "comparisonName": "Safe Remediation Workflows",
     "showInComparisonTable": true,
     "displayableInSelfHostedPlan": true,
     "roles": {

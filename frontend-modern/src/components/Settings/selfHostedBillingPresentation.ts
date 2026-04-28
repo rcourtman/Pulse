@@ -46,7 +46,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   planSectionTitle: 'Current plan',
   planSectionDescription:
     'See which self-hosted tier this instance unlocked, what capabilities are active, and how plan status or continuity affects this install.',
-  planComparisonSectionTitle: 'If You Need More',
+  planComparisonSectionTitle: 'Optional extras',
   planComparisonActionLabel: 'See all plans',
   usageSectionTitle: 'Usage',
   hiddenShellTitle: 'Demo mode',
@@ -59,7 +59,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
   planSelectionPromptTitle: 'Compare self-hosted plans',
   planSelectionPromptBody:
-    'Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day history.',
+    'Community includes unlimited self-hosted monitoring. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
   planSelectionPromptActionLabel: 'Compare plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',

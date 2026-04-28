@@ -324,8 +324,8 @@ Community limit enforcement.
     narrative across the in-app billing shell, Pulse Account handoff, public
     pricing contract, and owned upgrade reasons. Customer-facing self-hosted
     copy must keep the ladder explicit as `Community = monitor`, `Relay = reach
-    Pulse from anywhere`, and `Pro = investigate root cause, apply safe
-    remediation, and retain 90-day history`. Team/admin extras such as
+    Pulse from anywhere`, and `Pro = investigate root cause, use safe
+    remediation workflows, and retain 90-day history`. Team/admin extras such as
     RBAC, SSO, audit logging, reporting, and agent profiles may remain present,
     but they are secondary included value and must not displace that operator
     outcome framing on owned commercial surfaces.
@@ -354,14 +354,18 @@ Community limit enforcement.
     customer-facing plan cards, top-summary highlights, and comparison rows
     must lead with the canonical plan story: `Community = monitor`, `Relay =
     reach Pulse from anywhere`, and `Pro = root-cause analysis, safe
-    remediation, and longer history`. Team/admin capabilities such as SAML
+    remediation workflows, and longer history`. Team/admin capabilities such as SAML
     SSO, RBAC, audit logging, reporting, and agent profiles may appear as
     secondary included extras, while platform-specific compatibility keys such
     as `kubernetes_ai` must not be elevated into a marquee marketed Pro line
     item on the self-hosted Plans surface. Legacy packaging nouns such as
     `incident memory`, `scheduled remediations`, and `execution audit trail`
     must likewise stay out of current v6 commercial copy unless Pulse ships a
-    first-class product surface that makes those names truthful again.
+    first-class product surface that makes those names truthful again. The raw
+    entitlement key `ai_autofix` may remain the internal capability identifier,
+    but owned plan cards, comparison rows, and upgrade reasons must present it
+    as safe remediation workflows rather than `Patrol Auto-Fix` or other
+    stronger automation-first labels.
     That same self-hosted pricing boundary now also owns canonical feature
     classification metadata. `pkg/licensing/self_hosted_feature_catalog.go`
     is the source of truth for customer-facing self-hosted feature labels,

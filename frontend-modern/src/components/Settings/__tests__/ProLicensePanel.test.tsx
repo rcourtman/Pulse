@@ -224,7 +224,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
     expect(screen.queryByText(/^Expired$/)).not.toBeInTheDocument();
     expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
-    expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
+    expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
     expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
     expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Compare plans' })).not.toBeInTheDocument();
@@ -294,7 +294,7 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getAllByText('Trial').length).toBeGreaterThan(0);
     expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
+    expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
   });
 
   it('shows active recurring v5 plan terms as uncapped even if stale limit metadata is present', async () => {
@@ -470,19 +470,17 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Alert Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
+    expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
+    expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
     expect(screen.getByText('Included extras')).toBeInTheDocument();
     expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
-    expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
+    expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
     expect(screen.getByText('90 days')).toBeInTheDocument();
-    expect(
-      screen.getByText('Root-cause analysis, remediation, and admin extras'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Analysis, remediation, and admin controls')).toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
@@ -512,7 +510,7 @@ describe('ProLicensePanel', () => {
         'Relay is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.',
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
+    expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
     expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
     expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'See all plans' })).not.toBeInTheDocument();
@@ -725,8 +723,8 @@ describe('ProLicensePanel', () => {
 
     // Verify every capability renders with its expected label
     expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Alert Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
+    expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
+    expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
     expect(screen.getByText('Update Alerts')).toBeInTheDocument();
     expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
     expect(screen.getByText('Role-Based Access Control (RBAC)')).toBeInTheDocument();
@@ -779,7 +777,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Pulse Pro trial is now active')).toBeInTheDocument();
     expect(screen.getByText(/this instance now has Pulse Pro trial access/i)).toBeInTheDocument();
     expect(screen.getByText('Available during this trial')).toBeInTheDocument();
-    expect(screen.getAllByText('Patrol Auto-Fix').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Safe Remediation Workflows').length).toBeGreaterThan(0);
     expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
       replace: true,
       scroll: false,
@@ -862,7 +860,7 @@ describe('ProLicensePanel', () => {
           screen.getByText(/Checkout completed and this instance is now running Pulse Pro/i),
         ).toBeInTheDocument();
         expect(screen.getByText('Available now on this instance')).toBeInTheDocument();
-        expect(screen.getAllByText('Patrol Auto-Fix').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Safe Remediation Workflows').length).toBeGreaterThan(0);
       }
       if (actionLabel && actionHref) {
         const actionLinks = screen.getAllByRole('link', { name: actionLabel });
@@ -900,8 +898,8 @@ describe('ProLicensePanel', () => {
       screen.getByText(/Checkout completed and this instance is now running Pulse Pro/i),
     ).toBeInTheDocument();
     expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Patrol Auto-Fix').length).toBeGreaterThan(0);
-    expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Safe Remediation Workflows').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Review plan' })).not.toBeInTheDocument();
   });
 
@@ -1165,7 +1163,7 @@ describe('ProLicensePanel', () => {
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain(
-      'Turn alert noise into root-cause answers, safe fixes, and 90-day history.',
+      'Turn alert noise into root-cause analysis, safe remediation workflows, and 90-day history.',
     );
     expect(selfHostedCommercialRecoverySectionSource).toContain(
       'SELF_HOSTED_RECOVERY_PRESENTATION',
