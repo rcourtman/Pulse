@@ -114,18 +114,23 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(currentPlanCard.getByText('Grandfathered price')).toBeVisible();
     await expect(currentPlanCard.getByText('Grandfathered floor')).toHaveCount(0);
     await expect(
-      currentPlanCard.getByText(
-        /existing recurring price and uncapped monitored-system and guest capacity until cancellation/i,
-      ),
+      currentPlanCard.getByText(/keeps its existing recurring price until cancellation/i),
     ).toBeVisible();
     await expect(
-      page.getByText(
-        /keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel/i,
+      currentPlanCard.getByText(
+        /self-hosted monitoring and child-resource volume remain uncapped/i,
       ),
     ).toBeVisible();
+    const recurringContinuityNotice = page.getByText(
+      /This migrated v5 Pro subscription keeps its existing recurring price until you cancel/i,
+    );
+    await expect(recurringContinuityNotice).toBeVisible();
+    await expect(recurringContinuityNotice).toContainText(
+      /Self-hosted monitoring and child-resource volume remain uncapped/i,
+    );
     await expect(currentPlanCard.getByText(/effective monitored-system limit/i)).toHaveCount(0);
     await expect(page.getByText('Core Monitoring', { exact: true })).toBeVisible();
-    await expect(page.getByText('Guest Capacity', { exact: true })).toBeVisible();
+    await expect(page.getByText('Guest Capacity', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Unlimited').first()).toBeVisible();
     await expect(currentPlanCard.getByText('Primary capabilities')).toBeVisible();
     await expect(currentPlanCard.getByText('Included extras')).toBeVisible();
