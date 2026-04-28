@@ -14,14 +14,6 @@ interface UnifiedResourceSourceBadgeCellProps {
 const getVisibleSourceBadgeLimit = (layoutMode: UnifiedResourceTableLayoutMode): number =>
   layoutMode === 'wide' ? 3 : 2;
 
-const compactSourceBadgeLabel = (label: string): string =>
-  label === 'Containers' ? 'Cont' : label;
-
-const getSourceBadgeDisplayLabel = (
-  label: string,
-  layoutMode: UnifiedResourceTableLayoutMode,
-): string => (layoutMode === 'wide' ? label : compactSourceBadgeLabel(label));
-
 export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadgeCellProps> = (
   props,
 ) => {
@@ -40,9 +32,7 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
   const hiddenBadges = createMemo(() => badges().slice(visibleBadges().length));
   const hiddenBadgeCount = createMemo(() => Math.max(0, badges().length - visibleBadges().length));
   const hiddenBadgeLabel = createMemo(() =>
-    hiddenBadgeCount() === 1
-      ? `+${compactSourceBadgeLabel(hiddenBadges()[0]?.label ?? '')}`
-      : `+${hiddenBadgeCount()}`,
+    hiddenBadgeCount() === 1 ? `+${hiddenBadges()[0]?.label ?? ''}` : `+${hiddenBadgeCount()}`,
   );
   const title = createMemo(() =>
     titleBadges()
@@ -53,7 +43,7 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
   return (
     <div
       class="flex min-w-0 max-w-full items-center justify-center gap-1 overflow-hidden"
-      aria-label={title() ? `Platform: ${title()}` : undefined}
+      aria-label={title() ? `System: ${title()}` : undefined}
       title={title()}
     >
       <For each={visibleBadges()}>
@@ -62,16 +52,14 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
             class={`${badge.classes} min-w-0 max-w-full overflow-hidden px-1`}
             title={badge.title}
           >
-            <span class="min-w-0 truncate">
-              {getSourceBadgeDisplayLabel(badge.label, props.layoutMode)}
-            </span>
+            <span class="min-w-0 truncate">{badge.label}</span>
           </span>
         )}
       </For>
       <Show when={hiddenBadgeCount() > 0}>
         <span
           class="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded bg-surface-alt px-1 py-0.5 text-[10px] font-medium text-muted"
-          aria-label={`Additional sources: ${hiddenBadges()
+          aria-label={`Additional systems: ${hiddenBadges()
             .map((badge) => badge.title ?? badge.label)
             .join(', ')}`}
           title={title()}

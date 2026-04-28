@@ -16,7 +16,8 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import {
-  getInfrastructurePlatformBadges,
+  dedupeResourceBadges,
+  getInfrastructureSystemIdentityBadges,
   getPlatformBadge,
   getSourceBadge,
   getUnifiedSourceBadges,
@@ -121,8 +122,11 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                 const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
                 const unifiedSources = createMemo(() => table.getUnifiedSources(resource));
                 const sourceBadges = createMemo(() => getUnifiedSourceBadges(unifiedSources()));
-                const platformBadges = createMemo(() =>
-                  getInfrastructurePlatformBadges(unifiedSources()),
+                const systemBadges = createMemo(() =>
+                  getInfrastructureSystemIdentityBadges(resource),
+                );
+                const systemTitleBadges = createMemo(() =>
+                  dedupeResourceBadges([...systemBadges(), ...sourceBadges()]),
                 );
                 const healthClass = createMemo(
                   () =>
@@ -256,10 +260,10 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
 
                       <TableCell classList={{ hidden: !table.isServiceVisible('secondary') }}>
                         <UnifiedResourceSourceBadgeCell
-                          unifiedBadges={platformBadges()}
+                          unifiedBadges={systemBadges()}
                           platformBadge={platformBadge()}
                           sourceBadge={sourceBadge()}
-                          titleBadges={sourceBadges()}
+                          titleBadges={systemTitleBadges()}
                           layoutMode={table.layoutMode()}
                         />
                       </TableCell>

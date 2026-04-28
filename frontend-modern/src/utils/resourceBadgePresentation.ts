@@ -1,5 +1,6 @@
-import type { PlatformType, SourceType, ResourceType } from '@/types/resource';
+import type { PlatformType, SourceType, Resource, ResourceType } from '@/types/resource';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
+import { getPlatformAgentRecord, getPlatformDataRecord } from '@/utils/agentResources';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getSourceTypePresentation } from '@/utils/sourceTypePresentation';
 import {
@@ -17,6 +18,58 @@ const baseBadge =
   'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
 const typeClasses = 'bg-surface-alt text-base-content';
+
+const PRIMARY_SYSTEM_SOURCE_PRIORITY: KnownSourcePlatform[] = [
+  'proxmox-pve',
+  'proxmox-pbs',
+  'proxmox-pmg',
+  'truenas',
+  'vmware-vsphere',
+  'unraid',
+  'synology-dsm',
+  'microsoft-hyperv',
+  'kubernetes',
+];
+
+const knownHostIdentityPlatformPatterns: Array<{
+  pattern: RegExp;
+  source: KnownSourcePlatform;
+}> = [
+  { pattern: /\btrue\s*nas\b|\btruenas\b/i, source: 'truenas' },
+  { pattern: /\bunraid\b/i, source: 'unraid' },
+  { pattern: /\bsynology\b|\bdiskstation\b|\bdsm\b/i, source: 'synology-dsm' },
+  { pattern: /\bhyper-?v\b/i, source: 'microsoft-hyperv' },
+];
+
+const hostOsLabelPatterns: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\bqnap\b|\bqts\b|\bquts\b/i, label: 'QNAP' },
+  { pattern: /\bubuntu\b/i, label: 'Ubuntu' },
+  { pattern: /\bdebian\b/i, label: 'Debian' },
+  { pattern: /\bproxmox\b/i, label: 'Proxmox' },
+  { pattern: /\bfedora\b/i, label: 'Fedora' },
+  { pattern: /\brocky\b/i, label: 'Rocky' },
+  { pattern: /\balma\s*linux\b|\balmalinux\b/i, label: 'AlmaLinux' },
+  { pattern: /\bcentos\b/i, label: 'CentOS' },
+  { pattern: /\bred\s*hat\b|\brhel\b/i, label: 'RHEL' },
+  { pattern: /\barch\b/i, label: 'Arch' },
+  { pattern: /\balpine\b/i, label: 'Alpine' },
+  { pattern: /\bopen\s*suse\b|\bopensuse\b/i, label: 'openSUSE' },
+  { pattern: /\bsuse\b/i, label: 'SUSE' },
+  { pattern: /\bfreebsd\b/i, label: 'FreeBSD' },
+  { pattern: /\bwindows\b/i, label: 'Windows' },
+  { pattern: /\bmac\s*os\b|\bmacos\b|\bdarwin\b/i, label: 'macOS' },
+  { pattern: /\blinux\b/i, label: 'Linux' },
+];
+
+const trimString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const titleFromParts = (...parts: Array<string | undefined>): string | undefined => {
+  const title = parts
+    .map((part) => (part || '').trim())
+    .filter(Boolean)
+    .join(' ');
+  return title || undefined;
+};
 
 const normalizeUnifiedSourceKeys = (sources?: string[] | null): KnownSourcePlatform[] => {
   if (!sources || sources.length === 0) return [];
@@ -81,6 +134,115 @@ export function getInfrastructurePlatformBadges(sources?: string[] | null): Reso
 
   const platformSources = normalized.filter((source) => source !== 'agent');
   return buildUnifiedSourceBadges(platformSources.length > 0 ? platformSources : normalized);
+}
+
+const firstSystemSource = (
+  sources: KnownSourcePlatform[],
+  platformType?: PlatformType,
+): KnownSourcePlatform | null => {
+  const sourceSet = new Set(sources);
+  const normalizedPlatform = normalizeSourcePlatformKey(platformType);
+  if (normalizedPlatform) {
+    sourceSet.add(normalizedPlatform);
+  }
+
+  return PRIMARY_SYSTEM_SOURCE_PRIORITY.find((source) => sourceSet.has(source)) ?? null;
+};
+
+const getKnownHostIdentitySource = (...values: string[]): KnownSourcePlatform | null => {
+  for (const value of values) {
+    if (!value) continue;
+    const normalized = normalizeSourcePlatformKey(value);
+    if (
+      normalized &&
+      normalized !== 'agent' &&
+      normalized !== 'docker' &&
+      normalized !== 'generic'
+    ) {
+      return normalized;
+    }
+    const match = knownHostIdentityPlatformPatterns.find(({ pattern }) => pattern.test(value));
+    if (match) return match.source;
+  }
+  return null;
+};
+
+const getHostOsLabel = (...values: string[]): string | null => {
+  for (const value of values) {
+    if (!value) continue;
+    const match = hostOsLabelPatterns.find(({ pattern }) => pattern.test(value));
+    if (match) return match.label;
+  }
+  return null;
+};
+
+const getAgentSystemIdentityBadge = (resource: Resource): ResourceBadge | null => {
+  const agent = getPlatformAgentRecord(resource);
+  if (!agent) return null;
+
+  const platform = trimString(agent.platform);
+  const osName = trimString(agent.osName);
+  const osVersion = trimString(agent.osVersion);
+  const knownSource = getKnownHostIdentitySource(platform, osName);
+  if (knownSource) {
+    const badge = getSourcePlatformBadge(knownSource);
+    if (badge) {
+      return {
+        label: badge.label,
+        classes: badge.classes,
+        title: titleFromParts(osName || badge.title, osVersion) ?? badge.title,
+      };
+    }
+  }
+
+  const osLabel = getHostOsLabel(osName, platform);
+  if (osLabel) {
+    return {
+      label: osLabel,
+      classes: `${baseBadge} ${typeClasses}`,
+      title: titleFromParts(osName || osLabel, osVersion),
+    };
+  }
+
+  return null;
+};
+
+export function getInfrastructureSystemIdentityBadges(resource: Resource): ResourceBadge[] {
+  const platformData = getPlatformDataRecord(resource) as { sources?: string[] } | undefined;
+  const sources = normalizeUnifiedSourceKeys(platformData?.sources);
+  const systemSource = firstSystemSource(sources, resource.platformType);
+  if (systemSource) {
+    return buildUnifiedSourceBadges([systemSource]);
+  }
+
+  const agentIdentityBadge = getAgentSystemIdentityBadge(resource);
+  if (agentIdentityBadge) {
+    return [agentIdentityBadge];
+  }
+
+  if (
+    resource.platformType === 'docker' ||
+    resource.type === 'docker-host' ||
+    sources.includes('docker')
+  ) {
+    return buildUnifiedSourceBadges(['docker']);
+  }
+
+  const platformBadge = getPlatformBadge(resource.platformType);
+  if (platformBadge) {
+    return [platformBadge];
+  }
+
+  return getInfrastructurePlatformBadges(platformData?.sources);
+}
+
+export function getInfrastructureSystemIdentitySortLabel(resource: Resource): string {
+  return (
+    getInfrastructureSystemIdentityBadges(resource)[0]?.label ||
+    getPlatformBadge(resource.platformType)?.label ||
+    resource.platformType ||
+    ''
+  );
 }
 
 export function dedupeResourceBadges(

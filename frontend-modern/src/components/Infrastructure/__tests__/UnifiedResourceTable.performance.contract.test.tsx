@@ -184,6 +184,39 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(container.querySelector('[style]')).toBeNull();
     });
 
+    it('renders reported host identity instead of container runtime as the primary system badge', async () => {
+      const resources = [
+        makeResource(1, {
+          type: 'docker-host',
+          displayName: 'tower',
+          platformType: 'docker',
+          sourceType: 'hybrid',
+          platformData: {
+            sources: ['agent', 'docker'],
+            agent: {
+              platform: 'unraid',
+              osName: 'Unraid',
+              osVersion: '7.1.0',
+            },
+          },
+        }),
+      ];
+      const { getByText, queryByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(getByText('System')).toBeInTheDocument();
+        expect(getByText('Unraid')).toBeInTheDocument();
+      });
+      expect(queryByText('Docker')).toBeNull();
+    });
+
     it('adapts host columns from the measured table surface width instead of the window width', async () => {
       const resources = [
         makeResource(1, {
@@ -210,7 +243,7 @@ describe('UnifiedResourceTable performance contract', () => {
 
       await waitFor(() => {
         expect(getByText('Net').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Plat').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Sys').closest('th')).not.toHaveClass('hidden');
         expect(getByText('I/O').closest('th')).toHaveClass('hidden');
         expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
@@ -223,7 +256,7 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getByText('Net').closest('th')).not.toHaveClass('hidden');
         expect(getByText('I/O').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Plat').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Sys').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
 
@@ -232,7 +265,7 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getByText('Net I/O').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Disk I/O').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Platform').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('System').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Up').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Temp').closest('th')).not.toHaveClass('hidden');
       });
@@ -241,7 +274,7 @@ describe('UnifiedResourceTable performance contract', () => {
 
       await waitFor(() => {
         expect(getByText('Memory')).toBeInTheDocument();
-        expect(getByText('Platform').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('System').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Uptime').closest('th')).not.toHaveClass('hidden');
       });
     });
@@ -276,7 +309,7 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getByText('Store').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Jobs').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Plat').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Sys').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
       expect(getByText('PBS')).toBeInTheDocument();
@@ -284,7 +317,7 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(queryByText('PBS+Agent')).toBeNull();
       expect(queryByText('+1')).toBeNull();
       expect(
-        container.querySelectorAll('[aria-label^="Platform:"] .h-1\\.5.w-1\\.5.rounded-full'),
+        container.querySelectorAll('[aria-label^="System:"] .h-1\\.5.w-1\\.5.rounded-full'),
       ).toHaveLength(0);
 
       emitResizeObserverWidth(660);

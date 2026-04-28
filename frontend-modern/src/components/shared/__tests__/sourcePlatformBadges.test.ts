@@ -46,9 +46,9 @@ describe('sourcePlatformBadges', () => {
       expect(result?.label).toBe('PMG');
     });
 
-    it('returns Containers badge for docker', () => {
+    it('returns Docker badge for docker', () => {
       const result = getSourcePlatformBadge('docker');
-      expect(result?.label).toBe('Containers');
+      expect(result?.label).toBe('Docker');
     });
 
     it('returns K8s badge for kubernetes', () => {
@@ -108,9 +108,9 @@ describe('sourcePlatformBadges', () => {
     });
 
     it('is case-insensitive', () => {
-      expect(getSourcePlatformBadge('DOCKER')?.label).toBe('Containers');
+      expect(getSourcePlatformBadge('DOCKER')?.label).toBe('Docker');
       expect(getSourcePlatformBadge('Kubernetes')?.label).toBe('K8s');
-      expect(getSourcePlatformBadge('Docker')?.label).toBe('Containers');
+      expect(getSourcePlatformBadge('Docker')?.label).toBe('Docker');
     });
 
     it('returns unknown platform badge for unrecognized platforms', () => {
@@ -121,7 +121,7 @@ describe('sourcePlatformBadges', () => {
 
     it('handles whitespace around platform names', () => {
       const result = getSourcePlatformBadge('  docker  ');
-      expect(result?.label).toBe('Containers');
+      expect(result?.label).toBe('Docker');
     });
 
     it('handles platform names with underscores', () => {

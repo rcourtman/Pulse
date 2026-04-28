@@ -111,7 +111,7 @@ describe('dashboardWorkloadFilterConfigModel', () => {
         isWorkloadsRoute: true,
         selectedPlatform: 'truenas',
         platformOptions: [
-          { value: 'docker', label: 'Containers' },
+          { value: 'docker', label: 'Docker' },
           { value: 'truenas', label: 'TrueNAS' },
         ],
         onChange,
@@ -122,7 +122,7 @@ describe('dashboardWorkloadFilterConfigModel', () => {
       value: 'truenas',
       options: [
         { value: '', label: 'All platforms' },
-        { value: 'docker', label: 'Containers' },
+        { value: 'docker', label: 'Docker' },
         { value: 'truenas', label: 'TrueNAS' },
       ],
     });

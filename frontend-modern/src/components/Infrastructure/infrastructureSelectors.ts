@@ -4,6 +4,7 @@ import {
   getPreferredInfrastructureDisplayName,
   getPreferredResourceDisplayName,
 } from '@/utils/resourceIdentity';
+import { getInfrastructureSystemIdentitySortLabel } from '@/utils/resourceBadgePresentation';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getCanonicalStatusLabel, STATUS_SORT_ORDER } from '@/utils/status';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
@@ -89,7 +90,7 @@ const getSortValue = (resource: Resource, key: string): number | string | null =
     case 'diskio':
       return resource.diskIO ? resource.diskIO.readRate + resource.diskIO.writeRate : null;
     case 'source':
-      return resource.platformType ?? '';
+      return getInfrastructureSystemIdentitySortLabel(resource);
     case 'temp':
       return resource.temperature ?? null;
     default:

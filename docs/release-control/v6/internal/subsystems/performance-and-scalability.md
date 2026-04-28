@@ -677,13 +677,16 @@ matching, and row titles on the infrastructure page must use the canonical
 local instance identity rather than governed AI-summary text, so performance
 work cannot “optimize” the table into ambiguous labels that collapse multiple
 resources into the same visible name.
-The same protected table path treats the visible platform column as
-platform-first presentation over canonical merged-source data. Sort derivation
-for that column must use the normalized infrastructure platform key, while the
-render path may keep full merged-source detail in tooltips. When a row contains
-both `agent` and a provider/API platform such as Proxmox, the table must render
-the provider platform as the compact visible badge rather than adding extra
-Agent badge width or sorting primarily by the telemetry method.
+The same protected table path treats the visible system column as
+identity-first presentation over canonical merged-source data. Sort derivation
+for that column must use the same displayed system identity as the render path,
+while the render path may keep full merged-source detail in tooltips. When a
+row contains both `agent` and a provider/API platform such as Proxmox, the table
+must render the provider platform as the compact visible badge rather than
+adding extra Agent badge width or sorting primarily by the telemetry method.
+When a row is only known through an agent or container runtime, the table must
+prefer reported OS/appliance identity before falling back to Docker/runtime
+capability labels.
 That derived workload owner now also routes grouped row windowing through
 `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`, which
 owns row-window thresholds, overscan behavior, reveal-index clamping, and

@@ -12,7 +12,7 @@ describe('getUnifiedSourceBadges', () => {
     const badges = getUnifiedSourceBadges(['proxmox-pve', 'docker']);
     expect(badges).toHaveLength(2);
     expect(badges[0].label).toBe('PVE');
-    expect(badges[1].label).toBe('Containers');
+    expect(badges[1].label).toBe('Docker');
   });
 
   it('includes TrueNAS source badge', () => {

@@ -66,11 +66,11 @@
         "assistant_read": "supported",
         "assistant_control": "supported"
       },
-      "ui_label": "Containers",
+      "ui_label": "Docker",
       "ui_tone": "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-400",
       "aliases": [],
       "display_tokens": [
-        "Containers",
+        "Container runtime",
         "Docker"
       ],
       "storage_family": "container"

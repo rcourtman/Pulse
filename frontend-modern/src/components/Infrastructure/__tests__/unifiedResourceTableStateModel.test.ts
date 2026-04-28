@@ -159,11 +159,11 @@ describe('unifiedResourceTableStateModel', () => {
     expect(wideColumns.ioColumn.width).toBe('12.5%');
     expect(wideColumns.serviceActionColumn.width).toBe('16%');
     expect(getUnifiedResourceTableHeaderLabels('wide').memory).toBe('Memory');
-    expect(getUnifiedResourceTableHeaderLabels('wide').source).toBe('Platform');
+    expect(getUnifiedResourceTableHeaderLabels('wide').source).toBe('System');
     expect(getUnifiedResourceTableHeaderLabels('compact').memory).toBe('Mem');
-    expect(getUnifiedResourceTableHeaderLabels('compact').source).toBe('Platform');
+    expect(getUnifiedResourceTableHeaderLabels('compact').source).toBe('System');
     expect(getUnifiedResourceTableHeaderLabels('tablet').network).toBe('Net');
-    expect(getUnifiedResourceTableHeaderLabels('tablet').source).toBe('Plat');
+    expect(getUnifiedResourceTableHeaderLabels('tablet').source).toBe('Sys');
     expect(getUnifiedResourceTableHeaderLabels('mobile').datastores).toBe('Store');
     expect(shouldShowUnifiedResourceHostTable(0, 0)).toBe(true);
     expect(shouldShowUnifiedResourceHostTable(0, 2)).toBe(false);

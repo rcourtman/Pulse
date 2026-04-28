@@ -229,7 +229,7 @@ describe('infrastructureSelectors', () => {
       ]);
     });
 
-    it('sorts the visible platform column by infrastructure platform, not telemetry method', () => {
+    it('sorts the visible system column by displayed infrastructure identity', () => {
       const resources = [
         makeResource(1, {
           displayName: 'PVE hybrid',
@@ -237,22 +237,32 @@ describe('infrastructureSelectors', () => {
           sourceType: 'hybrid',
         }),
         makeResource(2, {
-          displayName: 'Agent only',
-          platformType: 'agent',
-          sourceType: 'agent',
+          displayName: 'Docker only',
+          type: 'docker-host',
+          platformType: 'docker',
+          sourceType: 'api',
+          platformData: { sources: ['docker'] },
         }),
         makeResource(3, {
-          displayName: 'Kubernetes',
-          platformType: 'kubernetes',
+          displayName: 'Unraid runtime',
+          type: 'docker-host',
+          platformType: 'docker',
           sourceType: 'hybrid',
+          platformData: {
+            sources: ['agent', 'docker'],
+            agent: {
+              platform: 'unraid',
+              osName: 'Unraid',
+            },
+          },
         }),
       ];
 
       const sorted = sortResources(resources, 'source', 'asc');
       expect(sorted.map((resource) => resource.id)).toEqual([
         'resource-2',
-        'resource-3',
         'resource-1',
+        'resource-3',
       ]);
     });
 

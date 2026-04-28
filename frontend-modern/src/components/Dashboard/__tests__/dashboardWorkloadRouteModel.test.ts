@@ -143,8 +143,8 @@ describe('dashboardWorkloadRouteModel', () => {
         'app-container',
       ),
     ).toEqual([
-      { value: 'docker', label: 'Containers' },
       { value: 'truenas', label: 'TrueNAS' },
+      { value: 'docker', label: 'Docker' },
     ]);
   });
 

@@ -420,6 +420,11 @@ this health-state projection: it must derive counts only from the resources
 accessor already available to the summary state, not from a separate API call or
 a re-projection of websocket state outside the shared summary pipeline.
 
+`resourceBadgePresentation.ts` now owns the Infrastructure table system
+identity resolver. That resolver must prefer provider/API platform identity,
+then reported host OS or appliance identity, before falling back to Docker or
+other runtime capability labels.
+
 This subsystem now sits under the dedicated core monitoring runtime lane so
 canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface, including the
@@ -1800,15 +1805,19 @@ sources, `frontend-modern/src/utils/sourcePlatforms.ts` must still resolve the
 platform as `truenas` and the source mode as `hybrid`, so workload and
 infrastructure consumers do not collapse API-backed TrueNAS systems or apps
 back onto the generic agent path just because host telemetry is also present.
-That same boundary also owns the infrastructure table's operator-facing
-platform vocabulary. `frontend-modern/src/utils/resourceBadgePresentation.ts`,
+That same boundary also owns the infrastructure table's operator-facing system
+identity vocabulary. `frontend-modern/src/utils/resourceBadgePresentation.ts`,
 `frontend-modern/src/components/Infrastructure/resourceBadges.ts`, and the
 unified resource table sections may preserve full merged-source detail in
-tooltips and accessibility metadata, but visible table headers, filters, sort
-keys, and row badges must present the owning infrastructure platform first.
-Agent telemetry is collection-method detail when a stronger platform source is
-present, not a peer platform label that should crowd the table or drive the
-primary platform sort.
+tooltips and accessibility metadata, but visible table headers, sort keys, and
+row badges must answer what system the operator is looking at. Provider/API
+platforms such as Proxmox, TrueNAS, VMware, and Kubernetes outrank collection
+methods; reported agent OS or appliance identity such as Unraid or Ubuntu
+outranks a generic container-runtime capability; and Docker should appear as
+the primary visible system label only when the container runtime is the best
+available identity. Agent telemetry is collection-method detail when a stronger
+platform or host identity is present, not a peer platform label that should
+crowd the table or drive the primary system sort.
 The route file `frontend-modern/src/pages/Infrastructure.tsx` is now only the
 navigation boundary for that surface; canonical infrastructure filter, search,
 deep-link, and expansion state now live behind the dedicated infrastructure

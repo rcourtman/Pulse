@@ -19,7 +19,8 @@ import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
-  getInfrastructurePlatformBadges,
+  dedupeResourceBadges,
+  getInfrastructureSystemIdentityBadges,
   getPlatformBadge,
   getSourceBadge,
   getUnifiedSourceBadges,
@@ -304,8 +305,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
                   const unifiedSources = createMemo(() => table.getUnifiedSources(resource));
                   const sourceBadges = createMemo(() => getUnifiedSourceBadges(unifiedSources()));
-                  const platformBadges = createMemo(() =>
-                    getInfrastructurePlatformBadges(unifiedSources()),
+                  const systemBadges = createMemo(() =>
+                    getInfrastructureSystemIdentityBadges(resource),
+                  );
+                  const systemTitleBadges = createMemo(() =>
+                    dedupeResourceBadges([...systemBadges(), ...sourceBadges()]),
                   );
                   const policyBadges = createMemo(() =>
                     getResourcePolicyTableBadges(resource.policy),
@@ -589,10 +593,10 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
                         >
                           <UnifiedResourceSourceBadgeCell
-                            unifiedBadges={platformBadges()}
+                            unifiedBadges={systemBadges()}
                             platformBadge={platformBadge()}
                             sourceBadge={sourceBadge()}
-                            titleBadges={sourceBadges()}
+                            titleBadges={systemTitleBadges()}
                             layoutMode={table.layoutMode()}
                           />
                         </TableCell>

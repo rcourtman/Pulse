@@ -42,7 +42,7 @@ describe('sourcePlatforms', () => {
 
   describe('getSourcePlatformLabel', () => {
     it('returns label for known platforms', () => {
-      expect(getSourcePlatformLabel('docker')).toBe('Containers');
+      expect(getSourcePlatformLabel('docker')).toBe('Docker');
       expect(getSourcePlatformLabel('kubernetes')).toBe('K8s');
     });
 

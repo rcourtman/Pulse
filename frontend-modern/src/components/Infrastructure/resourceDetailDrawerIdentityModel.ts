@@ -67,7 +67,7 @@ export const buildSourceSections = (
   return [
     { id: 'proxmox', label: 'Proxmox', payload: platformData.proxmox },
     { id: 'agent', label: 'Agent', payload: platformData.agent },
-    { id: 'docker', label: 'Containers', payload: platformData.docker },
+    { id: 'docker', label: 'Docker', payload: platformData.docker },
     { id: 'pbs', label: 'PBS', payload: platformData.pbs },
     { id: 'pmg', label: 'PMG', payload: platformData.pmg },
     { id: 'kubernetes', label: 'Kubernetes', payload: platformData.kubernetes },
