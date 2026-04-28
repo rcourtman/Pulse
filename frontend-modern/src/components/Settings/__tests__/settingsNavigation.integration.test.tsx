@@ -145,6 +145,7 @@ describe('settingsNavigation integration scaffold', () => {
       'security-users',
       'security-audit',
       'security-webhooks',
+      'support-reporting',
     ] as SettingsTab[]) {
       expect(
         shouldHideSettingsNavItem(tab, {
@@ -162,6 +163,28 @@ describe('settingsNavigation integration scaffold', () => {
         }),
       ).toBe(true);
     }
+  });
+
+  it('shows paid reporting navigation only after advanced reporting is available', () => {
+    expect(
+      shouldHideSettingsNavItem('support-reporting', {
+        hasFeature: hasFeatures([]),
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyResolved: true,
+        presentationPolicyIsDemoMode: false,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideSettingsNavItem('support-reporting', {
+        hasFeature: hasFeatures(['advanced_reporting']),
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyResolved: true,
+        presentationPolicyIsDemoMode: false,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(false);
   });
 
   it('hides support tabs in demo mode and before demo policy resolves', () => {

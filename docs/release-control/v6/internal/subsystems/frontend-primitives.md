@@ -237,6 +237,12 @@ work extends shared components instead of creating new local variants.
    legacy `/operations/*` links must resolve through the canonical Settings
    routing boundary instead of reviving a standalone Operations utility tab or
    route-local support shell.
+   Because `Data & Reports` is the `advanced_reporting` capability surface
+   rather than a general diagnostics page, `settingsNavCatalog.ts` must hide it
+   when that feature is unavailable; ordinary self-hosted users should see
+   support diagnostics and logs without being shown a Pro-locked reporting tab,
+   while paid instances keep the canonical `/settings/support/reporting` route
+   and panel.
    Data Handling is a trust surface, not a commercial surface. The Settings
    shell must keep it under the Security group, route it through the canonical
    registry/header/navigation model, and avoid trial, upgrade, paid-plan, or

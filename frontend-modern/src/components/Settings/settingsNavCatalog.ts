@@ -153,6 +153,8 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Data & Reports',
         icon: FileText,
         iconProps: { strokeWidth: 2 },
+        features: ['advanced_reporting'],
+        hideWhenUnavailable: true,
         hideWhenDemoMode: true,
       },
       {
