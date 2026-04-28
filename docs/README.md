@@ -86,7 +86,7 @@ Pulse is available in three self-hosted tiers plus hosted Cloud:
 
 - **Community**: Free self-hosted monitoring with unlimited core monitoring and 7-day history.
 - **Relay**: Adds remote access, mobile, push notifications, and 14-day history.
-- **Pro**: Adds AI investigation, auto-fix, operations tooling, governance features, and 90-day history.
+- **Pro**: Adds alert-triggered root-cause analysis, safe remediation workflows, operations tooling, governance features, and 90-day history.
 - **Cloud**: Hosted Pulse with Pro-level capabilities; hosted pricing is unchanged by the self-hosted model lock.
 
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**

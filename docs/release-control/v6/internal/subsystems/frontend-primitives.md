@@ -523,7 +523,11 @@ work extends shared components instead of creating new local variants.
     decorative rather than a second label source. The Patrol-owned supporting-context
     presenter must also keep the disclosure toggle plus evidence-boundary copy
     centralized instead of letting the workspace reintroduce inline shell-local
-    trust wording.
+    trust wording. The same shared feature-shell boundary owns the
+    commercial-facing Patrol capability language: Pro-locked helper copy,
+    autonomy segmented controls, and run-history/result labels must use
+    `Remediate`, `remediated`, or safe remediation wording while legacy API
+    names remain hidden from operators.
 19. Keep the shared `system-ai` settings shell product-first.
     `frontend-modern/src/components/Settings/AISettings.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,

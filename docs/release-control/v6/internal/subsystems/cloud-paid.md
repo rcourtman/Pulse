@@ -365,7 +365,10 @@ Community limit enforcement.
     entitlement key `ai_autofix` may remain the internal capability identifier,
     but owned plan cards, comparison rows, and upgrade reasons must present it
     as safe remediation workflows rather than `Patrol Auto-Fix` or other
-    stronger automation-first labels.
+    stronger automation-first labels. Pulse Account preview/handoff pricing
+    copy, public plan docs, and the in-app self-hosted billing shell must share
+    that same free-first ladder so release-candidate and public purchase paths
+    do not drift into a separate commercial story.
     That same self-hosted pricing boundary now also owns canonical feature
     classification metadata. `pkg/licensing/self_hosted_feature_catalog.go`
     is the source of truth for customer-facing self-hosted feature labels,

@@ -135,9 +135,10 @@ test.describe('Self-hosted manual activation success', () => {
         'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
       ),
     ).toBeVisible();
-    await expect(page.getByText('If You Need More')).toBeVisible();
-    await expect(page.getByText('What Relay adds')).toBeVisible();
-    await expect(page.getByText('What Pulse Pro adds')).toBeVisible();
+    await expect(page.getByText('Optional extras')).toHaveCount(0);
+    await expect(page.getByText('What Relay adds')).toHaveCount(0);
+    await expect(page.getByText('What Pulse Pro adds')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Compare plans' })).toHaveCount(0);
 
     await page.locator('summary').filter({ hasText: 'Redeem existing key' }).first().click();
     const activationField = page.locator('#pulse-pro-license-key');
@@ -157,8 +158,8 @@ test.describe('Self-hosted manual activation success', () => {
       ),
     ).toBeVisible();
     await expect(activationSummary.getByText('Available now on this instance')).toBeVisible();
-    await expect(activationSummary.getByText('Patrol Auto-Fix')).toBeVisible();
-    await expect(activationSummary.getByText('Pulse Alert Analysis')).toBeVisible();
+    await expect(activationSummary.getByText('Safe Remediation Workflows')).toBeVisible();
+    await expect(activationSummary.getByText('Alert Root-Cause Analysis')).toBeVisible();
 
     await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible();
     const currentPlanCard = page
@@ -167,10 +168,10 @@ test.describe('Self-hosted manual activation success', () => {
       .first();
     await expect(
       currentPlanCard.getByText(
-        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
       ),
     ).toBeVisible();
     await expect(currentPlanCard.getByText('Included extras')).toBeVisible();
-    await expect(page.getByText('If You Need More')).toHaveCount(0);
+    await expect(page.getByText('Optional extras')).toHaveCount(0);
   });
 });

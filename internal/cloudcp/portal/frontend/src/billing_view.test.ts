@@ -346,7 +346,7 @@ describe('services view', function() {
           title: 'Pro',
           price: '$8.99',
           period: '$79/year available too',
-          blurb: 'Investigation, alert analysis, and auto-fix.',
+          blurb: 'Root-cause analysis, alert analysis, and safe remediation workflows.',
           features: [{ tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' }],
           buttons: [
             {
@@ -386,7 +386,7 @@ describe('services view', function() {
           title: 'Pro',
           price: '$8.99',
           period: '$79/year available too',
-          blurb: 'Investigation, alert analysis, and auto-fix.',
+          blurb: 'Root-cause analysis, alert analysis, and safe remediation workflows.',
           features: [{ tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' }],
           buttons: [
             {

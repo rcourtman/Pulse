@@ -130,7 +130,7 @@ const INVESTIGATION_OUTCOME_LABELS: Record<InvestigationOutcome, string> = {
   fix_executed: 'Fix applied',
   fix_failed: 'Fix failed',
   needs_attention: 'Needs attention',
-  cannot_fix: 'Cannot auto-fix',
+  cannot_fix: 'Cannot remediate',
   timed_out: 'Timed out',
   fix_verified: 'Fix verified',
   fix_verification_failed: 'Verification failed',

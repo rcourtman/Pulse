@@ -90,6 +90,11 @@ Patrol-specific presentation helpers.
    label-bearing when the icon stands alone, but Patrol headings and actions
    that already include visible Patrol text must render the logo as decorative
    so accessible names do not repeat as `Pulse Patrol Patrol`.
+7. Keep Patrol remediation copy operator-safe even while legacy transport
+   fields retain `auto_fix` naming for compatibility: header autonomy controls,
+   Pro-locked helper text, investigation outcome labels, and run-history badges
+   must present the paid capability as safe remediation or remediation actions,
+   not as a broad automation promise.
 
 ## Current State
 

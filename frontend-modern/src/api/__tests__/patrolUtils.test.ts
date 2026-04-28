@@ -92,7 +92,7 @@ describe('patrol utilities', () => {
     });
 
     it('has correct label for cannot_fix', () => {
-      expect(investigationOutcomeLabels.cannot_fix).toBe('Cannot Auto-Fix');
+      expect(investigationOutcomeLabels.cannot_fix).toBe('Cannot Remediate');
     });
 
     it('has correct label for timed_out', () => {

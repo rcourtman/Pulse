@@ -482,9 +482,9 @@ function routeCommercialAPI(request, response, url, scenario) {
   if (request.method === 'GET' && route === '/v1/public/pricing-model') {
     sendJSON(response, 200, {
       title: 'Simple self-hosted pricing for Pulse',
-      description: 'Community keeps monitoring free. Relay lets you reach Pulse securely from anywhere. Pro explains what broke, helps fix it safely, and keeps 90 days of history.',
+      description: 'Community keeps monitoring free and unlimited. Relay lets you reach Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       explainer:
-        'Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day history.',
+        'Community keeps monitoring free and unlimited. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       plans: [
         {
           badge: 'Recommended',
@@ -510,12 +510,12 @@ function routeCommercialAPI(request, response, url, scenario) {
           title: 'Pro',
           price: '$8.99',
           period: '$79/year available too',
-          blurb: 'The operator tier for root-cause answers, safe remediation, and 90-day history.',
+          blurb: 'The operator tier for root-cause analysis, safe remediation workflows, and 90-day history.',
           features: [
             { tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' },
             { tone: 'check', html: 'Everything in Relay' },
             { tone: 'check', html: 'Alert-triggered root-cause analysis' },
-            { tone: 'check', html: 'Patrol auto-fix with approval or autonomous mode' },
+            { tone: 'check', html: 'Safe remediation workflows with approval or autonomous mode' },
             { tone: 'check', html: '90-day history' },
           ],
           buttons: [

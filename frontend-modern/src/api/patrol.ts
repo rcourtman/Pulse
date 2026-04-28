@@ -164,7 +164,7 @@ export interface PatrolStatus {
   error_count: number;
   healthy: boolean;
   interval_ms: number; // Patrol interval in milliseconds
-  fixed_count: number; // Number of issues auto-fixed by Patrol
+  fixed_count: number; // Number of issues remediated by Patrol
   blocked_reason?: string; // Canonical server-authored Patrol block reason, including quickstart activation/exhaustion state.
   blocked_at?: string;
   license_required?: boolean;
@@ -350,7 +350,7 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
   fix_executed: 'Fix Executed',
   fix_failed: 'Fix Failed',
   needs_attention: 'Needs Attention',
-  cannot_fix: 'Cannot Auto-Fix',
+  cannot_fix: 'Cannot Remediate',
   timed_out: 'Timed Out — Will Retry',
   fix_verified: 'Fix Verified',
   fix_verification_failed: 'Verification Failed',

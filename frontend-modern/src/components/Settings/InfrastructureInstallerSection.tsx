@@ -415,7 +415,7 @@ export const InfrastructureInstallerSection: Component = () => {
                       onChange={(event) => state.setEnableCommands(event.currentTarget.checked)}
                       class="rounded text-blue-600 focus:ring-blue-500"
                     />
-                    Enable Pulse command execution (for Patrol auto-fix)
+                    Enable Pulse command execution (for Patrol remediation)
                   </label>
 
                   <Show when={state.enableCommands()}>

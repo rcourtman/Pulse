@@ -80,7 +80,7 @@ test.describe("Pulse Account upgrade bootstrap", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day history.",
+        "Community keeps monitoring free and unlimited. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.",
       ),
     ).toBeVisible();
     await expect(

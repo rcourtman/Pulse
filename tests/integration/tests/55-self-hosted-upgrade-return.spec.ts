@@ -421,7 +421,7 @@ async function openMonitoredSystemUpgradeArrival(page: Page) {
   );
   await expect(
     page.getByText(
-      "Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day history.",
+      "Community includes unlimited self-hosted monitoring. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Hide counting rules" })).toHaveCount(0);
@@ -497,7 +497,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       ),
     ).toBeVisible();
     await expect(activationSummary.getByText("Available now on this instance")).toBeVisible();
-    await expect(activationSummary.getByText("Patrol Auto-Fix")).toBeVisible();
+    await expect(activationSummary.getByText("Safe Remediation Workflows")).toBeVisible();
     await expect(page.getByRole("link", { name: "Review usage" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Review plan" })).toHaveCount(0);
   });
@@ -580,7 +580,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       ),
     ).toBeVisible();
     await expect(activationSummary.getByText("Available now on this instance")).toBeVisible();
-    await expect(activationSummary.getByText("Patrol Auto-Fix")).toBeVisible();
+    await expect(activationSummary.getByText("Safe Remediation Workflows")).toBeVisible();
     await expect(page.getByRole("link", { name: "Review plan" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Review usage" })).toHaveCount(0);
   });
@@ -615,12 +615,12 @@ test.describe("Self-hosted upgrade return flow", () => {
     await expect(
       page.getByText("Upgrade return expired", { exact: true }),
     ).toBeVisible();
-    const restartUpgradeLink = page.getByRole("link", { name: "Restart upgrade" });
-    await expect(restartUpgradeLink).toHaveAttribute(
+    const comparePlansLink = page.getByRole("link", { name: "Compare plans" });
+    await expect(comparePlansLink).toHaveAttribute(
       "href",
       `${PURCHASE_START_PATH}?feature=self_hosted_plan`,
     );
-    await expect(restartUpgradeLink).toHaveAttribute("target", "_blank");
+    await expect(comparePlansLink).toHaveAttribute("target", "_blank");
   });
 
   test("returns local activation failures to the billing recovery entry point", async ({

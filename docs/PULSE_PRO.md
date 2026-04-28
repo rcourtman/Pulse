@@ -89,7 +89,7 @@ capability key is a primary v6 product pillar.
 These are the current self-hosted Pro pillars that Pulse should keep
 investing in, surfacing, and marketing:
 - Alert-triggered root-cause analysis.
-- Safe remediation through Patrol auto-fix and higher-autonomy controls.
+- Safe remediation workflows through Patrol fix execution and autonomy controls.
 - 90-day history.
 - Included team/admin extras: Advanced SSO (SAML), RBAC, audit logging,
   reporting, and agent profiles.
@@ -123,7 +123,7 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 | `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with BYOK. Optional managed quickstart runs are available only after explicit Pulse Account activation. Higher-autonomy outcomes and fix execution are separately gated. |
 | `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
 | `FeatureAIAlerts` | `ai_alerts` | Alert-Triggered Root-Cause Analysis | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
-| `FeatureAIAutoFix` | `ai_autofix` | Pulse Patrol Auto-Fix | N | N | Y | Y | Required for fix execution and higher-autonomy actions. |
+| `FeatureAIAutoFix` | `ai_autofix` | Safe Remediation Workflows | N | N | Y | Y | Required for governed fix execution and autonomous remediation actions. |
 | `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
 | `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
 | `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
@@ -143,10 +143,10 @@ Patrol and the Assistant support tiered autonomy:
 
 | Mode | Behavior | Plan |
 |---|---|---|
-| **Monitor** | Detect issues only. No investigation or fixes. | Community / Relay |
-| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Pro / hosted Cloud |
-| **Auto-fix** | Automatically fixes issues and verifies. Critical findings require approval by default. | Pro / hosted Cloud |
-| **Full autonomy** | Auto-fix for all findings including critical, without approval (explicit toggle). | Pro / hosted Cloud |
+| **Monitor** | Detect issues only. No investigation or remediation execution. | Community / Relay |
+| **Investigate** | Investigates findings and proposes fixes. All remediation actions require approval. | Pro / hosted Cloud |
+| **Remediate** | Runs approved safe remediation actions and verifies the outcome. Critical findings require approval by default. | Pro / hosted Cloud |
+| **Full autonomy** | Allows critical remediation actions without approval when explicitly enabled. | Pro / hosted Cloud |
 
 ## What You Get (By Plan)
 
@@ -167,7 +167,7 @@ Patrol and the Assistant support tiered autonomy:
 ### Pro
 - Everything in Relay, plus:
 - Alert-triggered root-cause analysis.
-- Auto-fix and higher autonomy.
+- Safe remediation workflows and autonomy controls.
 - Centralized agent profiles.
 - Advanced SSO, RBAC, audit logging, and advanced reporting.
 - 90-day history.

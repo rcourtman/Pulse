@@ -422,8 +422,13 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Grandfathered v5 pricing')).toBeInTheDocument();
       expect(screen.getByText('Grandfathered price')).toBeInTheDocument();
       expect(
-        screen.getByText(/keeps its existing recurring price and uncapped guest capacity/i),
-      ).toBeInTheDocument();
+        screen.getAllByText(
+          /keeps its existing recurring price and uncapped monitored-system and guest capacity/i,
+        ).length,
+      ).toBeGreaterThan(0);
+      expect(
+        screen.queryByText(/keeps its existing recurring price and uncapped guest capacity/i),
+      ).not.toBeInTheDocument();
       expect(
         screen.getByText(
           /keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel/i,

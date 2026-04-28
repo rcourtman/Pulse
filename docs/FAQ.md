@@ -32,9 +32,9 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 ## 🔍 Monitoring & Metrics
 
 ### What do Relay, Pro, and Cloud unlock?
-Relay adds remote access, mobile access, push notifications, and 14-day history. Pro and Cloud unlock **Auto-Fix and advanced AI analysis** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
+Relay adds remote access, mobile access, push notifications, and 14-day history. Pro and Cloud unlock **alert-triggered root-cause analysis and safe remediation workflows** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
 
-Example output includes trend-based capacity warnings, backup regressions, Kubernetes AI cluster analysis, and correlated container failures that simple threshold alerts miss.
+Example output includes trend-based capacity warnings, backup regressions, Kubernetes cluster analysis, and correlated container failures that simple threshold alerts miss.
 See [Pulse AI](AI.md), [Plans and entitlements](PULSE_PRO.md), and <https://pulserelay.pro>.
 
 ### Why do VMs show "-" for disk usage?

@@ -1,6 +1,6 @@
 # Pulse AI
 
-Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro adds auto-fix and advanced operations analysis, while hosted Cloud carries those capabilities for hosted environments. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
+Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro adds alert-triggered root-cause analysis and safe remediation workflows, while hosted Cloud carries those capabilities for hosted environments. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
 
 ---
 
@@ -414,9 +414,9 @@ scripts/eval/run_model_matrix.sh
 Pulse includes settings that control how "active" AI features are:
 
 - **Autonomous mode (Pro and above)**: When enabled, AI may execute safe commands without approval
-- **Patrol auto-fix (Pro and above)**: Allows patrol to attempt automatic remediation
+- **Safe remediation workflows (Pro and above)**: Allows Patrol to propose and run governed remediation actions under the approval or autonomy policy you choose
 - **Alert-triggered analysis (Pro and above)**: Limits AI to analyzing specific events when alerts occur
-- **Full autonomy unlock (Pro and above)**: Enables auto-fix for critical findings without approval (requires explicit toggle)
+- **Full autonomy unlock (Pro and above)**: Permits critical remediation actions without approval (requires explicit toggle)
 
 If you enable execution features, ensure agent tokens and scopes are appropriately restricted.
 

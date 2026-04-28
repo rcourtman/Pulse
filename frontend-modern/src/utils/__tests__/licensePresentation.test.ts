@@ -358,7 +358,7 @@ describe('licensePresentation', () => {
       ],
       supplementalBadges: ['Grandfathered price'],
       supplementalSummary:
-        'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation.',
+        'This migrated v5 subscription keeps its existing recurring price and uncapped monitored-system and guest capacity until cancellation.',
     });
   });
 

@@ -106,7 +106,7 @@ with self-hosted commercial surfaces treating core monitoring as unlimited.
 | Metrics history | **7 days** |
 | AI Patrol | Monitor + root-cause summaries + fix suggestions (BYOK by default, with optional Patrol quickstart after explicit Pulse Account activation) |
 | AI Quickstart Credits | **25 hosted Patrol runs** (explicit Pulse Account activation only; no API key needed, Patrol only, powered by MiniMax 2.5M) |
-| Patrol Auto-Fix | **No** (must apply fixes manually) |
+| Safe remediation workflows | **No** (must apply fixes manually) |
 | Alert-triggered root-cause analysis | No |
 | Relay | No |
 | Push notifications | No |
@@ -132,8 +132,9 @@ with self-hosted commercial surfaces treating core monitoring as unlimited.
    (OpenAI/Anthropic/etc.). No commercial quota — it's their API key, their money. Only
    technical guardrails (anti-loop, rate protection).
 
-In both modes, the gate is on AUTO-EXECUTION: free users see the full analysis and fix
-suggestions but must apply fixes manually. Pro users click "Apply Fix."
+In both modes, the paid gate is governed execution through Pulse: free users see the
+full analysis and fix suggestions but apply fixes manually. Pro users can run approved
+remediation actions through Pulse.
 
 **Quickstart credit economics:**
 - Model: MiniMax 2.5M (selected for cost-effectiveness)
@@ -154,7 +155,7 @@ suggestions but must apply fixes manually. Pro users click "Apply Fix."
 | Push notifications | **Yes** |
 | Custom URL | **yourlab.pulserelay.pro** |
 | Metrics history | **14 days** |
-| Patrol Auto-Fix | No |
+| Safe remediation workflows | No |
 | Alert-triggered root-cause analysis | No |
 | RBAC/Audit/SAML | No |
 | Reporting | No |
@@ -169,7 +170,7 @@ without changing their self-hosted monitoring scope.
 |---|---|
 | Monitoring scope | **Unlimited self-hosted monitoring** |
 | Everything in Relay | Yes |
-| Patrol Auto-Fix | **Yes** (one-click execution, safety preflight, rollback) |
+| Safe remediation workflows | **Yes** (approved execution, safety preflight, rollback) |
 | Alert-triggered root-cause analysis | **Yes** |
 | Metrics history | **90 days** |
 | RBAC | **Yes** |
@@ -182,7 +183,7 @@ without changing their self-hosted monitoring scope.
 **Positioning:** For serious self-hosted operators who want Pulse to move from monitoring
 into operations. The marketing pitch focuses on three things:
 1. "Explain what broke" (alert-triggered root-cause analysis)
-2. "Fix it safely" (Patrol auto-fix)
+2. "Fix it safely" (safe remediation workflows)
 3. "Keep longer operating memory" (90-day history)
 
 Relay convenience and the team extras (RBAC, audit logging, SAML, reporting, and agent
@@ -305,7 +306,7 @@ Patrol finding is a conversion moment.
 Eligible activated installs get 25 Patrol runs powered by MiniMax 2.5M with no API key setup.
 This gives support and commercial handoff flows one bounded Patrol-first activation path.
 Ordinary self-hosted Community installs should connect their own key (BYOK, stays free) and
-must not be pushed into a trial just to use Patrol. Paid operations features such as auto-fix,
+must not be pushed into a trial just to use Patrol. Paid operations features such as safe remediation workflows,
 alert analysis, and longer history remain opt-in extras; they do not replace BYOK for
 self-hosted AI runtime. Cost: ~$0.002-0.01 per run.
 
@@ -322,7 +323,7 @@ opens pricing/activation/recovery/support flows, when the session is hosted/clou
 existing entitlement requires a clear renewal or recovery path.
 
 High-intent product moments should stay useful without becoming sales surfaces:
-- Patrol finds a fixable issue -> show the manual fix and BYOK/provider path first; auto-fix can
+- Patrol finds a fixable issue -> show the manual fix and BYOK/provider path first; safe remediation execution can
   remain an opt-in Pro capability where commercial prompts are explicitly allowed.
 - An alert needs deeper explanation -> keep free investigation context useful; paid alert
   analysis stays an optional, discoverable extra.
@@ -334,7 +335,7 @@ High-intent product moments should stay useful without becoming sales surfaces:
 ### 6. No self-hosted monitored-system overflow gate
 Self-hosted Community users should not need a temporary monitored-system overflow path because
 core self-hosted monitoring is unlimited. Onboarding can still surface Relay and Pro value when
-users try remote access, push notifications, longer history, alert investigation, or auto-fix.
+users try remote access, push notifications, longer history, alert investigation, or safe remediation workflows.
 
 ### 7. Transparent monitored-system ledger
 The ledger remains important for inventory truth, hosted/MSP limits, and support. It should
@@ -450,7 +451,7 @@ explain monitored-system identity:
 ### Boundary-upgrade copy
 
 - **Community → Relay:** Want Pulse outside your LAN? Upgrade to Relay for secure remote access, mobile, push notifications, and 14-day history.
-- **Relay → Pro:** Want Pulse to do more than alert? Upgrade to Pro for AI investigation, auto-fix, and 90-day history.
+- **Relay → Pro:** Want Pulse to do more than alert? Upgrade to Pro for root-cause analysis, safe remediation workflows, and 90-day history.
 - **Existing self-hosted monitoring:** Your monitored systems keep working. Paid self-hosted tiers add convenience and operations features, not more monitoring room.
 
 ---

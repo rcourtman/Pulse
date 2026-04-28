@@ -128,6 +128,11 @@ runtime cost control, and shared AI transport surfaces.
    match a short host against its FQDN, but they must not broaden that
    fallback into a generic short-name collapse that would make two distinct
    FQDNs with the same short host look interchangeable.
+11. Keep AI runtime transport compatibility separate from operator-facing
+    product copy. Existing Patrol payload fields such as `fixed_count`,
+    `auto_fix_model`, and `patrol_auto_fix` may remain stable wire/API names,
+    but frontend comments, status labels, and commercial prompts that describe
+    the capability must use safe remediation or remediation wording.
 
 ## Current State
 

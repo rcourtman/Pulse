@@ -574,7 +574,7 @@ describe('AIIntelligence entitlement gating', () => {
     await screen.findByRole('button', { name: 'Investigate' });
 
     expect(screen.getByRole('button', { name: 'Investigate' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Auto-fix' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remediate' })).toBeDisabled();
     expect(
       screen
         .getAllByRole('link', { name: 'Upgrade to Pro' })
@@ -612,7 +612,7 @@ describe('AIIntelligence entitlement gating', () => {
     await screen.findByRole('button', { name: 'Investigate' });
 
     expect(screen.getByRole('button', { name: 'Investigate' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Auto-fix' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remediate' })).toBeDisabled();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
@@ -636,7 +636,7 @@ describe('AIIntelligence entitlement gating', () => {
     await screen.findByRole('button', { name: 'Investigate' });
 
     expect(screen.getByRole('button', { name: 'Investigate' })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Auto-fix' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remediate' })).not.toBeDisabled();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(trackPaywallViewedMock).not.toHaveBeenCalled();

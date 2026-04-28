@@ -16,7 +16,7 @@ export interface AISettings {
   model: string;
   chat_model?: string; // Model for interactive chat (empty = use default)
   patrol_model?: string; // Model for background patrol (empty = use default)
-  auto_fix_model?: string; // Model for auto-fix remediation (empty = use patrol model)
+  auto_fix_model?: string; // Model for safe remediation workflows (empty = use patrol model)
   configured: boolean; // true if AI is ready to use
   custom_context: string; // user-provided infrastructure context
   // OAuth fields for Claude Pro/Max subscription authentication
@@ -29,7 +29,7 @@ export interface AISettings {
   patrol_event_triggers_enabled?: boolean; // legacy aggregate toggle, true if any scoped Patrol trigger source is enabled
   patrol_alert_triggers_enabled?: boolean; // true if alert-driven scoped Patrol triggers are enabled
   patrol_anomaly_triggers_enabled?: boolean; // true if anomaly-driven scoped Patrol triggers are enabled
-  patrol_auto_fix?: boolean; // true if Patrol can auto-fix without approval
+  patrol_auto_fix?: boolean; // true if Patrol can remediate without approval
   // Multi-provider configuration
   anthropic_configured: boolean; // true if Anthropic API key or OAuth is set
   openai_configured: boolean; // true if OpenAI API key is set
@@ -72,7 +72,7 @@ export interface AISettingsUpdateRequest {
   // Model overrides for different use cases
   chat_model?: string; // Model for interactive chat
   patrol_model?: string; // Model for background patrol
-  auto_fix_model?: string; // Model for auto-fix remediation
+  auto_fix_model?: string; // Model for safe remediation workflows
   // Patrol settings for token efficiency
   patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)
   patrol_enabled?: boolean; // Legacy/server-authored patrol runtime toggle still accepted by the API
@@ -80,7 +80,7 @@ export interface AISettingsUpdateRequest {
   patrol_event_triggers_enabled?: boolean; // legacy aggregate toggle, applies to both scoped Patrol trigger sources
   patrol_alert_triggers_enabled?: boolean; // true if alert-driven scoped Patrol triggers are enabled
   patrol_anomaly_triggers_enabled?: boolean; // true if anomaly-driven scoped Patrol triggers are enabled
-  patrol_auto_fix?: boolean; // true if Patrol can auto-fix without approval
+  patrol_auto_fix?: boolean; // true if Patrol can remediate without approval
   // Multi-provider credentials
   anthropic_api_key?: string; // Set Anthropic API key
   openai_api_key?: string; // Set OpenAI API key

@@ -481,7 +481,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
   ) {
     supplementalBadges.push('Grandfathered price');
     supplementalDetails.push(
-      'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation.',
+      'This migrated v5 subscription keeps its existing recurring price and uncapped monitored-system and guest capacity until cancellation.',
     );
   } else if (hasUncappedContinuity && current.is_lifetime) {
     supplementalBadges.push('Grandfathered lifetime');

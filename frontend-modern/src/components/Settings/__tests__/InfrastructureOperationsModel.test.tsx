@@ -195,6 +195,10 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain(
       'Allow Pulse Patrol to execute diagnostic and fix commands on this agent',
     );
+    expect(infrastructureInstallerSectionSource).toContain(
+      'Enable Pulse command execution (for Patrol remediation)',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain('Patrol auto-fix');
     expect(infrastructureInstallerSectionSource).not.toContain('auto-fix requires Pulse Pro');
     expect(infrastructureInstallerSectionSource).not.toContain('<api-token>');
     expect(infrastructureInstallerSectionSource).not.toContain(

@@ -54,7 +54,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
               >
                 Upgrade to Pro
               </UpgradeLink>{' '}
-              to unlock automatic fixes and alert-triggered analysis.
+              to unlock safe remediation workflows and alert-triggered root-cause analysis.
             </p>
           </div>
         </div>

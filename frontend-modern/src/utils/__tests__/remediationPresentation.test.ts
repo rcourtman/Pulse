@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
 import { getRemediationPresentation } from '@/utils/remediationPresentation';
 
 describe('getRemediationPresentation', () => {
@@ -20,5 +21,10 @@ describe('getRemediationPresentation', () => {
       messageClass: 'font-medium text-red-700 dark:text-red-300',
       panelClass: 'bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800',
     });
+  });
+
+  it('keeps investigation outcome copy remediation-first', () => {
+    expect(aiFindingPresentationSource).toContain("cannot_fix: 'Cannot remediate'");
+    expect(aiFindingPresentationSource).not.toContain('Cannot auto-fix');
   });
 });

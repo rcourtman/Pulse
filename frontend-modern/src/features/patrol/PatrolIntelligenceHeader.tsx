@@ -249,7 +249,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                             <br />
                             <strong>Investigate:</strong> Detect & propose fixes.
                             <br />
-                            <strong>Auto-fix:</strong> Execute safe fixes automatically.
+                            <strong>Remediate:</strong> Execute approved safe actions under policy.
                           </div>
                         </div>
                       </label>
@@ -275,7 +275,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                                 !presentationPolicyHidesUpgradePrompts() && isProLocked()
                                   ? level === 'approval'
                                     ? 'Upgrade to Pro to investigate findings'
-                                    : 'Upgrade to Pro for automatic fixes'
+                                    : 'Upgrade to Pro for safe remediation workflows'
                                   : undefined
                               }
                               class={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200 ${isActive() ? ' text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : isDisabled() ? ' ' : 'text-muted hover:text-base-content hover:bg-surface-hover'} ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -284,7 +284,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                                 ? 'Monitor'
                                 : level === 'approval'
                                   ? 'Investigate'
-                                  : 'Auto-fix'}
+                                  : 'Remediate'}
                             </button>
                           );
                         }}
@@ -298,7 +298,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                         >
                           Upgrade to Pro
                         </UpgradeLink>{' '}
-                        to unlock investigation and auto-fix.
+                        to unlock investigation and safe remediation workflows.
                         <Show when={state.canStartTrial()}>
                           {' '}
                           <button
@@ -409,10 +409,10 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     <div class="flex items-start justify-between gap-3">
                       <div class="flex-1">
                         <label class="text-sm font-medium text-red-600 dark:text-red-400">
-                          Auto-fix critical issues
+                          Autonomous critical remediation
                         </label>
                         <p class="text-[11px] text-muted mt-0.5 leading-tight">
-                          Permit Patrol to execute critical remediations without approval.
+                          Permit Patrol to execute critical remediation actions without approval.
                         </p>
                       </div>
                       <Toggle

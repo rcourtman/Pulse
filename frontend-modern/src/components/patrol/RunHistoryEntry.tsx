@@ -241,7 +241,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                   {run.new_findings !== 1 ? 's' : ''}
                   {run.auto_fix_count > 0 ? (
                     <>
-                      , auto-fixed <strong>{run.auto_fix_count}</strong>
+                      , remediated <strong>{run.auto_fix_count}</strong>
                     </>
                   ) : (
                     ''
@@ -358,7 +358,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </Show>
               <Show when={run.auto_fix_count > 0}>
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                  <WrenchIcon class="w-3 h-3" /> {run.auto_fix_count} auto-fixed
+                  <WrenchIcon class="w-3 h-3" /> {run.auto_fix_count} remediated
                 </span>
               </Show>
               <Show when={run.rejected_findings > 0}>
