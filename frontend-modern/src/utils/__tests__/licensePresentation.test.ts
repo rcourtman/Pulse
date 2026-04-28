@@ -271,7 +271,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
+      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Alert Root-Cause Analysis',
@@ -303,7 +303,7 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Legacy Pulse Pro+',
-      body: 'Legacy Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
+      body: 'Legacy Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Alert Root-Cause Analysis',
@@ -332,7 +332,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
+      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Alert Root-Cause Analysis',
@@ -383,6 +383,11 @@ describe('licensePresentation', () => {
             'Alert Root-Cause Analysis',
             'Safe Remediation Workflows',
             '90-day metric history',
+            'Advanced SSO (SAML/Multi-Provider)',
+            'Role-Based Access Control (RBAC)',
+            'Audit Logging',
+            'PDF/CSV Reporting',
+            'Centralized Agent Profiles',
           ],
         },
       ],
@@ -407,6 +412,11 @@ describe('licensePresentation', () => {
             'Alert Root-Cause Analysis',
             'Safe Remediation Workflows',
             '90-day metric history',
+            'Advanced SSO (SAML/Multi-Provider)',
+            'Role-Based Access Control (RBAC)',
+            'Audit Logging',
+            'PDF/CSV Reporting',
+            'Centralized Agent Profiles',
           ],
         },
       ],
@@ -452,6 +462,11 @@ describe('licensePresentation', () => {
         'Alert Root-Cause Analysis',
         'Safe Remediation Workflows',
         '90-day metric history',
+        'Advanced SSO (SAML/Multi-Provider)',
+        'Role-Based Access Control (RBAC)',
+        'Audit Logging',
+        'PDF/CSV Reporting',
+        'Centralized Agent Profiles',
       ],
     });
 

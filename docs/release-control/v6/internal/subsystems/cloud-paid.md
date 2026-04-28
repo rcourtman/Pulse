@@ -1461,7 +1461,11 @@ meter-style entitlement fields on retail Community, Relay, or Pro plans. Pro+
 may appear only as a legacy continuity tier, and
 `frontend-modern/src/utils/licensePresentation.ts` must label `pro_plus`
 accordingly in tier, plan, and plan-version presentation instead of rendering
-it as a current public Pulse Pro+ package.
+it as a current public Pulse Pro+ package. When direct plan-selection intent
+opens the explicit self-hosted comparison surface, the shared presentation
+helpers must show Pro's operations, admin, and reporting extras together while
+still framing Community, Relay, and Pro as unlimited core monitoring rather
+than monitored-system capacity tiers.
 The shared license presentation owner also holds self-hosted Pro settings
 trial-ended notice copy for `ProLicensePlanSection.tsx`; that surface must
 consume canonical helper notices instead of carrying inline upgrade copy or

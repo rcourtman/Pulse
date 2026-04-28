@@ -113,7 +113,7 @@ describe('selfHostedPlans', () => {
       'Analysis, remediation, and admin controls',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
-      'Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
+      'Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toContain(
       'safe remediation workflows, 90-day history',

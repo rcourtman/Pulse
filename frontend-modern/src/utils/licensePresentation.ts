@@ -368,7 +368,10 @@ const getSelfHostedActivationHighlights = ({
   displayableCapabilities: string[];
 }): string[] => {
   const planDefinition = getSelfHostedPlanDefinitionForBillingTier(entitlements?.tier);
-  const prioritized = [...(planDefinition?.entitlementHighlights ?? [])];
+  const prioritized = [
+    ...(planDefinition?.entitlementHighlights ?? []),
+    ...(planDefinition?.includedExtras ?? []),
+  ];
   const unlockedFeatures = getSelfHostedUnlockedFeatures({
     entitlements,
     displayableCapabilities,
@@ -380,11 +383,33 @@ const getSelfHostedActivationHighlights = ({
       continue;
     }
     highlights.push(feature);
-    if (highlights.length >= 4) {
+    if (highlights.length >= 8) {
       break;
     }
   }
 
+  return highlights;
+};
+
+const getSelfHostedPlanComparisonHighlights = (
+  planDefinition: ReturnType<typeof getSelfHostedPlanDefinitionForBillingTier>,
+): string[] => {
+  if (!planDefinition) {
+    return [];
+  }
+  const highlights: string[] = [];
+  for (const feature of [
+    ...planDefinition.entitlementHighlights,
+    ...planDefinition.includedExtras,
+  ]) {
+    if (!feature || highlights.includes(feature)) {
+      continue;
+    }
+    highlights.push(feature);
+    if (highlights.length >= 8) {
+      break;
+    }
+  }
   return highlights;
 };
 
@@ -398,7 +423,7 @@ const getSelfHostedActivePlanSummary = (
     case 'relay':
       return `${planLabel} is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.`;
     case 'pro':
-      return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.`;
+      return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.`;
     default:
       return null;
   }
@@ -427,7 +452,7 @@ export const getSelfHostedPlanComparisonPresentation = ({
         return {
           title: `What ${getSelfHostedPlanLabel(tier)} adds`,
           body: definition.comparisonSummary,
-          highlights: [...definition.entitlementHighlights].slice(0, 4),
+          highlights: getSelfHostedPlanComparisonHighlights(definition),
         };
       })
       .filter((card): card is SelfHostedPlanComparisonCardPresentation => card !== null),
