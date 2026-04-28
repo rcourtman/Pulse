@@ -1632,6 +1632,12 @@ self-hosted callback must also stay absent from lifecycle retry and backoff
 behavior. Lifecycle-adjacent setup and install surfaces must also treat
 `trial_eligible` and `trial_eligibility_reason` as retired compatibility
 fields, not as prompt state or setup transport state.
+Legacy-named hosted entitlement verifier plumbing under shared `internal/api/`
+is boundary-only commercial compatibility, not lifecycle setup state:
+agent-lifecycle surfaces may consume the resolved entitlement outcome, but
+must not treat `TrialActivation*` names or the retained
+`PULSE_TRIAL_ACTIVATION_PUBLIC_KEY` literal as permission to recreate trial
+acquisition, setup retry, or install-progress prompts.
 That same shared `internal/api/` dependency also assumes session-carried OIDC
 refresh tokens stay fail-closed at rest: `session_store.go` may only persist
 or recover those tokens through encrypted-at-rest session payloads, and any

@@ -751,6 +751,12 @@ Shared licensing routes under `internal/api/` may retain legacy
 recovery surfaces must continue to consume the presentation policy instead of
 using those route names as a cue to render paid history prompts in ordinary
 self-hosted sessions.
+Legacy-named hosted entitlement verifier wiring under shared `internal/api/`
+is the same kind of boundary-only compatibility: storage and recovery surfaces
+may consume the resolved hosted entitlement, but they must not infer trial
+acquisition, restore identity, or recovery-progress state from
+`TrialActivation*` names or the retained
+`PULSE_TRIAL_ACTIVATION_PUBLIC_KEY` literal.
 That same shared boundary now also owns the one runtime-safe exception:
 storage and recovery may inherit demo-safe `/api/license/runtime-capabilities`
 reads for capability and history-retention truth, but

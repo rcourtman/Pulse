@@ -1000,6 +1000,13 @@ The retired `/auth/trial-activate` return path must also stay out of the
 ordinary self-hosted router and Pro settings UI. Hosted/cloud entitlement lease
 refresh may still validate signed leases for already-approved hosted state, but
 ordinary self-hosted Pulse must not create a local trial acquisition callback.
+The remaining `TrialActivation*` verifier names and
+`PULSE_TRIAL_ACTIVATION_PUBLIC_KEY` environment literal are boundary-only
+compatibility for hosted entitlement lease signing and already-deployed tenant
+configuration. New entitlement runtime call sites must use the
+`HostedEntitlement*` aliases unless they are explicitly proving the retired
+callback boundary, and changing the environment literal requires a separately
+governed credential rollout.
 The matching control-plane acquisition routes are retired too:
 `/start-pro-trial`, `/trial-signup/*`, and `/api/trial-signup/*` must remain
 unregistered. `/api/entitlements/refresh` remains the only hosted entitlement

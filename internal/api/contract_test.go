@@ -5240,6 +5240,27 @@ func TestContract_HostedTenantEntitlementRefreshFallsBackToDefaultBillingState(t
 	}
 }
 
+func TestContract_HostedEntitlementVerifierBridgeUsesCompatibilityEnvAlias(t *testing.T) {
+	if pkglicensing.HostedEntitlementPublicKeyEnvVar != pkglicensing.TrialActivationPublicKeyEnvVar {
+		t.Fatalf("hosted entitlement verifier env=%q, want legacy env alias %q", pkglicensing.HostedEntitlementPublicKeyEnvVar, pkglicensing.TrialActivationPublicKeyEnvVar)
+	}
+
+	pub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv("PULSE_HOSTED_MODE", "true")
+	t.Setenv(pkglicensing.HostedEntitlementPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	got, err := trialActivationPublicKeyFromLicensing()
+	if err != nil {
+		t.Fatalf("trialActivationPublicKeyFromLicensing: %v", err)
+	}
+	if !bytes.Equal(got, pub) {
+		t.Fatal("hosted entitlement verifier bridge did not resolve the compatibility env key")
+	}
+}
+
 func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
 		Valid:               true,

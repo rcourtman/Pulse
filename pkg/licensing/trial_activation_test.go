@@ -194,3 +194,36 @@ func TestTrialActivationPublicKey_SelectsAllowedVerificationSource(t *testing.T)
 		t.Fatalf("TrialActivationPublicKey mismatch")
 	}
 }
+
+func TestHostedEntitlementPublicKey_AliasesLegacyVerificationSource(t *testing.T) {
+	if HostedEntitlementPublicKeyEnvVar != TrialActivationPublicKeyEnvVar {
+		t.Fatalf("HostedEntitlementPublicKeyEnvVar=%q, want legacy env var %q", HostedEntitlementPublicKeyEnvVar, TrialActivationPublicKeyEnvVar)
+	}
+
+	envPub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	embeddedPub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	t.Setenv("PULSE_HOSTED_MODE", "true")
+	t.Setenv(HostedEntitlementPublicKeyEnvVar, base64.StdEncoding.EncodeToString(envPub))
+	embeddedBefore := EmbeddedPublicKey
+	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
+	EmbeddedPublicKey = base64.StdEncoding.EncodeToString(embeddedPub)
+
+	got, err := HostedEntitlementPublicKey()
+	if err != nil {
+		t.Fatalf("HostedEntitlementPublicKey: %v", err)
+	}
+	want := embeddedPub
+	if allowTrialActivationPublicKeyEnvOverride() {
+		want = envPub
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("HostedEntitlementPublicKey mismatch")
+	}
+}

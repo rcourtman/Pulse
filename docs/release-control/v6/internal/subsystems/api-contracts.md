@@ -379,6 +379,12 @@ the canonical monitored-system blocked payload.
     target before refresh, persistence, and evaluator rewiring, so tenant-
     scoped hosted routes cannot refresh against an empty non-default org while
     the machine's real hosted lease still lives on `default`.
+    The hosted verifier bridge may keep the legacy
+    `PULSE_TRIAL_ACTIVATION_PUBLIC_KEY` environment literal for deployed tenant
+    compatibility, but API call sites that validate hosted entitlement leases
+    must route through the `HostedEntitlement*` licensing aliases rather than
+    treating the retired trial-activation callback as the active acquisition
+    model.
 33. Keep public demo bootstrap posture on the shared security-status contract.
     `internal/api/router_routes_auth_security.go`,
     `internal/api/security_status_capabilities.go`, frontend security-status

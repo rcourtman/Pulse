@@ -11,11 +11,17 @@ import (
 )
 
 const (
-	// TrialEntitlementLeaseIssuer is the JWT issuer for hosted entitlement cache leases.
-	TrialEntitlementLeaseIssuer = "pulse-pro-entitlement-lease"
+	// HostedEntitlementLeaseIssuer is the JWT issuer for hosted entitlement cache leases.
+	HostedEntitlementLeaseIssuer = "pulse-pro-entitlement-lease"
 
-	// TrialEntitlementLeaseAudience is the JWT audience for hosted entitlement cache leases.
-	TrialEntitlementLeaseAudience = "pulse-pro-entitlement-cache"
+	// HostedEntitlementLeaseAudience is the JWT audience for hosted entitlement cache leases.
+	HostedEntitlementLeaseAudience = "pulse-pro-entitlement-cache"
+
+	// TrialEntitlementLeaseIssuer is the legacy exported name for hosted entitlement leases.
+	TrialEntitlementLeaseIssuer = HostedEntitlementLeaseIssuer
+
+	// TrialEntitlementLeaseAudience is the legacy exported name for hosted entitlement leases.
+	TrialEntitlementLeaseAudience = HostedEntitlementLeaseAudience
 )
 
 var (
@@ -88,10 +94,10 @@ func SignEntitlementLeaseToken(privateKey ed25519.PrivateKey, claims Entitlement
 		claims.ExpiresAt = jwt.NewNumericDate(expiresAt)
 	}
 	if strings.TrimSpace(claims.Issuer) == "" {
-		claims.Issuer = TrialEntitlementLeaseIssuer
+		claims.Issuer = HostedEntitlementLeaseIssuer
 	}
 	if len(claims.Audience) == 0 {
-		claims.Audience = jwt.ClaimStrings{TrialEntitlementLeaseAudience}
+		claims.Audience = jwt.ClaimStrings{HostedEntitlementLeaseAudience}
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
@@ -127,8 +133,8 @@ func parseEntitlementLeaseToken(token string, publicKey ed25519.PublicKey, expec
 	claims := &EntitlementLeaseClaims{}
 	parseOpts := []jwt.ParserOption{
 		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}),
-		jwt.WithIssuer(TrialEntitlementLeaseIssuer),
-		jwt.WithAudience(TrialEntitlementLeaseAudience),
+		jwt.WithIssuer(HostedEntitlementLeaseIssuer),
+		jwt.WithAudience(HostedEntitlementLeaseAudience),
 		jwt.WithTimeFunc(func() time.Time { return now }),
 	}
 	if skipTimeValidation {
@@ -162,7 +168,7 @@ func parseEntitlementLeaseToken(token string, publicKey ed25519.PublicKey, expec
 	}
 	expected := normalizeHost(expectedInstanceHost)
 	if expected != "" && !strings.EqualFold(claims.InstanceHost, expected) {
-		return nil, ErrTrialActivationHostMismatch
+		return nil, ErrHostedEntitlementHostMismatch
 	}
 	normalizeEntitlementLeaseClaims(claims)
 	return claims, nil
@@ -175,7 +181,7 @@ func ResolveEntitlementLeaseBillingState(state BillingState, expectedInstanceHos
 	if token == "" {
 		return normalizeTrialExpiry(state, now)
 	}
-	publicKey, err := TrialActivationPublicKey()
+	publicKey, err := HostedEntitlementPublicKey()
 	if err != nil {
 		return entitlementLeaseFallbackState(state, now)
 	}

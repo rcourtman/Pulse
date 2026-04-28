@@ -120,8 +120,8 @@ func TestVerifyEntitlementLeaseTokenHostMismatch(t *testing.T) {
 	}
 
 	_, err = VerifyEntitlementLeaseToken(token, pub, "pulse-b.example.com", time.Now())
-	if !errors.Is(err, ErrTrialActivationHostMismatch) {
-		t.Fatalf("VerifyEntitlementLeaseToken() error=%v, want %v", err, ErrTrialActivationHostMismatch)
+	if !errors.Is(err, ErrHostedEntitlementHostMismatch) {
+		t.Fatalf("VerifyEntitlementLeaseToken() error=%v, want %v", err, ErrHostedEntitlementHostMismatch)
 	}
 }
 

@@ -17,9 +17,17 @@ import (
 )
 
 const (
-	// TrialActivationPublicKeyEnvVar overrides the public key used to validate
-	// hosted trial activation tokens.
+	// TrialActivationPublicKeyEnvVar is the legacy environment variable name
+	// for the hosted entitlement signing public key. The literal value stays
+	// stable for deployed-tenant compatibility; do not use it to reintroduce
+	// self-hosted trial acquisition.
 	TrialActivationPublicKeyEnvVar = "PULSE_TRIAL_ACTIVATION_PUBLIC_KEY"
+
+	// HostedEntitlementPublicKeyEnvVar is the canonical name for the hosted
+	// entitlement signing public-key source. It intentionally aliases the
+	// legacy environment variable until a separately governed credential
+	// migration exists.
+	HostedEntitlementPublicKeyEnvVar = TrialActivationPublicKeyEnvVar
 
 	// TrialActivationIssuer is the JWT issuer for hosted trial activation tokens.
 	TrialActivationIssuer = "pulse-pro-trial-signup"
@@ -38,10 +46,16 @@ var (
 	ErrTrialActivationReturnURLMissing  = errors.New("trial activation return_url is required")
 	ErrTrialActivationReturnURLInvalid  = errors.New("trial activation return_url is invalid")
 	ErrTrialActivationHostMismatch      = errors.New("trial activation token host mismatch")
+
+	ErrHostedEntitlementPublicKeyMissing = ErrTrialActivationPublicKeyMissing
+	ErrHostedEntitlementPublicKeyInvalid = ErrTrialActivationPublicKeyInvalid
+	ErrHostedEntitlementHostMismatch     = ErrTrialActivationHostMismatch
 )
 
-// TrialActivationClaims are signed by the hosted signup service and consumed by
-// self-hosted Pulse instances to start a Pro trial after registration/checkout.
+// TrialActivationClaims model the retired self-hosted trial-acquisition
+// callback. They remain for compatibility tests around the closed
+// /auth/trial-activate boundary; normal v6 hosted entitlement state uses
+// EntitlementLeaseClaims.
 type TrialActivationClaims struct {
 	OrgID         string `json:"org_id"`
 	Email         string `json:"email,omitempty"`
@@ -75,16 +89,29 @@ func DecodeEd25519PrivateKey(encoded string) (ed25519.PrivateKey, error) {
 	}
 }
 
-// TrialActivationPublicKey resolves the verification key for hosted trial
-// activation tokens. Environment override is only allowed in local/dev builds.
-// Release builds must use the build-time embedded verification key instead of
-// reopening that trust boundary through hosted-mode environment wiring.
+// HostedEntitlementPublicKey resolves the verification key for hosted
+// entitlement leases. It currently reads the legacy trial-activation
+// environment name for deployed-tenant compatibility. Environment override is
+// only allowed in local/dev builds. Release builds must use the build-time
+// embedded verification key instead of reopening that trust boundary through
+// hosted-mode environment wiring.
+func HostedEntitlementPublicKey() (ed25519.PublicKey, error) {
+	return trialActivationPublicKey()
+}
+
+// TrialActivationPublicKey resolves the same legacy verification source for
+// retired trial-activation compatibility. New hosted entitlement code should
+// call HostedEntitlementPublicKey instead.
 func TrialActivationPublicKey() (ed25519.PublicKey, error) {
+	return trialActivationPublicKey()
+}
+
+func trialActivationPublicKey() (ed25519.PublicKey, error) {
 	if allowTrialActivationPublicKeyEnvOverride() {
-		if env := strings.TrimSpace(os.Getenv(TrialActivationPublicKeyEnvVar)); env != "" {
+		if env := strings.TrimSpace(os.Getenv(HostedEntitlementPublicKeyEnvVar)); env != "" {
 			key, err := DecodePublicKey(env)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrTrialActivationPublicKeyInvalid, err)
+				return nil, fmt.Errorf("%w: %v", ErrHostedEntitlementPublicKeyInvalid, err)
 			}
 			return key, nil
 		}
@@ -92,11 +119,11 @@ func TrialActivationPublicKey() (ed25519.PublicKey, error) {
 
 	embedded := strings.TrimSpace(EmbeddedPublicKey)
 	if embedded == "" {
-		return nil, ErrTrialActivationPublicKeyMissing
+		return nil, ErrHostedEntitlementPublicKeyMissing
 	}
 	key, err := DecodePublicKey(embedded)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTrialActivationPublicKeyInvalid, err)
+		return nil, fmt.Errorf("%w: %v", ErrHostedEntitlementPublicKeyInvalid, err)
 	}
 	return key, nil
 }

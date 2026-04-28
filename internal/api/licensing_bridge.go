@@ -303,7 +303,7 @@ func parseOptionalTimeParamFromLicensing(raw string, defaultValue time.Time) (ti
 }
 
 func trialActivationPublicKeyFromLicensing() (ed25519.PublicKey, error) {
-	return pkglicensing.TrialActivationPublicKey()
+	return pkglicensing.HostedEntitlementPublicKey()
 }
 
 func signPurchaseReturnTokenFromLicensing(signingKey []byte, claims purchaseReturnClaimsModel) (string, error) {
