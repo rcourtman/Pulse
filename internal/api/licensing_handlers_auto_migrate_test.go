@@ -315,8 +315,8 @@ func TestGetTenantComponents_PersistsCommercialMigrationState_WhenAutoExchangeFa
 	if payload.TrialEligible {
 		t.Fatalf("trial_eligible=%v, want false", payload.TrialEligible)
 	}
-	if payload.TrialEligibilityReason != "commercial_migration_pending" {
-		t.Fatalf("trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "commercial_migration_pending")
+	if payload.TrialEligibilityReason != "" {
+		t.Fatalf("trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
 	}
 
 	handlers.StopAllBackgroundLoops()

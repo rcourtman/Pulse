@@ -23,7 +23,6 @@ import {
   getOrganizationBillingLicenseStatusLabel,
   getInactiveProUpsellNotice,
   getPurchaseActivationNotice,
-  getTrialEndedProLicenseNotice,
   isDisplayableLicenseFeature,
   isGrandfatheredRecurringV5PlanVersion,
   isUncappedGrandfatheredPlanVersion,
@@ -49,12 +48,6 @@ describe('licensePresentation', () => {
     });
     expect(getNoActiveProLicenseState()).toEqual({
       text: 'No Pro license is active.',
-    });
-    expect(getTrialEndedProLicenseNotice()).toEqual({
-      tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
-      title: 'Your Pro trial has ended',
-      body: 'Choose a paid plan to keep root-cause analysis, safe remediation workflows, and 90-day history on this instance.',
-      actionLabel: 'View Pro plans',
     });
     expect(getInactiveProUpsellNotice()).toEqual({
       tone: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',

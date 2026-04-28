@@ -57,10 +57,12 @@ type EntitlementPayload struct {
 	// GracePeriodEnd is the RFC3339 grace period end timestamp when available.
 	GracePeriodEnd *string `json:"grace_period_end,omitempty"`
 
-	// TrialEligible indicates whether this org can start a self-serve trial right now.
+	// TrialEligible is retained for compatibility with retired self-hosted trial clients.
+	// New self-hosted payloads leave it false; active trial state is exposed through
+	// SubscriptionState, TrialExpiresAt, and TrialDaysRemaining.
 	TrialEligible bool `json:"trial_eligible"`
 
-	// TrialEligibilityReason is set when trial start is denied.
+	// TrialEligibilityReason is retained for compatibility with retired self-hosted trial clients.
 	TrialEligibilityReason string `json:"trial_eligibility_reason,omitempty"`
 
 	// MaxHistoryDays is the maximum metrics history retention in days for the current tier.
@@ -95,7 +97,7 @@ type EntitlementPayload struct {
 }
 
 // CommercialPosturePayload is the canonical non-billing commercial contract
-// for upgrade messaging, trial posture, and monitored-system migration copy.
+// for upgrade messaging and monitored-system migration copy.
 // It intentionally excludes billing identity, grandfathered plan terms, and
 // other full-entitlement details that belong only to billing surfaces.
 type CommercialPosturePayload struct {
@@ -114,10 +116,10 @@ type CommercialPosturePayload struct {
 	// TrialDaysRemaining is the number of whole or partial days remaining in trial.
 	TrialDaysRemaining *int `json:"trial_days_remaining,omitempty"`
 
-	// TrialEligible indicates whether this org can start a self-serve trial right now.
+	// TrialEligible is retained for compatibility with retired self-hosted trial clients.
 	TrialEligible bool `json:"trial_eligible"`
 
-	// TrialEligibilityReason is set when trial start is denied.
+	// TrialEligibilityReason is retained for compatibility with retired self-hosted trial clients.
 	TrialEligibilityReason string `json:"trial_eligibility_reason,omitempty"`
 
 	// OverflowDaysRemaining is set when the onboarding overflow (+1 host) is active.

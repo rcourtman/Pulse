@@ -86,6 +86,12 @@ func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
 	if len(payload.UpgradeReasons) == 0 {
 		t.Fatalf("expected upgrade reasons for free tier")
 	}
+	if payload.TrialEligible {
+		t.Fatal("expected retired self-hosted trial eligibility to stay false")
+	}
+	if payload.TrialEligibilityReason != "" {
+		t.Fatalf("TrialEligibilityReason=%q, want empty", payload.TrialEligibilityReason)
+	}
 	for _, reason := range payload.UpgradeReasons {
 		if reason.ActionURL == "" {
 			t.Fatalf("expected action_url for reason %q", reason.Key)

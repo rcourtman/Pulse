@@ -756,9 +756,9 @@ storage and recovery may inherit demo-safe `/api/license/runtime-capabilities`
 reads for capability and history-retention truth, but
 `/api/license/commercial-posture`, `/api/license/entitlements`, and
 `/auth/license-purchase-start` stay hidden and those surfaces must not expect
-licensed identity, upgrade prompts, trial urgency, checkout handoff state, or
-observed usage counts to remain present once the public-demo contract is
-applied.
+licensed identity, upgrade prompts, trial urgency or eligibility reasons,
+checkout handoff state, or observed usage counts to remain present once the
+public-demo contract is applied.
 That same runtime-safe exception now also redacts monitored-system capacity
 posture. Storage/recovery surfaces may keep demo-safe capability and retention
 truth from `/api/license/runtime-capabilities`, but they must not expect
@@ -1887,7 +1887,9 @@ storage- or recovery-adjacent flows must not invoke or advertise the retired
 `POST /api/license/trial/start` route, and the normal self-hosted router must
 return `404` for that path without mutating entitlements. The retired
 `/auth/trial-activate` self-hosted callback must also stay absent from
-storage/recovery-local retry or backoff behavior.
+storage/recovery-local retry or backoff behavior. Retired
+`trial_eligible`/`trial_eligibility_reason` payload fields are compatibility
+only and must not become storage/recovery prompt, identity, or restore state.
 That same shared `internal/api/` dependency now also assumes adjacent
 commercial helper surfaces speak in monitored-system terms: recovery- or
 storage-adjacent API wiring may consume the canonical monitored-system ledger

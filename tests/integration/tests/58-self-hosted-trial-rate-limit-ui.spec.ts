@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { ensureAuthenticated } from './helpers';
 
-const FREE_TRIAL_ELIGIBLE_ENTITLEMENTS = {
+const FREE_SELF_HOSTED_ENTITLEMENTS = {
   capabilities: [],
   limits: [],
   subscription_state: 'active',
   upgrade_reasons: [],
   tier: 'free',
-  trial_eligible: true,
+  trial_eligible: false,
 };
 
 const SELF_HOSTED_SECURITY_STATUS = {
@@ -72,7 +72,7 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(FREE_TRIAL_ELIGIBLE_ENTITLEMENTS),
+        body: JSON.stringify(FREE_SELF_HOSTED_ENTITLEMENTS),
       });
     });
 
@@ -80,7 +80,7 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(FREE_TRIAL_ELIGIBLE_ENTITLEMENTS),
+        body: JSON.stringify(FREE_SELF_HOSTED_ENTITLEMENTS),
       });
     });
 

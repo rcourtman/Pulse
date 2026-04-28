@@ -2505,7 +2505,7 @@ describe('frontend resource type boundaries', () => {
     expect(proLicensePanelStateSource).toContain('getCommercialMigrationNotice');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
-    expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
+    expect(proLicensePlanSectionSource).not.toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
     expect(proLicensePanelSource).not.toContain('Loading license status...');
     expect(proLicensePanelSource).not.toContain('No Pro license is active.');
@@ -2519,7 +2519,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(licensePresentationSource).toContain('export const getLicenseStatusLoadingState');
     expect(licensePresentationSource).toContain('export const getNoActiveProLicenseState');
-    expect(licensePresentationSource).toContain('export const getTrialEndedProLicenseNotice');
+    expect(licensePresentationSource).not.toContain('export const getTrialEndedProLicenseNotice');
     expect(licensePresentationSource).toContain('export const getInactiveProUpsellNotice');
     expect(licensePresentationSource).toContain(
       'export const getOrganizationBillingLicenseStatusLabel',

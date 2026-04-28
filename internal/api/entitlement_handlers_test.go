@@ -548,7 +548,7 @@ func TestHandleRuntimeCapabilities_HostedCommunityEvaluatorStateStripsLegacyComm
 	}
 }
 
-func TestEntitlementHandler_TrialEligibility_FreshOrgAllowed(t *testing.T) {
+func TestEntitlementHandler_SelfHostedTrialEligibilityRetiredForFreshOrg(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
@@ -569,8 +569,8 @@ func TestEntitlementHandler_TrialEligibility_FreshOrgAllowed(t *testing.T) {
 	if payload.SubscriptionState != string(license.SubStateActive) {
 		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateActive)
 	}
-	if !payload.TrialEligible {
-		t.Fatalf("trial_eligible=%v, want true", payload.TrialEligible)
+	if payload.TrialEligible {
+		t.Fatalf("trial_eligible=%v, want false", payload.TrialEligible)
 	}
 	if payload.TrialEligibilityReason != "" {
 		t.Fatalf("trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
@@ -622,8 +622,8 @@ func TestEntitlementHandler_OverflowOnlyBillingStateReportsActiveCommunity(t *te
 	if payload.SubscriptionState != string(license.SubStateActive) {
 		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateActive)
 	}
-	if !payload.TrialEligible {
-		t.Fatalf("trial_eligible=%v, want true", payload.TrialEligible)
+	if payload.TrialEligible {
+		t.Fatalf("trial_eligible=%v, want false", payload.TrialEligible)
 	}
 	if payload.MonitoredSystemCapacity == nil || payload.MonitoredSystemCapacity.Limit != 0 || payload.MonitoredSystemCapacity.BlocksNewSystems {
 		t.Fatalf("expected uncapped monitored_system_capacity, got %+v", payload.MonitoredSystemCapacity)
@@ -709,7 +709,7 @@ func TestEntitlementHandler_DevModeIncludesMultiTenantWhenRuntimeEnabled(t *test
 	}
 }
 
-func TestEntitlementHandler_TrialEligibility_AlreadyUsedDenied(t *testing.T) {
+func TestEntitlementHandler_ExpiredTrialStateDoesNotExposeStartReason(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	orgID := "default"
@@ -746,12 +746,12 @@ func TestEntitlementHandler_TrialEligibility_AlreadyUsedDenied(t *testing.T) {
 	if payload.TrialEligible {
 		t.Fatalf("trial_eligible=%v, want false", payload.TrialEligible)
 	}
-	if payload.TrialEligibilityReason != "already_used" {
-		t.Fatalf("trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "already_used")
+	if payload.TrialEligibilityReason != "" {
+		t.Fatalf("trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
 	}
 }
 
-func TestEntitlementHandler_CommercialMigrationBlocksTrialEligibility(t *testing.T) {
+func TestEntitlementHandler_CommercialMigrationDoesNotExposeTrialStartReason(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	orgID := "default"
@@ -795,8 +795,8 @@ func TestEntitlementHandler_CommercialMigrationBlocksTrialEligibility(t *testing
 	if payload.TrialEligible {
 		t.Fatalf("trial_eligible=%v, want false", payload.TrialEligible)
 	}
-	if payload.TrialEligibilityReason != "commercial_migration_pending" {
-		t.Fatalf("trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "commercial_migration_pending")
+	if payload.TrialEligibilityReason != "" {
+		t.Fatalf("trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
 	}
 }
 

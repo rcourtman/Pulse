@@ -46,6 +46,12 @@ describe('pricingHandoff', () => {
     expect(getUpgradeFallbackDestination('rbac')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
   });
 
+  it('does not keep retired trial-expired as an owned in-product billing intent', () => {
+    expect(getPricingRouteDestination('?feature=trial_expired')).toBe(
+      getSelfHostedPurchaseStartUrl('trial_expired', new URLSearchParams('feature=trial_expired')),
+    );
+  });
+
   it('routes unknown feature upgrades to Pulse Account purchase start', () => {
     expect(getUpgradeFallbackDestination('unknown_pro_feature')).toBe(
       getSelfHostedPurchaseStartUrl('unknown_pro_feature'),

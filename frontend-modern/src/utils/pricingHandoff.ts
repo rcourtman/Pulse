@@ -63,7 +63,6 @@ const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   advanced_sso: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   agent_profiles: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   long_term_metrics: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  trial_expired: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
 };
 
 const INTERNAL_HREF_BASE = 'https://pulse.invalid';

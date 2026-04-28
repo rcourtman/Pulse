@@ -1,12 +1,10 @@
 import { Component, For, Show } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
-import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
   getLicenseStatusLoadingState,
   getNoActiveProLicenseState,
-  getTrialEndedProLicenseNotice,
 } from '@/utils/licensePresentation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
@@ -88,7 +86,6 @@ interface ProLicensePlanSectionProps {
     destination: UpgradeDestination;
   } | null;
   onPurchaseActivationActionClick: () => void;
-  trialEnded: boolean;
 }
 
 const formatDate = (value?: string | null) => {
@@ -99,8 +96,6 @@ const formatDate = (value?: string | null) => {
 };
 
 export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (props) => {
-  const trialEndedNotice = props.trialEnded ? getTrialEndedProLicenseNotice() : null;
-
   return (
     <>
       <Show when={props.activationSuccessSummary}>
@@ -320,18 +315,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             </div>
           </div>
         )}
-      </Show>
-      <Show when={props.trialEnded && !licenseEntitlementsLoadError() && trialEndedNotice}>
-        <div class={`mb-4 rounded-md border p-3 text-sm ${trialEndedNotice?.tone ?? ''}`}>
-          <p class="font-medium">{trialEndedNotice?.title}</p>
-          <p class="text-xs mt-1 opacity-90">{trialEndedNotice?.body}</p>
-          <UpgradeLink
-            class="inline-flex items-center gap-1 mt-2 text-xs font-medium hover:underline"
-            destination={getUpgradeActionDestination('trial_expired')}
-          >
-            {trialEndedNotice?.actionLabel}
-          </UpgradeLink>
-        </div>
       </Show>
       <Show when={licenseEntitlementsLoadError()}>
         <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">

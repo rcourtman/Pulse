@@ -118,7 +118,7 @@ describe('ProLicensePanel', () => {
       subscription_state: 'expired',
       upgrade_reasons: [],
       tier: 'free',
-      trial_eligible: true,
+      trial_eligible: false,
     };
 
     loadRuntimeLicenseStatusMock.mockReset();
@@ -252,7 +252,7 @@ describe('ProLicensePanel', () => {
     );
   });
 
-  it('hides start trial action and shows trial-ended banner when trial was already used', async () => {
+  it('does not surface a trial-ended banner for retired self-hosted trial state', async () => {
     mockEntitlements = {
       capabilities: [],
       limits: [],
@@ -268,7 +268,7 @@ describe('ProLicensePanel', () => {
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Your Pro trial has ended')).toBeInTheDocument();
+    expect(screen.queryByText('Your Pro trial has ended')).not.toBeInTheDocument();
   });
 
   it('renders trial countdown from entitlements payload', async () => {
@@ -1014,7 +1014,6 @@ describe('ProLicensePanel', () => {
       upgrade_reasons: [],
       tier: 'free',
       trial_eligible: false,
-      trial_eligibility_reason: 'commercial_migration_pending',
       commercial_migration: {
         source: 'v5_license',
         state: 'pending',
@@ -1040,7 +1039,6 @@ describe('ProLicensePanel', () => {
       upgrade_reasons: [],
       tier: 'free',
       trial_eligible: false,
-      trial_eligibility_reason: 'commercial_migration_pending',
       commercial_migration: {
         source: 'v5_license',
         state: 'pending',
@@ -1064,7 +1062,6 @@ describe('ProLicensePanel', () => {
       upgrade_reasons: [],
       tier: 'free',
       trial_eligible: false,
-      trial_eligibility_reason: 'commercial_migration_failed',
       commercial_migration: {
         source: 'v5_license',
         state: 'failed',
@@ -1117,7 +1114,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain("'A license or activation key is required'");
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
-    expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
+    expect(proLicensePlanSectionSource).not.toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.title');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.supplementalBadges');
     expect(proLicensePlanSectionSource).toContain('props.activationSuccessSummary');
@@ -1132,9 +1129,8 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).not.toContain('MonitoredSystemDefinitionDisclosure');
     expect(proLicensePlanSectionSource).not.toContain('trialStartTitle');
     expect(proLicensePlanSectionSource).not.toContain('trialStartIdleActionLabel');
-    expect(proLicensePlanSectionSource).toContain(
-      'const trialEndedNotice = props.trialEnded ? getTrialEndedProLicenseNotice() : null;',
-    );
+    expect(proLicensePlanSectionSource).not.toContain('trialEndedNotice');
+    expect(proLicensePlanSectionSource).not.toContain('props.trialEnded');
     expect(proLicensePlanSectionSource).toContain('planSelectionPrompt');
     expect(proLicensePlanSectionSource).not.toContain(
       "resolveSelfHostedPurchaseStartDestination('self_hosted_plan')",

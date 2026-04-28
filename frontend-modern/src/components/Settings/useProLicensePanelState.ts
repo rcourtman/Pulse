@@ -427,12 +427,6 @@ export function useProLicensePanelState() {
       : undefined;
   });
 
-  const trialEnded = createMemo(
-    () =>
-      subscriptionState() === 'expired' &&
-      entitlements()?.trial_eligibility_reason === 'already_used',
-  );
-
   const purchaseActivationNotice = createMemo(() => {
     if (purchaseActivationResult().trim().toLowerCase() === 'activated') {
       return null;
@@ -668,6 +662,5 @@ export function useProLicensePanelState() {
     showCountingRulesByDefault,
     showRecoveryByDefault,
     statusPresentation,
-    trialEnded,
   };
 }

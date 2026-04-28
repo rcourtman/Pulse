@@ -630,7 +630,6 @@ export const getCommercialMigrationNotice = (
   if (!migration?.state) return null;
 
   const actionText = getCommercialMigrationActionText(migration.recommended_action);
-  const blockedText = 'A new Pro trial stays blocked until this is resolved.';
 
   if (migration.state === 'pending') {
     let body =
@@ -651,7 +650,7 @@ export const getCommercialMigrationNotice = (
     return {
       tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
       title: 'v5 license migration pending',
-      body: `${body} ${actionText} ${blockedText}`,
+      body: `${body} ${actionText}`,
     };
   }
 
@@ -680,7 +679,7 @@ export const getCommercialMigrationNotice = (
   return {
     tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
     title: 'v5 license migration needs attention',
-    body: `${body} ${actionText} ${blockedText}`,
+    body: `${body} ${actionText}`,
   };
 };
 
@@ -778,13 +777,6 @@ export const getLicenseStatusLoadingState = (): LicenseLoadingStateCopy => ({
 
 export const getNoActiveProLicenseState = (): LicenseLoadingStateCopy => ({
   text: 'No Pro license is active.',
-});
-
-export const getTrialEndedProLicenseNotice = (): LicenseActionNotice => ({
-  tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
-  title: 'Your Pro trial has ended',
-  body: 'Choose a paid plan to keep root-cause analysis, safe remediation workflows, and 90-day history on this instance.',
-  actionLabel: 'View Pro plans',
 });
 
 export const getInactiveProUpsellNotice = (): LicenseActionNotice => ({

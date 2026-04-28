@@ -1556,8 +1556,8 @@ func TestHandleClearLicense_ClearsActiveTrialButPreservesTrialUsedMarker(t *test
 	if payload.TrialEligible {
 		t.Fatalf("payload.trial_eligible=%v, want false", payload.TrialEligible)
 	}
-	if payload.TrialEligibilityReason != "already_used" {
-		t.Fatalf("payload.trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "already_used")
+	if payload.TrialEligibilityReason != "" {
+		t.Fatalf("payload.trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
 	}
 }
 

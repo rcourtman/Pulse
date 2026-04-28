@@ -5327,7 +5327,7 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 		"valid":false,
 		"is_lifetime":false,
 		"days_remaining":0,
-		"trial_eligible":true,
+		"trial_eligible":false,
 		"max_history_days":7,
 		"overflow_days_remaining":14,
 		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},

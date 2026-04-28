@@ -676,7 +676,11 @@ the canonical monitored-system blocked payload.
     `/auth/trial-activate` self-hosted return path must also stay absent from
     the ordinary router and settings UI; signed hosted entitlement leases may
     refresh cached hosted/cloud entitlement state, but they must not create a
-    local Pro trial acquisition callback.
+    local Pro trial acquisition callback. Entitlement payloads may retain
+    `trial_eligible` and `trial_eligibility_reason` as compatibility fields,
+    but ordinary self-hosted responses leave eligibility false and the reason
+    empty; active trial state is represented by `subscription_state`,
+    `trial_expires_at`, and `trial_days_remaining` only.
 29. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
     unauthenticated: when the dev reset route clears first-run auth it must
     also clear any env-backed auth state that feeds `/api/security/status`, so
@@ -869,7 +873,7 @@ for upgrade links, trial CTAs, plan upsells, and paid-only navigation rather
 than as a billing entitlement change.
 That same contract split also makes the licensing boundary explicit:
 `/api/license/runtime-capabilities` is the public runtime feature contract,
-`/api/license/commercial-posture` is the non-billing upgrade/trial posture
+`/api/license/commercial-posture` is the non-billing upgrade posture
 contract for real customer workspaces, and `/api/license/entitlements`
 remains billing-only. New callers must extend one of those owned shapes
 instead of reviving a combined entitlement payload for mixed runtime,
@@ -2947,7 +2951,8 @@ out of the router inventory and must not return the old hosted-signup or
 trial-rate-limit acquisition payloads from an ordinary self-hosted runtime;
 `frontend-modern/src/api/license.ts`, demo mode, and feature gates must not
 expose a start-trial client method or in-app CTA in the same slice as any
-handler change.
+handler change. Commercial migration state must travel through
+`commercial_migration`, not through trial-denial reason strings.
 That same shared commercial API boundary also owns hosted self-serve failure
 transport semantics. Hosted trial request and verification failures may render
 owned HTML pages, but they must preserve the originating Pulse instance and

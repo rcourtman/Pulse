@@ -21,7 +21,6 @@ type EntitlementPayload = {
 type ExpectedCopy = {
   title: RegExp;
   bodyFragments: RegExp[];
-  trialReason: string;
 };
 
 const expectedState = process.env.PULSE_E2E_EXPECT_COMMERCIAL_MIGRATION_STATE || '';
@@ -98,8 +97,7 @@ function expectedCopyFor(state: string, reason: string, action: string): Expecte
 
     return {
       title: /v5 license migration pending/i,
-      bodyFragments: [reasonFragment, actionFragment, /new pro trial stays blocked/i],
-      trialReason: 'commercial_migration_pending',
+      bodyFragments: [reasonFragment, actionFragment],
     };
   }
 
@@ -118,8 +116,7 @@ function expectedCopyFor(state: string, reason: string, action: string): Expecte
 
   return {
     title: /v5 license migration needs attention/i,
-    bodyFragments: [reasonFragment, actionFragment, /new pro trial stays blocked/i],
-    trialReason: 'commercial_migration_failed',
+    bodyFragments: [reasonFragment, actionFragment],
   };
 }
 
@@ -173,7 +170,7 @@ test.describe.serial('v5 commercial migration notice', () => {
     expect(entitlements.commercial_migration?.reason).toBe(expectedReason);
     expect(entitlements.commercial_migration?.recommended_action).toBe(expectedAction);
     expect(entitlements.trial_eligible).toBe(false);
-    expect(entitlements.trial_eligibility_reason).toBe(expectedCopy.trialReason);
+    expect(entitlements.trial_eligibility_reason || '').toBe('');
   });
 
   test('Pro settings renders the expected migration state', async ({ page }) => {

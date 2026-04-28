@@ -241,7 +241,11 @@ Community limit enforcement.
 13. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-16. Add or change self-hosted Pro plan, trial, recovery, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+16. Add or change self-hosted Pro plan, recovery, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+    Ordinary self-hosted trial acquisition is retired: these plan surfaces may
+    show active historical `subscription_state=trial` entitlement state, but
+    they must not turn `trial_eligible`, `trial_eligibility_reason`, or an
+    expired trial marker into a default Pro CTA or banner.
 17. Add or change monitored-system ledger, disclosure, or admission-preview presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The Dashboard shell must not carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
     Public demo and other read-only presentation policy states must suppress
@@ -504,11 +508,14 @@ Community limit enforcement.
 
 `frontend-modern/src/utils/pricingHandoff.ts` now routes pro-feature paywall
 keys (`ai_alerts`, `ai_autofix`, `relay`, `rbac`, `audit_logging`,
-`advanced_sso`, `agent_profiles`, `long_term_metrics`, `trial_expired`) to the
+`advanced_sso`, `agent_profiles`, `long_term_metrics`) to the
 self-hosted billing plan page instead of the Pulse Account purchase-start
 handoff. The purchase-start handoff requires a `PublicURL` and fails on local
 instances; routing these keys to the in-product billing plan keeps upgrades
 accessible from self-hosted environments.
+Retired trial-acquisition intents such as `trial_expired` must not be owned
+pricing handoff destinations; no ordinary self-hosted runtime path should emit
+them as an upgrade reason or plan-page CTA.
 The monitored-system app-shell warning CTA now follows that same commercial
 boundary by rendering only in hosted mode. Ordinary self-hosted installs must
 not see finite monitored-system pressure in the global app shell; when hosted
@@ -567,7 +574,7 @@ endpoints are fully hidden (`404`) and which remain available only as a
 non-commercial public contract. `/api/license/runtime-capabilities` is the
 canonical public exception for feature truth and history retention.
 `/api/license/commercial-posture` is the canonical non-billing commercial
-contract for upgrade/trial posture in real customer workspaces, while
+contract for upgrade posture in real customer workspaces, while
 `/api/license/entitlements` remains billing-only. In public demo mode both
 commercial routes, plus `/auth/license-purchase-start`, must stay hidden and
 public browsers must not see licensed identity, plan labels, upgrade reasons,
@@ -623,7 +630,7 @@ owner for the first `/api/license/commercial-posture` read, while
 other non-billing feature hooks may consume the resolved posture store but
 must not each trigger their own mount-time posture fetch. Billing-owned
 surfaces such as `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-may still force refresh through the same shared store when plan, trial, or
+may still force refresh through the same shared store when plan, activation, or
 recovery actions mutate commercial truth.
 Non-billing browser journeys must also stay off
 `/api/license/entitlements` entirely. Dashboard, infrastructure, alerts,

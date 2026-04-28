@@ -35,8 +35,6 @@ type licenseFeaturesResponse = pkglicensing.LicenseFeaturesResponse
 type activateLicenseRequestModel = pkglicensing.ActivateLicenseRequest
 type activateLicenseResponseModel = pkglicensing.ActivateLicenseResponse
 type activationStateModel = pkglicensing.ActivationState
-type trialStartDecisionModel = pkglicensing.TrialStartDecision
-type trialStartDenialReasonModel = pkglicensing.TrialStartDenialReason
 type billingStoreModel = pkglicensing.BillingStore
 type billingState = pkglicensing.BillingState
 type subscriptionState = pkglicensing.SubscriptionState
@@ -92,7 +90,6 @@ const (
 	activationKeyPrefixValue          = pkglicensing.ActivationKeyPrefix
 
 	// Conversion event type constants for backend-emitted events.
-	conversionEventTrialStarted            = pkglicensing.EventTrialStarted
 	conversionEventLicenseActivated        = pkglicensing.EventLicenseActivated
 	conversionEventLicenseActivationFailed = pkglicensing.EventLicenseActivationFailed
 	conversionEventCheckoutStarted         = pkglicensing.EventCheckoutStarted
@@ -150,14 +147,6 @@ func defaultTrialDurationFromLicensing() time.Duration {
 
 func buildTrialBillingStateWithPlanFromLicensing(now time.Time, capabilities []string, planVersion string, duration time.Duration) *billingState {
 	return pkglicensing.BuildTrialBillingStateWithPlan(now, capabilities, planVersion, duration)
-}
-
-func evaluateTrialStartEligibilityFromLicensing(hasActiveLicense bool, existing *billingState) trialStartDecisionModel {
-	return pkglicensing.EvaluateTrialStartEligibility(hasActiveLicense, existing)
-}
-
-func trialStartErrorFromLicensing(reason trialStartDenialReasonModel) (code, message string, includeOrgID bool) {
-	return pkglicensing.TrialStartError(reason)
 }
 
 func newLicensePersistenceFromLicensing(configDir string) (*licensePersistence, error) {

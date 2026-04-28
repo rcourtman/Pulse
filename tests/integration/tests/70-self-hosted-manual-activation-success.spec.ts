@@ -8,7 +8,7 @@ const INACTIVE_ENTITLEMENTS = {
   subscription_state: 'expired',
   upgrade_reasons: [],
   tier: 'free',
-  trial_eligible: true,
+  trial_eligible: false,
   hosted_mode: false,
   valid: false,
 };
@@ -56,7 +56,7 @@ const INACTIVE_COMMERCIAL_POSTURE = {
   subscription_state: 'expired',
   upgrade_reasons: [],
   tier: 'free',
-  trial_eligible: true,
+  trial_eligible: false,
   monitored_system_capacity: null,
   monitored_system_continuity: null,
   has_migration_gap: false,

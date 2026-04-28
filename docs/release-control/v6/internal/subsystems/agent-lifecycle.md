@@ -1629,7 +1629,9 @@ fleet surfaces must not expose direct trial CTAs or depend on
 `POST /api/license/trial/start`, and the normal router must fail that path as
 `404` without mutating entitlements. The retired `/auth/trial-activate`
 self-hosted callback must also stay absent from lifecycle retry and backoff
-behavior.
+behavior. Lifecycle-adjacent setup and install surfaces must also treat
+`trial_eligible` and `trial_eligibility_reason` as retired compatibility
+fields, not as prompt state or setup transport state.
 That same shared `internal/api/` dependency also assumes session-carried OIDC
 refresh tokens stay fail-closed at rest: `session_store.go` may only persist
 or recover those tokens through encrypted-at-rest session payloads, and any

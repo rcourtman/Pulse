@@ -19,7 +19,7 @@ type EntitlementPayload = entitlementPayloadModel
 type RuntimeCapabilitiesPayload = runtimeCapabilitiesPayloadModel
 
 // CommercialPosturePayload is the canonical non-billing commercial response
-// for upgrade/trial posture and monitored-system migration guidance.
+// for upgrade posture and monitored-system migration guidance.
 type CommercialPosturePayload = commercialPosturePayloadModel
 
 // LimitStatus represents a quantitative limit with current usage state.
@@ -72,13 +72,12 @@ func (h *LicenseHandlers) buildCommercialEntitlementPayload(
 	if existing != nil {
 		payload.CommercialMigration = cloneCommercialMigrationStatusFromLicensing(existing.CommercialMigration)
 	}
-	payload.TrialEligible, payload.TrialEligibilityReason = h.trialStartEligibility(ctx, svc, existing)
 	payload.HostedMode = h != nil && h.hostedMode
 	return payload, nil
 }
 
 // HandleEntitlements returns the normalized entitlement payload for the current tenant.
-// This is the commercial entitlement endpoint for billing, trial, and upgrade presentation.
+// This is the commercial entitlement endpoint for billing, activation, and upgrade presentation.
 func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
@@ -416,31 +415,4 @@ func (h *LicenseHandlers) billingStateForContext(ctx context.Context) *billingSt
 		return nil
 	}
 	return existing
-}
-
-func (h *LicenseHandlers) trialStartEligibility(ctx context.Context, svc *licenseService, existing *billingState) (eligible bool, reason string) {
-	if h == nil || h.mtPersistence == nil {
-		return false, "unavailable"
-	}
-
-	orgID := GetOrgID(ctx)
-	if orgID == "" {
-		orgID = "default"
-	}
-
-	if existing == nil {
-		billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
-		loaded, err := billingStore.GetBillingState(orgID)
-		if err != nil {
-			return false, "unavailable"
-		}
-		existing = loaded
-	}
-
-	hasActiveLicense := svc != nil && svc.Current() != nil && svc.IsValid()
-	decision := evaluateTrialStartEligibilityFromLicensing(hasActiveLicense, existing)
-	if decision.Allowed {
-		return true, ""
-	}
-	return false, string(decision.Reason)
 }

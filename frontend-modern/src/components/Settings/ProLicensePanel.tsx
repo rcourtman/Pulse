@@ -114,7 +114,6 @@ const ProLicensePanelContent: Component = () => {
                   purchaseActivationAction={state.purchaseActivationAction()}
                   onPurchaseActivationActionClick={state.handlePurchaseActivationActionClick}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
-                  trialEnded={state.trialEnded()}
                 />
 
                 <SelfHostedCommercialRecoverySection
