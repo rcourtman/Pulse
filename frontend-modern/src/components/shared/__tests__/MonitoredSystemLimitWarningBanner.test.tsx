@@ -101,7 +101,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       external: false,
     });
     mockGetUpgradeActionUrlOrFallback.mockReturnValue(
-      '/settings/system/billing/plan?intent=self_hosted_plan',
+      '/settings/system/billing/usage?details=counting-rules',
     );
   });
 

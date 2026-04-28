@@ -248,17 +248,14 @@ async function configureMonitoredSystemBillingFixtures(
   );
 }
 
-async function openPageWithUrgentMonitoredSystemBanner(page: Page) {
+async function openSelfHostedGeneralSettings(page: Page) {
   await page.goto(`${DEV_SERVER_URL}/settings/system-general`, {
     waitUntil: "domcontentloaded",
   });
-  await expect(
-    page.getByRole("status").filter({ hasText: "Over plan by 11. 16 monitored, 5 included." }),
-  ).toBeVisible();
 }
 
 test.describe("Monitored-system billing focus", () => {
-test("keeps capacity and upgrade arrivals distinct on the billing surface", async ({
+  test("keeps monitored-system capacity review informational on self-hosted billing", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -267,27 +264,41 @@ test("keeps capacity and upgrade arrivals distinct on the billing surface", asyn
     );
 
     await configureMonitoredSystemBillingFixtures(page);
-    await openPageWithUrgentMonitoredSystemBanner(page);
+    await openSelfHostedGeneralSettings(page);
 
-    const banner = page
-      .getByRole("status")
-      .filter({ hasText: "Over plan by 11. 16 monitored, 5 included." });
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "Over policy by 11. 16 monitored, 5 included." }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Upgrade to add more" }),
+    ).toHaveCount(0);
 
-    await banner.getByRole("link", { name: "View capacity" }).click();
+    await page.goto(`${DEV_SERVER_URL}/settings/system/billing/plan`, {
+      waitUntil: "domcontentloaded",
+    });
     await page.waitForURL("**/settings/system/billing/plan");
     await expect(page.getByRole("tab", { name: "Plan" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     await expect(
-      page
-        .getByText("Existing monitoring continues. New monitored systems are blocked."),
+      page.getByText(
+        "Existing monitoring continues. Additional monitored systems are paused.",
+      ),
     ).toBeVisible();
-    await expect(page.getByText("Why am I over plan?")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Review monitored systems" })).toHaveAttribute(
-      "href",
-      "/settings/system/billing/usage",
+    await expect(page.getByText("Why is this over policy?")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Review monitored systems" }),
+    ).toHaveAttribute("href", "/settings/system/billing/usage");
+    await expect(page.getByText("Compare self-hosted plans")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Compare plans" })).toHaveCount(
+      0,
     );
+    await expect(
+      page.getByRole("link", { name: "Upgrade to add more" }),
+    ).toHaveCount(0);
 
     await page.getByRole("link", { name: "Review monitored systems" }).click();
     await page.waitForURL("**/settings/system/billing/usage");
@@ -295,30 +306,14 @@ test("keeps capacity and upgrade arrivals distinct on the billing surface", asyn
       "aria-selected",
       "true",
     );
-    await expect(page.getByRole("button", { name: "View counting rules" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "View counting rules" }),
+    ).toBeVisible();
     await expect(page.getByText("Counts as 1 monitored system")).toBeVisible();
     await expect(page.getByText("1 grouped source")).toBeVisible();
-
-    await openPageWithUrgentMonitoredSystemBanner(page);
-
-    await banner.getByRole("link", { name: "Upgrade to add more" }).click();
-    await page.waitForURL(
-      "**/settings/system/billing/plan?intent=self_hosted_plan",
-    );
-    await expect(page.getByRole("tab", { name: "Plan" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(
-      page.getByText("Compare self-hosted plans"),
-    ).toBeVisible();
-    await expect(page.getByText("Redeem existing key")).toBeVisible();
-    await expect(page.getByLabel("Pulse Pro Key")).toBeHidden();
-    await expect(
-      page.getByRole("link", { name: "Compare plans" }),
-    ).toHaveAttribute(
-      "href",
-      "/auth/license-purchase-start?feature=self_hosted_plan",
+    await expect(page.getByText("Compare self-hosted plans")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Compare plans" })).toHaveCount(
+      0,
     );
   });
 
@@ -340,7 +335,7 @@ test("keeps capacity and upgrade arrivals distinct on the billing surface", asyn
     });
 
     await expect(
-      page.getByRole("status").filter({ hasText: "over plan by 11" }),
+      page.getByRole("status").filter({ hasText: "over policy by 11" }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "Upgrade to add more" }),

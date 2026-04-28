@@ -294,29 +294,20 @@ Community limit enforcement.
     the section, but that summary treatment must stay inside the same task
     surface instead of reviving a separate overview panel, summary strip, or
     metric deck ahead of the real workspace list.
-23. Keep self-hosted monitored-system warning CTA intents distinct on the owned
-    billing surface. `Learn more` links must land on the monitored-system
-    usage-focused billing state, while `Upgrade to add more` links must land on
-    the plan-focused billing state. The owned billing shell must express those
-    states explicitly through canonical route-owned destinations
-    (`/settings/system/billing/plan` and `/settings/system/billing/usage`) and
-    their rendered content, not through nearby fragments that still present the
-    same visible destination. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-    and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-    therefore own a canonical two-state billing focus model (`plan` vs
-    `usage`) that survives direct links, compatibility redirects, and
-    in-product CTA navigation. The current canonical arrivals are
-    `/settings/system/billing/usage?details=counting-rules` for explanation and
-    `/settings/system/billing/plan?intent=self_hosted_plan` for plan-selection
-    intent. That plan-selection arrival must reopen an explicit
-    `Compare self-hosted plans` prompt inside Plans & Billing so operators can
-    review the self-hosted upgrade path without falling back to the legacy
-    usage surface or a dead-end placeholder CTA. The same owned plan route must
-    also reopen that compare-plans prompt by default for expired or no-paid
-    self-hosted installs, so `Plans & Billing` remains actionable even when the
-    operator arrives without an explicit `intent=self_hosted_plan` link.
-    That same self-hosted commercial boundary also owns legacy migration
-    continuity semantics: `legacy_migration_fallback` may preserve
+23. Keep self-hosted monitored-system capacity review informational and
+    non-commercial. Any monitored-system limit, continuity, or legacy
+    `max_monitored_systems` handoff must land on the usage-focused billing
+    state (`/settings/system/billing/usage?details=counting-rules`) so the
+    operator can inspect counting rules and any support/audit policy context
+    without being pushed toward a purchase. Monitored-system warnings must not
+    surface `Upgrade to add more`, `Compare self-hosted plans`, or the
+    `intent=self_hosted_plan` plan-selection arrival. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`,
+    `frontend-modern/src/components/Settings/useProLicensePanelState.ts`, and
+    `frontend-modern/src/utils/pricingHandoff.ts` therefore own a two-state
+    billing focus model where monitored-system aliases resolve to `usage`, and
+    plan selection is reserved for explicit self-hosted Pro/commercial-extra
+    arrivals. That same self-hosted commercial boundary also owns legacy
+    migration continuity semantics: `legacy_migration_fallback` may preserve
     `plan_limit` and `grandfathered_floor` for support/audit context, but
     self-hosted v6 monitoring remains uncapped. The canonical contract is
     therefore `status.max_monitored_systems = 0`, no enforced
@@ -927,12 +918,15 @@ checkout creation must post only `portal_handoff_id` so Pulse Account
 resolves the private checkout intent server-side before contacting Stripe.
 For self-hosted upgrades, that browser-facing feature metadata is now
 canonically `self_hosted_plan`. Pulse Account may continue normalizing the
-legacy `max_monitored_systems` alias so older handoff links do not break, but
-the portal proxy contract, checked-in embedded bundle, and rendered upgrade
-copy must treat self-hosted commerce as plan selection and paid extras rather
-than monitored-system-cap expansion. Shared helpers and route-owned browser
-symbols should name that state as plan selection as well; the monitored-system
-alias belongs only to backward-compatible handoff normalization.
+legacy `max_monitored_systems` alias only for already-created checkout records,
+but in-product browser links and fallback helpers must route that alias to the
+monitored-system usage/counting-rules surface instead of plan selection. The
+portal proxy contract, checked-in embedded bundle, and rendered upgrade copy
+must treat self-hosted commerce as plan selection and paid extras rather than
+monitored-system-cap expansion. Shared helpers and route-owned browser symbols
+should name that commercial state as plan selection as well; the
+monitored-system alias belongs only to backward-compatible handoff
+normalization and non-commercial usage review.
 If Pulse cannot create or resolve that portal handoff locally, the Pulse-owned
 start route must still return the operator to the owned billing plan surface
 with an explicit `purchase=unavailable` arrival instead of leaving the browser
@@ -1462,8 +1456,8 @@ users must not be funneled through upgrade CTAs inside Settings -> Plan.
 `ProLicensePlanSection.tsx` must not render the monitored-system upgrade
 arrival banner, the trial-start CTA, or the inactive-Pro upsell notice to
 users without paid features, `licensePresentation.ts` must not retain a dead
-inactive-Pro upsell helper for that surface, and the capacity-section `Upgrade
-plan` button must be gated on `hasPaidFeatures`. Self-hosted Pro marketing lives at
+inactive-Pro upsell helper for that surface, and the capacity section must not
+render an upgrade-plan button for monitored-system pressure. Self-hosted Pro marketing lives at
 `pulserelay.pro/pricing`; the Settings plan surface must show factual
 license state for Community users and leave discovery of paid tiers to
 surfaces outside the plan page.

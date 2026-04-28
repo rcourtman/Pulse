@@ -257,9 +257,7 @@ describe('monitoredSystemPresentation', () => {
           existing_monitoring_continues: true,
         },
       ),
-    ).toBe(
-      'Continuity verification pending. 16 monitored, 5 included.',
-    );
+    ).toBe('Continuity verification pending. 16 monitored, 5 included.');
     expect(
       formatMonitoredSystemLegacyConnectionBreakdown({
         proxmox_nodes: 2,
@@ -297,9 +295,10 @@ describe('monitoredSystemPresentation', () => {
         { label: 'Status', value: 'Over policy by 11' },
       ],
       statusMessage: 'Existing monitoring continues. Additional monitored systems are paused.',
-      detailMessage: 'Reduce usage or resolve the applicable policy before adding another monitored system.',
+      detailMessage:
+        'Reduce usage or resolve the applicable policy before adding another monitored system.',
       explanation: {
-        label: 'Why am I over plan?',
+        label: 'Why is this over policy?',
         body: 'This installation was already monitoring 16 monitored systems before Pulse paused net-new monitored-system admissions at the active finite policy boundary. Pulse keeps those existing systems visible, but additional monitored systems stay paused until usage is reduced or the policy changes.',
       },
     });

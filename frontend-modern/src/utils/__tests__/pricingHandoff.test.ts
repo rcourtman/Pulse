@@ -30,9 +30,9 @@ import {
 } from '@/utils/pricingHandoff';
 
 describe('pricingHandoff', () => {
-  it('routes product-owned monitored-system pricing links to billing', () => {
+  it('routes legacy monitored-system pricing links to usage, not plan purchase', () => {
     expect(getUpgradeFallbackDestination('max_monitored_systems')).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+      SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
     );
   });
 
@@ -77,7 +77,7 @@ describe('pricingHandoff', () => {
 
   it('keeps internal route exceptions when handing off the legacy pricing route', () => {
     expect(getPricingRouteDestination('?feature=max_monitored_systems')).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+      SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
     );
   });
 
@@ -108,11 +108,21 @@ describe('pricingHandoff', () => {
       resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE, '', '#pulse-pro-usage'),
     ).toBe(SELF_HOSTED_PRO_BILLING_USAGE_HREF);
     expect(
-      resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE, '', '#pulse-pro-recovery'),
+      resolveCanonicalSelfHostedBillingHref(
+        SELF_HOSTED_PRO_BILLING_ROUTE,
+        '',
+        '#pulse-pro-recovery',
+      ),
     ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF);
     expect(resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE)).toBe(
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
+    expect(
+      resolveCanonicalSelfHostedBillingHref(
+        SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+        '?intent=max_monitored_systems',
+      ),
+    ).toBe(SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF);
   });
 
   it('derives billing focus and arrival intent from canonical routes', () => {
@@ -124,12 +134,16 @@ describe('pricingHandoff', () => {
     expect(
       getSelfHostedBillingPlanIntent('?intent=' + SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
     ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT);
-    expect(getSelfHostedBillingPlanIntent('?intent=max_monitored_systems')).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-    );
-    expect(getSelfHostedBillingPlanDetail('?details=' + SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL)).toBe(
-      SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
-    );
+    expect(
+      resolveSelfHostedBillingSection(
+        SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+        '?intent=max_monitored_systems',
+      ),
+    ).toBe('usage');
+    expect(getSelfHostedBillingPlanIntent('?intent=max_monitored_systems')).toBeNull();
+    expect(
+      getSelfHostedBillingPlanDetail('?details=' + SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL),
+    ).toBe(SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL);
     expect(
       getSelfHostedBillingPurchaseArrival(
         '?purchase=' + SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,

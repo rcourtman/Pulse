@@ -426,14 +426,14 @@ describe('license stores', () => {
       expect(getUpgradeActionUrlOrFallback('relay')).toBe(getUpgradeFallbackDestination('relay'));
     });
 
-    it('routes monitored-system limit fallbacks to the billing upgrade arrival', async () => {
+    it('routes monitored-system limit fallbacks to usage instead of plan purchase', async () => {
       vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
         ...mockCommercialPosture,
         upgrade_reasons: [{ key: 'reason1', reason: 'Reason 1', action_url: '/upgrade/reason1' }],
       });
       await loadCommercialPosture(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
-        '/settings/system/billing/plan?intent=self_hosted_plan',
+        '/settings/system/billing/usage?details=counting-rules',
       );
     });
 
@@ -451,7 +451,7 @@ describe('license stores', () => {
       );
     });
 
-    it('prefers a specific monitored-system upgrade action when provided', async () => {
+    it('keeps specific monitored-system upgrade actions on usage review', async () => {
       vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
         ...mockCommercialPosture,
         upgrade_reasons: [

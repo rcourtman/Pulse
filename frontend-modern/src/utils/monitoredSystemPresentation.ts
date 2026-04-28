@@ -469,7 +469,7 @@ export function getMonitoredSystemLimitContextSummary(
 
   switch (resolved.mode) {
     case 'unlimited':
-      return 'This plan does not cap monitored systems.';
+      return 'This policy does not cap monitored systems.';
     case 'over_limit_frozen':
       if (resolved.reason === 'legacy_migration_capture_pending') {
         return `This finite policy includes ${resolved.limit}. Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while additional monitored-system admissions pause until continuity capture finishes.`;
@@ -528,13 +528,14 @@ export function buildMonitoredSystemCapacitySectionModel(
     case 'unlimited':
       return {
         stats,
-        statusMessage: 'This plan does not cap monitored systems.',
+        statusMessage: 'This policy does not cap monitored systems.',
       };
     case 'at_limit_blocking_new':
       return {
         stats,
         statusMessage: 'Existing monitoring continues. Additional monitored systems are paused.',
-        detailMessage: 'Reduce usage or resolve the applicable policy before adding another monitored system.',
+        detailMessage:
+          'Reduce usage or resolve the applicable policy before adding another monitored system.',
       };
     case 'over_limit_frozen':
       if (resolved.reason === 'legacy_migration_capture_pending') {
@@ -542,8 +543,7 @@ export function buildMonitoredSystemCapacitySectionModel(
           stats,
           statusMessage:
             'Existing monitoring continues. Additional monitored systems are temporarily paused.',
-          detailMessage:
-            'Pulse is still verifying migrated v5 continuity for this installation.',
+          detailMessage: 'Pulse is still verifying migrated v5 continuity for this installation.',
           explanation: {
             label: 'Why is continuity still pending?',
             body: `Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. The finite policy includes ${resolved.limit}, while this installation is already monitoring ${resolved.current}. Existing monitoring continues while additional monitored-system admissions pause until continuity capture finishes.`,
@@ -553,9 +553,10 @@ export function buildMonitoredSystemCapacitySectionModel(
       return {
         stats,
         statusMessage: 'Existing monitoring continues. Additional monitored systems are paused.',
-        detailMessage: 'Reduce usage or resolve the applicable policy before adding another monitored system.',
+        detailMessage:
+          'Reduce usage or resolve the applicable policy before adding another monitored system.',
         explanation: {
-          label: 'Why am I over plan?',
+          label: 'Why is this over policy?',
           body: `This installation was already monitoring ${resolved.current} monitored systems before Pulse paused net-new monitored-system admissions at the active finite policy boundary. Pulse keeps those existing systems visible, but additional monitored systems stay paused until usage is reduced or the policy changes.`,
         },
       };

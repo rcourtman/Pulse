@@ -13,9 +13,8 @@ vi.mock('@/utils/upgradeMetrics', () => ({
 }));
 
 vi.mock('@/utils/pricingHandoff', async () => {
-  const actual = await vi.importActual<typeof import('@/utils/pricingHandoff')>(
-    '@/utils/pricingHandoff',
-  );
+  const actual =
+    await vi.importActual<typeof import('@/utils/pricingHandoff')>('@/utils/pricingHandoff');
   return {
     ...actual,
     handoffToExternalPricing: (...args: unknown[]) => handoffToExternalPricingMock(...args),
@@ -34,11 +33,11 @@ describe('PricingHandoff', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('hands self-hosted upgrade requests off to Pulse Account', async () => {
-    window.history.replaceState({}, '', '/pricing?feature=relay');
+  it('hands unknown feature requests off to Pulse Account', async () => {
+    window.history.replaceState({}, '', '/pricing?feature=unknown_pro_feature');
     const expectedDestination = getSelfHostedPurchaseStartUrl(
-      'relay',
-      new URLSearchParams('feature=relay'),
+      'unknown_pro_feature',
+      new URLSearchParams('feature=unknown_pro_feature'),
     );
 
     render(() => (
@@ -48,12 +47,12 @@ describe('PricingHandoff', () => {
     ));
 
     await waitFor(() => {
-      expect(handoffToExternalPricingMock).toHaveBeenCalledWith(
-        expectedDestination,
-      );
+      expect(handoffToExternalPricingMock).toHaveBeenCalledWith(expectedDestination);
     });
 
-    expect(screen.getByRole('heading', { name: 'Redirecting to Pulse Account' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Redirecting to Pulse Account' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /continue to Pulse Account/i })).toHaveAttribute(
       'href',
       expectedDestination,
@@ -61,19 +60,21 @@ describe('PricingHandoff', () => {
   });
 
   it('keeps the pricing handoff on the shared page-header shell', () => {
-    expect(pricingHandoffSource).toContain("import { PageHeader } from '@/components/shared/PageHeader';");
+    expect(pricingHandoffSource).toContain(
+      "import { PageHeader } from '@/components/shared/PageHeader';",
+    );
     expect(pricingHandoffSource).toContain('<PageHeader');
     expect(pricingHandoffSource).not.toContain('<h1');
   });
 
-  it('keeps monitored-system pricing handoffs inside the product', async () => {
+  it('keeps monitored-system pricing handoffs inside usage review', async () => {
     window.history.replaceState({}, '', '/pricing?feature=max_monitored_systems');
 
     render(() => (
       <Router>
         <Route path="/pricing" component={PricingHandoff} />
         <Route
-          path="/settings/system/billing/plan"
+          path="/settings/system/billing/usage"
           component={() => <div>Billing destination</div>}
         />
       </Router>
