@@ -776,7 +776,9 @@ fixtures. Future exchange-path changes must not reintroduce a split contract
 where the shared Pulse runtime and the real `pulse-pro/license-server` disagree
 on the activation payload shape.
 That same license-server transport boundary now treats Patrol quickstart
-bootstrap as retired, not as a mixed-version runtime extension point. The
+bootstrap as retired, not as a mixed-version runtime extension point.
+`pulse-pro/license-server` must not register `/v1/quickstart/*` routes, parse
+OpenAI/OpenRouter quickstart env, or create new quickstart ledger tables. The
 Pulse runtime must not call `POST /v1/quickstart/bootstrap`, must not persist
 quickstart-backed AI config, and must not mint hosted-model tokens from hosted
 or self-hosted billing state. Historical quickstart credit fields may remain
@@ -1610,11 +1612,12 @@ Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.
 Hosted trial bootstrap and hosted entitlement refresh must not mint new
-quickstart inventory. Historical quickstart fields may remain parseable as
-persisted billing compatibility while those fields exist, but new user-facing
-hosted or self-hosted acquisition work must not depend on that inventory as a
-product promise, and lease-refresh rewrites must avoid turning legacy fields
-into a renewed customer-facing hosted-model offer.
+quickstart inventory. The `pulse-pro` license server route/config/proxy layer
+for hosted quickstart is retired for v6 GA; historical quickstart fields may
+remain parseable as persisted billing compatibility while those fields exist,
+but new user-facing hosted or self-hosted acquisition work must not depend on
+that inventory as a product promise, and lease-refresh rewrites must avoid
+turning legacy fields into a renewed customer-facing hosted-model offer.
 Hosted AI runtime defaults are part of the same boundary as well: when a cloud
 tenant falls back to provider defaults, the persisted model identifier must
 remain canonical `provider:model` data rather than a bare provider-local alias,
