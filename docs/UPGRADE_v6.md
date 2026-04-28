@@ -117,7 +117,7 @@ Unified Resources is now the canonical model and endpoint family:
 
 - Canonical: `/api/resources`
 
-### License, Trial, and Entitlements
+### License and Entitlements
 
 Pulse v6 feature gating is driven by the entitlements endpoint:
 
@@ -128,7 +128,12 @@ monitoring stays available across Community, Relay, and Pro, while Relay and
 Pro sell convenience, history, AI operations, and advanced administration.
 Relay raises history to 14 days, while Pro raises it to 90 days.
 
-For self-hosted v6, `POST /api/license/trial/start` initiates hosted signup by returning `409 trial_signup_required` with a hosted `action_url` rather than minting a local trial directly. Duplicate start attempts stay on the hosted-signup retry burst until it is exhausted, then return canonical `429 trial_rate_limited` plus `Retry-After` backoff metadata. Pulse only reflects trial lifecycle entitlements after the hosted control plane returns a signed activation token to `/auth/trial-activate`.
+Self-hosted v6 does not expose a general in-app trial or hosted AI quickstart
+path. If support deliberately issues a trial or hosted handoff for a specific
+case, Pulse only reflects that lifecycle after the hosted control plane returns
+a signed activation token to `/auth/trial-activate`; ordinary upgraded
+self-hosted installs should use activation, recovery, or BYOK/local AI setup
+instead.
 
 #### v5 License Migration
 

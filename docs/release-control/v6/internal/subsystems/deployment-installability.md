@@ -137,6 +137,11 @@ server-side update execution surfaces.
    `docs/UPGRADE_v6.md` must also stay aligned with the current RC support
    packet so upgrade guidance does not keep pointing operators at retired
    rollout/support docs after a later RC packet is prepared.
+   The upgrade guide's license and entitlement guidance must also stay aligned
+   with the free-first self-hosted GA posture: it may describe activation,
+   recovery, and signed support handoffs, but it must not teach ordinary
+   self-hosted users to start a general in-app trial or depend on hosted AI
+   quickstart acquisition as part of the upgrade path.
    The active prerelease cut must keep the repo-root `VERSION` file aligned
    with the current RC packet itself: when the governed line moves from `rc.1`
    to `rc.2` or later, the staged release-notes packet, changelog packet, and
