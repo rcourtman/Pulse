@@ -3,7 +3,7 @@ export const GUEST_THRESHOLDS_EMPTY_STATE = 'No VMs or containers found.';
 export const NODE_THRESHOLDS_FILTER_EMPTY_STATE = 'No virtualization hosts match the current filters.';
 export const PBS_THRESHOLDS_FILTER_EMPTY_STATE = 'No PBS servers match the current filters.';
 export const GUEST_THRESHOLDS_FILTER_EMPTY_STATE = 'No VMs or containers match the current filters.';
-export const GUEST_FILTERING_EMPTY_STATE = 'Configure guest filtering rules.';
+export const GUEST_FILTERING_EMPTY_STATE = 'Configure VM and container filtering rules.';
 export const BACKUP_THRESHOLDS_EMPTY_STATE = 'Configure recovery alert thresholds.';
 export const SNAPSHOT_THRESHOLDS_EMPTY_STATE = 'Configure snapshot age thresholds.';
 export const STORAGE_THRESHOLDS_EMPTY_STATE = 'No storage devices found.';
@@ -20,17 +20,17 @@ export const CONTAINER_RUNTIMES_FILTER_EMPTY_STATE =
 export const CONTAINERS_FILTER_EMPTY_STATE = 'No containers match the current filters.';
 export const ALERT_THRESHOLDS_SEARCH_PLACEHOLDER = 'Search resources...';
 export const ALERT_THRESHOLDS_HELP_DISMISS_LABEL = 'Dismiss tips';
-export const ALERT_THRESHOLDS_GUEST_IGNORED_PREFIXES_TITLE = 'Ignored Prefixes';
+export const ALERT_THRESHOLDS_GUEST_IGNORED_PREFIXES_TITLE = 'Ignored prefixes';
 export const ALERT_THRESHOLDS_GUEST_IGNORED_PREFIXES_DESCRIPTION =
-  'Skip metrics for guests starting with:';
+  'Skip metrics for VMs and containers starting with:';
 export const ALERT_THRESHOLDS_GUEST_IGNORED_PREFIXES_PLACEHOLDER = 'dev-';
-export const ALERT_THRESHOLDS_GUEST_TAG_WHITELIST_TITLE = 'Tag Whitelist';
+export const ALERT_THRESHOLDS_GUEST_TAG_WHITELIST_TITLE = 'Required tags';
 export const ALERT_THRESHOLDS_GUEST_TAG_WHITELIST_DESCRIPTION =
-  'Only monitor guests with at least one of these tags (leave empty to disable whitelist):';
+  'Only monitor VMs and containers with at least one of these tags (leave empty to disable this filter):';
 export const ALERT_THRESHOLDS_GUEST_TAG_WHITELIST_PLACEHOLDER = 'production';
-export const ALERT_THRESHOLDS_GUEST_TAG_BLACKLIST_TITLE = 'Tag Blacklist';
+export const ALERT_THRESHOLDS_GUEST_TAG_BLACKLIST_TITLE = 'Ignored tags';
 export const ALERT_THRESHOLDS_GUEST_TAG_BLACKLIST_DESCRIPTION =
-  'Ignore guests with any of these tags:';
+  'Ignore VMs and containers with any of these tags:';
 export const ALERT_THRESHOLDS_GUEST_TAG_BLACKLIST_PLACEHOLDER = 'maintenance';
 export const ALERT_THRESHOLDS_BACKUP_ORPHANED_TITLE = 'Orphaned backups';
 export const ALERT_THRESHOLDS_BACKUP_ORPHANED_DESCRIPTION =
@@ -64,7 +64,7 @@ export const ALERT_THRESHOLDS_DOCKER_SERVICES_GAP_VALIDATION_MESSAGE =
 export const ALERT_THRESHOLDS_SECTION_TITLE_NODES = 'Virtualization Hosts';
 export const ALERT_THRESHOLDS_SECTION_TITLE_PBS = 'PBS Servers';
 export const ALERT_THRESHOLDS_SECTION_TITLE_GUESTS = 'VMs & Containers';
-export const ALERT_THRESHOLDS_SECTION_TITLE_GUEST_FILTERING = 'Guest Filtering';
+export const ALERT_THRESHOLDS_SECTION_TITLE_GUEST_FILTERING = 'VM and Container Filtering';
 export const ALERT_THRESHOLDS_SECTION_TITLE_BACKUPS = 'Recovery';
 export const ALERT_THRESHOLDS_SECTION_TITLE_SNAPSHOTS = 'Snapshot Age';
 export const ALERT_THRESHOLDS_SECTION_TITLE_STORAGE = 'Storage Devices';

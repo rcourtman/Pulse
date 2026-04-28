@@ -656,10 +656,10 @@ describe('Storage', () => {
         .some((element) => element.getAttribute('title') === 'Pool redundancy is reduced.'),
     ).toBe(true);
 
-    fireEvent.change(screen.getByLabelText('Sort By'), {
+    fireEvent.change(screen.getByLabelText('Sort by'), {
       target: { value: 'usage' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Sort Direction' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sort direction' }));
 
     await waitFor(() => {
       const orderedRowIds = Array.from(document.querySelectorAll('tr[data-row-id]')).map((row) =>
@@ -668,7 +668,7 @@ describe('Storage', () => {
       expect(orderedRowIds.slice(0, 2)).toEqual(['storage-1', 'storage-2']);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'By Status' }));
+    fireEvent.click(screen.getByRole('button', { name: 'By status' }));
 
     // Group headers now show just the key name (without prefix)
     expect(screen.getAllByText('degraded').length).toBeGreaterThan(0);
@@ -710,18 +710,18 @@ describe('Storage', () => {
       'true',
     );
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
-    expect((screen.getByLabelText('Sort By') as HTMLSelectElement).value).toBe('usage');
+    expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
     expect(getStorageSourceSelect().value).toBe('proxmox-pve');
     expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('warning');
 
     // Grouping controls are only shown on the Pools view.
     fireEvent.click(screen.getByRole('tab', { name: 'Pools' }));
-    expect(screen.getByRole('button', { name: 'By Status' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'By status' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'By Type' }));
+    fireEvent.click(screen.getByRole('button', { name: 'By type' }));
 
     await waitFor(() => {
       const [nextPath] = navigateSpy.mock.calls.at(-1) as [string];
@@ -791,7 +791,7 @@ describe('Storage', () => {
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
     expect(getStorageSourceSelect().value).toBe('proxmox-pve');
     expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('available');
-    expect((screen.getByLabelText('Sort By') as HTMLSelectElement).value).toBe('usage');
+    expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
   });
 
   it('canonicalizes source aliases in storage URL params back to owned option values', async () => {
@@ -1550,7 +1550,7 @@ describe('Storage', () => {
         label: option.textContent,
       })),
     ).toEqual([
-      { value: 'all', label: 'All Sources' },
+      { value: 'all', label: 'All sources' },
       { value: 'proxmox-pve', label: 'PVE' },
       { value: 'truenas', label: 'TrueNAS' },
     ]);
@@ -1728,7 +1728,7 @@ describe('Storage', () => {
       .getAllByRole('option')
       .map((option) => option.textContent)
       .filter(Boolean);
-    expect(options).toContain('All Disk Hosts');
+    expect(options).toContain('All disk hosts');
     expect(options).toContain('pve1');
     expect(options).not.toContain('mini');
   });

@@ -15,7 +15,7 @@ describe('StorageControls', () => {
       createSignal<'all' | 'warning' | 'critical'>('all');
     const [sourceFilter, setSourceFilter] = createSignal('all');
     const [sourceOptions] = createSignal<StorageSourceOption[]>([
-      { key: 'all', label: 'All Sources', tone: 'slate' as const },
+      { key: 'all', label: 'All sources', tone: 'slate' as const },
       { key: 'proxmox-pve', label: 'PVE', tone: 'orange' as const },
     ]);
     const [selectedNodeId, setSelectedNodeId] = createSignal('all');
@@ -38,7 +38,7 @@ describe('StorageControls', () => {
         setSourceFilter={setSourceFilter}
         sourceOptions={sourceOptions}
         nodeFilterOptions={[
-          { value: 'all', label: 'All Nodes' },
+          { value: 'all', label: 'All nodes' },
           { value: 'node-1', label: 'pve1' },
         ]}
         selectedNodeId={selectedNodeId}
@@ -65,7 +65,7 @@ describe('StorageControls', () => {
       createSignal<'all' | 'warning' | 'critical'>('all');
     const [sourceFilter, setSourceFilter] = createSignal('truenas');
     const [sourceOptions, setSourceOptions] = createSignal<StorageSourceOption[]>([
-      { key: 'all', label: 'All Sources', tone: 'slate' as const },
+      { key: 'all', label: 'All sources', tone: 'slate' as const },
     ]);
     const [selectedNodeId, setSelectedNodeId] = createSignal('all');
 
@@ -86,14 +86,14 @@ describe('StorageControls', () => {
         sourceFilter={sourceFilter}
         setSourceFilter={setSourceFilter}
         sourceOptions={sourceOptions}
-        nodeFilterOptions={[{ value: 'all', label: 'All Nodes' }]}
+        nodeFilterOptions={[{ value: 'all', label: 'All nodes' }]}
         selectedNodeId={selectedNodeId}
         setSelectedNodeId={setSelectedNodeId}
       />
     ));
 
     setSourceOptions([
-      { key: 'all', label: 'All Sources', tone: 'slate' as const },
+      { key: 'all', label: 'All sources', tone: 'slate' as const },
       { key: 'proxmox-pve', label: 'PVE', tone: 'orange' as const },
       { key: 'truenas', label: 'TrueNAS', tone: 'blue' as const },
     ]);
@@ -104,7 +104,7 @@ describe('StorageControls', () => {
         label: option.textContent,
       })),
     ).toEqual([
-      { value: 'all', label: 'All Sources' },
+      { value: 'all', label: 'All sources' },
       { value: 'proxmox-pve', label: 'PVE' },
       { value: 'truenas', label: 'TrueNAS' },
     ]);

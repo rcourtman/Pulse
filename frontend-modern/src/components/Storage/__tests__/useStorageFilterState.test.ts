@@ -39,13 +39,13 @@ describe('useStorageFilterState', () => {
     );
 
     expect(result.sourceFilterOptions()).toEqual([
-      { key: 'all', label: 'All Sources', tone: 'slate' },
+      { key: 'all', label: 'All sources', tone: 'slate' },
       { key: 'proxmox-pve', label: 'PVE', tone: 'orange' },
       { key: 'truenas', label: 'TrueNAS', tone: 'blue' },
       { key: 'agent', label: 'Agent', tone: 'slate' },
     ]);
     expect(result.nodeFilterOptions()).toEqual([
-      { value: 'all', label: 'All Nodes' },
+      { value: 'all', label: 'All nodes' },
       { value: 'node-1', label: 'pve1' },
     ]);
     expect(result.storageFilterGroupBy()).toBe('node');
@@ -56,9 +56,9 @@ describe('useStorageFilterState', () => {
 
   it('coerces stale selected nodes and disk facets, and maps status setters', () => {
     const [view] = createSignal<'pools' | 'disks'>('disks');
-    const [nodeOptions] = createSignal<StorageNodeOption[]>([{ id: 'all', label: 'All Nodes' }]);
+    const [nodeOptions] = createSignal<StorageNodeOption[]>([{ id: 'all', label: 'All nodes' }]);
     const [diskNodeOptions] = createSignal<StorageNodeOption[]>([
-      { id: 'all', label: 'All Nodes' },
+      { id: 'all', label: 'All nodes' },
     ]);
     const [selectedNodeId, setSelectedNodeId] = createSignal('missing');
     const [sourceOptions] = createSignal(['all']);

@@ -19,7 +19,7 @@ export interface StorageSourceOption {
 
 const ALL_STORAGE_SOURCE_OPTION: StorageSourceOption = {
   key: 'all',
-  label: 'All Sources',
+  label: 'All sources',
   tone: 'slate',
 };
 

@@ -35,6 +35,7 @@ import {
 } from '@/utils/recoveryLocationPresentation';
 import { normalizeRecoveryModeQueryValue } from '@/utils/recoveryRecordPresentation';
 import {
+  getRecoveryArtifactColumnLabel,
   getRecoveryHistorySearchPlaceholder,
   getRecoverySearchHistoryEmptyMessage,
   RECOVERY_ADVANCED_FILTER_FIELD_CLASS,
@@ -403,7 +404,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
 
               <LabeledFilterSelect
                 id="recovery-item-type-filter-history"
-                label="Item type"
+                label={getRecoveryArtifactColumnLabel('type', 'Item Type')}
                 value={props.itemTypeFilter()}
                 onChange={(event) => {
                   props.setItemTypeFilter(

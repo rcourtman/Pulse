@@ -264,7 +264,16 @@ work extends shared components instead of creating new local variants.
    inherits that same boundary: shared data-grid shells must route scrollbar
    hiding and table-width sizing through shared classes plus HTML attributes,
    not inline overflow or min-width styles.
-3. Add feature-specific presentation only when no shared primitive should own it
+3. Add feature-specific presentation only when no shared primitive should own it.
+   Feature surfaces under `frontend-modern/src/features/` that display
+   product labels must consume the owning subsystem's presentation utilities
+   rather than hard-coding divergent page-local copy. Shared primitives and
+   feature shells may compose those labels, but they must not become a second
+   source of truth for alert, storage, recovery, infrastructure, workload, or
+   adjacent product vocabulary. Table-mode segmented controls that expose a
+   grouping accessible label must use the shared `Group by` casing, while
+   visible options describe the mode itself (`Grouped`, `List`, or the
+   owning surface's equivalent) instead of resource-specific concepts.
 4. Add guardrail tests when a new shared pattern is introduced.
    Shared monitored-system warning primitives must prove their admission-freeze
    posture through the canonical `frontend-modern/src/utils/monitoredSystemPresentation.ts`

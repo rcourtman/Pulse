@@ -100,7 +100,7 @@ describe('alertConfigPresentation', () => {
     );
     expect(ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL).toBe('Max alerts / hour');
     expect(ALERT_CONFIG_COOLDOWN_MAX_ALERTS_SUFFIX).toBe('alerts');
-    expect(ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP).toBe('Per guest/metric combination');
+    expect(ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP).toBe('Per workload/metric combination');
     expect(ALERT_CONFIG_GROUPING_TITLE).toBe('Smart grouping');
     expect(ALERT_CONFIG_GROUPING_DESCRIPTION).toBe('Bundle similar alerts together.');
     expect(ALERT_CONFIG_GROUPING_WINDOW_LABEL).toBe('Grouping window');
@@ -108,8 +108,8 @@ describe('alertConfigPresentation', () => {
       'Alerts within this window are grouped together. Set to 0 to send immediately.',
     );
     expect(ALERT_CONFIG_GROUPING_STRATEGY_LABEL).toBe('Grouping strategy');
-    expect(ALERT_CONFIG_GROUPING_BY_NODE).toBe('By Node');
-    expect(ALERT_CONFIG_GROUPING_BY_GUEST).toBe('By Guest');
+    expect(ALERT_CONFIG_GROUPING_BY_NODE).toBe('By node');
+    expect(ALERT_CONFIG_GROUPING_BY_GUEST).toBe('By workload');
     expect(getAlertConfigQuietHourSuppressOptions()).toEqual([
       {
         key: 'performance',

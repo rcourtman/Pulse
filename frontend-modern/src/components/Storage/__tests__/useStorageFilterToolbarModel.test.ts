@@ -67,7 +67,7 @@ describe('useStorageFilterToolbarModel', () => {
     const [sortKey, setSortKey] = createSignal('priority');
     const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('desc');
     const [sourceOptions, setSourceOptions] = createSignal<StorageSourceOption[]>([
-      { key: 'all', label: 'All Sources', tone: 'slate' as const },
+      { key: 'all', label: 'All sources', tone: 'slate' as const },
     ]);
 
     const { result } = renderHook(() =>
@@ -82,16 +82,16 @@ describe('useStorageFilterToolbarModel', () => {
       }),
     );
 
-    expect(result.sourceOptions()).toEqual([{ key: 'all', label: 'All Sources', tone: 'slate' }]);
+    expect(result.sourceOptions()).toEqual([{ key: 'all', label: 'All sources', tone: 'slate' }]);
 
     setSourceOptions([
-      { key: 'all', label: 'All Sources', tone: 'slate' },
+      { key: 'all', label: 'All sources', tone: 'slate' },
       { key: 'proxmox-pve', label: 'PVE', tone: 'orange' },
       { key: 'truenas', label: 'TrueNAS', tone: 'blue' },
     ]);
 
     expect(result.sourceOptions()).toEqual([
-      { key: 'all', label: 'All Sources', tone: 'slate' },
+      { key: 'all', label: 'All sources', tone: 'slate' },
       { key: 'proxmox-pve', label: 'PVE', tone: 'orange' },
       { key: 'truenas', label: 'TrueNAS', tone: 'blue' },
     ]);

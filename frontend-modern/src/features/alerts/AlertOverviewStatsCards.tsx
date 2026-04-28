@@ -1,4 +1,9 @@
 import { Card } from '@/components/shared/Card';
+import {
+  ALERT_OVERVIEW_ACKNOWLEDGED_LABEL,
+  ALERT_OVERVIEW_LAST_24_HOURS_LABEL,
+  ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL,
+} from '@/utils/alertOverviewPresentation';
 
 import type { AlertOverviewState } from './useAlertOverviewState';
 
@@ -13,7 +18,7 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
         <div class="flex items-center justify-between">
           <div>
             <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
-              Acknowledged
+              {ALERT_OVERVIEW_ACKNOWLEDGED_LABEL}
             </p>
             <p class="text-lg sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
               {props.state.alertStats().acknowledged}
@@ -40,7 +45,7 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
         <div class="flex items-center justify-between">
           <div>
             <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
-              Last 24 Hours
+              {ALERT_OVERVIEW_LAST_24_HOURS_LABEL}
             </p>
             <p class="text-lg sm:text-2xl font-semibold text-base-content">
               {props.state.alertStats().total24h}
@@ -67,7 +72,7 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
         <div class="flex items-center justify-between">
           <div>
             <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
-              Guest Overrides
+              {ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL}
             </p>
             <p class="text-lg sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">
               {props.state.alertStats().overrides}

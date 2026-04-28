@@ -81,6 +81,8 @@ describe('InfrastructurePageSurface guardrails', () => {
       'data-testid="infrastructure-interaction-surface"',
     );
     expect(infrastructurePageSurfaceSource).toContain('data-summary-clear-ignore');
+    expect(infrastructurePageSurfaceSource).toContain('aria-label="Group by"');
+    expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Group By"');
     expect(infrastructurePageSurfaceSource).toContain("title: 'Grouped table view'");
     expect(infrastructurePageSurfaceSource).toContain('Grouped');
     expect(infrastructurePageSurfaceSource).not.toContain("title: 'Group by cluster'");

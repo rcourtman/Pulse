@@ -5,6 +5,9 @@ import {
   ALERT_HISTORY_EMPTY_STATE,
   ALERT_HISTORY_LOADING_STATE,
   ALERT_HISTORY_SEARCH_PLACEHOLDER,
+  ALERT_OVERVIEW_ACKNOWLEDGED_LABEL,
+  ALERT_OVERVIEW_LAST_24_HOURS_LABEL,
+  ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL,
   ALERTS_EMPTY_STATE,
   ALERTS_PAGE_DEFAULT_TITLE,
   ALERTS_PAGE_DEFAULT_DESCRIPTION,
@@ -60,6 +63,12 @@ describe('alertOverviewPresentation', () => {
     expect(ALERTS_THRESHOLD_HINT).toBe('Alerts will appear here when thresholds are exceeded');
     expect(getAlertListEmptyState(true)).toBe('No active alerts');
     expect(getAlertListEmptyState(false)).toBe('No unacknowledged alerts');
+  });
+
+  it('returns canonical alert overview stat labels', () => {
+    expect(ALERT_OVERVIEW_ACKNOWLEDGED_LABEL).toBe('Acknowledged');
+    expect(ALERT_OVERVIEW_LAST_24_HOURS_LABEL).toBe('Last 24 Hours');
+    expect(ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL).toBe('Workload Overrides');
   });
 
   it('returns canonical alert history search and empty-state copy', () => {

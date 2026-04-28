@@ -183,7 +183,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
         <FilterSegmentedControl
           value={props.groupingMode()}
           onChange={(value) => props.setGroupingMode(value as 'grouped' | 'flat')}
-          aria-label="Group By"
+          aria-label="Group by"
           options={[
             {
               value: 'grouped',

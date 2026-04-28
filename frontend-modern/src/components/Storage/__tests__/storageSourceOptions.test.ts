@@ -52,7 +52,7 @@ describe('storageSourceOptions', () => {
       makeStorage({ id: '4', type: 'custom-backend' }),
     ]);
 
-    expect(options[0]).toMatchObject({ key: 'all', label: 'All Sources' });
+    expect(options[0]).toMatchObject({ key: 'all', label: 'All sources' });
     expect(options.map((option) => option.key)).toEqual([
       'all',
       'proxmox-pve',

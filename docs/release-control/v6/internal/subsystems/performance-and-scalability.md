@@ -779,6 +779,10 @@ stays in `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`, while
 toolbar defaults, active-filter counting, and reset semantics live in
 `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and
 `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`.
+Dashboard table-mode controls must also keep their accessible group name aligned
+with the shared table presentation contract by using `Group by` for the
+grouped/list selector instead of reintroducing local `Group By` casing or
+platform-specific cluster wording.
 The dashboard-owned filter-config assembly now lives in
 `frontend-modern/src/components/Dashboard/useDashboardState.ts`, so future
 filter runtime changes must extend through those owners instead of

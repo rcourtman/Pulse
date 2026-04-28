@@ -117,8 +117,8 @@ describe('storagePageState', () => {
     expect(getStorageStatusFilterValue('attention')).toBe('attention');
     expect(toStorageHealthFilterValue('available')).toBe('healthy');
     expect(toStorageHealthFilterValue('attention')).toBe('attention');
-    expect(getStorageNodeFilterLabel('pools')).toBe('All Nodes');
-    expect(getStorageNodeFilterLabel('disks')).toBe('All Disk Hosts');
+    expect(getStorageNodeFilterLabel('pools')).toBe('All nodes');
+    expect(getStorageNodeFilterLabel('disks')).toBe('All disk hosts');
     expect(DEFAULT_STORAGE_VIEW).toBe('pools');
     expect(DEFAULT_STORAGE_SOURCE_FILTER).toBe('all');
     expect(DEFAULT_STORAGE_DISK_ROLE_FILTER).toBe('all');
@@ -171,7 +171,7 @@ describe('storagePageState', () => {
     expect(coerceSelectedStorageNodeId('node-1', nodeOptions)).toBe('node-1');
     expect(coerceSelectedStorageNodeId('missing', nodeOptions)).toBe('all');
     expect(buildStorageNodeFilterOptions('disks', nodeOptions)).toEqual([
-      { value: 'all', label: 'All Disk Hosts' },
+      { value: 'all', label: 'All disk hosts' },
       { value: 'node-1', label: 'pve1' },
       { value: 'node-2', label: 'pve2' },
     ]);

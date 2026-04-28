@@ -291,7 +291,7 @@ export const RecoveryProtectedInventorySection: Component<
             >
               <LabeledFilterSelect
                 id="recovery-item-type-filter"
-                label="Item Type"
+                label={getRecoveryArtifactColumnLabel('type', 'Item Type')}
                 value={props.itemTypeFilter()}
                 onChange={(event) =>
                   props.setItemTypeFilter(
@@ -419,7 +419,7 @@ export const RecoveryProtectedInventorySection: Component<
                   {(
                     [
                       ['item', getRecoveryArtifactColumnLabel('item', 'Item')],
-                      ['type', 'Item Type'],
+                      ['type', getRecoveryArtifactColumnLabel('type', 'Item Type')],
                       ['platform', getRecoveryArtifactColumnLabel('platform', 'Platform')],
                       ['lastBackup', 'Latest Point'],
                       ['outcome', 'Protection State'],

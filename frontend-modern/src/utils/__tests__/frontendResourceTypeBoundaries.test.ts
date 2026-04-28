@@ -839,7 +839,7 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
     expect(dashboardWorkloadRouteStateSource).not.toContain("from './workloadTopology'");
     expect(dashboardWorkloadRouteModelSource).toContain("from './workloadTopology'");
-    expect(dashboardWorkloadRouteModelSource).toContain('workloadNodeScopeId');
+    expect(dashboardWorkloadRouteModelSource).toContain('workloadHostScopeId');
     expect(dashboardWorkloadRouteModelSource).toContain('getKubernetesContextKey');
     expect(dashboardWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
     expect(dashboardSelectionStateSource).toContain(

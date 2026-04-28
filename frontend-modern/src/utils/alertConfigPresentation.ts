@@ -22,15 +22,15 @@ export const ALERT_CONFIG_COOLDOWN_PERIOD_HELP =
   'Minimum time between alerts for the same issue';
 export const ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL = 'Max alerts / hour';
 export const ALERT_CONFIG_COOLDOWN_MAX_ALERTS_SUFFIX = 'alerts';
-export const ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP = 'Per guest/metric combination';
+export const ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP = 'Per workload/metric combination';
 export const ALERT_CONFIG_GROUPING_TITLE = 'Smart grouping';
 export const ALERT_CONFIG_GROUPING_DESCRIPTION = 'Bundle similar alerts together.';
 export const ALERT_CONFIG_GROUPING_WINDOW_LABEL = 'Grouping window';
 export const ALERT_CONFIG_GROUPING_WINDOW_HELP =
   'Alerts within this window are grouped together. Set to 0 to send immediately.';
 export const ALERT_CONFIG_GROUPING_STRATEGY_LABEL = 'Grouping strategy';
-export const ALERT_CONFIG_GROUPING_BY_NODE = 'By Node';
-export const ALERT_CONFIG_GROUPING_BY_GUEST = 'By Guest';
+export const ALERT_CONFIG_GROUPING_BY_NODE = 'By node';
+export const ALERT_CONFIG_GROUPING_BY_GUEST = 'By workload';
 export const ALERT_CONFIG_QUIET_HOUR_SUPPRESS_OPTIONS = [
   {
     key: 'performance',
@@ -129,7 +129,7 @@ export function getAlertConfigSummaryGrouping(
   byNode: boolean,
   byGuest: boolean,
 ) {
-  const groupingTargets = [byNode && 'node', byGuest && 'guest'].filter(Boolean).join(' and ');
+  const groupingTargets = [byNode && 'node', byGuest && 'workload'].filter(Boolean).join(' and ');
   return groupingTargets
     ? `${ALERT_CONFIG_SUMMARY_GROUPING_PREFIX} ${windowMinutes} minute windows by ${groupingTargets}`
     : `${ALERT_CONFIG_SUMMARY_GROUPING_PREFIX} ${windowMinutes} minute windows`;

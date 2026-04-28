@@ -847,6 +847,11 @@ contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and
 default-option model for sources like PVE, PBS, Ceph, and TrueNAS instead of
 re-sorting or re-presenting those source options locally.
+Storage filter option labels for grouped views, node/host filters, sort
+controls, and source selectors are also canonical presentation contracts:
+storage surfaces must consume `frontend-modern/src/components/Storage/storagePageState.ts`
+and `frontend-modern/src/utils/storageSources.ts` rather than re-declaring
+page-local title casing or alternate all-option labels.
 That same storage ownership also includes the physical-disk detail identity
 contract in `frontend-modern/src/components/Storage/` and
 `frontend-modern/src/features/storageBackups/`: historical disk charts must
@@ -1441,7 +1446,10 @@ The recovery table presentation helper now owns the canonical subject-type
 label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a
 local recovery-only formatter, so subject and outcome labels stay aligned with
-the shared frontend label contract.
+the shared frontend label contract. Protected-inventory and recovery-event
+filters, table headers, and column-picker labels must use that helper for
+artifact fields such as `Item Type`, so the recovery tabs do not drift into
+near-identical page-local casing.
 That same recovery drill-in surface now also keeps provider-specific metadata
 inside a provider-neutral detail shell through
 `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, so PBS

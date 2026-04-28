@@ -75,9 +75,9 @@ export const STORAGE_STATUS_FILTER_OPTIONS: StorageOption[] = [
 
 export const STORAGE_GROUP_BY_OPTIONS: StorageOption[] = [
   { value: 'none', label: 'Flat' },
-  { value: 'node', label: 'By Node' },
-  { value: 'type', label: 'By Type' },
-  { value: 'status', label: 'By Status' },
+  { value: 'node', label: 'By node' },
+  { value: 'type', label: 'By type' },
+  { value: 'status', label: 'By status' },
 ];
 
 export const normalizeStorageHealthFilter = (value: string): StorageHealthFilter => {
@@ -196,7 +196,7 @@ export const hasActiveStorageFilters = (state: StorageFilterActivityState): bool
     DEFAULT_STORAGE_DISK_GROUP_FILTER;
 
 export const getStorageNodeFilterLabel = (view: StorageView): string =>
-  view === 'disks' ? 'All Disk Hosts' : 'All Nodes';
+  view === 'disks' ? 'All disk hosts' : 'All nodes';
 
 export const readStorageRouteValue = (value: string | undefined, defaultValue: string): string => {
   const normalized = (value || '').trim();

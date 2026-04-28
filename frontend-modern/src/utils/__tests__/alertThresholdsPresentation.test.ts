@@ -64,7 +64,7 @@ describe('alertThresholdsPresentation', () => {
     );
     expect(PBS_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No PBS servers match the current filters.');
     expect(GUEST_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No VMs or containers match the current filters.');
-    expect(GUEST_FILTERING_EMPTY_STATE).toBe('Configure guest filtering rules.');
+    expect(GUEST_FILTERING_EMPTY_STATE).toBe('Configure VM and container filtering rules.');
     expect(BACKUP_THRESHOLDS_EMPTY_STATE).toBe('Configure recovery alert thresholds.');
     expect(SNAPSHOT_THRESHOLDS_EMPTY_STATE).toBe('Configure snapshot age thresholds.');
     expect(STORAGE_THRESHOLDS_EMPTY_STATE).toBe('No storage devices found.');
@@ -100,19 +100,19 @@ describe('alertThresholdsPresentation', () => {
     expect(ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_PLACEHOLDER).toBe('runner-');
     expect(getAlertThresholdsGuestFilterPresentation()).toEqual({
       ignoredPrefixes: {
-        title: 'Ignored Prefixes',
-        description: 'Skip metrics for guests starting with:',
+        title: 'Ignored prefixes',
+        description: 'Skip metrics for VMs and containers starting with:',
         placeholder: 'dev-',
       },
       tagWhitelist: {
-        title: 'Tag Whitelist',
+        title: 'Required tags',
         description:
-          'Only monitor guests with at least one of these tags (leave empty to disable whitelist):',
+          'Only monitor VMs and containers with at least one of these tags (leave empty to disable this filter):',
         placeholder: 'production',
       },
       tagBlacklist: {
-        title: 'Tag Blacklist',
-        description: 'Ignore guests with any of these tags:',
+        title: 'Ignored tags',
+        description: 'Ignore VMs and containers with any of these tags:',
         placeholder: 'maintenance',
       },
     });
@@ -172,7 +172,7 @@ describe('alertThresholdsPresentation', () => {
     expect(ALERT_THRESHOLDS_SECTION_TITLE_NODES).toBe('Virtualization Hosts');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_PBS).toBe('PBS Servers');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_GUESTS).toBe('VMs & Containers');
-    expect(ALERT_THRESHOLDS_SECTION_TITLE_GUEST_FILTERING).toBe('Guest Filtering');
+    expect(ALERT_THRESHOLDS_SECTION_TITLE_GUEST_FILTERING).toBe('VM and Container Filtering');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_BACKUPS).toBe('Recovery');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_SNAPSHOTS).toBe('Snapshot Age');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_STORAGE).toBe('Storage Devices');
@@ -185,7 +185,7 @@ describe('alertThresholdsPresentation', () => {
       nodes: 'Virtualization Hosts',
       pbs: 'PBS Servers',
       guests: 'VMs & Containers',
-      guestFiltering: 'Guest Filtering',
+      guestFiltering: 'VM and Container Filtering',
       backups: 'Recovery',
       snapshots: 'Snapshot Age',
       storage: 'Storage Devices',

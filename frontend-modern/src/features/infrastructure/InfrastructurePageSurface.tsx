@@ -232,7 +232,7 @@ export function InfrastructurePageSurface() {
                         <FilterSegmentedControl
                           value={groupingMode()}
                           onChange={(value) => setGroupingMode(value as GroupingMode)}
-                          aria-label="Group By"
+                          aria-label="Group by"
                           options={[
                             {
                               value: 'grouped',

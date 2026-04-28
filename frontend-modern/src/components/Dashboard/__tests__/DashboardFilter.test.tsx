@@ -104,6 +104,7 @@ describe('DashboardFilter', () => {
     it('renders Grouped and List buttons', () => {
       const props = makeProps();
       render(() => <DashboardFilter {...props} />);
+      expect(screen.getByLabelText('Group by')).toBeInTheDocument();
       expect(screen.getByText('Grouped')).toBeInTheDocument();
       expect(screen.getByText('List')).toBeInTheDocument();
     });

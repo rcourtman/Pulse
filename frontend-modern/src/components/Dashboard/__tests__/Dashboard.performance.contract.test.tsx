@@ -744,7 +744,7 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadViewportSyncSource).toContain('groupedWindowing.onScroll');
       expect(dashboardWorkloadRouteStateSource).not.toContain("from './workloadTopology'");
       expect(dashboardWorkloadRouteModelSource).toContain("from './workloadTopology'");
-      expect(dashboardWorkloadRouteModelSource).toContain('workloadNodeScopeId');
+      expect(dashboardWorkloadRouteModelSource).toContain('workloadHostScopeId');
       expect(dashboardWorkloadRouteModelSource).toContain('getKubernetesContextKey');
       expect(dashboardSelectionStateSource).toContain(
         'const [selectedGuestId, setSelectedGuestIdRaw]',

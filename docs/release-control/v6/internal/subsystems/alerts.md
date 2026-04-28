@@ -209,7 +209,11 @@ canonical owners for alert enablement copy, history administration wording,
 bulk-edit labels, schedule/configuration text, email-destination field labels,
 frequency chips, grouping card styling, history source and resource badges,
 severity badges, tab labels, thresholds empty states, and thresholds section
-status labels. Future alert configuration or history presentation work should
+status labels. Overview stat-card labels must also route through the alert
+overview presentation helper, and user-facing configuration or thresholds copy
+must use workload, VM, and container vocabulary instead of exposing internal
+guest override/filter names unless the UI is naming a backend field directly.
+Future alert configuration or history presentation work should
 extend those helpers instead of rebuilding alert-specific semantics in pages,
 dashboard surfaces, feature hooks, or thresholds shells.
 

@@ -422,7 +422,7 @@ describe('Recovery', () => {
     );
     expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
     expect(within(historyControls).queryByText(/day group/i)).not.toBeInTheDocument();
-    expect(within(historyControls).getByLabelText('Item type').className).not.toContain('min-w-[');
+    expect(within(historyControls).getByLabelText('Item Type').className).not.toContain('min-w-[');
     expect(within(historyControls).getByLabelText('Platform').className).not.toContain('min-w-[');
     expect(within(historyControls).getByLabelText('Status').className).not.toContain('min-w-[');
     const recoverySummaryPanel = screen.getByTestId('recovery-summary');

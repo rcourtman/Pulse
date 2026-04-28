@@ -180,7 +180,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             <FilterSegmentedControl
               value={props.groupBy!()}
               onChange={(value) => props.setGroupBy!(value as StorageGroupByFilter)}
-              aria-label="Group By"
+              aria-label="Group by"
               options={STORAGE_GROUP_BY_OPTIONS}
             />
           </div>
@@ -267,7 +267,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             value={props.sortKey()}
             onChange={(e) => props.setSortKey(e.currentTarget.value)}
             disabled={props.sortDisabled}
-            aria-label="Sort By"
+            aria-label="Sort by"
             class={STORAGE_FILTER_SORT_SELECT_CLASS}
           >
             {sortOptions().map((option) => (
@@ -279,7 +279,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             title={sortDirectionTitle()}
             onClick={toggleSortDirection}
             disabled={props.sortDisabled}
-            aria-label="Sort Direction"
+            aria-label="Sort direction"
             class={STORAGE_FILTER_SORT_DIRECTION_BUTTON_CLASS}
           >
             <svg
