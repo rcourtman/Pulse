@@ -518,12 +518,12 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
       expect(unifiedResourceHostTableCardSource).not.toContain('cursor-pointer bg-surface-alt');
       expect(unifiedResourceHostTableCardSource).toContain('TableCard');
-      expect(unifiedResourceHostTableCardSource).toContain('SummaryTableCardHeader');
+      expect(unifiedResourceHostTableCardSource).toContain('TableCardHeader');
       expect(unifiedResourceHostTableCardSource).toContain(
         'onClear={tableProps.clearPinnedSummaryScope}',
       );
       expect(unifiedResourceServiceInfrastructureCardSource).toContain('TableCard');
-      expect(unifiedResourceServiceInfrastructureCardSource).toContain('SummaryTableCardHeader');
+      expect(unifiedResourceServiceInfrastructureCardSource).toContain('TableCardHeader');
       expect(unifiedResourceServiceInfrastructureCardSource).toContain('showClearAction');
       expect(unifiedResourceServiceInfrastructureCardSource).toContain(
         'onClear={tableProps.clearPinnedSummaryScope}',

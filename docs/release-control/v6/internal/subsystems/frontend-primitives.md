@@ -133,10 +133,11 @@ work extends shared components instead of creating new local variants.
 107. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
 108. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
 109. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
-110. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
-111. `frontend-modern/src/components/shared/UpgradeLink.tsx`
-112. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
-113. `frontend-modern/src/utils/upgradeNavigation.ts`
+110. `frontend-modern/src/components/shared/TableCardHeader.tsx`
+111. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
+112. `frontend-modern/src/components/shared/UpgradeLink.tsx`
+113. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
+114. `frontend-modern/src/utils/upgradeNavigation.ts`
 115. `frontend-modern/src/components/DemoBanner.tsx`
 116. `frontend-modern/src/components/Login.tsx`
 117. `frontend-modern/src/stores/demoMode.ts`
@@ -168,12 +169,13 @@ work extends shared components instead of creating new local variants.
 ## Extension Points
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
-   Framed product table surfaces must consume the shared
-   `TableCard` primitive instead of composing page-local `Card` border,
-   background, and overflow classes. Feature owners may own the table data,
-   filters, columns, and row behavior, but the outer product-table frame and
-   its light/dark border treatment belong to frontend primitives so
-   Infrastructure, Workloads, Storage, and Recovery do not drift visually.
+   Framed product table surfaces must consume the shared `TableCard` frame and
+   `TableCardHeader` title/action band instead of composing page-local `Card`
+   border, background, overflow, or table-title chrome. Feature owners may own
+   the table data, filters, columns, and row behavior, but the outer
+   product-table frame, section header band, and light/dark border treatment
+   belong to frontend primitives so Infrastructure, Workloads, Storage, and
+   Recovery do not drift visually.
    Shared monitored-system warning primitives under that path must stay compact
    app-shell pointers into the owned Pulse Pro billing surface. The shared
    banner may announce posture and route to the relevant billing tab, but

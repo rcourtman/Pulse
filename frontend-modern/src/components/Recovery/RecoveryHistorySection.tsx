@@ -13,6 +13,7 @@ import {
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
@@ -472,6 +473,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
       </Show>
 
       <TableCard>
+        <TableCardHeader title="Recovery events" />
         <RecoveryHistoryTable
           clearSelectedPoint={clearSelectedPoint}
           currentPage={props.currentPage}

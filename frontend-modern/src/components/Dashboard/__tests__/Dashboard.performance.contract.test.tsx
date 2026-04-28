@@ -795,7 +795,7 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(dashboardWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(dashboardWorkloadTableSource).toContain('TableCard');
-      expect(dashboardWorkloadTableSource).toContain('SummaryTableCardHeader');
+      expect(dashboardWorkloadTableSource).toContain('TableCardHeader');
       expect(dashboardWorkloadTableSource).toContain('showClearSelection');
       expect(dashboardWorkloadTableSource).toContain('clearPinnedSummaryScope');
       expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');

@@ -1,5 +1,5 @@
 import { Component, Show } from 'solid-js';
-import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TableCard } from '@/components/shared/TableCard';
 import { DiskList } from '@/components/Storage/DiskList';
 import StoragePoolsTable from '@/components/Storage/StoragePoolsTable';
@@ -64,7 +64,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
       data-summary-clear-surface
       data-testid="storage-content-surface"
     >
-      <SummaryTableCardHeader
+      <TableCardHeader
         title={model.heading()}
         showClearAction={showClearSelection()}
         onClear={props.clearPinnedSummaryScope}

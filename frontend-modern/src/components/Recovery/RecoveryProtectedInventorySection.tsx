@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import type { ProtectionRollup } from '@/types/recovery';
@@ -359,12 +360,13 @@ export const RecoveryProtectedInventorySection: Component<
       </Show>
 
       <TableCard>
+        <TableCardHeader title="Protected items" />
         <Show when={props.loading() && props.filteredRollups().length === 0}>
           <div
             data-testid="recovery-protected-loading"
             class="animate-pulse pointer-events-none select-none"
           >
-            <div class="border-b border-border bg-surface-alt/80 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+            <div class="px-4 py-3 text-sm text-muted">
               {getRecoveryProtectedItemsLoadingState().text}
             </div>
             <div class="space-y-3 px-4 py-4">

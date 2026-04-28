@@ -62,6 +62,7 @@ import summaryCardInteractionSource from '@/components/shared/summaryCardInterac
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
+import tableCardHeaderSource from '@/components/shared/TableCardHeader.tsx?raw';
 import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHeader.tsx?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
@@ -272,15 +273,27 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
   });
 
-  it('keeps shared summary table chrome on one canonical header owner', () => {
-    expect(summaryTableCardHeaderSource).toContain('Clear selection');
-    expect(summaryTableCardHeaderSource).toContain("props.clearLabel ?? 'Clear'");
-    expect(summaryTableCardHeaderSource).toContain('props.clearAriaLabel ??');
-    expect(summaryTableCardHeaderSource).toContain('event.stopPropagation()');
-    expect(summaryTableCardHeaderSource).not.toContain('Pinned to');
-    expect(summaryTableCardHeaderSource).not.toContain('Scoped to');
-    expect(dashboardWorkloadTableSource).toContain('SummaryTableCardHeader');
-    expect(unifiedResourceHostTableCardSource).toContain('SummaryTableCardHeader');
+  it('keeps shared table card chrome on one canonical header owner', () => {
+    expect(tableCardHeaderSource).toContain('Clear selection');
+    expect(tableCardHeaderSource).toContain("props.clearLabel ?? 'Clear'");
+    expect(tableCardHeaderSource).toContain('props.clearAriaLabel ??');
+    expect(tableCardHeaderSource).toContain('event.stopPropagation()');
+    expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
+    expect(tableCardHeaderSource).not.toContain('Pinned to');
+    expect(tableCardHeaderSource).not.toContain('Scoped to');
+    expect(summaryTableCardHeaderSource).toContain("from './TableCardHeader'");
+    expect(summaryTableCardHeaderSource).not.toContain('border-b border-border bg-surface-hover');
+    for (const source of [
+      dashboardWorkloadTableSource,
+      unifiedResourceHostTableCardSource,
+      unifiedResourceServiceInfrastructureCardSource,
+      storageContentCardSource,
+      recoveryHistorySectionSource,
+      recoveryProtectedInventorySectionSource,
+    ]) {
+      expect(source).toContain('TableCardHeader');
+      expect(source).not.toContain('SummaryTableCardHeader');
+    }
     expect(storagePoolRowSource).not.toContain('Clear selection');
   });
 

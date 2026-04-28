@@ -143,6 +143,10 @@ cross-source deduplication.
    accessible group label, while Proxmox, Kubernetes, and other platform
    clusters stay reserved for actual resource identity, filters, and detail
    surfaces.
+   Infrastructure host and service table cards must consume the
+   frontend-primitives-owned `TableCard` frame and `TableCardHeader` header
+   band; unified resources owns the resource identity, rows, grouping, and
+   detail presentation, not page-local table-shell chrome.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor

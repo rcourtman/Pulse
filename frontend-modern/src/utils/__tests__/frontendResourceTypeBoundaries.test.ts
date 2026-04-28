@@ -2060,7 +2060,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageContentCardSource).toContain('DiskList');
     expect(storageContentCardSource).toContain('StoragePoolsTable');
     expect(storageContentCardSource).toContain('TableCard');
-    expect(storageContentCardSource).toContain('SummaryTableCardHeader');
+    expect(storageContentCardSource).toContain('TableCardHeader');
     expect(storageContentCardSource).toContain('STORAGE_CONTENT_CARD_BODY_CLASS');
     expect(storageContentCardSource).not.toContain(
       "props.selectedNodeId() === 'all' ? null : props.selectedNodeId()",

@@ -1,7 +1,7 @@
 import { For } from 'solid-js';
 
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
-import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { Table } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 
@@ -66,7 +66,7 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
         data-summary-clear-surface
         data-testid="workloads-table-surface"
       >
-        <SummaryTableCardHeader
+        <TableCardHeader
           title="Workloads"
           showClearAction={showClearSelection()}
           onClear={props.clearPinnedSummaryScope}

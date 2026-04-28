@@ -4,7 +4,7 @@ import type { Disk } from '@/types/api';
 import { formatBytes, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import { getInteractiveGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
-import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TableCard } from '@/components/shared/TableCard';
 import {
   Table,
@@ -64,7 +64,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
   return (
     <Show when={table.showHostTable()}>
       <TableCard class="mb-0">
-        <SummaryTableCardHeader
+        <TableCardHeader
           title="Agent Infrastructure"
           showClearAction={table.showHostClearAction()}
           onClear={tableProps.clearPinnedSummaryScope}
