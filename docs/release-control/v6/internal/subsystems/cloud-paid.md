@@ -1394,7 +1394,11 @@ when a migrated recurring v5 plan is active or in grace, the settings surface
 must render plan terms and a continuity notice that makes it clear the
 existing recurring price remains in force until cancellation, while
 self-hosted monitoring and child-resource volume stay uncapped under the
-current v6 policy.
+current v6 policy. The same plan summary must not render a separate
+`Guest Capacity`, child-resource allowance, or equivalent volume-cap row for
+uncapped/grandfathered self-hosted plans; the customer-facing continuity story
+is existing-price protection plus uncapped self-hosted monitoring and
+child-resource volume, not a new paid guest-capacity benefit.
 The self-hosted commercial presentation on that same surface is now locked to
 the no-cap monitored-system model as well. `ProLicensePanel.tsx`,
 `CommercialBillingSections.tsx`, and

@@ -162,9 +162,6 @@ export function useProLicensePanelState() {
   const monitoredSystemCapacity = createMemo(() =>
     uncappedGrandfatheredPlan() ? undefined : entitlements()?.monitored_system_capacity,
   );
-  const guestLimitStatus = createMemo(() =>
-    uncappedGrandfatheredPlan() ? undefined : limitStatus('max_guests'),
-  );
   const displayableMonitoredSystemContinuity = createMemo(() =>
     getDisplayableMonitoredSystemContinuity({
       continuity: monitoredSystemContinuity(),
@@ -507,17 +504,6 @@ export function useProLicensePanelState() {
     ),
   );
 
-  const showGuestCapacity = createMemo(() => {
-    if (currentRetailPlanDefinition()) {
-      return false;
-    }
-    if (uncappedGrandfatheredPlan()) {
-      return true;
-    }
-    const guestLimit = guestLimitStatus()?.limit;
-    return typeof guestLimit === 'number' && guestLimit > 0;
-  });
-
   const commercialPlanModel = createMemo(() =>
     buildSelfHostedCommercialPlanModel({
       licensedEmail: entitlements()?.licensed_email,
@@ -533,12 +519,7 @@ export function useProLicensePanelState() {
         monitoredSystemLimitStatus()!.limit > 0
           ? monitoredSystemLimitStatus()!.limit
           : 'Unlimited',
-      guestCapacity:
-        typeof guestLimitStatus()?.limit === 'number' && guestLimitStatus()!.limit > 0
-          ? guestLimitStatus()!.limit
-          : 'Unlimited',
       retailPlanDefinition: currentRetailPlanDefinition(),
-      showGuestCapacity: showGuestCapacity(),
       monitoredSystemContinuity: displayableMonitoredSystemContinuity() ?? null,
       continuityCapturedAt: continuityCapturedAt(),
     }),

@@ -375,7 +375,7 @@ describe('ProLicensePanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
-    expect(screen.getByText('Guest Capacity')).toBeInTheDocument();
+    expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
@@ -423,17 +423,17 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Grandfathered price')).toBeInTheDocument();
       expect(
         screen.getAllByText(
-          /keeps its existing recurring price and uncapped monitored-system and guest capacity/i,
+          /keeps its existing recurring price until/i,
         ).length,
       ).toBeGreaterThan(0);
       expect(
         screen.queryByText(/keeps its existing recurring price and uncapped guest capacity/i),
       ).not.toBeInTheDocument();
       expect(
-        screen.getByText(
-          /keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel/i,
-        ),
-      ).toBeInTheDocument();
+        screen.getAllByText(
+          /self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy/i,
+        ).length,
+      ).toBeGreaterThan(0);
       expect(
         within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
           'Unlimited',
@@ -441,7 +441,7 @@ describe('ProLicensePanel', () => {
       ).toBeInTheDocument();
       expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
       expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
-      expect(screen.getByText('Guest Capacity')).toBeInTheDocument();
+      expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
       expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
       expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
       expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);

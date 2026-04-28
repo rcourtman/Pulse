@@ -193,8 +193,14 @@ describe('licensePresentation', () => {
     ).toMatchObject({
       title: 'Grandfathered v5 pricing',
       tone: expect.stringContaining('green'),
-      body: expect.stringContaining('uncapped monitored-system and guest capacity'),
+      body: expect.stringContaining('keeps its existing recurring price until you cancel'),
     });
+    expect(
+      getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'active')?.body,
+    ).toContain('Self-hosted monitoring and child-resource volume remain uncapped');
+    expect(
+      getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'active')?.body,
+    ).not.toContain('guest capacity');
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_annual_grandfathered', 'grace'),
     ).toMatchObject({
@@ -343,7 +349,7 @@ describe('licensePresentation', () => {
       ],
       supplementalBadges: ['Grandfathered price'],
       supplementalSummary:
-        'This migrated v5 subscription keeps its existing recurring price and uncapped monitored-system and guest capacity until cancellation.',
+        'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy.',
     });
   });
 

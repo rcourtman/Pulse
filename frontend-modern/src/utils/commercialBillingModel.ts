@@ -33,12 +33,10 @@ export interface SelfHostedCommercialModelInput {
   monitoredSystemsSummary: string | number;
   capacityStatusSummary: string | number;
   maxMonitoredSystems: string | number;
-  guestCapacity: string | number;
   retailPlanDefinition?: Pick<
     SelfHostedPlanDefinition,
     'billingExtrasSummary' | 'metricHistoryDays'
   > | null;
-  showGuestCapacity?: boolean;
   monitoredSystemContinuity?: MonitoredSystemContinuityStatus | null;
   continuityCapturedAt?: string;
 }
@@ -123,14 +121,6 @@ export const buildSelfHostedCommercialPlanModel = (
               label: 'Core Monitoring',
               value: 'Unlimited',
             },
-            ...(input.showGuestCapacity
-              ? [
-                  {
-                    label: 'Guest Capacity',
-                    value: input.guestCapacity,
-                  },
-                ]
-              : []),
             {
               label: 'Plan Status',
               value: input.statusLabel,

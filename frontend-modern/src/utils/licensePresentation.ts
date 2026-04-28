@@ -251,7 +251,7 @@ export const getGrandfatheredPriceContinuityNotice = (
   return {
     tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
     title: 'Grandfathered v5 pricing',
-    body: 'This migrated v5 Pro subscription keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel. If you cancel and return later, current v6 pricing applies; public self-hosted monitoring remains unlimited.',
+    body: 'This migrated v5 Pro subscription keeps its existing recurring price until you cancel. Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy. If you cancel and return later, current v6 pricing applies for paid features.',
   };
 };
 
@@ -481,12 +481,12 @@ export const getSelfHostedCurrentPlanPresentation = ({
   ) {
     supplementalBadges.push('Grandfathered price');
     supplementalDetails.push(
-      'This migrated v5 subscription keeps its existing recurring price and uncapped monitored-system and guest capacity until cancellation.',
+      'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy.',
     );
   } else if (hasUncappedContinuity && current.is_lifetime) {
     supplementalBadges.push('Grandfathered lifetime');
     supplementalDetails.push(
-      'This migrated lifetime install keeps uncapped monitored-system and guest capacity continuity.',
+      'This migrated lifetime install remains valid permanently, with uncapped self-hosted monitoring and child-resource volume.',
     );
   }
 

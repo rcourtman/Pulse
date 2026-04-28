@@ -13,7 +13,6 @@ const createBaseInput = () => ({
   monitoredSystemsSummary: 'Unlimited',
   capacityStatusSummary: 'Unlimited',
   maxMonitoredSystems: 'Unlimited' as const,
-  guestCapacity: 'Unlimited' as const,
 });
 
 describe('commercialBillingModel', () => {
@@ -21,7 +20,6 @@ describe('commercialBillingModel', () => {
     const model = buildSelfHostedCommercialPlanModel({
       ...createBaseInput(),
       retailPlanDefinition: SELF_HOSTED_PLAN_BY_TIER.pro,
-      showGuestCapacity: false,
     });
 
     expect(model.summary).toEqual([
@@ -38,20 +36,19 @@ describe('commercialBillingModel', () => {
     ]);
   });
 
-  it('keeps guest capacity visible for uncapped grandfathered continuity states', () => {
+  it('keeps uncapped grandfathered continuity focused on core monitoring', () => {
     const model = buildSelfHostedCommercialPlanModel({
       ...createBaseInput(),
       planTerms: 'V5 Pro Monthly (Grandfathered)',
       retailPlanDefinition: null,
-      showGuestCapacity: true,
     });
 
     expect(model.summary).toEqual([
       { label: 'Core Monitoring', value: 'Unlimited' },
-      { label: 'Guest Capacity', value: 'Unlimited' },
       { label: 'Plan Status', value: 'Active' },
     ]);
     expect(model.details.map((item) => item.label)).not.toContain('Included Monitored Systems');
+    expect(model.summary.map((item) => item.label)).not.toContain('Guest Capacity');
   });
 
   it('keeps bounded monitored-system details on legacy fallback paths', () => {
@@ -60,9 +57,7 @@ describe('commercialBillingModel', () => {
       monitoredSystemsSummary: '7 monitored systems',
       capacityStatusSummary: '3 remaining',
       maxMonitoredSystems: 10,
-      guestCapacity: 50,
       retailPlanDefinition: null,
-      showGuestCapacity: true,
     });
 
     expect(model.summary).toEqual([
