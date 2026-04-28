@@ -169,14 +169,16 @@ commercial destinations from the shared license boundary, but they must leave
 internal-versus-external navigation semantics to `frontend-primitives` once a
 Patrol feature can resolve to either product-owned routes or public pricing.
 That same Patrol-owned commercial boundary must also fail closed in public
-demo runtimes. Patrol header and banner upgrade/trial affordances may render
-for real customer workspaces, but the browser-owned trigger for that
-suppression is now the shared resolved `presentationPolicy` from
+demo and ordinary self-hosted runtimes. Patrol header, banner, approval, and
+history-adjacent lock surfaces must remain informational unless the operator
+is already in an entitled, hosted, or explicit commercial handoff context. The
+browser-owned trigger for self-hosted suppression is the shared resolved
+`presentationPolicy` from
 `/api/security/status`, seeded by the backend capability fact
-`sessionCapabilities.demoMode`. Patrol surfaces must therefore suppress
-upgrade CTAs, trial nudges, and Pro-only helper copy only from that shared
-policy instead of reviving local demo heuristics or issuing early commercial
-reads before the policy resolves.
+`sessionCapabilities.demoMode` plus the self-hosted upgrade policy. Patrol
+surfaces must therefore suppress upgrade CTAs, trial nudges, checkout links,
+and Pro-only helper copy from that shared policy instead of reviving local demo
+heuristics or issuing early commercial reads before the policy resolves.
 That same shared policy now also owns Patrol approval polling posture.
 `frontend-modern/src/stores/aiIntelligence.ts` must fail
 `loadPendingApprovals()` closed in public demo mode and return the canonical
@@ -199,12 +201,12 @@ That same store-owned demo boundary also covers remediation artifacts.
 `/api/ai/remediation/plans` paywall probes after demo posture has resolved.
 That same posture split now also centralizes Patrol commercial bootstrap.
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` and
-`frontend-modern/src/components/patrol/ApprovalSection.tsx` may consume the
-resolved commercial-posture store when Patrol needs upgrade or trial context,
-but they must not trigger their own mount-time `loadCommercialPosture()`
-reads. Authenticated Patrol shells inherit that bootstrap from
-`frontend-modern/src/useAppRuntimeState.ts`, so Patrol-specific hooks do not
-quietly retake ownership of commercial fetch timing.
+`frontend-modern/src/components/patrol/ApprovalSection.tsx` must not mount
+commercial trial or upgrade state merely because an ordinary self-hosted
+operator opens Patrol. Authenticated Patrol shells inherit any allowed
+commercial bootstrap from `frontend-modern/src/useAppRuntimeState.ts`, so
+Patrol-specific hooks do not quietly retake ownership of commercial fetch
+timing or reintroduce local trial-start actions.
 Under ordinary self-hosted v6, Patrol commercial affordances must also honor
 the shared `presentationPolicy.hideUpgrade` contract. A free self-hosted
 install may show Patrol runtime availability and configuration gaps, but it

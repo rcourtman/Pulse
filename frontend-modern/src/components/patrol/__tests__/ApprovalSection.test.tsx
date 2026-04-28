@@ -22,7 +22,6 @@ const denyInvestigationFixMock = vi.hoisted(() => vi.fn());
 const notificationSuccessMock = vi.hoisted(() => vi.fn());
 const notificationErrorMock = vi.hoisted(() => vi.fn());
 const openWithPromptMock = vi.hoisted(() => vi.fn());
-const startProTrialMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -62,13 +61,7 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
-  canStartCommercialTrial: () => {
-    const ent = state.entitlements;
-    if (!ent) return false;
-    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
-    return ent.trial_eligible !== false;
-  },
-  startProTrial: (...args: unknown[]) => startProTrialMock(...args),
+  canStartCommercialTrial: () => false,
 }));
 
 vi.mock('../RemediationStatus', () => ({
@@ -93,15 +86,16 @@ describe('ApprovalSection', () => {
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
     openWithPromptMock.mockReset();
-    startProTrialMock.mockReset();
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it('keeps patrol trial gating on shared commercial selector helpers', () => {
-    expect(approvalSectionSource).toContain('canStartCommercialTrial');
+  it('keeps fix approvals out of commercial trial prompts', () => {
+    expect(approvalSectionSource).not.toContain('canStartCommercialTrial');
+    expect(approvalSectionSource).not.toContain('runStartProTrialAction');
+    expect(approvalSectionSource).not.toContain('start a free 14-day trial');
     expect(approvalSectionSource).not.toContain('commercialPosture');
   });
 

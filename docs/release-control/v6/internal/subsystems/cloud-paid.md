@@ -491,9 +491,10 @@ Community limit enforcement.
     may keep checkout, activation, recovery, and support-only trial plumbing
     available for explicit handoffs and entitled installs, but default
     self-hosted browser surfaces must honor `presentationPolicy.hideUpgrade`
-    and suppress Relay/Pro plan comparison, Pro trial CTAs, paid-only settings
-    navigation, and feature upsells unless hosted mode, direct intent,
-    activation/recovery state, or active entitlement makes them relevant.
+    and suppress Relay/Pro plan comparison, Pro trial CTAs, monitored-system
+    limit pressure, paid-only settings navigation, and feature upsells unless
+    hosted mode, direct intent, activation/recovery state, or active entitlement
+    makes them relevant.
 
 ## Current State
 
@@ -504,9 +505,12 @@ self-hosted billing plan page instead of the Pulse Account purchase-start
 handoff. The purchase-start handoff requires a `PublicURL` and fails on local
 instances; routing these keys to the in-product billing plan keeps upgrades
 accessible from self-hosted environments.
-The monitored-system app-shell warning CTA now follows that same self-hosted
-commercial boundary by reviewing finite-policy usage on the usage ledger rather
-than sending operators to the plan-selection surface with capacity-shaped copy.
+The monitored-system app-shell warning CTA now follows that same commercial
+boundary by rendering only in hosted mode. Ordinary self-hosted installs must
+not see finite monitored-system pressure in the global app shell; when hosted
+capacity policy is active, the banner reviews finite-policy usage on the usage
+ledger rather than sending operators to the plan-selection surface with
+capacity-shaped copy.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.
@@ -1554,7 +1558,8 @@ for that feature's owning subsystem — those are user-initiated discovery
 paths, not blanket funnels, and are not required to be removed.
 Public AI and entitlement docs must use the same boundary: Community/Relay may
 describe Patrol background findings with BYOK, while investigation, proposed
-remediation, auto-fix, and higher autonomy remain paid AI-operations features.
+remediation, safe remediation execution, and higher autonomy remain paid
+AI-operations features.
 Those docs should describe moving between available modes, not tell readers to
 "upgrade" as part of an ordinary safety progression.
 That same counted-unit boundary also owns the disclosure rule for retail copy:

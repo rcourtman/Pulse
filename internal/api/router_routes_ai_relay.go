@@ -214,7 +214,7 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.aiSettingsHandler.SetAIAutoFixEndpoints(r.aiAutoFixEndpoints)
 }
 
-// --- AI Auto-Fix free-tier adapter ---
+// --- Safe remediation free-tier adapter ---
 // All methods return 402 "requires Pulse Pro". Enterprise binders replace this
 // with real handler implementations.
 
@@ -257,7 +257,7 @@ func (aiAutoFixFreeAdapter) HandleRollbackRemediationPlan(w http.ResponseWriter,
 }
 
 func (aiAutoFixFreeAdapter) HandleApproveInvestigationFix(w http.ResponseWriter, _ *http.Request) {
-	WriteLicenseRequired(w, featureAIAutoFixKey, "Auto-Fix requires Pulse Pro")
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Safe remediation workflows require Pulse Pro")
 }
 
 func (a aiAutoFixFreeAdapter) HandleListApprovals(w http.ResponseWriter, req *http.Request) {

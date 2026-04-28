@@ -555,7 +555,7 @@ describe('AIIntelligence entitlement gating', () => {
     cleanup();
   });
 
-  it('locks paid patrol controls and shows upgrade paths for free entitlements', async () => {
+  it('locks paid patrol controls without promoting checkout from ordinary Patrol workflows', async () => {
     getPatrolStatusMock.mockResolvedValue(
       defaultPatrolStatus({
         license_required: true,
@@ -576,20 +576,22 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByRole('button', { name: 'Investigate' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Remediate' })).toBeDisabled();
     expect(
-      screen
-        .getAllByRole('link', { name: 'Upgrade to Pro' })
-        .some((link) => link.getAttribute('href') === getPublicPricingUrl('ai_autofix')),
-    ).toBe(true);
-    expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute(
-      'href',
-      getPublicPricingUrl('ai_alerts'),
-    );
-
-    await waitFor(() => {
-      expect(trackPaywallViewedMock).toHaveBeenCalledWith('ai_autofix', 'ai_intelligence');
-      expect(trackPaywallViewedMock).toHaveBeenCalledWith('ai_alerts', 'ai_intelligence');
-      expect(trackPaywallViewedMock).toHaveBeenCalledWith('ai_autofix', 'ai_intelligence_banner');
-    });
+      screen.getByText(
+        'Safe remediation workflows and alert-triggered root-cause analysis are not enabled on this plan.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Investigation and safe remediation workflows are not enabled on this plan.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Alert-triggered analysis is not enabled on this plan.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
+    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
   });
 
   it('locks paid patrol controls without upgrade prompts in default self-hosted mode', async () => {

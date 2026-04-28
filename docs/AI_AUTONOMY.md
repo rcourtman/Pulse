@@ -25,13 +25,13 @@ Patrol autonomy controls how aggressively Patrol responds to findings.
 |-------|-----|:------:|:-----------:|:-------------:|:--------------:|------|
 | **Monitor** | `monitor` | Yes | No | No | No | Community |
 | **Approval** | `approval` | Yes | Yes | Approval required | Approval required | Pro / legacy Pro+ / Cloud |
-| **Assisted** | `assisted` | Yes | Yes | Auto-fix | Approval required | Pro / legacy Pro+ / Cloud |
-| **Full** | `full` | Yes | Yes | Auto-fix | Auto-fix | Pro / legacy Pro+ / Cloud |
+| **Assisted** | `assisted` | Yes | Yes | Execute automatically | Approval required | Pro / legacy Pro+ / Cloud |
+| **Full** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
 
 - **Monitor** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation or remediation.
 - **Approval** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
-- **Assisted** (Pro and above): Warning-level findings are auto-fixed. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
-- **Full** (Pro and above): All findings are auto-fixed without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
+- **Assisted** (Pro and above): Warning-level safe remediation plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
+- **Full** (Pro and above): Safe remediation plans can execute without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
 
 ### Configuration
 
@@ -148,7 +148,7 @@ For new deployments, we recommend gradually increasing autonomy:
 
 1. **Start with Monitor** — Run Patrol for a few cycles to see what it detects. Dismiss false positives.
 2. **Move to Approval where available** — Enable investigation. Review proposed fixes to build confidence.
-3. **Use Assisted when fix execution is enabled** — Let Patrol auto-fix warnings while you approve critical fixes.
+3. **Use Assisted when fix execution is enabled** — Let Patrol execute warning-level remediation while you approve critical fixes.
 4. **Consider Full** — Only if your environment has comprehensive alerting and you trust the fix patterns.
 
 ---

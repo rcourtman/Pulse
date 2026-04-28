@@ -795,12 +795,13 @@ work extends shared components instead of creating new local variants.
     takeover between tabs.
 35. Keep self-hosted paid-service prompts opt-in at the shared shell layer.
     `settingsNavCatalog.ts`, `settingsNavVisibility.ts`, shared upgrade link
-    primitives, trial banners, and history-lock overlays must honor
-    `presentationPolicy.hideUpgrade` by hiding paid prompts by default on
-    ordinary self-hosted installs. Direct activation/recovery routes may
-    render their owned content, but sidebar discovery, trial CTAs, plan upsells,
-    and feature upgrade links must require hosted mode, explicit handoff, or
-    active entitlement.
+    primitives, trial banners, monitored-system warning banners, history-lock
+    overlays, and Patrol lock helpers must honor `presentationPolicy.hideUpgrade`
+    by hiding paid prompts by default on ordinary self-hosted installs. Direct
+    activation/recovery routes may render their owned content, but sidebar
+    discovery, trial CTAs, plan upsells, monitored-system limit pressure, and
+    feature upgrade links must require hosted mode, explicit handoff, or active
+    entitlement.
 
 ## Current State
 
@@ -812,9 +813,10 @@ infrastructure area uses `InfrastructurePanelStep` in-page state.
 The shared monitored-system warning banner now uses a neutral policy-review
 CTA and `reviewPolicyDestination` state, keeping the render shell pointed at
 the usage-owned policy ledger instead of plan-selection or capacity wording.
-It also follows the resolved session-presentation upgrade policy, so ordinary
-self-hosted sessions with `presentationPolicy.hideUpgrade` do not render the
-banner, its plan-review link, or its upgrade-impression telemetry.
+It also requires hosted mode and follows the resolved session-presentation
+upgrade policy, so ordinary self-hosted sessions do not render the banner, its
+plan-review link, or its upgrade-impression telemetry even when stale finite
+policy data is present.
 Shared alert presentation surfaces (`OverviewTab.tsx`, `HistoryTab.tsx`,
 `AlertOverviewActiveAlertsSection.tsx`, `AlertHistoryTableSection.tsx`,
 `AlertHistoryTableAlertRow.tsx`, `AlertOverviewAlertCard.tsx`) no longer accept
@@ -1386,11 +1388,13 @@ parallel modal-stack bookkeeping.
 The shared history chart now follows the same owner shape.
 `frontend-modern/src/components/shared/HistoryChart.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useHistoryChartState.ts` owns
-license gating, trial actions, history fetch/refresh, canvas draw lifecycle,
-and hover state, and `frontend-modern/src/components/shared/historyChartModel.ts`
-owns tooltip formatting, scale and axis math, and closest-point selection.
-Future history-chart work should extend those owners instead of pushing fetch,
-license, or canvas math back into the shared component shell.
+license gating, history fetch/refresh, canvas draw lifecycle, and hover state,
+and `frontend-modern/src/components/shared/historyChartModel.ts` owns tooltip
+formatting, scale and axis math, and closest-point selection. Lock overlays in
+ordinary self-hosted surfaces must stay informational rather than presenting
+trial-start or upgrade-link actions. Future history-chart work should extend
+those owners instead of pushing fetch, license, commercial trial actions, or
+canvas math back into the shared component shell.
 The remaining header, overlay, and tooltip render surfaces now live in
 `frontend-modern/src/components/shared/HistoryChartHeader.tsx`,
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`, and
@@ -2113,20 +2117,22 @@ agent-era banner filename or component name as the primary primitive.
 That shared monitored-system warning banner now also follows the shell/runtime/model
 owner split. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 stays the render shell, `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`
-owns entitlement load, warning metric emission, migration click tracking, and
-policy-review plus collector-link runtime, and
+owns hosted-mode eligibility, entitlement load, warning metric emission,
+migration click tracking, and policy-review plus collector-link runtime, and
 `frontend-modern/src/components/shared/monitoredSystemLimitWarningBannerModel.ts`
 owns monitored-system warning policy, count aggregation, and tone/text-class
 policy while sourcing customer-facing monitored-system copy from the canonical
 `frontend-modern/src/utils/monitoredSystemPresentation.ts` helper. Future
 warning-banner work should extend those owners instead of pushing entitlement
-state or route selection back into the render shell. When the warning points at
-the self-hosted commercial surface, the shared primitive must stay a compact
+state, hosted-mode checks, or route selection back into the render shell. In
+ordinary self-hosted mode the banner must remain absent rather than turning
+stale finite policy data into monitored-system limit pressure. When hosted
+capacity policy is active, the shared primitive must stay a compact
 policy-review pointer into the usage-owned ledger rather than a plan-selection
-or "capacity" CTA. The banner may signal the current monitored-system posture
-and link into the owned usage surface, but the longer over-plan or continuity
-explanation belongs in the bounded legacy usage ledger and commercial detail
-sections owned by `cloud-paid`, not in permanent app-shell banner copy.
+or "capacity" CTA. The banner may signal the current hosted monitored-system
+posture and link into the owned usage surface, but the longer over-plan or
+continuity explanation belongs in the bounded usage ledger and commercial
+detail sections owned by `cloud-paid`, not in permanent app-shell banner copy.
 That same shared warning boundary now also owns the monitored-system capacity
 posture vocabulary. Shared banners, plan summaries, and ledger headers must
 describe the canonical admission-freeze model from

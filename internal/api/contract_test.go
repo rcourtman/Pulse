@@ -57,6 +57,21 @@ type resourceContractSnapshot struct {
 	Type string
 }
 
+func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T) {
+	files := []string{"ai_handlers.go", "router_routes_ai_relay.go"}
+	for _, file := range files {
+		source, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		text := string(source)
+		if strings.Contains(text, "Pulse Patrol Auto-Fix requires Pulse Pro") ||
+			strings.Contains(text, "Auto-Fix requires Pulse Pro") {
+			t.Fatalf("%s must not expose legacy Auto-Fix license copy", file)
+		}
+	}
+}
+
 func sortedVMChartKeys(values map[string]VMChartData) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {

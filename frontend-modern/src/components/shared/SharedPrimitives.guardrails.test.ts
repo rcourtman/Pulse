@@ -663,6 +663,7 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'getRuntimeMonitoredSystemCapacity',
     );
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('isHostedModeEnabled');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesCommercialSurfaces',
     );
@@ -919,7 +920,11 @@ describe('shared primitive guardrails', () => {
     expect(historyChartHeaderSource).not.toContain('setupCanvasDPR');
 
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
-    expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).toContain(
+      'Historical data beyond {props.chart.lockDays()} days is not enabled on this instance.',
+    );
+    expect(historyChartOverlaySource).not.toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).not.toContain('free 14-day trial');
     expect(historyChartOverlaySource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');
 

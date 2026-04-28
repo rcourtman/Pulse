@@ -161,7 +161,7 @@ Self-hosted tiers:
 |---|---:|---|---:|---|
 | Community | Free | Unlimited | 7 days | Full self-hosted monitoring |
 | Relay | $4.99/mo or $39/yr | Unlimited | 14 days | Remote access, mobile, and push notifications |
-| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | Root-cause analysis, safe auto-fix, and operations tooling |
+| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | Root-cause analysis, safe remediation workflows, and operations tooling |
 
 Pulse still counts top-level monitored systems once no matter how they are
 collected. VMs, containers, pods, disks, backups, and other child resources
@@ -181,7 +181,7 @@ Runtime-aligned capability summary:
 | Pulse Patrol (Background Health Checks) | ✅ | ✅ | ✅ | ✅ |
 | Remote Access / Mobile / Push | — | ✅ | ✅ | ✅ |
 | Alert-Triggered Root-Cause Analysis | — | — | ✅ | ✅ |
-| Pulse Patrol Auto-Fix | — | — | ✅ | ✅ |
+| Safe Remediation Workflows | — | — | ✅ | ✅ |
 | Centralized Agent Profiles | — | — | ✅ | ✅ |
 | Update Alerts (Container/Package Updates) | ✅ | ✅ | ✅ | ✅ |
 | Basic SSO (OIDC) | ✅ | ✅ | ✅ | ✅ |
@@ -207,7 +207,7 @@ Community installs continue with BYOK. Chat Assistant remains BYOK.
 Technical highlights:
 - Cross-system context (nodes, VMs, backups, containers, and metrics history)
 - LLM analysis with your provider plus alert-triggered root-cause investigations (Pro / hosted Cloud)
-- Optional auto-fix with command safety policies and audit trail
+- Optional safe remediation execution with command safety policies and audit trail
 - Centralized agent profiles for consistent fleet settings
 
 **[Try the live demo →](https://demo.pulserelay.pro)** or **[learn more at pulserelay.pro](https://pulserelay.pro)**

@@ -24,13 +24,9 @@ import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
-import { canStartCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import type { AISettings } from '@/types/ai';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 type PatrolTab = 'findings' | 'history';
 
@@ -63,7 +59,6 @@ export function usePatrolIntelligenceState() {
   const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(false);
   const [patrolAlertTriggers, setPatrolAlertTriggers] = createSignal<boolean>(true);
   const [patrolAnomalyTriggers, setPatrolAnomalyTriggers] = createSignal<boolean>(true);
-  const [startingTrial, setStartingTrial] = createSignal(false);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
 
   let advancedSettingsRef: HTMLDivElement | undefined;
@@ -151,22 +146,6 @@ export function usePatrolIntelligenceState() {
 
   const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
-
-  const canStartTrial = createMemo(() => canStartCommercialTrial());
-
-  async function handleStartTrial() {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        branded: true,
-        showSuccess: notificationStore.success,
-        showError: notificationStore.error,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  }
 
   const applyPatrolAISettings = (data: AISettings | null | undefined) => {
     setPatrolModel(data?.patrol_model || '');
@@ -348,10 +327,6 @@ export function usePatrolIntelligenceState() {
   });
 
   const licenseRequired = createMemo(() => patrolStatus()?.license_required ?? false);
-  const upgradeDestination = createMemo(() => getUpgradeActionDestination('ai_autofix'));
-  const alertAnalysisUpgradeDestination = createMemo(() =>
-    getUpgradeActionDestination('ai_alerts'),
-  );
   const runtimeState = createMemo<PatrolRuntimeState>(() => {
     if (!patrolEnabledLocal()) return 'disabled';
     return patrolStatus()?.runtime_state ?? 'active';
@@ -367,38 +342,6 @@ export function usePatrolIntelligenceState() {
     if (runtimeState() === 'unavailable') return 'Patrol service is unavailable';
     return '';
   });
-
-  createEffect((wasAutoFixLocked) => {
-    const isAutoFixLocked = autoFixLocked();
-    if (!presentationPolicyHidesUpgradePrompts() && isAutoFixLocked && !wasAutoFixLocked) {
-      trackPaywallViewed('ai_autofix', 'ai_intelligence');
-    }
-    return isAutoFixLocked;
-  }, false);
-
-  createEffect((wasAlertAnalysisLocked) => {
-    const isAlertAnalysisLocked = alertAnalysisLocked();
-    if (
-      !presentationPolicyHidesUpgradePrompts() &&
-      isAlertAnalysisLocked &&
-      !wasAlertAnalysisLocked
-    ) {
-      trackPaywallViewed('ai_alerts', 'ai_intelligence');
-    }
-    return isAlertAnalysisLocked;
-  }, false);
-
-  createEffect((wasLicenseBannerVisible) => {
-    const isLicenseBannerVisible = licenseRequired() && !showBlockedBanner();
-    if (
-      !presentationPolicyHidesUpgradePrompts() &&
-      isLicenseBannerVisible &&
-      !wasLicenseBannerVisible
-    ) {
-      trackPaywallViewed('ai_autofix', 'ai_intelligence_banner');
-    }
-    return isLicenseBannerVisible;
-  }, false);
 
   const shouldShowLiveRun = createMemo(
     () =>
@@ -694,7 +637,6 @@ export function usePatrolIntelligenceState() {
     activeTab,
     activePatrolFindings,
     activityRefreshTrigger,
-    alertAnalysisUpgradeDestination,
     alertAnalysisLocked,
     alertTriggeredAnalysis,
     autonomyLevel,
@@ -702,7 +644,6 @@ export function usePatrolIntelligenceState() {
     availableModels,
     blockedAt,
     blockedReason,
-    canStartTrial,
     canTriggerPatrol,
     circuitBreakerStatus,
     correlationTotal,
@@ -721,7 +662,6 @@ export function usePatrolIntelligenceState() {
     handlePatrolAlertTriggersChange,
     handlePatrolAnomalyTriggersChange,
     handleRunPatrol,
-    handleStartTrial,
     handleTogglePatrol,
     hasInvestigationContext,
     initialSurfaceReady,
@@ -769,10 +709,8 @@ export function usePatrolIntelligenceState() {
     showBlockedBanner,
     showInvestigationContext,
     shouldSurfaceInvestigationContext,
-    startingTrial,
     summaryStats,
     triggerPatrolDisabledReason,
-    upgradeDestination,
   };
 }
 

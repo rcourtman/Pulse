@@ -41,16 +41,6 @@ vi.mock('@/stores/license', () => ({
   maxHistoryDays: () => 30,
 }));
 
-vi.mock('@/stores/licenseCommercial', () => ({
-  canStartCommercialTrial: () => false,
-  getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
-  startProTrial: vi.fn(),
-}));
-
-vi.mock('@/stores/sessionPresentationPolicy', () => ({
-  presentationPolicyHidesUpgradePrompts: () => false,
-}));
-
 vi.mock('@/api/charts', () => ({
   ChartsAPI: {
     getMetricsHistory: vi.fn().mockResolvedValue({ points: [], source: 'store' }),
@@ -76,10 +66,8 @@ describe('HistoryChart', () => {
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
     expect(historyChartStateSource).toContain("'mock_synthetic' | null");
-    expect(historyChartStateSource).toContain(
-      'const canStartTrial = createMemo(() => canStartCommercialTrial());',
-    );
-    expect(historyChartStateSource).toContain('runStartProTrialAction({');
+    expect(historyChartStateSource).not.toContain('canStartCommercialTrial');
+    expect(historyChartStateSource).not.toContain('runStartProTrialAction({');
     expect(historyChartStateSource).not.toContain('startProTrial()');
     expect(historyChartStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(historyChartStateSource).not.toContain('getTrialTryAgainLaterMessage()');
@@ -95,8 +83,12 @@ describe('HistoryChart', () => {
     expect(historyChartHeaderSource).not.toContain('setupCanvasDPR');
 
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
-    expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
-    expect(historyChartOverlaySource).toContain('presentationPolicyHidesUpgradePrompts');
+    expect(historyChartOverlaySource).toContain(
+      'Historical data beyond {props.chart.lockDays()} days is not enabled on this instance.',
+    );
+    expect(historyChartOverlaySource).not.toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).not.toContain('presentationPolicyHidesUpgradePrompts');
+    expect(historyChartOverlaySource).not.toContain('free 14-day trial');
     expect(historyChartOverlaySource).toContain('is not enabled on this');
     expect(historyChartOverlaySource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');

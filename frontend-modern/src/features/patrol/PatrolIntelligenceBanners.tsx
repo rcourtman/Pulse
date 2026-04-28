@@ -1,11 +1,8 @@
 import { Show } from 'solid-js';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import SettingsIcon from 'lucide-solid/icons/settings';
-import SparklesIcon from 'lucide-solid/icons/sparkles';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
-import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceState }) {
@@ -47,14 +44,8 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
         <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <p class="text-xs text-blue-700 dark:text-blue-300">
-              <UpgradeLink
-                class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
-                destination={state.upgradeDestination()}
-                onClick={() => trackUpgradeClicked('ai_intelligence_banner', 'ai_autofix')}
-              >
-                Upgrade to Pro
-              </UpgradeLink>{' '}
-              to unlock safe remediation workflows and alert-triggered root-cause analysis.
+              Safe remediation workflows and alert-triggered root-cause analysis are not enabled
+              on this plan.
             </p>
           </div>
         </div>
@@ -89,15 +80,6 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                 <SettingsIcon class="w-3.5 h-3.5" />
                 Open Patrol provider settings
               </a>
-              <Show when={!presentationPolicyHidesUpgradePrompts() && state.licenseRequired()}>
-                <UpgradeLink
-                  destination={state.upgradeDestination()}
-                  class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md transition-colors"
-                >
-                  <SparklesIcon class="w-3.5 h-3.5" />
-                  Upgrade
-                </UpgradeLink>
-              </Show>
             </div>
           </div>
         </div>

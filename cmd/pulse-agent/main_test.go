@@ -21,6 +21,21 @@ import (
 	"github.com/rs/zerolog"
 )
 
+func TestEnableCommandsHelpUsesPatrolRemediationCopy(t *testing.T) {
+	source, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read pulse-agent main.go: %v", err)
+	}
+	text := string(source)
+
+	if !strings.Contains(text, "Enable command execution for Patrol remediation (disabled by default)") {
+		t.Fatal("expected enable-commands help to describe Patrol remediation")
+	}
+	if strings.Contains(text, "Enable command execution for AI auto-fix") {
+		t.Fatal("enable-commands help must not revive AI auto-fix wording")
+	}
+}
+
 func TestGatherTags(t *testing.T) {
 	tests := []struct {
 		name     string

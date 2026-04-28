@@ -20,6 +20,21 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
+func TestServiceCommercialLogsUseSafeRemediationCopy(t *testing.T) {
+	source, err := os.ReadFile("service.go")
+	if err != nil {
+		t.Fatalf("read service.go: %v", err)
+	}
+	text := string(source)
+
+	if !strings.Contains(text, "Patrol safe remediation requires Pulse Pro license") {
+		t.Fatal("expected Patrol remediation license log copy")
+	}
+	if strings.Contains(text, "AI Patrol Auto-Fix requires Pulse Pro license") {
+		t.Fatal("runtime logs must not revive Patrol Auto-Fix commercial copy")
+	}
+}
+
 func TestService_GetToolInputDisplay(t *testing.T) {
 	svc := NewService(nil, nil)
 

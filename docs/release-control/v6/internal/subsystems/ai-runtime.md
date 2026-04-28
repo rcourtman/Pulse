@@ -131,8 +131,9 @@ runtime cost control, and shared AI transport surfaces.
 11. Keep AI runtime transport compatibility separate from operator-facing
     product copy. Existing Patrol payload fields such as `fixed_count`,
     `auto_fix_model`, and `patrol_auto_fix` may remain stable wire/API names,
-    but frontend comments, status labels, and commercial prompts that describe
-    the capability must use safe remediation or remediation wording.
+    but frontend comments, API denial messages, runtime logs, status labels,
+    CLI help, and commercial prompts that describe the capability must use safe
+    remediation or remediation wording.
 
 ## Current State
 

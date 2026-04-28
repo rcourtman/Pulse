@@ -6,7 +6,6 @@ import XIcon from 'lucide-solid/icons/x';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { Toggle, TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
@@ -274,8 +273,8 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                               title={
                                 !presentationPolicyHidesUpgradePrompts() && isProLocked()
                                   ? level === 'approval'
-                                    ? 'Upgrade to Pro to investigate findings'
-                                    : 'Upgrade to Pro for safe remediation workflows'
+                                    ? 'Investigation is not enabled on this plan'
+                                    : 'Safe remediation workflows are not enabled on this plan'
                                   : undefined
                               }
                               class={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200 ${isActive() ? ' text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : isDisabled() ? ' ' : 'text-muted hover:text-base-content hover:bg-surface-hover'} ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -292,24 +291,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     </div>
                     <Show when={!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()}>
                       <div class="pl-1 text-[11px] text-slate-500">
-                        <UpgradeLink
-                          destination={state.upgradeDestination()}
-                          class="text-indigo-500 font-medium hover:underline"
-                        >
-                          Upgrade to Pro
-                        </UpgradeLink>{' '}
-                        to unlock investigation and safe remediation workflows.
-                        <Show when={state.canStartTrial()}>
-                          {' '}
-                          <button
-                            type="button"
-                            onClick={state.handleStartTrial}
-                            disabled={state.startingTrial()}
-                            class="text-indigo-500 hover:underline"
-                          >
-                            Start free trial
-                          </button>
-                        </Show>
+                        Investigation and safe remediation workflows are not enabled on this plan.
                       </div>
                     </Show>
                   </div>
@@ -337,23 +319,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                       when={!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()}
                     >
                       <div class="-my-1 pl-1 text-[11px]">
-                        <UpgradeLink
-                          destination={state.alertAnalysisUpgradeDestination()}
-                          class="text-indigo-500 font-medium hover:underline"
-                        >
-                          Upgrade
-                        </UpgradeLink>{' '}
-                        to enable.
-                        <Show when={state.canStartTrial()}>
-                          <button
-                            type="button"
-                            onClick={state.handleStartTrial}
-                            disabled={state.startingTrial()}
-                            class="ml-1 text-indigo-500 hover:underline"
-                          >
-                            Start free trial
-                          </button>
-                        </Show>
+                        Alert-triggered analysis is not enabled on this plan.
                       </div>
                     </Show>
 

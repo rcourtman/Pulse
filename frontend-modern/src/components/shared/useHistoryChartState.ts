@@ -1,13 +1,8 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { ChartsAPI, type HistoryTimeRange } from '@/api/charts';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
-import { canStartCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import { notificationStore } from '@/stores/notifications';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 import {
   HISTORY_CHART_RANGES,
   createHistoryChartGeometry,
@@ -40,26 +35,9 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [refreshTick, setRefreshTick] = createSignal(0);
   const [hasLoadedOnce, setHasLoadedOnce] = createSignal(false);
   const [cursorX, setCursorX] = createSignal<number | null>(null);
-  const [startingTrial, setStartingTrial] = createSignal(false);
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
   const [chartWidth, setChartWidth] = createSignal(300);
   const chartHeight = createMemo(() => props.height || 200);
-
-  const canStartTrial = createMemo(() => canStartCommercialTrial());
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        branded: true,
-        showSuccess: notificationStore.success,
-        showError: notificationStore.error,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
 
   const refreshIntervalMs = createMemo(() => getHistoryChartRefreshIntervalMs(range()));
 
@@ -94,14 +72,6 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     if (max <= 7 && targetDays <= 14) return 'Relay';
     return 'Pro';
   });
-
-  createEffect((wasVisible) => {
-    const visible = isLocked() && !props.hideLock;
-    if (!presentationPolicyHidesUpgradePrompts() && visible && !wasVisible) {
-      trackPaywallViewed('long_term_metrics', 'history_chart');
-    }
-    return visible;
-  }, false);
 
   const dataMin = createMemo(() => getHistoryChartDataMin(data()));
   const dataMax = createMemo(() => getHistoryChartDataMax(data()));
@@ -373,15 +343,12 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   };
 
   return {
-    canStartTrial,
     data,
     dataMax,
     dataMin,
     error,
-    getUpgradeActionDestination,
     handleMouseLeave,
     handleMouseMove,
-    handleStartTrial,
     chartHeight,
     chartWidth,
     hoveredPoint,
@@ -392,8 +359,6 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     range,
     ranges: HISTORY_CHART_RANGES,
     source,
-    startingTrial,
-    trackUpgradeClicked,
     updateRange,
   };
 }

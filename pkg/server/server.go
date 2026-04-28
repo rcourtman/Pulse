@@ -68,7 +68,7 @@ type BusinessHooks struct {
 	BindReportingAdminEndpoints extensions.BindReportingAdminEndpointsFunc
 
 	// BindAIAutoFixEndpoints allows enterprise modules to replace or decorate
-	// AI auto-fix endpoints (investigation, remediation, autonomy, fix execution).
+	// safe remediation endpoints (investigation, remediation, autonomy, fix execution).
 	BindAIAutoFixEndpoints extensions.BindAIAutoFixEndpointsFunc
 
 	// BindAIAlertAnalysisEndpoints allows enterprise modules to replace or decorate

@@ -9,12 +9,10 @@ import { Component, Show, createSignal, createResource, createMemo } from 'solid
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { canStartCommercialTrial } from '@/stores/licenseCommercial';
 import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { RemediationStatus } from './RemediationStatus';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 interface ApprovalSectionProps {
   findingId: string;
@@ -39,24 +37,6 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   });
 
   const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
-
-  const [startingTrial, setStartingTrial] = createSignal(false);
-  const canStartTrial = createMemo(() => canStartCommercialTrial());
-
-  const handleStartTrial = async (e: Event) => {
-    e.stopPropagation();
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        branded: true,
-        showSuccess: notificationStore.success,
-        showError: notificationStore.error,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
 
   const handleFixWithAssistant = (
     approval: ApprovalRequest | null,
@@ -271,16 +251,6 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
           </svg>
           {assistantLabel}
         </button>
-        <Show when={canStartTrial()}>
-          <button
-            type="button"
-            class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
-            disabled={startingTrial()}
-            onClick={handleStartTrial}
-          >
-            Apply fixes automatically — start a free 14-day trial
-          </button>
-        </Show>
       </Show>
     </div>
   );
@@ -380,16 +350,6 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       </svg>
                       Fix with Assistant
                     </button>
-                    <Show when={canStartTrial()}>
-                      <button
-                        type="button"
-                        class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
-                        disabled={startingTrial()}
-                        onClick={handleStartTrial}
-                      >
-                        Apply fixes automatically — start a free 14-day trial
-                      </button>
-                    </Show>
                   </Show>
                 </div>
               </>

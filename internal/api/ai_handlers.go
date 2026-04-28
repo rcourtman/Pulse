@@ -2519,9 +2519,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	if req.PatrolAutoFix != nil {
-		// Auto-fix requires Pro license with ai_autofix feature
+		// Safe remediation requires Pro license with the ai_autofix feature.
 		if *req.PatrolAutoFix && !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Safe remediation workflows require Pulse Pro")
 			return
 		}
 		settings.PatrolAutoFix = *req.PatrolAutoFix
@@ -3227,7 +3227,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	useCase := strings.ToLower(strings.TrimSpace(req.UseCase))
 	if useCase == "autofix" || useCase == "remediation" {
 		if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Safe remediation workflows require Pulse Pro")
 			return
 		}
 	}
@@ -3408,7 +3408,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	useCase := strings.ToLower(strings.TrimSpace(req.UseCase))
 	if useCase == "autofix" || useCase == "remediation" {
 		if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Safe remediation workflows require Pulse Pro")
 			return
 		}
 	}
@@ -3672,10 +3672,10 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Gated for AI Auto-Fix (Pro feature). Request shape is validated before the
+	// Gated for safe remediation workflows (Pro feature). Request shape is validated before the
 	// entitlement check so clients get deterministic 400s for malformed calls.
 	if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
+		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Safe remediation workflows require Pulse Pro")
 		return
 	}
 
@@ -4880,7 +4880,7 @@ type PatrolStatusResponse struct {
 	ErrorCount       int                   `json:"error_count"`
 	Healthy          bool                  `json:"healthy"`
 	IntervalMs       int64                 `json:"interval_ms"` // Patrol interval in milliseconds
-	FixedCount       int                   `json:"fixed_count"` // Number of issues auto-fixed by Patrol
+	FixedCount       int                   `json:"fixed_count"` // Number of issues remediated by Patrol
 	BlockedReason    string                `json:"blocked_reason,omitempty"`
 	BlockedAt        *time.Time            `json:"blocked_at,omitempty"`
 	// Quickstart credit info for Patrol quickstart mode
@@ -6591,13 +6591,13 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Investigation fix approvals are gated by the AI auto-fix extension point.
+	// Investigation fix approvals are gated by the safe remediation extension point.
 	// The free adapter returns 402; the enterprise adapter executes the fix.
 	if existingReq.ToolID == "investigation_fix" {
 		if h.aiAutoFixEndpoints != nil {
 			h.aiAutoFixEndpoints.HandleApproveInvestigationFix(w, r)
 		} else {
-			WriteLicenseRequired(w, featureAIAutoFixValue, "Pulse Patrol Auto-Fix feature requires Pulse Pro")
+			WriteLicenseRequired(w, featureAIAutoFixValue, "Safe remediation workflows require Pulse Pro")
 		}
 		return
 	}

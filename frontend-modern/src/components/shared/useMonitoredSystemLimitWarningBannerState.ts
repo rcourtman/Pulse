@@ -6,6 +6,7 @@ import {
 import {
   getRuntimeMonitoredSystemCapacity,
   getRuntimeLimit,
+  isHostedModeEnabled,
   loadRuntimeCapabilities,
 } from '@/stores/license';
 import { hasMigrationGap } from '@/stores/licenseCommercial';
@@ -37,6 +38,7 @@ export function useMonitoredSystemLimitWarningBannerState() {
   );
   const showBanner = createMemo(
     () =>
+      isHostedModeEnabled() &&
       !presentationPolicyHidesCommercialSurfaces() &&
       !presentationPolicyHidesUpgradePrompts() &&
       shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit(), monitoredSystemCapacity()),

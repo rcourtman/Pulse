@@ -710,6 +710,12 @@ fields and nullable mode/kind metadata before presenting canonical item labels,
 while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
+Storage and recovery's adjacent `internal/api/` contract must also preserve
+the product-facing remediation vocabulary used by shared API denials. When
+storage/recovery-adjacent browser sessions encounter AI or Patrol remediation
+license responses while sharing the app shell, those API messages must use
+safe remediation wording and must not revive `Auto-Fix` as customer-facing
+paid copy.
 That same adjacent `internal/api/` router boundary now also keeps usage-data
 transport descriptive-only for storage and recovery. Shared storage/recovery
 surfaces may coexist with `/api/upgrade-metrics/*` config reads and telemetry

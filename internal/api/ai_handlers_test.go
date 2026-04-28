@@ -91,6 +91,17 @@ func persistQuickstartActivationState(t *testing.T, persistence *config.ConfigPe
 	}))
 }
 
+func TestAIHandlersUseSafeRemediationCommercialCopy(t *testing.T) {
+	files := []string{"ai_handlers.go", "router_routes_ai_relay.go"}
+	for _, file := range files {
+		source, err := os.ReadFile(file)
+		require.NoError(t, err)
+		text := string(source)
+		require.NotContains(t, text, "Pulse Patrol Auto-Fix requires Pulse Pro")
+		require.NotContains(t, text, "Auto-Fix requires Pulse Pro")
+	}
+}
+
 func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	t.Parallel()
 
