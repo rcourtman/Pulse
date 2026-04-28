@@ -10,71 +10,21 @@ type EntitlementPayload = {
   is_lifetime?: boolean;
 };
 
-type TrialStartPayload = {
-  code?: string;
-  details?: Record<string, string>;
-};
-
-function expectTrialRateLimited(payload: TrialStartPayload, retryAfterHeader?: string | null) {
-  expect(payload.code).toBe('trial_rate_limited');
-  const retryAfterSeconds = Number.parseInt(payload.details?.retry_after_seconds || '', 10);
-  expect(retryAfterSeconds).toBeGreaterThan(0);
-  if (retryAfterHeader) {
-    expect(String(retryAfterSeconds)).toBe(retryAfterHeader);
-  }
-}
-
-function expectHostedTrialRedirect(payload: TrialStartPayload) {
-  expect(payload.code).toBe('trial_signup_required');
-
-  const actionUrl = payload.details?.action_url ?? '';
-  expect(actionUrl).toContain('/start-pro-trial');
-  const parsedActionUrl = new URL(actionUrl);
-  expect(parsedActionUrl.searchParams.get('org_id')).toBe('default');
-  expect(parsedActionUrl.searchParams.get('return_url')).toContain('/auth/trial-activate');
-}
-
-test.describe.serial('Trial signup return flow', () => {
-  test('initiates hosted trial signup and preserves local entitlements until activation', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only trial workflow coverage');
+test.describe.serial('Retired self-hosted trial start route', () => {
+  test('does not expose in-app trial acquisition and preserves local entitlements', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only commercial route coverage');
 
     await ensureAuthenticated(page);
 
     const preRes = await apiRequest(page, '/api/license/entitlements');
     expect(preRes.ok(), `entitlements pre-check failed: HTTP ${preRes.status()}`).toBeTruthy();
     const pre = (await preRes.json()) as EntitlementPayload;
-    test.skip(
-      pre.trial_eligible !== true,
-      `Skipping trial flow because trial_eligible is ${String(pre.trial_eligible)} in this environment.`,
-    );
 
-    expect(
-      pre.trial_eligible,
-      'Expected trial_eligible=true before test.',
-    ).toBe(true);
-    expect(pre.tier).toBe('free');
-    expect(pre.valid ?? false).toBe(false);
-    expect(pre.is_lifetime ?? false).toBe(false);
-
-    // Start hosted trial via API.
     const startRes = await apiRequest(page, '/api/license/trial/start', {
       method: 'POST',
     });
-    expect(
-      [409, 429],
-      `trial start failed: expected 409 or 429, got HTTP ${startRes.status()}`,
-    ).toContain(startRes.status());
+    expect(startRes.status(), `retired trial start route must not be exposed: HTTP ${startRes.status()}`).toBe(404);
 
-    const startPayload = (await startRes.json()) as TrialStartPayload;
-    // Playwright lowercases response header keys; this still reads the canonical Retry-After header.
-    const startRetryAfterHeader = startRes.headers()['retry-after'] ?? null;
-    if (startRes.status() === 409) {
-      expectHostedTrialRedirect(startPayload);
-    } else {
-      expectTrialRateLimited(startPayload, startRetryAfterHeader);
-    }
-
-    // Verify commercial entitlements remain unchanged until the hosted flow returns.
     const postRes = await apiRequest(page, '/api/license/entitlements');
     expect(postRes.ok(), `entitlements post-check failed: HTTP ${postRes.status()}`).toBeTruthy();
     const post = (await postRes.json()) as EntitlementPayload;
@@ -83,28 +33,6 @@ test.describe.serial('Trial signup return flow', () => {
     expect(post.valid ?? false).toBe(pre.valid ?? false);
     expect(post.is_lifetime ?? false).toBe(pre.is_lifetime ?? false);
     expect(post.trial_days_remaining ?? 0).toBe(pre.trial_days_remaining ?? 0);
-    expect(post.trial_eligible).toBe(true);
-
-    // Verify UI still reflects the unactivated local state.
-    await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
-    await expect(page.getByText(/No Pro license is active/i)).toBeVisible();
-
-    // Verify duplicate initiation stays on the owned retry-burst contract.
-    const secondRes = await apiRequest(page, '/api/license/trial/start', {
-      method: 'POST',
-    });
-    const secondPayload = (await secondRes.json()) as TrialStartPayload;
-    // Playwright lowercases response header keys; this still reads the canonical Retry-After header.
-    const secondRetryAfterHeader = secondRes.headers()['retry-after'] ?? null;
-    if (startRes.status() === 429) {
-      expect(secondRes.status()).toBe(429);
-      expectTrialRateLimited(secondPayload, secondRetryAfterHeader);
-    } else if (secondRes.status() === 409) {
-      expectHostedTrialRedirect(secondPayload);
-    } else {
-      expect(secondRes.status()).toBe(429);
-      expectTrialRateLimited(secondPayload, secondRetryAfterHeader);
-    }
+    expect(post.trial_eligible).toBe(pre.trial_eligible);
   });
 });

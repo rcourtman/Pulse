@@ -756,7 +756,7 @@ test_integration_readme_uses_managed_backend_restart_wrapper() {
   assert_not_contains "integration readme no longer documents raw backend restart script" "${output}" "./scripts/hot-dev-bg.sh backend-restart"
 }
 
-test_integration_readme_documents_trial_retry_burst_contract() {
+test_integration_readme_documents_retired_trial_start_contract() {
   local output
   output="$(
     awk '
@@ -769,25 +769,24 @@ test_integration_readme_documents_trial_retry_burst_contract() {
   )"
 
   assert_contains "integration readme names trial-start route" "${output}" "POST /api/license/trial/start"
-  assert_contains "integration readme names hosted-signup redirect code" "${output}" "409 trial_signup_required"
-  assert_contains "integration readme names rate-limited code" "${output}" "429 trial_rate_limited"
-  assert_contains "integration readme documents hosted-signup retry burst" "${output}" "retry-burst"
-  assert_contains "integration readme documents retry contract wording" "${output}" "contract:"
-  assert_contains "integration readme keeps hosted-signup wording" "${output}" "hosted-signup"
-  assert_contains "integration readme documents retry burst exhaustion" "${output}" "retry burst is exhausted"
-  assert_contains "integration readme documents retry-after backoff" "${output}" "Retry-After"
-  assert_contains "integration readme references hosted trial probe script" "${output}" "tests/integration/scripts/trial-signup-contract.sh"
-  assert_contains "integration readme references pulse pro retry-after ui proof" "${output}" "tests/58-self-hosted-trial-rate-limit-ui.spec.ts"
+  assert_contains "integration readme documents retired route status" "${output}" "404"
+  assert_contains "integration readme documents unchanged entitlements" "${output}" "without mutating entitlements"
+  assert_contains "integration readme references retired trial probe script" "${output}" "tests/integration/scripts/trial-signup-contract.sh"
+  assert_contains "integration readme references paid prompt proof" "${output}" "tests/58-self-hosted-trial-rate-limit-ui.spec.ts"
+  assert_contains "integration readme documents no trial CTAs" "${output}" "trial CTAs"
+  assert_not_contains "integration readme no longer documents hosted-signup redirect code" "${output}" "409 trial_signup_required"
+  assert_not_contains "integration readme no longer documents trial rate limit code" "${output}" "429 trial_rate_limited"
 }
 
-test_integration_eval_scenario_documents_trial_retry_burst_contract() {
+test_integration_eval_scenario_documents_retired_trial_start_contract() {
   local output
   output="$(sed -n '24,34p' "${INTEGRATION_EVAL_SCENARIOS}")"
 
   assert_contains "integration eval scenario names trial-start route" "${output}" "POST /api/license/trial/start"
-  assert_contains "integration eval scenario names hosted-signup redirect code" "${output}" "409 trial_signup_required"
-  assert_contains "integration eval scenario names rate-limited code" "${output}" "429 trial_rate_limited"
-  assert_contains "integration eval scenario names retry-after metadata" "${output}" "Retry-After"
+  assert_contains "integration eval scenario names retired route status" "${output}" "404"
+  assert_contains "integration eval scenario documents entitlement preservation" "${output}" "preserves local entitlements"
+  assert_not_contains "integration eval scenario no longer names hosted-signup redirect code" "${output}" "409 trial_signup_required"
+  assert_not_contains "integration eval scenario no longer names rate-limited code" "${output}" "429 trial_rate_limited"
 }
 
 test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev() {
@@ -1184,7 +1183,8 @@ main() {
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper
-  test_integration_readme_documents_trial_retry_burst_contract
+  test_integration_readme_documents_retired_trial_start_contract
+  test_integration_eval_scenario_documents_retired_trial_start_contract
   test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev
   test_acceptance_doc_distinguishes_embedded_frontend_from_hot_dev
   test_playwright_defaults_prefer_managed_hot_dev_runtime

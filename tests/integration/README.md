@@ -27,15 +27,12 @@ End-to-end Playwright tests that validate critical user flows against a running 
 - `tests/06-theme-visual.spec.ts` — visual regression baselines for light/dark auth surfaces:
   - Logged-out login page (full page + form card)
   - Authenticated Settings → Authentication page
-- `tests/07-trial-signup-return.spec.ts` — trial workflow contract:
-  - Start hosted Pro trial initiation via `POST /api/license/trial/start` and verify the reused-instance contract
-  - Verify the response either returns `409 trial_signup_required` with hosted `/start-pro-trial` handoff or `429 trial_rate_limited` with canonical `Retry-After` backoff when the local retry bucket is already exhausted
-  - Verify local entitlements remain unchanged until activation
-  - Verify duplicate initiation stays on the hosted-signup retry-burst contract
-- `tests/58-self-hosted-trial-rate-limit-ui.spec.ts` — Pulse Pro trial CTA retry-after UI contract:
+- `tests/07-trial-signup-return.spec.ts` — retired self-hosted trial-start route contract:
+  - Probe `POST /api/license/trial/start` and verify ordinary self-hosted v6 returns `404`
+  - Verify local entitlements remain unchanged after the retired route probe
+- `tests/58-self-hosted-trial-rate-limit-ui.spec.ts` — paid prompt visibility contract:
   - Open `/settings/system/billing` on the real browser shell with free-tier entitlements
-  - Stub `429 trial_rate_limited` on `POST /api/license/trial/start`
-  - Verify the Pulse Pro CTA surfaces canonical `Retry-After` guidance even if `details.retry_after_seconds` disagrees
+  - Verify trial CTAs and paid-only navigation stay out of the default self-hosted UI
 - `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
   - Public `/cloud/signup` form creates a real Stripe sandbox checkout session
   - Checkout completes and returns to hosted signup completion page
@@ -192,24 +189,18 @@ The harness understands these profiles:
 - `PULSE_E2E_ENTITLEMENT_PROFILE=infra` for Pro/relay/reporting-style journeys.
 
 ### Snapshot-Clean Proxmox LXC Trial SAT
-For hosted trial initiation validation against a fresh LXC each run:
+For retired self-hosted trial-start validation against a fresh LXC each run:
 
 - Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
 - Probe script: `tests/integration/scripts/trial-signup-contract.sh`
   - Exercises `POST /api/license/trial/start` from a clean snapshot and proves
-    the hosted-signup retry-burst contract: duplicate attempts keep returning
-    `409 trial_signup_required` with hosted redirects while the burst remains
-    open, then transition to `429 trial_rate_limited` plus `Retry-After`
-    backoff metadata once the retry burst is exhausted and the limiter
-    actually engages
+    ordinary self-hosted v6 returns `404` without mutating entitlements
 - Pulse Pro browser proof: `tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
   - Exercises `/settings/system/billing` on the real browser shell and proves
-    the rendered CTA surfaces canonical `Retry-After` guidance when
-    `trial_rate_limited` is returned, including header precedence over a
-    conflicting `details.retry_after_seconds` payload
+    trial CTAs and paid-only navigation stay out of the default self-hosted UI
 - Full sandbox orchestration (multi-tenant + trial + cloud, with per-scenario snapshot reset):
   - `tests/integration/scripts/run-lxc-sandbox-evals.sh`
-  - Includes hosted trial initiation validation and cloud subscription cancellation lifecycle verification
+  - Includes retired self-hosted trial-start validation and cloud subscription cancellation lifecycle verification
 
 Example:
 ```bash

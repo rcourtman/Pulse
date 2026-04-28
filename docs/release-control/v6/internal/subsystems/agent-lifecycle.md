@@ -497,6 +497,7 @@ the manifest's support-floor row.
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.
 2. Agent profile or fleet-control behavior implemented outside the canonical agent settings/profile surfaces.
 3. Installer or update flows that depend on branch-tip, dev-only, or non-release asset behavior for supported RC/stable paths.
+4. Lifecycle setup, install, or fleet surfaces that invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` must stay closed on the ordinary self-hosted router, and approved support/hosted activation belongs to signed `/auth/trial-activate` rather than lifecycle-local CTAs.
 
 ## Completion Obligations
 
@@ -1630,11 +1631,13 @@ continuity, but `session_store.go` and `csrf_store.go` must immediately
 rewrite hashed canonical persistence during load instead of leaving raw-token
 files on the primary runtime path until a later save side effect happens to
 run.
-That same shared `internal/api/` dependency also assumes local commercial-trial
-handoff remains human-usable: lifecycle-adjacent trial CTAs may allow a short
-burst of retries, but the backend contract must return the real remaining
-backoff through `Retry-After` plus `details.retry_after_seconds` so setup and
-install-adjacent surfaces do not drift into generic “try again later” behavior.
+That same shared `internal/api/` dependency also assumes ordinary self-hosted
+commercial-trial acquisition is retired: lifecycle-adjacent setup, install, and
+fleet surfaces must not expose direct trial CTAs or depend on
+`POST /api/license/trial/start`, and the normal router must fail that path as
+`404` without mutating entitlements. Approved support or hosted handoff remains
+owned by signed `/auth/trial-activate` redemption, not by lifecycle-local retry
+or backoff behavior.
 That same shared `internal/api/` dependency also assumes session-carried OIDC
 refresh tokens stay fail-closed at rest: `session_store.go` may only persist
 or recover those tokens through encrypted-at-rest session payloads, and any

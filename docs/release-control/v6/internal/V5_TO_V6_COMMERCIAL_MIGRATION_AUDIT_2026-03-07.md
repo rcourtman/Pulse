@@ -11,8 +11,8 @@ Scope: Self-hosted v5 -> v6 commercial and licensing bridge in `pulse`
 
 Locked v6 contract from those sources:
 
-1. Trial authority in v6 is SaaS-controlled. `POST /api/license/trial/start` must initiate hosted signup only by returning `409 trial_signup_required` while the hosted-signup retry burst remains open, then `429 trial_rate_limited` plus `Retry-After` backoff once the limiter engages.
-2. The local runtime may only redeem signed hosted trial activation tokens via `/auth/trial-activate`; it may not mint local trial state directly.
+1. Trial acquisition is retired from ordinary self-hosted v6 GA. `POST /api/license/trial/start` must not be registered as an in-app route and must return `404` on a normal self-hosted runtime.
+2. The local runtime may only redeem signed hosted trial activation tokens via `/auth/trial-activate`; it may not mint local trial state directly or prompt trial entry from default self-hosted surfaces.
 3. v6 may auto-exchange persisted v5 Pro/Lifetime licenses on upgrade startup.
 4. v6 may accept valid v5 Pro/Lifetime keys in the activation flow.
 5. Paid Pulse Pro v5 recurring customers keep their existing recurring price after migration until they cancel; any return after cancellation uses current v6 pricing.
@@ -22,7 +22,7 @@ Locked v6 contract from those sources:
 - Startup auto-exchange: `internal/api/licensing_handlers.go`, `internal/api/licensing_handlers_auto_migrate_test.go`
 - Activation flow: `pkg/licensing/service.go`, `internal/api/license_handlers_test.go`, `pkg/licensing/service_activate_test.go`
 - Entitlement payload + trial eligibility: `internal/api/subscription_entitlements.go`, `pkg/licensing/entitlement_payload.go`, `internal/api/entitlement_handlers_test.go`
-- Hosted trial start and callback: `internal/api/licensing_handlers.go`, `internal/api/trial_handlers_test.go`, `internal/api/hosted_lifecycle_integration_test.go`
+- Hosted trial activation callback: `internal/api/licensing_handlers.go`, `internal/api/hosted_lifecycle_integration_test.go`
 - Upgrade UI messaging: `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx`, `frontend-modern/src/stores/license.ts`
 - Upgrade integration fixture: `tests/migration/v5_full_upgrade_test.go`
 
@@ -30,7 +30,7 @@ Locked v6 contract from those sources:
 
 | Incoming v5 state | Starting persisted state | Expected v6 entitlement result | Expected UI state / message | User action required | Hosted service involved |
 |---|---|---|---|---|---|
-| Fresh/free v5 install | No `license.enc`, no `activation.enc` | Free / expired entitlement only | Standard free-state upgrade UI; Pro trial CTA allowed | No | No |
+| Fresh/free v5 install | No `license.enc`, no `activation.enc` | Free / expired entitlement only | Standard free-state upgrade UI; no Pro trial CTA | No | No |
 | Already on v6 activation model | `activation.enc` present, optional stale `license.enc` | Keep current v6 activation/grant; do not re-exchange legacy file | Active paid state with current plan details; no migration prompt | No | No at startup |
 | Paid v5 Pro/Lifetime, exchange succeeds on startup | Valid v5 `license.enc`, no `activation.enc` | Auto-exchange into active v6 activation/grant; preserve grandfathered recurring-price identity and `plan_version`; keep legacy key on disk for downgrade fallback | Paid state is live immediately; if grandfathered, show migrated plan terms and legacy-price continuity | No | Yes, license exchange endpoint |
 | Paid v5 Pro/Lifetime, exchange fails transiently | Valid v5 `license.enc`, no `activation.enc`, exchange unavailable/5xx/network | Do not silently collapse to ordinary free/trial-eligible state; mark migration as pending/blocked; preserve legacy key | Explicit migration-needed notice: paid v5 key detected, automatic exchange did not complete, retry activation from this instance; no new-trial CTA | Yes, retry activation or retrieve v6 activation key | Yes, exchange endpoint unavailable |
@@ -38,13 +38,12 @@ Locked v6 contract from those sources:
 | Manual activation with valid v5 Pro/Lifetime key | User pastes v5 key into v6 panel | Exchange into active v6 activation/grant; persist activation state; preserve legacy key for downgrade fallback | Success message should make it clear the v5 key was migrated to v6 | Yes, one-time manual paste | Yes, exchange endpoint |
 | Manual activation with invalid/expired/unsupported v5-like key | User pastes JWT-like legacy key into v6 panel | No entitlement change | Clear error message: not a valid v6 activation key or supported v5 Pro/Lifetime key | Yes | Yes, exchange endpoint |
 
-## Related hosted-trial flows after upgrade
+## Related hosted-trial activation flows after upgrade
 
-These are not incoming paid-license migration states, but they are part of the same commercial bridge and must stay coherent for upgraded v5 users.
+These are not incoming paid-license migration states, but signed support or hosted activation handoffs remain part of the same commercial bridge and must stay coherent for upgraded v5 users.
 
 | Post-upgrade state | Starting persisted state | Expected v6 entitlement result | Expected UI state / message | User action required | Hosted service involved |
 |---|---|---|---|---|---|
-| Free/eligible org starts v6 trial | No active paid state; no prior `trial_started_at` | No immediate local trial minting from `/api/license/trial/start`; response must redirect into hosted signup | User leaves Pulse for hosted signup | Yes | Yes, hosted signup |
 | Hosted trial callback succeeds | Signed token + valid initiation token | Lease-backed trial entitlement becomes active; local billing state is lease cache only | `/settings/system-pro?trial=activated` notice and live trial countdown | No further action | Yes, hosted signup + lease redemption |
 | Hosted trial callback invalid/replayed/unavailable/ineligible | Invalid or stale callback/token state | No new paid entitlement | Explicit result banner based on `trial` query (`invalid`, `replayed`, `unavailable`, `ineligible`) | Usually yes | Yes |
 
@@ -55,7 +54,7 @@ These are not incoming paid-license migration states, but they are part of the s
 1. Startup auto-exchange exists for persisted legacy JWT-style licenses and preserves the old key for downgrade fallback.
 2. Manual activation accepts v6 activation keys and also exchanges v5 JWT-style keys outside dev mode.
 3. Migrated `plan_version` survives into `status` and `entitlements`, and the Pro panel renders migrated plan terms without repricing recurring v5 customers.
-4. `POST /api/license/trial/start` does not mint local trial state; it returns `409 trial_signup_required` with a hosted action URL while the retry burst remains open, then `429 trial_rate_limited` plus `Retry-After` once the limiter engages.
+4. `POST /api/license/trial/start` is no longer registered as an ordinary self-hosted in-app route, so the default runtime returns `404` instead of starting hosted signup.
 5. `/auth/trial-activate` redeems a signed hosted token, stores lease-backed billing state, and redirects with an explicit result code.
 
 ### Highest-risk gaps

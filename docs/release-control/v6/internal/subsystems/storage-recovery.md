@@ -506,6 +506,7 @@ querying, and the operator-facing storage health presentation layer.
 17. Letting recovery-event focus leak as hidden state on the protected inventory surface; switching back to protected items must clear event-only `rollupId` and `day` context, and protected-item drill-ins must open recovery events without preserving an invisible day filter that can make valid history look empty.
 18. Letting the recovery details panel lead with transport-shaped payloads; operator-facing details must summarize outcome, artifact, target, restore readiness, and readable metadata labels first, while raw JSON and provider-specific keys stay behind an explicitly technical disclosure.
 19. Letting recovery posture summaries become passive counters only; summary-card actions may focus events, stale inventory, or attention inventory, but those actions must route through the canonical recovery workspace and route-state owner instead of mutating local-only filter state.
+20. Letting storage or recovery surfaces invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` must stay closed on the ordinary self-hosted router, and storage/recovery-adjacent billing or support handoffs must not treat trial activation as recovery identity, restore proof, or backup transport state.
 
 ## Completion Obligations
 
@@ -1891,10 +1892,12 @@ continuity, but `session_store.go` and `csrf_store.go` must immediately
 rewrite hashed canonical persistence on load so adjacent storage and recovery
 transport does not keep running against primary-path raw-token files.
 That same shared `internal/api/` dependency also assumes customer-visible
-commercial retry guidance stays canonical when storage- or recovery-adjacent
-surfaces invoke trial or billing handoffs: the backend must return the real
-remaining backoff through `Retry-After` and `details.retry_after_seconds`
-instead of leaving neighboring surfaces to guess or hardcode retry windows.
+commercial acquisition stays out of storage and recovery surfaces by default:
+storage- or recovery-adjacent flows must not invoke or advertise the retired
+`POST /api/license/trial/start` route, and the normal self-hosted router must
+return `404` for that path without mutating entitlements. Approved support or
+hosted handoff remains owned by signed `/auth/trial-activate` redemption, not by
+storage/recovery-local retry or backoff behavior.
 That same shared `internal/api/` dependency now also assumes adjacent
 commercial helper surfaces speak in monitored-system terms: recovery- or
 storage-adjacent API wiring may consume the canonical monitored-system ledger

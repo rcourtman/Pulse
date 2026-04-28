@@ -43,7 +43,6 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("GET /api/license/monitored-system-ledger", RequireAuth(r.config, r.handleMonitoredSystemLedger))
 	r.mux.HandleFunc("POST /api/license/monitored-system-ledger/explain", RequireAuth(r.config, r.handleMonitoredSystemLedgerExplain))
 	r.mux.HandleFunc("POST /api/license/monitored-system-ledger/preview", RequireAuth(r.config, r.handleMonitoredSystemLedgerPreview))
-	r.mux.HandleFunc("POST /api/license/trial/start", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleStartTrial)))
 
 	// Local-only commercial handoff events (legacy route names retain "upgrade-metrics" for compatibility).
 	// These are local-only signals used to debug explicit paid-plan handoffs; no external export.

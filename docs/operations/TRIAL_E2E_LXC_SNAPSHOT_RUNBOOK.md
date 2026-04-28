@@ -78,10 +78,10 @@ Use:
 This script asserts:
 
 1. Login succeeds.
-2. Pre-trial entitlements are fetched and trial is eligible.
-3. `POST /api/license/trial/start` returns `409` with `trial_signup_required` and a hosted `action_url`.
-4. Post-initiation entitlements remain locally unactivated (`trial_eligible=true`, `subscription_state=expired`).
-5. Duplicate immediate trial starts stay on the hosted-signup retry burst until it is exhausted, then return `429 trial_rate_limited` plus `Retry-After` backoff metadata.
+2. Current entitlements can be fetched.
+3. `POST /api/license/trial/start` returns `404`, because ordinary self-hosted v6 runtimes no longer expose in-app trial acquisition.
+4. The retired route does not return legacy hosted-signup or trial-rate-limit acquisition payloads.
+5. Entitlements remain unchanged after the retired route probe.
 
 Run inside container:
 
@@ -101,8 +101,8 @@ for i in 1 2 3; do
 done
 ```
 
-If each run prints `PASS: hosted trial signup initiation contract validated`, state pollution between runs is eliminated.
-On a fresh rollback the probe should show `trial_start_code=409 (code=trial_signup_required)` first, then report which later duplicate attempt first hit the limiter via `retry_limiter_attempt=...` and `final_trial_start_code=429 (...)`.
+If each run prints `PASS: self-hosted trial-start route is retired`, state pollution between runs is eliminated.
+On a fresh rollback the probe should show `trial_start_code=404` and matching entitlement summaries before and after the route probe.
 
 ## Full Sandbox E2E (Playwright)
 

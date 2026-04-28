@@ -42,8 +42,6 @@ class HostedSignupBillingReplayRehearsalTest(unittest.TestCase):
                     "Pulse Labs",
                     "--api-token",
                     "token",
-                    "--expected-checkout-base",
-                    "https://billing.example.com/start-pro-trial",
                     "--prelink-webhook-payload-file",
                     str(prelink_path),
                     "--prelink-webhook-secret",
@@ -61,10 +59,7 @@ class HostedSignupBillingReplayRehearsalTest(unittest.TestCase):
                 if url == "https://pulse-bad.example.com/api/public/signup":
                     return 503, {"code": "public_url_missing"}
                 if url == "https://pulse.example.com/api/license/trial/start":
-                    return 409, {
-                        "code": "trial_signup_required",
-                        "details": {"action_url": "https://billing.example.com/start-pro-trial?org_id=default"},
-                    }
+                    return 404, {"error": "not found"}
                 if url == "https://pulse.example.com/api/public/signup":
                     return 201, {
                         "org_id": "org-123",
@@ -91,10 +86,8 @@ class HostedSignupBillingReplayRehearsalTest(unittest.TestCase):
                 results = mod.run_rehearsal(args)
 
             self.assertTrue(all(result.ok for result in results), [r.detail for r in results])
-            redirect_result = next(result for result in results if result.name == "self-hosted-trial-redirect-to-hosted")
-            self.assertIn("trial_signup_required", redirect_result.detail)
-            self.assertIn("trial_rate_limited", redirect_result.detail)
-            self.assertIn("Retry-After", redirect_result.detail)
+            retired_result = next(result for result in results if result.name == "self-hosted-trial-start-retired")
+            self.assertIn("returned 404", retired_result.detail)
             trial_headers = next(headers for _method, url, headers in fetch_json_calls if url.endswith("/api/license/trial/start"))
             self.assertEqual(trial_headers["X-API-Token"], "token")
             webhook_headers = next(headers for _method, url, headers, _body in fetch_calls if url.endswith("/api/stripe/webhook"))
@@ -110,10 +103,7 @@ class HostedSignupBillingReplayRehearsalTest(unittest.TestCase):
             def fake_fetch_json(method: str, url: str, **kwargs):
                 nonlocal billing_state_calls
                 if url.endswith("/api/license/trial/start"):
-                    return 409, {
-                        "code": "trial_signup_required",
-                        "details": {"action_url": "https://billing.example.com/start-pro-trial?org_id=default"},
-                    }
+                    return 404, {"error": "not found"}
                 if url.endswith("/api/public/signup"):
                     return 201, {
                         "org_id": "org-123",

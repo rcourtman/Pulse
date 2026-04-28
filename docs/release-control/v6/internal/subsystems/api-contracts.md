@@ -674,14 +674,15 @@ the canonical monitored-system blocked payload.
     `+git...` builds, and other unpublished prerelease identifiers must fail
     closed on that API boundary instead of generating fake release URLs from
     a local runtime version string.
-28. Keep local trial-start transport retired from normal self-hosted v6 GA
-    frontend paths. `/api/license/trial/start` may remain available only as a
-    legacy/support or externally initiated compatibility endpoint while existing
-    purchase and activation flows migrate; browser API clients and ordinary
-    self-hosted feature gates must not expose it as an in-app acquisition path.
-    Hosted self-serve verification failures may render owned HTML, but they must
-    preserve originating Pulse context instead of collapsing into generic
-    control-plane failures.
+28. Keep local trial-start transport retired from self-hosted v6 GA runtime
+    paths. `POST /api/license/trial/start` must not be registered as an ordinary
+    in-app acquisition endpoint; browser API clients, route inventory, demo
+    mode, and feature gates must all treat it as absent. Signed hosted/support
+    handoffs may still return through `/auth/trial-activate`, but trial
+    acquisition must not start from the self-hosted app. Hosted self-serve
+    verification failures may render owned HTML, but they must preserve
+    originating Pulse context instead of collapsing into generic control-plane
+    failures.
 29. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
     unauthenticated: when the dev reset route clears first-run auth it must
     also clear any env-backed auth state that feeds `/api/security/status`, so
@@ -2960,12 +2961,12 @@ security side: token settings changes must continue to carry the direct
 `api-token-management-surface` API-contract proof together with the
 security-side surface proof.
 That same shared commercial API boundary now treats local trial-start transport
-as legacy/support compatibility, not a normal self-hosted v6 GA browser path.
-If `/api/license/trial/start` remains implemented for externally initiated
-activation or support flows, `internal/api/contract_test.go` may pin its
-compatibility behavior, but `frontend-modern/src/api/license.ts` and ordinary
-feature gates must not expose a start-trial client method or in-app CTA
-in the same slice as any handler change.
+as retired for normal self-hosted v6 GA. `POST /api/license/trial/start` must stay
+out of the router inventory and must not return the old hosted-signup or
+trial-rate-limit acquisition payloads from an ordinary self-hosted runtime;
+`frontend-modern/src/api/license.ts`, demo mode, and feature gates must not
+expose a start-trial client method or in-app CTA in the same slice as any
+handler change.
 That same shared commercial API boundary also owns hosted self-serve failure
 transport semantics. Hosted trial request and verification failures may render
 owned HTML pages, but they must preserve the originating Pulse instance and

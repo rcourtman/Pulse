@@ -839,23 +839,18 @@ browser helper must treat `PLAYWRIGHT_BASE_URL` as the browser truth and leave
 `PULSE_BASE_URL` available for backend-oriented health checks and setup
 traffic, so split browser/backend proof can target fresh frontend code without
 rewiring the API-side contract.
-That same integration-README ownership includes the local commercial trial
-probe guidance. The snapshot-clean trial instructions for
-`tests/integration/scripts/trial-signup-contract.sh` must describe duplicate
-local `/api/license/trial/start` requests as staying on the hosted-signup
-redirect contract until the configured retry burst is exhausted; they may only
-teach `429 trial_rate_limited` plus `Retry-After` backoff once the limiter
-actually engages, rather than claiming the second duplicate attempt is always
-rate limited. The reused-instance browser-proof entry in
-`tests/integration/README.md` must carry those same canonical anchors by name:
-`POST /api/license/trial/start`, `409 trial_signup_required`, `429
-trial_rate_limited`, and `Retry-After`, so the shared trial-start docs guard
-can auto-discover that README alongside the rest of the governed trial-start
-surface instead of relying on README-only fallback checks. That README must
-also keep the named Pulse Pro browser proof,
-`tests/58-self-hosted-trial-rate-limit-ui.spec.ts`, on the owned trial-start
-surface so the user-facing retry-after proof does not drift into an orphaned
-integration spec. The eval-pack metadata in
+That same integration-README ownership includes the retired local commercial
+trial probe guidance. The snapshot-clean trial instructions for
+`tests/integration/scripts/trial-signup-contract.sh` must describe
+`POST /api/license/trial/start` as retired in ordinary self-hosted v6 and must
+expect `404` plus unchanged entitlements. The reused-instance browser-proof
+entry in `tests/integration/README.md` must carry that same retired-route
+posture, so the shared trial-start docs guard can auto-discover that README
+alongside the rest of the governed trial-start surface instead of relying on
+README-only fallback checks. That README must also keep the named Pulse Pro
+browser proof, `tests/58-self-hosted-trial-rate-limit-ui.spec.ts`, on the
+owned paid-prompt surface so the user-facing no-trial-CTA proof does not drift
+into an orphaned integration spec. The eval-pack metadata in
 `tests/integration/evals/scenarios.json` must carry those same anchors for the
 `trial-signup` scenario description, so deterministic and agentic trial runs
 inherit the same canonical contract wording instead of teaching a drifted

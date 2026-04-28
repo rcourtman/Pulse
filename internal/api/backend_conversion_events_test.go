@@ -42,41 +42,6 @@ func queryAllEvents(t *testing.T, store *pkglicensing.ConversionStore, orgID str
 
 // --- LicenseHandlers.emitConversionEvent tests ---
 
-func TestLicenseHandlersEmitConversionEvent_CheckoutStartedViaHandleStartTrial(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
-
-	rec, store := newTestRecorderWithStore(t, baseDir)
-	health := pkglicensing.NewPipelineHealth()
-	h.SetConversionRecorder(rec, health)
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-	h.HandleStartTrial(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("HandleStartTrial status=%d, want %d: %s", w.Code, http.StatusConflict, w.Body.String())
-	}
-
-	events := queryAllEvents(t, store, "default")
-	found := false
-	for _, e := range events {
-		if e.EventType == pkglicensing.EventCheckoutStarted && e.Surface == "license_api" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected checkout_started event with surface=license_api in store, got %d events: %+v", len(events), events)
-	}
-
-	if hs := health.CheckHealth(); hs.EventsTotal < 1 {
-		t.Fatalf("pipeline health events_total=%d, want >=1", hs.EventsTotal)
-	}
-}
-
 func TestLicenseHandlersEmitConversionEvent_ActivationFailedOnBadKey(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -112,52 +77,6 @@ func TestLicenseHandlersEmitConversionEvent_ActivationFailedOnBadKey(t *testing.
 	if !found {
 		t.Fatalf("expected license_activation_failed event in store after bad key, got %d events: %+v", len(events), events)
 	}
-}
-
-func TestLicenseHandlersEmitConversionEvent_RespectsDisableFlag(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-	cfg := &config.Config{
-		DisableLocalUpgradeMetrics: true,
-		PublicURL:                  "https://pulse.example.com",
-	}
-	h := NewLicenseHandlers(mtp, false, cfg)
-
-	rec, store := newTestRecorderWithStore(t, baseDir)
-	h.SetConversionRecorder(rec, pkglicensing.NewPipelineHealth())
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-	h.HandleStartTrial(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("HandleStartTrial status=%d, want %d: %s", w.Code, http.StatusConflict, w.Body.String())
-	}
-
-	events := queryAllEvents(t, store, "default")
-	for _, e := range events {
-		if e.EventType == pkglicensing.EventCheckoutStarted {
-			t.Fatalf("expected no checkout_started event when DisableLocalUpgradeMetrics=true, but found one: %+v", e)
-		}
-	}
-}
-
-func TestLicenseHandlersEmitConversionEvent_NilRecorderDoesNotPanic(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
-	// Deliberately NOT setting a conversion recorder.
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-	h.HandleStartTrial(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("HandleStartTrial status=%d, want %d: %s", w.Code, http.StatusConflict, w.Body.String())
-	}
-	// No panic — success.
 }
 
 func TestLicenseHandlersEmitConversionEvent_LicenseActivatedDirectEmit(t *testing.T) {

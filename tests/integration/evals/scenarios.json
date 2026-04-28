@@ -26,7 +26,7 @@
     {
       "id": "trial-signup",
       "name": "Pro Trial Signup Return",
-      "description": "Ensures self-hosted Pulse initiates hosted trial signup through POST /api/license/trial/start, preserves local entitlements until activation, returns 409 trial_signup_required while the hosted-signup retry burst remains open, and transitions to 429 trial_rate_limited with Retry-After backoff once the limiter engages.",
+      "description": "Ensures self-hosted Pulse no longer initiates hosted Pro trial acquisition from the ordinary runtime: POST /api/license/trial/start returns 404 and preserves local entitlements.",
       "deterministic": {
         "command": [
           "npx",

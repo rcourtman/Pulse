@@ -3528,7 +3528,6 @@ func TestPrivilegedSecurityEndpointsRejectNonAdminSession(t *testing.T) {
 		{method: http.MethodGet, path: "/api/diagnostics", body: ``},
 		{method: http.MethodGet, path: "/api/diagnostics/docker/prepare-token", body: ``},
 		{method: http.MethodGet, path: "/api/license/status", body: ``},
-		{method: http.MethodPost, path: "/api/license/trial/start", body: `{}`},
 		{method: http.MethodGet, path: "/api/updates/check", body: ``},
 		{method: http.MethodGet, path: "/api/updates/status", body: ``},
 		{method: http.MethodGet, path: "/api/updates/plan", body: ``},

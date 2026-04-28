@@ -46,7 +46,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--cookie", help="Optional Cookie header for admin checks")
     parser.add_argument(
         "--expected-checkout-base",
-        help="Optional prefix expected for trial-start redirect action_url",
+        help="Deprecated; retained for old command lines. Self-hosted trial start is retired.",
     )
     parser.add_argument(
         "--billing-org-id",
@@ -232,10 +232,10 @@ def check_fail_closed(args: argparse.Namespace) -> CheckResult:
     )
 
 
-def check_trial_start_redirect(args: argparse.Namespace, auth_headers: dict[str, str]) -> CheckResult:
+def check_retired_self_hosted_trial_start(args: argparse.Namespace, auth_headers: dict[str, str]) -> CheckResult:
     if not auth_headers:
         return CheckResult(
-            name="self-hosted-trial-redirect-to-hosted",
+            name="self-hosted-trial-start-retired",
             ok=False,
             detail="authenticated admin credentials are required for this check",
         )
@@ -246,48 +246,23 @@ def check_trial_start_redirect(args: argparse.Namespace, auth_headers: dict[str,
         headers=auth_headers,
         json_body={},
     )
-    if status != 409:
+    if status != 404:
         return CheckResult(
-            name="self-hosted-trial-redirect-to-hosted",
+            name="self-hosted-trial-start-retired",
             ok=False,
-            detail=f"status={status}, expected 409",
+            detail=f"status={status}, expected 404",
         )
     code = str(payload.get("code", "")).strip()
-    if code != "trial_signup_required":
+    if code in {"trial_signup_required", "trial_rate_limited"}:
         return CheckResult(
-            name="self-hosted-trial-redirect-to-hosted",
+            name="self-hosted-trial-start-retired",
             ok=False,
-            detail=f"code={code!r}, expected 'trial_signup_required'",
-        )
-    details = payload.get("details")
-    if not isinstance(details, dict):
-        return CheckResult(
-            name="self-hosted-trial-redirect-to-hosted",
-            ok=False,
-            detail="missing details.action_url in response",
-        )
-    action_url = str(details.get("action_url", "")).strip()
-    if not action_url:
-        return CheckResult(
-            name="self-hosted-trial-redirect-to-hosted",
-            ok=False,
-            detail="details.action_url was empty",
-        )
-    if args.expected_checkout_base and not action_url.startswith(args.expected_checkout_base):
-        return CheckResult(
-            name="self-hosted-trial-redirect-to-hosted",
-            ok=False,
-            detail=f"action_url={action_url!r} did not start with {args.expected_checkout_base!r}",
+            detail=f"retired route returned legacy acquisition code={code!r}",
         )
     return CheckResult(
-        name="self-hosted-trial-redirect-to-hosted",
+        name="self-hosted-trial-start-retired",
         ok=True,
-        detail=(
-            "returned hosted handoff action_url="
-            f"{action_url}; this rehearsal covers the `409 trial_signup_required` "
-            "branch only, while the later `429 trial_rate_limited` plus "
-            "`Retry-After` branch stays owned by the local trial-start proofs"
-        ),
+        detail="ordinary self-hosted trial-start route returned 404 without legacy acquisition payload",
     )
 
 
@@ -470,8 +445,8 @@ def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
     if auth_headers:
         results.append(
             safe_check(
-                "self-hosted-trial-redirect-to-hosted",
-                lambda: check_trial_start_redirect(args, auth_headers),
+                "self-hosted-trial-start-retired",
+                lambda: check_retired_self_hosted_trial_start(args, auth_headers),
             )
         )
 

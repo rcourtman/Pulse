@@ -46,13 +46,11 @@ Companion drill:
   `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx`
   `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/07-trial-signup-return.spec.ts --project=chromium`
   `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/58-self-hosted-trial-rate-limit-ui.spec.ts --project=chromium`
-  The self-hosted support/explicit-handoff proof must keep the canonical
-  trial-start transport contract: `POST /api/license/trial/start` returns `409
-  trial_signup_required` while the hosted-signup retry burst remains open, then
-  transitions to `429 trial_rate_limited` plus `Retry-After` backoff once the
-  limiter actually engages. Ordinary self-hosted runtime surfaces must still
-  suppress trial prompts unless an explicit commercial handoff or entitlement
-  state allows them.
+  The self-hosted proof must keep the retired trial-start transport contract:
+  `POST /api/license/trial/start` returns `404` on an ordinary self-hosted v6
+  runtime and does not mutate entitlements. Ordinary self-hosted runtime
+  surfaces must still suppress trial prompts; signed support handoffs may return
+  through `/auth/trial-activate` only.
 - Live rehearsal helper:
   `python3 scripts/release_control/hosted_signup_billing_replay_rehearsal.py --base-url <hosted-url> --signup-email <email> --org-name <org> ...`
 - Manual scenario:

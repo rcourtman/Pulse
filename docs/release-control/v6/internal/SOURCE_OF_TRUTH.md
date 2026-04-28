@@ -418,14 +418,12 @@ Assertion design rules:
 2. v6 GA is gated by `L1`, `L2`, `L3`, `L5`, `L6`, `L7`, `L8`, `L9`, `L10`,
    `L11`, and `L12`. `L4` remains post-GA track work and is not a GA floor
    gate.
-3. Trial authority for v6 is SaaS-controlled.
-   `POST /api/license/trial/start` must initiate hosted signup only by
-   returning `409 trial_signup_required` while the hosted-signup retry burst
-   remains open, then `429 trial_rate_limited` plus `Retry-After` backoff once
-   that limiter engages; the local runtime may redeem signed trial activations
-   but must not mint local trial state directly. This transport is support-only
-   or explicit-handoff plumbing for self-hosted v6 GA; ordinary self-hosted
-   runtime surfaces must not promote trial entry.
+3. Trial acquisition is retired from ordinary self-hosted v6 GA.
+   `POST /api/license/trial/start` must not be registered as an in-app route
+   and must return `404` when probed on a normal self-hosted runtime. The local
+   runtime may redeem signed trial activations through `/auth/trial-activate`,
+   but it must not mint local trial state directly or prompt users into paid
+   trial entry from default self-hosted surfaces.
 4. v5 to v6 commercial migration must preserve unresolved paid-license state
    and downgrade safety.
 5. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not

@@ -990,60 +990,21 @@ that decides whether that href stays in-app or opens externally. Commercial
 surfaces must not re-infer that behavior locally with per-component
 `target="_blank"` or `window.open(...)` branches once a feature can resolve to
 either product-owned billing/cloud routes or the public pricing site.
-The trial-start rate-limit contract is part of that same boundary. Local
-`/api/license/trial/start` retries are allowed as a short human-scale burst so
-operators can revisit the hosted handoff without getting locked out for a day,
-and both the local app server and hosted trial signup limiters must return the
-actual remaining backoff through `Retry-After` and
-`details.retry_after_seconds` rather than a coarse full-window guess. Shared
-trial-start presentation must treat that backoff as canonical and surface it
-consistently instead of flattening every `429` into generic copy.
-That proof must stay aligned in browser and shell coverage too:
-`tests/integration/tests/07-trial-signup-return.spec.ts` and
-`tests/integration/scripts/trial-signup-contract.sh` must treat duplicate
-starts inside the allowed burst as the same hosted-signup redirect contract and
-only require `trial_rate_limited` plus backoff metadata once the limiter
-actually engages, rather than assuming the second attempt is already denied.
-`tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts` must then
-prove the rendered Pulse Pro CTA on `/settings/system/billing` surfaces the
-same canonical `Retry-After` backoff when the backend returns
-`trial_rate_limited`, including header precedence over a conflicting
-`details.retry_after_seconds` payload.
-That proof split is also intentional: the browser spec may attach to a reused
-local instance whose retry bucket is already exhausted and therefore must
-accept an immediate canonical `429` backoff response, while the snapshot-clean
-shell probe remains the fresh-state contract that proves an initial hosted
-redirect and the later transition into `trial_rate_limited`.
-Operator docs must describe that same split. The snapshot-clean runbook in
-`docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md` may require the first trial
-start to return `409 trial_signup_required` on a rolled-back container, but it
-must describe duplicate attempts as staying on the hosted-signup retry burst
-until exhaustion rather than teaching a universal "second attempt is `429`"
-rule.
-That active-doc hygiene is guarded directly in
-`scripts/tests/test-trial-signup-docs.sh`: it auto-discovers every tracked
-trial-start reference across `docs/` and `tests/integration/`, requires the
-operator/pricing/upgrade/integration surfaces to keep the hosted-only /
-retry-burst story aligned, and rejects the obsolete 24-hour or automatic
-second-attempt phrasing anywhere in that tracked reference set. The integration
-README now carries the same `POST /api/license/trial/start`,
-`trial_signup_required`, and `trial_rate_limited` anchors as the other
-operator-facing docs so it stays inside the discovered set instead of relying
-on a special-case assertion path. The `trial-signup` entry in
-`tests/integration/evals/scenarios.json` must now carry those same anchors too,
-so eval-pack metadata cannot silently drift away from the canonical hosted
-handoff contract while the task file stays correct. The release-control
-high-risk verification matrix must carry those same anchors for the
-`tests/07-trial-signup-return.spec.ts` transport proof and the
-`tests/58-self-hosted-trial-rate-limit-ui.spec.ts` Pulse Pro CTA proof, so the
-RC packet cannot describe trial-start verification through an unanchored
-summary path. The
-canonical release-control summaries in `docs/release-control/v6/internal/
-SOURCE_OF_TRUTH.md` and
-`docs/release-control/v6/internal/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md`
-must carry that same explicit `409 trial_signup_required` to `429
-trial_rate_limited` plus `Retry-After` transition, so the governing release
-packet cannot collapse the hosted handoff into a vague "hosted-only" statement.
+The self-hosted trial-start boundary is now retired for ordinary v6 GA
+runtimes. Local `POST /api/license/trial/start` must not be registered as an
+in-app acquisition route, and it must not return the old
+hosted-signup or trial-rate-limit payloads from a normal self-hosted instance.
+Signed activation handoffs may still return through
+`/auth/trial-activate`, but the user must not be prompted into a paid trial
+from the self-hosted app. Browser and shell coverage now guard that retired
+boundary: `tests/integration/tests/07-trial-signup-return.spec.ts` and
+`tests/integration/scripts/trial-signup-contract.sh` must expect `404` from the
+retired route and prove entitlements remain unchanged. The paid-prompt browser
+proof in `tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
+must keep trial CTAs and paid-only navigation out of the default self-hosted UI.
+`scripts/tests/test-trial-signup-docs.sh` guards the same documentation posture
+so active operator docs and eval metadata describe the retired route instead of
+the old hosted-signup acquisition contract.
 Hosted tenant organization seeding and hosted handoff role mapping now belong
 to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
 must seed tenant org members from the shared account-role-to-organization-role

@@ -3,36 +3,36 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNBOOK="${ROOT_DIR}/docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md"
-PRICING_DOC="${ROOT_DIR}/docs/architecture/v6-pricing-and-tiering.md"
 UPGRADE_DOC="${ROOT_DIR}/docs/UPGRADE_v6.md"
 INTEGRATION_README="${ROOT_DIR}/tests/integration/README.md"
 EVAL_TASK_DOC="${ROOT_DIR}/tests/integration/evals/tasks/trial-signup.md"
 EVAL_SCENARIOS_DOC="${ROOT_DIR}/tests/integration/evals/scenarios.json"
 SOURCE_OF_TRUTH_DOC="${ROOT_DIR}/docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
-MIGRATION_AUDIT_DOC="${ROOT_DIR}/docs/release-control/v6/internal/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md"
 HIGH_RISK_MATRIX_DOC="${ROOT_DIR}/docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
 API_CONTRACTS_DOC="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/api-contracts.md"
+CLOUD_PAID_DOC="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/cloud-paid.md"
+AGENT_LIFECYCLE_DOC="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/agent-lifecycle.md"
+STORAGE_RECOVERY_DOC="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/storage-recovery.md"
 
-TRIAL_SIGNUP_REFERENCE_PATTERN='(/api/license/trial/start|trial_signup_required|trial_rate_limited)'
+FORBIDDEN_ACTIVE_PATTERNS=(
+  "trial_signup_required"
+  "trial_rate_limited"
+  "hosted-signup retry burst"
+  "hosted-signup retry-burst"
+  "Start hosted Pro trial initiation"
+)
 
-REQUIRED_CONTRACT_DOCS=(
+RETIRED_CONTRACT_DOCS=(
   "${RUNBOOK}"
-  "${PRICING_DOC}"
-  "${UPGRADE_DOC}"
   "${INTEGRATION_README}"
   "${EVAL_TASK_DOC}"
   "${EVAL_SCENARIOS_DOC}"
+  "${SOURCE_OF_TRUTH_DOC}"
   "${HIGH_RISK_MATRIX_DOC}"
   "${API_CONTRACTS_DOC}"
-)
-
-TRACKED_REFERENCE_DOCS=()
-
-FORBIDDEN_PATTERNS=(
-  "1 trial initiation attempt per org per 24 hours"
-  "1 initiation attempt per org per 24h"
-  "A second immediate initiation attempt is rate limited."
-  "Second immediate trial start is rejected with \`429\`"
+  "${CLOUD_PAID_DOC}"
+  "${AGENT_LIFECYCLE_DOC}"
+  "${STORAGE_RECOVERY_DOC}"
 )
 
 failures=0
@@ -44,29 +44,6 @@ record_failure() {
 
 record_pass() {
   echo "[PASS] $1"
-}
-
-discover_tracked_reference_docs() {
-  local discovered_doc
-  local tracked_doc
-
-  TRACKED_REFERENCE_DOCS=()
-  while IFS= read -r discovered_doc; do
-    TRACKED_REFERENCE_DOCS+=("${ROOT_DIR}/${discovered_doc}")
-  done < <(
-    while IFS= read -r tracked_doc; do
-      if rg -q "${TRIAL_SIGNUP_REFERENCE_PATTERN}" "${ROOT_DIR}/${tracked_doc}"; then
-        printf '%s\n' "${tracked_doc}"
-      fi
-    done < <(git -C "${ROOT_DIR}" ls-files docs tests/integration)
-  )
-
-  if (( ${#TRACKED_REFERENCE_DOCS[@]} == 0 )); then
-    record_failure "discovered tracked trial-start reference files"
-    echo "Expected tracked trial-start reference docs/tests from tracked worktree discovery." >&2
-  else
-    record_pass "discovered tracked trial-start reference files (${#TRACKED_REFERENCE_DOCS[@]})"
-  fi
 }
 
 assert_contains() {
@@ -93,152 +70,45 @@ assert_not_contains() {
   fi
 }
 
-assert_doc_discovered() {
+assert_file_contains() {
   local label="$1"
-  local doc="$2"
-  local candidate
-  for candidate in "${TRACKED_REFERENCE_DOCS[@]}"; do
-    if [[ "${candidate}" == "${doc}" ]]; then
-      record_pass "${label}"
-      return
-    fi
-  done
-  record_failure "${label}"
-  echo "Expected discovered reference set to include: ${doc#${ROOT_DIR}/}" >&2
+  local file="$2"
+  local needle="$3"
+  assert_contains "${label}" "$(cat "${file}")" "${needle}"
 }
 
-assert_forbidden_patterns_absent() {
-  local doc file_content needle label
-
-  for doc in "${TRACKED_REFERENCE_DOCS[@]}"; do
-    file_content="$(cat "${doc}")"
-    for needle in "${FORBIDDEN_PATTERNS[@]}"; do
-      label="${doc#${ROOT_DIR}/} excludes stale pattern: ${needle}"
-      assert_not_contains "${label}" "${file_content}" "${needle}"
-    done
-  done
+assert_file_not_contains() {
+  local label="$1"
+  local file="$2"
+  local needle="$3"
+  assert_not_contains "${label}" "$(cat "${file}")" "${needle}"
 }
 
 main() {
-  local runbook_output pricing_output upgrade_output integration_output eval_task_output
-  local eval_scenarios_output high_risk_matrix_output api_contracts_output
-  local source_of_truth_output migration_audit_output
-  local contract_doc
+  local doc pattern
 
-  discover_tracked_reference_docs
-
-  assert_doc_discovered "source of truth is in tracked reference discovery" "${SOURCE_OF_TRUTH_DOC}"
-  assert_doc_discovered "migration audit is in tracked reference discovery" "${MIGRATION_AUDIT_DOC}"
-  for contract_doc in "${REQUIRED_CONTRACT_DOCS[@]}"; do
-    assert_doc_discovered "${contract_doc#${ROOT_DIR}/} is in tracked reference discovery" "${contract_doc}"
+  for doc in "${RETIRED_CONTRACT_DOCS[@]}"; do
+    assert_file_contains "${doc#${ROOT_DIR}/} documents retired trial-start route" "${doc}" "POST /api/license/trial/start"
+    assert_file_contains "${doc#${ROOT_DIR}/} documents HTTP 404 retired route behavior" "${doc}" "404"
   done
 
-  runbook_output="$(
-    awk '
-      /^## Contract Probe Script$/ { capture=1 }
-      capture { print }
-      /^## Full Sandbox E2E \(Playwright\)$/ { exit }
-    ' "${RUNBOOK}"
-  )"
-  pricing_output="$(
-    sed -n '368,386p' "${PRICING_DOC}"
-  )"
-  upgrade_output="$(
-    sed -n '112,128p' "${UPGRADE_DOC}"
-  )"
-  integration_output="$(
-    sed -n '28,48p' "${INTEGRATION_README}"
-  )"
-  eval_task_output="$(
-    sed -n '1,24p' "${EVAL_TASK_DOC}"
-  )"
-  eval_scenarios_output="$(
-    sed -n '24,34p' "${EVAL_SCENARIOS_DOC}"
-  )"
-  high_risk_matrix_output="$(
-    sed -n '44,58p' "${HIGH_RISK_MATRIX_DOC}"
-  )"
-  api_contracts_output="$(
-    sed -n '447,453p' "${API_CONTRACTS_DOC}"
-  )"
-  source_of_truth_output="$(
-    sed -n '412,420p' "${SOURCE_OF_TRUTH_DOC}"
-  )"
-  migration_audit_output="$(
-    sed -n '10,22p' "${MIGRATION_AUDIT_DOC}"
-  )"
+  assert_file_contains "upgrade guide documents no general in-app trial" "${UPGRADE_DOC}" "does not expose a general in-app trial"
+  assert_file_contains "runbook documents unchanged entitlements" "${RUNBOOK}" "Entitlements remain unchanged"
+  assert_file_contains "integration README documents no trial CTAs" "${INTEGRATION_README}" "trial CTAs"
+  assert_file_contains "eval task documents no legacy acquisition payloads" "${EVAL_TASK_DOC}" "legacy"
 
-  assert_contains "runbook references hosted trial probe script" "${runbook_output}" "tests/integration/scripts/trial-signup-contract.sh"
-  assert_contains "runbook documents initial hosted-signup redirect" "${runbook_output}" "returns \`409\` with \`trial_signup_required\`"
-  assert_contains "runbook documents hosted-signup retry burst" "${runbook_output}" "hosted-signup retry burst"
-  assert_contains "runbook documents retry-after backoff metadata" "${runbook_output}" "\`Retry-After\` backoff metadata"
-  assert_contains "runbook documents limiter transition output" "${runbook_output}" "retry_limiter_attempt=..."
-  assert_contains "runbook documents final trial-rate-limited output" "${runbook_output}" "final_trial_start_code=429"
-  assert_not_contains "runbook no longer hardcodes second-attempt rejection" "${runbook_output}" "Second immediate trial start is rejected with \`429\`"
-
-  assert_contains "pricing doc documents trial-start route" "${pricing_output}" "POST \`/api/license/trial/start\`"
-  assert_contains "pricing doc documents hosted-signup redirect code" "${pricing_output}" "\`409 trial_signup_required\`"
-  assert_contains "pricing doc documents retry burst" "${pricing_output}" "retry burst"
-  assert_contains "pricing doc documents trial-rate-limited response" "${pricing_output}" "\`429 trial_rate_limited\`"
-  assert_contains "pricing doc documents retry-after metadata" "${pricing_output}" "\`Retry-After\`"
-  assert_not_contains "pricing doc no longer claims 24 hour limiter" "${pricing_output}" "24 hours"
-
-  assert_contains "upgrade guide keeps hosted-signup-only wording" "${upgrade_output}" "rather than minting a local trial directly"
-  assert_contains "upgrade guide documents hosted-signup redirect code" "${upgrade_output}" "\`409 trial_signup_required\`"
-  assert_contains "upgrade guide documents retry burst" "${upgrade_output}" "retry burst"
-  assert_contains "upgrade guide documents trial-rate-limited response" "${upgrade_output}" "\`429 trial_rate_limited\`"
-  assert_contains "upgrade guide documents retry-after metadata" "${upgrade_output}" "\`Retry-After\`"
-
-  assert_contains "integration readme documents trial-start route" "${integration_output}" "POST /api/license/trial/start"
-  assert_contains "integration readme documents hosted-signup redirect code" "${integration_output}" "\`409 trial_signup_required\`"
-  assert_contains "integration readme documents canonical trial-rate-limited response" "${integration_output}" "\`429 trial_rate_limited\`"
-  assert_contains "integration readme documents reused-instance retry-after branch" "${integration_output}" "Retry-After"
-  assert_contains "integration readme documents hosted-signup retry burst" "${integration_output}" "hosted-signup retry-burst contract"
-  assert_contains "integration readme names pulse pro retry-after ui proof" "${integration_output}" "tests/58-self-hosted-trial-rate-limit-ui.spec.ts"
-  assert_contains "integration readme documents pulse pro billing route proof" "${integration_output}" "/settings/system/billing"
-
-  assert_contains "eval task documents retry-burst contract" "${eval_task_output}" "retry-burst contract"
-  assert_contains "eval task documents canonical trial-rate-limited response" "${eval_task_output}" "\`429 trial_rate_limited\`"
-  assert_contains "eval task documents retry-after metadata" "${eval_task_output}" "\`Retry-After\`"
-
-  assert_contains "eval scenario documents trial-start route" "${eval_scenarios_output}" "POST /api/license/trial/start"
-  assert_contains "eval scenario documents hosted-signup redirect code" "${eval_scenarios_output}" "409 trial_signup_required"
-  assert_contains "eval scenario documents canonical trial-rate-limited response" "${eval_scenarios_output}" "429 trial_rate_limited"
-  assert_contains "eval scenario documents retry-after metadata" "${eval_scenarios_output}" "Retry-After"
-
-  assert_contains "high-risk matrix documents trial-start route" "${high_risk_matrix_output}" "POST /api/license/trial/start"
-  assert_contains "high-risk matrix documents hosted-signup redirect code" "${high_risk_matrix_output}" "trial_signup_required"
-  assert_contains "high-risk matrix documents canonical trial-rate-limited response" "${high_risk_matrix_output}" "trial_rate_limited"
-  assert_contains "high-risk matrix documents retry-after metadata" "${high_risk_matrix_output}" "Retry-After"
-  assert_contains "high-risk matrix names pulse pro retry-after ui proof" "${high_risk_matrix_output}" "tests/58-self-hosted-trial-rate-limit-ui.spec.ts"
-
-  assert_contains "api contracts document trial-start route" "${api_contracts_output}" "/api/license/trial/start"
-  assert_contains "api contracts document hosted-signup redirect code" "${api_contracts_output}" "trial_signup_required"
-  assert_contains "api contracts document canonical trial-rate-limited response" "${api_contracts_output}" "trial_rate_limited"
-  assert_contains "api contracts document retry-after metadata" "${api_contracts_output}" "Retry-After"
-
-  assert_contains "source of truth documents trial-start route" "${source_of_truth_output}" "POST /api/license/trial/start"
-  assert_contains "source of truth keeps hosted-signup-only contract" "${source_of_truth_output}" "must initiate hosted signup only"
-  assert_contains "source of truth documents hosted-signup redirect code" "${source_of_truth_output}" "trial_signup_required"
-  assert_contains "source of truth documents canonical trial-rate-limited response" "${source_of_truth_output}" "trial_rate_limited"
-  assert_contains "source of truth documents retry-after metadata" "${source_of_truth_output}" "Retry-After"
-  assert_contains "source of truth forbids local trial minting" "${source_of_truth_output}" "must not mint local trial"
-
-  assert_contains "migration audit documents trial-start route" "${migration_audit_output}" "POST /api/license/trial/start"
-  assert_contains "migration audit keeps hosted-signup-only contract" "${migration_audit_output}" "must initiate hosted signup only"
-  assert_contains "migration audit documents hosted-signup redirect code" "${migration_audit_output}" "trial_signup_required"
-  assert_contains "migration audit documents canonical trial-rate-limited response" "${migration_audit_output}" "trial_rate_limited"
-  assert_contains "migration audit documents retry-after metadata" "${migration_audit_output}" "Retry-After"
-  assert_contains "migration audit forbids local trial minting" "${migration_audit_output}" "may only redeem signed hosted trial activation tokens"
-
-  assert_forbidden_patterns_absent
+  for doc in "${RETIRED_CONTRACT_DOCS[@]}"; do
+    for pattern in "${FORBIDDEN_ACTIVE_PATTERNS[@]}"; do
+      assert_file_not_contains "${doc#${ROOT_DIR}/} excludes old active trial-start wording: ${pattern}" "${doc}" "${pattern}"
+    done
+  done
 
   if (( failures > 0 )); then
-    echo "trial-signup docs smoke tests failed: ${failures}" >&2
+    echo "trial-start retired docs smoke tests failed: ${failures}" >&2
     exit 1
   fi
 
-  echo "trial-signup docs smoke tests passed."
+  echo "trial-start retired docs smoke tests passed."
 }
 
 main "$@"

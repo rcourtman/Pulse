@@ -2349,129 +2349,6 @@ func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
-func TestContract_TrialStartHostedSignupRedirectContract(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false, &config.Config{
-		PublicURL:         "https://pulse.example.com",
-		ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=contract",
-	})
-
-	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(
-		context.WithValue(context.Background(), OrgIDContextKey, "default"),
-	)
-	rec := httptest.NewRecorder()
-	h.HandleStartTrial(rec, req)
-
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
-	}
-
-	var payload APIError
-	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if payload.Code != "trial_signup_required" {
-		t.Fatalf("code=%q, want %q", payload.Code, "trial_signup_required")
-	}
-	if strings.TrimSpace(payload.Details["action_url"]) == "" {
-		t.Fatal("expected action_url in contract payload")
-	}
-}
-
-func TestContract_TrialStartRejectsInsecureNonLoopbackCallbackURL(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false, &config.Config{
-		ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=contract",
-	})
-
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"http://192.168.1.25:7655/api/license/trial/start",
-		nil,
-	).WithContext(context.WithValue(context.Background(), OrgIDContextKey, "default"))
-	req.Host = "192.168.1.25:7655"
-	req.RemoteAddr = "192.168.1.50:54321"
-	rec := httptest.NewRecorder()
-	h.HandleStartTrial(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
-	}
-
-	var payload APIError
-	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	payload = payload.NormalizeCollections()
-	got, err := json.Marshal(struct {
-		StatusCode int               `json:"status_code"`
-		Code       string            `json:"code"`
-		Error      string            `json:"error"`
-		Details    map[string]string `json:"details"`
-	}{
-		StatusCode: payload.StatusCode,
-		Code:       payload.Code,
-		Error:      payload.ErrorMessage,
-		Details:    payload.Details,
-	})
-	if err != nil {
-		t.Fatalf("marshal payload snapshot: %v", err)
-	}
-
-	const want = `{
-		"status_code":503,
-		"code":"trial_signup_unavailable",
-		"error":"Hosted trial signup is unavailable",
-		"details":{}
-	}`
-
-	assertJSONSnapshot(t, got, want)
-}
-
-func TestContract_TrialStartRateLimitContract(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false, &config.Config{
-		PublicURL:         "https://pulse.example.com",
-		ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=contract",
-	})
-	h.trialLimiter = NewRateLimiter(1, time.Minute)
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-
-	firstReq := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	firstRec := httptest.NewRecorder()
-	h.HandleStartTrial(firstRec, firstReq)
-	if firstRec.Code != http.StatusConflict {
-		t.Fatalf("first status=%d, want %d: %s", firstRec.Code, http.StatusConflict, firstRec.Body.String())
-	}
-
-	secondReq := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	secondRec := httptest.NewRecorder()
-	h.HandleStartTrial(secondRec, secondReq)
-	if secondRec.Code != http.StatusTooManyRequests {
-		t.Fatalf("second status=%d, want %d: %s", secondRec.Code, http.StatusTooManyRequests, secondRec.Body.String())
-	}
-
-	retryAfter := secondRec.Header().Get("Retry-After")
-	if retryAfter == "" {
-		t.Fatal("expected Retry-After header")
-	}
-
-	var payload APIError
-	if err := json.NewDecoder(secondRec.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if payload.Code != "trial_rate_limited" {
-		t.Fatalf("code=%q, want %q", payload.Code, "trial_rate_limited")
-	}
-	if payload.Details["retry_after_seconds"] != retryAfter {
-		t.Fatalf("retry_after_seconds=%q, want %q", payload.Details["retry_after_seconds"], retryAfter)
-	}
-}
-
 func TestContract_BillingStateQuickstartJSONSnapshot(t *testing.T) {
 	grantedAt := time.Date(2026, 3, 25, 14, 30, 0, 0, time.UTC).Unix()
 
@@ -5604,7 +5481,7 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 			{"key":"push_notifications","reason":"Get Relay so important alerts reach you immediately on mobile instead of waiting for you to reopen Pulse.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=push_notifications"},
 			{"key":"relay","reason":"Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=relay"},
 			{"key":"long_term_metrics","reason":"Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},
-			{"key":"ai_autofix","reason":"Upgrade to Pro so Pulse can move from finding issues to applying safe remediation with your approval or in autonomous mode.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
+			{"key":"ai_autofix","reason":"Upgrade to Pro so Pulse can move from finding issues to governed remediation with your approval or autonomy policy.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
 			{"key":"ai_alerts","reason":"Upgrade to Pro so alerts arrive with root-cause analysis instead of a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
 			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
 			{"key":"agent_profiles","reason":"Upgrade to Pro to standardize agent behavior across systems without reconfiguring every install by hand.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=agent_profiles"},
@@ -6671,7 +6548,6 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodGet, path: "/api/license/entitlements"},
 			{method: http.MethodPost, path: "/api/license/activate"},
 			{method: http.MethodPost, path: "/api/license/clear"},
-			{method: http.MethodPost, path: "/api/license/trial/start"},
 			{method: http.MethodGet, path: "/api/license/monitored-system-ledger"},
 			{method: http.MethodPost, path: "/api/license/monitored-system-ledger/explain"},
 			{method: http.MethodPost, path: "/api/license/monitored-system-ledger/preview"},

@@ -54,11 +54,6 @@ var publicDemoCommercialPolicies = []publicDemoCommercialRoutePolicy{
 		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/license/entitlements"),
 	},
 	{
-		route:    "POST /api/license/trial/start",
-		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodPost, "/api/license/trial/start"),
-	},
-	{
 		route:    "GET /api/license/monitored-system-ledger",
 		exposure: publicDemoCommercialExposureHidden,
 		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/license/monitored-system-ledger"),
