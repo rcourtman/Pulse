@@ -662,15 +662,12 @@ work extends shared components instead of creating new local variants.
     route strings or provider-local link builders inside feature panels.
 16. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
 17. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and keep focused-entity detail in the hover tooltip instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or adding persistent card chrome that steals heatmap space. The card body must stay overview-first; the tooltip may carry the active entity identity, current value, and peak, shared tooltip shells must follow semantic surface tokens instead of forcing a dark palette in light mode, the tooltip header must let long entity names consume the available width before truncating rather than clipping against an arbitrary fixed label cap, numeric metric readouts such as `16.9 MB/s` or `37.4 MB/s` must stay single-line instead of wrapping the unit onto a second row, and density-map detail that cannot fit cleanly inside the canonical tooltip shell must be omitted rather than introducing tooltip-specific chrome or a secondary chart inside the hover surface.
-18. Keep shared commercial and Patrol quickstart presenters on runtime-backed
-    wording. Reusable shells and helper-driven badges must describe quickstart
-    as Patrol runs or Patrol-only activation support when that is the governed
-    backend truth, and must not drift back to generic hosted-chat or generic
-    AI-credit claims.
-    When a shared settings dialog describes hosted Quickstart transport, it
-    must match the governed privacy boundary: hosted Quickstart routes
-    policy-redacted prompts through Pulse infrastructure, while BYOK providers
-    go direct to the operator's chosen provider.
+18. Keep retired self-hosted hosted-model and trial acquisition surfaces out of
+    normal v6 GA runtime. Shared shells and helper-driven badges may continue to
+    parse legacy payload fields, but ordinary self-hosted Assistant, Patrol, and
+    settings flows must present provider setup as BYOK/local/self-managed and
+    must not surface hosted-model credits, in-app trial starts, or generic
+    managed-model claims.
 19. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell.
 20. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
 21. Keep shared infrastructure/resource selectors on the canonical agent-facet
@@ -875,7 +872,6 @@ commercial suppression. `frontend-modern/src/components/Settings/settingsNavCata
 `frontend-modern/src/stores/license.ts`,
 `frontend-modern/src/stores/licenseCommercial.ts`,
 `frontend-modern/src/useAppRuntimeState.ts`,
-`frontend-modern/src/components/shared/useTrialBannerState.ts`, and
 `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
 `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
@@ -1078,25 +1074,21 @@ is REST-backed: operators should only see reconnect or disconnected shells when
 the route's own data contract is unhealthy, not because a global websocket
 singleton is transiently reconnecting.
 Those same feature-owned header badges must also stay aligned to the owning
-runtime state instead of surfacing stale auxiliary counters as primary status;
-an exhausted quickstart-credit badge cannot override an otherwise active Patrol
-runtime unless quickstart exhaustion is the active blocker.
-When those shared helpers surface quickstart state, the wording must stay
-Patrol-scoped as well: the badge copy should talk about Patrol quickstart runs
-or Patrol quickstart exhaustion on activated or trial-backed installs rather
-than generic AI credits, anonymous free hosted AI, or broad hosted AI
-availability.
-The same shared shell rule applies to activation-gated availability copy: when
-Patrol is blocked because quickstart lacks a server-verified install identity,
-shared feature shells must preserve the backend activation-or-BYOK guidance
-instead of translating that state into an exhausted-credit badge or a generic
-hosted-AI upgrade message.
+runtime state instead of surfacing stale auxiliary counters as primary status.
+Legacy hosted-model credit counters may remain parseable on transport payloads,
+but shared Patrol headers must not render them as customer-facing badges in the
+normal self-hosted GA app.
+The same shared shell rule applies to retired hosted availability copy: when an
+older backend payload describes hosted model activation, credit exhaustion, or
+account-backed AI availability, shared feature shells must normalize the
+operator-facing guidance back to provider setup or local model setup rather than
+rendering the retired offer.
 The same primitive boundary now also owns the first AI enable control in
 `AISettings.tsx`: the primary toggle must remain explicitly addressable with a
-stable accessible label, route through the runtime-backed quickstart
-availability/blocked-reason state, and enable directly for quickstart-ready
-installs instead of falling back to generic "first pressed toggle" selectors,
-provider-model-load heuristics, or unconditional BYOK setup modals.
+stable accessible label and route unconfigured installs into the canonical
+provider setup modal instead of falling back to generic "first pressed toggle"
+selectors, provider-model-load heuristics, legacy hosted-model enablement, or
+in-app trial acquisition.
 That same route-owned presentation rule also governs Patrol findings empty
 states: shared section shells under `frontend-modern/src/features/patrol/`
 must not render a green healthy empty state from `0 active findings` alone
@@ -1154,36 +1146,15 @@ stream lifecycle, buffering, level updates, and download action. Future system
 logs work must extend that split instead of pulling `EventSource`, API calls,
 notification flow, or customer-facing system-log copy back into the panel
 render shell.
-Shared trial CTA handling is now part of that same primitive boundary for
-settings and shared paywalls. Shared/settings runtime owners must derive trial
-eligibility and upgrade posture from the canonical commercial-posture
-contract, including `trial_eligible`, while billing identity and plan detail
-stay on the billing-only entitlements contract. Shared/settings runtime owners
-must route operator-facing failure copy through
-`frontend-modern/src/utils/upgradePresentation.ts`. The trial-start runtime
-handoff itself is now centralized in
-`frontend-modern/src/utils/trialStartAction.ts`; settings/shared paywalls and
-onboarding surfaces must use that owner for redirect, success-notification, and
-canonical denial handling instead of open-coding local `startProTrial()`
-branches or re-interpreting backend status codes.
-That same shared presentation owner also holds the canonical trial
-rate-limit copy. When the shared commercial store provides
-`retryAfterSeconds`, `upgradePresentation.ts` must render human guidance from
-that canonical backoff instead of flattening the UI to a generic "try again
-later" message; user-facing CTA surfaces must therefore inherit
-`Retry-After`-backed copy through the shared helper path rather than
-inventing lane-local 429 wording.
-That same shared primitive boundary now also owns intent-level commercial
-selectors for surfaces that are allowed to show commercial state. Trial status
-surfaces such as `useTrialBannerState.ts` must consume selector helpers from
-`frontend-modern/src/stores/licenseCommercial.ts` such as
-`isCommercialTrialActive()`, `commercialTrialDaysRemaining()`, and
-`commercialOverflowDaysRemaining()` instead of branching directly on raw
-`subscription_state`, `trial_eligible`, or day-count fields. Non-billing
-feature gates must not consume `canOfferCommercialTrial()` or call
-`runStartProTrialAction()` directly; they may show neutral "View plans" links
-through `upgradePresentation.ts`, while trial starts remain owned by explicit
-Plans, hosted, activation, recovery, or support handoff surfaces.
+Self-hosted trial CTA removal is now part of that same primitive boundary for
+settings and shared paywalls. Shared/settings runtime owners may derive neutral
+plan and entitlement posture from the canonical commercial contracts, but
+ordinary self-hosted feature gates must not present in-app trial starts,
+trial-status banners, or trial-specific rate-limit copy. Operator-facing paid
+handoff remains limited to explicit Plans, hosted, activation, recovery, or
+support surfaces; feature gates may show neutral "View plans" links through
+`frontend-modern/src/utils/upgradePresentation.ts` only where presentation
+policy allows commercial discovery.
 Top-level route files are now also expected to stay thin when a feature owns
 the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
 acts only as the route boundary, while
@@ -1298,14 +1269,10 @@ math, hover target selection, focused-series tooltip detail, and density-cell
 opacity rules. Future density-map work should extend those owners instead of
 pushing canvas lifecycle, tooltip shaping, or chart math back into the shared
 shell.
-The shared trial banner now follows that same owner split.
-`frontend-modern/src/components/shared/TrialBanner.tsx` stays the render
-shell, `frontend-modern/src/components/shared/useTrialBannerState.ts` owns
-entitlement load, snooze lifecycle, and upgrade-link runtime, and
-`frontend-modern/src/components/shared/trialBannerModel.ts` owns day-count
-normalization, tone policy, and display labels. Future trial-banner work
-should extend those owners instead of pushing entitlement orchestration,
-snooze state, or tone math back into the shared shell.
+The shared trial banner is retired for self-hosted v6 GA. Future commercial
+notification work must start from the explicit Plans, hosted, activation,
+recovery, or support surfaces rather than reviving a global authenticated-shell
+trial banner.
 The shared column picker now follows that same owner split.
 `frontend-modern/src/components/shared/ColumnPicker.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useColumnPickerState.ts` owns
@@ -2592,7 +2559,6 @@ commercial suppression. `frontend-modern/src/components/Settings/settingsNavCata
 `frontend-modern/src/stores/sessionCapabilities.ts`,
 `frontend-modern/src/stores/demoMode.ts`,
 `frontend-modern/src/useAppRuntimeState.ts`,
-`frontend-modern/src/components/shared/useTrialBannerState.ts`, and
 `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
 `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and

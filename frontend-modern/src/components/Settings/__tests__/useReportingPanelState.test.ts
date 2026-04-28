@@ -105,10 +105,6 @@ describe('useReportingPanelState', () => {
       showWarning: vi.fn(),
     }));
 
-    vi.doMock('@/utils/trialStartAction', () => ({
-      runStartProTrialAction: vi.fn(),
-    }));
-
     vi.doMock('@/utils/upgradeMetrics', () => ({
       trackPaywallViewed: vi.fn(),
     }));
@@ -211,10 +207,6 @@ describe('useReportingPanelState', () => {
       showWarning: vi.fn(),
     }));
 
-    vi.doMock('@/utils/trialStartAction', () => ({
-      runStartProTrialAction: vi.fn(),
-    }));
-
     vi.doMock('@/utils/upgradeMetrics', () => ({
       trackPaywallViewed: vi.fn(),
     }));
@@ -273,10 +265,6 @@ describe('useReportingPanelState', () => {
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
       showWarning: vi.fn(),
-    }));
-
-    vi.doMock('@/utils/trialStartAction', () => ({
-      runStartProTrialAction: vi.fn(),
     }));
 
     vi.doMock('@/utils/upgradeMetrics', () => ({
@@ -345,10 +333,6 @@ describe('useReportingPanelState', () => {
       showWarning: vi.fn(),
     }));
 
-    vi.doMock('@/utils/trialStartAction', () => ({
-      runStartProTrialAction: vi.fn(),
-    }));
-
     vi.doMock('@/utils/upgradeMetrics', () => ({
       trackPaywallViewed: vi.fn(),
     }));
@@ -402,10 +386,6 @@ describe('useReportingPanelState', () => {
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
       showWarning: vi.fn(),
-    }));
-
-    vi.doMock('@/utils/trialStartAction', () => ({
-      runStartProTrialAction: vi.fn(),
     }));
 
     vi.doMock('@/utils/upgradeMetrics', () => ({

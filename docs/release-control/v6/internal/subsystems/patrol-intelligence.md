@@ -38,15 +38,14 @@ Patrol-specific presentation helpers.
 15. `frontend-modern/src/utils/aiFindingPresentation.ts`
 16. `frontend-modern/src/utils/approvalRiskPresentation.ts`
 17. `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`
-18. `frontend-modern/src/utils/aiQuickstartPresentation.ts`
-19. `frontend-modern/src/utils/findingAlertIdentity.ts`
-20. `frontend-modern/src/utils/remediationPresentation.ts`
-21. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
-22. `frontend-modern/src/utils/patrolFormat.ts`
-23. `frontend-modern/src/utils/patrolRunPresentation.ts`
-24. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
-25. `frontend-modern/src/utils/patrolRuntimePresentation.ts`
-26. `frontend-modern/src/utils/textPresentation.ts`
+18. `frontend-modern/src/utils/findingAlertIdentity.ts`
+19. `frontend-modern/src/utils/remediationPresentation.ts`
+20. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
+21. `frontend-modern/src/utils/patrolFormat.ts`
+22. `frontend-modern/src/utils/patrolRunPresentation.ts`
+23. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
+24. `frontend-modern/src/utils/patrolRuntimePresentation.ts`
+25. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -58,8 +57,8 @@ Patrol-specific presentation helpers.
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
 4. Add or change Patrol header, summary, or status runtime-state presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`
-5. Add or change Patrol header quickstart-credit or schedule presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiQuickstartPresentation.ts`, and `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`
-   Patrol must not show the exhausted quickstart-credit warning while runtime state is active on a non-quickstart provider path; that warning belongs only to active quickstart usage or a blocked quickstart-exhausted runtime.
+5. Add or change Patrol header schedule and runtime presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`.
+   Patrol must not surface retired hosted-model credit badges or trial-like activation prompts in the normal self-hosted GA app, even when legacy transport fields are still present.
 6. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
 7. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
 8. Keep Patrol transport and payload changes aligned through the governed AI runtime and API contract transport surfaces
@@ -75,11 +74,11 @@ Patrol-specific presentation helpers.
 1. Update Patrol page, state, presentation helpers, and proof files together when Patrol UX semantics change
 2. Keep Patrol-specific copy and badge logic inside the governed Patrol presentation helpers instead of page-local branches
 3. Update this contract whenever a new Patrol-specific page, store, helper, or presentation component becomes canonical runtime surface area
-4. Keep Patrol header quickstart copy Patrol-scoped and runtime-backed: the
-   Patrol header may promise only the server-authoritative quickstart
-   inventory, phrase availability as Patrol runs with no API key on activated
-   Pulse Account installs or effective hosted entitlements, and avoid implying
-   broader hosted chat, generic AI credits, or anonymous Community entitlement.
+4. Keep retired hosted-model and trial-like Patrol acquisition copy out of the
+   normal self-hosted GA app. Patrol may parse legacy transport fields, but
+   header badges, runtime banners, empty states, and settings handoffs must
+   present provider setup as BYOK/local/self-managed rather than promising
+   managed credits or account-backed AI access.
 5. Keep customer-facing Patrol naming product-first: page titles, route chrome,
    summary copy, actions, and empty states should lead with `Patrol` or
    `Pulse Patrol` rather than generic `AI` branding. Reserve `AI` terminology
@@ -133,10 +132,10 @@ That same Patrol hook boundary now consumes shared AI settings/model truth
 through `frontend-modern/src/stores/aiRuntimeState.ts` instead of mounting its
 own `/api/settings/ai` or `/api/ai/models` reads. Patrol-specific state still
 owns local toggle optimism, run-status orchestration, and Patrol-only copy,
-including quickstart exhaustion and runtime-availability messaging that stays
-Patrol-first in operator-facing shells and uses provider/API-key wording only
-for the actual configuration boundary, but the underlying AI runtime catalog
-must stay shared with chat and AI settings.
+including runtime-availability messaging that stays Patrol-first in
+operator-facing shells and uses provider/API-key wording only for the actual
+configuration boundary, but the underlying AI runtime catalog must stay shared
+with chat and AI settings.
 The Patrol page now also treats Patrol runtime availability as a first-class
 render contract: the header chip, primary summary card, and status bar must
 all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`
@@ -482,25 +481,15 @@ with execution errors as an error result even when the stored status text is
 still `healthy`, so run history and header activity surfaces do not present a
 false green outcome for an incomplete Patrol execution.
 hook-local fallback logic.
-The Patrol header now also has explicit helper ownership for its quickstart and
-schedule presentation. `frontend-modern/src/utils/aiQuickstartPresentation.ts`
-and `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts` are the
-canonical owners for quickstart-credit messaging and Patrol interval option
-labeling used by `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`;
-future Patrol header work should extend those helpers instead of rebuilding
-credit badges or schedule labels inline in the header shell. That same header
-surface must now gate exhausted-credit messaging on actual runtime usage:
-Patrol may only show the quickstart exhausted warning when `using_quickstart`
-is true or when the Patrol runtime is explicitly blocked by quickstart
-exhaustion, not merely because the stored credit counter reached zero while a
-configured provider path keeps Patrol active.
-That same header copy must stay Patrol-only in operator-facing language:
-available inventory should read as free Patrol quickstart runs with no API
-key for Patrol on the current activated Pulse Account install or effective
-hosted entitlement, and
-activation-required states must trust the canonical blocked reason instead of
-relabeling stale counters as exhausted. Exhaustion should direct the operator
-toward BYOK for Patrol rather than implying a broader hosted AI allowance.
+The Patrol header now also has explicit helper ownership for schedule and
+runtime presentation. `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`
+and `frontend-modern/src/utils/patrolRuntimePresentation.ts` are the canonical
+owners for Patrol interval option labeling and runtime-state wording used by
+`frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`; future
+Patrol header work should extend those helpers instead of rebuilding schedule
+labels, runtime copy, or retired managed-credit badges inline in the header
+shell. That same header surface must normalize older hosted-model block reasons
+back to provider or local-model setup guidance.
 `frontend-modern/src/utils/remediationPresentation.ts` is now also the
 canonical owner for remediation result badge copy and success/failure styling
 used by `frontend-modern/src/components/patrol/RemediationStatus.tsx`, so
@@ -581,12 +570,11 @@ The same page and drawer now also share the canonical
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card for recent changes, so the timeline layout and relative-time wording
 stay governed by one frontend feed instead of separate page-local loops.
-Patrol trial-entry surfaces now also share the canonical
-`frontend-modern/src/utils/trialStartAction.ts` owner for hosted handoff and
-denial handling. `ApprovalSection.tsx` and
-`usePatrolIntelligenceState.ts` may still choose Patrol-specific success copy,
-but they must not reintroduce local `startProTrial()` status-code branches
-that diverge from the commercial backend contract.
+Patrol trial-entry surfaces are retired for normal self-hosted v6 GA.
+`ApprovalSection.tsx` and `usePatrolIntelligenceState.ts` may link to explicit
+plan, activation, recovery, support, or hosted handoff surfaces where
+presentation policy allows, but they must not reintroduce local
+`startProTrial()` status-code branches or trial-specific denial copy.
 Pending Patrol fix approvals now also require a canonical urgency order across
 the store and Patrol approval surfaces. `frontend-modern/src/stores/aiIntelligence.ts`,
 `frontend-modern/src/components/patrol/ApprovalBanner.tsx`, and dashboard
@@ -676,15 +664,12 @@ through `frontend-modern/src/routing/resourceLinks.ts` where those surfaces
 exist, rather than forcing operators to pivot manually through search or
 assistant prompts to continue investigating API-backed platforms such as
 TrueNAS.
-Patrol upgrade and trial posture now follows the same runtime-versus-
-commercial split as the rest of the app. Patrol runtime availability must stay
-on the non-commercial capability store, while approval/trial CTAs use the
-shared commercial-posture store and trial-start helper. Patrol surfaces must not
-recombine those two contracts into one entitlement payload.
-Patrol approval and trial shells should consume selector helpers such as
-`canStartCommercialTrial()` from
-`frontend-modern/src/stores/licenseCommercial.ts` instead of branching on raw
-commercial-posture fields in leaf components.
+Patrol upgrade posture now follows the same runtime-versus-commercial split as
+the rest of the app. Patrol runtime availability must stay on the
+non-commercial capability store, while any paid handoff uses explicit plan,
+activation, recovery, support, or hosted surfaces governed by presentation
+policy. Patrol surfaces must not recombine those contracts into one entitlement
+payload or revive trial-start selectors in leaf components.
 Patrol findings presentation now also keeps runtime identity and action routing
 on shared helpers. Findings shells may link or format from feature-owned
 presentation helpers, but Patrol runtime severity, title cleanup, and primary

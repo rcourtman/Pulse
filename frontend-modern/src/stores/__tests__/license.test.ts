@@ -34,7 +34,6 @@ import {
   legacyConnections,
   commercialPostureLoadError,
   loadCommercialPosture,
-  startProTrial,
 } from '@/stores/licenseCommercial';
 import {
   licenseEntitlements,
@@ -337,129 +336,6 @@ describe('license stores', () => {
 
       expect(commercialPostureLoadError()).toBeInstanceOf(Error);
       expect(commercialPostureLoadError()?.message).toBe('Network timeout');
-    });
-
-    it('startProTrial throws error if trial start fails', async () => {
-      vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
-        ok: false,
-        status: 400,
-        headers: new Headers(),
-        json: vi.fn().mockResolvedValue({ code: 'trial_failed' }),
-      } as unknown as Response);
-
-      await expect(startProTrial()).rejects.toThrow('Failed to start trial');
-    });
-
-    it('startProTrial fails closed when commercial surfaces are hidden', async () => {
-      vi.mocked(presentationPolicyHidesCommercialSurfaces).mockReturnValue(true);
-
-      await expect(startProTrial()).rejects.toMatchObject({
-        message: 'Trial activation unavailable under the current presentation policy',
-        status: 404,
-        code: 'presentation_policy_unavailable',
-      });
-      expect(LicenseAPI.startTrial).not.toHaveBeenCalled();
-    });
-
-    it('startProTrial fails closed when upgrade prompts are hidden', async () => {
-      vi.mocked(presentationPolicyHidesUpgradePrompts).mockReturnValue(true);
-
-      await expect(startProTrial()).rejects.toMatchObject({
-        message: 'Trial activation unavailable under the current presentation policy',
-        status: 404,
-        code: 'presentation_policy_unavailable',
-      });
-      expect(LicenseAPI.startTrial).not.toHaveBeenCalled();
-    });
-
-    it('startProTrial preserves backend error details for trial-not-available responses', async () => {
-      vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
-        ok: false,
-        status: 409,
-        headers: new Headers(),
-        json: vi.fn().mockResolvedValue({
-          code: 'trial_not_available',
-          error: 'Trial cannot be started while a paid v5 license migration is pending',
-          details: { org_id: 'default' },
-        }),
-      } as unknown as Response);
-
-      await expect(startProTrial()).rejects.toMatchObject({
-        status: 409,
-        code: 'trial_not_available',
-        message: 'Trial cannot be started while a paid v5 license migration is pending',
-        details: { org_id: 'default' },
-      });
-    });
-
-    it('startProTrial returns redirect action when hosted signup is required', async () => {
-      vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
-        ok: false,
-        status: 409,
-        json: vi.fn().mockResolvedValue({
-          code: 'trial_signup_required',
-          details: { action_url: 'https://pulserelay.pro/pricing?intent=pro_trial' },
-        }),
-      } as unknown as Response);
-
-      await expect(startProTrial()).resolves.toEqual({
-        outcome: 'redirect',
-        actionUrl: 'https://pulserelay.pro/pricing?intent=pro_trial',
-      });
-    });
-
-    it('startProTrial parses Retry-After headers on rate-limited responses', async () => {
-      vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
-        ok: false,
-        status: 429,
-        headers: new Headers({ 'Retry-After': '120' }),
-        json: vi.fn().mockResolvedValue({
-          code: 'trial_rate_limited',
-          error: 'Trial start rate limit exceeded',
-          details: { retry_after_seconds: '45' },
-        }),
-      } as unknown as Response);
-
-      await expect(startProTrial()).rejects.toMatchObject({
-        status: 429,
-        code: 'trial_rate_limited',
-        message: 'Trial start rate limit exceeded',
-        retryAfterSeconds: 120,
-        details: { retry_after_seconds: '45' },
-      });
-    });
-
-    it('startProTrial falls back to payload retry_after_seconds when headers are absent', async () => {
-      vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
-        ok: false,
-        status: 429,
-        headers: new Headers(),
-        json: vi.fn().mockResolvedValue({
-          code: 'trial_rate_limited',
-          error: 'Trial start rate limit exceeded',
-          details: { retry_after_seconds: '75' },
-        }),
-      } as unknown as Response);
-
-      await expect(startProTrial()).rejects.toMatchObject({
-        status: 429,
-        code: 'trial_rate_limited',
-        message: 'Trial start rate limit exceeded',
-        retryAfterSeconds: 75,
-        details: { retry_after_seconds: '75' },
-      });
-    });
-
-    it('startProTrial refreshes commercial and runtime state when local activation succeeds', async () => {
-      vi.mocked(LicenseAPI.startTrial).mockResolvedValue({ ok: true } as Response);
-      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
-      vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
-
-      await expect(startProTrial()).resolves.toEqual({ outcome: 'activated' });
-      expect(LicenseAPI.getCommercialPosture).toHaveBeenCalled();
-      expect(LicenseAPI.getCommercialEntitlements).toHaveBeenCalled();
-      expect(LicenseAPI.getRuntimeCapabilities).toHaveBeenCalled();
     });
 
     it('returns true for pro tier', async () => {

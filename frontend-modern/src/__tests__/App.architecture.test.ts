@@ -74,6 +74,7 @@ describe('App architecture', () => {
     expect(appSource).toContain("if (e.key === 'Escape' && aiChatStore.isOpen) {");
     expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
     expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
+    expect(appSource).not.toContain('TrialBanner');
   });
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {

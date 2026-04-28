@@ -276,6 +276,11 @@ regression protection.
     `/api/state` and paying an avoidable `401`; once a local-login hint exists
     or the operator is on a protected route, that shared state probe remains
     the canonical runtime detector.
+    That same app-shell performance boundary treats global commercial banners as
+    non-hot-path UI. Retired self-hosted trial or managed-model acquisition
+    surfaces must not be reintroduced into `frontend-modern/src/App.tsx` as
+    always-mounted chrome that preloads commercial posture or adds route-global
+    render work to ordinary monitoring sessions.
     Invitation accept/revoke and other org-membership changes follow that same
     hot-path contract: `frontend-modern/src/useAppRuntimeState.ts` may reload
     the org list from the shared `organizations_changed` event, but that refresh

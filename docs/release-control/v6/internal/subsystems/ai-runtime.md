@@ -90,10 +90,11 @@ runtime cost control, and shared AI transport surfaces.
    represented only as aggregate posture and omitted from detailed prompt
    sections, while sensitive alert text is scrubbed through the shared
    unified-resource redaction helper before it reaches a non-local model.
-   The final provider-bound chat, Patrol, investigation, tool-result, and
-   hosted-quickstart requests must also pass through that same resource-policy
-   sanitizer immediately before transport, so later agentic turns cannot
-   reintroduce local-only identifiers after the original context export.
+   The final provider-bound chat, Patrol, investigation, tool-result, and any
+   retained legacy managed-model compatibility requests must also pass through
+   that same resource-policy sanitizer immediately before transport, so later
+   agentic turns cannot reintroduce local-only identifiers after the original
+   context export.
 6. Keep AI resource and incident context aligned with the canonical unified-resource timeline before falling back to patrol-local change detectors
 7. Keep platform assistant read/control claims aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. New
@@ -110,12 +111,10 @@ runtime cost control, and shared AI transport surfaces.
    `ActionPlan.Preflight` dry-run boundary through
    `internal/ai/tools/action_audit.go` rather than leaving dry-run availability
    as chat-only text.
-9. Keep self-hosted Patrol quickstart messaging aligned with backend runtime
-   truth: the governed quickstart contract is Patrol-only first-run
-   acceleration on installs with an activated entitlement and
-   server-authoritative run inventory, not a trial prompt, a general hosted chat
-   entitlement, or a replacement for BYOK once Patrol leaves the quickstart
-   path.
+9. Keep self-hosted Patrol messaging aligned with the v6 GA product contract:
+   ordinary self-hosted installs use BYOK or local providers, and the runtime
+   must not surface retired managed-model credits, trial prompts, account-backed
+   AI activation, or general hosted chat entitlement in the normal app.
 10. Keep discovery-analysis prompt bounds and response budgets aligned across
    `internal/ai/service.go` and the shared service-discovery prompt builders:
    the runtime must reserve enough output tokens for structured discovery JSON,
@@ -196,71 +195,25 @@ selection may fall back only to the provider-owned default declared in
 `internal/config/ai.go`. Runtime startup, connection-test, and load-config
 paths may not return an empty effective model or borrow another provider's
 selection just because live model discovery was unavailable.
-That quickstart ownership includes the public proxy dependency under
-`internal/ai/providers/quickstart.go`: the runtime must default to the owned
-commercial API edge at `https://license.pulserelay.pro/v1/quickstart/patrol`
-instead of depending on an ungoverned standalone hostname. Runtime overrides
-may exist only as an explicit environment-controlled rollout escape hatch, and
-the canonical quickstart proxy contract remains an OpenAI-compatible server-owned
-surface that lives behind the public license API rather than a tenant-local or
-mobile-local adapter. That server-owned boundary must also own the real upstream
-vendor model selection explicitly through license-server configuration rather
-than through a baked runtime fallback, so model churn does not leak into the
-Pulse runtime or API contract.
-Every hosted quickstart provider call must carry the `resource-policy-v1`
-data-policy marker declaring client-side enforcement of aggregate-only
-local-only handling and exact resource-policy redaction. The public proxy must
-reject prompt relay requests that omit that marker so the Pulse-hosted route
-cannot silently become an ungoverned external-model bypass.
-That same Patrol quickstart boundary is now server-authoritative end to end.
-`internal/ai/quickstart.go` must bootstrap before the first Patrol-only
-quickstart use, resolve the strongest server-verified runtime authority in
-this order, and refuse bootstrap entirely when neither exists: installation
-identity from installation-scoped `activation.enc` for activated self-hosted
-installs, then signed entitlement-lease identity from the effective
-entitlement-backed billing state for hosted entitlement-backed runtimes,
-including hosted trial leases. Tenant-
-local Patrol persistence must therefore reuse installation-scoped activation
-state where it exists and must fall back to the shared entitlement lease
-without inventing shadow activation files or anonymous client identity.
-`quickstart.enc` may cache only the server-issued token snapshot and latest
-server-reported inventory through the shared `internal/config/persistence.go`,
-`internal/config/entitlement_billing_state.go`, and
-`internal/config/quickstart_state.go` helpers; it must not persist anonymous
-bootstrap identity or revive local counter truth. `internal/ai/providers/quickstart.go`
-must authenticate Patrol proxy calls with `Authorization: Bearer <quickstart_token>`, sync
-`credits_remaining` / `credits_total` back into that cache on every server
-response, accept both `quickstart_token_expires_at` and the older
-`token_expires_at` response field while mixed quickstart deployments exist,
-and invalidate the cached token on auth rejection. Explicit BYOK provider
-credentials still outrank Patrol quickstart whenever both are present.
-That same Patrol quickstart contract is execution-scoped rather than
-provider-turn-scoped: the runtime must stamp one stable execution identifier
-per higher-level Patrol run and propagate it through every hosted quickstart
-provider call, including retries, the evaluation pass, alert auto-resolution
-quick-analysis calls, and any other ancillary Patrol-side AI work that still
-belongs to the same run, so one Patrol run consumes at most one quickstart
-credit even when the underlying agentic loop makes multiple model turns or
-post-analysis Patrol helpers need additional model calls.
-That same server-authoritative quickstart contract also governs partial and
-released error paths. `internal/ai/providers/quickstart.go` and
-`internal/ai/quickstart.go` must treat server-reported credits and expiry as
-optional fields on non-success responses, sync cached inventory only when the
-server actually returns authoritative inventory, and preserve the last known
-server state otherwise. The license-server quickstart boundary must release
-failed reservations with the post-release workspace snapshot attached whenever
-that inventory is known, rather than forcing the runtime to infer exhaustion
-from absent fields or resetting credits to zero after transient upstream
-errors.
-Public-facing copy that reflects those runtime fields must therefore speak in
-Patrol quickstart runs on activated Pulse Account installs or effective hosted
-entitlements and Patrol-only no-key activation, not in generic AI credits,
-anonymous Community bootstrap, trial CTAs, or a promise of full hosted chat.
+Retired quickstart ownership is now a compatibility boundary, not a normal
+self-hosted GA runtime path. `internal/ai/providers/quickstart.go` and
+`internal/ai/quickstart.go` may remain parseable for mixed-version runtimes,
+hosted compatibility, or support migration while that backend code exists, but
+ordinary self-hosted Assistant, Patrol, and AI Settings flows must prefer the
+operator's configured provider or local model and must not bootstrap managed
+credits from the frontend. Any retained compatibility traffic must still use the
+owned commercial API edge, authenticate with server-verified commercial
+authority, avoid anonymous local identity, and carry the `resource-policy-v1`
+data-policy marker so legacy prompt relay cannot become an ungoverned
+external-model bypass.
+Public-facing copy that reflects those legacy runtime fields must normalize
+back to provider or local-model setup. It must not promise managed credits,
+account activation support, trial CTAs, anonymous Community bootstrap, or full
+hosted chat access in ordinary self-hosted v6 GA flows.
 That same runtime-backed contract now governs AI settings enablement too:
-quickstart-ready installs may enable Patrol directly without opening provider
-setup, while activation-required or offline quickstart states must surface one
-canonical blocked reason and fall back to activation-or-BYOK guidance instead
-of inferring readiness from provider model catalogs or local credit counters.
+unconfigured installs open provider setup, while stale managed-credit or
+activation-required states are treated as compatibility metadata rather than a
+direct-enable path.
 That same AI/runtime boundary now also owns the server-side assistant
 availability fact used by the app shell. `internal/api/ai_handlers.go`,
 `internal/api/security_status_capabilities.go`, and
@@ -957,13 +910,13 @@ summary payload directly through the shared AI client and store, so the
 visible summary card stays aligned with the same recent-change slice that the
 runtime and API contracts expose.
 The Patrol runtime now also exports a canonical `runtime_state` alongside
-`blocked_reason` in the Patrol status payload, so blocked quickstart-credit or
-provider-availability conditions remain part of the governed runtime contract
-instead of being inferred later from the last successful patrol summary.
+`blocked_reason` in the Patrol status payload, so provider-availability and any
+legacy managed-credit block conditions remain part of the governed runtime
+contract instead of being inferred later from the last successful patrol
+summary.
 That runtime-state contract must be derived from live Patrol runtime inputs,
-not only from the last failed run attempt: exhausted quickstart credits are a
-blocked Patrol runtime immediately, and the backend must also clear any stale
-quickstart block once credits or BYOK configuration return.
+not only from the last failed run attempt, and the backend must clear any stale
+managed-credit block once a provider or local model configuration returns.
 The same runtime contract now also governs when the system-wide Patrol health
 summary is allowed to read as healthy. `internal/ai/intelligence.go` must not
 derive `Health A` or `100/100` from "no active findings" alone when recent

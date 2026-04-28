@@ -43,17 +43,10 @@ describe('aiSettingsPresentation', () => {
     expect(getAISettingsWorkloadDiscoverySummary()).toEqual({
       text: 'Workload discovery gives Pulse Assistant and Patrol concrete service context, so chat responses and verification findings can reference real services and commands instead of generic advice.',
     });
-    expect(getAISettingsSetupDialogPresentation('provider')).toEqual({
+    expect(getAISettingsSetupDialogPresentation()).toEqual({
       ariaLabel: 'Set up Assistant and Patrol',
       title: 'Set Up Assistant & Patrol',
       description: 'Connect a provider to power Pulse Assistant and Patrol.',
-      submitLabel: 'Enable Assistant & Patrol',
-    });
-    expect(getAISettingsSetupDialogPresentation('activation-or-provider')).toEqual({
-      ariaLabel: 'Activate quickstart or connect a provider',
-      title: 'Activate quickstart or connect a provider',
-      description:
-        'Use an eligible hosted quickstart entitlement, or connect your own provider for Pulse Assistant and Patrol.',
       submitLabel: 'Enable Assistant & Patrol',
     });
   });
@@ -64,53 +57,11 @@ describe('aiSettingsPresentation', () => {
         configured: true,
         providerCount: 2,
         modelCount: 5,
-        quickstartCreditsAvailable: false,
-        quickstartCreditsRemaining: 0,
-        quickstartCreditsTotal: 0,
-        quickstartBlockedReason: '',
       }),
     ).toEqual({
       containerClassName: 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200',
       dotClassName: 'bg-emerald-400',
       summary: 'Ready • 2 providers • 5 models',
-    });
-  });
-
-  it('returns the canonical quickstart-ready presentation', () => {
-    expect(
-      getAISettingsReadinessPresentation({
-        configured: false,
-        providerCount: 0,
-        modelCount: 0,
-        quickstartCreditsAvailable: true,
-        quickstartCreditsRemaining: 25,
-        quickstartCreditsTotal: 25,
-        quickstartBlockedReason: '',
-      }),
-    ).toEqual({
-      containerClassName: 'bg-blue-50 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
-      dotClassName: 'bg-blue-400',
-      summary: 'Patrol quickstart ready • 25/25 runs left • no API key needed yet',
-    });
-  });
-
-  it('returns the canonical activation-required presentation', () => {
-    expect(
-      getAISettingsReadinessPresentation({
-        configured: false,
-        providerCount: 0,
-        modelCount: 0,
-        quickstartCreditsAvailable: false,
-        quickstartCreditsRemaining: 0,
-        quickstartCreditsTotal: 0,
-        quickstartBlockedReason:
-          'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
-      }),
-    ).toEqual({
-      containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
-      dotClassName: 'bg-amber-400',
-      summary:
-        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
     });
   });
 
@@ -120,10 +71,6 @@ describe('aiSettingsPresentation', () => {
         configured: false,
         providerCount: 0,
         modelCount: 0,
-        quickstartCreditsAvailable: false,
-        quickstartCreditsRemaining: 0,
-        quickstartCreditsTotal: 0,
-        quickstartBlockedReason: '',
       }),
     ).toEqual({
       containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',

@@ -27,7 +27,6 @@ const commercialPostureMock = vi.fn();
 const entitlementsMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
 const trackUpgradeClickedMock = vi.fn();
-const runStartProTrialActionMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 
 vi.mock('@/api/ai', () => ({
@@ -76,10 +75,6 @@ vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
-}));
-
-vi.mock('@/utils/trialStartAction', () => ({
-  runStartProTrialAction: (...args: unknown[]) => runStartProTrialActionMock(...args),
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
@@ -137,7 +132,6 @@ const resetAllMocks = () => {
   entitlementsMock.mockReset();
   trackPaywallViewedMock.mockReset();
   trackUpgradeClickedMock.mockReset();
-  runStartProTrialActionMock.mockReset();
   presentationPolicyHidesUpgradePromptsMock.mockReset();
 };
 
@@ -158,7 +152,6 @@ const setupDefaultMocks = () => {
   summarizeSessionMock.mockResolvedValue(undefined);
   getSessionDiffMock.mockResolvedValue({ files: [], summary: '' });
   revertSessionMock.mockResolvedValue(undefined);
-  runStartProTrialActionMock.mockResolvedValue('activated');
   presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
 };
 
@@ -464,7 +457,7 @@ describe('AISettings OpenRouter flow', () => {
   });
 });
 
-describe('AISettings quickstart enablement flow', () => {
+describe('AISettings provider setup flow', () => {
   beforeEach(() => {
     resetAllMocks();
     setupDefaultMocks();
@@ -474,7 +467,7 @@ describe('AISettings quickstart enablement flow', () => {
     cleanup();
   });
 
-  it('does not load provider model catalog for quickstart-only installs', async () => {
+  it('keeps quickstart-only installs on the provider setup path', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
       configured: true,
@@ -483,41 +476,6 @@ describe('AISettings quickstart enablement flow', () => {
       quickstart_credits_total: 25,
       quickstart_credits_remaining: 25,
       quickstart_credits_available: true,
-    });
-
-    renderComponent();
-
-    await waitFor(() => {
-      expect(getSettingsMock).toHaveBeenCalledTimes(1);
-    });
-
-    expect(getModelsMock).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
-    ).toBeInTheDocument();
-  });
-
-  it('enables directly when quickstart is available on an activated install', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      configured: true,
-      enabled: false,
-      model: 'quickstart:pulse-hosted',
-      quickstart_credits_total: 25,
-      quickstart_credits_remaining: 25,
-      quickstart_credits_available: true,
-    });
-    updateSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      configured: true,
-      enabled: true,
-      model: 'quickstart:pulse-hosted',
-      chat_model: 'quickstart:pulse-hosted',
-      patrol_model: 'quickstart:pulse-hosted',
-      quickstart_credits_total: 25,
-      quickstart_credits_remaining: 25,
-      quickstart_credits_available: true,
-      using_quickstart: true,
     });
 
     renderComponent();
@@ -528,14 +486,15 @@ describe('AISettings quickstart enablement flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
 
-    await waitFor(() => {
-      expect(updateSettingsMock).toHaveBeenCalledWith({ enabled: true });
-    });
-
+    expect(getModelsMock).not.toHaveBeenCalled();
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+    expect(await screen.findByText('Set Up Assistant & Patrol')).toBeInTheDocument();
     expect(
-      screen.queryByText('Connect a provider to power Pulse Assistant and Patrol.'),
+      screen.getByText('Connect a provider to power Pulse Assistant and Patrol.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
     ).not.toBeInTheDocument();
-    expect(notificationSuccessMock).toHaveBeenCalledWith('Assistant & Patrol enabled');
   });
 
   it('keeps activation-required quickstart guidance out of default provider setup', async () => {

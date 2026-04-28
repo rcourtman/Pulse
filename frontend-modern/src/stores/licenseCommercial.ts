@@ -11,11 +11,8 @@ import {
   isSelfHostedPurchaseStartDestination,
 } from '@/utils/pricingHandoff';
 import { resolveUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
-import { loadRuntimeCapabilities } from '@/stores/license';
-import { loadLicenseEntitlements } from '@/stores/licenseEntitlements';
 import {
   presentationPolicyHidesCommercialSurfaces,
-  presentationPolicyHidesUpgradePrompts,
   sessionPresentationPolicyResolved,
 } from '@/stores/sessionPresentationPolicy';
 
@@ -40,42 +37,8 @@ const [loaded, setLoaded] = createSignal(false);
 const [loadError, setLoadError] = createSignal<Error | null>(null);
 let inFlightCommercialPostureLoad: Promise<void> | null = null;
 
-type TrialStartErrorPayload = {
-  error?: string;
-  code?: string;
-  details?: Record<string, string>;
-};
-
-type TrialStartRequestError = Error & {
-  status: number;
-  code?: string;
-  details?: Record<string, string>;
-  retryAfterSeconds?: number;
-};
-
-export type StartProTrialResult =
-  | { outcome: 'activated' }
-  | { outcome: 'redirect'; actionUrl: string };
-
-function parseRetryAfterSeconds(value: string | null | undefined): number | undefined {
-  const normalized = value?.trim();
-  if (!normalized) return undefined;
-
-  const parsed = Number(normalized);
-  if (Number.isFinite(parsed) && parsed > 0) {
-    return Math.ceil(parsed);
-  }
-
-  const retryAt = Date.parse(normalized);
-  if (Number.isNaN(retryAt)) return undefined;
-
-  const waitMs = retryAt - Date.now();
-  if (waitMs <= 0) return 1;
-  return Math.ceil(waitMs / 1000);
-}
-
 /**
- * Load the commercial posture payload used by non-billing trial and upgrade UI.
+ * Load the commercial posture payload used by non-billing upgrade and activation UI.
  * Initial bootstrap belongs to the authenticated app shell or first-run setup,
  * not to feature-local hooks.
  */
@@ -136,60 +99,6 @@ export async function loadCommercialPosture(force = false): Promise<void> {
   }
 }
 
-/**
- * Start the explicit hosted trial handoff for the current org, then refresh runtime and commercial state.
- */
-export async function startProTrial(): Promise<StartProTrialResult> {
-  if (
-    !sessionPresentationPolicyResolved() ||
-    presentationPolicyHidesCommercialSurfaces() ||
-    presentationPolicyHidesUpgradePrompts()
-  ) {
-    const err = new Error(
-      'Trial activation unavailable under the current presentation policy',
-    ) as TrialStartRequestError;
-    err.status = 404;
-    err.code = 'presentation_policy_unavailable';
-    throw err;
-  }
-
-  const res = await LicenseAPI.startTrial();
-  if (!res.ok) {
-    let payload: TrialStartErrorPayload | null = null;
-    try {
-      payload = (await res.json()) as TrialStartErrorPayload;
-    } catch {
-      payload = null;
-    }
-
-    if (res.status === 409 && payload?.code === 'trial_signup_required') {
-      const actionUrl =
-        payload.details?.action_url ||
-        getFirstUpgradeActionUrl() ||
-        getUpgradeActionUrlOrFallback('relay');
-      return { outcome: 'redirect', actionUrl };
-    }
-
-    const err = new Error(
-      payload?.error?.trim() || `Failed to start trial (status ${res.status})`,
-    ) as TrialStartRequestError;
-    const retryAfterSeconds =
-      parseRetryAfterSeconds(res.headers.get('Retry-After')) ??
-      parseRetryAfterSeconds(payload?.details?.retry_after_seconds);
-    err.status = res.status;
-    err.code = payload?.code;
-    err.details = payload?.details;
-    err.retryAfterSeconds = retryAfterSeconds;
-    throw err;
-  }
-  await Promise.all([
-    loadCommercialPosture(true),
-    loadRuntimeCapabilities(true),
-    loadLicenseEntitlements(true),
-  ]);
-  return { outcome: 'activated' };
-}
-
 const PRO_TIERS = new Set([
   'pro',
   'pro_annual',
@@ -210,38 +119,6 @@ export const isPro = createRoot(() =>
     return Boolean(current && PRO_TIERS.has(current.tier));
   }),
 );
-
-/**
- * Used by explicit commercial surfaces that can render a trial CTA unless the
- * presentation policy or current posture denies trial eligibility.
- */
-export function canOfferCommercialTrial(): boolean {
-  if (presentationPolicyHidesUpgradePrompts()) return false;
-  return commercialPostureState()?.trial_eligible !== false;
-}
-
-/**
- * Used by explicit commercial surfaces that should only offer trial start when
- * the current commercial posture is loaded and not already active or trialing.
- */
-export function canStartCommercialTrial(): boolean {
-  if (presentationPolicyHidesUpgradePrompts()) return false;
-  const current = commercialPostureState();
-  if (!current) return false;
-  if (current.subscription_state === 'active' || current.subscription_state === 'trial') {
-    return false;
-  }
-  return current.trial_eligible !== false;
-}
-
-export function isCommercialTrialActive(): boolean {
-  return commercialPostureState()?.subscription_state === 'trial';
-}
-
-export function commercialTrialDaysRemaining(): number | null {
-  const current = commercialPostureState()?.trial_days_remaining;
-  return typeof current === 'number' && Number.isFinite(current) ? current : null;
-}
 
 export function commercialOverflowDaysRemaining(): number | null {
   const current = commercialPostureState()?.overflow_days_remaining;

@@ -76,11 +76,11 @@ describe('systemSettings store', () => {
     expect(privacyDoc).toContain('Reset ID');
   });
 
-  it('documents hosted quickstart transport and resource-policy redaction in the privacy doc', () => {
+  it('documents self-hosted AI provider transport and resource-policy redaction in the privacy doc', () => {
     const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
 
-    expect(privacyDoc).toContain('requests transit Pulse infrastructure');
-    expect(privacyDoc).toContain('resource-policy redaction is applied before the Quickstart request');
-    expect(privacyDoc).toContain('To keep prompts off Pulse infrastructure entirely, use a BYOK provider');
+    expect(privacyDoc).toContain('AI prompts from self-managed installs do not transit Pulse infrastructure');
+    expect(privacyDoc).toContain('governed resource details use the same resource-policy redaction');
+    expect(privacyDoc).toContain('Local providers stay on your network');
   });
 });

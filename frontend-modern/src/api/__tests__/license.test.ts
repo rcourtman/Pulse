@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LicenseAPI } from '../license';
-import { apiClient, apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON } from '@/utils/apiClient';
 
 vi.mock('@/utils/apiClient', () => ({
-  apiClient: {
-    fetch: vi.fn(),
-  },
   apiFetchJSON: vi.fn(),
 }));
 
@@ -162,15 +159,7 @@ describe('LicenseAPI', () => {
     expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/entitlements');
   });
 
-  it('starts trials through the raw license transport', async () => {
-    vi.mocked(apiClient.fetch).mockResolvedValueOnce(new Response(null, { status: 202 }));
-
-    const response = await LicenseAPI.startTrial();
-
-    expect(apiClient.fetch).toHaveBeenCalledWith('/api/license/trial/start', {
-      method: 'POST',
-      headers: { Accept: 'application/json' },
-    });
-    expect(response.status).toBe(202);
+  it('does not expose a normal self-hosted trial-start client', () => {
+    expect('startTrial' in LicenseAPI).toBe(false);
   });
 });

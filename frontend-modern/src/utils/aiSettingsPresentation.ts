@@ -8,10 +8,6 @@ export interface AISettingsReadinessInput {
   configured: boolean;
   providerCount: number;
   modelCount: number;
-  quickstartCreditsAvailable: boolean;
-  quickstartCreditsRemaining: number;
-  quickstartCreditsTotal: number;
-  quickstartBlockedReason: string;
 }
 
 const AI_OAUTH_ERROR_MESSAGES: Record<string, string> = {
@@ -32,8 +28,6 @@ export const AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR = 'Unable to load chat session
 export const AI_SETTINGS_LOAD_FAILURE_MESSAGE =
   'Unable to load Assistant & Patrol settings. Your configuration could not be retrieved.';
 export const AI_SETTINGS_LOAD_RETRY_LABEL = 'Retry';
-
-export type AISettingsSetupMode = 'provider' | 'activation-or-provider' | 'provider-required';
 
 export interface AISettingsSetupDialogPresentation {
   ariaLabel: string;
@@ -60,70 +54,25 @@ export function getAISettingsWorkloadDiscoverySummary() {
   } as const;
 }
 
-export function getAISettingsSetupDialogPresentation(
-  mode: AISettingsSetupMode,
-): AISettingsSetupDialogPresentation {
-  switch (mode) {
-    case 'activation-or-provider':
-      return {
-        ariaLabel: 'Activate quickstart or connect a provider',
-        title: 'Activate quickstart or connect a provider',
-        description:
-          'Use an eligible hosted quickstart entitlement, or connect your own provider for Pulse Assistant and Patrol.',
-        submitLabel: 'Enable Assistant & Patrol',
-      };
-    case 'provider-required':
-      return {
-        ariaLabel: 'Connect a provider to continue',
-        title: 'Connect a provider to continue',
-        description:
-          'Patrol quickstart is not currently available. Connect a provider for Pulse Assistant and Patrol.',
-        submitLabel: 'Enable Assistant & Patrol',
-      };
-    default:
-      return {
-        ariaLabel: 'Set up Assistant and Patrol',
-        title: 'Set Up Assistant & Patrol',
-        description: 'Connect a provider to power Pulse Assistant and Patrol.',
-        submitLabel: 'Enable Assistant & Patrol',
-      };
-  }
+export function getAISettingsSetupDialogPresentation(): AISettingsSetupDialogPresentation {
+  return {
+    ariaLabel: 'Set up Assistant and Patrol',
+    title: 'Set Up Assistant & Patrol',
+    description: 'Connect a provider to power Pulse Assistant and Patrol.',
+    submitLabel: 'Enable Assistant & Patrol',
+  };
 }
 
 export function getAISettingsReadinessPresentation(
   input: AISettingsReadinessInput,
 ): AISettingsReadinessPresentation {
-  const {
-    configured,
-    providerCount,
-    modelCount,
-    quickstartCreditsAvailable,
-    quickstartCreditsRemaining,
-    quickstartCreditsTotal,
-    quickstartBlockedReason,
-  } = input;
-
-  if (quickstartCreditsAvailable && providerCount === 0) {
-    return {
-      containerClassName: 'bg-blue-50 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
-      dotClassName: 'bg-blue-400',
-      summary: `Patrol quickstart ready • ${quickstartCreditsRemaining}/${quickstartCreditsTotal} runs left • no API key needed yet`,
-    };
-  }
+  const { configured, providerCount, modelCount } = input;
 
   if (configured) {
     return {
       containerClassName: 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200',
       dotClassName: 'bg-emerald-400',
       summary: `Ready • ${providerCount} provider${providerCount !== 1 ? 's' : ''} • ${modelCount} models`,
-    };
-  }
-
-  if (quickstartBlockedReason) {
-    return {
-      containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
-      dotClassName: 'bg-amber-400',
-      summary: quickstartBlockedReason,
     };
   }
 

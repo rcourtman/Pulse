@@ -18,7 +18,6 @@ export interface AISettingsDialogsProps {
   diffSessionLabel: Accessor<string>;
   formatDiffStats: (change: FileChange) => string;
   showSetupModal: Accessor<boolean>;
-  setupMode: Accessor<'provider' | 'activation-or-provider' | 'provider-required'>;
   setupProvider: Accessor<AIProvider>;
   setSetupProvider: Setter<AIProvider>;
   setupApiKey: Accessor<string>;
@@ -26,14 +25,13 @@ export interface AISettingsDialogsProps {
   setupOllamaUrl: Accessor<string>;
   setSetupOllamaUrl: Setter<string>;
   setupSaving: Accessor<boolean>;
-  quickstartBlockedReason: Accessor<string>;
   handleCloseSetupModal: () => void;
   handleSetupSubmit: () => Promise<void>;
 }
 
 export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
   const setupProviderConfig = () => getAIProviderConfig(props.setupProvider());
-  const setupPresentation = () => getAISettingsSetupDialogPresentation(props.setupMode());
+  const setupPresentation = getAISettingsSetupDialogPresentation;
 
   return (
     <>
@@ -107,12 +105,6 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
             </div>
 
             <div class="p-6 space-y-4">
-              <Show when={props.quickstartBlockedReason()}>
-                <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                  {props.quickstartBlockedReason()}
-                </div>
-              </Show>
-
               <SelectionCardGroup
                 options={AI_SETUP_PROVIDER_OPTIONS}
                 value={props.setupProvider()}

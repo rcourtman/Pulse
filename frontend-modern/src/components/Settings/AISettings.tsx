@@ -142,9 +142,7 @@ export const AISettings: Component = () => {
         setSetupApiKey={state.setSetupApiKey}
         setupOllamaUrl={state.setupOllamaUrl}
         setSetupOllamaUrl={state.setSetupOllamaUrl}
-        setupMode={state.setupMode}
         setupSaving={state.setupSaving}
-        quickstartBlockedReason={state.quickstartBlockedReason}
         handleCloseSetupModal={state.handleCloseSetupModal}
         handleSetupSubmit={state.handleSetupSubmit}
       />

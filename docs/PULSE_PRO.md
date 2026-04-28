@@ -120,7 +120,7 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 
 | Constant | Capability Key | Display Name | Community | Relay | Pro | Cloud | Primary Gating Mechanism / Notes |
 |---|---|---|:---:|:---:|:---:|:---:|---|
-| `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with BYOK. Optional managed quickstart runs are available only after explicit Pulse Account activation. Higher-autonomy outcomes and fix execution are separately gated. |
+| `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with your own provider or local model. Higher-autonomy outcomes and fix execution are separately gated. |
 | `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
 | `FeatureAIAlerts` | `ai_alerts` | Alert-Triggered Root-Cause Analysis | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
 | `FeatureAIAutoFix` | `ai_autofix` | Safe Remediation Workflows | N | N | Y | Y | Required for governed fix execution and autonomous remediation actions. |
@@ -153,9 +153,7 @@ Patrol and the Assistant support tiered autonomy:
 ### Community
 - Unlimited self-hosted core monitoring.
 - 7-day history.
-- Pulse Patrol with BYOK.
-- Optional Patrol quickstart after explicit Pulse Account activation: 25 Patrol runs with no API key on a server-verified install.
-- Quickstart is Patrol-only activation support, not a general hosted chat entitlement.
+- Pulse Patrol with your own provider or local model.
 - Basic SSO and update alerts.
 
 ### Relay

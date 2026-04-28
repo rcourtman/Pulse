@@ -91,7 +91,7 @@ describe('patrolEmptyStatePresentation', () => {
     });
   });
 
-  it('returns the patrol runtime explanation when the runtime is blocked', () => {
+  it('normalizes retired hosted runtime explanations when the runtime is blocked', () => {
     expect(
       getPatrolFindingsEmptyState({
         filter: 'active',
@@ -100,7 +100,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'Patrol paused',
-      body: 'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
+      body: 'Connect your own AI provider or local model to use Pulse Patrol.',
       tone: 'warning',
     });
   });

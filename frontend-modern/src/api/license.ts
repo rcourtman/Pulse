@@ -1,4 +1,4 @@
-import { apiClient, apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON } from '@/utils/apiClient';
 
 export interface LicenseStatus {
   valid: boolean;
@@ -193,11 +193,4 @@ export class LicenseAPI {
     }) as Promise<ClearLicenseResponse>;
   }
 
-  static async startTrial(): Promise<Response> {
-    // Return the raw Response so callers can handle status codes (409 trial_already_used, 429 rate limited, etc.)
-    return apiClient.fetch(`${this.baseUrl}/trial/start`, {
-      method: 'POST',
-      headers: { Accept: 'application/json' },
-    });
-  }
 }

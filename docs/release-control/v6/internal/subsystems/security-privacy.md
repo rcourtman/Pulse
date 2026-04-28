@@ -111,13 +111,14 @@ visibility, and privacy controls to operators.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
 7. Keep auth-env ingestion and shared fingerprint-verifier TLS defaults aligned whenever runtime auth loading or pinned-certificate transport behavior changes.
 8. Keep the Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits.
-9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, and hosted-quickstart text must use the shared resource-policy redaction helper before leaving the local trust boundary. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
+9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, and any retained legacy managed-model compatibility text must use the shared resource-policy redaction helper before leaving the local trust boundary. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
 10. Keep the canonical and frontend-served privacy disclosures aligned with
-    the actual AI transport boundary: BYOK must remain described as direct to
-    the chosen provider, hosted Quickstart must remain described as transiting
-    Pulse infrastructure, and both disclosures must state that governed
-    resource details use resource-policy redaction before non-local model
-    transport.
+    the actual AI transport boundary: self-managed installs must describe local
+    providers as staying on the operator network, non-local providers as direct
+    provider-bound requests from the Pulse instance, and managed-model
+    quickstart/trial transport as absent from normal self-hosted v6 GA docs.
+    Both disclosures must state that governed resource details use
+    resource-policy redaction before non-local model transport.
 
 ## Current State
 

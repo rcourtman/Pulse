@@ -35,14 +35,8 @@ import {
   getAISettingsSaveErrorMessage,
   getAISettingsToggleErrorMessage,
 } from '@/utils/aiSettingsPresentation';
-import {
-  AI_QUICKSTART_ACTIVATION_REQUIRED_REASON,
-  normalizeQuickstartReason,
-} from '@/utils/aiQuickstartContract';
 import { logger } from '@/utils/logger';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-
-type AISetupMode = 'provider' | 'activation-or-provider' | 'provider-required';
 
 export const useAISettingsState = () => {
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
@@ -79,7 +73,6 @@ export const useAISettingsState = () => {
   const [preflightLastCheckedAt, setPreflightLastCheckedAt] = createSignal<number | null>(null);
 
   const [showSetupModal, setShowSetupModal] = createSignal(false);
-  const [setupMode, setSetupMode] = createSignal<AISetupMode>('provider');
   const [setupProvider, setSetupProvider] = createSignal<AIProvider>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
@@ -114,23 +107,12 @@ export const useAISettingsState = () => {
   });
 
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
-  const visibleQuickstartBlockedReason = () => {
-    const normalized = normalizeQuickstartReason(settings()?.quickstart_blocked_reason);
-    if (normalized === AI_QUICKSTART_ACTIVATION_REQUIRED_REASON) {
-      return '';
-    }
-    return normalized;
-  };
 
   const settingsReadiness = createMemo(() =>
     getAISettingsReadinessPresentation({
       configured: Boolean(settings()?.configured),
       providerCount: settings()?.configured_providers?.length || 0,
       modelCount: availableModels().length,
-      quickstartCreditsAvailable: Boolean(settings()?.quickstart_credits_available),
-      quickstartCreditsRemaining: settings()?.quickstart_credits_remaining ?? 0,
-      quickstartCreditsTotal: settings()?.quickstart_credits_total ?? 0,
-      quickstartBlockedReason: visibleQuickstartBlockedReason(),
     }),
   );
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
@@ -154,10 +136,6 @@ export const useAISettingsState = () => {
         current.ollama_configured),
     );
   });
-  const hasQuickstartAvailable = createMemo(() =>
-    Boolean(settings()?.quickstart_credits_available),
-  );
-  const quickstartBlockedReason = createMemo(visibleQuickstartBlockedReason);
   const upgradeAutofixDestination = () => getUpgradeActionDestination('ai_autofix');
 
   const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>
@@ -305,19 +283,10 @@ export const useAISettingsState = () => {
 
   const handleCloseSetupModal = () => {
     setShowSetupModal(false);
-    setSetupMode('provider');
     setSetupApiKey('');
   };
 
   const openEnableSetupModal = () => {
-    const blockedReason = quickstartBlockedReason();
-    if (blockedReason === AI_QUICKSTART_ACTIVATION_REQUIRED_REASON && showUpgradePrompts()) {
-      setSetupMode('activation-or-provider');
-    } else if (blockedReason) {
-      setSetupMode('provider-required');
-    } else {
-      setSetupMode('provider');
-    }
     setShowSetupModal(true);
   };
 
@@ -810,7 +779,7 @@ export const useAISettingsState = () => {
       await handleEnabledToggle(false);
       return;
     }
-    if (hasConfiguredProvider() || hasQuickstartAvailable()) {
+    if (hasConfiguredProvider()) {
       await handleEnabledToggle(true);
       return;
     }
@@ -862,7 +831,6 @@ export const useAISettingsState = () => {
     handleTest,
     handleTestProvider,
     hasConfiguredProvider,
-    hasQuickstartAvailable,
     loadChatSessions,
     loading,
     loadError,
@@ -892,7 +860,6 @@ export const useAISettingsState = () => {
     setShowDiffModal,
     setShowDiscoverySettings,
     setShowSetupModal,
-    setupMode,
     settings,
     settingsReadiness,
     setupApiKey,
@@ -907,7 +874,6 @@ export const useAISettingsState = () => {
     showUpgradePrompts,
     testing,
     testingProvider,
-    quickstartBlockedReason,
     upgradeAutofixDestination,
   };
 };

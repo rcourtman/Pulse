@@ -26,6 +26,7 @@ import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
 import type { AISettings } from '@/types/ai';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
+import { normalizePatrolRuntimeBlockedReason } from '@/utils/patrolRuntimePresentation';
 import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
 
 type PatrolTab = 'findings' | 'history';
@@ -331,7 +332,9 @@ export function usePatrolIntelligenceState() {
     if (!patrolEnabledLocal()) return 'disabled';
     return patrolStatus()?.runtime_state ?? 'active';
   });
-  const blockedReason = createMemo(() => patrolStatus()?.blocked_reason?.trim() ?? '');
+  const blockedReason = createMemo(() =>
+    normalizePatrolRuntimeBlockedReason(patrolStatus()?.blocked_reason),
+  );
   const blockedAt = createMemo(() => patrolStatus()?.blocked_at);
   const showBlockedBanner = createMemo(() => runtimeState() === 'blocked');
   const canTriggerPatrol = createMemo(() => runtimeState() === 'active');

@@ -54,8 +54,6 @@ import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?r
 import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverModel.ts?raw';
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
-import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
-import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
@@ -90,7 +88,6 @@ import statusBadgeStateSource from '@/components/shared/useStatusBadgeState.ts?r
 import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
-import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
 import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
@@ -587,7 +584,6 @@ import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenc
 import patrolInvestigationContextModelSource from '@/features/patrol/patrolInvestigationContextModel.ts?raw';
 import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
-import aiQuickstartPresentationSource from '@/utils/aiQuickstartPresentation.ts?raw';
 import aiCostPresentationSource from '@/utils/aiCostPresentation.ts?raw';
 import thresholdSliderPresentationSource from '@/utils/thresholdSliderPresentation.ts?raw';
 import emptyStatePresentationSource from '@/utils/emptyStatePresentation.ts?raw';
@@ -1502,8 +1498,8 @@ describe('frontend resource type boundaries', () => {
     expect(auditWebhookPanelSource).toContain('@/utils/upgradePresentation');
     expect(ssoProvidersPanelSource).toContain('@/utils/upgradePresentation');
     expect(upgradePresentationSource).toContain('export const UPGRADE_ACTION_LABEL');
-    expect(upgradePresentationSource).toContain('export const UPGRADE_TRIAL_LABEL');
-    expect(upgradePresentationSource).toContain('export const UPGRADE_TRIAL_LINK_CLASS');
+    expect(upgradePresentationSource).not.toContain('UPGRADE_TRIAL_LABEL');
+    expect(upgradePresentationSource).not.toContain('UPGRADE_TRIAL_LINK_CLASS');
     expect(upgradePresentationSource).toContain('export function getUpgradeActionButtonClass');
     expect(organizationAccessManagementSectionSource).toContain(
       '@/utils/organizationRolePresentation',
@@ -2815,26 +2811,6 @@ describe('frontend resource type boundaries', () => {
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverPositionClass');
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerVariant');
     expect(searchTipsPopoverModelSource).toContain('shouldSearchTipsPopoverOpenOnHover');
-    expect(trialBannerSource).toContain('useTrialBannerState');
-    expect(trialBannerSource).toContain('TRIAL_BANNER_TITLE');
-    expect(trialBannerSource).not.toContain('createSignal');
-    expect(trialBannerSource).not.toContain('createMemo');
-    expect(trialBannerSource).not.toContain('loadRuntimeCapabilities');
-    expect(trialBannerSource).not.toContain('licenseStatus');
-    expect(trialBannerSource).not.toContain('getUpgradeActionUrlOrFallback');
-    expect(trialBannerStateSource).toContain('createSignal');
-    expect(trialBannerStateSource).toContain('createMemo');
-    expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
-    expect(trialBannerStateSource).toContain('isCommercialTrialActive');
-    expect(trialBannerStateSource).toContain('commercialTrialDaysRemaining');
-    expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
-    expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
-    expect(trialBannerStateSource).toContain('snoozeUpsell');
-    expect(trialBannerModelSource).toContain('TRIAL_BANNER_SNOOZE_KEY');
-    expect(trialBannerModelSource).toContain('normalizeTrialBannerDaysRemaining');
-    expect(trialBannerModelSource).toContain('getTrialBannerToneClass');
-    expect(trialBannerModelSource).toContain('getTrialBannerStatusLabel');
-    expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
     expect(upgradeLinkSource).toContain('destination.external');
     expect(upgradeLinkSource).not.toContain('window.open');
     expect(upgradeLinkSource).not.toContain('useNavigate(');
@@ -4394,7 +4370,9 @@ describe('frontend resource type boundaries', () => {
     );
     expect(patrolInvestigationContextModelSource).toContain('policy-covered resource');
     expect(patrolIntelligenceHeaderSource).toContain('buildPatrolScheduleOptions');
-    expect(patrolIntelligenceHeaderSource).toContain('getAIQuickstartCreditsPresentation');
+    expect(patrolIntelligenceHeaderSource).not.toContain('getAIQuickstartCreditsPresentation');
+    expect(patrolIntelligenceHeaderSource).not.toContain('quickstart_credits');
+    expect(patrolIntelligenceHeaderSource).not.toContain('using_quickstart');
     expect(patrolIntelligenceSummarySource).toContain('getPatrolSummaryPresentation');
     expect(patrolIntelligenceSummarySource).toContain('getPatrolAssessmentPresentation');
     expect(patrolIntelligenceWorkspaceSource).toContain('ApprovalBanner');
@@ -4414,9 +4392,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       "(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0\n                  ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'",
-    );
-    expect(aiQuickstartPresentationSource).toContain(
-      'export function getAIQuickstartCreditsPresentation',
     );
     expect(investigationMessagesSource).toContain('getInvestigationMessagesState');
     expect(investigationMessagesSource).not.toContain('Loading messages...');

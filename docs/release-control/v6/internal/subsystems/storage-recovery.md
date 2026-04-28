@@ -377,6 +377,10 @@ querying, and the operator-facing storage health presentation layer.
     compatibility redirect, but storage/recovery route owners must not depend
     on or borrow that Patrol redirect path for their own preview or
     compatibility entrypoints.
+    The same route-ownership rule keeps retired self-hosted trial and
+    managed-model acquisition banners out of shared app chrome: storage and
+    recovery routes must not inherit commercial nudges simply because
+    `frontend-modern/src/App.tsx` owns the authenticated shell.
     Authenticated `/login` must follow that same shared app-shell contract:
     once login succeeds, `frontend-modern/src/App.tsx` must hand the browser
     back to the governed dashboard landing route instead of leaving

@@ -133,6 +133,8 @@ describe('settings architecture guardrails', () => {
   it('keeps default self-hosted commercial copy opt-in from shared settings primitives', () => {
     expect(aiSettingsDialogsSource).not.toContain('Open hosted handoff');
     expect(aiSettingsDialogsSource).not.toContain('Hosted quickstart routes policy-redacted prompts');
+    expect(aiSettingsDialogsSource).not.toContain('quickstartBlockedReason');
+    expect(aiSettingsStateSource).not.toContain('hasQuickstartAvailable');
     expect(aiSettingsDialogsSource).not.toContain('Start Trial');
     expect(aiSettingsDialogsSource).not.toContain('RELAY_ONBOARDING_TRIAL_STARTING_LABEL');
     expect(generalSettingsPanelSource).toContain('Disable local-only commercial events');

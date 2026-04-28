@@ -3993,12 +3993,12 @@
         "frontend-modern/src/types/aiIntelligence.ts",
         "frontend-modern/src/utils/aiFindingPresentation.ts",
         "frontend-modern/src/utils/aiPatrolSchedulePresentation.ts",
-        "frontend-modern/src/utils/aiQuickstartPresentation.ts",
         "frontend-modern/src/utils/approvalRiskPresentation.ts",
         "frontend-modern/src/utils/findingAlertIdentity.ts",
         "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
         "frontend-modern/src/utils/patrolFormat.ts",
         "frontend-modern/src/utils/patrolRunPresentation.ts",
+        "frontend-modern/src/utils/patrolRuntimePresentation.ts",
         "frontend-modern/src/utils/patrolSummaryPresentation.ts",
         "frontend-modern/src/utils/remediationPresentation.ts"
       ],
@@ -4049,13 +4049,12 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/utils/aiPatrolSchedulePresentation.ts",
-              "frontend-modern/src/utils/aiQuickstartPresentation.ts"
+              "frontend-modern/src/utils/patrolRuntimePresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/aiPatrolSchedulePresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/aiQuickstartPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           },

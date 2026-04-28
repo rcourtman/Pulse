@@ -12,10 +12,6 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import { formatRelativeTime } from '@/utils/format';
 import { groupModelsByProvider } from '@/utils/patrolFormat';
 import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
-import {
-  getAIQuickstartCreditsPresentation,
-  isPatrolQuickstartExhaustedReason,
-} from '@/utils/aiQuickstartPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
@@ -24,12 +20,6 @@ import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
   const headerMeta = getPatrolPageHeaderMeta();
-  const quickstartPresentation = createMemo(() =>
-    getAIQuickstartCreditsPresentation(
-      state.patrolStatus()?.quickstart_credits_remaining ?? 0,
-      state.patrolStatus()?.quickstart_credits_total ?? 0,
-    ),
-  );
   const scheduleOptions = createMemo(() => buildPatrolScheduleOptions(state.patrolInterval()));
   const selectedScheduleLabel = createMemo(
     () =>
@@ -46,14 +36,6 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       lastActivityAt: state.patrolStatus()?.last_activity_at,
     }),
   );
-  const showQuickstartStatus = createMemo(() => {
-    const patrolStatus = state.patrolStatus();
-    if (!patrolStatus) return false;
-    if (patrolStatus.using_quickstart) return true;
-    return (
-      state.runtimeState() === 'blocked' && isPatrolQuickstartExhaustedReason(state.blockedReason())
-    );
-  });
   const patrolModelStale = createMemo(() => {
     const model = state.patrolModel();
     const models = state.availableModels();
@@ -143,21 +125,6 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             />
             <span class="text-sm font-medium text-base-content">{runtimePresentation().label}</span>
           </div>
-
-          <Show when={showQuickstartStatus()}>
-            <div
-              class={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium ${quickstartPresentation().className}`}
-              aria-label={quickstartPresentation().title}
-              title={quickstartPresentation().title}
-            >
-              <Show
-                when={(state.patrolStatus()?.quickstart_credits_remaining ?? 0) > 0}
-                fallback={<span>{quickstartPresentation().summary}</span>}
-              >
-                <span>{quickstartPresentation().summary}</span>
-              </Show>
-            </div>
-          </Show>
 
           <div class="relative ml-auto" ref={state.setAdvancedSettingsRef}>
             <button

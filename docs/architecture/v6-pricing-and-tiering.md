@@ -18,10 +18,10 @@ align with this document. If there is a conflict, this document wins.
 
 1. **Free attracts, paid converts.** The free tier must be good enough to get users in the
    door, while paid tiers must add obvious operational value for serious users.
-2. **Gate on action, not information.** Self-hosted AI Patrol is BYOK in steady state,
-   with one optional Patrol-only quickstart allowance after explicit Pulse Account
-   activation. We never cap how many times users can run Patrol through their own API
-   keys. The paid gate is on auto-execution of fixes, not on analysis or suggestions.
+2. **Gate on action, not information.** AI Patrol on self-hosted installs uses the operator's
+   configured provider or local model. We never cap how many times users can run
+   Patrol through their own provider. The paid gate is on auto-execution of fixes,
+   not on analysis or suggestions.
 3. **Smooth upgrade ladder.** No large price gaps. Every step up has a clear reason.
 4. **Simple to understand.** A homelabber should know which tier is right for them in
    under 10 seconds.
@@ -104,8 +104,7 @@ with self-hosted commercial surfaces treating core monitoring as unlimited.
 | SSO | Basic OIDC |
 | Update notifications | Yes |
 | Metrics history | **7 days** |
-| AI Patrol | Monitor + root-cause summaries + fix suggestions (BYOK by default, with optional Patrol quickstart after explicit Pulse Account activation) |
-| AI Quickstart Credits | **25 hosted Patrol runs** (explicit Pulse Account activation only; no API key needed, Patrol only, powered by MiniMax 2.5M) |
+| AI Patrol | Monitor + root-cause summaries + fix suggestions with the operator's configured provider or local model |
 | Safe remediation workflows | **No** (must apply fixes manually) |
 | Alert-triggered root-cause analysis | No |
 | Relay | No |
@@ -117,32 +116,14 @@ with self-hosted commercial surfaces treating core monitoring as unlimited.
 | Agent profiles | No |
 | PDF/CSV reporting | No |
 
-**AI Patrol in free tier:** Two modes of operation:
-
-1. **Quickstart Credits (Patrol only, no API key needed):** Installs with an
-   explicit Pulse Account activation and server-verified installation identity get
-   25 hosted Patrol runs powered by MiniMax 2.5M. This gives users who deliberately
-   enter the commercial/account path a bounded way to try Patrol before adding a
-   provider. Community installs that do not activate continue with their own API key
-   instead. After credits are exhausted, users connect their own API key to continue
-   self-hosted Patrol. Quickstart is activation support only: it is not a general
-   hosted chat entitlement and it does not replace BYOK for ongoing self-hosted AI use.
-
-2. **BYOK (after credits or by choice):** Users provide their own API key
-   (OpenAI/Anthropic/etc.). No commercial quota — it's their API key, their money. Only
-   technical guardrails (anti-loop, rate protection).
+**AI Patrol in free tier:** Users provide their own provider connection
+(OpenAI/Anthropic/etc.) or a local model endpoint. No commercial quota applies:
+it's their provider, their key or local runtime, and their operating cost. Pulse
+applies technical guardrails such as anti-loop protection and rate protection.
 
 In both modes, the paid gate is governed execution through Pulse: free users see the
 full analysis and fix suggestions but apply fixes manually. Pro users can run approved
 remediation actions through Pulse.
-
-**Quickstart credit economics:**
-- Model: MiniMax 2.5M (selected for cost-effectiveness)
-- Estimated cost: $0.002–0.01 per Patrol run
-- Budget per 10,000 users (all 25 credits used): $500–2,500
-- This is customer acquisition cost, not ongoing expense
-- Cost can be further reduced with: caching repeated analyses, strict context/token caps,
-  model cascade (cheap triage first, deeper analysis only when needed)
 
 ### Relay — $4.99/month or $39/year
 
@@ -302,13 +283,11 @@ Free/Relay users see exactly what Patrol found and how to fix it (specific comma
 must apply manually. Pro users see the same information with an "Apply Fix" button. Every
 Patrol finding is a conversion moment.
 
-### 3. AI Quickstart Credits (25 hosted Patrol runs)
-Eligible activated installs get 25 Patrol runs powered by MiniMax 2.5M with no API key setup.
-This gives support and commercial handoff flows one bounded Patrol-first activation path.
-Ordinary self-hosted Community installs should connect their own key (BYOK, stays free) and
-must not be pushed into a trial just to use Patrol. Paid operations features such as safe remediation workflows,
-alert analysis, and longer history remain opt-in extras; they do not replace BYOK for
-self-hosted AI runtime. Cost: ~$0.002-0.01 per run.
+### 3. Provider setup stays self-managed
+AI setup on self-hosted installs should point operators at their own provider connection or
+local model endpoint. Paid operations features such as safe remediation
+workflows, alert analysis, and longer history remain opt-in extras; they do not
+replace the self-managed AI runtime path.
 
 ### 4. Relay as optional convenience ($39/yr)
 Gives remote-access and mobile users a small paid convenience option without turning core
@@ -371,26 +350,16 @@ want to self-host.
 
 ---
 
-## Trial System
+## Self-Hosted Trial Policy
 
-- **Duration:** 14 days
-- **Credit card:** Not required
-- **Available on:** Pro and hosted Cloud. Legacy Pro+ continuity may still satisfy
-  the same runtime capability for existing holders, but it is not a public plan.
-- **Not available on:** Relay (cheap enough to just buy)
-- **Features during trial:** Full Pro capabilities
-- **Activation paths:**
-  - Self-hosted: POST `/api/license/trial/start` returns `409 trial_signup_required` with a hosted control-plane `action_url`
-  - Self-hosted completion: hosted control plane returns a signed token to `/auth/trial-activate`
-  - Cloud: Stripe checkout with trial period
-- **Restrictions:**
-  - One trial per workspace
-  - Rate limited: a short per-org retry burst is allowed so operators can
-    revisit the hosted handoff; duplicate immediate starts may continue to
-    return `409 trial_signup_required` while that burst remains open, then the
-    local runtime returns `429 trial_rate_limited` with `Retry-After` backoff
-    metadata once it is exhausted
-  - Cannot start if already has active Pro license
+Self-hosted v6 GA should not present a trial acquisition path inside the normal
+app. Paid self-hosted plans are discoverable from explicit pricing, activation,
+recovery, support, or account flows rather than being pushed into ordinary
+monitoring, infrastructure setup, AI setup, or Patrol workflows.
+
+Legacy or externally initiated activation plumbing may remain as a compatibility
+boundary while existing purchases and support cases are migrated, but it is not a
+customer-facing GA funnel.
 
 ---
 

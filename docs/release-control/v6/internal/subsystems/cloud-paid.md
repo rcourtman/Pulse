@@ -407,10 +407,10 @@ Community limit enforcement.
 2. Update runtime and frontend tests together when plan/limit rules move
 3. Add or tighten drift tests when a pricing/runtime mismatch is fixed
 4. Keep self-hosted pricing and public docs on runtime-backed commercial truth:
-   Patrol quickstart may be presented only as Patrol-only first-run activation
-   support backed by the license server and an activated entitlement, never as
-   a default self-hosted trial CTA, while Relay and Pro remain the canonical
-   commercial story.
+   self-hosted Patrol remains provider/local-model based in Community, paid
+   discovery stays out of ordinary monitoring flows, and retired hosted-model
+   credits or trial acquisition must not be presented as a default self-hosted
+   benefit. Relay and Pro remain the canonical self-hosted commercial story.
 5. Treat grandfathered `lifetime` licenses as uncapped commercial entitlements:
    they keep the Pro feature set, but they must not inherit monitored-system or
    guest caps from recurring Pro contracts anywhere in runtime, issuance, or
@@ -764,42 +764,25 @@ backward-compatible decode alias for older local stubs and historical test
 fixtures. Future exchange-path changes must not reintroduce a split contract
 where the shared Pulse runtime and the real `pulse-pro/license-server` disagree
 on the activation payload shape.
-That same license-server transport boundary now owns Patrol quickstart
-bootstrap. `pkg/licensing/license_server_client.go` and
-`pkg/licensing/quickstart_bootstrap.go` must treat
-`POST /v1/quickstart/bootstrap` as the canonical exchange for a server-issued
-quickstart token plus the authoritative quickstart credit snapshot. The Pulse
-runtime must authenticate that bootstrap with one of the server-verified
-commercial authorities owned by the shared commercial boundary: an
-installation token from installation-scoped activation state for activated
-self-hosted installs, or a signed hosted entitlement lease for hosted
-entitlement-backed runtimes, including hosted trial leases. There is no
-anonymous `client_installation_id` fallback in the v6 runtime contract, and
-hosted quickstart must not fake self-hosted `activation.enc` just to satisfy
-the bootstrap path. Local runtime cache files may memoize the returned token
-and counts but may not treat those cached counts as commercial authority. The
-transport must also remain mixed-version compatible while quickstart rolls out:
-Pulse may send optional binding metadata such as `instance_name` and
-`use_case=patrol`, and the server must not reject that additive metadata or
-rely on one expiry field spelling only when returning the quickstart token
-snapshot.
-`POST /v1/quickstart/patrol` also owns the Patrol-run billing boundary: the
-runtime may send an execution identifier for one higher-level Patrol run, and
-the license server must treat repeated proxy calls that share that execution
-identifier as one commercial quickstart run rather than charging once per
-agentic provider turn.
-That same public proxy boundary must accept hosted quickstart prompts only
-when the runtime attaches the `resource-policy-v1` data-policy marker proving
-client-side aggregate-only local-only handling and exact resource-policy
-redaction. Requests without that marker are invalid, because the Pulse-hosted
-route is commercial activation support, not an ungoverned external prompt
-relay.
-That quickstart allowance is therefore activation support, not the main
-commercial pitch: self-hosted pricing and docs may promise Patrol-only
-quickstart runs with no API key for activated Pulse Account installs or
-effective hosted entitlements, but they must not market that bootstrap as
-anonymous Community entitlement, a trial CTA, or a general hosted chat plan
-while Relay and Pro carry the paid story.
+That same license-server transport boundary now treats Patrol quickstart
+bootstrap as legacy/support compatibility rather than a normal self-hosted v6
+GA journey. `pkg/licensing/license_server_client.go` and
+`pkg/licensing/quickstart_bootstrap.go` may continue to understand
+`POST /v1/quickstart/bootstrap` payloads for mixed-version runtimes and support
+cases, but ordinary self-hosted frontend flows must not initiate that path.
+If the compatibility path is retained, the Pulse runtime must authenticate it
+with one of the server-verified commercial authorities owned by the shared
+commercial boundary and must not invent anonymous local identity or fake
+self-hosted `activation.enc` state. Local runtime cache files may memoize
+returned tokens and counts but may not treat those cached counts as commercial
+authority or customer-facing entitlement.
+That same public proxy boundary remains privacy-constrained for any legacy
+traffic that still reaches it: requests must carry the `resource-policy-v1`
+data-policy marker proving client-side aggregate-only local-only handling and
+exact resource-policy redaction. Pricing, docs, and normal self-hosted runtime
+UI must not present this compatibility path as Community entitlement, a trial
+CTA, account activation support, or a general hosted chat plan while Relay and
+Pro carry the paid story.
 The self-hosted commercial counted unit is now also locked to monitored
 systems rather than agent installs. `max_monitored_systems` is the live
 runtime and UI contract, while legacy `max_agents` / `max_nodes` aliases are
@@ -907,13 +890,11 @@ preview label with a second top-of-shell release-candidate warning banner or
 release-feedback CTA in `frontend-modern/src/AppLayout.tsx`; prerelease cloud
 posture stays a subtle shell label, not a public-RC callout inside the paid
 runtime chrome.
-The shared trial-start runtime is part of that same cloud-paid boundary.
-Commercial relay, onboarding, setup, Pro settings, and shared paywall
-surfaces may customize success copy, but they must route hosted handoff,
-success-notification, and canonical denial handling through
-`frontend-modern/src/utils/trialStartAction.ts` instead of carrying local
-`startProTrial()` redirect/error branches that drift from backend commercial
-truth.
+The self-hosted trial-start frontend runtime is retired for v6 GA. Commercial
+relay, onboarding, setup, Pro settings, and shared paywall surfaces may still
+offer explicit plan, activation, recovery, support, or hosted handoff paths, but
+they must not revive local `startProTrial()` branches, shared trial-start
+helpers, or global trial acquisition banners in the normal self-hosted app.
 The same commercial handoff rule also covers the legacy `/pricing` route in
 `frontend-modern/src/pages/PricingHandoff.tsx` and
 `frontend-modern/src/utils/pricingHandoff.ts`: compatibility handoff may keep
@@ -1695,12 +1676,11 @@ prior email usage through `201` versus `429` drift.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.
-Hosted trial bootstrap and hosted entitlement refresh now also own quickstart
-credit seeding as part of that same persisted billing boundary. New hosted
-trial workspaces and later lease-refresh rewrites must preserve
-`quickstart_credits_granted` plus its grant timestamp instead of resetting the
-workspace to zero hosted quickstart inventory after signup or entitlement
-renewal.
+Hosted trial bootstrap and hosted entitlement refresh may still preserve legacy
+quickstart inventory fields as persisted billing compatibility while those
+fields exist. New user-facing hosted or self-hosted acquisition work should not
+depend on that inventory as a product promise, and lease-refresh rewrites must
+avoid turning legacy fields into a renewed customer-facing hosted-model offer.
 Hosted AI runtime defaults are part of the same boundary as well: when a cloud
 tenant falls back to provider defaults, the persisted model identifier must
 remain canonical `provider:model` data rather than a bare provider-local alias,
@@ -2076,13 +2056,14 @@ commercial posture. Outside hosted mode, ordinary self-hosted installs must
 fail closed on in-app upgrade prompts: Relay/Pro plan comparison, Pro trial
 CTAs, paid-only settings navigation, and history/feature upsells may render
 only for explicit handoff/direct routes, activation or recovery state, hosted
-mode, or an already entitled install. Trial checkout plumbing may remain for
-support-only or externally initiated flows, but it is not a normal GA
-self-hosted app journey.
+mode, or an already entitled install. Trial checkout plumbing may remain only
+as legacy/support or externally initiated compatibility, but it is not a normal
+GA self-hosted app journey.
 Shared self-hosted plan presentation helpers must carry that same policy:
-Community copy may mention BYOK Patrol and hosted quickstart only as an
-activated-entitlement benefit, not as a default self-hosted trial CTA or a
-reason to put a paid prompt in front of ordinary users.
+Community copy may mention provider/local-model Patrol, but must not present
+hosted-model credits, account-backed AI access, or trial acquisition as a
+default self-hosted benefit or a reason to put a paid prompt in front of
+ordinary users.
 That public-demo commercial boundary also owns monitored-system preview
 unavailability wording. Browser presentation may keep the unavailable reason
 nullable until the formatting edge, but it must normalize the message through

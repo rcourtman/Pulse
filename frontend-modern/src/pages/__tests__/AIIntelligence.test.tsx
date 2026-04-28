@@ -105,7 +105,6 @@ const hasFeatureMock = vi.fn();
 const licenseStatusMock = vi.fn();
 const loadLicenseStatusMock = vi.fn();
 const loadCommercialPostureMock = vi.fn();
-const startProTrialMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.fn();
 const getUpgradeActionUrlOrFallbackMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
@@ -141,13 +140,11 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
-  canStartCommercialTrial: () => licenseStatusMock()?.trial_eligible !== false,
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   commercialPosture: (...args: unknown[]) => licenseStatusMock(...args),
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
-  startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
 }));
 
@@ -347,7 +344,6 @@ describe('AIIntelligence entitlement gating', () => {
     licenseStatusMock.mockReset();
     loadLicenseStatusMock.mockReset();
     loadCommercialPostureMock.mockReset();
-    startProTrialMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     trackPaywallViewedMock.mockReset();
@@ -397,7 +393,6 @@ describe('AIIntelligence entitlement gating', () => {
     licenseStatusMock.mockReturnValue({ subscription_state: 'expired' });
     loadLicenseStatusMock.mockResolvedValue(undefined);
     loadCommercialPostureMock.mockResolvedValue(undefined);
-    startProTrialMock.mockResolvedValue({ outcome: 'started' });
     getUpgradeActionDestinationMock.mockImplementation((feature?: string) => ({
       href: getPublicPricingUrl(feature),
       external: true,
@@ -741,7 +736,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('Patrol assessment')).not.toBeInTheDocument();
   });
 
-  it('does not present a healthy patrol summary when patrol is blocked on exhausted quickstart credits', async () => {
+  it('does not present a healthy patrol summary when a retired hosted block reason is normalized', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(
@@ -793,14 +788,14 @@ describe('AIIntelligence entitlement gating', () => {
 
     expect(screen.getAllByText('Patrol paused').length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText(
-        'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
-      ).length,
+      screen.getAllByText('Connect your own AI provider or local model to use Pulse Patrol.')
+        .length,
     ).toBeGreaterThan(0);
+    expect(screen.queryByText(/Quickstart credits exhausted/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Health A · 100\/100/)).not.toBeInTheDocument();
   });
 
-  it('does not show the exhausted quickstart chip when patrol is active on a configured provider path', async () => {
+  it('does not show retired hosted-credit chips when patrol is active on a configured provider path', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(
@@ -851,7 +846,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText(/Health A · 100\/100/)).toBeInTheDocument();
   });
 
-  it('shows the activation-or-byok path from the server when quickstart is unavailable on an unactivated install', async () => {
+  it('normalizes retired hosted availability copy on unactivated installs', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'expired' });
     getPatrolStatusMock.mockResolvedValue(
@@ -870,16 +865,16 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(
-        screen.getAllByText(
-          'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
-        ).length,
+        screen.getAllByText('Connect your own AI provider or local model to use Pulse Patrol.')
+          .length,
       ).toBeGreaterThan(0);
     });
 
     expect(screen.queryByText('Patrol quickstart exhausted')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Hosted quickstart requires/i)).not.toBeInTheDocument();
   });
 
-  it('shows the active Patrol quickstart chip only when runtime is actually using quickstart', async () => {
+  it('does not surface hosted-credit chips even when legacy runtime fields are present', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(
@@ -923,14 +918,11 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(
-        screen.getByTitle(
-          '12 of 25 Patrol quickstart runs remaining on this activated Pulse Account install. No API key needed for initial Patrol quickstart.',
-        ),
-      ).toBeInTheDocument();
+      expect(screen.getByText('Patrol enabled')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Patrol quickstart: 12/25 runs left')).toBeInTheDocument();
+    expect(screen.queryByText(/Patrol quickstart/i)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/No API key needed/i)).not.toBeInTheDocument();
   });
 
   it('surfaces coverage incomplete as the primary patrol assessment instead of no-issues copy', async () => {

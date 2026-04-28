@@ -219,16 +219,11 @@ That RBAC gate now also depends on the shared commercial navigation contract:
 the shared license boundary, but it must render that destination through the
 `frontend-primitives` typed upgrade link owner instead of assuming
 organization-settings paywalls always leave the app in a new tab.
-That shared RBAC free-trial runtime must also preserve backend denial reasons
-through the canonical upgrade presentation helper instead of collapsing every
-trial-start conflict into a generic already-used message. Organization settings
-paywalls should only map the explicit canonical trial helper outputs, not
-re-interpret status codes locally.
-The RBAC feature-gate state now also depends on the shared
-`frontend-modern/src/utils/trialStartAction.ts` owner for hosted handoff and
-success/error orchestration. Organization settings paywalls must not keep a
-lane-local `startProTrial()` branch once that shared helper covers the same
-runtime contract.
+RBAC paid handoff must stay neutral in ordinary self-hosted settings flows.
+Organization settings paywalls may route to explicit plan, activation, recovery,
+support, or hosted handoff surfaces where presentation policy allows, but they
+must not reintroduce in-app trial-start helpers, trial-specific denial copy, or
+lane-local `startProTrial()` branches.
 That same RBAC paywall surface now also depends on the runtime-versus-
 commercial license split: RBAC enablement must stay on the runtime capability
 store, while commercial routing stays on the canonical upgrade destination

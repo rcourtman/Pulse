@@ -8,17 +8,35 @@ export interface PatrolRuntimePresentation {
   tone: SemanticTone;
 }
 
+const RETIRED_HOSTED_PATROL_BLOCKED_REASON =
+  'Connect your own AI provider or local model to use Pulse Patrol.';
+
+export function normalizePatrolRuntimeBlockedReason(blockedReason?: string): string {
+  const reason = blockedReason?.trim() ?? '';
+  if (!reason) {
+    return '';
+  }
+
+  if (/\bquickstart\b/i.test(reason) || /\bhosted\b/i.test(reason)) {
+    return RETIRED_HOSTED_PATROL_BLOCKED_REASON;
+  }
+
+  return reason;
+}
+
 export function getPatrolRuntimePresentation(
   runtimeState: PatrolRuntimeState | undefined,
   blockedReason?: string,
 ): PatrolRuntimePresentation {
+  const normalizedBlockedReason = normalizePatrolRuntimeBlockedReason(blockedReason);
+
   switch (runtimeState) {
     case 'blocked':
       return {
         label: 'Patrol Paused',
         title: 'Patrol paused',
         description:
-          blockedReason?.trim() ||
+          normalizedBlockedReason ||
           'Pulse Patrol cannot start new verification until the blocking condition is cleared.',
         tone: 'warning',
       };

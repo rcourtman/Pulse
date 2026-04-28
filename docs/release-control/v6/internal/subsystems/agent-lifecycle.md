@@ -753,9 +753,10 @@ lifecycle-adjacent authenticated-shell surfaces such as
 `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts` must
 consume the shared posture owner instead of reintroducing their own mount-time
 commercial reads.
-Even on that governed first-run exception, render-time trial gating should stay
-on shared selectors such as `isCommercialTrialActive()` instead of reading raw
-commercial-posture fields inside `SetupCompletionPanel.tsx`.
+Even on that governed first-run exception, render-time commercial gating must
+not revive trial-status selectors or raw commercial-posture reads inside
+`SetupCompletionPanel.tsx`; first-run can link to explicit plan or support
+handoff only where presentation policy allows.
 That same shared boundary now also owns the one-time checkout-return lookup:
 lifecycle-adjacent surfaces may initiate billing or account handoff through
 shared public routes, but they must never persist, derive, or replay the
@@ -1035,13 +1036,10 @@ reintroducing local array or JSON parsing rules.
 That same lifecycle-owned install/profile surface now also keeps trial-start
 CTA orchestration out of ordinary authenticated self-hosted feature gates.
 Agent profile paywalls may describe the entitled lifecycle capability and link
-to neutral plan review, but they must not call
-`frontend-modern/src/utils/trialStartAction.ts` directly or present direct
-trial-start copy inside the normal Settings flow. Trial-start orchestration
-through that helper remains limited to explicit first-run, hosted, activation,
-recovery, or support handoff contexts that own redirect, success-notification,
-and canonical denial handling instead of open-coding `startProTrial()`
-branches in each lifecycle surface.
+to neutral plan review, but they must not present direct trial-start copy inside
+the normal Settings flow or open-code `startProTrial()` branches in each
+lifecycle surface. Any paid handoff belongs to explicit plan, hosted,
+activation, recovery, or support contexts governed by presentation policy.
 
 The owned backend API surfaces must preserve the exact-release installer
 fallback, canonical /api/auto-register behavior, and hosted org install-command

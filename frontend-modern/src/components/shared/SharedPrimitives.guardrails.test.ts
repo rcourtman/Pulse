@@ -54,8 +54,6 @@ import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverM
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
-import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
-import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
@@ -103,7 +101,6 @@ import statusBadgeStateSource from '@/components/shared/useStatusBadgeState.ts?r
 import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
-import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
 import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
@@ -444,35 +441,6 @@ describe('shared primitive guardrails', () => {
     expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
 
     expect(nodeGroupHeaderSource).toContain('event.stopPropagation()');
-  });
-
-  it('keeps trial banner on shell, runtime, and model owners', () => {
-    expect(trialBannerSource).toContain('useTrialBannerState');
-    expect(trialBannerSource).toContain('TRIAL_BANNER_TITLE');
-    expect(trialBannerSource).not.toContain('createSignal');
-    expect(trialBannerSource).not.toContain('createMemo');
-    expect(trialBannerSource).not.toContain('loadRuntimeCapabilities');
-    expect(trialBannerSource).not.toContain('licenseStatus');
-    expect(trialBannerSource).not.toContain('getUpgradeActionUrlOrFallback');
-
-    expect(trialBannerStateSource).toContain('export function useTrialBannerState');
-    expect(trialBannerStateSource).toContain('createSignal');
-    expect(trialBannerStateSource).toContain('createMemo');
-    expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
-    expect(trialBannerStateSource).toContain('commercialTrialDaysRemaining');
-    expect(trialBannerStateSource).toContain('isCommercialTrialActive');
-    expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
-    expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
-    expect(trialBannerStateSource).toContain('snoozeUpsell');
-    expect(trialBannerStateSource).not.toContain("fetch('/api/health'");
-
-    expect(trialBannerModelSource).toContain('TRIAL_BANNER_SNOOZE_KEY');
-    expect(trialBannerModelSource).toContain('normalizeTrialBannerDaysRemaining');
-    expect(trialBannerModelSource).toContain('getTrialBannerToneClass');
-    expect(trialBannerModelSource).toContain('getTrialBannerStatusLabel');
-    expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
-    expect(trialBannerModelSource).toContain("TRIAL_BANNER_UPGRADE_LABEL = 'Manage plan'");
-    expect(trialBannerModelSource).not.toContain("TRIAL_BANNER_UPGRADE_LABEL = 'Upgrade'");
   });
 
   it('keeps upgrade navigation split across shell, runtime, and utility owners', () => {
