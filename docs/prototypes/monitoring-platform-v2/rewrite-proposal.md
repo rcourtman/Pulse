@@ -39,7 +39,7 @@ Adding a role should be treated as a contract change, not a frontend convention.
 2. First-class cluster resources for platform-level state across Proxmox, Kubernetes, vSphere, Ceph, and equivalent cluster-capable sources.
 3. Metrics-history API schema for row trends, detail drawers, storage growth, and anomaly context.
 4. First-class liveness fields separate from incidental `LastSeen`.
-5. Recovery/protection fields for target, last run, verification state, and protected-resource linkage.
+5. Backup/protection fields for target, last run, verification state, and protected-resource linkage.
 
 ## Prototype Field Mapping
 
@@ -50,7 +50,7 @@ The current v2 prototype should be read through this mapping:
 - `Info`: compact source-backed facet summary, not product narration
 - resource state indicator: shown directly before the resource name, derived from first-class liveness plus health state. `On` is green, `Off` is red, and `Issue` is yellow.
 - `CPU`, `Memory`, `Disk`: latest resource metrics, with history supplied by the metrics API later
-- `Recovery`: canonical recovery/protection posture
+- `Backup`: canonical backup/protection posture
 - `Signals`: incidents, alerts, or canonical health signals
 - `Placement`: `ParentID` plus typed edges such as `runs_on`, `member_of`, or `contains`
 - `Target`: typed recovery/replication target via `backed_up_by` or `replicates_to`
@@ -58,18 +58,27 @@ The current v2 prototype should be read through this mapping:
 
 ## Platform Rule
 
-The rewrite must not bias one platform. Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and future first-class platforms should all project into the same Monitoring primitives: identity, type, status, metrics, typed relationships, liveness, storage, recovery, and health signals.
+The rewrite must not bias one platform. Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and future first-class platforms should all project into the same Monitoring primitives: identity, type, status, metrics, typed relationships, liveness, storage, backup/protection state, and health signals.
 
 ## Layout Rule
 
-The Monitoring page should keep one platform selection model. Do not split platform choice into duplicate concepts such as workspace and focus.
+The Monitoring page should keep one platform selection model. Do not split platform choice into duplicate concepts that both mean "which estate am I looking at?"
 
-The default surface should remain a dense, segmented table. Visual grouping should come from canonical resource structure and typed relationships: platform, primary/top-level resource, then operational lanes such as workloads, storage, and recovery. If those relationships are not available from the unified resource model, the production UI should wait for the model contract rather than inventing a frontend-only hierarchy.
+The UI vocabulary should be literal resource vocabulary, not abstract architecture vocabulary and not inherited page names. Use words that tell the operator what rows they will see:
 
-When a platform is focused, the primary layout should become relationship-first rather than type-first. A user looking at a host should see the workloads on that host, and any attached storage, network devices, recovery jobs, or protection state should appear under the workload or host they belong to. Type filters can narrow the view, but they must not be the main organizing principle because they separate related resources and force the user to reconstruct the topology mentally.
+- `All resources` for the full relationship-preserving table.
+- `Hosts & clusters` for top-level systems, appliances, and equivalent source roots.
+- `VMs / containers / pods` for runtime units.
+- `Storage` for disks, pools, datastores, volumes, PVCs, datasets, and mounted storage.
+- `Backups` for backups, replication, snapshots, restore verification, and protected-resource state.
+- `Problems` for incident-led triage.
 
-Each filter state should be treated as a monitoring intent with its own view model. Overview should emphasize topology. Workload views should emphasize runtime units and their attachments. Storage views should emphasize ownership and attachment points. Recovery views should emphasize protected resources and backup/replication policies. Problem views should preserve enough context to explain what is affected. A single generic grouping algorithm is not sufficient.
+The default surface should remain a dense, segmented table. Visual grouping should come from canonical resource structure and typed relationships: platform, primary host or cluster, then operational lanes such as VMs/containers/pods, storage, and backups. If those relationships are not available from the unified resource model, the production UI should wait for the model contract rather than inventing a frontend-only hierarchy.
 
-Users should also be able to compose the density of the page. The Monitoring surface needs layer toggles for top-level resources, workloads, storage, and recovery so an operator can choose "hosts only", "hosts plus workloads", or "hosts plus workloads plus storage" without losing the hierarchy.
+When a platform is selected, the primary layout should become relationship-first rather than type-first. A user looking at a host should see the VMs, containers, or pods running on that host, and any attached storage, network devices, backup jobs, snapshot jobs, replication jobs, or backup status should appear under the resource they belong to. Type filters can narrow the view, but they must not be the main organizing principle because they separate related resources and force the user to reconstruct the topology mentally.
 
-The filter controls should be preset-first, not combination-first. Platform selection answers "which estate am I looking at?", Focus answers "what monitoring job am I doing?", and Include answers "which related layers should stay visible for context?" Focus choices should apply sensible layer defaults such as Top Level only, Workloads with owners, Storage with owners and attached workloads, Recovery with protected resources, and Problems with enough context to explain impact. Operators can then adjust Include toggles, but they should not have to know hidden layer dependencies to get a useful view.
+Each filter state should be treated as a monitoring intent with its own view model. All resources should emphasize estate topology. VMs/containers/pods should emphasize runtime units and their attachments. Storage should emphasize ownership and attachment points. Backups should emphasize protected resources, backup jobs, replication, snapshots, and verification state. Problems should preserve enough context to explain what is affected. A single generic grouping algorithm is not sufficient.
+
+Users should also be able to change the density of the page without learning a second control model. The Monitoring surface should use one `Show` row with concrete resource filters such as `All resources`, `Hosts & clusters`, `VMs / containers / pods`, `Storage`, `Backups`, and `Problems`.
+
+The filter controls should be preset-first, not combination-first. Platform selection answers "which estate am I looking at?" and Show answers "which resource rows should I see?" Each option owns its hierarchy and row mix, so operators do not need to combine abstract density modes with layer toggles. A reset control should always return to the neutral All resources / All Platforms state.

@@ -134,6 +134,11 @@
         margin-bottom: 8px;
       }
 
+      .search-row {
+        display: flex;
+        gap: 7px;
+      }
+
       .toolbar input {
         width: 100%;
         border: 1px solid var(--line);
@@ -163,6 +168,10 @@
         align-items: center;
         gap: 6px;
         flex-wrap: wrap;
+      }
+
+      .reset-button {
+        flex: 0 0 auto;
       }
 
       .table-card {
@@ -493,11 +502,11 @@
           <div class="big-number"><span id="platformCount">0</span><span class="note">supported</span></div>
         </article>
         <article class="card summary-card">
-          <div class="label">Top Level</div>
+          <div class="label">Hosts & Clusters</div>
           <div class="big-number"><span id="topLevelCount">0</span><span class="note">resources</span></div>
         </article>
         <article class="card summary-card">
-          <div class="label">Workloads</div>
+          <div class="label">VMs / Containers / Pods</div>
           <div class="big-number"><span id="workloadCount">0</span><span class="note">guests, pods, containers</span></div>
         </article>
         <article class="card summary-card">
@@ -505,7 +514,7 @@
           <div class="big-number"><span id="storageCount">0</span><span class="note">items</span></div>
         </article>
         <article class="card summary-card">
-          <div class="label">Recovery</div>
+          <div class="label">Backups</div>
           <div class="big-number"><span id="recoveryCount">0</span><span class="note">policies</span></div>
         </article>
         <article class="card summary-card">
@@ -515,18 +524,17 @@
       </section>
 
       <section class="card toolbar" aria-label="Monitoring controls">
-        <input id="search" type="search" placeholder="Search resources, platforms, hosts, guests, storage, backup jobs..." />
+        <div class="search-row">
+          <input id="search" type="search" placeholder="Search hosts, clusters, VMs, containers, pods, storage, backups..." />
+          <button id="resetFilters" class="reset-button" type="button">Reset</button>
+        </div>
         <div class="filter-row">
           <span class="filter-label">Platform</span>
           <div id="platformButtons" class="filter-buttons"></div>
         </div>
         <div class="filter-row">
-          <span class="filter-label">Focus</span>
+          <span class="filter-label">Show</span>
           <div id="viewButtons" class="filter-buttons"></div>
-        </div>
-        <div class="filter-row">
-          <span class="filter-label">Include</span>
-          <div id="layerButtons" class="filter-buttons"></div>
         </div>
       </section>
 
@@ -543,24 +551,17 @@
     </main>
 
     <script>
-      const focusOptions = [
-        { id: "overview", label: "Everything", layers: ["top", "workload", "storage", "recovery"] },
-        { id: "hosts", label: "Top Level", layers: ["top"] },
-        { id: "workloads", label: "Workloads", layers: ["top", "workload"] },
+      const viewOptions = [
+        { id: "overview", label: "All resources", layers: ["top", "workload", "storage", "recovery"] },
+        { id: "hosts", label: "Hosts & clusters", layers: ["top"] },
+        { id: "workloads", label: "VMs / containers / pods", layers: ["top", "workload"] },
         { id: "storage", label: "Storage", layers: ["top", "workload", "storage"] },
-        { id: "recovery", label: "Recovery", layers: ["top", "workload", "recovery"] },
+        { id: "recovery", label: "Backups", layers: ["top", "workload", "recovery"] },
         { id: "problems", label: "Problems", layers: ["top", "workload", "storage", "recovery"] },
       ];
 
-      const layerOptions = [
-        { id: "top", label: "Top Level" },
-        { id: "workload", label: "Workloads" },
-        { id: "storage", label: "Storage" },
-        { id: "recovery", label: "Recovery" },
-      ];
-
       // Displayed fields stay inside unified resource model concerns: identity,
-      // kind, placement, liveness state, metrics, recovery state, and health signals.
+      // kind, placement, liveness state, metrics, protection state, and health signals.
       const columns = {
         overview: [
           { key: "name", label: "Resource", width: 260, type: "resource" },
@@ -569,17 +570,17 @@
           { key: "cpu", label: "CPU", width: 100, type: "metric" },
           { key: "memory", label: "Memory", width: 100, type: "metric" },
           { key: "disk", label: "Disk", width: 100, type: "metric" },
-          { key: "recovery", label: "Recovery", width: 110 },
+          { key: "recovery", label: "Backup", width: 110 },
           { key: "signals", label: "Signals", width: 330, type: "signals" },
         ],
         workloads: [
-          { key: "name", label: "Workload", width: 270, type: "resource" },
+          { key: "name", label: "VM / Container / Pod", width: 270, type: "resource" },
           { key: "kind", label: "Kind", width: 125 },
           { key: "placement", label: "Placement", width: 180 },
           { key: "cpu", label: "CPU", width: 100, type: "metric" },
           { key: "memory", label: "Memory", width: 100, type: "metric" },
           { key: "disk", label: "Disk", width: 100, type: "metric" },
-          { key: "recovery", label: "Recovery", width: 120 },
+          { key: "recovery", label: "Backup", width: 120 },
           { key: "signals", label: "Signals", width: 340, type: "signals" },
         ],
         storage: [
@@ -589,7 +590,7 @@
           { key: "disk", label: "Used", width: 100, type: "metric" },
           { key: "size", label: "Size", width: 120 },
           { key: "temp", label: "Temp", width: 90 },
-          { key: "recovery", label: "Recovery", width: 120 },
+          { key: "recovery", label: "Backup", width: 120 },
           { key: "signals", label: "Signals", width: 340, type: "signals" },
         ],
         backups: [
@@ -599,16 +600,8 @@
           { key: "target", label: "Target", width: 220 },
           { key: "lastRun", label: "Last Run", width: 130 },
           { key: "verification", label: "Verification", width: 145 },
-          { key: "recovery", label: "Recovery", width: 120 },
+          { key: "recovery", label: "Backup", width: 120 },
           { key: "signals", label: "Signals", width: 360, type: "signals" },
-        ],
-        problems: [
-          { key: "name", label: "Resource", width: 290, type: "resource" },
-          { key: "platformLabel", label: "Platform", width: 125 },
-          { key: "kind", label: "Kind", width: 130 },
-          { key: "placement", label: "Placement", width: 220 },
-          { key: "recovery", label: "Recovery", width: 120 },
-          { key: "signal", label: "Signal", width: 420 },
         ],
       };
 
@@ -737,7 +730,6 @@
       const state = {
         view: "overview",
         selectedPlatforms: new Set(),
-        layers: new Set(focusOptions[0].layers),
         query: "",
       };
 
@@ -745,35 +737,31 @@
         return Object.keys(data);
       }
 
-      function focusOption(view) {
-        return focusOptions.find((option) => option.id === view) || focusOptions[0];
+      function viewOption(view) {
+        return viewOptions.find((option) => option.id === view) || viewOptions[0];
       }
 
-      function primaryLayerForView(view) {
-        if (view === "hosts") return "top";
-        if (view === "workloads") return "workload";
-        if (view === "storage") return "storage";
-        if (view === "recovery") return "recovery";
-        return "";
-      }
-
-      function applyFocusDefaults(view) {
+      function applyView(view) {
         state.view = view;
-        state.layers = new Set(focusOption(view).layers);
       }
 
-      function ensureFocusState() {
-        if (!focusOptions.some((option) => option.id === state.view)) {
-          applyFocusDefaults("overview");
-          return;
-        }
-        const primary = primaryLayerForView(state.view);
-        if (primary) state.layers.add(primary);
-        if (state.layers.size === 0) applyFocusDefaults("overview");
+      function ensureViewState() {
+        if (!viewOptions.some((option) => option.id === state.view)) applyView("overview");
+      }
+
+      function activeLayers() {
+        return new Set(viewOption(state.view).layers);
       }
 
       function layerEnabled(layer) {
-        return state.layers.has(layer);
+        return activeLayers().has(layer);
+      }
+
+      function resetFilters() {
+        state.selectedPlatforms.clear();
+        state.query = "";
+        applyView("overview");
+        document.getElementById("search").value = "";
       }
 
       function selectedPlatformIds() {
@@ -846,8 +834,6 @@
       function globalRows() {
         if (state.view === "overview") return segmentedOverviewRows(selectedPlatformIds(), true);
         if (state.view === "problems") return globalProblemRows();
-        if (state.view === "recovery") return recoveryRows();
-
         const rows = [];
         for (const platformId of selectedPlatformIds()) {
           const result = platformRows(platformId);
@@ -867,7 +853,6 @@
       function columnsForFocus() {
         if (state.view === "storage") return columns.storage;
         if (state.view === "recovery") return columns.backups;
-        if (state.view === "problems") return columns.problems;
         return columns.overview;
       }
 
@@ -928,19 +913,18 @@
         if (layerEnabled("top")) rows.push(topRow);
 
         if (visibleWorkloads.length) {
-          const workloadCount = model.workloads.length;
-          rows.push(section("Workloads", laneMeta(model.workloads.map((entry) => entry.workload), "resource"), "lane lane-workload"));
+          rows.push(section("VMs / Containers / Pods", laneMeta(model.workloads.map((entry) => entry.workload), "resource"), "lane lane-workload"));
           for (const entry of visibleWorkloads) {
             rows.push(entry.workload, ...entry.storage, ...entry.recovery);
           }
         }
 
         if (visibleHostStorage.length) {
-          rows.push(section("Host Storage", laneMeta(model.hostStorage, "item"), "lane lane-storage"), ...visibleHostStorage);
+          rows.push(section("System Storage", laneMeta(model.hostStorage, "item"), "lane lane-storage"), ...visibleHostStorage);
         }
 
         if (visibleHostRecovery.length) {
-          rows.push(section("Recovery", laneMeta(model.hostRecovery, "policy"), "lane lane-recovery"), ...visibleHostRecovery);
+          rows.push(section("Backups", laneMeta(model.hostRecovery, "policy"), "lane lane-recovery"), ...visibleHostRecovery);
         }
       }
 
@@ -1032,14 +1016,15 @@
         const storage = platform.storage.filter(byTop).map((row) => normalizeRow(platformId, "storage", row));
         const recovery = platform.backups.map((row) => normalizeRow(platformId, "recovery", row)).filter(byTop);
         return [
-          { id: "workload", title: "Workloads", meta: laneMeta(workloads, "resource"), rows: workloads },
+          { id: "workload", title: "VMs / Containers / Pods", meta: laneMeta(workloads, "resource"), rows: workloads },
           { id: "storage", title: "Storage", meta: laneMeta(storage, "item"), rows: storage },
-          { id: "recovery", title: "Recovery", meta: laneMeta(recovery, "policy"), rows: recovery },
+          { id: "recovery", title: "Backups", meta: laneMeta(recovery, "policy"), rows: recovery },
         ];
       }
 
       function laneMeta(rows, noun) {
-        return `${rows.length} ${rows.length === 1 ? noun : `${noun}s`}`;
+        if (rows.length === 1) return `1 ${noun}`;
+        return `${rows.length} ${noun.endsWith("y") ? `${noun.slice(0, -1)}ies` : `${noun}s`}`;
       }
 
       function platformRows(platformId) {
@@ -1066,7 +1051,7 @@
           rows.push(section(top.name, top.info, "top"), topRow);
           if (!layerEnabled("top")) rows.pop();
           if (!entries.length) continue;
-          rows.push(section("Workloads", laneMeta(entries.map((entry) => entry.workload), "resource"), "lane lane-workload"));
+          rows.push(section("VMs / Containers / Pods", laneMeta(entries.map((entry) => entry.workload), "resource"), "lane lane-workload"));
           for (const entry of entries) rows.push(entry.workload, ...entry.storage, ...entry.recovery);
         }
         return { columns: columns.overview, rows };
@@ -1092,7 +1077,7 @@
             rows.push(section("Attached Storage", laneMeta(guestStorage.flatMap((entry) => entry.storage), "item"), "lane lane-storage"));
             for (const entry of guestStorage) rows.push(...(layerEnabled("workload") ? [entry.workload] : []), ...entry.storage);
           }
-          if (hostStorage.length) rows.push(section("Host Storage", laneMeta(hostStorage, "item"), "lane lane-storage"), ...hostStorage);
+          if (hostStorage.length) rows.push(section("System Storage", laneMeta(hostStorage, "item"), "lane lane-storage"), ...hostStorage);
         }
         return { columns: columns.storage, rows };
       }
@@ -1114,10 +1099,10 @@
           rows.push(section(top.name, top.info, "top"), topRow);
           if (!layerEnabled("top")) rows.pop();
           if (protectedWorkloads.length) {
-            rows.push(section("Protected Workloads", laneMeta(protectedWorkloads.flatMap((entry) => entry.recovery), "policy"), "lane lane-recovery"));
+            rows.push(section("Protected VMs / Containers / Pods", laneMeta(protectedWorkloads.flatMap((entry) => entry.recovery), "policy"), "lane lane-recovery"));
             for (const entry of protectedWorkloads) rows.push(...(layerEnabled("workload") ? [entry.workload] : []), ...entry.recovery);
           }
-          if (hostRecovery.length) rows.push(section("Host Recovery", laneMeta(hostRecovery, "policy"), "lane lane-recovery"), ...hostRecovery);
+          if (hostRecovery.length) rows.push(section("System Backups", laneMeta(hostRecovery, "policy"), "lane lane-recovery"), ...hostRecovery);
         }
         return { columns: columns.backups, rows };
       }
@@ -1152,11 +1137,11 @@
           rows.push(section(top.name, top.info, "top"), topRow);
           if (!layerEnabled("top")) rows.pop();
           if (affectedWorkloads.length) {
-            rows.push(section("Affected Workloads", laneMeta(affectedWorkloads.map((entry) => entry.workload), "resource"), "lane lane-workload"));
+            rows.push(section("Affected VMs / Containers / Pods", laneMeta(affectedWorkloads.map((entry) => entry.workload), "resource"), "lane lane-workload"));
             for (const entry of affectedWorkloads) rows.push(...(layerEnabled("workload") ? [entry.workload] : []), ...entry.related);
           }
-          if (hostStorage.length) rows.push(section("Host Storage", laneMeta(hostStorage, "item"), "lane lane-storage"), ...hostStorage);
-          if (hostRecovery.length) rows.push(section("Recovery", laneMeta(hostRecovery, "policy"), "lane lane-recovery"), ...hostRecovery);
+          if (hostStorage.length) rows.push(section("System Storage", laneMeta(hostStorage, "item"), "lane lane-storage"), ...hostStorage);
+          if (hostRecovery.length) rows.push(section("Backups", laneMeta(hostRecovery, "policy"), "lane lane-recovery"), ...hostRecovery);
         }
         return { columns: columns.overview, rows };
       }
@@ -1248,24 +1233,15 @@
       }
 
       function renderControls() {
-        ensureFocusState();
+        ensureViewState();
 
         document.getElementById("platformButtons").innerHTML = [
           `<button class="platform ${state.selectedPlatforms.size === 0 ? "active" : ""}" type="button" data-platform="any">All Platforms</button>`,
           ...platformIds().map((id) => `<button class="platform ${state.selectedPlatforms.has(id) ? "active" : ""}" type="button" data-platform="${id}">${data[id].label}</button>`),
         ].join("");
 
-        document.getElementById("viewButtons").innerHTML = focusOptions
+        document.getElementById("viewButtons").innerHTML = viewOptions
           .map((view) => `<button class="view ${state.view === view.id ? "active" : ""}" type="button" data-view="${view.id}">${view.label}</button>`)
-          .join("");
-
-        const primaryLayer = primaryLayerForView(state.view);
-        document.getElementById("layerButtons").innerHTML = layerOptions
-          .map((layer) => {
-            const active = layerEnabled(layer.id);
-            const required = primaryLayer === layer.id;
-            return `<button class="layer ${active ? "active" : ""}" type="button" data-layer="${layer.id}" aria-pressed="${active}" ${required ? 'aria-disabled="true"' : ""}>${layer.label}</button>`;
-          })
           .join("");
       }
 
@@ -1334,24 +1310,16 @@
         });
         document.querySelectorAll(".view").forEach((button) => {
           button.addEventListener("click", () => {
-            applyFocusDefaults(button.dataset.view);
-            render();
-          });
-        });
-        document.querySelectorAll(".layer").forEach((button) => {
-          button.addEventListener("click", () => {
-            const layer = button.dataset.layer;
-            if (primaryLayerForView(state.view) === layer) return;
-            if (state.layers.has(layer) && state.layers.size > 1) {
-              state.layers.delete(layer);
-            } else {
-              state.layers.add(layer);
-            }
-            ensureFocusState();
+            applyView(button.dataset.view);
             render();
           });
         });
       }
+
+      document.getElementById("resetFilters").addEventListener("click", () => {
+        resetFilters();
+        render();
+      });
 
       document.getElementById("search").addEventListener("input", (event) => {
         state.query = event.currentTarget.value.trim().toLowerCase();
