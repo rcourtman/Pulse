@@ -1549,7 +1549,7 @@
     },
     {
       "id": "RA16",
-      "summary": "Commercial continuity fails closed across cancellation and re-entry: active grandfathered v5 recurring customers keep their legacy recurring price plus uncapped monitored-system and guest capacity only while the subscription remains continuous, cancellation revokes paid access cleanly, and any later re-entry uses current public v6 pricing and limits rather than reviving grandfathered terms.",
+      "summary": "Commercial continuity fails closed across cancellation and re-entry: active grandfathered v5 recurring customers keep their legacy recurring price plus uncapped self-hosted monitoring and child-resource volume only while the subscription remains continuous, cancellation revokes paid access cleanly, and any later re-entry uses current public v6 pricing rather than reviving grandfathered terms.",
       "kind": "invariant",
       "blocking_level": "rc-ready",
       "proof_type": "hybrid",
@@ -4942,7 +4942,7 @@
     },
     {
       "id": "v5-pro-price-grandfathering",
-      "summary": "Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their existing recurring price plus uncapped monitored-system and guest capacity through the v6 pricing change until they cancel; renewals must preserve that grandfathered state, while any return after cancellation re-enters on current v6 pricing and limits.",
+      "summary": "Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their existing recurring price plus uncapped self-hosted monitoring and child-resource volume through the v6 pricing change until they cancel; renewals must preserve that grandfathered state, while any return after cancellation re-enters on current v6 pricing.",
       "kind": "pricing",
       "decided_at": "2026-03-12",
       "subsystem_ids": [
