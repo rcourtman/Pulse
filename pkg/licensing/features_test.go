@@ -231,7 +231,7 @@ func TestGetFeatureDisplayName(t *testing.T) {
 		{FeatureMultiUser, "Multi-User Mode"},
 		{FeatureWhiteLabel, "White-Label Branding"},
 		{FeatureMultiTenant, "Multi-Tenant Mode"},
-		{FeatureUnlimited, "Unlimited Instances"},
+		{FeatureUnlimited, "Hosted Capacity Policy"},
 		{FeatureAgentProfiles, "Centralized Agent Profiles"},
 		{FeatureAuditLogging, "Audit Logging"},
 		{FeatureSSO, "Basic SSO (OIDC)"},

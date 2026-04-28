@@ -38,7 +38,7 @@ const (
 	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
 	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
 	FeatureMultiTenant = "multi_tenant" // Multi-tenant organizations
-	FeatureUnlimited   = "unlimited"    // Unlimited instances (for MSP/volume deals)
+	FeatureUnlimited   = "unlimited"    // Hosted capacity policy marker for MSP/enterprise deals
 
 	// Internal-only runtime capabilities. These must never be added to public
 	// tier defaults or public pricing contracts.
@@ -297,7 +297,7 @@ var proFeatures = appendFeatures(relayFeatures,
 	FeatureAdvancedReporting,
 )
 
-// mspFeatures adds multi-tenant and unlimited on top of pro.
+// mspFeatures adds multi-tenant and hosted capacity policy on top of pro.
 var mspFeatures = appendFeatures(proFeatures,
 	FeatureUnlimited,
 	FeatureMultiTenant,

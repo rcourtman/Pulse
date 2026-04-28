@@ -533,6 +533,12 @@ Community limit enforcement.
     entitlement refresh paths may preserve historical billing fields for old
     state, but new trial or hosted workspaces must not mint quickstart credits
     or imply a managed-model allowance as part of the commercial contract.
+18. Keep the `unlimited` feature key neutral in shared metadata. It is a
+    hosted/MSP capacity-policy marker, not a self-hosted monitoring-volume
+    product promise. Runtime and generated feature catalogs must label it as
+    hosted capacity policy, keep it hidden from self-hosted plan cards, and
+    avoid customer-facing "Unlimited Instances" copy that sounds like the old
+    capped self-hosted packaging.
 
 ## Current State
 
@@ -1787,7 +1793,10 @@ The same runtime-readiness rule also excludes placeholder and plan-marker
 entries like `white_label`, `multi_user`, and `unlimited` from dev/demo
 entitlement payloads when there is no corresponding operable runtime surface;
 those belong in tier metadata and plan semantics, not in live capability
-advertising for a free dev shell.
+advertising for a free dev shell. The `unlimited` feature key is a hosted/MSP
+capacity-policy marker and must use neutral hosted-capacity wording in shared
+metadata rather than customer-facing "Unlimited Instances" copy that implies a
+self-hosted monitoring-volume tier.
 The same distinction applies to customer-facing self-hosted billing
 presentation. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 and `frontend-modern/src/utils/licensePresentation.ts` may label operable

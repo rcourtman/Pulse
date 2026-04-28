@@ -335,8 +335,8 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   },
   {
     "key": "unlimited",
-    "displayName": "Unlimited Instances",
-    "comparisonName": "Unlimited Instances",
+    "displayName": "Hosted Capacity Policy",
+    "comparisonName": "Hosted Capacity Policy",
     "showInComparisonTable": false,
     "displayableInSelfHostedPlan": false,
     "roles": {

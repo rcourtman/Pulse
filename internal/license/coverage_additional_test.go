@@ -86,7 +86,7 @@ func TestGetFeatureDisplayNameCoversKnownFeaturesAndFallback(t *testing.T) {
 		{feature: FeatureMultiUser, want: "Multi-User Mode"},
 		{feature: FeatureWhiteLabel, want: "White-Label Branding"},
 		{feature: FeatureMultiTenant, want: "Multi-Tenant Mode"},
-		{feature: FeatureUnlimited, want: "Unlimited Instances"},
+		{feature: FeatureUnlimited, want: "Hosted Capacity Policy"},
 		{feature: FeatureAgentProfiles, want: "Centralized Agent Profiles"},
 		{feature: FeatureAuditLogging, want: "Audit Logging"},
 		{feature: FeatureSSO, want: "Basic SSO (OIDC)"},

@@ -290,8 +290,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureUnlimited: {
 		Key:                 FeatureUnlimited,
-		DisplayName:         "Unlimited Instances",
-		ComparisonName:      "Unlimited Instances",
+		DisplayName:         "Hosted Capacity Policy",
+		ComparisonName:      "Hosted Capacity Policy",
 		DisplayableInPlanUI: false,
 		SelfHostedRoles: SelfHostedFeatureRoles{
 			Community: SelfHostedFeatureRoleHidden,

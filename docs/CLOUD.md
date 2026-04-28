@@ -31,7 +31,7 @@ For organisations that need multi-tenant management:
 |---|---|
 | Multi-Tenant Mode | `multi_tenant` |
 | Multi-User Mode | `multi_user` |
-| Unlimited Instances | `unlimited` |
+| Hosted Capacity Policy | `unlimited` |
 
 See [Plans & Entitlements](PULSE_PRO.md) for the full feature matrix.
 
