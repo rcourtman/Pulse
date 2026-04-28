@@ -2118,6 +2118,22 @@
             ]
           },
           {
+            "id": "license-test-support",
+            "label": "license test-support helper proof",
+            "match_prefixes": [
+              "pkg/licensing/testsupport/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "internal/api/license_handlers_test.go",
+              "internal/api/licensing_handlers_auto_migrate_test.go",
+              "internal/license/testing_helpers_test.go"
+            ]
+          },
+          {
             "id": "license-server-transport",
             "label": "license server transport proof",
             "match_prefixes": [],

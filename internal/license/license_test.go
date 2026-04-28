@@ -15,6 +15,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 )
 
 // init sets dev mode for tests so license validation works without a real public key
@@ -610,7 +611,7 @@ func TestServiceActivateReturnsSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
-	grantJWT, pub, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, pub, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID: "snapshot_test",
 		Email:     "snapshot@example.com",
 		Tier:      string(TierPro),

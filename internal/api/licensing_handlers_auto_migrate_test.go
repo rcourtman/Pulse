@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 )
 
 type grandfatherFloorSupplementalProvider struct {
@@ -46,7 +47,7 @@ func (p *grandfatherFloorSupplementalProvider) settle(count int) {
 func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_migrated",
 		Tier:                "pro",
 		State:               "active",
@@ -108,7 +109,7 @@ func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 	}
 
 	// Create and persist a legacy test JWT.
-	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("user@example.com", pkglicensing.TierPro, 365*24*time.Hour)
+	legacyJWT, err := licensetestsupport.GenerateLicenseForTesting("user@example.com", pkglicensing.TierPro, 365*24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -182,7 +183,7 @@ func TestGetTenantComponents_SkipsExchange_WhenActivationStateExists(t *testing.
 	}
 
 	// Save a legacy JWT (shouldn't be used since activation state exists).
-	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("user@example.com", pkglicensing.TierPro, 365*24*time.Hour)
+	legacyJWT, err := licensetestsupport.GenerateLicenseForTesting("user@example.com", pkglicensing.TierPro, 365*24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -263,7 +264,7 @@ func TestGetTenantComponents_PersistsCommercialMigrationState_WhenAutoExchangeFa
 		t.Fatalf("init default persistence: %v", err)
 	}
 
-	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("user@example.com", pkglicensing.TierPro, 365*24*time.Hour)
+	legacyJWT, err := licensetestsupport.GenerateLicenseForTesting("user@example.com", pkglicensing.TierPro, 365*24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -325,7 +326,7 @@ func TestGetTenantComponents_PersistsCommercialMigrationState_WhenAutoExchangeFa
 func TestGetTenantComponents_AutoExchangeGrandfathersObservedMonitoredSystems(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_auto",
 		Tier:                "pro",
 		PlanKey:             "legacy_migration_fallback",
@@ -377,7 +378,7 @@ func TestGetTenantComponents_AutoExchangeGrandfathersObservedMonitoredSystems(t 
 		t.Fatalf("init default persistence: %v", err)
 	}
 
-	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("floor-auto@example.com", pkglicensing.TierPro, 24*time.Hour)
+	legacyJWT, err := licensetestsupport.GenerateLicenseForTesting("floor-auto@example.com", pkglicensing.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -424,7 +425,7 @@ func TestGetTenantComponents_AutoExchangeGrandfathersObservedMonitoredSystems(t 
 func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArrivesLate(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_restore",
 		Tier:                "pro",
 		PlanKey:             "legacy_migration_fallback",
@@ -521,7 +522,7 @@ func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArr
 func TestBillingReads_DoNotRestartLegacyGrandfatherReconcileLoop(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_read_only",
 		Tier:                "pro",
 		PlanKey:             "legacy_migration_fallback",
@@ -619,7 +620,7 @@ func TestBillingReads_DoNotRestartLegacyGrandfatherReconcileLoop(t *testing.T) {
 func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigration(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_manual",
 		Tier:                "pro",
 		PlanKey:             "legacy_migration_fallback",
@@ -669,7 +670,7 @@ func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigrati
 	t.Cleanup(handlers.StopAllBackgroundLoops)
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("floor-manual@example.com", pkglicensing.TierPro, 24*time.Hour)
+	legacyJWT, err := licensetestsupport.GenerateLicenseForTesting("floor-manual@example.com", pkglicensing.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -694,7 +695,7 @@ func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigrati
 func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySettles(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_supplemental",
 		Tier:                "pro",
 		PlanKey:             "legacy_migration_fallback",
@@ -746,7 +747,7 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 		t.Fatalf("init default persistence: %v", err)
 	}
 
-	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("floor-supplemental@example.com", pkglicensing.TierPro, 24*time.Hour)
+	legacyJWT, err := licensetestsupport.GenerateLicenseForTesting("floor-supplemental@example.com", pkglicensing.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}

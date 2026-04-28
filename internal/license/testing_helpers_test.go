@@ -3,9 +3,9 @@ package license
 import (
 	"time"
 
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 )
 
 func GenerateLicenseForTesting(email string, tier Tier, expiresIn time.Duration) (string, error) {
-	return pkglicensing.GenerateLicenseForTesting(email, tier, expiresIn)
+	return licensetestsupport.GenerateLicenseForTesting(email, tier, expiresIn)
 }

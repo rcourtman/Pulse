@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 )
 
 func createTestHandler(t *testing.T) *LicenseHandlers {
@@ -64,7 +65,7 @@ func purchaseReturnJTIFromToken(t *testing.T, handler *LicenseHandlers, token st
 func issueCheckoutActivationGrant(t *testing.T) string {
 	t.Helper()
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_checkout_success",
 		Tier:                "pro_plus",
 		State:               "active",
@@ -156,7 +157,7 @@ func TestHandleLicenseFeatures_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -245,7 +246,7 @@ func TestHandleLicenseStatus_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -403,7 +404,7 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+			grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 				LicenseID:           "lic_exchanged",
 				Tier:                "pro",
 				PlanKey:             tc.planKey,
@@ -450,7 +451,7 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 			t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 			handler := createTestHandler(t)
-			licenseKey, err := pkglicensing.GenerateLicenseForTesting("legacy-jwt@example.com", license.TierPro, 24*time.Hour)
+			licenseKey, err := licensetestsupport.GenerateLicenseForTesting("legacy-jwt@example.com", license.TierPro, 24*time.Hour)
 			if err != nil {
 				t.Fatalf("failed to generate test license: %v", err)
 			}
@@ -502,7 +503,7 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 func TestHandleActivateLicense_ClearsCommercialMigrationStateOnNativeActivation(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_v6_native",
 		Tier:                "pro",
 		State:               "active",
@@ -588,7 +589,7 @@ func TestHandleActivateLicense_ClearsCommercialMigrationStateOnNativeActivation(
 func TestHandleActivateLicense_ActivationKeyClearsStaleLegacyPersistence(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_v6_native",
 		Tier:                "pro",
 		State:               "active",
@@ -644,7 +645,7 @@ func TestHandleActivateLicense_ActivationKeyClearsStaleLegacyPersistence(t *test
 		t.Fatalf("new license persistence: %v", err)
 	}
 
-	legacyKey, err := pkglicensing.GenerateLicenseForTesting("legacy-stale@example.com", license.TierPro, 24*time.Hour)
+	legacyKey, err := licensetestsupport.GenerateLicenseForTesting("legacy-stale@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate stale legacy license: %v", err)
 	}
@@ -697,7 +698,7 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("pro@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("pro@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -1456,7 +1457,7 @@ func TestHandleClearLicense_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -1592,7 +1593,7 @@ func TestRequireLicenseFeature_WithLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -1741,7 +1742,7 @@ func TestLicenseGatedEmptyResponse_WithLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}

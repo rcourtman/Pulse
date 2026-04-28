@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 )
 
 type staticLicenseProvider struct {
@@ -27,7 +28,7 @@ func setMaxMonitoredSystemsLicenseForTests(t *testing.T, maxMonitoredSystems int
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	service := pkglicensing.NewService()
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("limits@example.com", pkglicensing.TierEnterprise, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("limits@example.com", pkglicensing.TierEnterprise, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 )
 
 // createTestHandlerWithDir creates a LicenseHandlers and returns the base data
@@ -36,7 +37,7 @@ func TestExpiredLicenseBlocksProFeature(t *testing.T) {
 	handler := createTestHandler(t)
 
 	// Activate a Pro license with a 24h expiry.
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("expiry@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("expiry@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -93,7 +94,7 @@ func TestGracePeriodAllowsProFeature(t *testing.T) {
 
 	handler := createTestHandler(t)
 
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("grace@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("grace@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestExpiredLicenseFeaturesEndpoint(t *testing.T) {
 
 	handler := createTestHandler(t)
 
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("features@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("features@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -278,7 +279,7 @@ func TestLicenseGatedEmptyResponseOnExpiry(t *testing.T) {
 
 	handler := createTestHandler(t)
 
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("gated@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting("gated@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}

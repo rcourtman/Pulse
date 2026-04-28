@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 )
 
 func containsCapability(values []string, key string) bool {
@@ -230,7 +231,7 @@ func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 func TestHandleCommercialPosture_ActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 	handler := createTestHandler(t)
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting(
+	licenseKey, err := licensetestsupport.GenerateLicenseForTesting(
 		"owner@example.com",
 		pkglicensing.TierPro,
 		24*time.Hour,

@@ -45,6 +45,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog"
@@ -5517,7 +5518,7 @@ func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	const expectedClientVersion = "6.0.0-rc.1"
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_contract_floor",
 		Tier:                "pro",
 		PlanKey:             "legacy_migration_fallback",
@@ -5579,7 +5580,7 @@ func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing
 	if err != nil {
 		t.Fatalf("new persistence: %v", err)
 	}
-	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("contract-floor@example.com", pkglicensing.TierPro, 24*time.Hour)
+	legacyJWT, err := licensetestsupport.GenerateLicenseForTesting("contract-floor@example.com", pkglicensing.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -6437,7 +6438,7 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 
 		handlers := createTestHandler(t)
 		handlers.SetConfig(&config.Config{DemoMode: true})
-		licenseKey, err := pkglicensing.GenerateLicenseForTesting("contract-demo@example.com", pkglicensing.TierPro, 24*time.Hour)
+		licenseKey, err := licensetestsupport.GenerateLicenseForTesting("contract-demo@example.com", pkglicensing.TierPro, 24*time.Hour)
 		if err != nil {
 			t.Fatalf("GenerateLicenseForTesting: %v", err)
 		}
