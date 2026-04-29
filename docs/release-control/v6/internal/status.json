@@ -5275,7 +5275,7 @@
     },
     {
       "id": "self-hosted-plans-surface-entitlement-first",
-      "summary": "The self-hosted v6 commercial settings surface is plan-owned rather than tier-owned: the settings nav label is `Plans`, the page title is `Plans & Activation`, and the canonical plan state must foreground the current unlocked tier plus capabilities so paid upgrades can confirm their entitlement immediately after entering a new key.",
+      "summary": "The self-hosted v6 commercial settings surface is plan-owned rather than tier-owned: the settings nav label is `Plans`, the page title is `Self-hosted plan`, and the canonical plan state must foreground the current tier plus available capabilities so paid upgrades can confirm what their key enabled without making default Community look like it is missing an activation key.",
       "kind": "pricing",
       "decided_at": "2026-04-22",
       "subsystem_ids": [
