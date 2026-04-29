@@ -178,19 +178,27 @@ The canonical operator preview for that cutover now lives in
 `pulse-pro/scripts/grandfathered_recurring_cutover_preview.py`, and it must use
 the same active-at-snapshot rule as the live server before anyone sets
 `PULSE_LICENSE_GRANDFATHERED_RECURRING_SNAPSHOT_AT`.
-That same commercial control boundary also owns the server-side checkout funnel
-analytics, alerting, digest generation, and admin summary payloads in
-`pulse-pro:license-server/checkout_funnel.go`. Alert evaluation there must use
-rolling trailing windows for "last 24 hours" and "previous 7 days" semantics
-rather than UTC calendar-day buckets, so midnight does not suppress active
-checkout regressions or leave the admin summary without the alert state the
-server already observed.
+The retired server-side checkout funnel analytics, alerting, digest
+generation, and admin summary payloads are no longer part of the active v6
+proof floor. `pulse-pro:license-server/v6_checkout.go` may accept legacy
+funnel-telemetry fields only as ignored compatibility input for older static
+site deploys; active paid-feature proof must stay on checkout creation,
+portal-handoff state, pricing/catalog truth, download delivery, and license or
+relay entitlement behavior rather than requiring the removed funnel monitoring
+files.
 That same public-pricing boundary also owns the machine-readable v6 pricing
 validator and launch checklist in `pulse-pro:scripts/validate_public_pricing_model.py`
 and `pulse-pro:V6_LAUNCH_CHECKLIST.md`. Those operator surfaces must describe
 self-hosted Pulse as core monitoring included by default, must not reintroduce
 monitored-system upsell language, and must verify the no-cap release posture
 rather than legacy Community limit enforcement.
+Self-hosted paid-feature claims must also remain covered by the executable
+cross-repo proof bundle in `scripts/release_control/paid_feature_claims_proof.py`.
+When Community, Relay, or Pro claims change, that proof must continue to verify
+the canonical licensing matrix, runtime history entitlement enforcement,
+frontend plan presentation, public pricing/checkout/download behavior, and
+Relay entitlement acceptance together rather than treating copy, checkout, and
+runtime gating as separate unlinked claims.
 
 ## Extension Points
 

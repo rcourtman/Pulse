@@ -13,6 +13,7 @@ class ProofEntrypointsTest(unittest.TestCase):
         entrypoints = [
             "commercial_cancellation_reactivation_proof.py",
             "commercial_cancellation_reactivation_rehearsal.py",
+            "paid_feature_claims_proof.py",
             "mobile_relay_auth_approvals_proof.py",
             "relay_registration_reconnect_drain_proof.py",
         ]

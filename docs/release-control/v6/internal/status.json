@@ -2514,6 +2514,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/paid-feature-claim-proof-matrix-2026-04-29.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md",
           "kind": "file"
         },
@@ -2526,6 +2532,12 @@
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/paid_feature_claims_proof.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         },
         {
           "repo": "pulse-pro",
@@ -4417,9 +4429,21 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/paid-feature-claim-proof-matrix-2026-04-29.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/paid-feature-entitlement-gating-2026-03-12.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/paid_feature_claims_proof.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         }
       ]
     },

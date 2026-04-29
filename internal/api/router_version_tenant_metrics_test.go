@@ -179,10 +179,13 @@ func TestHandleMetricsHistory_TierAwareHistoryRanges(t *testing.T) {
 		range_ string
 		want   int
 	}{
+		{name: "community allows free seven day history", range_: "7d", want: http.StatusOK},
 		{name: "community blocks relay history", range_: "14d", want: http.StatusPaymentRequired},
 		{name: "relay allows 14 days", tier: pkglicensing.TierRelay, range_: "14d", want: http.StatusOK},
+		{name: "relay allows equivalent hour range", tier: pkglicensing.TierRelay, range_: "336h", want: http.StatusOK},
 		{name: "relay blocks longer day range", tier: pkglicensing.TierRelay, range_: "15d", want: http.StatusPaymentRequired},
 		{name: "pro allows 90 days", tier: pkglicensing.TierPro, range_: "90d", want: http.StatusOK},
+		{name: "pro blocks longer than 90 days", tier: pkglicensing.TierPro, range_: "91d", want: http.StatusPaymentRequired},
 	}
 
 	for _, tt := range tests {

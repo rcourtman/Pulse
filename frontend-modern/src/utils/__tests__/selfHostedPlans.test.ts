@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getSelfHostedPlanEntitlementSummary,
   getSelfHostedPlanDefinitionForBillingTier,
   SELF_HOSTED_COMMERCIAL_PRESENTATION,
   SELF_HOSTED_FEATURE_ROWS,
   SELF_HOSTED_PLAN_BY_TIER,
   SELF_HOSTED_PLAN_DEFINITIONS,
 } from '../selfHostedPlans';
+import {
+  getSelfHostedFeaturesForRole,
+  SELF_HOSTED_FEATURE_CATALOG,
+} from '../selfHostedFeatureCatalog.generated';
+
+const primaryPillarClaimLabels = (tier: 'relay' | 'pro', metricHistoryDays: number) =>
+  getSelfHostedFeaturesForRole(tier, 'primary_pillar').map((entry) =>
+    entry.key === 'long_term_metrics'
+      ? `${metricHistoryDays}-day metric history`
+      : entry.comparisonName,
+  );
 
 describe('selfHostedPlans', () => {
   it('keeps core monitoring aligned as an included self-hosted baseline', () => {
@@ -142,6 +154,96 @@ describe('selfHostedPlans', () => {
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).not.toContain(
       'Patrol quickstart: 25 runs, no API key',
+    );
+  });
+
+  it('derives paid self-hosted feature claims from the generated catalog', () => {
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementSummary).toBe(
+      getSelfHostedPlanEntitlementSummary('community'),
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toBe(
+      getSelfHostedPlanEntitlementSummary('relay'),
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toBe(
+      getSelfHostedPlanEntitlementSummary('pro'),
+    );
+    expect(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+')).toBe(
+      'Legacy Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+    );
+
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual(
+      primaryPillarClaimLabels('relay', SELF_HOSTED_PLAN_BY_TIER.relay.metricHistoryDays),
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual(
+      primaryPillarClaimLabels('pro', SELF_HOSTED_PLAN_BY_TIER.pro.metricHistoryDays),
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.includedExtras).toEqual(
+      getSelfHostedFeaturesForRole('pro', 'included_extra').map((entry) => entry.displayName),
+    );
+
+    const displayablePaidFeatures = SELF_HOSTED_FEATURE_CATALOG.filter(
+      (entry) =>
+        entry.displayableInSelfHostedPlan &&
+        !entry.includedIn.community &&
+        (entry.includedIn.relay || entry.includedIn.pro),
+    ).map((entry) => entry.key);
+    expect(displayablePaidFeatures).toEqual([
+      'relay',
+      'mobile_app',
+      'push_notifications',
+      'ai_alerts',
+      'ai_autofix',
+      'long_term_metrics',
+      'advanced_sso',
+      'rbac',
+      'audit_logging',
+      'advanced_reporting',
+      'agent_profiles',
+    ]);
+    expect(
+      SELF_HOSTED_PLAN_DEFINITIONS.map((plan) => ({
+        tier: plan.tier,
+        historyDays: plan.metricHistoryDays,
+        extras: plan.billingExtrasSummary,
+      })),
+    ).toEqual([
+      { tier: 'community', historyDays: 7, extras: 'Patrol, alerts, and OIDC' },
+      {
+        tier: 'relay',
+        historyDays: 14,
+        extras: 'Remote web access, mobile pairing, and push',
+      },
+      { tier: 'pro', historyDays: 90, extras: 'Analysis, remediation, and admin controls' },
+    ]);
+    expect(SELF_HOSTED_FEATURE_ROWS.find((row) => row.key === 'history')).toEqual({
+      key: 'history',
+      name: 'Metric History',
+      community: '7 days',
+      relay: '14 days',
+      pro: '90 days',
+    });
+
+    const paidClaimText = [
+      SELF_HOSTED_COMMERCIAL_PRESENTATION.pageDescription,
+      SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary,
+      SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary,
+      ...SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights,
+      ...SELF_HOSTED_PLAN_BY_TIER.relay.highlights,
+      SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary,
+      SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary,
+      ...SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights,
+      ...SELF_HOSTED_PLAN_BY_TIER.pro.includedExtras,
+      ...SELF_HOSTED_PLAN_BY_TIER.pro.highlights,
+    ].join('\n');
+
+    for (const hiddenEntry of SELF_HOSTED_FEATURE_CATALOG.filter(
+      (entry) => !entry.displayableInSelfHostedPlan,
+    )) {
+      expect(paidClaimText).not.toContain(hiddenEntry.displayName);
+      expect(paidClaimText).not.toContain(hiddenEntry.comparisonName);
+    }
+    expect(paidClaimText).not.toMatch(
+      /unlimited|monitoring capacity|guest capacity|hosted quickstart|trial/i,
     );
   });
 

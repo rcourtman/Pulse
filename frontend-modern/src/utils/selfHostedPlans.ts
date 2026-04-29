@@ -68,6 +68,26 @@ const getTierEntitlementHighlights = (
 const getTierIncludedExtras = (tier: SelfHostedTierKey): readonly string[] =>
   getSelfHostedFeaturesForRole(tier, 'included_extra').map((entry) => entry.displayName);
 
+const SELF_HOSTED_PLAN_DEFAULT_ENTITLEMENT_LABELS: Record<SelfHostedTierKey, string> = {
+  community: 'Community',
+  relay: 'Relay',
+  pro: 'Pulse Pro',
+};
+
+export function getSelfHostedPlanEntitlementSummary(
+  tier: SelfHostedTierKey,
+  planLabel = SELF_HOSTED_PLAN_DEFAULT_ENTITLEMENT_LABELS[tier],
+): string {
+  switch (tier) {
+    case 'community':
+      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.`;
+    case 'relay':
+      return `${planLabel} is active on this instance. Remote web access, mobile pairing, push notifications, and longer history are available right now.`;
+    case 'pro':
+      return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.`;
+  }
+}
+
 const buildSelfHostedComparisonFeatureRows = (): readonly SelfHostedFeatureRow[] =>
   SELF_HOSTED_FEATURE_CATALOG.filter((entry) => entry.showInComparisonTable).map((entry) => ({
     key: entry.key,
@@ -85,8 +105,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     subline: 'Core monitoring included',
     metricHistoryDays: 7,
     billingExtrasSummary: 'Patrol, alerts, and OIDC',
-    entitlementSummary:
-      'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
+    entitlementSummary: getSelfHostedPlanEntitlementSummary('community'),
     entitlementHighlights: [
       'Real-time monitoring',
       '7-day metric history',
@@ -112,8 +131,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     subline: 'or $4.99/month',
     metricHistoryDays: 14,
     billingExtrasSummary: 'Remote web access, mobile pairing, and push',
-    entitlementSummary:
-      'Relay is active on this instance. Remote web access, mobile pairing, push notifications, and longer history are available right now.',
+    entitlementSummary: getSelfHostedPlanEntitlementSummary('relay'),
     entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],
     comparisonSummary:
@@ -134,8 +152,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     subline: 'or $8.99/month',
     metricHistoryDays: 90,
     billingExtrasSummary: 'Analysis, remediation, and admin controls',
-    entitlementSummary:
-      'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+    entitlementSummary: getSelfHostedPlanEntitlementSummary('pro'),
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:

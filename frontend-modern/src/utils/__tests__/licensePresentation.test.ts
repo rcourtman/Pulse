@@ -28,6 +28,7 @@ import {
   SELF_HOSTED_RECOVERY_PRESENTATION,
 } from '@/utils/licensePresentation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/components/Settings/selfHostedBillingPresentation';
+import { getSelfHostedPlanEntitlementSummary } from '@/utils/selfHostedPlans';
 
 describe('licensePresentation', () => {
   it('returns canonical tier labels', () => {
@@ -376,6 +377,38 @@ describe('licensePresentation', () => {
       supplementalSummary:
         'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume are not metered in current v6 self-hosted packaging.',
     });
+  });
+
+  it('sources active self-hosted current-plan summaries from the shared plan contract', () => {
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'relay',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'push_notifications'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Mobile App Pairing',
+          'Push Notifications',
+        ],
+      }).body,
+    ).toBe(getSelfHostedPlanEntitlementSummary('relay', 'Relay'));
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro_plus',
+          subscription_state: 'active',
+          capabilities: ['relay', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
+      }).body,
+    ).toBe(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+'));
   });
 
   it('builds restrained higher-tier comparison cards for Community and Relay only', () => {

@@ -14,7 +14,10 @@ import {
   type MonitoredSystemCapacityStatus,
   type MonitoredSystemLimitUsageStatus,
 } from '@/utils/monitoredSystemPresentation';
-import { getSelfHostedPlanDefinitionForBillingTier } from '@/utils/selfHostedPlans';
+import {
+  getSelfHostedPlanDefinitionForBillingTier,
+  getSelfHostedPlanEntitlementSummary,
+} from '@/utils/selfHostedPlans';
 import {
   getSelfHostedFeatureCatalogEntry,
   isDisplayableSelfHostedFeatureKey,
@@ -417,16 +420,10 @@ const getSelfHostedActivePlanSummary = (
   planLabel: string,
   planDefinition: ReturnType<typeof getSelfHostedPlanDefinitionForBillingTier>,
 ): string | null => {
-  switch (planDefinition?.tier) {
-    case 'community':
-      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.`;
-    case 'relay':
-      return `${planLabel} is active on this instance. Remote web access, mobile pairing, push notifications, and longer history are available right now.`;
-    case 'pro':
-      return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.`;
-    default:
-      return null;
+  if (!planDefinition) {
+    return null;
   }
+  return getSelfHostedPlanEntitlementSummary(planDefinition.tier, planLabel);
 };
 
 export const getSelfHostedPlanComparisonPresentation = ({

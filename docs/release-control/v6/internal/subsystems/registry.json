@@ -1834,7 +1834,6 @@
         "internal/hosted/provisioner.go",
         "pulse-pro:.github/workflows/deploy-v6-preview-demo.yml",
         "pulse-pro:landing-page/thanks.html",
-        "pulse-pro:license-server/checkout_funnel.go",
         "pulse-pro:license-server/grandfathering.go",
         "pulse-pro:license-server/main.go",
         "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
@@ -2528,19 +2527,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/pages/__tests__/RuntimeHome.test.tsx"
-            ]
-          },
-          {
-            "id": "checkout-funnel-analytics",
-            "label": "checkout funnel analytics proof",
-            "match_prefixes": [],
-            "match_files": [
-              "pulse-pro:license-server/checkout_funnel.go"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "pulse-pro:license-server/checkout_funnel_test.go"
             ]
           },
           {

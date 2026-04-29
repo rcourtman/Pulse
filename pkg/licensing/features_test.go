@@ -127,6 +127,129 @@ func TestDeriveCapabilitiesFromTier_Sorted(t *testing.T) {
 	}
 }
 
+func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
+	tests := []struct {
+		name                     string
+		tier                     Tier
+		wantHistoryDays          int
+		wantCoreMonitoringLimit  int
+		wantIncludedCapabilities []string
+		wantExcludedCapabilities []string
+	}{
+		{
+			name:                    "community keeps core monitoring free and does not claim paid extras",
+			tier:                    TierFree,
+			wantHistoryDays:         7,
+			wantCoreMonitoringLimit: 0,
+			wantIncludedCapabilities: []string{
+				FeatureUpdateAlerts,
+				FeatureSSO,
+				FeatureAIPatrol,
+			},
+			wantExcludedCapabilities: []string{
+				FeatureRelay,
+				FeatureMobileApp,
+				FeaturePushNotifications,
+				FeatureLongTermMetrics,
+				FeatureAIAlerts,
+				FeatureAIAutoFix,
+				FeatureRBAC,
+				FeatureAdvancedReporting,
+			},
+		},
+		{
+			name:                    "relay sells remote access mobile handoff push and fourteen day history",
+			tier:                    TierRelay,
+			wantHistoryDays:         14,
+			wantCoreMonitoringLimit: 0,
+			wantIncludedCapabilities: []string{
+				FeatureUpdateAlerts,
+				FeatureSSO,
+				FeatureAIPatrol,
+				FeatureRelay,
+				FeatureMobileApp,
+				FeaturePushNotifications,
+				FeatureLongTermMetrics,
+			},
+			wantExcludedCapabilities: []string{
+				FeatureAIAlerts,
+				FeatureAIAutoFix,
+				FeatureRBAC,
+				FeatureAdvancedReporting,
+				FeatureAgentProfiles,
+			},
+		},
+		{
+			name:                    "pro sells operator extras and preserves relay capabilities",
+			tier:                    TierPro,
+			wantHistoryDays:         90,
+			wantCoreMonitoringLimit: 0,
+			wantIncludedCapabilities: []string{
+				FeatureRelay,
+				FeatureMobileApp,
+				FeaturePushNotifications,
+				FeatureLongTermMetrics,
+				FeatureAIAlerts,
+				FeatureAIAutoFix,
+				FeatureRBAC,
+				FeatureAuditLogging,
+				FeatureAdvancedReporting,
+				FeatureAgentProfiles,
+			},
+			wantExcludedCapabilities: []string{
+				FeatureMultiTenant,
+				FeatureUnlimited,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			gotHistoryDays, ok := TierHistoryDays[tt.tier]
+			if !ok {
+				t.Fatalf("TierHistoryDays missing entry for tier %q", tt.tier)
+			}
+			if gotHistoryDays != tt.wantHistoryDays {
+				t.Fatalf(
+					"TierHistoryDays[%q] = %d, want %d",
+					tt.tier,
+					gotHistoryDays,
+					tt.wantHistoryDays,
+				)
+			}
+
+			gotMonitoringLimit, ok := TierMonitoredSystemLimits[tt.tier]
+			if !ok {
+				t.Fatalf("TierMonitoredSystemLimits missing entry for tier %q", tt.tier)
+			}
+			if gotMonitoringLimit != tt.wantCoreMonitoringLimit {
+				t.Fatalf(
+					"TierMonitoredSystemLimits[%q] = %d, want %d",
+					tt.tier,
+					gotMonitoringLimit,
+					tt.wantCoreMonitoringLimit,
+				)
+			}
+
+			capabilities := make(map[string]struct{})
+			for _, capability := range TierFeatures[tt.tier] {
+				capabilities[capability] = struct{}{}
+			}
+			for _, capability := range tt.wantIncludedCapabilities {
+				if _, ok := capabilities[capability]; !ok {
+					t.Fatalf("tier %q missing paid-feature claim capability %q", tt.tier, capability)
+				}
+			}
+			for _, capability := range tt.wantExcludedCapabilities {
+				if _, ok := capabilities[capability]; ok {
+					t.Fatalf("tier %q unexpectedly includes capability %q", tt.tier, capability)
+				}
+			}
+		})
+	}
+}
+
 func TestDeriveEntitlements(t *testing.T) {
 	caps, limits := DeriveEntitlements(TierPro, []string{"custom"}, 50, 100)
 
