@@ -232,7 +232,7 @@ export const LabeledFilterSelect: Component<LabeledFilterSelectProps> = (props) 
     'value',
   ]);
   let selectRef: HTMLSelectElement | undefined;
-  const selectId = typeof selectProps.id === 'string' ? selectProps.id : undefined;
+  const selectId = () => (typeof selectProps.id === 'string' ? selectProps.id : undefined);
 
   createEffect(() => {
     const nextValue = local.value;
@@ -261,7 +261,7 @@ export const LabeledFilterSelect: Component<LabeledFilterSelectProps> = (props) 
 
   return (
     <div class={`${filterGroupClass} ${local.groupClass ?? ''}`.trim()}>
-      <label for={selectId} class={filterLabelClass}>
+      <label for={selectId()} class={filterLabelClass}>
         {local.label}
       </label>
       <select

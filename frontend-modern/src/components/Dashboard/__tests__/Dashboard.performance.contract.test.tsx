@@ -676,6 +676,12 @@ describe('Dashboard performance contract', () => {
         'export const buildDashboardHostFilterConfig',
       );
       expect(dashboardWorkloadFilterConfigModelSource).toContain(
+        "DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL = 'K8s Cluster'",
+      );
+      expect(dashboardWorkloadFilterConfigModelSource).toContain(
+        "DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL = 'All K8s clusters'",
+      );
+      expect(dashboardWorkloadFilterConfigModelSource).toContain(
         'export const buildDashboardNamespaceFilterConfig',
       );
       expect(dashboardWorkloadRouteModelSource).toContain(

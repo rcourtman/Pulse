@@ -5,6 +5,8 @@ import {
   buildDashboardHostFilterConfig,
   buildDashboardNamespaceFilterConfig,
   buildDashboardPlatformFilterConfig,
+  DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL,
+  DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL,
 } from '../dashboardWorkloadFilterConfigModel';
 
 describe('dashboardWorkloadFilterConfigModel', () => {
@@ -53,8 +55,13 @@ describe('dashboardWorkloadFilterConfigModel', () => {
       }),
     ).toMatchObject({
       id: 'workloads-k8s-context-filter',
-      label: 'Cluster',
+      label: DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL,
       value: 'prod',
+      options: [
+        { value: '', label: DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL },
+        { value: 'prod', label: 'prod' },
+        { value: 'stage', label: 'stage' },
+      ],
     });
 
     expect(

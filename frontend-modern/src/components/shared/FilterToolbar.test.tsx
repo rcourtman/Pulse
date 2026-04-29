@@ -104,6 +104,48 @@ describe('FilterHeader', () => {
     );
   });
 
+  it('keeps the label association current when a dynamic select id changes', async () => {
+    const [mode, setMode] = createSignal<'node' | 'k8s'>('node');
+    const filterConfig = () =>
+      mode() === 'node'
+        ? {
+            id: 'workloads-node-filter',
+            label: 'Node',
+            options: [{ value: '', label: 'All nodes' }],
+          }
+        : {
+            id: 'workloads-k8s-context-filter',
+            label: 'K8s Cluster',
+            options: [{ value: '', label: 'All K8s clusters' }],
+          };
+
+    render(() => (
+      <>
+        <button type="button" onClick={() => setMode('k8s')}>
+          Show pods
+        </button>
+        <LabeledFilterSelect
+          id={filterConfig().id}
+          label={filterConfig().label}
+          value=""
+          data-testid="dynamic-filter"
+        >
+          <For each={filterConfig().options}>
+            {(option) => <option value={option.value}>{option.label}</option>}
+          </For>
+        </LabeledFilterSelect>
+      </>
+    ));
+
+    expect(screen.getByLabelText('Node')).toBe(screen.getByTestId('dynamic-filter'));
+
+    screen.getByRole('button', { name: 'Show pods' }).click();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('K8s Cluster')).toBe(screen.getByTestId('dynamic-filter')),
+    );
+  });
+
   it('keeps shared filter popovers above nested table and card shells', () => {
     expect(filterPanelClass).toContain('absolute');
     expect(filterPanelClass).toContain('z-[80]');

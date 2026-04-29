@@ -370,7 +370,7 @@ describe('Dashboard pod workloads integration', () => {
 
     await waitFor(() => {
       expect(lastHostFilter).toBeDefined();
-      expect(lastHostFilter?.label).toBe('Cluster');
+      expect(lastHostFilter?.label).toBe('K8s Cluster');
     });
     const hostFilter = requireLastHostFilter();
     hostFilter.onChange('cluster-a');

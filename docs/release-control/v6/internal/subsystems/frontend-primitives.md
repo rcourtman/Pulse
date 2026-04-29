@@ -1533,7 +1533,10 @@ That same shared filter-toolbar boundary also owns controlled select continuity
 when filter options materialize asynchronously. `LabeledFilterSelect` must keep
 the caller-owned `value` visibly selected after option children arrive so
 dashboard, recovery, and other canonical filter bars do not drop their active
-selection until the operator reopens the control.
+selection until the operator reopens the control. The same primitive must keep
+its `<label for>` association reactive when a route-owned filter swaps the
+select `id`, label, and option set in place, so controls such as the workloads
+node/K8s cluster filter remain accessible after mode changes.
 That same boundary also owns live option propagation through shared page-control
 composition. Callers such as storage and recovery must pass source/filter
 option collections through reactive accessors instead of snapshot arrays when

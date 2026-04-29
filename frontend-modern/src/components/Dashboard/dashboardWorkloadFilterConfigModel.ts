@@ -2,6 +2,9 @@ import type { ViewMode } from '@/types/workloads';
 import type { DashboardToolbarFilterConfig } from './dashboardFilterModel';
 import type { DashboardWorkloadNodeOption } from './dashboardWorkloadRouteModel';
 
+export const DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL = 'K8s Cluster';
+export const DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL = 'All K8s clusters';
+
 interface DashboardContainerRuntimeFilterConfigOptions {
   isWorkloadsRoute: boolean;
   viewMode: ViewMode;
@@ -85,10 +88,10 @@ export const buildDashboardHostFilterConfig = ({
   if (viewMode === 'pod') {
     return {
       id: 'workloads-k8s-context-filter',
-      label: 'Cluster',
+      label: DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL,
       value: selectedKubernetesContext ?? '',
       options: [
-        { value: '', label: 'All clusters' },
+        { value: '', label: DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL },
         ...kubernetesContextOptions.map((context) => ({ value: context, label: context })),
       ],
       onChange: onContextChange,
