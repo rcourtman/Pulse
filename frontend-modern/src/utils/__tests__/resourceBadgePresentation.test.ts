@@ -28,7 +28,7 @@ describe('resourceBadgePresentation', () => {
   it('returns canonical platform badges via shared platform presentation', () => {
     expect(getPlatformBadge('proxmox-pve')?.label).toBe('PVE');
     expect(getPlatformBadge('proxmox-pbs')?.label).toBe('PBS');
-    expect(getPlatformBadge('docker')?.label).toBe('Docker');
+    expect(getPlatformBadge('docker')?.label).toBe('Container runtime');
   });
 
   it('returns source badges for infrastructure source types', () => {
@@ -87,7 +87,7 @@ describe('resourceBadgePresentation', () => {
           platformData: { sources: ['docker'] },
         }),
       ).map((badge) => badge.label),
-    ).toEqual(['Docker']);
+    ).toEqual(['Container runtime']);
   });
 
   it('keeps API-backed platform identity ahead of reported host OS', () => {

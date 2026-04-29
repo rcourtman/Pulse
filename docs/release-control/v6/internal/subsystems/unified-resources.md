@@ -122,6 +122,10 @@ cross-source deduplication.
 14. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 15. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
 16. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+    That shared vocabulary boundary owns the generic `docker` platform label:
+    selectors, badges, and filter options render it as `Container runtime`,
+    while Docker remains a display token or implementation label only for
+    Docker-native action surfaces.
 17. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 
 ## Extension Points
@@ -1845,11 +1849,13 @@ tooltips and accessibility metadata, but visible table headers, sort keys, and
 row badges must answer what system the operator is looking at. Provider/API
 platforms such as Proxmox, TrueNAS, VMware, and Kubernetes outrank collection
 methods; reported agent OS or appliance identity such as Unraid or Ubuntu
-outranks a generic container-runtime capability; and Docker should appear as
-the primary visible system label only when the container runtime is the best
-available identity. Agent telemetry is collection-method detail when a stronger
-platform or host identity is present, not a peer platform label that should
-crowd the table or drive the primary system sort.
+outranks a generic container-runtime capability; and the shared generic source
+label for the `docker` platform is `Container runtime` when the runtime
+capability is the best available identity. Docker-specific wording is reserved
+for implementation or action surfaces that are explicitly scoped to
+Docker-native behavior. Agent telemetry is collection-method detail when a
+stronger platform or host identity is present, not a peer platform label that
+should crowd the table or drive the primary system sort.
 The route file `frontend-modern/src/pages/Infrastructure.tsx` is now only the
 navigation boundary for that surface; canonical infrastructure filter, search,
 deep-link, and expansion state now live behind the dedicated infrastructure

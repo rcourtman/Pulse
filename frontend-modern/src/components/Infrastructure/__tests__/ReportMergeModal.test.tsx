@@ -71,7 +71,7 @@ describe('ReportMergeModal', () => {
 
       expect(screen.getByText('PVE')).toBeInTheDocument();
       expect(screen.getByText('Agent')).toBeInTheDocument();
-      expect(screen.getByText('Docker')).toBeInTheDocument();
+      expect(screen.getByText('Container runtime')).toBeInTheDocument();
       expect(screen.getByText('PBS')).toBeInTheDocument();
       expect(screen.getByText('PMG')).toBeInTheDocument();
       expect(screen.getByText('K8s')).toBeInTheDocument();
@@ -91,7 +91,7 @@ describe('ReportMergeModal', () => {
       render(() => <ReportMergeModal {...props} />);
 
       expect(screen.getByText('PVE')).toBeInTheDocument();
-      expect(screen.getByText('Docker')).toBeInTheDocument();
+      expect(screen.getByText('Container runtime')).toBeInTheDocument();
     });
 
     it('shows a notes textarea with placeholder', () => {
