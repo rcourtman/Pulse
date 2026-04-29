@@ -1,9 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import {
-  FilterSegmentedControl,
-  LabeledFilterSelect,
-} from '@/components/shared/FilterToolbar';
+import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
+import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -179,53 +177,9 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           <option value="stopped">Stopped</option>
         </LabeledFilterSelect>
 
-        <FilterSegmentedControl
+        <GroupedTableModeSegmentedControl
           value={props.groupingMode()}
-          onChange={(value) => props.setGroupingMode(value as 'grouped' | 'flat')}
-          aria-label="Group by"
-          options={[
-            {
-              value: 'grouped',
-              title: 'Group by node',
-              label: (
-                <>
-                  <svg
-                    class="w-3 h-3"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
-                  </svg>
-                  Grouped
-                </>
-              ),
-            },
-            {
-              value: 'flat',
-              title: 'Flat list view',
-              label: (
-                <>
-                  <svg
-                    class="w-3 h-3"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <line x1="8" y1="6" x2="21" y2="6" />
-                    <line x1="8" y1="12" x2="21" y2="12" />
-                    <line x1="8" y1="18" x2="21" y2="18" />
-                    <line x1="3" y1="6" x2="3.01" y2="6" />
-                    <line x1="3" y1="12" x2="3.01" y2="12" />
-                    <line x1="3" y1="18" x2="3.01" y2="18" />
-                  </svg>
-                  List
-                </>
-              ),
-            },
-          ]}
+          onChange={props.setGroupingMode}
         />
 
         <Show when={props.onChartsToggle}>

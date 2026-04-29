@@ -182,6 +182,19 @@ describe('DashboardFilter', () => {
   // --- Grouping mode ---
 
   describe('grouping mode', () => {
+    it('uses the canonical grouped/list table-mode titles', () => {
+      const props = makeProps();
+      render(() => <DashboardFilter {...props} />);
+      expect(screen.getByRole('button', { name: 'Grouped' })).toHaveAttribute(
+        'title',
+        'Grouped table view',
+      );
+      expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute(
+        'title',
+        'Flat list view',
+      );
+    });
+
     it('calls setGroupingMode("flat") when List button is clicked', () => {
       const props = makeProps();
       render(() => <DashboardFilter {...props} />);

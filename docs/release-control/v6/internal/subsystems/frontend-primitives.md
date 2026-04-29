@@ -291,9 +291,12 @@ work extends shared components instead of creating new local variants.
    feature shells may compose those labels, but they must not become a second
    source of truth for alert, storage, recovery, infrastructure, workload, or
    adjacent product vocabulary. Table-mode segmented controls that expose a
-   grouping accessible label must use the shared `Group by` casing, while
-   visible options describe the mode itself (`Grouped`, `List`, or the
-   owning surface's equivalent) instead of resource-specific concepts. Shared
+   grouped/list view mode must use
+   `frontend-modern/src/components/shared/GroupedTableModeSegmentedControl.tsx`
+   so the shared primitive owns the `Group by` accessible label, `Grouped` and
+   `List` visible labels, tooltip titles, and icons instead of each resource
+   surface rebuilding that language with subtly different resource-specific
+   concepts. Shared
    `PageControls` owns trailing filter-row actions such as utility buttons,
    Columns, and Reset; those controls must stay grouped at the row end when
    dense toolbars wrap so popovers remain viewport-safe instead of drifting

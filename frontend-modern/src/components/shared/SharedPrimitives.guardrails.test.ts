@@ -66,7 +66,10 @@ import tableCardHeaderSource from '@/components/shared/TableCardHeader.tsx?raw';
 import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHeader.tsx?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
+import groupedTableModeSegmentedControlSource from '@/components/shared/GroupedTableModeSegmentedControl.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
+import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
+import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
 import infrastructureSourceManagerSource from '@/components/Settings/InfrastructureSourceManager.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
@@ -482,6 +485,30 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowCellClass');
     expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
     expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
+  });
+
+  it('keeps grouped/list table-mode controls on one shared presentation contract', () => {
+    expect(groupedTableModeSegmentedControlSource).toContain('GroupedTableModeSegmentedControl');
+    expect(groupedTableModeSegmentedControlSource).toContain('GROUPED_TABLE_MODE_ARIA_LABEL');
+    expect(groupedTableModeSegmentedControlSource).toContain(
+      "GROUPED_TABLE_MODE_GROUPED_TITLE = 'Grouped table view'",
+    );
+    expect(groupedTableModeSegmentedControlSource).toContain(
+      "GROUPED_TABLE_MODE_FLAT_TITLE = 'Flat list view'",
+    );
+    expect(groupedTableModeSegmentedControlSource).toContain(
+      "import FolderTreeIcon from 'lucide-solid/icons/folder-tree'",
+    );
+    expect(groupedTableModeSegmentedControlSource).toContain(
+      "import ListIcon from 'lucide-solid/icons/list'",
+    );
+
+    for (const source of [dashboardFilterSource, infrastructurePageSurfaceSource]) {
+      expect(source).toContain('GroupedTableModeSegmentedControl');
+      expect(source).not.toContain("title: 'Group by node'");
+      expect(source).not.toContain("title: 'Grouped table view'");
+      expect(source).not.toContain("title: 'Flat list view'");
+    }
   });
 
   it('keeps summary-linked row input semantics on the shared interaction helper', () => {
