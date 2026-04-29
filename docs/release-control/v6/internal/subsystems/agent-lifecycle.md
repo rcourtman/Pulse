@@ -139,6 +139,11 @@ those facts into source-strategy copy, but it must not turn an admitted
 `first-lab-ready` platform such as VMware into a product-level supported
 claim, invent platform-local projections, or classify assistant control beyond
 the manifest's support-floor row.
+The lifecycle-owned infrastructure source manager also owns platform/system
+grouping as source-management content, but not its table band presentation:
+`frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` must
+route table-level product/system group rows through the shared grouped table row
+helper instead of carrying lifecycle-local background or hover classes.
 
 ## Extension Points
 

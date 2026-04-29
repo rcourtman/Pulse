@@ -181,8 +181,9 @@ work extends shared components instead of creating new local variants.
    helper and `.grouped-table-row` CSS token contract instead of local
    `bg-surface-alt` or page-specific hover fills. This applies to grouped
    rows across Infrastructure, Workloads, Storage, Recovery, alert history,
-   and alert threshold tables; feature owners may own group content and
-   behavior, but not duplicate the subgroup band styling.
+   alert threshold tables, and Infrastructure Settings source-manager tables;
+   feature owners may own group content and behavior, but not duplicate the
+   subgroup band styling.
    Shared monitored-system warning primitives under that path must stay compact
    app-shell pointers into the owned Pulse Pro billing surface. The shared
    banner may announce posture and route to the relevant billing tab, but
@@ -358,6 +359,10 @@ work extends shared components instead of creating new local variants.
    Pulse Agent`, or `via platform API and Pulse Agent`), with fuller detail in
    the edit dialog, instead of duplicating the same machine across multiple
    peer groups or forcing operators to decode badge jargon.
+   The table-level product/system group rows in
+   `InfrastructureSourceManager.tsx` must also use the shared grouped table row
+   presentation helper, not local table-background classes, so source-manager
+   grouping stays visually consistent with the product tables.
    That same shared shell boundary owns the landing taxonomy too: the primary
    grouping labels in the infrastructure manager must describe real
    platform/system owners, not collection methods. Agent-only machines belong

@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
+import { getGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
 import {
   connectionAgentVersionPresentation,
   fleetSignalClassName,
@@ -617,7 +618,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                     const configuredRows = () => groupedConfiguredRows().get(product.type) ?? [];
                     const discoveredRows = () => groupedDiscoveredRows().get(product.type) ?? [];
                     const groupRowClass = () =>
-                      'border-b border-border-subtle bg-base hover:bg-base';
+                      getGroupedTableRowClass('border-b border-border-subtle');
                     const groupLabelClass = () => 'text-[15px] font-semibold text-base-content';
 
                     return (

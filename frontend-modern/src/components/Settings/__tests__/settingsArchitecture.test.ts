@@ -256,6 +256,8 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Discovered');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureSourceManagerProducts');
     expect(infrastructureSourceManagerSource).toContain('TableHeader');
+    expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowClass');
+    expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
     expect(infrastructureSourceManagerSource).toContain('aria-label={product.actionLabel}');
     expect(infrastructureSourceManagerSource).toContain('Review');
     expect(infrastructureSourceManagerSource).toContain('Manage');

@@ -67,6 +67,7 @@ import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHe
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
+import infrastructureSourceManagerSource from '@/components/Settings/InfrastructureSourceManager.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
@@ -469,6 +470,8 @@ describe('shared primitive guardrails', () => {
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
     expect(alertHistoryTableGroupRowSource).not.toContain('class="bg-surface-alt"');
     expect(alertResourceTableDesktopSource).toContain('getGroupedTableRowClass');
+    expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowClass');
+    expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
     expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
   });
 
