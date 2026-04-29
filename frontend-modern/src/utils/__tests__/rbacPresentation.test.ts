@@ -21,6 +21,19 @@ describe('rbacPresentation', () => {
     });
   });
 
+  it('returns neutral feature gate copy when commercial prompts are hidden', () => {
+    expect(getRBACFeatureGateCopy('roles', { showCommercialCopy: false })).toMatchObject({
+      title: 'Custom Roles',
+      body: expect.not.stringContaining('Pro'),
+    });
+    expect(
+      getRBACFeatureGateCopy('user-assignments', { showCommercialCopy: false }),
+    ).toMatchObject({
+      title: 'Centralized Access Control',
+      body: expect.not.stringContaining('Pro'),
+    });
+  });
+
   it('returns canonical user assignments empty state copy', () => {
     expect(getUserAssignmentsEmptyStateCopy()).toMatchObject({
       title: 'No users yet',

@@ -15,11 +15,11 @@ interface UseRBACFeatureGateStateOptions {
 }
 
 export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions) {
+  const showUpgradePrompts = createMemo(() => !presentationPolicyHidesUpgradePrompts());
   const featureGateCopy = createMemo<RBACFeatureGateCopy>(() =>
-    getRBACFeatureGateCopy(options.kind),
+    getRBACFeatureGateCopy(options.kind, { showCommercialCopy: showUpgradePrompts() }),
   );
   const licenseReady = createMemo(() => runtimeCapabilitiesLoaded());
-  const showUpgradePrompts = createMemo(() => !presentationPolicyHidesUpgradePrompts());
   const rbacEnabled = createMemo(() => licenseReady() && hasFeature('rbac'));
   const paywallVisible = createMemo(
     () => licenseReady() && !hasFeature('rbac') && !options.loading(),

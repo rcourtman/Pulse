@@ -164,6 +164,23 @@ describe('ReportingPanel', () => {
     expect(screen.getByText('Catalog-owned locked teaser copy')).toBeInTheDocument();
   });
 
+  it('uses neutral locked copy when upgrade prompts are hidden', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        isLocked: () => true,
+        isReportingEnabled: () => false,
+        showUpgradePrompts: () => false,
+      }),
+    );
+
+    render(() => <ReportingPanel />);
+
+    expect(screen.getAllByText('Detailed Reporting').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Canonical reporting surfaces').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Advanced Reporting (Pro)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+  });
+
   it('uses catalog-owned guidance copy for the enabled explainer callout', () => {
     useReportingPanelStateMock.mockReturnValue(
       buildState({

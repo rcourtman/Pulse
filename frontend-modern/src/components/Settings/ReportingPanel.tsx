@@ -67,7 +67,17 @@ export function ReportingPanel() {
 
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
   const inventoryDefinition = () => reportingCatalog()?.vmInventoryExport ?? null;
-  const lockedState = () => reportingCatalog()?.lockedState ?? null;
+  const lockedState = () => {
+    const catalog = reportingCatalog();
+    const state = catalog?.lockedState ?? null;
+    if (!catalog || !state || showUpgradePrompts()) {
+      return state;
+    }
+    return {
+      title: catalog.title,
+      description: catalog.description,
+    };
+  };
   const guidance = () => reportingCatalog()?.guidance ?? null;
   const catalogReady = () => reportingCatalog() !== null;
   const supportsMetricFilter = () => performanceReport()?.supportsMetricFilter ?? false;

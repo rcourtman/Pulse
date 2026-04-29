@@ -3,6 +3,10 @@ export interface RBACFeatureGateCopy {
   body: string;
 }
 
+export interface RBACFeatureGateCopyOptions {
+  showCommercialCopy?: boolean;
+}
+
 export interface UserAssignmentsEmptyStateCopy {
   title: string;
   body: string;
@@ -10,17 +14,27 @@ export interface UserAssignmentsEmptyStateCopy {
   syncHint: string;
 }
 
-export function getRBACFeatureGateCopy(kind: 'roles' | 'user-assignments'): RBACFeatureGateCopy {
+export function getRBACFeatureGateCopy(
+  kind: 'roles' | 'user-assignments',
+  options: RBACFeatureGateCopyOptions = {},
+): RBACFeatureGateCopy {
+  const showCommercialCopy = options.showCommercialCopy !== false;
   if (kind === 'roles') {
     return {
-      title: 'Custom Roles (Pro)',
-      body: 'Define granular permissions and custom access tiers for your team.',
+      title: showCommercialCopy ? 'Custom Roles (Pro)' : 'Custom Roles',
+      body: showCommercialCopy
+        ? 'Define granular permissions and custom access tiers for your team.'
+        : 'Define granular permissions and custom access tiers when RBAC is enabled for this instance.',
     };
   }
 
   return {
-    title: 'Centralized Access Control (Pro)',
-    body: 'Assign multi-tier roles to users and manage infrastructure-wide security policies.',
+    title: showCommercialCopy
+      ? 'Centralized Access Control (Pro)'
+      : 'Centralized Access Control',
+    body: showCommercialCopy
+      ? 'Assign multi-tier roles to users and manage infrastructure-wide security policies.'
+      : 'Assign roles to users and review access policy when RBAC is enabled for this instance.',
   };
 }
 

@@ -15,6 +15,9 @@ const showSuccessMock = vi.fn();
 const showErrorMock = vi.fn();
 const showWarningMock = vi.fn();
 const loggerErrorMock = vi.fn();
+const presentationPolicyHidesUpgradePromptsMock = vi.fn();
+const trackPaywallViewedMock = vi.fn();
+const trackUpgradeClickedMock = vi.fn();
 
 vi.mock('../QuickSecuritySetup', () => ({
   QuickSecuritySetup: () => <div data-testid="quick-security-setup">Quick Security Setup</div>,
@@ -24,10 +27,14 @@ vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   runtimeCapabilitiesLoaded: () => true,
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
+}));
+
+vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
-  getUpgradeActionUrlOrFallback: () => '/upgrade',
-  startProTrial: vi.fn(),
-  entitlements: () => ({ trial_eligible: false }),
+}));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
 vi.mock('@/api/relay', () => ({
@@ -63,8 +70,8 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: vi.fn(),
-  trackUpgradeClicked: vi.fn(),
+  trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
+  trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
 }));
 
 describe('settings read-only panel states', () => {
@@ -78,8 +85,12 @@ describe('settings read-only panel states', () => {
     showErrorMock.mockReset();
     showWarningMock.mockReset();
     loggerErrorMock.mockReset();
+    presentationPolicyHidesUpgradePromptsMock.mockReset();
+    trackPaywallViewedMock.mockReset();
+    trackUpgradeClickedMock.mockReset();
 
     hasFeatureMock.mockReturnValue(true);
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
     loadLicenseStatusMock.mockResolvedValue(undefined);
     getRelayConfigMock.mockResolvedValue({
       enabled: true,
@@ -154,5 +165,22 @@ describe('settings read-only panel states', () => {
 
     expect(screen.getByDisplayValue('')).toBeDisabled();
     expect(screen.getByRole('button', { name: /add endpoint/i })).toBeDisabled();
+  });
+
+  it('keeps audit webhook locked copy neutral when upgrade prompts are hidden', async () => {
+    hasFeatureMock.mockImplementation((feature: string) => feature !== 'audit_logging');
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+
+    render(() => <AuditWebhookPanel />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Audit Webhooks').length).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByText('Audit Webhooks (Pro)')).not.toBeInTheDocument();
+    expect(screen.queryByText(/require Pro/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
   });
 });

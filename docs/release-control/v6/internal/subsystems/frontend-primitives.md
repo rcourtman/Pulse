@@ -1645,9 +1645,9 @@ The audit webhook settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx` stays the
 canonical `SettingsPanel` shell, while
 `frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts` owns the
-license/paywall lifecycle, webhook fetch/save flow, validation, and trial
-startup orchestration. The shell must not re-accumulate API calls or paywall
-tracking inline.
+license/paywall lifecycle, webhook fetch/save flow, validation, paywall
+tracking, and hidden-upgrade copy posture. The shell must not re-accumulate API
+calls or paywall tracking inline.
 
 The diagnostics settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx` stays the

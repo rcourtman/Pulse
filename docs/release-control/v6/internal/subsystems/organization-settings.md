@@ -246,3 +246,7 @@ RBAC trial CTAs, hard-sell upgrade copy, or paid-only Roles/Users/Audit
 navigation by default. Direct routes may recover to the canonical free
 settings surface, and entitled or hosted-mode installs may still render the
 governed RBAC surfaces.
+The hidden-upgrade posture also applies to locked-card titles and bodies
+themselves: RBAC gates may show neutral unavailable-capability copy, but must
+not keep `(Pro)`, plan-tier labels, or paid-action wording after the CTA is
+suppressed.

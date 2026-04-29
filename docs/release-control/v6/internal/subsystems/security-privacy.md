@@ -196,6 +196,10 @@ capability truth where feature availability matters, but billing identity,
 trial posture, and upgrade routing stay on the dedicated commercial boundary,
 and public-demo suppression must resolve from the shared `presentationPolicy`
 contract instead of security-surface entitlement reads or local demo flags.
+Security/privacy feature gates that are suppressed by
+`presentationPolicy.hideUpgrade` must also use neutral unavailable-capability
+copy: privacy and audit surfaces must not leave `(Pro)`, trial, plan-tier, or
+upgrade wording visible after their commercial actions are hidden.
 That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path

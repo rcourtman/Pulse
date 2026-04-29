@@ -150,9 +150,10 @@ describe('RBAC paywall settings panels', () => {
     render(() => <RolesPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText('Custom Roles (Pro)')).toBeInTheDocument();
+      expect(screen.getByText('Custom Roles')).toBeInTheDocument();
     });
 
+    expect(screen.queryByText('Custom Roles (Pro)')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start trial' })).not.toBeInTheDocument();
     expect(trackPaywallViewedMock).not.toHaveBeenCalled();
@@ -203,6 +204,24 @@ describe('RBAC paywall settings panels', () => {
     expect(getRolesMock).toHaveBeenCalled();
     expect(trackPaywallViewedMock).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Search users...')).not.toBeDisabled();
+  });
+
+  it('keeps user assignment upgrade actions quiet when self-hosted upgrade prompts are hidden', async () => {
+    hasFeatureMock.mockImplementation((feature: string) => feature !== 'rbac');
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+
+    render(() => <UserAssignmentsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Centralized Access Control')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Centralized Access Control (Pro)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start trial' })).not.toBeInTheDocument();
+    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
+    expect(getUsersMock).not.toHaveBeenCalled();
+    expect(getRolesMock).not.toHaveBeenCalled();
   });
 
   it('shows the canonical update error when self role modification is denied', async () => {

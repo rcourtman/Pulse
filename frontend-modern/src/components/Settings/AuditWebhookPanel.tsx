@@ -43,7 +43,8 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     upgradeDestination,
     webhookUrls,
   } = useAuditWebhookPanelState(props.canManage);
-  const featureGateCopy = () => getAuditWebhookFeatureGateCopy();
+  const featureGateCopy = () =>
+    getAuditWebhookFeatureGateCopy({ showCommercialCopy: showUpgradePrompts() });
   const emptyStateCopy = () => getAuditWebhookEmptyStateCopy();
 
   if (!isAuditLoggingEnabled()) {

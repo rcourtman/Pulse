@@ -16,6 +16,13 @@ describe('auditWebhookPresentation', () => {
     });
   });
 
+  it('returns neutral feature gate copy when commercial prompts are hidden', () => {
+    expect(getAuditWebhookFeatureGateCopy({ showCommercialCopy: false })).toMatchObject({
+      title: 'Audit Webhooks',
+      body: expect.not.stringContaining('Pro'),
+    });
+  });
+
   it('returns canonical empty state copy and shell classes', () => {
     expect(getAuditWebhookEmptyStateCopy()).toMatchObject({
       title: 'No audit webhooks configured yet.',

@@ -17,11 +17,26 @@ export interface AuditWebhookFeatureGateCopy {
   body: string;
 }
 
+export interface AuditWebhookFeatureGateCopyOptions {
+  showCommercialCopy?: boolean;
+}
+
 export interface AuditWebhookEmptyStateCopy {
   title: string;
 }
 
-export function getAuditWebhookFeatureGateCopy(): AuditWebhookFeatureGateCopy {
+export function getAuditWebhookFeatureGateCopy(
+  options: AuditWebhookFeatureGateCopyOptions = {},
+): AuditWebhookFeatureGateCopy {
+  const showCommercialCopy = options.showCommercialCopy !== false;
+
+  if (!showCommercialCopy) {
+    return {
+      title: 'Audit Webhooks',
+      body: 'Audit webhook delivery is not enabled for this instance.',
+    };
+  }
+
   return {
     title: 'Audit Webhooks (Pro)',
     body: 'Audit webhooks are part of the audit logging feature set and require Pro.',

@@ -13,6 +13,8 @@ import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
+import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
+import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
@@ -151,6 +153,13 @@ describe('settings architecture guardrails', () => {
     expect(dataHandlingPanelSource).not.toContain('higher limits');
     expect(dataHandlingPanelSource).not.toContain('Upgrade');
     expect(dataHandlingPanelSource).not.toContain('Pro');
+    expect(auditWebhookPanelSource).toContain(
+      'getAuditWebhookFeatureGateCopy({ showCommercialCopy: showUpgradePrompts() })',
+    );
+    expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
+    expect(reportingPanelSource).toContain('if (!catalog || !state || showUpgradePrompts())');
+    expect(reportingPanelSource).toContain('title: catalog.title');
+    expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
     expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
     expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
     expect(aiRuntimeControlsSectionSource).not.toContain('without approval (Pro)');
