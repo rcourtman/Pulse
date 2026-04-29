@@ -2,7 +2,7 @@ export const SETTINGS_SHELL_COPY = {
   navigationAriaLabel: 'Settings navigation',
   navigationTitle: 'Settings',
   searchPlaceholder: 'Search settings...',
-  searchShortcutHint: 'Any key',
+  searchShortcutHint: undefined,
   mobileBackLabel: 'Settings',
   collapseSidebarLabel: 'Collapse settings navigation',
   expandSidebarLabel: 'Expand settings navigation',

@@ -7,7 +7,7 @@ export type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' |
 export const ALERT_TAB_SEGMENTS: Record<AlertTab, string> = {
   overview: 'overview',
   thresholds: 'thresholds',
-  destinations: 'destinations',
+  destinations: 'notifications',
   schedule: 'schedule',
   history: 'history',
 };
@@ -42,6 +42,10 @@ export const tabFromPath = (
 
   if (entry) {
     return entry[0];
+  }
+
+  if (segment === 'destinations') {
+    return 'destinations';
   }
 
   if (segment === 'custom-rules') {

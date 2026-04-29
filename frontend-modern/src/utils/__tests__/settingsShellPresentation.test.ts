@@ -13,7 +13,7 @@ describe('settingsShellPresentation', () => {
       navigationAriaLabel: 'Settings navigation',
       navigationTitle: 'Settings',
       searchPlaceholder: 'Search settings...',
-      searchShortcutHint: 'Any key',
+      searchShortcutHint: undefined,
       mobileBackLabel: 'Settings',
       collapseSidebarLabel: 'Collapse settings navigation',
       expandSidebarLabel: 'Expand settings navigation',

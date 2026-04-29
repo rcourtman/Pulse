@@ -203,6 +203,12 @@ work extends shared components instead of creating new local variants.
    mode is `Grouped`, not `Cluster`, because cluster remains a
    platform/resource concept for Proxmox, Kubernetes, and similar inventory
    details.
+   Settings shell search copy belongs to
+   `frontend-modern/src/utils/settingsShellPresentation.ts`. Shared settings
+   search must not display non-actionable shortcut chips such as `Any key`;
+   if the shell exposes a shortcut hint, it must name an actual key chord,
+   otherwise the hint must remain unset so the shared `SearchInput` renders no
+   shortcut chip.
 2. Route new top-level settings surfaces through the canonical settings shell
    instead of introducing page-local framing.
    Shared shells and primitives that need websocket or dark-mode context must

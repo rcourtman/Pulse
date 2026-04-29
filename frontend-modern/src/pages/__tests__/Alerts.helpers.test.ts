@@ -270,6 +270,7 @@ describe('shared storage override migration', () => {
 describe('tab path helpers', () => {
   it('maps tab to path', () => {
     expect(pathForTab('overview')).toBe('/alerts/overview');
+    expect(pathForTab('destinations')).toBe('/alerts/notifications');
     expect(pathForTab('schedule')).toBe('/alerts/schedule');
   });
 
@@ -279,6 +280,8 @@ describe('tab path helpers', () => {
     expect(tabFromPath('/alerts/thresholds/infrastructure')).toBe('thresholds');
     expect(tabFromPath('/alerts/thresholds/systems')).toBe('thresholds');
     expect(tabFromPath('/alerts/thresholds/proxmox')).toBe('thresholds');
+    expect(tabFromPath('/alerts/notifications')).toBe('destinations');
+    expect(tabFromPath('/alerts/destinations')).toBe('destinations');
     expect(tabFromPath('/alerts/custom-rules')).toBe('thresholds');
     expect(tabFromPath('/foo/bar')).toBe('overview');
   });

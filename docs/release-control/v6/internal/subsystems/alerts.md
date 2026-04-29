@@ -42,9 +42,10 @@ operator-facing alert routing behavior for live runtime alerts.
 20. `frontend-modern/src/utils/alertHistoryPresentation.ts`
 21. `frontend-modern/src/utils/alertSeverityPresentation.ts`
 22. `frontend-modern/src/utils/alertTabsPresentation.ts`
-23. `frontend-modern/src/utils/alertThresholdsPresentation.ts`
-24. `frontend-modern/src/utils/alertThresholdsSectionPresentation.ts`
-25. `internal/alerts/history.go`
+23. `frontend-modern/src/features/alerts/types.ts`
+24. `frontend-modern/src/utils/alertThresholdsPresentation.ts`
+25. `frontend-modern/src/utils/alertThresholdsSectionPresentation.ts`
+26. `internal/alerts/history.go`
 
 ## Shared Boundaries
 
@@ -180,6 +181,13 @@ The alerts page also owns its mobile tab-shell presentation directly.
 disabled tab styling, but horizontal tab scrolling must route through the
 shared `touch-scroll` / `scrollbar-hide` class contract instead of writing
 inline overflow styles that break CSP on the public shell.
+Alert tab routing is part of that same presentation boundary.
+`frontend-modern/src/features/alerts/types.ts` owns the canonical mapping
+between visible alert tabs and URLs. The operator-facing Notifications tab
+must use `/alerts/notifications` as its canonical route because the visible
+navigation label is Notifications; `/alerts/destinations` is a legacy alias
+only and must normalize through `tabFromPath` / `pathForTab` instead of being
+reintroduced as canonical UI vocabulary.
 That shared alert presentation boundary now also has explicit alerts ownership.
 `frontend-modern/src/utils/alertWebhookPresentation.ts` is the canonical owner
 for webhook setup copy, service labels, mention-help phrasing, custom-field
