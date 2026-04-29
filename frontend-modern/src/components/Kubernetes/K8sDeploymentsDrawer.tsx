@@ -226,83 +226,78 @@ export const K8sDeploymentsDrawer: Component<{
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <div class="overflow-x-auto">
-                <Table class="w-full min-w-[760px] border-collapse text-xs">
-                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.deploymentColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.namespaceColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.desiredColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.updatedColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.readyColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.availableColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.actionsColumnLabel}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class="divide-y divide-border-subtle">
-                    <For each={filteredDeployments()}>
-                      {(dep) => {
-                        const name = () => asTrimmedString(dep.name) || dep.id;
-                        const ns = () => asTrimmedString(dep.kubernetes?.namespace) || '—';
-                        const desired = () => dep.kubernetes?.desiredReplicas ?? 0;
-                        const updated = () => dep.kubernetes?.updatedReplicas ?? 0;
-                        const ready = () => dep.kubernetes?.readyReplicas ?? 0;
-                        const available = () => dep.kubernetes?.availableReplicas ?? 0;
-                        const status = () => getSimpleStatusIndicator(dep.status);
+              <Table class="w-full min-w-[760px] border-collapse text-xs">
+                <TableHeader class="bg-surface-alt text-muted border-b border-border">
+                  <TableRow class="text-left text-[10px] uppercase tracking-wide">
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.deploymentColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.namespaceColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.desiredColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.updatedColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.readyColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.availableColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.actionsColumnLabel}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody class="divide-y divide-border-subtle">
+                  <For each={filteredDeployments()}>
+                    {(dep) => {
+                      const name = () => asTrimmedString(dep.name) || dep.id;
+                      const ns = () => asTrimmedString(dep.kubernetes?.namespace) || '—';
+                      const desired = () => dep.kubernetes?.desiredReplicas ?? 0;
+                      const updated = () => dep.kubernetes?.updatedReplicas ?? 0;
+                      const ready = () => dep.kubernetes?.readyReplicas ?? 0;
+                      const available = () => dep.kubernetes?.availableReplicas ?? 0;
+                      const status = () => getSimpleStatusIndicator(dep.status);
 
-                        return (
-                          <TableRow class="hover:bg-surface-hover">
-                            <TableCell class="px-3 py-2">
-                              <div class="flex items-center gap-2 min-w-0">
-                                <StatusDot
-                                  size="sm"
-                                  variant={status().variant}
-                                  title={dep.status || 'unknown'}
-                                  ariaHidden
-                                />
-                                <span
-                                  class="font-semibold text-base-content truncate"
-                                  title={name()}
-                                >
-                                  {name()}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{ns()}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{desired()}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{updated()}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{ready()}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{available()}</TableCell>
-                            <TableCell class="px-3 py-2">
-                              <button
-                                type="button"
-                                onClick={() => openPods(dep.kubernetes?.namespace)}
-                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
-                              >
-                                {drawerPresentation.viewPodsLabel}
-                              </button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }}
-                    </For>
-                  </TableBody>
-                </Table>
-              </div>
+                      return (
+                        <TableRow class="hover:bg-surface-hover">
+                          <TableCell class="px-3 py-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                              <StatusDot
+                                size="sm"
+                                variant={status().variant}
+                                title={dep.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="font-semibold text-base-content truncate" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{ns()}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{desired()}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{updated()}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{ready()}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{available()}</TableCell>
+                          <TableCell class="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => openPods(dep.kubernetes?.namespace)}
+                              class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
+                            >
+                              {drawerPresentation.viewPodsLabel}
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }}
+                  </For>
+                </TableBody>
+              </Table>
             </Card>
           </Show>
         }

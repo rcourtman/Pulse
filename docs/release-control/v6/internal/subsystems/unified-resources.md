@@ -52,60 +52,63 @@ cross-source deduplication.
 28. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
 29. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`
 30. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx`
-31. `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`
-31. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
-32. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
-33. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-34. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-35. `frontend-modern/src/components/Infrastructure/resourceBadges.ts`
-36. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-37. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-38. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-39. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-40. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-41. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-42. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
-43. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
-44. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
-45. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
-46. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
-47. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
-48. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
-49. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-50. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-51. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-52. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-53. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-54. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-55. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-56. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-57. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
-58. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-59. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-60. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-61. `frontend-modern/src/utils/agentResources.ts`
-62. `frontend-modern/src/utils/canonicalResourceTypes.ts`
-63. `frontend-modern/src/utils/resourceBadgePresentation.ts`
-64. `frontend-modern/src/utils/resourceChangePresentation.ts`
-65. `frontend-modern/src/utils/actionAuditPresentation.ts`
-65. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
-66. `frontend-modern/src/utils/resourcePlatformData.ts`
-67. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
-68. `frontend-modern/src/utils/resourceStateAdapters.ts`
-69. `frontend-modern/src/utils/resourceTypeCompat.ts`
-70. `frontend-modern/src/utils/resourceTypePresentation.ts`
-71. `frontend-modern/src/utils/serviceHealthPresentation.ts`
-72. `frontend-modern/src/utils/sourceTypePresentation.ts`
-73. `frontend-modern/src/utils/workloadTypePresentation.ts`
-74. `frontend-modern/src/components/PMG/ServiceHealthBadge.tsx`
-75. `frontend-modern/src/utils/resourceIdentity.ts`
-76. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
-77. `frontend-modern/src/hooks/useUnifiedResources.ts`
-79. `frontend-modern/src/types/resource.ts`
-80. `frontend-modern/src/utils/sourcePlatforms.ts`
-81. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-82. `internal/unifiedresources/kubernetes_metric_ids.go`
-83. `internal/unifiedresources/policy_posture.go`
+31. `frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx`
+32. `frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`
+33. `frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`
+34. `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`
+35. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
+36. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+37. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
+38. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
+39. `frontend-modern/src/components/Infrastructure/resourceBadges.ts`
+40. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
+41. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+42. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
+43. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
+44. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
+45. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+46. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+47. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
+48. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
+49. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
+50. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
+51. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
+52. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
+53. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+54. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+55. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+56. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+57. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+58. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+59. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+60. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+61. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
+62. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+63. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+64. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+65. `frontend-modern/src/utils/agentResources.ts`
+66. `frontend-modern/src/utils/canonicalResourceTypes.ts`
+67. `frontend-modern/src/utils/resourceBadgePresentation.ts`
+68. `frontend-modern/src/utils/resourceChangePresentation.ts`
+69. `frontend-modern/src/utils/actionAuditPresentation.ts`
+70. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
+71. `frontend-modern/src/utils/resourcePlatformData.ts`
+72. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
+73. `frontend-modern/src/utils/resourceStateAdapters.ts`
+74. `frontend-modern/src/utils/resourceTypeCompat.ts`
+75. `frontend-modern/src/utils/resourceTypePresentation.ts`
+76. `frontend-modern/src/utils/serviceHealthPresentation.ts`
+77. `frontend-modern/src/utils/sourceTypePresentation.ts`
+78. `frontend-modern/src/utils/workloadTypePresentation.ts`
+79. `frontend-modern/src/components/PMG/ServiceHealthBadge.tsx`
+80. `frontend-modern/src/utils/resourceIdentity.ts`
+81. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+82. `frontend-modern/src/hooks/useUnifiedResources.ts`
+83. `frontend-modern/src/types/resource.ts`
+84. `frontend-modern/src/utils/sourcePlatforms.ts`
+85. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+86. `internal/unifiedresources/kubernetes_metric_ids.go`
+87. `internal/unifiedresources/policy_posture.go`
 
 ## Shared Boundaries
 
@@ -162,6 +165,10 @@ cross-source deduplication.
    infrastructure tables must use the shared `Table` primitive's scroll frame
    directly instead of reintroducing page-local `overflow-x-auto` wrappers
    inside the canonical card shell.
+   Docker Swarm service and Kubernetes namespace/deployment resource-drawer
+   tables follow that same shell boundary: their platform-specific rows and
+   actions are unified-resource-owned, while horizontal overflow is owned by the
+   shared `Table` wrapper rather than drawer-local scroll divs.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
@@ -221,7 +228,7 @@ AI-only summary payloads, or page-local heuristics.
    generic disk-count aggregate, so resource drawers and incidents do not hide
    the actual protection boundary behind a broader count phrase.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
-7. Add or change resource drawer timeline/facet/action-history presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline plus `internal/api/activity_audit_handlers.go` action-audit contracts together
+7. Add or change resource drawer timeline/facet/action-history presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx`, `frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`, `frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline plus `internal/api/activity_audit_handlers.go` action-audit contracts together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership
 9. Keep dashboard and infrastructure freshness on the canonical unified-resource
    ownership path. `frontend-modern/src/stores/websocket.ts`,

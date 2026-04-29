@@ -4859,6 +4859,7 @@
       "owned_files": [
         "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
         "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
+        "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
         "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
@@ -4891,6 +4892,8 @@
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
+        "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
+        "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
         "frontend-modern/src/components/PMG/ServiceHealthBadge.tsx",
         "frontend-modern/src/features/infrastructure/infrastructurePageModel.ts",
         "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
@@ -4979,6 +4982,7 @@
             "match_files": [
               "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
               "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
+              "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
               "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
@@ -5010,6 +5014,8 @@
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
+              "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
+              "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
               "frontend-modern/src/features/infrastructure/infrastructurePageModel.ts",
               "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
               "frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts",
@@ -5045,6 +5051,7 @@
               "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/types/__tests__/resource.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "internal/unifiedresources/code_standards_test.go"
             ]
           },

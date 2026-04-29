@@ -4771,6 +4771,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
                 "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
                 "frontend-modern/src/types/__tests__/resource.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "internal/unifiedresources/code_standards_test.go",
             ],
         )

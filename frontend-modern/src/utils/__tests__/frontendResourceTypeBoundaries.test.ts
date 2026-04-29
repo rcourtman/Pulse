@@ -2422,6 +2422,8 @@ describe('frontend resource type boundaries', () => {
     expect(swarmServicesDrawerSource).toContain('getSwarmDrawerPresentation');
     expect(swarmServicesDrawerSource).toContain('getSwarmServicesEmptyState');
     expect(swarmServicesDrawerSource).toContain('getSwarmServicesLoadingState');
+    expect(swarmServicesDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(swarmServicesDrawerSource).not.toContain('<div class="overflow-x-auto">');
     expect(swarmServicesDrawerSource).not.toContain('const statusTone =');
     expect(swarmServicesDrawerSource).not.toContain('No Swarm cluster detected');
     expect(swarmServicesDrawerSource).not.toContain('Search services...');
@@ -2436,6 +2438,8 @@ describe('frontend resource type boundaries', () => {
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsDrawerPresentation');
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsEmptyState');
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsLoadingState');
+    expect(k8sDeploymentsDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(k8sDeploymentsDrawerSource).not.toContain('<div class="overflow-x-auto">');
     expect(k8sDeploymentPresentationSource).toContain('getAllFilterOptionLabel');
     expect(k8sDeploymentsDrawerSource).not.toContain('const statusTone =');
     expect(k8sDeploymentsDrawerSource).not.toContain('Desired state controllers (not Pods)');
@@ -2463,6 +2467,8 @@ describe('frontend resource type boundaries', () => {
     expect(k8sNamespacesDrawerSource).toContain('getK8sNamespacesLoadingState');
     expect(k8sNamespacesDrawerSource).toContain('getK8sNamespacesFailureState');
     expect(k8sNamespacesDrawerSource).toContain('<StatusDot');
+    expect(k8sNamespacesDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(k8sNamespacesDrawerSource).not.toContain('<div class="overflow-x-auto">');
     expect(k8sNamespacesDrawerSource).not.toContain('const statusTone =');
     expect(k8sNamespacesDrawerSource).not.toContain('Scope Pods and Deployments by namespace');
     expect(k8sNamespacesDrawerSource).not.toContain('Search namespaces...');

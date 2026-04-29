@@ -131,6 +131,9 @@ import unifiedResourceHostTableCardSource from '@/components/Infrastructure/Unif
 import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
 import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
+import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.tsx?raw';
+import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
+import k8sNamespacesDrawerSource from '@/components/Kubernetes/K8sNamespacesDrawer.tsx?raw';
 import nodeGroupHeaderSource from '@/components/shared/NodeGroupHeader.tsx?raw';
 import storageGroupRowSource from '@/components/Storage/StorageGroupRow.tsx?raw';
 import storageGroupPresentationSource from '@/features/storageBackups/groupPresentation.ts?raw';
@@ -528,6 +531,9 @@ describe('shared primitive guardrails', () => {
       diskListSource,
       infrastructureSourceManagerSource,
       configuredNodeTablesSource,
+      swarmServicesDrawerSource,
+      k8sDeploymentsDrawerSource,
+      k8sNamespacesDrawerSource,
     ]) {
       expect(source).toContain('<Table');
       expect(source).not.toContain('<div class="overflow-x-auto">');

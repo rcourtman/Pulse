@@ -253,90 +253,82 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <div class="overflow-x-auto">
-                <Table class="w-full min-w-[900px] border-collapse text-xs">
-                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
-                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.serviceColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.stackColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.imageColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.modeColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.desiredColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.runningColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.updateColumnLabel}
-                      </TableHead>
-                      <TableHead class="px-3 py-2 font-medium">
-                        {drawerPresentation.portsColumnLabel}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class="divide-y divide-border-subtle">
-                    <For each={filteredServices()}>
-                      {(svc) => {
-                        const name = () => asTrimmedString(svc.name) || svc.id;
-                        const stack = () => asTrimmedString(svc.docker?.stack) || '—';
-                        const image = () => asTrimmedString(svc.docker?.image) || '—';
-                        const mode = () => asTrimmedString(svc.docker?.mode) || '—';
-                        const desired = () => svc.docker?.desiredTasks ?? 0;
-                        const running = () => svc.docker?.runningTasks ?? 0;
-                        const update = () => formatUpdate(svc.docker?.serviceUpdate);
-                        const ports = () => formatPorts(svc.docker?.endpointPorts);
-                        const status = () => getSimpleStatusIndicator(svc.status);
+              <Table class="w-full min-w-[900px] border-collapse text-xs">
+                <TableHeader class="bg-surface-alt text-muted border-b border-border">
+                  <TableRow class="text-left text-[10px] uppercase tracking-wide">
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.serviceColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.stackColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.imageColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.modeColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.desiredColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.runningColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.updateColumnLabel}
+                    </TableHead>
+                    <TableHead class="px-3 py-2 font-medium">
+                      {drawerPresentation.portsColumnLabel}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody class="divide-y divide-border-subtle">
+                  <For each={filteredServices()}>
+                    {(svc) => {
+                      const name = () => asTrimmedString(svc.name) || svc.id;
+                      const stack = () => asTrimmedString(svc.docker?.stack) || '—';
+                      const image = () => asTrimmedString(svc.docker?.image) || '—';
+                      const mode = () => asTrimmedString(svc.docker?.mode) || '—';
+                      const desired = () => svc.docker?.desiredTasks ?? 0;
+                      const running = () => svc.docker?.runningTasks ?? 0;
+                      const update = () => formatUpdate(svc.docker?.serviceUpdate);
+                      const ports = () => formatPorts(svc.docker?.endpointPorts);
+                      const status = () => getSimpleStatusIndicator(svc.status);
 
-                        return (
-                          <TableRow class="hover:bg-surface-hover">
-                            <TableCell class="px-3 py-2">
-                              <div class="flex items-center gap-2 min-w-0">
-                                <StatusDot
-                                  size="sm"
-                                  variant={status().variant}
-                                  title={svc.status || 'unknown'}
-                                  ariaHidden
-                                />
-                                <span
-                                  class="font-semibold text-base-content truncate"
-                                  title={name()}
-                                >
-                                  {name()}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{stack()}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content truncate" title={image()}>
-                              {image()}
-                            </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{mode()}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{desired()}</TableCell>
-                            <TableCell class="px-3 py-2 text-base-content">{running()}</TableCell>
-                            <TableCell
-                              class="px-3 py-2 text-base-content truncate"
-                              title={update()}
-                            >
-                              {update()}
-                            </TableCell>
-                            <TableCell class="px-3 py-2 text-base-content truncate" title={ports()}>
-                              {ports()}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }}
-                    </For>
-                  </TableBody>
-                </Table>
-              </div>
+                      return (
+                        <TableRow class="hover:bg-surface-hover">
+                          <TableCell class="px-3 py-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                              <StatusDot
+                                size="sm"
+                                variant={status().variant}
+                                title={svc.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="font-semibold text-base-content truncate" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{stack()}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content truncate" title={image()}>
+                            {image()}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{mode()}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{desired()}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content">{running()}</TableCell>
+                          <TableCell class="px-3 py-2 text-base-content truncate" title={update()}>
+                            {update()}
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-base-content truncate" title={ports()}>
+                            {ports()}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }}
+                  </For>
+                </TableBody>
+              </Table>
             </Card>
           </Show>
         }
