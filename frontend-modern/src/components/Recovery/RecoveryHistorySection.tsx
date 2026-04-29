@@ -37,6 +37,8 @@ import {
 import { normalizeRecoveryModeQueryValue } from '@/utils/recoveryRecordPresentation';
 import {
   getRecoveryArtifactColumnLabel,
+  getRecoveryAllItemTypesLabel,
+  getRecoveryAllPlatformsLabel,
   getRecoveryHistorySearchPlaceholder,
   getRecoverySearchHistoryEmptyMessage,
   RECOVERY_ADVANCED_FILTER_FIELD_CLASS,
@@ -419,7 +421,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                   {(itemType) => (
                     <option value={itemType}>
                       {itemType === 'all'
-                        ? 'All Item Types'
+                        ? getRecoveryAllItemTypesLabel()
                         : getRecoveryItemTypePresentation(itemType)?.label || itemType}
                     </option>
                   )}
@@ -441,7 +443,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 <For each={props.platformOptions()}>
                   {(platform) => (
                     <option value={platform}>
-                      {platform === 'all' ? 'All Platforms' : getSourcePlatformLabel(platform)}
+                      {platform === 'all'
+                        ? getRecoveryAllPlatformsLabel()
+                        : getSourcePlatformLabel(platform)}
                     </option>
                   )}
                 </For>

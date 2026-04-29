@@ -27,6 +27,9 @@ export const RECOVERY_GROUP_NO_TIMESTAMP_LABEL = 'No Timestamp';
 export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...';
 export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
 export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
+export const RECOVERY_ALL_ITEM_TYPES_LABEL = 'All item types';
+export const RECOVERY_ALL_PLATFORMS_LABEL = 'All platforms';
+export const RECOVERY_ANY_ITEM_LABEL = 'Any item';
 export const RECOVERY_ARTIFACT_METADATA_TEXT_CLASS = 'text-[11px] font-medium text-base-content/80';
 export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
   cluster: getRecoveryLocationFacetLabel('cluster'),
@@ -90,6 +93,18 @@ export function getRecoveryHistorySearchPlaceholder(): string {
 
 export function getRecoverySearchHistoryEmptyMessage(): string {
   return RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE;
+}
+
+export function getRecoveryAllItemTypesLabel(): string {
+  return RECOVERY_ALL_ITEM_TYPES_LABEL;
+}
+
+export function getRecoveryAllPlatformsLabel(): string {
+  return RECOVERY_ALL_PLATFORMS_LABEL;
+}
+
+export function getRecoveryAnyItemLabel(): string {
+  return RECOVERY_ANY_ITEM_LABEL;
 }
 
 export function getRecoveryArtifactColumnLabel(id: string, fallback?: string): string {

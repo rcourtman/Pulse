@@ -10,6 +10,7 @@ import {
   filterPanelTitleClass,
   filterSelectClass,
 } from '@/components/shared/FilterToolbar';
+import { getRecoveryAnyItemLabel } from '@/utils/recoveryTablePresentation';
 
 export interface RecoveryHistoryItemFilterOption {
   rollupId: string;
@@ -109,7 +110,7 @@ export const RecoveryHistoryItemFilter: Component<RecoveryHistoryItemFilterProps
           setIsOpen(true);
         }}
       >
-        <span class="truncate">{props.selectedLabel() || 'Any Item'}</span>
+        <span class="truncate">{props.selectedLabel() || getRecoveryAnyItemLabel()}</span>
         <ChevronDownIcon
           class={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${isOpen() ? 'rotate-180' : ''}`}
         />

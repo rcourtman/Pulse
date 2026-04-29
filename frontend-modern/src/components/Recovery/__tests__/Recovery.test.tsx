@@ -1054,7 +1054,7 @@ describe('Recovery', () => {
         ROUTE_STATE_REPLACE_OPTIONS,
       );
       expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
-        'Any Item',
+        'Any item',
       );
       expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument();
     });
@@ -1074,7 +1074,7 @@ describe('Recovery', () => {
 
     const controls = await screen.findByRole('group', { name: /recovery events controls/i });
     const itemFilterTrigger = within(controls).getByTestId('recovery-history-item-filter-trigger');
-    expect(itemFilterTrigger).toHaveTextContent('Any Item');
+    expect(itemFilterTrigger).toHaveTextContent('Any item');
 
     fireEvent.click(itemFilterTrigger);
     expect(await screen.findByTestId('recovery-history-item-filter-panel')).toBeInTheDocument();
@@ -1101,7 +1101,7 @@ describe('Recovery', () => {
         ROUTE_STATE_REPLACE_OPTIONS,
       );
       expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
-        'Any Item',
+        'Any item',
       );
     });
   });

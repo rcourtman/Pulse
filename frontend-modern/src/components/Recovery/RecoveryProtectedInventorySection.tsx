@@ -46,6 +46,8 @@ import {
   getRecoveryProtectedSearchPlaceholder,
   getRecoverySearchHistoryEmptyMessage,
   getRecoveryRollupTimestampMs,
+  getRecoveryAllItemTypesLabel,
+  getRecoveryAllPlatformsLabel,
   STALE_ISSUE_THRESHOLD_MS,
   type RecoveryRollupInventoryStatus,
 } from '@/utils/recoveryTablePresentation';
@@ -306,7 +308,7 @@ export const RecoveryProtectedInventorySection: Component<
                   {(itemType) => (
                     <option value={itemType}>
                       {itemType === 'all'
-                        ? 'All Item Types'
+                        ? getRecoveryAllItemTypesLabel()
                         : getRecoveryItemTypePresentation(itemType)?.label || itemType}
                     </option>
                   )}
@@ -328,7 +330,9 @@ export const RecoveryProtectedInventorySection: Component<
                 <For each={props.platformOptions()}>
                   {(platform) => (
                     <option value={platform}>
-                      {platform === 'all' ? 'All Platforms' : getSourcePlatformLabel(platform)}
+                      {platform === 'all'
+                        ? getRecoveryAllPlatformsLabel()
+                        : getSourcePlatformLabel(platform)}
                     </option>
                   )}
                 </For>
