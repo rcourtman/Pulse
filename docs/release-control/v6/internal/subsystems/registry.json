@@ -671,6 +671,10 @@
         "cmd/pulse-agent/main.go",
         "frontend-modern/src/api/agentProfiles.ts",
         "frontend-modern/src/api/nodes.ts",
+        "frontend-modern/src/components/Infrastructure/deploy/CandidatesStep.tsx",
+        "frontend-modern/src/components/Infrastructure/deploy/ConfirmStep.tsx",
+        "frontend-modern/src/components/Infrastructure/deploy/DeployingStep.tsx",
+        "frontend-modern/src/components/Infrastructure/deploy/PreflightStep.tsx",
         "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
         "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
@@ -957,15 +961,26 @@
           },
           {
             "id": "deploy-fallback-install-surface",
-            "label": "deploy fallback install command proof",
+            "label": "deploy wizard surface proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Infrastructure/deploy/CandidatesStep.tsx",
+              "frontend-modern/src/components/Infrastructure/deploy/ConfirmStep.tsx",
+              "frontend-modern/src/components/Infrastructure/deploy/DeployingStep.tsx",
+              "frontend-modern/src/components/Infrastructure/deploy/PreflightStep.tsx",
               "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Infrastructure/__tests__/DeployStepComponents.test.tsx"
+              "frontend-modern/src/components/Infrastructure/__tests__/DeployStepComponents.test.tsx",
+              "frontend-modern/src/components/Infrastructure/deploy/__tests__/CandidatesStep.test.tsx",
+              "frontend-modern/src/components/Infrastructure/deploy/__tests__/ConfirmStep.test.tsx",
+              "frontend-modern/src/components/Infrastructure/deploy/__tests__/DeployingStep.test.tsx",
+              "frontend-modern/src/components/Infrastructure/deploy/__tests__/PreflightStep.test.tsx",
+              "frontend-modern/src/components/Infrastructure/deploy/__tests__/ResultsStep.test.tsx",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           },
           {
@@ -4727,6 +4742,7 @@
         "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
         "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
         "frontend-modern/src/hooks/useRecoveryRollups.ts",
+        "frontend-modern/src/pages/Ceph.tsx",
         "frontend-modern/src/pages/Recovery.tsx",
         "frontend-modern/src/pages/Storage.tsx",
         "frontend-modern/src/types/recovery.ts",
@@ -4823,11 +4839,13 @@
               "frontend-modern/src/features/storageBackups/"
             ],
             "match_files": [
+              "frontend-modern/src/pages/Ceph.tsx",
               "frontend-modern/src/pages/Storage.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
@@ -4894,7 +4912,9 @@
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
         "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
+        "frontend-modern/src/components/PMG/MailGateway.tsx",
         "frontend-modern/src/components/PMG/PMGInstanceDrawer.tsx",
+        "frontend-modern/src/components/PMG/PMGInstancePanel.tsx",
         "frontend-modern/src/components/PMG/ServiceHealthBadge.tsx",
         "frontend-modern/src/features/infrastructure/infrastructurePageModel.ts",
         "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
@@ -5017,7 +5037,9 @@
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
               "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
+              "frontend-modern/src/components/PMG/MailGateway.tsx",
               "frontend-modern/src/components/PMG/PMGInstanceDrawer.tsx",
+              "frontend-modern/src/components/PMG/PMGInstancePanel.tsx",
               "frontend-modern/src/features/infrastructure/infrastructurePageModel.ts",
               "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
               "frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts",
@@ -5045,6 +5067,7 @@
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
               "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
               "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",

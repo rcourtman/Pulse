@@ -1,6 +1,14 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import type { DeployWizardState } from '@/hooks/useDeployWizard';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
+import {
   getDeployCandidatesLoadingState,
   getDeployNoCandidatesState,
   getDeployNoSourceAgentsState,
@@ -105,80 +113,82 @@ export const CandidatesStep: Component<CandidatesStepProps> = (props) => {
               </div>
             </div>
 
-            <div class="rounded-md border border-border overflow-hidden">
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="bg-surface-alt text-left">
-                    <th class="w-8 px-3 py-2" />
-                    <th class="px-3 py-2 font-medium text-muted text-xs">Node</th>
-                    <th class="px-3 py-2 font-medium text-muted text-xs">IP</th>
-                    <th class="px-3 py-2 font-medium text-muted text-xs">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={w.candidates()}>
-                    {(node) => {
-                      const isDisabled = () => node.hasAgent || !node.deployable;
-                      const isChecked = () => w.selectedNodeIds().has(node.nodeId);
+            <Table wrapperClass="rounded-md border border-border" class="text-sm">
+              <TableHeader>
+                <TableRow class="bg-surface-alt text-left">
+                  <TableHead class="w-8 px-3 py-2" />
+                  <TableHead class="px-3 py-2 font-medium text-muted text-xs">Node</TableHead>
+                  <TableHead class="px-3 py-2 font-medium text-muted text-xs">IP</TableHead>
+                  <TableHead class="px-3 py-2 font-medium text-muted text-xs">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <For each={w.candidates()}>
+                  {(node) => {
+                    const isDisabled = () => node.hasAgent || !node.deployable;
+                    const isChecked = () => w.selectedNodeIds().has(node.nodeId);
 
-                      return (
-                        <tr
-                          class={`border-t border-border transition-colors ${
-                            isDisabled() ? 'opacity-50' : 'hover:bg-surface-hover cursor-pointer'
-                          }`}
-                          tabIndex={isDisabled() ? undefined : 0}
-                          onClick={() => {
-                            if (!isDisabled()) w.toggleNodeSelection(node.nodeId);
-                          }}
-                          onKeyDown={(e) => {
-                            if (!isDisabled() && (e.key === 'Enter' || e.key === ' ')) {
-                              e.preventDefault();
-                              w.toggleNodeSelection(node.nodeId);
+                    return (
+                      <TableRow
+                        class={`transition-colors ${
+                          isDisabled() ? 'opacity-50' : 'hover:bg-surface-hover cursor-pointer'
+                        }`}
+                        tabIndex={isDisabled() ? undefined : 0}
+                        onClick={() => {
+                          if (!isDisabled()) w.toggleNodeSelection(node.nodeId);
+                        }}
+                        onKeyDown={(e) => {
+                          if (!isDisabled() && (e.key === 'Enter' || e.key === ' ')) {
+                            e.preventDefault();
+                            w.toggleNodeSelection(node.nodeId);
+                          }
+                        }}
+                      >
+                        <TableCell class="px-3 py-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked()}
+                            disabled={isDisabled()}
+                            onChange={() => w.toggleNodeSelection(node.nodeId)}
+                            onClick={(e) => e.stopPropagation()}
+                            class="rounded border-border"
+                          />
+                        </TableCell>
+                        <TableCell class="px-3 py-2 font-medium text-base-content">
+                          {node.name}
+                        </TableCell>
+                        <TableCell class="px-3 py-2 text-muted font-mono text-xs">
+                          {node.ip || '--'}
+                        </TableCell>
+                        <TableCell class="px-3 py-2">
+                          <Show
+                            when={node.hasAgent}
+                            fallback={
+                              <Show
+                                when={node.deployable}
+                                fallback={
+                                  <span class="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                                    <AlertCircleIcon class="w-3 h-3" />
+                                    {node.reason || 'Not deployable'}
+                                  </span>
+                                }
+                              >
+                                <span class="text-xs text-muted">Available</span>
+                              </Show>
                             }
-                          }}
-                        >
-                          <td class="px-3 py-2">
-                            <input
-                              type="checkbox"
-                              checked={isChecked()}
-                              disabled={isDisabled()}
-                              onChange={() => w.toggleNodeSelection(node.nodeId)}
-                              onClick={(e) => e.stopPropagation()}
-                              class="rounded border-border"
-                            />
-                          </td>
-                          <td class="px-3 py-2 font-medium text-base-content">{node.name}</td>
-                          <td class="px-3 py-2 text-muted font-mono text-xs">{node.ip || '--'}</td>
-                          <td class="px-3 py-2">
-                            <Show
-                              when={node.hasAgent}
-                              fallback={
-                                <Show
-                                  when={node.deployable}
-                                  fallback={
-                                    <span class="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                                      <AlertCircleIcon class="w-3 h-3" />
-                                      {node.reason || 'Not deployable'}
-                                    </span>
-                                  }
-                                >
-                                  <span class="text-xs text-muted">Available</span>
-                                </Show>
-                              }
-                            >
-                              <span class="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                                <CheckIcon class="w-3 h-3" />
-                                Already monitored
-                              </span>
-                            </Show>
-                          </td>
-                        </tr>
-                      );
-                    }}
-                  </For>
-                </tbody>
-              </table>
-            </div>
+                          >
+                            <span class="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                              <CheckIcon class="w-3 h-3" />
+                              Already monitored
+                            </span>
+                          </Show>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }}
+                </For>
+              </TableBody>
+            </Table>
           </div>
         </Show>
 

@@ -38,24 +38,25 @@ querying, and the operator-facing storage health presentation layer.
 11. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`
 12. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
 13. `frontend-modern/src/pages/Storage.tsx`
-14. `frontend-modern/src/components/Storage/Storage.tsx`
-15. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
-16. `frontend-modern/src/utils/storageSources.ts`
-17. `frontend-modern/src/hooks/useRecoveryPoints.ts`
-18. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-19. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
-20. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
-21. `frontend-modern/src/pages/Recovery.tsx`
-22. `frontend-modern/src/routing/resourceLinks.ts`
-23. `frontend-modern/src/types/recovery.ts`
-28. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
-29. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-30. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
-31. `frontend-modern/src/utils/textPresentation.ts`
-32. `frontend-modern/src/components/Storage/StorageSummary.tsx`
-33. `frontend-modern/src/utils/storageSummaryCache.ts`
-34. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
-35. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+14. `frontend-modern/src/pages/Ceph.tsx`
+15. `frontend-modern/src/components/Storage/Storage.tsx`
+16. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
+17. `frontend-modern/src/utils/storageSources.ts`
+18. `frontend-modern/src/hooks/useRecoveryPoints.ts`
+19. `frontend-modern/src/hooks/useRecoveryRollups.ts`
+20. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
+21. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
+22. `frontend-modern/src/pages/Recovery.tsx`
+23. `frontend-modern/src/routing/resourceLinks.ts`
+24. `frontend-modern/src/types/recovery.ts`
+25. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
+26. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+27. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
+28. `frontend-modern/src/utils/textPresentation.ts`
+29. `frontend-modern/src/components/Storage/StorageSummary.tsx`
+30. `frontend-modern/src/utils/storageSummaryCache.ts`
+31. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+32. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
 
 ## Shared Boundaries
 
@@ -84,12 +85,17 @@ querying, and the operator-facing storage health presentation layer.
    compatibility path, but event views and event drill-ins must drop
    protected-inventory-only state so hidden filters cannot make valid history
    look empty.
-3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
+3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/pages/Ceph.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
    The retired dashboard route must not reintroduce storage or recovery
    widgets as compatibility panels. Storage capacity, storage health,
    protected-item, and recovery-outcome readiness claims belong on the Storage
    and Recovery surfaces or their shared summary components, not in a restored
    dashboard panel cluster or Assistant brief.
+   Ceph table shells on the storage route share the same frontend-primitives
+   table contract: `frontend-modern/src/pages/Ceph.tsx` may own Ceph-specific
+   columns and rows, but horizontal overflow and scrollbar hiding must route
+   through the shared `Table` wrapper rather than page-local scroll divs or
+   inline overflow styles.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    That same adjacent API/security boundary owns CSRF replacement-token
    concurrency for browser mutations. Storage and recovery forms may benefit

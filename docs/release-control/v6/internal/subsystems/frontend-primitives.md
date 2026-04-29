@@ -190,7 +190,12 @@ work extends shared components instead of creating new local variants.
    shared table shell still owns overflow behavior. Resource-detail drawer
    tables that consume `Table`, including Docker Swarm services, Kubernetes
    namespaces/deployments, and PMG detail tables, inherit the same scroll-shell
-   owner instead of carrying drawer-local `overflow-x-auto` wrappers.
+   owner instead of carrying drawer-local `overflow-x-auto` wrappers. Other
+   product table surfaces, including deploy wizard target tables, AI cost
+   tables, Ceph tables, PMG resource panels, and `PulseDataGrid`, must follow
+   the same rule: feature owners may pass `wrapperClass` for bounded height,
+   border, radius, or scrollbar hiding, but they must not add raw table markup
+   or local scroll wrappers around the shared table primitive.
    Product-table subgroup/header rows must likewise consume the shared
    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
    helper and `.grouped-table-row` CSS token contract instead of local

@@ -62,17 +62,21 @@ management, and fleet control surfaces.
 40. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
 41. `frontend-modern/src/components/Settings/useNodeModalState.ts`
 42. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-43. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
-44. `frontend-modern/src/utils/agentProfilesPresentation.ts`
-45. `frontend-modern/src/utils/agentInstallCommand.ts`
-46. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
-47. `frontend-modern/src/api/nodes.ts`
-48. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
-49. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
-50. `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`
-51. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
-52. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
-53. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
+43. `frontend-modern/src/components/Infrastructure/deploy/CandidatesStep.tsx`
+44. `frontend-modern/src/components/Infrastructure/deploy/ConfirmStep.tsx`
+45. `frontend-modern/src/components/Infrastructure/deploy/DeployingStep.tsx`
+46. `frontend-modern/src/components/Infrastructure/deploy/PreflightStep.tsx`
+47. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
+48. `frontend-modern/src/utils/agentProfilesPresentation.ts`
+49. `frontend-modern/src/utils/agentInstallCommand.ts`
+50. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
+51. `frontend-modern/src/api/nodes.ts`
+52. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+53. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
+54. `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`
+55. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
+56. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
+57. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
 54. `frontend-modern/src/utils/agentCapabilityPresentation.ts`
 55. `frontend-modern/src/utils/agentProfileSuggestionPresentation.ts`
 56. `frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts`
@@ -2262,11 +2266,15 @@ installer contract. That fallback surface must consume the shared validated
 `NodesAPI.getAgentInstallCommand` response, so malformed backend payloads fail
 closed and the raw backend install token stays inside the shared client
 boundary rather than leaking into deploy UI state.
+Deploy wizard target tables are lifecycle-owned presentation surfaces:
+`CandidatesStep`, `ConfirmStep`, `PreflightStep`, `DeployingStep`, and
+`ResultsStep` must use the shared frontend `Table` primitive for scroll and
+table semantics instead of raw table markup or step-local scroll frames.
 Deploy selection and retry capacity feedback may consume the monitored-system
 capacity boundary owned by API/cloud-paid, but lifecycle UI must label that
 state as workspace capacity and must not reintroduce legacy license-slot or
 plan-upgrade language in deploy confirmation, preflight, or retry surfaces.
-That same `ResultsStep` boundary must also stay on the direct
+That same deploy wizard boundary must also stay on the direct
 `deploy-fallback-install-surface` proof path, rather than relying only on the
 shared install helper or downstream deploy tests to catch lifecycle drift in
 the infrastructure fallback surface.

@@ -23,7 +23,12 @@ describe('PulseDataGrid', () => {
     expect(pulseDataGridSource).toContain('getPulseDataGridAlignClass');
     expect(pulseDataGridSource).toContain('getPulseDataGridWidthAttr');
     expect(pulseDataGridSource).toContain('isPulseDataGridInteractiveTarget');
+    expect(pulseDataGridSource).toContain("from '@/components/shared/Table'");
+    expect(pulseDataGridSource).toContain('<Table');
+    expect(pulseDataGridSource).toContain('wrapperClass="scrollbar-hide"');
     expect(pulseDataGridSource).toContain('scrollbar-hide');
+    expect(pulseDataGridSource).not.toContain('<div class="overflow-x-auto');
+    expect(pulseDataGridSource).not.toContain('overflow-x-auto touch-scroll scrollbar-hide');
     expect(pulseDataGridSource).not.toContain('style={{');
     expect(pulseDataGridSource).not.toContain('style={');
     expect(pulseDataGridSource).not.toContain('useBreakpoint');

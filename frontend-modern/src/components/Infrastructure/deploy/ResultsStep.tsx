@@ -1,5 +1,6 @@
 import { Component, For, Show, createSignal, onCleanup } from 'solid-js';
 import type { DeployWizardState } from '@/hooks/useDeployWizard';
+import { Table, TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import { NodesAPI } from '@/api/nodes';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getDeployInstallCommandLoadingState } from '@/utils/deployFlowPresentation';
@@ -73,23 +74,28 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
             <CheckCircleIcon class="w-3.5 h-3.5" />
             Deployed ({w.succeededTargets().length})
           </h4>
-          <div class="rounded-md border border-emerald-200 dark:border-emerald-800 overflow-hidden">
-            <table class="w-full text-sm">
-              <tbody>
-                <For each={w.succeededTargets()}>
-                  {(target) => (
-                    <tr class="border-t border-emerald-100 dark:border-emerald-900 first:border-t-0">
-                      <td class="px-3 py-2 font-medium text-base-content">{target.nodeName}</td>
-                      <td class="px-3 py-2 text-muted font-mono text-xs">{target.nodeIP}</td>
-                      <td class="px-3 py-2">
-                        <DeployStatusBadge status={target.status} />
-                      </td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
+          <Table
+            wrapperClass="rounded-md border border-emerald-200 dark:border-emerald-800"
+            class="text-sm"
+          >
+            <TableBody class="divide-y divide-emerald-100 dark:divide-emerald-900">
+              <For each={w.succeededTargets()}>
+                {(target) => (
+                  <TableRow>
+                    <TableCell class="px-3 py-2 font-medium text-base-content">
+                      {target.nodeName}
+                    </TableCell>
+                    <TableCell class="px-3 py-2 text-muted font-mono text-xs">
+                      {target.nodeIP}
+                    </TableCell>
+                    <TableCell class="px-3 py-2">
+                      <DeployStatusBadge status={target.status} />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </For>
+            </TableBody>
+          </Table>
         </div>
       </Show>
 
@@ -100,26 +106,31 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
             <XCircleIcon class="w-3.5 h-3.5" />
             Failed ({w.failedTargets().length})
           </h4>
-          <div class="rounded-md border border-red-200 dark:border-red-800 overflow-hidden">
-            <table class="w-full text-sm">
-              <tbody>
-                <For each={w.failedTargets()}>
-                  {(target) => (
-                    <tr class="border-t border-red-100 dark:border-red-900 first:border-t-0">
-                      <td class="px-3 py-2 font-medium text-base-content">{target.nodeName}</td>
-                      <td class="px-3 py-2 text-muted font-mono text-xs">{target.nodeIP}</td>
-                      <td class="px-3 py-2">
-                        <DeployStatusBadge status={target.status} />
-                      </td>
-                      <td class="px-3 py-2">
-                        <ErrorDetail message={target.errorMessage} />
-                      </td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
+          <Table
+            wrapperClass="rounded-md border border-red-200 dark:border-red-800"
+            class="text-sm"
+          >
+            <TableBody class="divide-y divide-red-100 dark:divide-red-900">
+              <For each={w.failedTargets()}>
+                {(target) => (
+                  <TableRow>
+                    <TableCell class="px-3 py-2 font-medium text-base-content">
+                      {target.nodeName}
+                    </TableCell>
+                    <TableCell class="px-3 py-2 text-muted font-mono text-xs">
+                      {target.nodeIP}
+                    </TableCell>
+                    <TableCell class="px-3 py-2">
+                      <DeployStatusBadge status={target.status} />
+                    </TableCell>
+                    <TableCell class="px-3 py-2">
+                      <ErrorDetail message={target.errorMessage} />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </For>
+            </TableBody>
+          </Table>
 
           {/* Manual install accordion for failed nodes */}
           <button
@@ -182,23 +193,25 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
             <AlertCircleIcon class="w-3.5 h-3.5" />
             Skipped ({w.skippedTargets().length})
           </h4>
-          <div class="rounded-md border border-border overflow-hidden">
-            <table class="w-full text-sm">
-              <tbody>
-                <For each={w.skippedTargets()}>
-                  {(target) => (
-                    <tr class="border-t border-border first:border-t-0 opacity-60">
-                      <td class="px-3 py-2 font-medium text-base-content">{target.nodeName}</td>
-                      <td class="px-3 py-2 text-muted font-mono text-xs">{target.nodeIP}</td>
-                      <td class="px-3 py-2">
-                        <DeployStatusBadge status={target.status} />
-                      </td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
+          <Table wrapperClass="rounded-md border border-border" class="text-sm">
+            <TableBody>
+              <For each={w.skippedTargets()}>
+                {(target) => (
+                  <TableRow class="opacity-60">
+                    <TableCell class="px-3 py-2 font-medium text-base-content">
+                      {target.nodeName}
+                    </TableCell>
+                    <TableCell class="px-3 py-2 text-muted font-mono text-xs">
+                      {target.nodeIP}
+                    </TableCell>
+                    <TableCell class="px-3 py-2">
+                      <DeployStatusBadge status={target.status} />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </For>
+            </TableBody>
+          </Table>
         </div>
       </Show>
 
@@ -206,23 +219,25 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
       <Show when={w.canceledTargets().length > 0}>
         <div class="space-y-2">
           <h4 class="text-xs font-semibold text-muted">Canceled ({w.canceledTargets().length})</h4>
-          <div class="rounded-md border border-border overflow-hidden">
-            <table class="w-full text-sm">
-              <tbody>
-                <For each={w.canceledTargets()}>
-                  {(target) => (
-                    <tr class="border-t border-border first:border-t-0 opacity-60">
-                      <td class="px-3 py-2 font-medium text-base-content">{target.nodeName}</td>
-                      <td class="px-3 py-2 text-muted font-mono text-xs">{target.nodeIP}</td>
-                      <td class="px-3 py-2">
-                        <DeployStatusBadge status={target.status} />
-                      </td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
+          <Table wrapperClass="rounded-md border border-border" class="text-sm">
+            <TableBody>
+              <For each={w.canceledTargets()}>
+                {(target) => (
+                  <TableRow class="opacity-60">
+                    <TableCell class="px-3 py-2 font-medium text-base-content">
+                      {target.nodeName}
+                    </TableCell>
+                    <TableCell class="px-3 py-2 text-muted font-mono text-xs">
+                      {target.nodeIP}
+                    </TableCell>
+                    <TableCell class="px-3 py-2">
+                      <DeployStatusBadge status={target.status} />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </For>
+            </TableBody>
+          </Table>
         </div>
       </Show>
     </div>

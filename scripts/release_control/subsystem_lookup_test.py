@@ -895,6 +895,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/useStoragePageSummary.test.ts",
                 "frontend-modern/src/components/Storage/code_standards.test.ts",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/storageAlertState.test.ts",
@@ -1589,7 +1590,14 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
-                "frontend-modern/src/components/Infrastructure/__tests__/DeployStepComponents.test.tsx"
+                "frontend-modern/src/components/Infrastructure/__tests__/DeployStepComponents.test.tsx",
+                "frontend-modern/src/components/Infrastructure/deploy/__tests__/CandidatesStep.test.tsx",
+                "frontend-modern/src/components/Infrastructure/deploy/__tests__/ConfirmStep.test.tsx",
+                "frontend-modern/src/components/Infrastructure/deploy/__tests__/DeployingStep.test.tsx",
+                "frontend-modern/src/components/Infrastructure/deploy/__tests__/PreflightStep.test.tsx",
+                "frontend-modern/src/components/Infrastructure/deploy/__tests__/ResultsStep.test.tsx",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
 
@@ -4763,6 +4771,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerOperationalModel.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                 "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                 "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
                 "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",

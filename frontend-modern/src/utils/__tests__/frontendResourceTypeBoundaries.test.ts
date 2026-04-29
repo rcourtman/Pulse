@@ -397,6 +397,9 @@ import zfsHealthMapPresentationSource from '@/features/storageBackups/zfsHealthM
 import storageAdaptersSource from '@/features/storageBackups/storageAdapters.ts?raw';
 import deployStatusBadgeSource from '@/components/Infrastructure/deploy/DeployStatusBadge.tsx?raw';
 import deployCandidatesStepSource from '@/components/Infrastructure/deploy/CandidatesStep.tsx?raw';
+import deployConfirmStepSource from '@/components/Infrastructure/deploy/ConfirmStep.tsx?raw';
+import deployDeployingStepSource from '@/components/Infrastructure/deploy/DeployingStep.tsx?raw';
+import deployPreflightStepSource from '@/components/Infrastructure/deploy/PreflightStep.tsx?raw';
 import deployResultsStepSource from '@/components/Infrastructure/deploy/ResultsStep.tsx?raw';
 import deployFlowPresentationSource from '@/utils/deployFlowPresentation.ts?raw';
 import deployStatusPresentationSource from '@/utils/deployStatusPresentation.ts?raw';
@@ -707,7 +710,9 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
     expect(workloadsSurfaceSource).not.toContain('function normalizeViewModeParam');
     expect(workloadsSurfaceSource).not.toContain('workloadSummaryGuestId');
-    expect(workloadsSurfaceSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(workloadsSurfaceSource).not.toContain(
+      'createMemo(() => getCanonicalWorkloadId(guest()))',
+    );
     expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
     expect(workloadsWorkloadTableSource).not.toContain(
       'createMemo(() => getCanonicalWorkloadId(guest()))',
@@ -740,9 +745,7 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsWorkloadRouteStateSource).not.toContain(
       'const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)',
     );
-    expect(workloadsWorkloadRouteStateSource).toContain(
-      "from './workloadRouteStateModel'",
-    );
+    expect(workloadsWorkloadRouteStateSource).toContain("from './workloadRouteStateModel'");
     expect(workloadsWorkloadRouteStateSource).toContain('resolveWorkloadsWorkloadNodeSelection({');
     expect(workloadsWorkloadRouteStateSource).toContain('WORKLOADS_WORKLOAD_ROUTE_RESET_STATE');
     expect(workloadsWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
@@ -759,22 +762,16 @@ describe('frontend resource type boundaries', () => {
     );
     expect(workloadUrlSyncModelSource).toContain('parseWorkloadsLinkSearch(search)');
     expect(workloadUrlSyncModelSource).toContain('buildWorkloadsPath({');
-    expect(workloadUrlSyncModelSource).toContain(
-      'resolveWorkloadsManagedWorkloadsNavigateTarget',
-    );
+    expect(workloadUrlSyncModelSource).toContain('resolveWorkloadsManagedWorkloadsNavigateTarget');
     expect(workloadUrlSyncModelSource).toContain('resolveWorkloadsWorkloadRuntimeParam');
-    expect(workloadUrlSyncModelSource).toContain(
-      'normalizeWorkloadViewModeParam(params.type)',
-    );
+    expect(workloadUrlSyncModelSource).toContain('normalizeWorkloadViewModeParam(params.type)');
     expect(workloadsControlsStateSource).toContain('useBreakpoint');
     expect(workloadsControlsStateSource).toContain('useColumnVisibility');
     expect(workloadsControlsStateSource).toContain('usePersistentSignal');
     expect(workloadsControlsStateSource).toContain('blurFocusedTypeToSearch');
     expect(workloadsControlsStateSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
     expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadFilterOptions');
-    expect(workloadsWorkloadFilterOptionsSource).toContain(
-      "from './workloadFilterConfigModel'",
-    );
+    expect(workloadsWorkloadFilterOptionsSource).toContain("from './workloadFilterConfigModel'");
     expect(workloadsWorkloadFilterOptionsSource).toContain(
       'buildWorkloadNodeOptions(options.allGuests())',
     );
@@ -797,18 +794,12 @@ describe('frontend resource type boundaries', () => {
     expect(workloadFilterConfigModelSource).toContain(
       'export const buildWorkloadsNamespaceFilterConfig',
     );
-    expect(workloadRouteModelSource).toContain(
-      'export const deserializeWorkloadViewMode',
-    );
-    expect(workloadRouteModelSource).toContain(
-      "normalizeWorkloadViewModeParam(raw) ?? 'all'",
-    );
+    expect(workloadRouteModelSource).toContain('export const deserializeWorkloadViewMode');
+    expect(workloadRouteModelSource).toContain("normalizeWorkloadViewModeParam(raw) ?? 'all'");
     expect(workloadRouteModelSource).not.toContain(
       'export const buildWorkloadsContainerRuntimeFilterConfig',
     );
-    expect(workloadRouteModelSource).not.toContain(
-      'export const buildWorkloadsHostFilterConfig',
-    );
+    expect(workloadRouteModelSource).not.toContain('export const buildWorkloadsHostFilterConfig');
     expect(workloadRouteModelSource).not.toContain(
       'export const buildWorkloadsNamespaceFilterConfig',
     );
@@ -1103,9 +1094,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryHistorySectionSource).toContain('getRecoveryAllHistoryLabel');
     expect(recoveryHistoryTableSource).toMatch(/<Table(?:\s|>)/);
     expect(recoveryHistoryTableSource).not.toContain('<div class="overflow-x-auto">');
-    expect(recoveryHistoryTableSource).not.toContain(
-      '<div class="overflow-x-auto bg-surface">',
-    );
+    expect(recoveryHistoryTableSource).not.toContain('<div class="overflow-x-auto bg-surface">');
     expect(recoveryTablePresentationSource).toContain('getAllFilterOptionLabel');
     expect(recoveryHistorySectionSource).not.toContain(
       'overflow-hidden border-border-subtle bg-surface',
@@ -1113,9 +1102,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryProtectedInventorySectionSource).toContain('TableCard');
     expect(recoveryProtectedInventorySectionSource).toMatch(/<Table(?:\s|>)/);
     expect(recoveryProtectedInventorySectionSource).toContain('wrapperClass="bg-surface"');
-    expect(recoveryProtectedInventorySectionSource).not.toContain(
-      '<div class="overflow-x-auto">',
-    );
+    expect(recoveryProtectedInventorySectionSource).not.toContain('<div class="overflow-x-auto">');
     expect(recoveryProtectedInventorySectionSource).not.toContain(
       '<div class="overflow-x-auto bg-surface">',
     );
@@ -2026,9 +2013,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolsTableSource).toMatch(/<Table(?:\s|>)/);
     expect(storagePoolsTableSource).not.toContain('STORAGE_POOLS_SCROLL_WRAP_CLASS');
     expect(storagePoolsTableSource).not.toContain('<div class="overflow-x-auto">');
-    expect(storagePoolsTableSource).not.toContain(
-      '<div class="overflow-x-auto bg-surface">',
-    );
+    expect(storagePoolsTableSource).not.toContain('<div class="overflow-x-auto bg-surface">');
     expect(storageContentCardSource).not.toContain(
       "props.selectedNodeId() === 'all' ? null : props.selectedNodeId()",
     );
@@ -2756,6 +2741,10 @@ describe('frontend resource type boundaries', () => {
     expect(pulseDataGridSource).toContain('usePulseDataGridState');
     expect(pulseDataGridSource).toContain('getPulseDataGridAlignClass');
     expect(pulseDataGridSource).toContain('isPulseDataGridInteractiveTarget');
+    expect(pulseDataGridSource).toContain('wrapperClass="scrollbar-hide"');
+    expect(pulseDataGridSource).not.toContain(
+      '<div class="overflow-x-auto touch-scroll scrollbar-hide">',
+    );
     expect(pulseDataGridSource).not.toContain('useBreakpoint');
     expect(pulseDataGridSource).not.toContain('createStore');
     expect(pulseDataGridSource).not.toContain('target.closest(');
@@ -3345,6 +3334,16 @@ describe('frontend resource type boundaries', () => {
     expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_FAILURE_STATE_TITLE');
     expect(pmgInstanceDrawerSource).toMatch(/<Table(?:\s|>)/);
     expect(pmgInstanceDrawerSource).not.toContain('<div class="mt-2 overflow-x-auto">');
+    expect(mailGatewaySource).not.toContain('<div class="overflow-x-auto -mx-4 px-4">');
+    expect(mailGatewaySource).not.toContain('wrapperClass="-mx-4 px-4"');
+    expect(pmgInstancePanelSource).not.toContain('<div class="overflow-x-auto -mx-4 px-4">');
+    expect(pmgInstancePanelSource).not.toContain('wrapperClass="-mx-4 px-4"');
+    expect(pmgInstancePanelSource).not.toContain(
+      '<div class="overflow-auto max-h-[240px] rounded-md border border-border">',
+    );
+    expect(pmgInstancePanelSource).not.toContain(
+      '<div class="overflow-auto max-h-[260px] rounded-md border border-border">',
+    );
     expect(pmgInstanceDrawerSource).not.toContain('Search domains...');
     expect(pmgInstanceDrawerSource).not.toContain('Unknown host');
     expect(pmgInstanceDrawerSource).not.toContain('Spam Distribution');
@@ -3443,6 +3442,10 @@ describe('frontend resource type boundaries', () => {
     expect(cephPageSource).toContain('getCephNoClustersStatePresentation');
     expect(cephPageSource).toContain('getCephPoolsSearchEmptyStatePresentation');
     expect(cephPageSource).toContain('CephServiceIcon');
+    expect(cephPageSource).not.toContain('<div class="overflow-x-auto"');
+    expect(cephPageSource).not.toContain(
+      '<style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>',
+    );
     expect(cephPageSource).not.toContain('const getServiceStatus =');
     expect(cephPageSource).not.toContain('const ServiceIcon: Component');
     expect(cephPageSource).not.toContain('Loading Ceph data...');
@@ -3464,6 +3467,21 @@ describe('frontend resource type boundaries', () => {
     expect(deployCandidatesStepSource).not.toContain('No online source agents found.');
     expect(deployResultsStepSource).toContain('getDeployInstallCommandLoadingState');
     expect(deployResultsStepSource).not.toContain('Loading install command...');
+    for (const source of [
+      deployCandidatesStepSource,
+      deployConfirmStepSource,
+      deployDeployingStepSource,
+      deployPreflightStepSource,
+      deployResultsStepSource,
+    ]) {
+      expect(source).toContain("from '@/components/shared/Table'");
+      expect(source).not.toContain('<table');
+      expect(source).not.toContain('<thead');
+      expect(source).not.toContain('<tbody');
+      expect(source).not.toContain('<tr ');
+      expect(source).not.toContain('<td ');
+      expect(source).not.toContain('<th ');
+    }
     expect(deployFlowPresentationSource).toContain(
       'export function getDeployCandidatesLoadingState',
     );

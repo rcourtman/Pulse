@@ -216,8 +216,7 @@ export const AICostDashboard: Component = () => {
   });
 
   const resetHistory = async () => {
-    if (!confirm(getAICostResetHistoryConfirmationMessage()))
-      return;
+    if (!confirm(getAICostResetHistoryConfirmationMessage())) return;
     try {
       const result = await AIAPI.resetCostHistory();
       notificationStore.success(getAICostResetHistorySuccessMessage(result.backup_file));
@@ -456,7 +455,9 @@ export const AICostDashboard: Component = () => {
                   <div class="mt-2">
                     <Show
                       when={anyPricingKnown() && dailyUSDValues().length >= 2}
-                      fallback={<div class="text-xs text-muted">{AI_COST_DAILY_USD_EMPTY_STATE}</div>}
+                      fallback={
+                        <div class="text-xs text-muted">{AI_COST_DAILY_USD_EMPTY_STATE}</div>
+                      }
                     >
                       <TinySparkline values={dailyUSDValues()} stroke="#10b981" />
                     </Show>
@@ -540,90 +541,86 @@ export const AICostDashboard: Component = () => {
               </div>
 
               <Show when={(data().targets?.length ?? 0) > 0}>
-                <div class="overflow-x-auto">
-                  <Table class="min-w-full text-sm">
-                    <TableHeader class="text-xs text-muted uppercase tracking-wide">
-                      <TableRow class="border-b border-border">
-                        <TableHead class="text-left py-2 pr-4">Top targets</TableHead>
-                        <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
-                        <TableHead class="text-right py-2 px-2">Calls</TableHead>
-                        <TableHead class="text-right py-2 px-2">Tokens</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <For each={data().targets}>
-                        {(t) => (
-                          <TableRow class="border-b border-border-subtle">
-                            <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
-                              {t.target_type}:{t.target_id}
-                            </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-base-content">
-                              <Show
-                                when={t.pricing_known}
-                                fallback={<span class="text-muted">—</span>}
-                              >
-                                {formatUSD(t.estimated_usd ?? 0)}
-                              </Show>
-                            </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-base-content">
-                              {formatNumber(t.calls)}
-                            </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-base-content">
-                              {formatNumber(t.total_tokens)}
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </For>
-                    </TableBody>
-                  </Table>
-                </div>
-              </Show>
-
-              <div class="overflow-x-auto">
                 <Table class="min-w-full text-sm">
                   <TableHeader class="text-xs text-muted uppercase tracking-wide">
                     <TableRow class="border-b border-border">
-                      <TableHead class="text-left py-2 pr-4">Provider</TableHead>
-                      <TableHead class="text-left py-2 pr-4">Model</TableHead>
+                      <TableHead class="text-left py-2 pr-4">Top targets</TableHead>
                       <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
-                      <TableHead class="text-right py-2 px-2">Input</TableHead>
-                      <TableHead class="text-right py-2 px-2">Output</TableHead>
-                      <TableHead class="text-right py-2 px-2">Total</TableHead>
+                      <TableHead class="text-right py-2 px-2">Calls</TableHead>
+                      <TableHead class="text-right py-2 px-2">Tokens</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <For each={data().provider_models}>
-                      {(pm) => (
+                    <For each={data().targets}>
+                      {(t) => (
                         <TableRow class="border-b border-border-subtle">
-                          <TableCell class="py-2 pr-4 font-medium text-base-content">
-                            {getAIProviderDisplayName(pm.provider) || pm.provider}
-                          </TableCell>
                           <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
-                            {pm.model}
+                            {t.target_type}:{t.target_id}
                           </TableCell>
                           <TableCell class="py-2 px-2 text-right text-base-content">
                             <Show
-                              when={pm.pricing_known}
+                              when={t.pricing_known}
                               fallback={<span class="text-muted">—</span>}
                             >
-                              {formatUSD(pm.estimated_usd ?? 0)}
+                              {formatUSD(t.estimated_usd ?? 0)}
                             </Show>
                           </TableCell>
                           <TableCell class="py-2 px-2 text-right text-base-content">
-                            {formatNumber(pm.input_tokens)}
+                            {formatNumber(t.calls)}
                           </TableCell>
                           <TableCell class="py-2 px-2 text-right text-base-content">
-                            {formatNumber(pm.output_tokens)}
-                          </TableCell>
-                          <TableCell class="py-2 px-2 text-right text-base-content">
-                            {formatNumber(pm.total_tokens)}
+                            {formatNumber(t.total_tokens)}
                           </TableCell>
                         </TableRow>
                       )}
                     </For>
                   </TableBody>
                 </Table>
-              </div>
+              </Show>
+
+              <Table class="min-w-full text-sm">
+                <TableHeader class="text-xs text-muted uppercase tracking-wide">
+                  <TableRow class="border-b border-border">
+                    <TableHead class="text-left py-2 pr-4">Provider</TableHead>
+                    <TableHead class="text-left py-2 pr-4">Model</TableHead>
+                    <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
+                    <TableHead class="text-right py-2 px-2">Input</TableHead>
+                    <TableHead class="text-right py-2 px-2">Output</TableHead>
+                    <TableHead class="text-right py-2 px-2">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <For each={data().provider_models}>
+                    {(pm) => (
+                      <TableRow class="border-b border-border-subtle">
+                        <TableCell class="py-2 pr-4 font-medium text-base-content">
+                          {getAIProviderDisplayName(pm.provider) || pm.provider}
+                        </TableCell>
+                        <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
+                          {pm.model}
+                        </TableCell>
+                        <TableCell class="py-2 px-2 text-right text-base-content">
+                          <Show
+                            when={pm.pricing_known}
+                            fallback={<span class="text-muted">—</span>}
+                          >
+                            {formatUSD(pm.estimated_usd ?? 0)}
+                          </Show>
+                        </TableCell>
+                        <TableCell class="py-2 px-2 text-right text-base-content">
+                          {formatNumber(pm.input_tokens)}
+                        </TableCell>
+                        <TableCell class="py-2 px-2 text-right text-base-content">
+                          {formatNumber(pm.output_tokens)}
+                        </TableCell>
+                        <TableCell class="py-2 px-2 text-right text-base-content">
+                          {formatNumber(pm.total_tokens)}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </For>
+                </TableBody>
+              </Table>
             </>
           )}
         </Show>

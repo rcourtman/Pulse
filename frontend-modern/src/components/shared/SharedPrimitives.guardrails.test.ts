@@ -152,6 +152,15 @@ import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.t
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
+import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
+import deployCandidatesStepSource from '@/components/Infrastructure/deploy/CandidatesStep.tsx?raw';
+import deployConfirmStepSource from '@/components/Infrastructure/deploy/ConfirmStep.tsx?raw';
+import deployDeployingStepSource from '@/components/Infrastructure/deploy/DeployingStep.tsx?raw';
+import deployPreflightStepSource from '@/components/Infrastructure/deploy/PreflightStep.tsx?raw';
+import deployResultsStepSource from '@/components/Infrastructure/deploy/ResultsStep.tsx?raw';
+import cephPageSource from '@/pages/Ceph.tsx?raw';
+import pmgMailGatewaySource from '@/components/PMG/MailGateway.tsx?raw';
+import pmgInstancePanelSource from '@/components/PMG/PMGInstancePanel.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
@@ -532,7 +541,17 @@ describe('shared primitive guardrails', () => {
       diskListSource,
       infrastructureSourceManagerSource,
       configuredNodeTablesSource,
+      aiCostDashboardSource,
+      cephPageSource,
+      deployCandidatesStepSource,
+      deployConfirmStepSource,
+      deployDeployingStepSource,
+      deployPreflightStepSource,
+      deployResultsStepSource,
       pmgInstanceDrawerSource,
+      pmgInstancePanelSource,
+      pmgMailGatewaySource,
+      pulseDataGridSource,
       swarmServicesDrawerSource,
       k8sDeploymentsDrawerSource,
       k8sNamespacesDrawerSource,
@@ -573,6 +592,26 @@ describe('shared primitive guardrails', () => {
     expect(recoveryProtectedInventorySectionSource).toContain('wrapperClass="bg-surface"');
     expect(configuredNodeTablesSource).toContain('wrapperClass="max-h-[600px] overflow-y-auto"');
     expect(storageContentCardSource).toContain('<StoragePoolsTable');
+    expect(pulseDataGridSource).toContain('wrapperClass="scrollbar-hide"');
+    expect(pulseDataGridSource).not.toContain(
+      '<div class="overflow-x-auto touch-scroll scrollbar-hide">',
+    );
+
+    for (const source of [
+      deployCandidatesStepSource,
+      deployConfirmStepSource,
+      deployDeployingStepSource,
+      deployPreflightStepSource,
+      deployResultsStepSource,
+    ]) {
+      expect(source).toContain("from '@/components/shared/Table'");
+      expect(source).not.toContain('<table');
+      expect(source).not.toContain('<thead');
+      expect(source).not.toContain('<tbody');
+      expect(source).not.toContain('<tr ');
+      expect(source).not.toContain('<td ');
+      expect(source).not.toContain('<th ');
+    }
   });
 
   it('keeps grouped/list table-mode controls on one shared presentation contract', () => {

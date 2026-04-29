@@ -12,10 +12,7 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
-import {
-  getPMGOldestAgeTextClass,
-  getPMGQueueTextClass,
-} from '@/utils/pmgQueuePresentation';
+import { getPMGOldestAgeTextClass, getPMGQueueTextClass } from '@/utils/pmgQueuePresentation';
 import { getPMGThreatPresentation } from '@/utils/pmgThreatPresentation';
 import type { PMGInstance } from '@/types/api';
 import { ServiceHealthBadge } from './ServiceHealthBadge';
@@ -104,9 +101,7 @@ const QueueIndicator: Component<{
         onMouseLeave={() => tip.onMouseLeave()}
       >
         <Show when={hasQueue()} fallback={<span class="text-xs text-slate-400">No queue</span>}>
-          <span
-            class={`text-xs font-medium ${getPMGQueueTextClass(queueTotal())}`}
-          >
+          <span class={`text-xs font-medium ${getPMGQueueTextClass(queueTotal())}`}>
             {formatNum(queueTotal())} msgs
           </span>
         </Show>
@@ -441,54 +436,52 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
             <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">
               Cluster Nodes ({props.pmg.nodes?.length})
             </div>
-            <div class="overflow-x-auto -mx-4 px-4">
-              <Table class="w-full min-w-[600px] text-xs">
-                <TableHeader>
-                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
-                    <TableHead class="pb-1.5 font-medium">Node</TableHead>
-                    <TableHead class="pb-1.5 font-medium">Status</TableHead>
-                    <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
-                    <TableHead class="pb-1.5 font-medium">Load</TableHead>
-                    <TableHead class="pb-1.5 font-medium">Queue</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody class="divide-y divide-border-subtle">
-                  <For each={props.pmg.nodes}>
-                    {(node) => {
-                      const isOnline = (node.status || '').toLowerCase() === 'online';
+            <Table class="w-full min-w-[600px] text-xs">
+              <TableHeader>
+                <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
+                  <TableHead class="pb-1.5 font-medium">Node</TableHead>
+                  <TableHead class="pb-1.5 font-medium">Status</TableHead>
+                  <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
+                  <TableHead class="pb-1.5 font-medium">Load</TableHead>
+                  <TableHead class="pb-1.5 font-medium">Queue</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody class="divide-y divide-border-subtle">
+                <For each={props.pmg.nodes}>
+                  {(node) => {
+                    const isOnline = (node.status || '').toLowerCase() === 'online';
 
-                      return (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell class="py-1.5 font-medium text-base-content">
-                            {node.name}
-                          </TableCell>
-                          <TableCell class="py-1.5">
+                    return (
+                      <TableRow class="hover:bg-surface-hover">
+                        <TableCell class="py-1.5 font-medium text-base-content">
+                          {node.name}
+                        </TableCell>
+                        <TableCell class="py-1.5">
+                          <span
+                            class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                          >
                             <span
-                              class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-                            >
-                              <span
-                                class={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}
-                              />
-                              {node.status || 'unknown'}
-                            </span>
-                          </TableCell>
-                          <TableCell class="py-1.5 text-muted">
-                            <Show when={node.uptime} fallback="—">
-                              {Math.floor((node.uptime ?? 0) / 86400)}d{' '}
-                              {Math.floor(((node.uptime ?? 0) % 86400) / 3600)}h
-                            </Show>
-                          </TableCell>
-                          <TableCell class="py-1.5 text-muted">{node.loadAvg || '—'}</TableCell>
-                          <TableCell class="py-1.5">
-                            <QueueIndicator queue={node.queueStatus} />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    }}
-                  </For>
-                </TableBody>
-              </Table>
-            </div>
+                              class={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}
+                            />
+                            {node.status || 'unknown'}
+                          </span>
+                        </TableCell>
+                        <TableCell class="py-1.5 text-muted">
+                          <Show when={node.uptime} fallback="—">
+                            {Math.floor((node.uptime ?? 0) / 86400)}d{' '}
+                            {Math.floor(((node.uptime ?? 0) % 86400) / 3600)}h
+                          </Show>
+                        </TableCell>
+                        <TableCell class="py-1.5 text-muted">{node.loadAvg || '—'}</TableCell>
+                        <TableCell class="py-1.5">
+                          <QueueIndicator queue={node.queueStatus} />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }}
+                </For>
+              </TableBody>
+            </Table>
           </div>
         </Show>
 
@@ -532,52 +525,53 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
               </div>
             </div>
 
-            <div class="overflow-auto max-h-[240px] rounded-md border border-border">
-              <Table class="w-full min-w-[780px] text-xs">
-                <TableHeader class="bg-surface-alt">
-                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
-                    <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Spam</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Virus</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Spam Rate</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Bytes</TableHead>
-                    <TableHead class="px-3 py-2 font-medium">Comment</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody class="divide-y divide-border-subtle">
-                  <For each={relayDomainsWithStats()}>
-                    {(row) => (
-                      <TableRow class="hover:bg-surface-hover">
-                        <TableCell class="px-3 py-2 font-medium text-base-content">
-                          {row.domain}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">
-                          {row.hasStats ? fmtMaybe(row.mail) : '—'}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-orange-700 dark:text-orange-300">
-                          {row.hasStats ? fmtMaybe(row.spam) : '—'}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-red-700 dark:text-red-300">
-                          {row.hasStats ? fmtMaybe(row.virus) : '—'}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-base-content">
-                          {row.hasStats ? formatPct(row.spamRate) : '—'}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-muted">
-                          {row.hasStats && row.bytes > 0
-                            ? formatBytes(row.bytes)
-                            : row.hasStats
-                              ? '—'
-                              : '—'}
-                        </TableCell>
-                        <TableCell class="px-3 py-2 text-muted">{row.comment || '—'}</TableCell>
-                      </TableRow>
-                    )}
-                  </For>
-                </TableBody>
-              </Table>
-            </div>
+            <Table
+              wrapperClass="max-h-[240px] overflow-y-auto rounded-md border border-border"
+              class="w-full min-w-[780px] text-xs"
+            >
+              <TableHeader class="bg-surface-alt">
+                <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
+                  <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Spam</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Virus</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Spam Rate</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Bytes</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Comment</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody class="divide-y divide-border-subtle">
+                <For each={relayDomainsWithStats()}>
+                  {(row) => (
+                    <TableRow class="hover:bg-surface-hover">
+                      <TableCell class="px-3 py-2 font-medium text-base-content">
+                        {row.domain}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-base-content">
+                        {row.hasStats ? fmtMaybe(row.mail) : '—'}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-orange-700 dark:text-orange-300">
+                        {row.hasStats ? fmtMaybe(row.spam) : '—'}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-red-700 dark:text-red-300">
+                        {row.hasStats ? fmtMaybe(row.virus) : '—'}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-base-content">
+                        {row.hasStats ? formatPct(row.spamRate) : '—'}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-muted">
+                        {row.hasStats && row.bytes > 0
+                          ? formatBytes(row.bytes)
+                          : row.hasStats
+                            ? '—'
+                            : '—'}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-muted">{row.comment || '—'}</TableCell>
+                    </TableRow>
+                  )}
+                </For>
+              </TableBody>
+            </Table>
           </div>
         </Show>
 
@@ -601,70 +595,10 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                 </div>
               </summary>
 
-              <div class="overflow-auto max-h-[260px] rounded-md border border-border">
-                <Table class="w-full min-w-[720px] text-xs">
-                  <TableHeader class="bg-surface-alt">
-                    <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
-                      <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Spam</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Virus</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Spam Rate</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Bytes</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class="divide-y divide-border-subtle">
-                    <For each={otherDomainStatsRows()}>
-                      {(row) => (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell class="px-3 py-2 font-medium text-base-content">
-                            {row.domain}
-                          </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
-                            {fmtMaybe(row.mail)}
-                          </TableCell>
-                          <TableCell class="px-3 py-2 text-orange-700 dark:text-orange-300">
-                            {fmtMaybe(row.spam)}
-                          </TableCell>
-                          <TableCell class="px-3 py-2 text-red-700 dark:text-red-300">
-                            {fmtMaybe(row.virus)}
-                          </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
-                            {formatPct(row.spamRate)}
-                          </TableCell>
-                          <TableCell class="px-3 py-2 text-muted">
-                            {row.bytes > 0 ? formatBytes(row.bytes) : '—'}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </For>
-                  </TableBody>
-                </Table>
-              </div>
-            </details>
-          </div>
-        </Show>
-
-        <Show
-          when={
-            (props.pmg.domainStats?.length ?? 0) > 0 && (props.pmg.relayDomains?.length ?? 0) === 0
-          }
-        >
-          <div class="mt-3 pt-3 border-t border-border">
-            <div class="flex items-center justify-between gap-3 mb-2">
-              <div class="text-xs font-medium text-muted uppercase tracking-wide">
-                Domains (24h)
-              </div>
-              <div class="flex items-center gap-3 text-xs text-muted">
-                <Show when={domainStatsAsOfRelative()}>
-                  <span>As of {domainStatsAsOfRelative()}</span>
-                </Show>
-                <span>{formatNum(domainStatsRows().length)}</span>
-              </div>
-            </div>
-
-            <div class="overflow-auto max-h-[260px] rounded-md border border-border">
-              <Table class="w-full min-w-[720px] text-xs">
+              <Table
+                wrapperClass="max-h-[260px] overflow-y-auto rounded-md border border-border"
+                class="w-full min-w-[720px] text-xs"
+              >
                 <TableHeader class="bg-surface-alt">
                   <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
                     <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
@@ -676,7 +610,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody class="divide-y divide-border-subtle">
-                  <For each={domainStatsRows()}>
+                  <For each={otherDomainStatsRows()}>
                     {(row) => (
                       <TableRow class="hover:bg-surface-hover">
                         <TableCell class="px-3 py-2 font-medium text-base-content">
@@ -702,7 +636,69 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                   </For>
                 </TableBody>
               </Table>
+            </details>
+          </div>
+        </Show>
+
+        <Show
+          when={
+            (props.pmg.domainStats?.length ?? 0) > 0 && (props.pmg.relayDomains?.length ?? 0) === 0
+          }
+        >
+          <div class="mt-3 pt-3 border-t border-border">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div class="text-xs font-medium text-muted uppercase tracking-wide">
+                Domains (24h)
+              </div>
+              <div class="flex items-center gap-3 text-xs text-muted">
+                <Show when={domainStatsAsOfRelative()}>
+                  <span>As of {domainStatsAsOfRelative()}</span>
+                </Show>
+                <span>{formatNum(domainStatsRows().length)}</span>
+              </div>
             </div>
+
+            <Table
+              wrapperClass="max-h-[260px] overflow-y-auto rounded-md border border-border"
+              class="w-full min-w-[720px] text-xs"
+            >
+              <TableHeader class="bg-surface-alt">
+                <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
+                  <TableHead class="px-3 py-2 font-medium">Domain</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Mail</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Spam</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Virus</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Spam Rate</TableHead>
+                  <TableHead class="px-3 py-2 font-medium">Bytes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody class="divide-y divide-border-subtle">
+                <For each={domainStatsRows()}>
+                  {(row) => (
+                    <TableRow class="hover:bg-surface-hover">
+                      <TableCell class="px-3 py-2 font-medium text-base-content">
+                        {row.domain}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-base-content">
+                        {fmtMaybe(row.mail)}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-orange-700 dark:text-orange-300">
+                        {fmtMaybe(row.spam)}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-red-700 dark:text-red-300">
+                        {fmtMaybe(row.virus)}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-base-content">
+                        {formatPct(row.spamRate)}
+                      </TableCell>
+                      <TableCell class="px-3 py-2 text-muted">
+                        {row.bytes > 0 ? formatBytes(row.bytes) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </For>
+              </TableBody>
+            </Table>
           </div>
         </Show>
       </div>

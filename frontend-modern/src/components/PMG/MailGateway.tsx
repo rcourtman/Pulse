@@ -14,10 +14,7 @@ import {
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
-import {
-  getPMGOldestAgeTextClass,
-  getPMGQueueTextClass,
-} from '@/utils/pmgQueuePresentation';
+import { getPMGOldestAgeTextClass, getPMGQueueTextClass } from '@/utils/pmgQueuePresentation';
 import {
   getPMGDisconnectedState,
   getPMGSearchEmptyState,
@@ -806,57 +803,54 @@ const MailGateway: Component = () => {
                             <div class="text-xs font-medium text-muted uppercase tracking-wide mb-2">
                               Cluster Nodes ({pmg.nodes?.length})
                             </div>
-                            <div class="overflow-x-auto -mx-4 px-4">
-                              <Table class="w-full min-w-[600px] text-xs">
-                                <TableHeader>
-                                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
-                                    <TableHead class="pb-1.5 font-medium">Node</TableHead>
-                                    <TableHead class="pb-1.5 font-medium">Status</TableHead>
-                                    <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
-                                    <TableHead class="pb-1.5 font-medium">Load</TableHead>
-                                    <TableHead class="pb-1.5 font-medium">Queue</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody class="divide-y divide-border-subtle">
-                                  <For each={pmg.nodes}>
-                                    {(node) => {
-                                      const isOnline =
-                                        (node.status || '').toLowerCase() === 'online';
+                            <Table class="w-full min-w-[600px] text-xs">
+                              <TableHeader>
+                                <TableRow class="text-left text-[10px] uppercase tracking-wide text-muted border-b border-border">
+                                  <TableHead class="pb-1.5 font-medium">Node</TableHead>
+                                  <TableHead class="pb-1.5 font-medium">Status</TableHead>
+                                  <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
+                                  <TableHead class="pb-1.5 font-medium">Load</TableHead>
+                                  <TableHead class="pb-1.5 font-medium">Queue</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody class="divide-y divide-border-subtle">
+                                <For each={pmg.nodes}>
+                                  {(node) => {
+                                    const isOnline = (node.status || '').toLowerCase() === 'online';
 
-                                      return (
-                                        <TableRow class="hover:bg-surface-hover">
-                                          <TableCell class="py-1.5 font-medium text-base-content">
-                                            {node.name}
-                                          </TableCell>
-                                          <TableCell class="py-1.5">
+                                    return (
+                                      <TableRow class="hover:bg-surface-hover">
+                                        <TableCell class="py-1.5 font-medium text-base-content">
+                                          {node.name}
+                                        </TableCell>
+                                        <TableCell class="py-1.5">
+                                          <span
+                                            class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                                          >
                                             <span
-                                              class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-                                            >
-                                              <span
-                                                class={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}
-                                              />
-                                              {node.status || 'unknown'}
-                                            </span>
-                                          </TableCell>
-                                          <TableCell class="py-1.5 text-muted">
-                                            <Show when={node.uptime} fallback="—">
-                                              {Math.floor((node.uptime ?? 0) / 86400)}d{' '}
-                                              {Math.floor(((node.uptime ?? 0) % 86400) / 3600)}h
-                                            </Show>
-                                          </TableCell>
-                                          <TableCell class="py-1.5 text-muted">
-                                            {node.loadAvg || '—'}
-                                          </TableCell>
-                                          <TableCell class="py-1.5">
-                                            <QueueIndicator queue={node.queueStatus} />
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    }}
-                                  </For>
-                                </TableBody>
-                              </Table>
-                            </div>
+                                              class={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}
+                                            />
+                                            {node.status || 'unknown'}
+                                          </span>
+                                        </TableCell>
+                                        <TableCell class="py-1.5 text-muted">
+                                          <Show when={node.uptime} fallback="—">
+                                            {Math.floor((node.uptime ?? 0) / 86400)}d{' '}
+                                            {Math.floor(((node.uptime ?? 0) % 86400) / 3600)}h
+                                          </Show>
+                                        </TableCell>
+                                        <TableCell class="py-1.5 text-muted">
+                                          {node.loadAvg || '—'}
+                                        </TableCell>
+                                        <TableCell class="py-1.5">
+                                          <QueueIndicator queue={node.queueStatus} />
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  }}
+                                </For>
+                              </TableBody>
+                            </Table>
                           </div>
                         </Show>
 

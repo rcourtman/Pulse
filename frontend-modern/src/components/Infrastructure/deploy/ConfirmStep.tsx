@@ -1,5 +1,13 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import type { DeployWizardState } from '@/hooks/useDeployWizard';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle-2';
 
@@ -47,48 +55,52 @@ export const ConfirmStep: Component<ConfirmStepProps> = (props) => {
             <CheckCircleIcon class="w-3.5 h-3.5 text-emerald-500" />
             Ready to deploy ({w.readyNodes().length})
           </h4>
-          <div class="rounded-md border border-border overflow-hidden">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="bg-surface-alt text-left">
-                  <th class="w-8 px-3 py-2" />
-                  <th class="px-3 py-2 font-medium text-muted text-xs">Node</th>
-                  <th class="px-3 py-2 font-medium text-muted text-xs">IP</th>
-                  <th class="px-3 py-2 font-medium text-muted text-xs">Arch</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={w.readyNodes()}>
-                  {(target) => (
-                    <tr
-                      class="border-t border-border hover:bg-surface-hover cursor-pointer"
-                      tabIndex={0}
-                      onClick={() => w.toggleConfirmNode(target.nodeId)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          w.toggleConfirmNode(target.nodeId);
-                        }
-                      }}
-                    >
-                      <td class="px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={w.confirmSelectedNodeIds().has(target.nodeId)}
-                          onChange={() => w.toggleConfirmNode(target.nodeId)}
-                          onClick={(e) => e.stopPropagation()}
-                          class="rounded border-border"
-                        />
-                      </td>
-                      <td class="px-3 py-2 font-medium text-base-content">{target.nodeName}</td>
-                      <td class="px-3 py-2 text-muted font-mono text-xs">{target.nodeIP}</td>
-                      <td class="px-3 py-2 text-muted text-xs">{target.arch || 'amd64'}</td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
+          <Table wrapperClass="rounded-md border border-border" class="text-sm">
+            <TableHeader>
+              <TableRow class="bg-surface-alt text-left">
+                <TableHead class="w-8 px-3 py-2" />
+                <TableHead class="px-3 py-2 font-medium text-muted text-xs">Node</TableHead>
+                <TableHead class="px-3 py-2 font-medium text-muted text-xs">IP</TableHead>
+                <TableHead class="px-3 py-2 font-medium text-muted text-xs">Arch</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <For each={w.readyNodes()}>
+                {(target) => (
+                  <TableRow
+                    class="hover:bg-surface-hover cursor-pointer"
+                    tabIndex={0}
+                    onClick={() => w.toggleConfirmNode(target.nodeId)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        w.toggleConfirmNode(target.nodeId);
+                      }
+                    }}
+                  >
+                    <TableCell class="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={w.confirmSelectedNodeIds().has(target.nodeId)}
+                        onChange={() => w.toggleConfirmNode(target.nodeId)}
+                        onClick={(e) => e.stopPropagation()}
+                        class="rounded border-border"
+                      />
+                    </TableCell>
+                    <TableCell class="px-3 py-2 font-medium text-base-content">
+                      {target.nodeName}
+                    </TableCell>
+                    <TableCell class="px-3 py-2 text-muted font-mono text-xs">
+                      {target.nodeIP}
+                    </TableCell>
+                    <TableCell class="px-3 py-2 text-muted text-xs">
+                      {target.arch || 'amd64'}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </For>
+            </TableBody>
+          </Table>
         </div>
       </Show>
 
@@ -98,30 +110,32 @@ export const ConfirmStep: Component<ConfirmStepProps> = (props) => {
           <h4 class="text-xs font-semibold text-muted">
             Cannot deploy ({w.failedPreflightNodes().length})
           </h4>
-          <div class="rounded-md border border-border overflow-hidden">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="bg-surface-alt text-left">
-                  <th class="px-3 py-2 font-medium text-muted text-xs">Node</th>
-                  <th class="px-3 py-2 font-medium text-muted text-xs">IP</th>
-                  <th class="px-3 py-2 font-medium text-muted text-xs">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={w.failedPreflightNodes()}>
-                  {(target) => (
-                    <tr class="border-t border-border opacity-60">
-                      <td class="px-3 py-2 font-medium text-base-content">{target.nodeName}</td>
-                      <td class="px-3 py-2 text-muted font-mono text-xs">{target.nodeIP}</td>
-                      <td class="px-3 py-2 text-xs text-red-600 dark:text-red-400">
-                        {target.errorMessage || 'Preflight failed'}
-                      </td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
+          <Table wrapperClass="rounded-md border border-border" class="text-sm">
+            <TableHeader>
+              <TableRow class="bg-surface-alt text-left">
+                <TableHead class="px-3 py-2 font-medium text-muted text-xs">Node</TableHead>
+                <TableHead class="px-3 py-2 font-medium text-muted text-xs">IP</TableHead>
+                <TableHead class="px-3 py-2 font-medium text-muted text-xs">Reason</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <For each={w.failedPreflightNodes()}>
+                {(target) => (
+                  <TableRow class="opacity-60">
+                    <TableCell class="px-3 py-2 font-medium text-base-content">
+                      {target.nodeName}
+                    </TableCell>
+                    <TableCell class="px-3 py-2 text-muted font-mono text-xs">
+                      {target.nodeIP}
+                    </TableCell>
+                    <TableCell class="px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                      {target.errorMessage || 'Preflight failed'}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </For>
+            </TableBody>
+          </Table>
         </div>
       </Show>
     </div>

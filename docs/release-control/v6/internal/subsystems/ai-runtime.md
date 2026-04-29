@@ -167,6 +167,13 @@ usage and spend backing Pulse Assistant and Patrol rather than generic `AI`
 history, and `frontend-modern/src/utils/aiCostPresentation.ts` must own the
 title, empty/loading states, budget note, and reset/export history messaging so
 settings shells and runtime widgets do not fork their own usage wording.
+That same runtime-facing table ownership applies to the cost dashboard shell:
+`frontend-modern/src/components/AI/AICostDashboard.tsx` owns provider usage,
+budget, and history semantics, but its tabular presentation must compose the
+shared `frontend-modern/src/components/shared/Table.tsx` primitive instead of
+carrying AI-local scroll wrappers or raw table shell markup. Any future AI
+usage table styling change must extend the shared primitive or its governed
+wrapper affordances first, then consume that contract from the dashboard.
 
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, provider selection,
