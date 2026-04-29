@@ -1495,6 +1495,18 @@ administration, and 90-day history, while Pro+ remains legacy continuity only.
 Cloud/MSP pricing semantics stay separate, and grandfathered v5 continuity copy
 must describe legacy continuity and recorded baselines rather than current
 self-hosted monitored-system caps, capacity, or policy boundaries.
+Active Relay and Pro installs may also render a factual value-proof panel on
+the owned Settings -> Plan surface, but that proof must derive from the live
+self-hosted entitlement payload rather than from public pricing copy. It may
+render only for active/grace/trial paid self-hosted states with a numeric
+`max_history_days` payload, must suppress itself for Community, inactive, and
+missing-payload states, and must describe partial or missing rows as
+activation/recovery attention rather than as marketing pressure. Relay proof is
+limited to remote access, Pulse Mobile pairing, push notifications, and the
+reported 14-day history entitlement. Pro proof adds the reported 90-day history
+entitlement plus root-cause/remediation and team/admin capability groups.
+Frontend presentation and component tests must cover active, partial, and
+Community-suppressed proof states whenever this panel changes.
 That same settings-owned presentation must distinguish between active
 grandfathered recurring v5 continuity and stale bounded legacy fallback
 metadata. Active grandfathered recurring v5 plans must render the existing

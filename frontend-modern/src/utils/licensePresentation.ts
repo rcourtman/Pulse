@@ -109,6 +109,19 @@ export interface SelfHostedCurrentPlanPresentation {
   supplementalSummary?: string;
 }
 
+export interface SelfHostedActivationProofItem {
+  label: string;
+  statusLabel: string;
+  state: 'active' | 'partial' | 'missing';
+  detail: string;
+}
+
+export interface SelfHostedActivationProofPresentation {
+  title: string;
+  body: string;
+  items: SelfHostedActivationProofItem[];
+}
+
 export interface SelfHostedActivationSuccessPresentation extends LicenseInlineNotice {
   highlightsLabel: string;
   highlights: string[];
@@ -590,6 +603,149 @@ export const getSelfHostedCurrentPlanPresentation = ({
     includedExtras,
     supplementalBadges,
     supplementalSummary: supplementalDetails.join(' '),
+  };
+};
+
+const getCapabilityProofState = (
+  capabilities: Set<string>,
+  requiredCapabilities: readonly string[],
+): SelfHostedActivationProofItem['state'] => {
+  const presentCount = requiredCapabilities.filter((capability) =>
+    capabilities.has(capability),
+  ).length;
+  if (presentCount === requiredCapabilities.length) {
+    return 'active';
+  }
+  return presentCount > 0 ? 'partial' : 'missing';
+};
+
+const getProofStatusLabel = (state: SelfHostedActivationProofItem['state']): string => {
+  switch (state) {
+    case 'active':
+      return 'Active';
+    case 'partial':
+      return 'Partial';
+    case 'missing':
+      return 'Needs attention';
+  }
+};
+
+const buildCapabilityProofItem = ({
+  capabilities,
+  label,
+  requiredCapabilities,
+  activeDetail,
+  partialDetail,
+  missingDetail,
+}: {
+  capabilities: Set<string>;
+  label: string;
+  requiredCapabilities: readonly string[];
+  activeDetail: string;
+  partialDetail: string;
+  missingDetail: string;
+}): SelfHostedActivationProofItem => {
+  const state = getCapabilityProofState(capabilities, requiredCapabilities);
+  return {
+    label,
+    state,
+    statusLabel: getProofStatusLabel(state),
+    detail:
+      state === 'active' ? activeDetail : state === 'partial' ? partialDetail : missingDetail,
+  };
+};
+
+export const getSelfHostedActivationProofPresentation = (
+  entitlements?: LicenseCommercialEntitlements | null,
+): SelfHostedActivationProofPresentation | null => {
+  const planDefinition = getSelfHostedPlanDefinitionForBillingTier(entitlements?.tier);
+  if (!entitlements || !planDefinition || planDefinition.tier === 'community') {
+    return null;
+  }
+  if (typeof entitlements.max_history_days !== 'number') {
+    return null;
+  }
+
+  const normalizedState = (entitlements.subscription_state || '').trim().toLowerCase();
+  if (normalizedState !== 'active' && normalizedState !== 'grace' && normalizedState !== 'trial') {
+    return null;
+  }
+
+  const capabilities = new Set(
+    (entitlements.capabilities || []).map((capability) => capability.trim().toLowerCase()),
+  );
+  const items: SelfHostedActivationProofItem[] = [
+    buildCapabilityProofItem({
+      capabilities,
+      label: 'Remote access, mobile, and push',
+      requiredCapabilities: ['relay', 'mobile_app', 'push_notifications'],
+      activeDetail:
+        'Relay, Pulse Mobile pairing, and push notification capabilities are present in this entitlement payload.',
+      partialDetail:
+        'Some Relay convenience capabilities are present. Refresh or recover activation if remote access, mobile pairing, or push stays unavailable.',
+      missingDetail:
+        'Expected Relay convenience capabilities are not present. Refresh or recover activation before treating this plan as fully active.',
+    }),
+  ];
+
+  const requiredHistoryDays = planDefinition.metricHistoryDays;
+  const actualHistoryDays = entitlements.max_history_days;
+  const historyState =
+    actualHistoryDays >= requiredHistoryDays
+      ? 'active'
+      : actualHistoryDays > 0
+        ? 'partial'
+        : 'missing';
+  items.push({
+    label: `${requiredHistoryDays}-day metric history`,
+    state: historyState,
+    statusLabel: getProofStatusLabel(historyState),
+    detail:
+      historyState === 'active'
+        ? `This instance reports ${actualHistoryDays} days of metric history in its entitlement payload.`
+        : historyState === 'partial'
+          ? `This instance reports ${actualHistoryDays} days of metric history, below the expected ${requiredHistoryDays} days.`
+          : `This instance has not reported a metric-history entitlement yet; expected ${requiredHistoryDays} days.`,
+  });
+
+  if (planDefinition.tier === 'pro') {
+    items.push(
+      buildCapabilityProofItem({
+        capabilities,
+        label: 'Root-cause analysis and remediation',
+        requiredCapabilities: ['ai_alerts', 'ai_autofix'],
+        activeDetail:
+          'Alert-triggered root-cause analysis and safe remediation workflow capabilities are present.',
+        partialDetail:
+          'Some Pro operations capabilities are present. Refresh or recover activation if alert analysis or remediation stays unavailable.',
+        missingDetail:
+          'Expected Pro operations capabilities are not present. Refresh or recover activation before treating this Pro install as complete.',
+      }),
+      buildCapabilityProofItem({
+        capabilities,
+        label: 'Team and admin controls',
+        requiredCapabilities: [
+          'advanced_sso',
+          'rbac',
+          'audit_logging',
+          'advanced_reporting',
+          'agent_profiles',
+        ],
+        activeDetail:
+          'Advanced SSO, RBAC, audit logging, reporting, and agent-profile capabilities are present.',
+        partialDetail:
+          'Some team/admin capabilities are present. Refresh or recover activation if any admin tools stay unavailable.',
+        missingDetail:
+          'Expected team/admin capabilities are not present. Refresh or recover activation before relying on this Pro install.',
+      }),
+    );
+  }
+
+  const planLabel = getSelfHostedPlanLabel(entitlements.tier);
+  return {
+    title: `${planLabel} value proof`,
+    body: "These checks come from this instance's entitlement payload, not from public pricing copy.",
+    items,
   };
 };
 

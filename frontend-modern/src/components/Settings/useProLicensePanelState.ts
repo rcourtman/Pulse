@@ -14,6 +14,7 @@ import {
   getSelfHostedActivationSuccessPresentation,
   getCommercialMigrationNotice,
   getGrandfatheredPriceContinuityNotice,
+  getSelfHostedActivationProofPresentation,
   getSelfHostedPlanComparisonPresentation,
   getSelfHostedCurrentPlanPresentation,
   getLicenseFeatureLabel,
@@ -530,6 +531,7 @@ export function useProLicensePanelState() {
       statusLabel: status.label,
     };
   });
+  const activationProof = createMemo(() => getSelfHostedActivationProofPresentation(entitlements()));
   const planComparisonSummary = createMemo(() => {
     if (!showPlanSelectionPrompt()) {
       return { cards: [], action: null };
@@ -607,6 +609,7 @@ export function useProLicensePanelState() {
     activating,
     clearing,
     activationSuccessSummary,
+    activationProof,
     commercialMigrationNotice,
     commercialPlanModel,
     currentPlanSummary,

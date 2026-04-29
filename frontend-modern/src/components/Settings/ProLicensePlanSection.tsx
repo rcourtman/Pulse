@@ -40,6 +40,16 @@ interface ProLicensePlanSectionProps {
     highlightsLabel: string;
     highlights: string[];
   } | null;
+  activationProof: {
+    title: string;
+    body: string;
+    items: Array<{
+      label: string;
+      statusLabel: string;
+      state: 'active' | 'partial' | 'missing';
+      detail: string;
+    }>;
+  } | null;
   commercialMigrationNotice: Notice | null;
   commercialPlanModel: {
     summary: Array<{ label: string; value: string | number }>;
@@ -93,6 +103,17 @@ const formatDate = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString();
+};
+
+const proofStateClass = (state: 'active' | 'partial' | 'missing') => {
+  switch (state) {
+    case 'active':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200';
+    case 'partial':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200';
+    case 'missing':
+      return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200';
+  }
 };
 
 export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (props) => {
@@ -217,6 +238,33 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </div>
         </Show>
       </div>
+      <Show when={props.activationProof}>
+        {(proof) => (
+          <div class="mb-4 rounded-md border border-border bg-surface p-4">
+            <p class="text-sm font-medium text-base-content">{proof().title}</p>
+            <p class="mt-1 text-xs text-muted">{proof().body}</p>
+            <ul class="mt-4 grid gap-3">
+              <For each={proof().items}>
+                {(item) => (
+                  <li class="border-t border-border pt-3 first:border-t-0 first:pt-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <p class="text-sm font-medium text-base-content">{item.label}</p>
+                      <span
+                        class={`rounded-full px-2 py-1 text-[11px] font-medium ${proofStateClass(
+                          item.state,
+                        )}`}
+                      >
+                        {item.statusLabel}
+                      </span>
+                    </div>
+                    <p class="mt-1 text-xs text-muted">{item.detail}</p>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+        )}
+      </Show>
       <Show when={props.planComparisonSummary.cards.length > 0}>
         <div class="mb-4 rounded-md border border-border bg-surface p-4">
           <p class="text-sm font-medium text-base-content">

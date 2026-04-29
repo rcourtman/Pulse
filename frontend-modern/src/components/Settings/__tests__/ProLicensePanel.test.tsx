@@ -487,13 +487,27 @@ describe('ProLicensePanel', () => {
 
   it('uses shared current-plan metadata for unmetered retail self-hosted tiers', async () => {
     mockEntitlements = {
-      capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_patrol', 'ai_autofix'],
+      capabilities: [
+        'relay',
+        'mobile_app',
+        'push_notifications',
+        'long_term_metrics',
+        'ai_patrol',
+        'ai_alerts',
+        'ai_autofix',
+        'advanced_sso',
+        'rbac',
+        'audit_logging',
+        'advanced_reporting',
+        'agent_profiles',
+      ],
       limits: [],
       subscription_state: 'active',
       upgrade_reasons: [],
       tier: 'pro',
       plan_version: 'pro_monthly',
       licensed_email: 'owner@example.com',
+      max_history_days: 90,
       trial_eligible: false,
     };
 
@@ -517,6 +531,17 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
     expect(screen.getByText('Included extras')).toBeInTheDocument();
     expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Pro value proof')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "These checks come from this instance's entitlement payload, not from public pricing copy.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Remote access, mobile, and push')).toBeInTheDocument();
+    expect(screen.getByText('Root-cause analysis and remediation')).toBeInTheDocument();
+    expect(screen.getByText('Team and admin controls')).toBeInTheDocument();
+    expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
     expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
     expect(screen.getByText('90 days')).toBeInTheDocument();
     expect(screen.getByText('Analysis, remediation, and admin controls')).toBeInTheDocument();
@@ -535,6 +560,7 @@ describe('ProLicensePanel', () => {
       tier: 'relay',
       plan_version: 'relay_monthly',
       licensed_email: 'owner@example.com',
+      max_history_days: 14,
       trial_eligible: false,
     };
 
@@ -553,6 +579,9 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
     expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'See all plans' })).not.toBeInTheDocument();
+    expect(screen.getByText('Relay value proof')).toBeInTheDocument();
+    expect(screen.getByText('Remote access, mobile, and push')).toBeInTheDocument();
+    expect(screen.getAllByText('14-day metric history').length).toBeGreaterThan(0);
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
     expect(screen.getByText('Mobile App Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();

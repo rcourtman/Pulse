@@ -8,6 +8,7 @@ import {
   getCommercialMigrationNotice,
   getFeatureMinTierLabel,
   getGrandfatheredPriceContinuityNotice,
+  getSelfHostedActivationProofPresentation,
   getSelfHostedActivationSuccessPresentation,
   getSelfHostedPlanComparisonPresentation,
   getSelfHostedCurrentPlanPresentation,
@@ -491,6 +492,94 @@ describe('licensePresentation', () => {
         },
       }),
     ).toEqual({ cards: [] });
+  });
+
+  it('builds entitlement-derived value proof for active Relay and Pro installs', () => {
+    expect(
+      getSelfHostedActivationProofPresentation({
+        tier: 'relay',
+        subscription_state: 'active',
+        capabilities: ['relay', 'mobile_app', 'push_notifications', 'long_term_metrics'],
+        limits: [],
+        upgrade_reasons: [],
+        max_history_days: 14,
+      }),
+    ).toEqual({
+      title: 'Relay value proof',
+      body: "These checks come from this instance's entitlement payload, not from public pricing copy.",
+      items: [
+        {
+          label: 'Remote access, mobile, and push',
+          statusLabel: 'Active',
+          state: 'active',
+          detail:
+            'Relay, Pulse Mobile pairing, and push notification capabilities are present in this entitlement payload.',
+        },
+        {
+          label: '14-day metric history',
+          statusLabel: 'Active',
+          state: 'active',
+          detail: 'This instance reports 14 days of metric history in its entitlement payload.',
+        },
+      ],
+    });
+
+    expect(
+      getSelfHostedActivationProofPresentation({
+        tier: 'pro',
+        subscription_state: 'active',
+        capabilities: [
+          'relay',
+          'mobile_app',
+          'push_notifications',
+          'long_term_metrics',
+          'ai_alerts',
+          'ai_autofix',
+          'advanced_sso',
+          'rbac',
+          'audit_logging',
+          'advanced_reporting',
+          'agent_profiles',
+        ],
+        limits: [],
+        upgrade_reasons: [],
+        max_history_days: 90,
+      }),
+    ).toMatchObject({
+      title: 'Pulse Pro value proof',
+      items: [
+        { label: 'Remote access, mobile, and push', statusLabel: 'Active' },
+        { label: '90-day metric history', statusLabel: 'Active' },
+        { label: 'Root-cause analysis and remediation', statusLabel: 'Active' },
+        { label: 'Team and admin controls', statusLabel: 'Active' },
+      ],
+    });
+
+    expect(
+      getSelfHostedActivationProofPresentation({
+        tier: 'pro',
+        subscription_state: 'active',
+        capabilities: ['relay', 'ai_autofix'],
+        limits: [],
+        upgrade_reasons: [],
+        max_history_days: 14,
+      })?.items.map((item) => [item.label, item.statusLabel]),
+    ).toEqual([
+      ['Remote access, mobile, and push', 'Partial'],
+      ['90-day metric history', 'Partial'],
+      ['Root-cause analysis and remediation', 'Partial'],
+      ['Team and admin controls', 'Needs attention'],
+    ]);
+
+    expect(
+      getSelfHostedActivationProofPresentation({
+        tier: 'free',
+        subscription_state: 'expired',
+        capabilities: [],
+        limits: [],
+        upgrade_reasons: [],
+      }),
+    ).toBeNull();
   });
 
   it('builds activation-success summaries for purchase and pasted-key paths', () => {
