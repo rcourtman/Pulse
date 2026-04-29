@@ -4,6 +4,7 @@ import { Dialog } from '@/components/shared/Dialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { controlClass, formField, formHelpText, labelClass } from '@/components/shared/Form';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
+import { getAPITokenManagementLocationMessage } from '@/utils/apiTokenPresentation';
 
 interface BackupTransferDialogsProps {
   securityStatus: Accessor<SecurityStatusInfo | null>;
@@ -202,9 +203,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
               </div>
 
               <div class="text-xs text-muted rounded p-2">
-                <p class="font-semibold mb-1">
-                  Create or rotate API tokens in Settings → Security → API tokens.
-                </p>
+                <p class="font-semibold mb-1">{getAPITokenManagementLocationMessage()}</p>
                 <p>
                   Tokens are managed in the UI and stored in <code>api_tokens.json</code>.
                 </p>

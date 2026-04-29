@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   getAPITokenGenerateErrorMessage,
+  getAPITokenManagementLocationMessage,
+  getAPITokenRevealSettingsNote,
   getAPITokensLoadErrorMessage,
   getAPITokenRevokeErrorMessage,
 } from '@/utils/apiTokenPresentation';
@@ -10,6 +12,15 @@ describe('apiTokenPresentation', () => {
     expect(getAPITokensLoadErrorMessage()).toBe('Unable to load API tokens.');
     expect(getAPITokenGenerateErrorMessage()).toBe('Unable to generate the API token.');
     expect(getAPITokenRevokeErrorMessage()).toBe('Unable to revoke the API token.');
+  });
+
+  it('returns canonical API token settings location copy', () => {
+    expect(getAPITokenManagementLocationMessage()).toBe(
+      'Create or rotate API tokens in Settings → API Access.',
+    );
+    expect(getAPITokenRevealSettingsNote()).toBe(
+      'Copy this token now. You can reopen this dialog from Settings → API Access while this page stays open.',
+    );
   });
 
   it('surfaces token scope denial copy for generate failures', () => {

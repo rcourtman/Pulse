@@ -157,6 +157,7 @@ describe('APITokenManager', () => {
           name: 'Container automation',
           scopes: [DOCKER_MANAGE_SCOPE, DOCKER_REPORT_SCOPE],
         }),
+        note: 'Copy this token now. You can reopen this dialog from Settings → API Access while this page stays open.',
       }),
     );
     expect(notificationSuccessMock).toHaveBeenCalledWith(

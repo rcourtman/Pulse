@@ -723,6 +723,10 @@ entry.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+The shared API-token presentation helper also owns API token management-location
+copy for Settings surfaces. Token reveal and rotation guidance must point
+operators to `Settings → API Access` and must not revive legacy
+`Security → API tokens` wording.
 That same shared `internal/api/` boundary now also keeps ephemeral auth flow
 state and request correlation fail-closed. OIDC authorization state storage
 must cap abandoned entries and evict the earliest-expiring state before

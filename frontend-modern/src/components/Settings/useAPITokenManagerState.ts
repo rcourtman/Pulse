@@ -16,6 +16,7 @@ import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import {
   getAPITokenGenerateErrorMessage,
+  getAPITokenRevealSettingsNote,
   getAPITokensLoadErrorMessage,
   getAPITokenRevokeErrorMessage,
 } from '@/utils/apiTokenPresentation';
@@ -196,7 +197,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
         token,
         record,
         source: 'security',
-        note: 'Copy this token now. You can reopen this dialog from Security → API tokens while this page stays open.',
+        note: getAPITokenRevealSettingsNote(),
       });
       notificationStore.success(
         'New API token generated. Copy it below while it is still visible.',

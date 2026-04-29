@@ -1,7 +1,3 @@
-export function getAPITokensLoadErrorMessage(): string {
-  return 'Unable to load API tokens.';
-}
-
 import { API_SCOPE_LABELS } from '@/constants/apiScopes';
 
 type APITokenErrorShape = {
@@ -9,6 +5,18 @@ type APITokenErrorShape = {
   status?: number;
   message?: string;
 };
+
+export function getAPITokensLoadErrorMessage(): string {
+  return 'Unable to load API tokens.';
+}
+
+export function getAPITokenManagementLocationMessage(): string {
+  return 'Create or rotate API tokens in Settings → API Access.';
+}
+
+export function getAPITokenRevealSettingsNote(): string {
+  return 'Copy this token now. You can reopen this dialog from Settings → API Access while this page stays open.';
+}
 
 export function getAPITokenGenerateErrorMessage(error?: unknown): string {
   if (error && typeof error === 'object') {

@@ -204,6 +204,10 @@ That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path
 instead of drifting back into hook-local notification strings.
+That same API-token presentation helper also owns API token management-location
+copy for Settings surfaces. Token reveal and rotation guidance must point
+operators to `Settings → API Access` and must not revive legacy
+`Security → API tokens` wording.
 That same token-management boundary must also treat top-level TrueNAS
 appliances as canonical agent-scope resources through the shared agent-facet
 helper. Security surfaces may consume compatibility-normalized
