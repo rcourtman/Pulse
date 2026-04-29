@@ -719,6 +719,12 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadUrlSyncSource).toContain(
         'const [handledTypeParam, setHandledTypeParam]',
       );
+      expect(dashboardWorkloadUrlSyncSource).toContain(
+        'if (normalized === handledPlatformParam()) return;',
+      );
+      expect(dashboardWorkloadUrlSyncSource).toContain(
+        'const currentSelected = untrack(() => options.selectedPlatform());',
+      );
       expect(dashboardWorkloadUrlSyncSource).toContain('parseDashboardWorkloadUrlParams');
       expect(dashboardWorkloadUrlSyncSource).toContain(
         'resolveDashboardManagedWorkloadsNavigateTarget({',

@@ -28,6 +28,15 @@ export const filterCountBadgeClass =
 export const filterUtilityBadgeClass =
   'ml-0.5 inline-flex items-center whitespace-nowrap rounded-md bg-surface-alt px-1.5 py-px text-[10px] font-medium text-base-content';
 
+export const resolveFilterSelectDomValue = (
+  value: unknown,
+  optionValues: readonly string[],
+): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  if (optionValues.includes(value)) return value;
+  return '';
+};
+
 interface FilterToolbarShellProps extends JSX.HTMLAttributes<HTMLDivElement> {
   children: JSX.Element;
 }
@@ -239,16 +248,19 @@ export const LabeledFilterSelect: Component<LabeledFilterSelectProps> = (props) 
     if (!selectRef || typeof nextValue !== 'string') return;
     const applyValue = () => {
       if (!selectRef) return;
-      let matched = false;
+      const resolvedValue = resolveFilterSelectDomValue(
+        nextValue,
+        Array.from(selectRef.options, (option) => option.value),
+      );
+      if (typeof resolvedValue !== 'string') return;
       for (const option of Array.from(selectRef.options)) {
-        const shouldSelect = option.value === nextValue;
+        const shouldSelect = option.value === resolvedValue;
         if (option.selected !== shouldSelect) {
           option.selected = shouldSelect;
         }
-        matched ||= shouldSelect;
       }
-      if (!matched && selectRef.value !== nextValue) {
-        selectRef.value = nextValue;
+      if (selectRef.value !== resolvedValue) {
+        selectRef.value = resolvedValue;
       }
     };
 

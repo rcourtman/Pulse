@@ -91,14 +91,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               selectClass="min-w-[8rem]"
             >
               <For each={platformFilter().options}>
-                {(option) => (
-                  <option
-                    value={option.value}
-                    selected={option.value === platformFilter().value}
-                  >
-                    {option.label}
-                  </option>
-                )}
+                {(option) => <option value={option.value}>{option.label}</option>}
               </For>
             </LabeledFilterSelect>
           )}

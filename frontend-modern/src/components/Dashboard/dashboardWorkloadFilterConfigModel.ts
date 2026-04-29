@@ -1,5 +1,6 @@
 import type { ViewMode } from '@/types/workloads';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
+import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import type { DashboardToolbarFilterConfig } from './dashboardFilterModel';
 import type { DashboardWorkloadNodeOption } from './dashboardWorkloadRouteModel';
 
@@ -57,6 +58,28 @@ interface DashboardPlatformFilterConfigOptions {
   onChange: (value: string) => void;
 }
 
+export const buildDashboardPlatformFilterOptions = (
+  selectedPlatform: string | null,
+  platformOptions: DashboardToolbarFilterConfig['options'],
+): DashboardToolbarFilterConfig['options'] => {
+  const allOption = { value: '', label: DASHBOARD_PLATFORM_ALL_OPTION_LABEL };
+  const selectedValue = normalizeSourcePlatformQueryValue(selectedPlatform);
+  if (!selectedValue || selectedValue === 'all') {
+    return [allOption, ...platformOptions];
+  }
+  if (platformOptions.some((option) => option.value === selectedValue)) {
+    return [allOption, ...platformOptions];
+  }
+  return [
+    allOption,
+    {
+      value: selectedValue,
+      label: getSourcePlatformLabel(selectedValue),
+    },
+    ...platformOptions,
+  ];
+};
+
 export const buildDashboardPlatformFilterConfig = ({
   isWorkloadsRoute,
   selectedPlatform,
@@ -71,7 +94,7 @@ export const buildDashboardPlatformFilterConfig = ({
     id: 'workloads-platform-filter',
     label: 'Platform',
     value: selectedPlatform ?? '',
-    options: [{ value: '', label: DASHBOARD_PLATFORM_ALL_OPTION_LABEL }, ...platformOptions],
+    options: buildDashboardPlatformFilterOptions(selectedPlatform, platformOptions),
     onChange,
   };
 };

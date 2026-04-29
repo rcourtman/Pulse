@@ -5,6 +5,7 @@ import {
   buildDashboardHostFilterConfig,
   buildDashboardNamespaceFilterConfig,
   buildDashboardPlatformFilterConfig,
+  buildDashboardPlatformFilterOptions,
   DASHBOARD_CONTAINER_RUNTIME_ALL_OPTION_LABEL,
   DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL,
   DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL,
@@ -152,6 +153,20 @@ describe('dashboardWorkloadFilterConfigModel', () => {
         { value: 'truenas', label: 'TrueNAS' },
       ],
     });
+  });
+
+  it('keeps the selected platform selectable when the current type narrows available options', () => {
+    expect(
+      buildDashboardPlatformFilterOptions('proxmox-pve', [
+        { value: 'truenas', label: 'TrueNAS' },
+        { value: 'docker', label: 'Docker / Podman' },
+      ]),
+    ).toEqual([
+      { value: '', label: DASHBOARD_PLATFORM_ALL_OPTION_LABEL },
+      { value: 'proxmox-pve', label: 'PVE' },
+      { value: 'truenas', label: 'TrueNAS' },
+      { value: 'docker', label: 'Docker / Podman' },
+    ]);
   });
 
   it('keeps workload type filter labels in the presentation model', () => {

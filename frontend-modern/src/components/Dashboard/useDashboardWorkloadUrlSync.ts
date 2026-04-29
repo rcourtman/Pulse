@@ -154,7 +154,8 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
 
   createEffect(() => {
     const normalized = workloadUrlParams().platform;
-    const currentSelected = options.selectedPlatform();
+    if (normalized === handledPlatformParam()) return;
+    const currentSelected = untrack(() => options.selectedPlatform());
 
     if (normalized) {
       if (currentSelected !== normalized) {

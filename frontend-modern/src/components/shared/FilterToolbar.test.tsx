@@ -8,6 +8,7 @@ import {
   LabeledFilterSelect,
   filterPanelDefaultWidthClass,
   filterPanelClass,
+  resolveFilterSelectDomValue,
 } from './FilterToolbar';
 import toggleSource from './Toggle.tsx?raw';
 import toggleModelSource from './toggleModel.ts?raw';
@@ -102,6 +103,12 @@ describe('FilterHeader', () => {
     expect((screen.getByRole('option', { name: 'TrueNAS' }) as HTMLOptionElement).selected).toBe(
       true,
     );
+  });
+
+  it('keeps stale controlled select values out of the native DOM value', () => {
+    expect(resolveFilterSelectDomValue('proxmox-pve', ['', 'docker'])).toBe('');
+    expect(resolveFilterSelectDomValue('docker', ['', 'docker'])).toBe('docker');
+    expect(resolveFilterSelectDomValue(undefined, ['', 'docker'])).toBeUndefined();
   });
 
   it('keeps the label association current when a dynamic select id changes', async () => {
