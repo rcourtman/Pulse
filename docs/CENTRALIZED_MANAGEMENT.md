@@ -18,11 +18,11 @@ The following settings can be controlled remotely via profiles:
 | :--- | :--- | :--- |
 | `interval` | string | Set reporting interval (e.g., "30s", "1m") |
 | `enable_host` | boolean | Enable/Disable host monitoring (metrics + command execution) |
-| `enable_docker` | boolean | Enable/Disable Docker monitoring |
+| `enable_docker` | boolean | Enable/Disable Docker / Podman monitoring |
 | `enable_kubernetes` | boolean | Enable/Disable Kubernetes monitoring |
 | `enable_proxmox` | boolean | Enable/Disable Proxmox monitoring |
 | `proxmox_type` | string | Set Proxmox type (`pve`, `pbs`, or `auto`) |
-| `docker_runtime` | string | Container runtime preference (`auto`, `docker`, `podman`) |
+| `docker_runtime` | string | Docker / Podman runtime preference (`auto`, `docker`, `podman`) |
 | `disable_auto_update` | boolean | Disable automatic agent updates |
 | `disable_docker_update_checks` | boolean | Disable Docker image update detection |
 | `kube_include_all_pods` | boolean | Include all non-succeeded pods in Kubernetes reports |

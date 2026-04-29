@@ -103,9 +103,9 @@ docker compose up -d
 
 ---
 
-## 🔄 Container Updates
+## 🔄 Docker / Podman Updates
 
-Pulse can detect and apply updates to your Docker containers directly from the UI.
+Pulse can detect and apply updates to your Docker / Podman containers directly from the UI.
 
 ### How It Works
 

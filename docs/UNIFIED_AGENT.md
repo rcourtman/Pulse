@@ -66,8 +66,8 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
-| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | `false` (auto-detect if not configured) |
-| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force container runtime: `auto`, `docker`, or `podman` | `auto` |
+| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker / Podman metrics | `false` (auto-detect if not configured) |
+| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force Docker / Podman runtime: `auto`, `docker`, or `podman` | `auto` |
 | `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` (installer auto-detect if not configured) |
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
 | `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |

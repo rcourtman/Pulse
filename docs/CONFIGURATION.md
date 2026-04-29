@@ -412,8 +412,8 @@ API tokens provide scoped, revocable access to Pulse. Manage tokens in **Setting
 | `*` (Full access) | All permissions (legacy, not recommended) |
 | `monitoring:read` | View dashboards, metrics, alerts |
 | `monitoring:write` | Acknowledge/silence alerts |
-| `docker:report` | Container agent telemetry submission |
-| `docker:manage` | Container lifecycle actions (restart, stop) |
+| `docker:report` | Docker / Podman agent telemetry submission |
+| `docker:manage` | Docker / Podman container lifecycle actions (restart, stop) |
 | `kubernetes:report` | Kubernetes agent telemetry submission |
 | `kubernetes:manage` | Kubernetes cluster management |
 | `agent:report` | Agent host telemetry submission |
@@ -430,8 +430,8 @@ The UI offers quick presets for common use cases:
 | -------- | -------- | ---------- |
 | **Kiosk / Dashboard** | `monitoring:read` | Read-only dashboard displays |
 | **Agent host** | `agent:report` | Agent host telemetry authentication |
-| **Container report** | `docker:report` | Container agent (read-only) |
-| **Container manage** | `docker:report`, `docker:manage` | Container agent with actions |
+| **Docker / Podman report** | `docker:report` | Docker / Podman agent (read-only) |
+| **Docker / Podman manage** | `docker:report`, `docker:manage` | Docker / Podman agent with actions |
 | **Settings read** | `settings:read` | Read-only config access |
 | **Settings admin** | `settings:read`, `settings:write` | Full config access |
 
