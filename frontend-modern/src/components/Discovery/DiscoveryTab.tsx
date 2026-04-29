@@ -9,8 +9,10 @@ import {
   getDiscoveryInitialEmptyState,
   getDiscoveryLoadingState,
   getDiscoveryNotesEmptyState,
+  getDiscoveryApiAccessSettingsTarget,
   getDiscoveryAnalysisProviderBadgeClass,
   getDiscoveryCategoryBadgeClass,
+  getDiscoveryCommandSettingsTarget,
   getDiscoverySuggestedURLFallback,
   getDiscoveryURLSuggestionSourceLabel,
 } from '@/utils/discoveryPresentation';
@@ -93,6 +95,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     }
     return getConfidenceLevel(current.confidence);
   });
+  const commandSettingsTarget = getDiscoveryCommandSettingsTarget();
+  const apiAccessSettingsTarget = getDiscoveryApiAccessSettingsTarget();
 
   return (
     <div class="space-y-4">
@@ -412,9 +416,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                       Commands not enabled
                     </p>
                     <p class="text-amber-700 dark:text-amber-300 mt-0.5">
-                      Discovery requires command execution. Enable "Pulse Commands" in{' '}
-                      <a href="/settings" class="underline hover:no-underline">
-                        Settings → Unified Agents
+                      Discovery requires command execution. Enable Pulse commands from{' '}
+                      <a href={commandSettingsTarget.href} class="underline hover:no-underline">
+                        {commandSettingsTarget.label}
                       </a>
                       .
                     </p>
@@ -449,8 +453,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         agent:exec
                       </code>{' '}
                       scope in{' '}
-                      <a href="/settings/integrations/api" class="underline hover:no-underline">
-                        Settings → API Tokens
+                      <a href={apiAccessSettingsTarget.href} class="underline hover:no-underline">
+                        {apiAccessSettingsTarget.label}
                       </a>
                       .
                     </p>

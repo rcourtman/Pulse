@@ -32,6 +32,48 @@ describe('DiscoveryTab', () => {
     expect(await screen.findByRole('button', { name: 'Run Discovery Now' })).toBeInTheDocument();
   });
 
+  it('uses canonical settings copy for disabled command guidance', async () => {
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="agent"
+        agentId="agent-1"
+        resourceId="agent-1"
+        hostname="pve1"
+        commandsEnabled={false}
+      />
+    ));
+
+    expect(await screen.findByText('Commands not enabled')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings → Infrastructure' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
+    expect(screen.queryByText('Settings → Unified Agents')).not.toBeInTheDocument();
+  });
+
+  it('uses canonical API Access copy for missing command connection guidance', async () => {
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="agent"
+        agentId="agent-1"
+        resourceId="agent-1"
+        hostname="pve1"
+        commandsEnabled={true}
+      />
+    ));
+
+    expect(await screen.findByText('Agent not connected for commands')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings → API Access' })).toHaveAttribute(
+      'href',
+      '/settings/security/api',
+    );
+    expect(screen.queryByText('Settings → API Tokens')).not.toBeInTheDocument();
+  });
+
   it('renders task-first analysis copy for provider and reasoning context', async () => {
     vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue({
       ai_provider: {

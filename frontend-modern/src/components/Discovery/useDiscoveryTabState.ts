@@ -9,6 +9,7 @@ import {
 } from '@/api/discovery';
 import { eventBus } from '@/stores/events';
 import type { DiscoveryProgress, ResourceType } from '@/types/discovery';
+import { getDiscoveryNoConnectedAgentMessage } from '@/utils/discoveryPresentation';
 import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 
 export interface DiscoveryTabStateProps {
@@ -162,19 +163,7 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
       const message = err instanceof Error ? err.message : 'Discovery scan failed';
 
       if (message.includes('no connected agent')) {
-        if (props.commandsEnabled === false) {
-          setScanError(
-            'Commands not enabled. Enable "Pulse Commands" in Settings → Unified Agents for this agent.',
-          );
-        } else if (props.commandsEnabled === true) {
-          setScanError(
-            'Agent not connected for command execution. The API token may be missing the "agent:exec" scope. Check Settings → API Tokens.',
-          );
-        } else {
-          setScanError(
-            'No agent available for command execution. Ensure "Pulse Commands" is enabled in Settings → Unified Agents and the API token has "agent:exec" scope.',
-          );
-        }
+        setScanError(getDiscoveryNoConnectedAgentMessage(props.commandsEnabled));
       } else {
         setScanError(message);
       }

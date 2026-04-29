@@ -19,6 +19,7 @@ import {
   isUnifiedResourceServiceColumnVisible,
   isUnifiedResourceTableColumnVisible,
   normalizeUnifiedResourceTableLayoutWidth,
+  shouldShowClusterGroupTypeLabel,
   shouldShowUnifiedResourceHostTable,
   shouldUseUnifiedResourceTableMobileLayout,
 } from '@/components/Infrastructure/unifiedResourceTableStateModel';
@@ -63,6 +64,13 @@ describe('unifiedResourceTableStateModel', () => {
       'row',
     ]);
     expect(buildHostTableItems(groups, 'flat').map((item) => item.type)).toEqual(['row', 'row']);
+  });
+
+  it('suppresses duplicate cluster type labels when the group name already ends with cluster', () => {
+    expect(shouldShowClusterGroupTypeLabel('Core Fabric')).toBe(true);
+    expect(shouldShowClusterGroupTypeLabel('Production Cluster')).toBe(false);
+    expect(shouldShowClusterGroupTypeLabel('production cluster')).toBe(false);
+    expect(shouldShowClusterGroupTypeLabel('')).toBe(false);
   });
 
   it('tracks reveal indexes only for row items', () => {

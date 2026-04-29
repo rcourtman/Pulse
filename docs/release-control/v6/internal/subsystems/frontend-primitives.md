@@ -876,6 +876,12 @@ work extends shared components instead of creating new local variants.
 
 ## Current State
 
+`frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
+command guidance targets. Discovery surfaces that need to tell operators where
+to enable command execution or verify `agent:exec` scope must use that helper's
+canonical `Settings → Infrastructure` and `Settings → API Access` handoffs
+instead of hard-coding legacy settings labels or old route paths.
+
 `SettingsTab` no longer includes `infrastructure-connections` or
 `infrastructure-install`. The single `infrastructure-systems` entry in
 `settingsNavCatalog.ts`, `settingsPanelRegistry.ts`, and
@@ -2496,9 +2502,16 @@ network-boundary surface must extend
 re-expanding the shell or reintroducing page-local section types.
 `frontend-modern/src/utils/discoveryPresentation.ts` now owns the
 customer-facing discovery-section framing copy, scan-scope labels, subnet
-guidance, and environment-lock messaging so
+guidance, command-execution settings targets, API Access handoff labels, and
+environment-lock messaging so
 `frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx` stays a
 shared presentation shell instead of re-accumulating that wording inline.
+Resource discovery command guidance must use that same presentation owner for
+settings handoffs. `frontend-modern/src/utils/discoveryPresentation.ts` owns
+the shared command-execution and `agent:exec` token-scope links; discovery
+surfaces may explain those states, but the visible links must remain
+`Settings → Infrastructure` and `Settings → API Access` through that helper,
+not inline legacy labels or old settings paths.
 That same settings-shell boundary now also owns the shared settings
 presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 is the canonical owner for shared system-settings presets, summaries, and

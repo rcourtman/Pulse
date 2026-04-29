@@ -928,6 +928,11 @@ Governance metadata such as sensitivity and routing scope may be visible in
 the table, but it must remain on the same bounded row-windowing and mounted-row
 budget proved by `UnifiedResourceTable.performance.contract.test.tsx` rather
 than creating a separate unbounded rendering path for policy-rich fleets.
+Infrastructure cluster-header presentation must stay inside that same bounded
+row model. `unifiedResourceTableStateModel.ts` owns whether the compact
+`Cluster` chip is rendered, including suppressing it when the visible group
+name already ends in `Cluster`, so label cleanup does not add a second
+row-rendering path or per-page DOM workaround.
 The shared table and detail drawer now also render governed resource labels
 through the shared identity/display contract, which routes policy-aware
 resources through the canonical policy-aware helper and suppresses the raw

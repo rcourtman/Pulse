@@ -143,6 +143,11 @@ cross-source deduplication.
    accessible group label, while Proxmox, Kubernetes, and other platform
    clusters stay reserved for actual resource identity, filters, and detail
    surfaces.
+   Cluster group headers may use a compact `Cluster` type chip when the group
+   name itself is only an estate label, but `unifiedResourceTableStateModel.ts`
+   must suppress that chip when the visible group name already ends in
+   `Cluster`, so rows do not read as duplicated labels such as `Production
+   Cluster Cluster`.
    Infrastructure host and service table cards must consume the
    frontend-primitives-owned `TableCard` frame and `TableCardHeader` header
    band; unified resources owns the resource identity, rows, grouping, and
@@ -1164,6 +1169,10 @@ That access-side analysis surface still follows the same shell/runtime split as
 the rest of the drawer: `DiscoveryTab.tsx` owns presentation and disclosures,
 while `useDiscoveryTabState.ts` owns API fetches, websocket progress, and
 note/discovery mutations.
+Command-availability guidance inside that analysis surface must consume the
+shared `frontend-modern/src/utils/discoveryPresentation.ts` settings targets
+and scan-error copy instead of hard-coding legacy settings labels such as
+Unified Agents, API Tokens, or `/settings/integrations/api`.
 The overview keeps access, investigation detail, service detail, and host
 detail as collapsed sibling disclosures under the primary card pair, so the
 drawer keeps

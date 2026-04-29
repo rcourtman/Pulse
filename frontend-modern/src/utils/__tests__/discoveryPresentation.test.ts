@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getDiscoveryApiAccessSettingsTarget,
+  getDiscoveryCommandSettingsTarget,
   getDiscoveryInitialEmptyState,
   getDiscoveryLoadingState,
+  getDiscoveryNoConnectedAgentMessage,
   getNetworkDiscoveryModePresentation,
   getDiscoveryNotesEmptyState,
   getNetworkDiscoveryPriorityNotice,
@@ -60,6 +63,26 @@ describe('discoveryPresentation', () => {
     expect(getDiscoveryNotesEmptyState()).toEqual({
       text: 'No discovery notes yet. Add notes to capture important context.',
     });
+  });
+
+  it('returns canonical discovery command guidance targets and errors', () => {
+    expect(getDiscoveryCommandSettingsTarget()).toEqual({
+      href: '/settings/infrastructure',
+      label: 'Settings → Infrastructure',
+    });
+    expect(getDiscoveryApiAccessSettingsTarget()).toEqual({
+      href: '/settings/security/api',
+      label: 'Settings → API Access',
+    });
+    expect(getDiscoveryNoConnectedAgentMessage(false)).toBe(
+      'Commands not enabled. Enable Pulse commands from Settings → Infrastructure for this agent.',
+    );
+    expect(getDiscoveryNoConnectedAgentMessage(true)).toBe(
+      'Agent not connected for command execution. The API token may be missing the "agent:exec" scope. Check Settings → API Access.',
+    );
+    expect(getDiscoveryNoConnectedAgentMessage()).toBe(
+      'No agent available for command execution. Enable Pulse commands from Settings → Infrastructure and make sure the API token has "agent:exec" scope in Settings → API Access.',
+    );
   });
 
   it('returns canonical network discovery settings copy', () => {

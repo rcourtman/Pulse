@@ -160,6 +160,13 @@ export const getVisibleHostTableItems = (
   return items.slice(startIndex, endIndex);
 };
 
+export const shouldShowClusterGroupTypeLabel = (
+  clusterLabel: string | null | undefined,
+): boolean => {
+  const normalized = (clusterLabel ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return Boolean(normalized) && !/\bcluster$/.test(normalized);
+};
+
 export const getHostSpacerHeights = (
   totalCount: number,
   startIndex: number,

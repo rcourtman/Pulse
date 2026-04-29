@@ -48,6 +48,7 @@ import {
   type UnifiedResourceTableProps,
   type UnifiedResourceTableState,
 } from './useUnifiedResourceTableState';
+import { shouldShowClusterGroupTypeLabel } from './unifiedResourceTableStateModel';
 import { getOutlierEmphasis, isResourceOnline } from './unifiedResourceTableModel';
 import { getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
 
@@ -200,9 +201,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               fallback={<span class="text-muted">Standalone</span>}
                             >
                               <span>{group.cluster}</span>
-                              <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                Cluster
-                              </span>
+                              <Show when={shouldShowClusterGroupTypeLabel(group.cluster)}>
+                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                  Cluster
+                                </span>
+                              </Show>
                             </Show>
                             <span class="text-[10px] text-muted font-normal">
                               {group.resources.length}{' '}

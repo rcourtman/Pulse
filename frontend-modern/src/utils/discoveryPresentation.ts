@@ -62,6 +62,32 @@ export function getDiscoveryNotesEmptyState() {
   } as const;
 }
 
+export function getDiscoveryCommandSettingsTarget() {
+  return {
+    href: '/settings/infrastructure',
+    label: 'Settings → Infrastructure',
+  } as const;
+}
+
+export function getDiscoveryApiAccessSettingsTarget() {
+  return {
+    href: '/settings/security/api',
+    label: 'Settings → API Access',
+  } as const;
+}
+
+export function getDiscoveryNoConnectedAgentMessage(commandsEnabled?: boolean): string {
+  if (commandsEnabled === false) {
+    return 'Commands not enabled. Enable Pulse commands from Settings → Infrastructure for this agent.';
+  }
+
+  if (commandsEnabled === true) {
+    return 'Agent not connected for command execution. The API token may be missing the "agent:exec" scope. Check Settings → API Access.';
+  }
+
+  return 'No agent available for command execution. Enable Pulse commands from Settings → Infrastructure and make sure the API token has "agent:exec" scope in Settings → API Access.';
+}
+
 export function getNetworkDiscoveryPriorityNotice() {
   return {
     title: 'Network scan safety',
