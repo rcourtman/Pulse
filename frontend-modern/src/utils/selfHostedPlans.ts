@@ -113,7 +113,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     metricHistoryDays: 14,
     billingExtrasSummary: 'Remote access, mobile, and push',
     entitlementSummary:
-      'Relay is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.',
+      'Relay is active on this instance. Remote access, mobile, push, and longer history are available right now.',
     entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],
     comparisonSummary:
@@ -135,7 +135,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     metricHistoryDays: 90,
     billingExtrasSummary: 'Analysis, remediation, and admin controls',
     entitlementSummary:
-      'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
+      'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:

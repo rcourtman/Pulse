@@ -1518,11 +1518,11 @@ opens the explicit self-hosted comparison surface, the shared presentation
 helpers must show Pro's operations, admin, and reporting extras together while
 still framing Community, Relay, and Pro as core monitoring included in every
 self-hosted tier rather than monitored-system capacity tiers. The same factual
-plan surface must keep
-inactive-state copy neutral: default Community installs may say no activation
-key is active, but they must not foreground paid self-hosted activation or
-v5-era "No Pro license" language before the operator opens an explicit
-comparison, checkout, activation, or recovery path.
+plan surface must keep inactive-state copy neutral: default Community installs
+may say no activation key is active, but they must not foreground paid
+self-hosted activation, v5-era "No Pro license" language, or `unlocked`
+entitlement phrasing before the operator opens an explicit comparison,
+checkout, activation, or recovery path.
 The shared license presentation owner also holds self-hosted Pro settings
 trial-ended notice copy for `ProLicensePlanSection.tsx`; that surface must
 consume canonical helper notices instead of carrying inline upgrade copy or

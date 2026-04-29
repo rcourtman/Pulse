@@ -421,9 +421,9 @@ const getSelfHostedActivePlanSummary = (
     case 'community':
       return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.`;
     case 'relay':
-      return `${planLabel} is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.`;
+      return `${planLabel} is active on this instance. Remote access, mobile, push, and longer history are available right now.`;
     case 'pro':
-      return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.`;
+      return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.`;
     default:
       return null;
   }
@@ -470,8 +470,8 @@ export const getSelfHostedCurrentPlanPresentation = ({
   if (!current) {
     return {
       title: 'Current plan: Unknown',
-      body: 'Pulse is still loading the current self-hosted entitlement for this instance.',
-      unlockedFeaturesLabel: 'Unlocked on this instance',
+      body: 'Pulse is still loading the current self-hosted plan state for this instance.',
+      unlockedFeaturesLabel: 'Available on this instance',
       unlockedFeatures: [],
       includedExtras: [],
       supplementalBadges: [],
@@ -575,7 +575,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
       title: `Current plan: ${planLabel}`,
       body:
         getSelfHostedActivePlanSummary(planLabel, planDefinition) ||
-        `${planLabel} is active on this instance. These capabilities are unlocked right now.`,
+        `${planLabel} is active on this instance. These capabilities are available right now.`,
       unlockedFeaturesLabel,
       unlockedFeatures,
       includedExtrasLabel: includedExtras.length > 0 ? 'Included extras' : undefined,
@@ -587,8 +587,8 @@ export const getSelfHostedCurrentPlanPresentation = ({
 
   return {
     title: `Current plan: ${planLabel}`,
-    body: 'Review the plan details below to confirm what this key unlocks on this instance.',
-    unlockedFeaturesLabel: 'Unlocked on this instance',
+    body: 'Review the plan details below to confirm what this key enables on this instance.',
+    unlockedFeaturesLabel: 'Available on this instance',
     unlockedFeatures,
     includedExtras,
     supplementalBadges,

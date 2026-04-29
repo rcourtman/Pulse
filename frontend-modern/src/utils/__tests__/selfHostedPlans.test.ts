@@ -97,7 +97,7 @@ describe('selfHostedPlans', () => {
       'Remote access, mobile, and push',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
-      'Remote access, mobile, push, and longer history are unlocked right now.',
+      'Remote access, mobile, push, and longer history are available right now.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary).toContain(
       'Reach this Pulse instance securely from anywhere',
@@ -113,7 +113,7 @@ describe('selfHostedPlans', () => {
       'Analysis, remediation, and admin controls',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
-      'Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
+      'Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toContain(
       'safe remediation workflows, 90-day history',

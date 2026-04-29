@@ -371,7 +371,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'See which self-hosted tier this instance unlocked, what capabilities are active, and how plan status or continuity affects this install.',
+        'See which self-hosted tier this instance is using, which capabilities are available, and how plan status or continuity affects this install.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
@@ -473,7 +473,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
@@ -510,7 +510,7 @@ describe('ProLicensePanel', () => {
 
     expect(
       screen.getByText(
-        'Relay is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.',
+        'Relay is active on this instance. Remote access, mobile, push, and longer history are available right now.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();

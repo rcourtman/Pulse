@@ -110,7 +110,7 @@ describe('settings architecture guardrails', () => {
     expect(selfHostedBillingPresentationSource).toContain("navLabel: 'Plans'");
     expect(selfHostedBillingPresentationSource).toContain("shellTitle: 'Plans & Activation'");
     expect(selfHostedBillingPresentationSource).toContain(
-      "shellDescription:\n    'Review your current self-hosted plan, activation status, and unlocked capabilities.'",
+      "shellDescription:\n    'Review your current self-hosted plan, activation status, and available capabilities.'",
     );
     expect(selfHostedBillingPresentationSource).toContain("planSectionTitle: 'Current plan'");
     expect(selfHostedBillingPresentationSource).toContain(

@@ -61,17 +61,17 @@ describe('licensePresentation', () => {
       navLabel: 'Plans',
       shellTitle: 'Plans & Activation',
       shellDescription:
-        'Review your current self-hosted plan, activation status, and unlocked capabilities.',
+        'Review your current self-hosted plan, activation status, and available capabilities.',
       infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans.',
       infrastructureWorkspaceReferral:
-        'Billing, self-hosted plan changes, activation status, and unlocked capabilities live in Plans, not here.',
+        'Billing, self-hosted plan changes, activation status, and available capabilities live in Plans, not here.',
       sectionSelectorAriaLabel: 'Self-hosted plans section',
       refreshLabel: 'Refresh',
       planTabLabel: 'Plan',
       usageTabLabel: 'Usage',
       planSectionTitle: 'Current plan',
       planSectionDescription:
-        'See which self-hosted tier this instance unlocked, what capabilities are active, and how plan status or continuity affects this install.',
+        'See which self-hosted tier this instance is using, which capabilities are available, and how plan status or continuity affects this install.',
       planComparisonSectionTitle: 'Optional extras',
       planComparisonActionLabel: 'See all plans',
       usageSectionTitle: 'Usage',
@@ -274,7 +274,7 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
+      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
       supplementalBadges: [],
       supplementalSummary: '',
     });
@@ -296,7 +296,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
+      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Alert Root-Cause Analysis',
@@ -328,7 +328,7 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Legacy Pulse Pro+',
-      body: 'Legacy Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
+      body: 'Legacy Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Alert Root-Cause Analysis',
@@ -357,7 +357,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are unlocked right now.',
+      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Alert Root-Cause Analysis',
