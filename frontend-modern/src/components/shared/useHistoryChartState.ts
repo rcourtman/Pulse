@@ -65,10 +65,22 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   };
 
   const isLocked = createMemo(() => isRangeLocked(range()));
-  const lockDays = createMemo(() => (range() === '30d' ? '30' : '90'));
+  const lockDays = createMemo(() => {
+    switch (range()) {
+      case '14d':
+        return '14';
+      case '30d':
+        return '30';
+      case '90d':
+        return '90';
+      default:
+        return '14';
+    }
+  });
   const lockTierLabel = createMemo(() => {
     const max = maxHistoryDays();
-    const targetDays = range() === '30d' ? 30 : range() === '90d' ? 90 : 14;
+    const targetDays =
+      range() === '14d' ? 14 : range() === '30d' ? 30 : range() === '90d' ? 90 : 14;
     if (max <= 7 && targetDays <= 14) return 'Relay';
     return 'Pro';
   });

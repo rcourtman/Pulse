@@ -99,6 +99,7 @@ describe('diskDetailPresentation', () => {
       '12h',
       '24h',
       '7d',
+      '14d',
       '30d',
       '90d',
     ]);

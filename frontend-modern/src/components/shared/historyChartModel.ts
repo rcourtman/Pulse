@@ -35,7 +35,7 @@ export interface HistoryChartTooltipLayout {
   height: number;
 }
 
-export const HISTORY_CHART_RANGES: HistoryTimeRange[] = ['24h', '7d', '30d', '90d'];
+export const HISTORY_CHART_RANGES: HistoryTimeRange[] = ['24h', '7d', '14d', '30d', '90d'];
 
 export function formatHistoryChartTooltipValue(value: number, unit?: string): string {
   if (unit === '%') return `${value.toFixed(1)}%`;
@@ -48,6 +48,7 @@ export function formatHistoryChartTooltipValue(value: number, unit?: string): st
 export function getHistoryChartRefreshIntervalMs(range: HistoryTimeRange) {
   switch (range) {
     case '7d':
+    case '14d':
       return 30000;
     case '30d':
       return 60000;
@@ -131,7 +132,7 @@ export function getHistoryChartYAxisLabels({
 
 export function formatHistoryChartTimeLabel(timestamp: number, range: HistoryTimeRange) {
   const date = new Date(timestamp);
-  if (range === '30d' || range === '90d' || range === '7d') {
+  if (range === '30d' || range === '90d' || range === '14d' || range === '7d') {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

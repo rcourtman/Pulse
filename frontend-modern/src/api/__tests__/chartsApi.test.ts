@@ -84,12 +84,12 @@ describe('ChartsAPI', () => {
       resourceType: 'agent',
       resourceId: 'agent-1',
       metric: 'cpu',
-      range: '7d',
+      range: '14d',
       maxPoints: 321.4,
     });
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/metrics-store/history?resourceType=agent&resourceId=agent-1&metric=cpu&range=7d&maxPoints=321',
+      '/api/metrics-store/history?resourceType=agent&resourceId=agent-1&metric=cpu&range=14d&maxPoints=321',
     );
   });
 

@@ -77,6 +77,7 @@ describe('storagePoolDetailPresentation', () => {
     expect(STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS.map((option) => option.value)).toEqual([
       '24h',
       '7d',
+      '14d',
       '30d',
       '90d',
     ]);

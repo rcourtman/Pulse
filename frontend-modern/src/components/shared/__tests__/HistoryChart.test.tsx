@@ -7,6 +7,7 @@ import historyChartModelSource from '@/components/shared/historyChartModel.ts?ra
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
 import { HistoryChart } from '@/components/shared/HistoryChart';
+import { HISTORY_CHART_RANGES } from '@/components/shared/historyChartModel';
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -106,5 +107,9 @@ describe('HistoryChart', () => {
     render(() => <HistoryChart resourceType="agent" resourceId="node-1" metric="cpu" />);
 
     expect(screen.getByText('History')).toBeInTheDocument();
+  });
+
+  it('exposes the Relay history range as a first-class chart option', () => {
+    expect(HISTORY_CHART_RANGES).toEqual(['24h', '7d', '14d', '30d', '90d']);
   });
 });

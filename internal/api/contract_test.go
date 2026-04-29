@@ -5332,7 +5332,7 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[
-			{"key":"mobile_app","reason":"Get Relay so you can check Pulse from your phone when you are away from the dashboard.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=mobile_app"},
+			{"key":"mobile_app","reason":"Get Relay so the mobile app can pair with this instance for secure handoff and notifications.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=mobile_app"},
 			{"key":"push_notifications","reason":"Get Relay so important alerts reach you immediately on mobile instead of waiting for you to reopen Pulse.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=push_notifications"},
 			{"key":"relay","reason":"Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=relay"},
 			{"key":"long_term_metrics","reason":"Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},

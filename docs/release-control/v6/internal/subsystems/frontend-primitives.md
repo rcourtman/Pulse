@@ -1447,6 +1447,12 @@ ordinary self-hosted surfaces must stay informational rather than presenting
 trial-start or upgrade-link actions. Future history-chart work should extend
 those owners instead of pushing fetch, license, commercial trial actions, or
 canvas math back into the shared component shell.
+The shared history range catalog is also owned here. The canonical product
+range sequence is `24h`, `7d`, `14d`, `30d`, and `90d`, with `14d` preserved
+as the Relay entitlement surface rather than hidden behind the Pro-only
+long-range controls. Lock copy must derive its target days and tier label from
+the selected range instead of assuming every locked history selection is a
+30-day or 90-day Pro ask.
 The remaining header, overlay, and tooltip render surfaces now live in
 `frontend-modern/src/components/shared/HistoryChartHeader.tsx`,
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`, and

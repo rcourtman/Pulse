@@ -8113,13 +8113,42 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 	}
 }
 
+func parseMetricsHistoryDuration(timeRange string) time.Duration {
+	normalizedRange := strings.ToLower(strings.TrimSpace(timeRange))
+	switch normalizedRange {
+	case "30m":
+		return 30 * time.Minute
+	case "1h":
+		return time.Hour
+	case "6h":
+		return 6 * time.Hour
+	case "12h":
+		return 12 * time.Hour
+	case "24h", "1d", "":
+		return 24 * time.Hour
+	}
+
+	if strings.HasSuffix(normalizedRange, "d") {
+		days, err := strconv.Atoi(strings.TrimSuffix(normalizedRange, "d"))
+		if err == nil && days > 0 {
+			return time.Duration(days) * 24 * time.Hour
+		}
+	}
+
+	duration, err := time.ParseDuration(normalizedRange)
+	if err != nil || duration <= 0 {
+		return 24 * time.Hour
+	}
+	return duration
+}
+
 // handleMetricsHistory returns historical metrics from the persistent SQLite store
 // Query params:
 //   - resourceType: "node", "agent", "vm", "system-container", "oci-container", "app-container",
 //     "docker-host", "k8s", "storage", or "disk" (required)
 //   - resourceId: the resource identifier (required)
 //   - metric: "cpu", "memory", "disk", etc. (optional, omit for all metrics)
-//   - range: time range like "1h", "24h", "7d", "30d", "90d" (optional, default "24h")
+//   - range: time range like "1h", "24h", "7d", "14d", "30d", "90d" (optional, default "24h")
 func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -8151,35 +8180,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 	resourceID = canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID)
 
-	// Parse time range
-	var duration time.Duration
+	duration := parseMetricsHistoryDuration(timeRange)
 	var stepSecs int64 = 0 // Default to no downsampling (use tier resolution)
-
-	switch timeRange {
-	case "30m":
-		duration = 30 * time.Minute
-	case "1h":
-		duration = time.Hour
-	case "6h":
-		duration = 6 * time.Hour
-	case "12h":
-		duration = 12 * time.Hour
-	case "24h", "1d", "":
-		duration = 24 * time.Hour
-	case "7d":
-		duration = 7 * 24 * time.Hour
-	case "30d":
-		duration = 30 * 24 * time.Hour
-	case "90d":
-		duration = 90 * 24 * time.Hour
-	default:
-		// Try parsing as duration
-		var err error
-		duration, err = time.ParseDuration(timeRange)
-		if err != nil {
-			duration = 24 * time.Hour // Default to 24 hours
-		}
-	}
 
 	// Optional downsampling based on requested max points.
 	// When omitted, we return the native tier resolution.

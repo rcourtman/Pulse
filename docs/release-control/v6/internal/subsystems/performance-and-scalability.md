@@ -533,6 +533,12 @@ onto the shared backend `resourceType=k8s` transport, but it must preserve the
 canonical frontend target types for clusters, nodes, pods, and deployments so
 the workloads and drawer hot paths do not silently drop deployment history or
 split Kubernetes charts across incompatible cache keys.
+That same protected metrics-store boundary also owns tiered history range
+parsing as pre-query work. Day-based ranges such as `14d`, longer day ranges,
+and equivalent duration syntax must be normalized and checked against the
+licensed `max_history_days` before the store read is planned, so denied history
+windows fail without widening DB scans or letting duration strings bypass the
+Relay 14-day and Pro 90-day budgets.
 That same protected metrics-store boundary also owns write-path churn on local
 instances. `pkg/metrics/store.go` must prefer fewer, larger SQLite write
 transactions over tiny frequent commits: the default write buffer should stay

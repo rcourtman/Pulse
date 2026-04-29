@@ -825,6 +825,11 @@ resource's canonical history target. Storage must not keep a drawer-local live
 metrics collector, agent-id/device fallback stream, or separate real-time
 history store once monitoring and `/api/metrics-store/history` already own the
 disk timeline.
+Storage pool and disk detail range selectors must mirror the shared history
+chart entitlement sequence. They must expose `14d` between `7d` and `30d` and
+pass the selected range through to `HistoryChart` unchanged, rather than
+inventing storage-local range catalogs, paid-tier labels, or alternate
+metrics-history gating.
 Shared chart transport that storage and recovery coexist with must also stay
 on rendered-metric budgets. When `internal/api/router.go` batches workload
 history for adjacent overview or shared summary cards, it may parallelize the

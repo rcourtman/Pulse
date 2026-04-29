@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -130,6 +131,93 @@ func TestHandleMetricsHistory_LicenseRequired(t *testing.T) {
 
 	if rec.Code != http.StatusPaymentRequired {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusPaymentRequired)
+	}
+}
+
+func TestParseMetricsHistoryDurationSupportsDayRanges(t *testing.T) {
+	tests := []struct {
+		input string
+		want  time.Duration
+	}{
+		{input: "", want: 24 * time.Hour},
+		{input: "24h", want: 24 * time.Hour},
+		{input: "7d", want: 7 * 24 * time.Hour},
+		{input: "14d", want: 14 * 24 * time.Hour},
+		{input: "15d", want: 15 * 24 * time.Hour},
+		{input: "336h", want: 14 * 24 * time.Hour},
+		{input: "nonsense", want: 24 * time.Hour},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := parseMetricsHistoryDuration(tt.input); got != tt.want {
+				t.Fatalf("parseMetricsHistoryDuration(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func setMetricsHistoryLicenseTier(t *testing.T, handlers *LicenseHandlers, tier pkglicensing.Tier) {
+	t.Helper()
+	svc := handlers.Service(context.Background())
+	svc.SetCurrentForTesting(&pkglicensing.License{
+		Claims: pkglicensing.Claims{
+			LicenseID: "metrics-history-tier-test",
+			Email:     "metrics-history@example.test",
+			Tier:      tier,
+			IssuedAt:  time.Now().Add(-time.Hour).Unix(),
+			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
+		},
+		ValidatedAt: time.Now(),
+	})
+}
+
+func TestHandleMetricsHistory_TierAwareHistoryRanges(t *testing.T) {
+	tests := []struct {
+		name   string
+		tier   pkglicensing.Tier
+		range_ string
+		want   int
+	}{
+		{name: "community blocks relay history", range_: "14d", want: http.StatusPaymentRequired},
+		{name: "relay allows 14 days", tier: pkglicensing.TierRelay, range_: "14d", want: http.StatusOK},
+		{name: "relay blocks longer day range", tier: pkglicensing.TierRelay, range_: "15d", want: http.StatusPaymentRequired},
+		{name: "pro allows 90 days", tier: pkglicensing.TierPro, range_: "90d", want: http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			monitor, _, _ := newTestMonitor(t)
+			store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+			if err != nil {
+				t.Fatalf("metrics.NewStore error: %v", err)
+			}
+			defer store.Close()
+			setUnexportedField(t, monitor, "metricsStore", store)
+
+			mtp := config.NewMultiTenantPersistence(t.TempDir())
+			if _, err := mtp.GetPersistence("default"); err != nil {
+				t.Fatalf("failed to init persistence: %v", err)
+			}
+			handlers := NewLicenseHandlers(mtp, false)
+			if tt.tier != "" {
+				setMetricsHistoryLicenseTier(t, handlers, tt.tier)
+			}
+
+			router := &Router{
+				monitor:         monitor,
+				licenseHandlers: handlers,
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=vm&resourceId=vm-1&metric=cpu&range="+tt.range_, nil)
+			rec := httptest.NewRecorder()
+
+			router.handleMetricsHistory(rec, req)
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.want, rec.Body.String())
+			}
+		})
 	}
 }
 

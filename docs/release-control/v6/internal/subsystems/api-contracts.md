@@ -801,6 +801,13 @@ the canonical cluster source key, node history on
 `k8s:<cluster>:pod:<uid-or-namespace/name>`, and deployment history on
 `<cluster>:deployment:<uid-or-namespace/name>`, so demo and live workload
 detail charts all resolve through one governed identity contract.
+That same metrics-history contract also owns commercial history-range
+enforcement. `frontend-modern/src/api/charts.ts` may expose `14d` as a
+first-class `HistoryTimeRange`, and `/api/metrics-store/history` must parse
+positive day ranges before querying the store so entitlement checks cannot be
+bypassed with duration syntax. Community instances must remain capped at seven
+days, Relay must allow 14 days and reject longer history, and Pro-tier
+entitlements must continue to allow 90-day history.
 The Pulse Account commercial shell now also owns a dedicated bootstrap
 contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
 and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and

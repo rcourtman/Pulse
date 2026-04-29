@@ -43,6 +43,7 @@ export const STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS: readonly {
 }[] = [
   { value: '24h', label: '24h' },
   { value: '7d', label: '7d' },
+  { value: '14d', label: '14d' },
   { value: '30d', label: '30d' },
   { value: '90d', label: '90d' },
 ] as const;

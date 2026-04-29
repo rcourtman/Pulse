@@ -1,4 +1,4 @@
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { StoragePoolDetail } from '@/components/Storage/StoragePoolDetail';
 import type { StorageRecord } from '@/features/storageBackups/models';
@@ -7,11 +7,11 @@ import type { Resource } from '@/types/resource';
 const historyChartSpy = vi.fn();
 
 vi.mock('@/components/shared/HistoryChart', () => ({
-  HistoryChart: (props: { resourceType: string; resourceId: string; metric: string }) => {
+  HistoryChart: (props: { resourceType: string; resourceId: string; metric: string; range?: string }) => {
     historyChartSpy(props);
     return (
       <div data-testid="history-chart">
-        {props.resourceType}:{props.resourceId}:{props.metric}
+        {props.resourceType}:{props.resourceId}:{props.metric}:{props.range}
       </div>
     );
   },
@@ -60,6 +60,45 @@ describe('StoragePoolDetail', () => {
         resourceType: 'storage',
         resourceId: 'pool:tank',
         metric: 'usage',
+        range: '7d',
+      }),
+    );
+  });
+
+  it('keeps the Relay 14-day range available in pool detail charts', () => {
+    historyChartSpy.mockClear();
+
+    render(() => (
+      <table>
+        <tbody>
+          <StoragePoolDetail
+            record={makeRecord({
+              metricsTarget: { resourceType: 'storage', resourceId: 'pool:tank' },
+            })}
+            physicalDisks={[]}
+            summarySeriesId="pool:tank"
+          />
+        </tbody>
+      </table>
+    ));
+
+    const rangeSelector = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(Array.from(rangeSelector.options).map((option) => option.value)).toEqual([
+      '24h',
+      '7d',
+      '14d',
+      '30d',
+      '90d',
+    ]);
+
+    fireEvent.change(rangeSelector, { target: { value: '14d' } });
+
+    expect(historyChartSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        resourceType: 'storage',
+        resourceId: 'pool:tank',
+        metric: 'usage',
+        range: '14d',
       }),
     );
   });
