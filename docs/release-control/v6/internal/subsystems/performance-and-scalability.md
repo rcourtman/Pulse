@@ -120,6 +120,8 @@ regression protection.
 98. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 99. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
 100. `frontend-modern/src/utils/workloadsSummaryCache.ts`
+101. `frontend-modern/src/routing/routePreload.ts`
+102. `frontend-modern/src/useAppRuntimeState.ts`
 103. `frontend-modern/src/components/Storage/StorageSummary.tsx`
 104. `frontend-modern/src/utils/storageSummaryCache.ts`
 105. `frontend-modern/src/pages/Workloads.tsx`
@@ -140,7 +142,9 @@ regression protection.
 12. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts` shared with `unified-resources`: infrastructure summary chart polling, cache hydration, and summary-state orchestration are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
 13. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 14. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-15. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
+16. `frontend-modern/src/useAppRuntimeState.ts` shared with `cloud-paid`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
+17. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 ## Extension Points
 
@@ -329,8 +333,8 @@ dashboard-specific overview, trend, or summary transport.
     the org list from the shared `organizations_changed` event, but that refresh
     must stay event-driven and route-safe rather than expanding into a second
     full app bootstrap, a pre-auth org probe, or a deleted dashboard-route prewarm
-    that duplicates the canonical summary fetch path.
-    into another summary-fetch or org-bootstrap hot path.
+    that duplicates the canonical summary fetch path or expands into another
+    summary-fetch or org-bootstrap hot path.
     The same protected hot path also owns Patrol route compatibility: if
     `frontend-modern/src/App.tsx` keeps `/ai` as a legacy alias while `/patrol`
     is canonical, that alias must stay a thin redirect and must not mount a
@@ -345,6 +349,12 @@ dashboard-specific overview, trend, or summary transport.
     canonical Infrastructure landing path instead of leaving the freshly
     authenticated shell on a not-found page that immediately pays another cold
     bootstrap.
+    App-shell route module preloading belongs to
+    `frontend-modern/src/routing/routePreload.ts` and the delayed authenticated
+    preload call in `frontend-modern/src/App.tsx`. `frontend-modern/src/useAppRuntimeState.ts`
+    must not keep page-local dynamic imports or a second route-preload cache,
+    because the runtime bootstrap already owns state, chart cache warming, org
+    hydration, and health probing.
     The same protected hot path now also owns proof harness steadiness.
     Store-backed chart SLO and benchmark helpers in `pkg/metrics/store_slo_test.go`,
     `internal/api/slo_bench_test.go`, and `internal/monitoring/monitor_metrics_slo_test.go`

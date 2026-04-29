@@ -362,11 +362,27 @@
       ]
     },
     {
+      "path": "frontend-modern/src/routing/routePreload.ts",
+      "rationale": "the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "performance-and-scalability"
+      ]
+    },
+    {
       "path": "frontend-modern/src/stores/aiChat.ts",
       "rationale": "the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary",
       "subsystems": [
         "ai-runtime",
         "frontend-primitives"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/useAppRuntimeState.ts",
+      "rationale": "the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary",
+      "subsystems": [
+        "cloud-paid",
+        "performance-and-scalability"
       ]
     },
     {
@@ -2992,6 +3008,7 @@
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
         "frontend-modern/src/index.css",
         "frontend-modern/src/pages/Operations.tsx",
+        "frontend-modern/src/routing/routePreload.ts",
         "frontend-modern/src/stores/aiChat.ts",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
@@ -3176,6 +3193,7 @@
               "frontend-modern/src/components/Settings/useReportingPanelState.ts",
               "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
               "frontend-modern/src/pages/Operations.tsx",
+              "frontend-modern/src/routing/routePreload.ts",
               "frontend-modern/src/utils/reportableResourceTypes.ts",
               "frontend-modern/src/utils/reportingPresentation.ts",
               "frontend-modern/src/utils/reportingResourceTypes.ts"
@@ -3192,6 +3210,7 @@
               "frontend-modern/src/pages/__tests__/Operations.helpers.test.ts",
               "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
               "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
+              "frontend-modern/src/routing/__tests__/routePreload.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportableResourceTypes.test.ts",
               "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts",
@@ -4173,6 +4192,8 @@
         "frontend-modern/src/components/Workloads/workloadTopology.ts",
         "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
         "frontend-modern/src/pages/Workloads.tsx",
+        "frontend-modern/src/routing/routePreload.ts",
+        "frontend-modern/src/useAppRuntimeState.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
         "frontend-modern/src/utils/throughputPresentation.ts",
         "frontend-modern/src/utils/workloadsSummaryCache.ts",
@@ -4229,6 +4250,22 @@
               "pkg/metrics/store_bench_test.go",
               "pkg/metrics/store_query_plan_test.go",
               "pkg/metrics/store_slo_test.go"
+            ]
+          },
+          {
+            "id": "app-shell-route-preload",
+            "label": "app-shell route preload proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/routing/routePreload.ts",
+              "frontend-modern/src/useAppRuntimeState.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/__tests__/App.architecture.test.ts",
+              "frontend-modern/src/__tests__/useAppRuntimeState.test.ts",
+              "frontend-modern/src/routing/__tests__/routePreload.test.ts"
             ]
           },
           {

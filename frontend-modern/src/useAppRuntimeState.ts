@@ -103,7 +103,6 @@ export const useAppRuntimeState = () => {
   };
 
   const alertsActivation = useAlertsActivation();
-  let hasPreloadedRoutes = false;
   let hasFetchedVersionInfo = false;
   let hasPrewarmedInfrastructureCharts = false;
   let hasPrewarmedWorkloadsCharts = false;
@@ -192,23 +191,6 @@ export const useAppRuntimeState = () => {
   const prewarmAppShellCharts = () => {
     prewarmInfrastructureCharts();
     prewarmWorkloadsCharts();
-  };
-
-  const preloadLazyRoutes = () => {
-    if (hasPreloadedRoutes || typeof window === 'undefined') {
-      return;
-    }
-    hasPreloadedRoutes = true;
-    const loaders: Array<() => Promise<unknown>> = [
-      () => import('@/pages/Alerts'),
-      () => import('@/components/Settings/Settings'),
-    ];
-
-    loaders.forEach((load) => {
-      void load().catch((error) => {
-        logger.warn('Preloading route module failed', error);
-      });
-    });
   };
 
   const fallbackState: State = {
@@ -493,17 +475,6 @@ export const useAppRuntimeState = () => {
     const updateTime = state().lastUpdate;
     if (updateTime > 0) {
       setLastUpdateText(formatLastUpdate(updateTime));
-    }
-  });
-
-  createEffect(() => {
-    if (!isLoading() && !needsAuth()) {
-      if (typeof window === 'undefined') {
-        return;
-      }
-      if (!hasPreloadedRoutes) {
-        window.setTimeout(preloadLazyRoutes, 0);
-      }
     }
   });
 

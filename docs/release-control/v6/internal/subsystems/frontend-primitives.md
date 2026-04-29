@@ -145,15 +145,16 @@ work extends shared components instead of creating new local variants.
 119. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
 120. `frontend-modern/src/stores/licenseCommercial.ts`
 121. `frontend-modern/src/useAppRuntimeState.ts`
-122. `frontend-modern/src/stores/aiChat.ts`
-123. `frontend-modern/scripts/header-audit.mjs`
-124. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-125. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-126. `frontend-modern/scripts/canonical-platform-audit.mjs`
-127. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-128. `frontend-modern/src/utils/platformSupportManifest.ts`
-129. `frontend-modern/src/utils/sourcePlatformOptions.ts`
-130. `frontend-modern/src/utils/sourcePlatforms.ts`
+122. `frontend-modern/src/routing/routePreload.ts`
+123. `frontend-modern/src/stores/aiChat.ts`
+124. `frontend-modern/scripts/header-audit.mjs`
+125. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+126. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+127. `frontend-modern/scripts/canonical-platform-audit.mjs`
+128. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+129. `frontend-modern/src/utils/platformSupportManifest.ts`
+130. `frontend-modern/src/utils/sourcePlatformOptions.ts`
+131. `frontend-modern/src/utils/sourcePlatforms.ts`
 
 ## Shared Boundaries
 
@@ -162,9 +163,10 @@ work extends shared components instead of creating new local variants.
 3. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 4. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 5. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-6. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
-7. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
-8. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+6. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
+7. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+8. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+9. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
 
 ## Extension Points
 

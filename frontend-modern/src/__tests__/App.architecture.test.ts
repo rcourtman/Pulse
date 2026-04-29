@@ -37,6 +37,9 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain('RECOVERY_ROUTE_PATH,');
     expect(routePreloadSource).toContain('PATROL_PATH,');
     expect(appSource).toContain('await preloadRouteModule(route);');
+    expect(appRuntimeStateSource).not.toContain('preloadLazyRoutes');
+    expect(appRuntimeStateSource).not.toContain("import('@/pages/Alerts')");
+    expect(appRuntimeStateSource).not.toContain("import('@/components/Settings/Settings')");
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
     expect(appSource).toContain(
