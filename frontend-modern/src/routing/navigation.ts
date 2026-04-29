@@ -9,7 +9,9 @@ export type AppTabId =
   | 'ai'
   | 'settings';
 
-export function getActiveTabForPath(path: string): AppTabId {
+export type ActiveAppTabId = AppTabId | null;
+
+export function getActiveTabForPath(path: string): ActiveAppTabId {
   if (path.startsWith(INFRASTRUCTURE_PATH)) return 'infrastructure';
   if (path.startsWith(WORKLOADS_PATH)) return 'workloads';
   if (path.startsWith('/storage')) return 'storage';
@@ -19,5 +21,5 @@ export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith(PATROL_PATH) || path.startsWith('/ai')) return 'ai';
   if (path.startsWith('/settings')) return 'settings';
   if (path.startsWith('/operations')) return 'settings';
-  return 'infrastructure';
+  return null;
 }

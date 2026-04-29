@@ -27,7 +27,7 @@ export type MobileNavBarUtilityTab = {
 };
 
 export type MobileNavBarProps = {
-  activeTab: () => string;
+  activeTab: () => string | null;
   platformTabs: () => MobileNavBarPlatformTab[];
   utilityTabs: () => MobileNavBarUtilityTab[];
   onPlatformClick: (platform: MobileNavBarPlatformTab) => void;

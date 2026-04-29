@@ -74,6 +74,48 @@ describe('MobileNavBar', () => {
     expect(within(navList).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
   });
 
+  it('allows retired shell routes to render without an active mobile tab', () => {
+    const { container } = render(() => (
+      <MobileNavBar
+        activeTab={() => null}
+        platformTabs={() => [
+          {
+            id: 'infrastructure',
+            label: 'Infrastructure',
+            route: '/infrastructure',
+            settingsRoute: '/settings',
+            tooltip: 'Infrastructure',
+            enabled: true,
+            live: true,
+            icon: InfrastructureIcon,
+            alwaysShow: true,
+          },
+        ]}
+        utilityTabs={() => [
+          {
+            id: 'settings',
+            label: 'Settings',
+            route: '/settings',
+            tooltip: 'Settings',
+            badge: null,
+            count: undefined,
+            breakdown: undefined,
+            icon: SettingsIcon,
+          },
+        ]}
+        onPlatformClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
+
+    const buttons = container.querySelectorAll('button[data-tab-id]');
+    expect(buttons).toHaveLength(2);
+    buttons.forEach((button) => {
+      expect(button).not.toHaveClass('bg-blue-50');
+      expect(button).not.toHaveClass('text-blue-700');
+    });
+  });
+
   it('orders tabs, renders alert badges, and shows fades from scroll state', async () => {
     const onPlatformClick = vi.fn();
     const onUtilityClick = vi.fn();

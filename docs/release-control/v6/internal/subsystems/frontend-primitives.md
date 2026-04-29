@@ -1733,6 +1733,12 @@ route-level data orchestration, section anchors, or Assistant prompt handoffs;
 they must not restore `frontend-modern/src/pages/Dashboard.tsx`,
 `frontend-modern/src/features/dashboardOverview/`, or deleted dashboard-only
 presentation helpers as compatibility paths.
+The primary navigation active-tab contract follows that retirement boundary:
+retired or unknown routes such as `/dashboard` must not be coerced into the
+Infrastructure tab just because Infrastructure is the authenticated landing
+surface. Shared desktop and mobile navigation must tolerate a missing active tab
+for those paths while still highlighting canonical active routes such as
+Infrastructure, Workloads, Storage, Recovery, Alerts, Patrol, and Settings.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may

@@ -3,7 +3,8 @@ import { getActiveTabForPath } from '../navigation';
 
 describe('navigation routing helpers', () => {
   it('maps paths to the correct primary tab', () => {
-    expect(getActiveTabForPath('/unknown')).toBe('infrastructure');
+    expect(getActiveTabForPath('/unknown')).toBeNull();
+    expect(getActiveTabForPath('/dashboard')).toBeNull();
     expect(getActiveTabForPath('/infrastructure')).toBe('infrastructure');
     expect(getActiveTabForPath('/workloads?type=pod')).toBe('workloads');
     expect(getActiveTabForPath('/storage')).toBe('storage');
