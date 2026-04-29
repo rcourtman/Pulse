@@ -252,6 +252,40 @@ describe('ProLicensePanel', () => {
     );
   });
 
+  it('keeps explicit self-hosted plan comparison focused on optional paid extras', async () => {
+    useLocationMock.mockReturnValue({
+      search: `?intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
+    });
+
+    expect(screen.getByText('Compare self-hosted plans')).toBeInTheDocument();
+    expect(screen.getByText('Optional extras')).toBeInTheDocument();
+    expect(screen.getByText('What Relay adds')).toBeInTheDocument();
+    expect(screen.getByText('What Pulse Pro adds')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
+    expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
+    expect(screen.getByText('Push Notifications')).toBeInTheDocument();
+    expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
+    expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
+    expect(screen.getByText('90-day metric history')).toBeInTheDocument();
+    expect(screen.getByText('Audit Logging')).toBeInTheDocument();
+    expect(screen.getByText('PDF/CSV Reporting')).toBeInTheDocument();
+    expect(screen.getByText('Centralized Agent Profiles')).toBeInTheDocument();
+
+    expect(screen.queryByText(/unlimited/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/trial/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/monitoring room/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/monitoring capacity/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/monitored-system capacity/i)).not.toBeInTheDocument();
+  });
+
   it('does not surface a trial-ended banner for retired self-hosted trial state', async () => {
     mockEntitlements = {
       capabilities: [],
