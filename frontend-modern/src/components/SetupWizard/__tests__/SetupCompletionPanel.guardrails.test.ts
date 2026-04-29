@@ -37,6 +37,7 @@ describe('SetupCompletionPanel guardrails', () => {
   it('describes setup completion through one compact source-choice next-step surface', () => {
     expect(setupCompletionPanelSource).toContain('SOURCE_STRATEGY_OPTIONS');
     expect(setupCompletionPanelSource).toContain('Source choices');
+    expect(setupCompletionPanelSource).toContain('<ul class="mt-2 space-y-1.5 text-left">');
     expect(setupCompletionPanelSource).toContain("title: 'Platform API'");
     expect(setupCompletionPanelSource).toContain("title: 'Pulse Agent'");
     expect(setupCompletionPanelSource).toContain("title: 'Use both'");
@@ -57,6 +58,16 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain('Smart Auto-Detection');
     expect(setupCompletionPanelSource).not.toContain('Agent Metrics');
     expect(setupCompletionPanelSource).not.toContain('ProxmoxIcon');
+  });
+
+  it('does not present setup guidance as extra credentials or clickable-looking source cards', () => {
+    expect(setupCompletionPanelSource).not.toMatch(
+      /<code[^>]*>\s*\{ADD_INFRASTRUCTURE_PATH\}\s*<\/code>/,
+    );
+    expect(setupCompletionPanelSource).not.toContain('grid gap-2 sm:grid-cols-3');
+    expect(setupCompletionPanelSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-2.5',
+    );
   });
 
   it('keeps connected infrastructure classification on the canonical setup model', () => {
