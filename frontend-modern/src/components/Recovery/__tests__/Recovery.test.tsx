@@ -658,6 +658,36 @@ describe('Recovery', () => {
     }
   });
 
+  it('labels Kubernetes cluster recovery subjects without generic cluster wording', async () => {
+    rollupsPayload.push({
+      rollupId: 'res:k8s-production-1',
+      itemResourceId: 'k8s-production-1',
+      display: {
+        itemLabel: 'Healthy Production',
+        itemType: 'cluster',
+      },
+      lastAttemptAt: '2026-02-15T11:00:00.000Z',
+      lastSuccessAt: '2026-02-15T11:00:00.000Z',
+      lastOutcome: 'success',
+      platforms: ['kubernetes'],
+    });
+    pointsByRollupId['res:k8s-production-1'] = [];
+
+    try {
+      render(() => <Recovery />);
+
+      expect(await screen.findByText('Healthy Production')).toBeInTheDocument();
+      const inventoryTable = (await screen.findAllByRole('table'))[0];
+      expect(within(inventoryTable).getAllByText('K8s Cluster').length).toBeGreaterThan(0);
+      expect(within(inventoryTable).queryByText('Cluster', { exact: true })).not.toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'K8s Cluster' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Cluster' })).not.toBeInTheDocument();
+    } finally {
+      rollupsPayload.pop();
+      delete pointsByRollupId['res:k8s-production-1'];
+    }
+  });
+
   it('renders degraded recovery records when item refs and details metadata are omitted', async () => {
     rollupsPayload.push({
       rollupId: 'res:pvc-1',

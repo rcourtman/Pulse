@@ -69,6 +69,10 @@ export const normalizeRecoveryItemTypeQueryValue = (
     case 'k8s-pvc':
     case 'pvc':
       return 'pvc';
+    case 'k8s-cluster':
+    case 'kubernetes-cluster':
+    case 'cluster':
+      return 'cluster';
     case 'truenas-dataset':
     case 'dataset':
       return 'dataset';
@@ -136,6 +140,15 @@ export const getRecoveryItemTypePresentation = (
       return {
         key,
         label: presentation?.label || 'PVC',
+        badgeClasses: `${BADGE_BASE_CLASSES} ${presentation?.badgeClasses || DEFAULT_BADGE_TONE_CLASSES}`,
+        tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation?.badgeClasses || DEFAULT_BADGE_TONE_CLASSES}`,
+      };
+    }
+    case 'cluster': {
+      const presentation = getResourceTypePresentation('k8s-cluster');
+      return {
+        key,
+        label: presentation?.label || 'K8s Cluster',
         badgeClasses: `${BADGE_BASE_CLASSES} ${presentation?.badgeClasses || DEFAULT_BADGE_TONE_CLASSES}`,
         tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation?.badgeClasses || DEFAULT_BADGE_TONE_CLASSES}`,
       };

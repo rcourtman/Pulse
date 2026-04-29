@@ -54,11 +54,12 @@ querying, and the operator-facing storage health presentation layer.
 27. `frontend-modern/src/types/recovery.ts`
 28. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
 29. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-30. `frontend-modern/src/utils/textPresentation.ts`
-31. `frontend-modern/src/components/Storage/StorageSummary.tsx`
-32. `frontend-modern/src/utils/storageSummaryCache.ts`
-33. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
-34. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+30. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
+31. `frontend-modern/src/utils/textPresentation.ts`
+32. `frontend-modern/src/components/Storage/StorageSummary.tsx`
+33. `frontend-modern/src/utils/storageSummaryCache.ts`
+34. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+35. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
 
 ## Shared Boundaries
 
@@ -712,6 +713,11 @@ Storage physical-disk requirements copy now consumes the shared
 Infrastructure target label. Disk-health guidance may refer to Proxmox node
 requirements, but it must not revive removed nested Pulse settings paths such
 as `Settings → Infrastructure → Proxmox`.
+Recovery item-type labels now route through
+`frontend-modern/src/utils/recoveryItemTypePresentation.ts`. Recovery surfaces
+must not render a bare `Cluster` item type for Kubernetes protected subjects;
+use the canonical `K8s Cluster` label so protected inventory and event filters
+do not confuse Kubernetes clusters with Proxmox clusters or table grouping.
 
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence

@@ -14,6 +14,8 @@ describe('recoveryItemTypePresentation', () => {
     expect(normalizeRecoveryItemTypeQueryValue('proxmox-vm')).toBe('vm');
     expect(normalizeRecoveryItemTypeQueryValue('proxmox-vm-backup')).toBe('vm');
     expect(normalizeRecoveryItemTypeQueryValue('k8s-pvc')).toBe('pvc');
+    expect(normalizeRecoveryItemTypeQueryValue('k8s-cluster')).toBe('cluster');
+    expect(normalizeRecoveryItemTypeQueryValue('kubernetes-cluster')).toBe('cluster');
     expect(normalizeRecoveryItemTypeQueryValue('truenas-dataset')).toBe('dataset');
     expect(normalizeRecoveryItemTypeQueryValue('docker-container')).toBe('app-container');
     expect(normalizeRecoveryItemTypeQueryValue(' custom-thing ')).toBe('custom-thing');
@@ -40,6 +42,14 @@ describe('recoveryItemTypePresentation', () => {
     expect(getRecoveryItemTypePresentation('task')).toMatchObject({
       key: 'task',
       label: 'Task',
+    });
+    expect(getRecoveryItemTypePresentation('cluster')).toMatchObject({
+      key: 'cluster',
+      label: 'K8s Cluster',
+    });
+    expect(getRecoveryItemTypePresentation('k8s-cluster')).toMatchObject({
+      key: 'cluster',
+      label: 'K8s Cluster',
     });
   });
 
