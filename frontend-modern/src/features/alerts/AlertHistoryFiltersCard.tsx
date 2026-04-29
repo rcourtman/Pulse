@@ -2,7 +2,10 @@ import { Card } from '@/components/shared/Card';
 import { LabeledFilterSelect } from '@/components/shared/FilterToolbar';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
-import { getAlertHistorySearchPlaceholder } from '@/utils/alertOverviewPresentation';
+import {
+  ALERT_HISTORY_ALL_TIME_FILTER_LABEL,
+  getAlertHistorySearchPlaceholder,
+} from '@/utils/alertOverviewPresentation';
 
 import type { AlertHistoryState } from './useAlertHistoryState';
 
@@ -44,7 +47,7 @@ export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
           <option value="24h">Last 24h</option>
           <option value="7d">Last 7d</option>
           <option value="30d">Last 30d</option>
-          <option value="all">All Time</option>
+          <option value="all">{ALERT_HISTORY_ALL_TIME_FILTER_LABEL}</option>
         </LabeledFilterSelect>
         <LabeledFilterSelect
           id="alert-severity-filter"

@@ -16,16 +16,19 @@ import {
   AUDIT_VERIFY_ALL_BUTTON_CLASS,
   AUDIT_VERIFY_ROW_BUTTON_CLASS,
   AUDIT_TOOLBAR_BUTTON_CLASS,
+  AUDIT_EVENT_CONFIG_CHANGE_LABEL,
+  AUDIT_EVENT_FILTER_ALL_LABEL,
+  AUDIT_SUCCESS_FILTER_FAILED_ONLY_LABEL,
+  AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL,
+  AUDIT_VERIFICATION_FILTER_ALL_LABEL,
+  AUDIT_VERIFICATION_FILTER_NEEDS_LABEL,
   getAuditEventStatusPresentation,
   getAuditEventTypeBadgeClass,
   getAuditLogEmptyState,
   getAuditLogLoadingState,
   getAuditVerificationBadgePresentation,
 } from '@/utils/auditLogPresentation';
-import {
-  getUpgradeActionButtonClass,
-  UPGRADE_ACTION_LABEL,
-} from '@/utils/upgradePresentation';
+import { getUpgradeActionButtonClass, UPGRADE_ACTION_LABEL } from '@/utils/upgradePresentation';
 import { useAuditLogPanelState } from '@/components/Settings/useAuditLogPanelState';
 
 export default function AuditLogPanel() {
@@ -187,10 +190,10 @@ export default function AuditLogPanel() {
             onChange={(e) => setEventFilter(e.currentTarget.value)}
             class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
           >
-            <option value="">All Events</option>
+            <option value="">{AUDIT_EVENT_FILTER_ALL_LABEL}</option>
             <option value="login">Login</option>
             <option value="logout">Logout</option>
-            <option value="config_change">Config Change</option>
+            <option value="config_change">{AUDIT_EVENT_CONFIG_CHANGE_LABEL}</option>
             <option value="startup">Startup</option>
           </select>
           <input
@@ -206,16 +209,16 @@ export default function AuditLogPanel() {
             class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
           >
             <option value="all">All</option>
-            <option value="success">Success Only</option>
-            <option value="failed">Failed Only</option>
+            <option value="success">{AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL}</option>
+            <option value="failed">{AUDIT_SUCCESS_FILTER_FAILED_ONLY_LABEL}</option>
           </select>
           <select
             value={verificationFilter()}
             onChange={(e) => setVerificationFilter(e.currentTarget.value)}
             class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
           >
-            <option value="all">All Verification</option>
-            <option value="needs">Needs Verification</option>
+            <option value="all">{AUDIT_VERIFICATION_FILTER_ALL_LABEL}</option>
+            <option value="needs">{AUDIT_VERIFICATION_FILTER_NEEDS_LABEL}</option>
             <option value="verified">Verified</option>
             <option value="failed">Failed/Error</option>
           </select>

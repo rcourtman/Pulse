@@ -1964,6 +1964,8 @@ describe('frontend resource type boundaries', () => {
     expect(storageFilterStateSource).toContain('getStorageFilterGroupBy');
     expect(storageFilterStateSource).toContain('getStorageStatusFilterValue');
     expect(storageFilterStateSource).toContain('toStorageHealthFilterValue');
+    expect(storageFilterStateSource).toContain('PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL');
+    expect(storageFilterStateSource).toContain('PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL');
     expect(storagePageSource).toContain('StorageContentCard');
     expect(storagePageSource).toContain('StoragePageBanners');
     expect(storagePageSource).toContain('StoragePageSummary');
@@ -2202,6 +2204,9 @@ describe('frontend resource type boundaries', () => {
       'export function getPhysicalDiskEmptyStatePresentation',
     );
     expect(diskPresentationSource).toContain('export const PHYSICAL_DISK_TABLE_CLASS');
+    expect(diskPresentationSource).toContain('PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL');
+    expect(diskPresentationSource).toContain('PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL');
+    expect(diskPresentationSource).toContain("return 'NVMe disk'");
     expect(diskPresentationSource).toContain('export function getPhysicalDiskRoleLabel');
     expect(diskPresentationSource).toContain('export function getPhysicalDiskParentLabel');
     expect(diskPresentationSource).toContain('export function getPhysicalDiskPlatformLabel');

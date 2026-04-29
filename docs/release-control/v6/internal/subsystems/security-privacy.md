@@ -273,6 +273,11 @@ That same governed settings trust boundary now also includes
 copy, security posture scoring, audit-log wording, audit-webhook wording, and
 SSO provider-type presentation remain part of the governed security trust
 surface instead of floating as unowned settings helpers.
+Audit-log filter option wording is part of that same trust surface: event,
+success, and verification filter labels must be sourced from
+`frontend-modern/src/utils/auditLogPresentation.ts` and the shared filter-option
+label primitive rather than hard-coded title-case strings in
+`AuditLogPanel.tsx`.
 That same governed security-score presentation boundary also owns the
 operator-facing low-score warning copy used by the top-level runtime banner:
 `frontend-modern/src/utils/securityScorePresentation.ts` must describe the

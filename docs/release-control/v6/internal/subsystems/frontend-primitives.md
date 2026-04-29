@@ -1543,6 +1543,12 @@ option collections through reactive accessors instead of snapshot arrays when
 those options depend on post-load unified-resource state, so the shared toolbar
 can reconcile late-arriving options and preserved route selections without
 requiring page-local reset hacks.
+Shared default filter labels must also stay on the same primitive-level
+contract. Generic `All …` option text should route through
+`frontend-modern/src/components/shared/filterOptionPresentation.ts`, with
+domain presentation helpers supplying the noun phrase, so storage, alerts,
+recovery, settings, and future filter bars do not drift between title-case and
+sentence-case local strings.
 When those workspace tabs need an embedded control-bar treatment, they should
 still stay on the one canonical `frontend-modern/src/components/shared/Subtabs.tsx`
 primitive and reuse the established shell, list, and button class pattern
@@ -1668,7 +1674,9 @@ The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/useAuditLogPanelState.ts` owns the
 license/paywall lifecycle, persisted filters, verification flow, and audit-log
 fetch orchestration. The shell must not re-accumulate localStorage or API
-runtime logic inline.
+runtime logic inline. Audit-log filter option labels must come from
+`frontend-modern/src/utils/auditLogPresentation.ts` and the shared filter-option
+label primitive instead of hard-coded title-case strings in the settings shell.
 
 The audit webhook settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx` stays the

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALERT_BUCKET_EMPTY_LABEL,
+  ALERT_HISTORY_ALL_TIME_FILTER_LABEL,
   ALERT_HISTORY_EMPTY_DESCRIPTION,
   ALERT_HISTORY_EMPTY_STATE,
   ALERT_HISTORY_LOADING_STATE,
@@ -74,6 +75,7 @@ describe('alertOverviewPresentation', () => {
   it('returns canonical alert history search and empty-state copy', () => {
     expect(ALERT_HISTORY_SEARCH_PLACEHOLDER).toBe('Search alerts...');
     expect(getAlertHistorySearchPlaceholder()).toBe('Search alerts...');
+    expect(ALERT_HISTORY_ALL_TIME_FILTER_LABEL).toBe('All time');
     expect(ALERT_HISTORY_EMPTY_STATE).toBe('No alerts found');
     expect(ALERT_HISTORY_EMPTY_DESCRIPTION).toBe('Try adjusting your filters or check back later');
     expect(getAlertHistoryEmptyState()).toEqual({

@@ -4,6 +4,7 @@ import {
   getSourcePlatformPresentation,
   resolvePlatformTypeFromSources,
 } from '@/utils/sourcePlatforms';
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getPhysicalDiskNodeIdentity } from '@/components/Storage/diskResourceUtils';
 import { getInfrastructureSettingsLocationLabel } from '@/utils/infrastructureSettingsPresentation';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
@@ -153,6 +154,8 @@ const slugifyPhysicalDiskFacetValue = (value: string): string =>
     .replace(/^-+|-+$/g, '');
 
 export const DEFAULT_PHYSICAL_DISK_FACET_FILTER = 'all';
+export const PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL = getAllFilterOptionLabel('roles');
+export const PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL = getAllFilterOptionLabel('groups');
 
 export const normalizePhysicalDiskFacetFilter = (value: string | null | undefined): string => {
   const normalized = slugifyPhysicalDiskFacetValue(value || '');
@@ -486,7 +489,13 @@ export function getPhysicalDiskHealthSummary(status: DiskHealthStatusPresentatio
 
 export function getPhysicalDiskRoleLabel(disk: PhysicalDiskPresentationData): string {
   if (disk.storageRole?.trim()) return titleize(disk.storageRole);
-  if (disk.type?.trim()) return `${disk.type.toUpperCase()} Disk`;
+  const normalizedType = disk.type?.trim().toLowerCase();
+  if (normalizedType === 'nvme') return 'NVMe disk';
+  if (normalizedType === 'sata') return 'SATA disk';
+  if (normalizedType === 'sas') return 'SAS disk';
+  if (normalizedType === 'ssd') return 'SSD';
+  if (normalizedType === 'hdd') return 'HDD';
+  if (normalizedType) return `${titleize(normalizedType)} disk`;
   return '';
 }
 
@@ -524,12 +533,20 @@ const buildPhysicalDiskFacetOptions = (
 };
 
 export const buildPhysicalDiskRoleFilterOptions = (disks: Resource[]): PhysicalDiskFilterOption[] =>
-  buildPhysicalDiskFacetOptions(disks, 'All Roles', getPhysicalDiskRoleLabel);
+  buildPhysicalDiskFacetOptions(
+    disks,
+    PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL,
+    getPhysicalDiskRoleLabel,
+  );
 
 export const buildPhysicalDiskGroupFilterOptions = (
   disks: Resource[],
 ): PhysicalDiskFilterOption[] =>
-  buildPhysicalDiskFacetOptions(disks, 'All Groups', getPhysicalDiskParentLabel);
+  buildPhysicalDiskFacetOptions(
+    disks,
+    PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL,
+    getPhysicalDiskParentLabel,
+  );
 
 const getPhysicalDiskHealthFilterEmptyTitle = (filter: StorageHealthFilter): string | null => {
   switch (filter) {
@@ -583,8 +600,7 @@ export function getPhysicalDiskEmptyStatePresentation(options: {
     searchMessage: options.searchTerm ? `matching "${options.searchTerm}"` : null,
     filterMessages,
     showRequirements: !hasScopedFilter && options.diskCount === 0 && options.hasPVENodes,
-    fallbackMessage:
-      `No Proxmox nodes configured. Add Proxmox VE in ${getInfrastructureSettingsLocationLabel()} to monitor physical disks.`,
+    fallbackMessage: `No Proxmox nodes configured. Add Proxmox VE in ${getInfrastructureSettingsLocationLabel()} to monitor physical disks.`,
     requirementsTitle: 'Physical disk monitoring requirements:',
     requirementsItems: [
       `Enable "Monitor physical disk health (SMART)" in ${getInfrastructureSettingsLocationLabel()} for the Proxmox node`,

@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   AUDIT_REFRESH_BUTTON_CLASS,
+  AUDIT_EVENT_CONFIG_CHANGE_LABEL,
+  AUDIT_EVENT_FILTER_ALL_LABEL,
+  AUDIT_SUCCESS_FILTER_FAILED_ONLY_LABEL,
+  AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL,
   AUDIT_TOOLBAR_BUTTON_CLASS,
   AUDIT_VERIFY_ALL_BUTTON_CLASS,
   AUDIT_VERIFY_ROW_BUTTON_CLASS,
+  AUDIT_VERIFICATION_FILTER_ALL_LABEL,
+  AUDIT_VERIFICATION_FILTER_NEEDS_LABEL,
   getAuditEventStatusPresentation,
   getAuditEventTypeBadgeClass,
   getAuditVerificationBadgePresentation,
@@ -46,5 +52,14 @@ describe('auditLogPresentation', () => {
     expect(AUDIT_REFRESH_BUTTON_CLASS).toContain('text-base-content');
     expect(AUDIT_VERIFY_ALL_BUTTON_CLASS).toContain('text-blue-700');
     expect(AUDIT_VERIFY_ROW_BUTTON_CLASS).toContain('text-blue-600');
+  });
+
+  it('exposes canonical audit filter option labels', () => {
+    expect(AUDIT_EVENT_FILTER_ALL_LABEL).toBe('All events');
+    expect(AUDIT_EVENT_CONFIG_CHANGE_LABEL).toBe('Config change');
+    expect(AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL).toBe('Success only');
+    expect(AUDIT_SUCCESS_FILTER_FAILED_ONLY_LABEL).toBe('Failed only');
+    expect(AUDIT_VERIFICATION_FILTER_ALL_LABEL).toBe('All verification');
+    expect(AUDIT_VERIFICATION_FILTER_NEEDS_LABEL).toBe('Needs verification');
   });
 });

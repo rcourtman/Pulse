@@ -1,3 +1,5 @@
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
+
 export const ALERTS_EMPTY_STATE = 'No active alerts';
 export const ALERTS_THRESHOLD_HINT = 'Alerts will appear here when thresholds are exceeded';
 export const ALERT_TIMELINE_LOADING_STATE = 'Loading timeline...';
@@ -11,6 +13,7 @@ export const ALERT_HISTORY_EMPTY_STATE = 'No alerts found';
 export const ALERT_HISTORY_EMPTY_DESCRIPTION = 'Try adjusting your filters or check back later';
 export const ALERT_BUCKET_EMPTY_LABEL = 'No alerts';
 export const ALERT_HISTORY_LOADING_STATE = 'Loading alert history...';
+export const ALERT_HISTORY_ALL_TIME_FILTER_LABEL = getAllFilterOptionLabel('time');
 export const ALERT_OVERVIEW_ACKNOWLEDGED_LABEL = 'Acknowledged';
 export const ALERT_OVERVIEW_LAST_24_HOURS_LABEL = 'Last 24 Hours';
 export const ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL = 'Workload Overrides';

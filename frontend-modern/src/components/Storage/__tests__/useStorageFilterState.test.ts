@@ -50,8 +50,8 @@ describe('useStorageFilterState', () => {
     ]);
     expect(result.storageFilterGroupBy()).toBe('node');
     expect(result.storageFilterStatus()).toBe('all');
-    expect(result.diskRoleFilterOptions()).toEqual([{ value: 'all', label: 'All Roles' }]);
-    expect(result.diskGroupFilterOptions()).toEqual([{ value: 'all', label: 'All Groups' }]);
+    expect(result.diskRoleFilterOptions()).toEqual([{ value: 'all', label: 'All roles' }]);
+    expect(result.diskGroupFilterOptions()).toEqual([{ value: 'all', label: 'All groups' }]);
   });
 
   it('coerces stale selected nodes and disk facets, and maps status setters', () => {
@@ -77,11 +77,11 @@ describe('useStorageFilterState', () => {
         setSelectedNodeId,
         sourceOptions,
         diskRoleOptions: () => [
-          { value: 'all', label: 'All Roles' },
-          { value: 'nvme-disk', label: 'NVME Disk' },
+          { value: 'all', label: 'All roles' },
+          { value: 'nvme-disk', label: 'NVMe disk' },
         ],
         diskGroupOptions: () => [
-          { value: 'all', label: 'All Groups' },
+          { value: 'all', label: 'All groups' },
           { value: 'data', label: 'data' },
         ],
         sourceFilter,

@@ -8,6 +8,8 @@ import {
   extractPhysicalDiskPresentationData,
   filterAndSortPhysicalDisks,
   PHYSICAL_DISK_EMPTY_CARD_CLASS,
+  PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL,
+  PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL,
   PHYSICAL_DISK_HEADER_DISK_CLASS,
   PHYSICAL_DISK_HEADER_SOURCE_CLASS,
   PHYSICAL_DISK_NAME_TEXT_CLASS,
@@ -102,6 +104,9 @@ describe('diskPresentation', () => {
         storageRole: 'cache_pool',
       }),
     ).toBe('Cache Pool');
+    expect(getPhysicalDiskRoleLabel(makeDiskData({ type: 'nvme' }))).toBe('NVMe disk');
+    expect(getPhysicalDiskRoleLabel(makeDiskData({ type: 'sata' }))).toBe('SATA disk');
+    expect(getPhysicalDiskRoleLabel(makeDiskData({ type: 'sas' }))).toBe('SAS disk');
     expect(
       getPhysicalDiskParentLabel({
         ...makeDiskData({
@@ -260,9 +265,17 @@ describe('diskPresentation', () => {
       value: 'cache-pool',
       label: 'Cache Pool',
     });
+    expect(buildPhysicalDiskRoleFilterOptions([warningDisk, healthyDisk])[0]).toEqual({
+      value: 'all',
+      label: PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL,
+    });
     expect(buildPhysicalDiskGroupFilterOptions([warningDisk, healthyDisk])).toContainEqual({
       value: 'tank',
       label: 'tank',
+    });
+    expect(buildPhysicalDiskGroupFilterOptions([warningDisk, healthyDisk])[0]).toEqual({
+      value: 'all',
+      label: PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL,
     });
     expect(getPhysicalDiskNormalizedHealth(warningDisk, warningData)).toBe('warning');
     expect(

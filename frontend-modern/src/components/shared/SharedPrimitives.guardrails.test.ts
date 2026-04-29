@@ -19,6 +19,7 @@ import dialogSource from '@/components/shared/Dialog.tsx?raw';
 import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import filterButtonGroupModelSource from '@/components/shared/filterButtonGroupModel.ts?raw';
+import filterOptionPresentationSource from '@/components/shared/filterOptionPresentation.ts?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
@@ -509,6 +510,14 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain("title: 'Grouped table view'");
       expect(source).not.toContain("title: 'Flat list view'");
     }
+  });
+
+  it('keeps shared all-option filter labels on one presentation helper', () => {
+    expect(filterOptionPresentationSource).toContain('FILTER_OPTION_ALL_LABEL');
+    expect(filterOptionPresentationSource).toContain('getAllFilterOptionLabel');
+    expect(filterOptionPresentationSource).toContain('collapseWhitespace');
+    expect(filterOptionPresentationSource).not.toContain('toUpperCase');
+    expect(filterOptionPresentationSource).not.toContain('toLowerCase');
   });
 
   it('keeps summary-linked row input semantics on the shared interaction helper', () => {

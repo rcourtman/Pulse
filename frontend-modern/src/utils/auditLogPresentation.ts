@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import XCircle from 'lucide-solid/icons/x-circle';
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 
 export type AuditVerificationStatus = 'verified' | 'failed' | 'unavailable' | 'error';
 
@@ -26,6 +27,12 @@ export const AUDIT_VERIFY_ALL_BUTTON_CLASS =
   'flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 disabled:opacity-50';
 export const AUDIT_VERIFY_ROW_BUTTON_CLASS =
   'inline-flex min-h-10 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50';
+export const AUDIT_EVENT_FILTER_ALL_LABEL = getAllFilterOptionLabel('events');
+export const AUDIT_EVENT_CONFIG_CHANGE_LABEL = 'Config change';
+export const AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL = 'Success only';
+export const AUDIT_SUCCESS_FILTER_FAILED_ONLY_LABEL = 'Failed only';
+export const AUDIT_VERIFICATION_FILTER_ALL_LABEL = getAllFilterOptionLabel('verification');
+export const AUDIT_VERIFICATION_FILTER_NEEDS_LABEL = 'Needs verification';
 
 export function getAuditEventTypeBadgeClass(event?: string | null): string {
   switch ((event ?? '').trim()) {
@@ -42,9 +49,7 @@ export function getAuditEventTypeBadgeClass(event?: string | null): string {
   }
 }
 
-export function getAuditEventStatusPresentation(
-  success: boolean,
-): AuditEventStatusPresentation {
+export function getAuditEventStatusPresentation(success: boolean): AuditEventStatusPresentation {
   return success
     ? {
         icon: CheckCircle,

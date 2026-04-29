@@ -224,6 +224,10 @@ status labels. Overview stat-card labels must also route through the alert
 overview presentation helper, and user-facing configuration or thresholds copy
 must use workload, VM, and container vocabulary instead of exposing internal
 guest override/filter names unless the UI is naming a backend field directly.
+Alert history filter defaults such as the all-time period option must likewise
+come from the alert overview/history presentation helper and the shared
+filter-option label primitive rather than hard-coded title-case strings in the
+history filter card.
 Thresholds empty states that hand operators to Infrastructure settings must use
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
 canonical `Settings → Infrastructure` label instead of hard-coding generic

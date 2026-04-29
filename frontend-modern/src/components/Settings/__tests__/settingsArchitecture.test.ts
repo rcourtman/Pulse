@@ -13,6 +13,7 @@ import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
+import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
@@ -36,6 +37,7 @@ import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
+import auditLogPresentationSource from '../../../utils/auditLogPresentation.ts?raw';
 
 describe('settings architecture guardrails', () => {
   it('keeps Settings on the canonical page shell boundary', () => {
@@ -136,7 +138,9 @@ describe('settings architecture guardrails', () => {
 
   it('keeps default self-hosted commercial copy opt-in from shared settings primitives', () => {
     expect(aiSettingsDialogsSource).not.toContain('Open hosted handoff');
-    expect(aiSettingsDialogsSource).not.toContain('Hosted quickstart routes policy-redacted prompts');
+    expect(aiSettingsDialogsSource).not.toContain(
+      'Hosted quickstart routes policy-redacted prompts',
+    );
     expect(aiSettingsDialogsSource).not.toContain('quickstartBlockedReason');
     expect(aiSettingsStateSource).not.toContain('hasQuickstartAvailable');
     expect(aiSettingsDialogsSource).not.toContain('Start Trial');
@@ -163,6 +167,22 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
     expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
     expect(aiRuntimeControlsSectionSource).not.toContain('without approval (Pro)');
+  });
+
+  it('keeps audit-log filter labels on the audit presentation owner', () => {
+    expect(auditLogPanelSource).toContain('AUDIT_EVENT_FILTER_ALL_LABEL');
+    expect(auditLogPanelSource).toContain('AUDIT_EVENT_CONFIG_CHANGE_LABEL');
+    expect(auditLogPanelSource).toContain('AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL');
+    expect(auditLogPanelSource).toContain('AUDIT_VERIFICATION_FILTER_ALL_LABEL');
+    expect(auditLogPanelSource).not.toContain('All Events');
+    expect(auditLogPanelSource).not.toContain('All Verification');
+    expect(auditLogPanelSource).not.toContain('Success Only');
+    expect(auditLogPresentationSource).toContain(
+      "AUDIT_EVENT_FILTER_ALL_LABEL = getAllFilterOptionLabel('events')",
+    );
+    expect(auditLogPresentationSource).toContain(
+      "AUDIT_VERIFICATION_FILTER_ALL_LABEL = getAllFilterOptionLabel('verification')",
+    );
   });
 
   it('keeps system AI model catalogs on the shared searchable picker boundary', () => {
@@ -246,9 +266,7 @@ describe('settings architecture guardrails', () => {
     expect(monitoredSystemAdmissionPreviewSource).not.toContain(
       'reuses your current monitored-system capacity',
     );
-    expect(monitoredSystemAdmissionPreviewSource).not.toContain(
-      'frees monitored-system capacity',
-    );
+    expect(monitoredSystemAdmissionPreviewSource).not.toContain('frees monitored-system capacity');
     expect(infrastructureSourceManagerSource).toContain(
       "Add, discover, and verify the platform APIs plus Pulse Agent telemetry that make up Pulse's infrastructure model.",
     );

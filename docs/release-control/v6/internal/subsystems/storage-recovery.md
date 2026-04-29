@@ -869,6 +869,11 @@ controls, and source selectors are also canonical presentation contracts:
 storage surfaces must consume `frontend-modern/src/components/Storage/storagePageState.ts`
 and `frontend-modern/src/utils/storageSources.ts` rather than re-declaring
 page-local title casing or alternate all-option labels.
+Physical-disk role and group filter defaults plus disk-type display labels
+must likewise come from `frontend-modern/src/features/storageBackups/diskPresentation.ts`;
+storage pages must not reintroduce local `All Roles`, `All Groups`, or
+`NVME Disk` strings that drift away from the shared filter-label and hardware
+acronym presentation contract.
 That same storage ownership also includes the physical-disk detail identity
 contract in `frontend-modern/src/components/Storage/` and
 `frontend-modern/src/features/storageBackups/`: historical disk charts must

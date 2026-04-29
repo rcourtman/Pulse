@@ -4,6 +4,8 @@ import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
 import {
   DEFAULT_PHYSICAL_DISK_FACET_FILTER,
+  PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL,
+  PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL,
   normalizePhysicalDiskFacetFilter,
   type PhysicalDiskFilterOption,
 } from '@/features/storageBackups/diskPresentation';
@@ -60,12 +62,22 @@ export const useStorageFilterState = (options: UseStorageFilterStateOptions) => 
   const diskRoleFilterOptions = createMemo(() =>
     options.view() === 'disks' && options.diskRoleOptions
       ? options.diskRoleOptions()
-      : [{ value: DEFAULT_PHYSICAL_DISK_FACET_FILTER, label: 'All Roles' }],
+      : [
+          {
+            value: DEFAULT_PHYSICAL_DISK_FACET_FILTER,
+            label: PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL,
+          },
+        ],
   );
   const diskGroupFilterOptions = createMemo(() =>
     options.view() === 'disks' && options.diskGroupOptions
       ? options.diskGroupOptions()
-      : [{ value: DEFAULT_PHYSICAL_DISK_FACET_FILTER, label: 'All Groups' }],
+      : [
+          {
+            value: DEFAULT_PHYSICAL_DISK_FACET_FILTER,
+            label: PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL,
+          },
+        ],
   );
 
   const storageFilterGroupBy = (): StorageGroupByFilter => {
