@@ -148,6 +148,12 @@ desktop source-management table also inherits the surrounding settings panel
 frame and the shared `Table` shell from `frontend-primitives`; lifecycle work
 must not restore a local `overflow-x-auto` wrapper or a page-local table card
 around that table.
+Configured-node settings tables follow the same boundary:
+`frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx` may own node,
+credential, capability, status, and action cells, but table scroll framing must
+stay on the shared `Table` primitive. If a configured-node table needs bounded
+vertical height, apply it through `Table` `wrapperClass` instead of an outer
+lifecycle-local scroll container.
 
 ## Extension Points
 

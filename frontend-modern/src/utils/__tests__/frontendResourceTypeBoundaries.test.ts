@@ -4045,6 +4045,10 @@ describe('frontend resource type boundaries', () => {
     expect(configuredNodeTablesSource).toContain('getConfiguredNodeCapabilityBadges');
     expect(configuredNodeTablesSource).toContain('resolveConfiguredPveNodeStatusIndicator');
     expect(configuredNodeTablesSource).toContain('resolveConfiguredInstanceStatusIndicator');
+    expect(configuredNodeTablesSource).toMatch(/<Table(?:\s|>)/);
+    expect(configuredNodeTablesSource).toContain('wrapperClass="max-h-[600px] overflow-y-auto"');
+    expect(configuredNodeTablesSource).not.toContain('<div class="overflow-x-auto">');
+    expect(configuredNodeTablesSource).not.toContain('<div class="overflow-auto max-h-[600px]">');
     expect(configuredNodeTablesSource).not.toContain("'monitorVMs' in node");
     expect(configuredNodeTablesSource).not.toContain("'monitorDatastores' in node");
     expect(configuredNodeTablesSource).not.toContain(

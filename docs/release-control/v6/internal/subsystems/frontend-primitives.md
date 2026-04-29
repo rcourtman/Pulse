@@ -184,8 +184,10 @@ work extends shared components instead of creating new local variants.
    history, still use `TableCard` for the outer frame instead of hand-coded
    rounded/bordered wrappers. Product tables already inside a canonical
    section frame, including storage pools, physical disks, and infrastructure
-   settings source tables, must use `Table` directly rather than nesting
-   another card or scroll wrapper.
+   settings source/configured-node tables, must use `Table` directly rather than
+   nesting another card or scroll wrapper. If a framed table needs bounded
+   vertical height, that constraint belongs on `Table.wrapperClass` so the
+   shared table shell still owns overflow behavior.
    Product-table subgroup/header rows must likewise consume the shared
    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
    helper and `.grouped-table-row` CSS token contract instead of local

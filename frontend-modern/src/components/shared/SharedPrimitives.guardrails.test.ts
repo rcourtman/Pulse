@@ -74,6 +74,7 @@ import groupedTableRowPresentationSource from '@/components/shared/groupedTableR
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
 import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
 import infrastructureSourceManagerSource from '@/components/Settings/InfrastructureSourceManager.tsx?raw';
+import configuredNodeTablesSource from '@/components/Settings/ConfiguredNodeTables.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
@@ -526,10 +527,12 @@ describe('shared primitive guardrails', () => {
       storagePoolsTableSource,
       diskListSource,
       infrastructureSourceManagerSource,
+      configuredNodeTablesSource,
     ]) {
       expect(source).toContain('<Table');
       expect(source).not.toContain('<div class="overflow-x-auto">');
       expect(source).not.toContain('<div class="overflow-x-auto bg-surface">');
+      expect(source).not.toContain('<div class="overflow-auto max-h-[600px]">');
     }
 
     for (const source of [
@@ -560,6 +563,7 @@ describe('shared primitive guardrails', () => {
     expect(diskListSource).not.toContain("from '@/components/shared/Card'");
     expect(diskListSource).not.toContain('PHYSICAL_DISK_TABLE_SCROLL_CLASS');
     expect(recoveryProtectedInventorySectionSource).toContain('wrapperClass="bg-surface"');
+    expect(configuredNodeTablesSource).toContain('wrapperClass="max-h-[600px] overflow-y-auto"');
     expect(storageContentCardSource).toContain('<StoragePoolsTable');
   });
 
