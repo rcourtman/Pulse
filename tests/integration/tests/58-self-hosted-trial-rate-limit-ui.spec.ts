@@ -95,7 +95,7 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
     await expect(page.getByRole('button', { name: 'Users' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Audit Log' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Audit Webhooks' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Plans & Activation' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Self-hosted plan' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /upgrade to pro/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /start free trial/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /start trial/i })).toHaveCount(0);

@@ -1582,11 +1582,11 @@ The same boundary also owns where monitored-system capacity truth lives. A
 dedicated self-hosted Pro plan-surface capacity section is only canonical
 when Pulse is reconciling or enforcing a finite monitored-system limit, such
 as bounded migration continuity, grandfathered floors, or other explicit
-carry-forward limits. Uncapped self-hosted plans should not keep a
+carry-forward limits. Unmetered self-hosted plans should not keep a
 `Monitoring capacity` section alive just to restate that monitoring is
-unlimited; those plan surfaces should describe core monitoring as unlimited in
-their summary model and reserve counted-unit explanation plus current usage
-inspection for the bounded legacy usage ledger/disclosure path. When a finite
+included without a monitored-system volume gate; those plan surfaces should
+reserve counted-unit explanation plus current usage inspection for the bounded
+legacy usage ledger/disclosure path. When a finite
 plan is full, the section must explain that existing monitoring continues
 while new monitored systems are blocked; when an installation is already above
 the current plan, it must explain that Pulse is in an over-plan frozen state

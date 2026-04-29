@@ -81,7 +81,8 @@ path, and their first-seen / last-seen state so users can understand Pulse's inv
 **Implementation transition note:** any remaining `max_agents` or agent-backed counting paths
 are compatibility boundaries for hosted, MSP, or legacy continuity logic, not the self-hosted
 commercial model. The canonical v6 destination is monitored-system identity and ledger truth,
-with self-hosted commercial surfaces treating core monitoring as unlimited.
+with self-hosted commercial surfaces treating core monitoring as included rather
+than sold by monitored-system volume.
 
 **Examples:**
 - A 3-node Proxmox cluster monitored node-by-node counts as **3 monitored systems**
@@ -98,7 +99,7 @@ with self-hosted commercial surfaces treating core monitoring as unlimited.
 
 | Element | Value |
 |---|---|
-| Monitoring scope | **Unlimited self-hosted monitoring** |
+| Monitoring scope | **Core self-hosted monitoring included** |
 | Monitoring | Full (Proxmox, Docker, K8s, agents) |
 | Alerts | Threshold-based |
 | SSO | Basic OIDC |
@@ -129,7 +130,7 @@ remediation actions through Pulse.
 
 | Element | Value |
 |---|---|
-| Monitoring scope | **Unlimited self-hosted monitoring** |
+| Monitoring scope | **Core self-hosted monitoring included** |
 | Everything in Free | Yes |
 | Relay remote access | **Yes** |
 | Mobile app access | **Yes** |
@@ -149,7 +150,7 @@ without changing their self-hosted monitoring scope.
 
 | Element | Value |
 |---|---|
-| Monitoring scope | **Unlimited self-hosted monitoring** |
+| Monitoring scope | **Core self-hosted monitoring included** |
 | Everything in Relay | Yes |
 | Safe remediation workflows | **Yes** (approved execution, safety preflight, rollback) |
 | Alert-triggered root-cause analysis | **Yes** |
@@ -470,7 +471,7 @@ explain monitored-system identity:
 
 ### Pulse runtime
 
-- [x] Treat self-hosted Community / Relay / Pro and legacy Pro+ continuity defaults as unlimited core monitoring
+- [x] Treat self-hosted Community / Relay / Pro and legacy Pro+ continuity defaults as core monitoring included without a monitored-system volume gate
 - [x] Preserve grandfathered v5 recurring plans as uncapped continuity states while subscriptions remain active
 - [x] Keep hosted Cloud / MSP capacity out of static self-hosted tier defaults and in plan-specific license claims
 - [ ] Keep refining monitored-system identity and ledger truth for inventory, hosted/MSP limits, and support workflows

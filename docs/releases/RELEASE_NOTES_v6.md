@@ -46,9 +46,9 @@ current public v6 plans.
 
 | Plan | Core monitoring | Metric history | Paid value |
 |---|---|---:|---|
-| Community | Unlimited | 7 days | Full self-hosted monitoring |
-| Relay | Unlimited | 14 days | Remote access, mobile, push, and convenience |
-| Pro | Unlimited | 90 days | Relay plus AI operations, automation, and advanced admin features |
+| Community | Included | 7 days | Full self-hosted monitoring |
+| Relay | Included | 14 days | Remote access, mobile, push, and convenience |
+| Pro | Included | 90 days | Relay plus AI operations, automation, and advanced admin features |
 
 Legacy `Pro+` remains continuity-only for existing holders. It is not a public
 self-hosted checkout tier.

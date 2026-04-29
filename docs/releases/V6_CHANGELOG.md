@@ -14,8 +14,9 @@ platform-specific views. Pulse v6 is organized around five primary surfaces:
 For existing Pulse v5 operators, this is not just a visual refresh. The
 default routes change, the main live-state contract changes, install and
 onboarding are split differently, and self-hosted commercial posture now
-revolves around unlimited core monitoring plus paid convenience, history, and
-AI/admin surfaces rather than capped monitored-system volume.
+revolves around core monitoring included for self-hosted installs plus paid
+convenience, history, and AI/admin surfaces rather than capped monitored-system
+volume.
 
 ## Major product and workflow changes
 

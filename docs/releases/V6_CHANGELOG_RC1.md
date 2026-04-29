@@ -67,7 +67,7 @@ For existing Pulse v5 operators, this is not just a visual refresh. The default 
 
 - **Monitored-system counting is more deliberate.** Pulse counts canonical top-level monitored systems so upgrade, support, and migration views describe the estate consistently, including cases where Pulse sees the same machine through more than one collection path. For current self-hosted v6 Community, Relay, and Pro plans, that counting is not a monitoring-volume paywall.
 
-- **Grandfathering is explicit rather than implied.** In `rc.1`, migrated paid installs could carry a higher monitored-system floor than the early capped self-hosted policy. Later v6 branch work replaced that public self-hosted capacity ladder with unlimited core monitoring while keeping paid-license continuity explicit.
+- **Grandfathering is explicit rather than implied.** In `rc.1`, migrated paid installs could carry a higher monitored-system floor than the early capped self-hosted policy. Later v6 branch work replaced that public self-hosted capacity ladder with core monitoring included on current self-hosted plans while keeping paid-license continuity explicit.
 
 - **Released install assets are tied to the release tag.** For released builds, install-script resolution is pinned to the shipped release asset, not to later branch state.
 

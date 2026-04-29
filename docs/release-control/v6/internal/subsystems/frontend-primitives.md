@@ -658,10 +658,11 @@ work extends shared components instead of creating new local variants.
    reintroducing local “go to Pulse Pro” variants.
    That same shared owner must also support explicit IA/title separation for
    self-hosted commercial settings: the nav label may stay product-IA-first
-   (`Plans`) while the page shell stays task-first (`Plans & Activation`), and
-   the owned plan shell must foreground the active plan name plus unlocked
+   (`Plans`) while the page shell stays task-first (`Self-hosted plan`), and
+   the owned plan shell must foreground the active plan name plus available
    capabilities before secondary billing or recovery detail so paid upgrades
-   can confirm their entitlement immediately after activation.
+   can confirm their entitlement immediately after activation without making
+   default Community look like it is missing an activation key.
 7. Keep hosted settings-shell framing imports safe for bundle initialization.
    Self-hosted billing titles, descriptions, and referral copy used by
    `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
@@ -2468,7 +2469,7 @@ instead of drifting independently. The owned split is now explicit: the
 navigation label comes from `navLabel`, while the route header and billing
 shell reuse `shellTitle` plus `shellDescription`, so the settings IA can stay
 plan-owned (`Plans`) while the page itself still names the concrete job
-(`Plans & Activation`) without reintroducing local label drift.
+(`Self-hosted plan`) without reintroducing local label drift.
 That same settings-shell framing boundary also covers adjacent top-level
 settings references to the self-hosted commercial surface. When
 `InfrastructureWorkspace.tsx` or other settings-shell surfaces point operators
@@ -2480,8 +2481,8 @@ That same shared presentation owner now also carries the entitlement-first
 commercial summary contract for self-hosted settings. The top-level navigation
 entry stays product-IA owned through `navLabel` (`Plans`), while the page
 header and shell title stay task-owned through `shellTitle`
-(`Plans & Activation`), and the billing shell must foreground the active plan
-name plus unlocked capabilities before secondary billing or recovery detail.
+(`Self-hosted plan`), and the billing shell must foreground the active plan
+name plus available capabilities before secondary billing or recovery detail.
 Paid upgrades should be able to confirm “Current plan: Pulse Pro” immediately
 after activation without hunting through generic billing language or a second
 page-local summary card model.

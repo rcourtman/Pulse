@@ -140,11 +140,11 @@ test.describe('Self-hosted manual activation success', () => {
     await expect(page.getByText('What Pulse Pro adds')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Compare plans' })).toHaveCount(0);
 
-    await page.locator('summary').filter({ hasText: 'Redeem existing key' }).first().click();
+    await page.locator('summary').filter({ hasText: 'Use existing key' }).first().click();
     const activationField = page.locator('#pulse-pro-license-key');
     await expect(activationField).toBeVisible();
     await activationField.fill('ppk_live_test_activation_key');
-    await page.getByRole('button', { name: 'Activate License' }).click();
+    await page.getByRole('button', { name: 'Activate Key' }).click();
 
     const activationSummary = page
       .locator('div.rounded-md.border.p-3.text-sm')
@@ -168,7 +168,7 @@ test.describe('Self-hosted manual activation success', () => {
       .first();
     await expect(
       currentPlanCard.getByText(
-        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
       ),
     ).toBeVisible();
     await expect(currentPlanCard.getByText('Included extras')).toBeVisible();

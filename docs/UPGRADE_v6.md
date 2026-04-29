@@ -154,10 +154,10 @@ Pulse v6 uses the activation/grant model for active licensing, but it can migrat
 When an existing paid user asks what changes for them specifically, use this rule set:
 
 - Legacy recurring Pulse Pro subscriptions from v5 or earlier that were already active before the public v6 pricing cutover keep their current recurring price while the subscription remains continuously active. Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy.
-- Existing lifetime customers remain permanently valid, with uncapped self-hosted monitoring and child-resource volume.
+- Existing lifetime customers remain permanently valid, with self-hosted monitoring and child-resource volume not metered under the current v6 policy.
 - Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered path can still exchange into the v6 activation model without repurchasing. Migration records can preserve the original cohort for support and audit, but self-hosted monitoring volume is no longer the paid gate.
-- Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing automatically; they re-enter on current public v6 pricing for paid features while self-hosted monitoring remains unlimited.
-- New self-hosted v6 purchases use the current Community / Relay / Pro plan model with unlimited core monitoring.
+- Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing automatically; they re-enter on current public v6 pricing for paid features while self-hosted monitoring remains included without a monitored-system volume gate.
+- New self-hosted v6 purchases use the current Community / Relay / Pro plan model with core monitoring included.
 
 If a self-hosted v6 install sees a new monitored-system, guest, or child-resource volume cap after moving to v6, treat that as a regression, not as expected upgrade behavior.
 

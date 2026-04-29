@@ -31,9 +31,9 @@ Self-hosted pricing is:
 
 | Plan | Price | Core monitoring | Metric history | Purpose |
 |---|---:|---|---:|---|
-| Community | Free | Unlimited | 7 days | Full self-hosted monitoring for normal homelab use |
-| Relay | $4.99/mo or $39/yr | Unlimited | 14 days | Remote access, mobile, push, and convenience |
-| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | AI operations and advanced admin features |
+| Community | Free | Included | 7 days | Full self-hosted monitoring for normal homelab use |
+| Relay | $4.99/mo or $39/yr | Included | 14 days | Remote access, mobile, push, and convenience |
+| Pro | $8.99/mo or $79/yr | Included | 90 days | AI operations and advanced admin features |
 
 Counted examples:
 - Proxmox PVE node
@@ -55,7 +55,8 @@ Not counted separately:
 
 Runtime rules:
 - API-backed monitoring and agent-backed monitoring use the same counted-system
-  model. Self-hosted public plans leave core monitoring unlimited; finite
+  model. Self-hosted public plans include core monitoring without a
+  monitored-system volume gate; finite
   capacity policies apply only where a hosted, enterprise, or explicit
   compatibility policy says so.
 - If the same system is seen through both paths, it counts once.
@@ -151,7 +152,7 @@ Patrol and the Assistant support tiered autonomy:
 ## What You Get (By Plan)
 
 ### Community
-- Unlimited self-hosted core monitoring.
+- Core self-hosted monitoring included without a monitored-system volume gate.
 - 7-day history.
 - Pulse Patrol with your own provider or local model.
 - Basic SSO and update alerts.

@@ -99,7 +99,7 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(
       page.locator('[aria-label="Settings navigation"]').getByText('Plans', { exact: true }),
     ).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Self-hosted plan' }).first()).toBeVisible();
     const currentPlanCard = page
       .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
       .filter({ has: page.getByText('Current plan: Pulse Pro') })
@@ -108,7 +108,7 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(currentPlanCard.getByText('Current plan: Pulse Pro')).toBeVisible();
     await expect(
       currentPlanCard.getByText(
-        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, and 90-day history are unlocked right now.',
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
       ),
     ).toBeVisible();
     await expect(currentPlanCard.getByText('Grandfathered price')).toBeVisible();

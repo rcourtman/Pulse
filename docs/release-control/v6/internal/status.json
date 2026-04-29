@@ -5249,7 +5249,7 @@
     },
     {
       "id": "self-hosted-paid-extras-packaging",
-      "summary": "Pulse v6 self-hosted paid packaging is now locked to Community / Relay / Pro with unlimited core monitoring on every self-hosted tier: Relay sells remote access, mobile, push, and convenience plus 14-day history; Pro sells Relay plus AI operations, automation, advanced administration, and 90-day history; legacy Pro+ remains continuity-only and is not a public no-cap self-hosted checkout tier; Cloud and MSP continue as separate hosted/commercial offers.",
+      "summary": "Pulse v6 self-hosted paid packaging is now locked to Community / Relay / Pro with core monitoring included and not sold by monitored-system volume on every self-hosted tier: Relay sells remote access, mobile, push, and convenience plus 14-day history; Pro sells Relay plus AI operations, automation, advanced administration, and 90-day history; legacy Pro+ remains continuity-only and is not a public no-cap self-hosted checkout tier; Cloud and MSP continue as separate hosted/commercial offers.",
       "kind": "pricing",
       "decided_at": "2026-04-16",
       "subsystem_ids": [

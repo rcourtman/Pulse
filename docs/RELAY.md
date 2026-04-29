@@ -88,7 +88,7 @@ The mobile app supports connecting to multiple Pulse instances. Each connection 
 
 ### Relay showing "Disconnected"
 
-1. Confirm your Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans & Activation**).
+1. Confirm your Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans**).
 2. Verify the Pulse server can reach the relay server:
    ```bash
    curl -s https://relay.pulserelay.pro/healthz

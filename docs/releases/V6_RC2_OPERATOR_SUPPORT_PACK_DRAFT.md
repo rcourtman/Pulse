@@ -38,7 +38,7 @@ inventory language, but they are no longer the self-hosted paid gate.
 ### What are the current self-hosted paid plans in `rc.2`?
 
 - Community:
-  unlimited core monitoring, 7-day history
+  core monitoring included, 7-day history
 - Relay:
   Community plus remote access, mobile, push notifications, and 14-day history
 - Pro:

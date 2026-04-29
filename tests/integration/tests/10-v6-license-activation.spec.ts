@@ -171,12 +171,12 @@ test.describe.serial("V6 license activation flow", () => {
     test.skip(!activationKey, "No activation key from previous step");
 
     await ensureAuthenticated(page);
-    await page.goto("/settings/system/billing");
+    await page.goto("/settings/system/billing/plan?details=recovery");
     await expect(
-      page.getByRole("heading", { name: "Plans & Activation" }).first(),
+      page.getByRole("heading", { name: "Self-hosted plan" }).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Activation & Recovery" }),
+      page.getByRole("heading", { name: "Existing purchases" }),
     ).toBeVisible();
 
     // Fill in the activation key.
@@ -186,7 +186,7 @@ test.describe.serial("V6 license activation flow", () => {
 
     // Click Activate.
     const activateButton = page.getByRole("button", {
-      name: "Activate License",
+      name: "Activate Key",
     });
     await expect(activateButton).toBeEnabled();
     await activateButton.click();
@@ -216,7 +216,7 @@ test.describe.serial("V6 license activation flow", () => {
     await ensureAuthenticated(page);
     await page.goto("/settings/system/billing");
     await expect(
-      page.getByRole("heading", { name: "Plans & Activation" }).first(),
+      page.getByRole("heading", { name: "Self-hosted plan" }).first(),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Current plan" }),
@@ -226,7 +226,7 @@ test.describe.serial("V6 license activation flow", () => {
       timeout: 10_000,
     });
     await expect(page.getByText("No Pro license is active.")).toHaveCount(0);
-    await expect(page.getByText("Unlimited").first()).toBeVisible();
+    await expect(page.getByText("90-day metric history")).toBeVisible();
 
     // Verify entitlements API agrees.
     const entRes = await apiRequest(page, "/api/license/entitlements");
@@ -323,19 +323,19 @@ test.describe.serial("V6 license activation flow", () => {
     test.skip(!activationKey, "No activation key from previous step");
 
     await ensureAuthenticated(page);
-    await page.goto("/settings/system/billing");
+    await page.goto("/settings/system/billing/plan?details=recovery");
     await expect(
-      page.getByRole("heading", { name: "Plans & Activation" }).first(),
+      page.getByRole("heading", { name: "Self-hosted plan" }).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Activation & Recovery" }),
+      page.getByRole("heading", { name: "Existing purchases" }),
     ).toBeVisible();
 
     // Set up one-shot dialog handler for the native confirm() prompt.
     page.once("dialog", (dialog) => dialog.accept());
 
     // Click Clear License.
-    const clearButton = page.getByRole("button", { name: "Clear License" });
+    const clearButton = page.getByRole("button", { name: "Clear Key" });
     await expect(clearButton).toBeEnabled({ timeout: 5_000 });
     await clearButton.click();
 

@@ -14,7 +14,7 @@ Without these, all API calls return `501 Not Implemented` (flag off) or `402 Pay
 ## Quick Start
 
 1. Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
-2. Activate your Enterprise license in **Settings → Plans & Activation**.
+2. Activate your Enterprise license in **Settings → Plans**.
 3. Go to **Settings → Organization** and click **Create Organization**.
 4. Name your organization and assign infrastructure to it.
 5. Use the **Org Switcher** in the header bar to switch between organizations.
@@ -170,7 +170,7 @@ Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
 
 ### "Multi-tenant requires an Enterprise license" (402)
 
-Activate an Enterprise license with the `multi_tenant` capability in **Settings → Plans & Activation**.
+Activate an Enterprise license with the `multi_tenant` capability in **Settings → Plans**.
 
 ### Organization data not loading after switch
 
