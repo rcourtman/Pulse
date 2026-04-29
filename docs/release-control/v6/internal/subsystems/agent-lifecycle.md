@@ -143,7 +143,11 @@ The lifecycle-owned infrastructure source manager also owns platform/system
 grouping as source-management content, but not its table band presentation:
 `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` must
 route table-level product/system group rows through the shared grouped table row
-helper instead of carrying lifecycle-local background or hover classes.
+helper instead of carrying lifecycle-local background or hover classes. Its
+desktop source-management table also inherits the surrounding settings panel
+frame and the shared `Table` shell from `frontend-primitives`; lifecycle work
+must not restore a local `overflow-x-auto` wrapper or a page-local table card
+around that table.
 
 ## Extension Points
 

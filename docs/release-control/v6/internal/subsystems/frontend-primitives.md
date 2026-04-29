@@ -182,7 +182,10 @@ work extends shared components instead of creating new local variants.
    tables must not wrap it in page-local scroll containers just to restore
    table sides or mobile overflow. Headerless product tables, including alert
    history, still use `TableCard` for the outer frame instead of hand-coded
-   rounded/bordered wrappers.
+   rounded/bordered wrappers. Product tables already inside a canonical
+   section frame, including storage pools, physical disks, and infrastructure
+   settings source tables, must use `Table` directly rather than nesting
+   another card or scroll wrapper.
    Product-table subgroup/header rows must likewise consume the shared
    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
    helper and `.grouped-table-row` CSS token contract instead of local

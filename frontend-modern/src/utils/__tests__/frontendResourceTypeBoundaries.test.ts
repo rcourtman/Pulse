@@ -1695,6 +1695,8 @@ describe('frontend resource type boundaries', () => {
     expect(diskListSource).not.toContain('Physical disk monitoring requirements:');
     expect(diskListSource).toContain('useDiskListModel');
     expect(diskListSource).toContain('PHYSICAL_DISK_TABLE_CLASS');
+    expect(diskListSource).not.toContain("from '@/components/shared/Card'");
+    expect(diskListSource).not.toContain('PHYSICAL_DISK_TABLE_SCROLL_CLASS');
     expect(diskListSource).not.toContain('cursor-pointer transition-colors');
     expect(diskListSource).not.toContain('function extractDiskData(');
     expect(diskListSource).not.toContain('const filteredDisks = createMemo(() => {');
@@ -2022,6 +2024,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageContentCardSource).toContain('TableCardHeader');
     expect(storageContentCardSource).toContain('STORAGE_CONTENT_CARD_BODY_CLASS');
     expect(storagePoolsTableSource).toMatch(/<Table(?:\s|>)/);
+    expect(storagePoolsTableSource).not.toContain('STORAGE_POOLS_SCROLL_WRAP_CLASS');
     expect(storagePoolsTableSource).not.toContain('<div class="overflow-x-auto">');
     expect(storagePoolsTableSource).not.toContain(
       '<div class="overflow-x-auto bg-surface">',

@@ -73,7 +73,9 @@ querying, and the operator-facing storage health presentation layer.
    lighter open-sided Recovery table frames. Recovery and storage tables must
    use the shared `Table` scroll shell directly; if a table needs the card body
    surface fill it may pass `wrapperClass`, but it must not nest a local
-   `overflow-x-auto` div around the shared table.
+   `overflow-x-auto` div around the shared table. Storage pools and physical
+   disks inherit the surrounding `StorageContentCard` frame and must not add
+   a nested `Card` or second scroll wrapper.
    Recovery inventory protection posture and recovery-event outcome filtering
    must stay separate in that owner: protected inventory uses the route-backed
    `state` query for health, stale, failed, warning, running, unknown, and

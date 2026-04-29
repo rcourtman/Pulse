@@ -588,422 +588,417 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         {setupConfidenceBand()}
 
         <Show when={!useCardLayout()}>
-          <div class="overflow-x-auto">
-            <Table class="w-full min-w-[820px] table-fixed text-sm">
-              <TableHeader class="bg-surface-alt/60">
-                <TableRow>
-                  <TableHead class="w-[22%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[20%]">
-                    System
+          <Table class="w-full min-w-[820px] table-fixed text-sm">
+            <TableHeader class="bg-surface-alt/60">
+              <TableRow>
+                <TableHead class="w-[22%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[20%]">
+                  System
+                </TableHead>
+                <TableHead class="w-[7.5rem] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                  Source
+                </TableHead>
+                <TableHead class="w-[21%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[20%]">
+                  Endpoint
+                </TableHead>
+                <TableHead class="w-[18%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[22%]">
+                  Coverage
+                </TableHead>
+                <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[15%]">
+                  Status
+                </TableHead>
+                <Show when={actionColumnVisible()}>
+                  <TableHead class="w-[7rem] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap">
+                    Actions
                   </TableHead>
-                  <TableHead class="w-[7.5rem] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
-                    Source
-                  </TableHead>
-                  <TableHead class="w-[21%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[20%]">
-                    Endpoint
-                  </TableHead>
-                  <TableHead class="w-[18%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[22%]">
-                    Coverage
-                  </TableHead>
-                  <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[15%]">
-                    Status
-                  </TableHead>
-                  <Show when={actionColumnVisible()}>
-                    <TableHead class="w-[7rem] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap">
-                      Actions
-                    </TableHead>
-                  </Show>
-                </TableRow>
-              </TableHeader>
+                </Show>
+              </TableRow>
+            </TableHeader>
 
-              <TableBody class="bg-surface">
-                <For each={sortedProducts()}>
-                  {(product) => {
-                    const configuredRows = () => groupedConfiguredRows().get(product.type) ?? [];
-                    const discoveredRows = () => groupedDiscoveredRows().get(product.type) ?? [];
-                    const groupRowClass = () =>
-                      getGroupedTableRowClass('border-b border-border-subtle');
+            <TableBody class="bg-surface">
+              <For each={sortedProducts()}>
+                {(product) => {
+                  const configuredRows = () => groupedConfiguredRows().get(product.type) ?? [];
+                  const discoveredRows = () => groupedDiscoveredRows().get(product.type) ?? [];
+                  const groupRowClass = () =>
+                    getGroupedTableRowClass('border-b border-border-subtle');
 
-                    return (
-                      <>
-                        <Show
-                          when={actionColumnVisible()}
-                          fallback={
-                            <TableRow class={groupRowClass()}>
-                              <TableCell colspan={5} class={getGroupedTableRowCellClass()}>
-                                <div class="flex min-w-0 items-center gap-2">
-                                  <span>{product.label}</span>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          }
-                        >
+                  return (
+                    <>
+                      <Show
+                        when={actionColumnVisible()}
+                        fallback={
                           <TableRow class={groupRowClass()}>
-                            <TableCell colspan={6} class={getGroupedTableRowCellClass()}>
-                              <div class="flex items-center justify-between gap-2 whitespace-nowrap">
+                            <TableCell colspan={5} class={getGroupedTableRowCellClass()}>
+                              <div class="flex min-w-0 items-center gap-2">
                                 <span>{product.label}</span>
-                                <Show when={!props.readOnly && props.onAddSource}>
-                                  <button
-                                    type="button"
-                                    onClick={() => props.onAddSource?.(product.type)}
-                                    class={`${addSectionButtonClass} whitespace-nowrap`}
-                                    aria-label={product.actionLabel}
-                                    title={product.actionLabel}
-                                  >
-                                    <Plus class="h-3.5 w-3.5" />
-                                    {product.actionLabel}
-                                  </button>
-                                </Show>
                               </div>
                             </TableCell>
                           </TableRow>
-                        </Show>
+                        }
+                      >
+                        <TableRow class={groupRowClass()}>
+                          <TableCell colspan={6} class={getGroupedTableRowCellClass()}>
+                            <div class="flex items-center justify-between gap-2 whitespace-nowrap">
+                              <span>{product.label}</span>
+                              <Show when={!props.readOnly && props.onAddSource}>
+                                <button
+                                  type="button"
+                                  onClick={() => props.onAddSource?.(product.type)}
+                                  class={`${addSectionButtonClass} whitespace-nowrap`}
+                                  aria-label={product.actionLabel}
+                                  title={product.actionLabel}
+                                >
+                                  <Plus class="h-3.5 w-3.5" />
+                                  {product.actionLabel}
+                                </button>
+                              </Show>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      </Show>
 
-                        <Show when={configuredRows().length > 0}>
-                          <For each={configuredRows()}>
-                            {(row) => {
-                              return (
-                                <>
-                                  <TableRow
-                                    class={`border-b border-border-subtle ${
-                                      row.isCluster ? 'bg-surface-alt/40' : ''
-                                    }`}
-                                  >
-                                    <TableCell class="py-1 pl-3 pr-3 align-top">
-                                      <div
-                                        class={`text-[13px] ${
-                                          row.isCluster
-                                            ? 'font-medium text-base-content'
-                                            : 'text-base-content/80'
-                                        } ${wrappedFieldClass}`}
-                                        title={row.name}
-                                      >
-                                        {row.name}
-                                      </div>
-                                      <Show when={row.isCluster && row.subtitle}>
-                                        <div class="mt-0.5 text-[11px] text-muted">
-                                          {row.subtitle}
-                                        </div>
-                                      </Show>
-                                      <Show when={!row.isCluster && row.identitySubtitle}>
-                                        <div class="mt-0.5 text-[11px] text-muted">
-                                          {row.identitySubtitle}
-                                        </div>
-                                      </Show>
-                                    </TableCell>
-
-                                    <TableCell class="px-3 py-1 align-top">
-                                      {(() => {
-                                        const presentation = infrastructureSourcePresentation(
-                                          row.source,
-                                        );
-                                        const title =
-                                          agentMethodTitleFor(row) ?? presentation.title;
-                                        return (
-                                          <span
-                                            class={`${presentation.badgeClassName} whitespace-nowrap`}
-                                            title={title}
-                                          >
-                                            {presentation.label}
-                                          </span>
-                                        );
-                                      })()}
-                                    </TableCell>
-
-                                    <TableCell class="px-3 py-1 align-top">
-                                      <Show
-                                        when={row.host}
-                                        fallback={<span class="text-xs text-muted">-</span>}
-                                      >
-                                        <div
-                                          class="truncate whitespace-nowrap text-[12px] text-muted"
-                                          title={row.host}
-                                        >
-                                          {row.host}
-                                        </div>
-                                      </Show>
-                                    </TableCell>
-
-                                    <TableCell class="px-3 py-1 align-top">
-                                      <Show
-                                        when={row.coverageLabels.length > 0}
-                                        fallback={<span class="text-xs text-muted">-</span>}
-                                      >
-                                        <div
-                                          class="whitespace-normal break-words text-[12px] leading-4 text-muted"
-                                          title={row.coverageLabels.join(', ')}
-                                        >
-                                          {row.coverageLabels.join(', ')}
-                                        </div>
-                                      </Show>
-                                    </TableCell>
-
-                                    <TableCell class="px-3 py-1 align-top">
-                                      <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                        <span
-                                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
-                                        >
-                                          {row.statusLabel}
-                                        </span>
-                                        <Show when={row.agentUpdateCount > 0}>
-                                          <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                                            {row.agentUpdateCount === 1
-                                              ? 'Agent update'
-                                              : `${row.agentUpdateCount} agent updates`}
-                                          </span>
-                                        </Show>
-                                        <span class="whitespace-nowrap text-[12px] text-muted/90">
-                                          {row.lastActivityText}
-                                        </span>
-                                      </div>
-                                      <div class="mt-1 flex flex-wrap items-center gap-1">
-                                        <For each={row.fleetHighlights}>
-                                          {(signal) => (
-                                            <span
-                                              class={fleetSignalClassName(signal.tone)}
-                                              title={signal.detail}
-                                            >
-                                              {signal.label}
-                                            </span>
-                                          )}
-                                        </For>
-                                      </div>
-                                    </TableCell>
-
-                                    <Show when={actionColumnVisible()}>
-                                      <TableCell class="px-3 py-1 align-top text-right">
-                                        <Show
-                                          when={rowInteractive(row)}
-                                          fallback={
-                                            <span class="text-xs text-muted">Read only</span>
-                                          }
-                                        >
-                                          <button
-                                            type="button"
-                                            onClick={() => props.onOpenConnection?.(row)}
-                                            class={inlineButtonClass}
-                                          >
-                                            Manage
-                                          </button>
-                                        </Show>
-                                      </TableCell>
-                                    </Show>
-                                  </TableRow>
-
-                                  <Show when={row.lastErrorMessage}>
-                                    <TableRow class="border-b border-border-subtle">
-                                      <TableCell
-                                        colspan={actionColumnVisible() ? 6 : 5}
-                                        class="bg-surface px-3 pb-1.5 pt-0"
-                                      >
-                                        <div
-                                          role="alert"
-                                          class="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-                                        >
-                                          {row.lastErrorMessage}
-                                        </div>
-                                      </TableCell>
-                                    </TableRow>
-                                  </Show>
-
-                                  <Show when={row.members.length > 0}>
-                                    <For each={row.members}>
-                                      {(member, memberIndex) => {
-                                        const memberPresentation = infrastructureSourcePresentation(
-                                          member.source,
-                                        );
-                                        const memberSourceTitle =
-                                          memberMethodTitleFor(row, memberIndex()) ??
-                                          memberPresentation.title;
-                                        return (
-                                          <TableRow class="border-b border-border-subtle bg-surface-alt/30">
-                                            <TableCell class="py-1 pl-3 pr-3 align-top">
-                                              <div class="flex min-w-0 items-start gap-2 pl-4">
-                                                <span class="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-border" />
-                                                <div class="min-w-0">
-                                                  <div
-                                                    class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
-                                                    title={member.name}
-                                                  >
-                                                    {member.name}
-                                                  </div>
-                                                  <div class="mt-0.5 text-[11px] text-muted">
-                                                    {member.subtitle}
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </TableCell>
-
-                                            <TableCell class="px-3 py-1 align-top">
-                                              <span
-                                                class={`${memberPresentation.badgeClassName} whitespace-nowrap`}
-                                                title={memberSourceTitle}
-                                              >
-                                                {memberPresentation.label}
-                                              </span>
-                                            </TableCell>
-
-                                            <TableCell class="px-3 py-1 align-top">
-                                              <Show
-                                                when={member.host}
-                                                fallback={<span class="text-xs text-muted">-</span>}
-                                              >
-                                                <div
-                                                  class="truncate whitespace-nowrap text-[12px] text-muted"
-                                                  title={member.host}
-                                                >
-                                                  {member.host}
-                                                </div>
-                                              </Show>
-                                            </TableCell>
-
-                                            <TableCell class="px-3 py-1 align-top">
-                                              <Show
-                                                when={member.coverageLabels.length > 0}
-                                                fallback={<span class="text-xs text-muted">-</span>}
-                                              >
-                                                <div
-                                                  class="whitespace-normal break-words text-[12px] leading-4 text-muted"
-                                                  title={member.coverageLabels.join(', ')}
-                                                >
-                                                  {member.coverageLabels.join(', ')}
-                                                </div>
-                                              </Show>
-                                            </TableCell>
-
-                                            <TableCell class="px-3 py-1 align-top">
-                                              <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                                <span
-                                                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${member.statusClassName}`}
-                                                >
-                                                  {member.statusLabel}
-                                                </span>
-                                                <span class="whitespace-nowrap text-[12px] text-muted/90">
-                                                  {member.lastActivityText}
-                                                </span>
-                                              </div>
-                                              <div class="mt-1 flex flex-wrap items-center gap-1">
-                                                <For each={member.fleetHighlights}>
-                                                  {(signal) => (
-                                                    <span
-                                                      class={fleetSignalClassName(signal.tone)}
-                                                      title={signal.detail}
-                                                    >
-                                                      {signal.label}
-                                                    </span>
-                                                  )}
-                                                </For>
-                                              </div>
-                                            </TableCell>
-
-                                            <Show when={actionColumnVisible()}>
-                                              <TableCell class="px-3 py-1 align-top text-right">
-                                                <span class="text-xs text-muted" aria-hidden="true">
-                                                  —
-                                                </span>
-                                              </TableCell>
-                                            </Show>
-                                          </TableRow>
-                                        );
-                                      }}
-                                    </For>
-                                  </Show>
-                                </>
-                              );
-                            }}
-                          </For>
-                        </Show>
-
-                        <Show when={discoveredRows().length > 0}>
-                          <For each={discoveredRows()}>
-                            {(server) => {
-                              return (
-                                <TableRow class={discoveryRowClass}>
+                      <Show when={configuredRows().length > 0}>
+                        <For each={configuredRows()}>
+                          {(row) => {
+                            return (
+                              <>
+                                <TableRow
+                                  class={`border-b border-border-subtle ${
+                                    row.isCluster ? 'bg-surface-alt/40' : ''
+                                  }`}
+                                >
                                   <TableCell class="py-1 pl-3 pr-3 align-top">
                                     <div
-                                      class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
-                                      title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
+                                      class={`text-[13px] ${
+                                        row.isCluster
+                                          ? 'font-medium text-base-content'
+                                          : 'text-base-content/80'
+                                      } ${wrappedFieldClass}`}
+                                      title={row.name}
                                     >
-                                      {discoveredServerName(server)}
+                                      {row.name}
                                     </div>
+                                    <Show when={row.isCluster && row.subtitle}>
+                                      <div class="mt-0.5 text-[11px] text-muted">
+                                        {row.subtitle}
+                                      </div>
+                                    </Show>
+                                    <Show when={!row.isCluster && row.identitySubtitle}>
+                                      <div class="mt-0.5 text-[11px] text-muted">
+                                        {row.identitySubtitle}
+                                      </div>
+                                    </Show>
                                   </TableCell>
 
                                   <TableCell class="px-3 py-1 align-top">
-                                    <span
-                                      class="inline-flex items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
-                                      title="Discovery candidate — review to attach a source"
-                                    >
-                                      Candidate
-                                    </span>
+                                    {(() => {
+                                      const presentation = infrastructureSourcePresentation(
+                                        row.source,
+                                      );
+                                      const title = agentMethodTitleFor(row) ?? presentation.title;
+                                      return (
+                                        <span
+                                          class={`${presentation.badgeClassName} whitespace-nowrap`}
+                                          title={title}
+                                        >
+                                          {presentation.label}
+                                        </span>
+                                      );
+                                    })()}
                                   </TableCell>
 
                                   <TableCell class="px-3 py-1 align-top">
-                                    <div
-                                      class="truncate whitespace-nowrap text-[12px] text-muted"
-                                      title={discoveredServerEndpoint(server)}
+                                    <Show
+                                      when={row.host}
+                                      fallback={<span class="text-xs text-muted">-</span>}
                                     >
-                                      {discoveredServerEndpoint(server)}
-                                    </div>
+                                      <div
+                                        class="truncate whitespace-nowrap text-[12px] text-muted"
+                                        title={row.host}
+                                      >
+                                        {row.host}
+                                      </div>
+                                    </Show>
                                   </TableCell>
 
                                   <TableCell class="px-3 py-1 align-top">
-                                    <div
-                                      class="whitespace-normal break-words text-[12px] leading-4 text-muted"
-                                      title={discoveredCoverageText(server)}
+                                    <Show
+                                      when={row.coverageLabels.length > 0}
+                                      fallback={<span class="text-xs text-muted">-</span>}
                                     >
-                                      {discoveredCoverageText(server)}
-                                    </div>
+                                      <div
+                                        class="whitespace-normal break-words text-[12px] leading-4 text-muted"
+                                        title={row.coverageLabels.join(', ')}
+                                      >
+                                        {row.coverageLabels.join(', ')}
+                                      </div>
+                                    </Show>
                                   </TableCell>
 
                                   <TableCell class="px-3 py-1 align-top">
                                     <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                      <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
-                                        Discovered
+                                      <span
+                                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
+                                      >
+                                        {row.statusLabel}
                                       </span>
+                                      <Show when={row.agentUpdateCount > 0}>
+                                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                          {row.agentUpdateCount === 1
+                                            ? 'Agent update'
+                                            : `${row.agentUpdateCount} agent updates`}
+                                        </span>
+                                      </Show>
                                       <span class="whitespace-nowrap text-[12px] text-muted/90">
-                                        {lastDiscoveryResultText() ?? 'Waiting for scan'}
+                                        {row.lastActivityText}
                                       </span>
+                                    </div>
+                                    <div class="mt-1 flex flex-wrap items-center gap-1">
+                                      <For each={row.fleetHighlights}>
+                                        {(signal) => (
+                                          <span
+                                            class={fleetSignalClassName(signal.tone)}
+                                            title={signal.detail}
+                                          >
+                                            {signal.label}
+                                          </span>
+                                        )}
+                                      </For>
                                     </div>
                                   </TableCell>
 
                                   <Show when={actionColumnVisible()}>
                                     <TableCell class="px-3 py-1 align-top text-right">
                                       <Show
-                                        when={props.onReviewDiscoveredSource}
+                                        when={rowInteractive(row)}
                                         fallback={<span class="text-xs text-muted">Read only</span>}
                                       >
                                         <button
                                           type="button"
-                                          onClick={() => props.onReviewDiscoveredSource?.(server)}
+                                          onClick={() => props.onOpenConnection?.(row)}
                                           class={inlineButtonClass}
                                         >
-                                          Review
+                                          Manage
                                         </button>
                                       </Show>
                                     </TableCell>
                                   </Show>
                                 </TableRow>
-                              );
-                            }}
-                          </For>
-                        </Show>
-                      </>
-                    );
-                  }}
-                </For>
 
-                <Show when={!hasAnyConfigured() && !hasAnyDiscovered()}>
-                  <TableRow>
-                    <TableCell
-                      colspan={actionColumnVisible() ? 6 : 5}
-                      class="px-4 py-8 text-center text-sm text-muted"
-                    >
-                      {emptyStateContent()}
-                    </TableCell>
-                  </TableRow>
-                </Show>
-              </TableBody>
-            </Table>
-          </div>
+                                <Show when={row.lastErrorMessage}>
+                                  <TableRow class="border-b border-border-subtle">
+                                    <TableCell
+                                      colspan={actionColumnVisible() ? 6 : 5}
+                                      class="bg-surface px-3 pb-1.5 pt-0"
+                                    >
+                                      <div
+                                        role="alert"
+                                        class="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                                      >
+                                        {row.lastErrorMessage}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                </Show>
+
+                                <Show when={row.members.length > 0}>
+                                  <For each={row.members}>
+                                    {(member, memberIndex) => {
+                                      const memberPresentation = infrastructureSourcePresentation(
+                                        member.source,
+                                      );
+                                      const memberSourceTitle =
+                                        memberMethodTitleFor(row, memberIndex()) ??
+                                        memberPresentation.title;
+                                      return (
+                                        <TableRow class="border-b border-border-subtle bg-surface-alt/30">
+                                          <TableCell class="py-1 pl-3 pr-3 align-top">
+                                            <div class="flex min-w-0 items-start gap-2 pl-4">
+                                              <span class="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-border" />
+                                              <div class="min-w-0">
+                                                <div
+                                                  class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
+                                                  title={member.name}
+                                                >
+                                                  {member.name}
+                                                </div>
+                                                <div class="mt-0.5 text-[11px] text-muted">
+                                                  {member.subtitle}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </TableCell>
+
+                                          <TableCell class="px-3 py-1 align-top">
+                                            <span
+                                              class={`${memberPresentation.badgeClassName} whitespace-nowrap`}
+                                              title={memberSourceTitle}
+                                            >
+                                              {memberPresentation.label}
+                                            </span>
+                                          </TableCell>
+
+                                          <TableCell class="px-3 py-1 align-top">
+                                            <Show
+                                              when={member.host}
+                                              fallback={<span class="text-xs text-muted">-</span>}
+                                            >
+                                              <div
+                                                class="truncate whitespace-nowrap text-[12px] text-muted"
+                                                title={member.host}
+                                              >
+                                                {member.host}
+                                              </div>
+                                            </Show>
+                                          </TableCell>
+
+                                          <TableCell class="px-3 py-1 align-top">
+                                            <Show
+                                              when={member.coverageLabels.length > 0}
+                                              fallback={<span class="text-xs text-muted">-</span>}
+                                            >
+                                              <div
+                                                class="whitespace-normal break-words text-[12px] leading-4 text-muted"
+                                                title={member.coverageLabels.join(', ')}
+                                              >
+                                                {member.coverageLabels.join(', ')}
+                                              </div>
+                                            </Show>
+                                          </TableCell>
+
+                                          <TableCell class="px-3 py-1 align-top">
+                                            <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                                              <span
+                                                class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${member.statusClassName}`}
+                                              >
+                                                {member.statusLabel}
+                                              </span>
+                                              <span class="whitespace-nowrap text-[12px] text-muted/90">
+                                                {member.lastActivityText}
+                                              </span>
+                                            </div>
+                                            <div class="mt-1 flex flex-wrap items-center gap-1">
+                                              <For each={member.fleetHighlights}>
+                                                {(signal) => (
+                                                  <span
+                                                    class={fleetSignalClassName(signal.tone)}
+                                                    title={signal.detail}
+                                                  >
+                                                    {signal.label}
+                                                  </span>
+                                                )}
+                                              </For>
+                                            </div>
+                                          </TableCell>
+
+                                          <Show when={actionColumnVisible()}>
+                                            <TableCell class="px-3 py-1 align-top text-right">
+                                              <span class="text-xs text-muted" aria-hidden="true">
+                                                —
+                                              </span>
+                                            </TableCell>
+                                          </Show>
+                                        </TableRow>
+                                      );
+                                    }}
+                                  </For>
+                                </Show>
+                              </>
+                            );
+                          }}
+                        </For>
+                      </Show>
+
+                      <Show when={discoveredRows().length > 0}>
+                        <For each={discoveredRows()}>
+                          {(server) => {
+                            return (
+                              <TableRow class={discoveryRowClass}>
+                                <TableCell class="py-1 pl-3 pr-3 align-top">
+                                  <div
+                                    class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
+                                    title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
+                                  >
+                                    {discoveredServerName(server)}
+                                  </div>
+                                </TableCell>
+
+                                <TableCell class="px-3 py-1 align-top">
+                                  <span
+                                    class="inline-flex items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
+                                    title="Discovery candidate — review to attach a source"
+                                  >
+                                    Candidate
+                                  </span>
+                                </TableCell>
+
+                                <TableCell class="px-3 py-1 align-top">
+                                  <div
+                                    class="truncate whitespace-nowrap text-[12px] text-muted"
+                                    title={discoveredServerEndpoint(server)}
+                                  >
+                                    {discoveredServerEndpoint(server)}
+                                  </div>
+                                </TableCell>
+
+                                <TableCell class="px-3 py-1 align-top">
+                                  <div
+                                    class="whitespace-normal break-words text-[12px] leading-4 text-muted"
+                                    title={discoveredCoverageText(server)}
+                                  >
+                                    {discoveredCoverageText(server)}
+                                  </div>
+                                </TableCell>
+
+                                <TableCell class="px-3 py-1 align-top">
+                                  <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                                    <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+                                      Discovered
+                                    </span>
+                                    <span class="whitespace-nowrap text-[12px] text-muted/90">
+                                      {lastDiscoveryResultText() ?? 'Waiting for scan'}
+                                    </span>
+                                  </div>
+                                </TableCell>
+
+                                <Show when={actionColumnVisible()}>
+                                  <TableCell class="px-3 py-1 align-top text-right">
+                                    <Show
+                                      when={props.onReviewDiscoveredSource}
+                                      fallback={<span class="text-xs text-muted">Read only</span>}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => props.onReviewDiscoveredSource?.(server)}
+                                        class={inlineButtonClass}
+                                      >
+                                        Review
+                                      </button>
+                                    </Show>
+                                  </TableCell>
+                                </Show>
+                              </TableRow>
+                            );
+                          }}
+                        </For>
+                      </Show>
+                    </>
+                  );
+                }}
+              </For>
+
+              <Show when={!hasAnyConfigured() && !hasAnyDiscovered()}>
+                <TableRow>
+                  <TableCell
+                    colspan={actionColumnVisible() ? 6 : 5}
+                    class="px-4 py-8 text-center text-sm text-muted"
+                  >
+                    {emptyStateContent()}
+                  </TableCell>
+                </TableRow>
+              </Show>
+            </TableBody>
+          </Table>
         </Show>
 
         <Show when={useCardLayout()}>

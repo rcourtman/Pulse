@@ -84,7 +84,6 @@ export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_NOTE_CLASS =
 const PHYSICAL_DISK_TABLE_HEADER_CLASS =
   'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] sm:text-[11px] lg:text-xs font-medium uppercase tracking-wider';
 
-export const PHYSICAL_DISK_TABLE_SCROLL_CLASS = 'overflow-x-auto';
 export const PHYSICAL_DISK_TABLE_CLASS = 'w-full table-fixed text-xs';
 export const PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS =
   'border-b border-border bg-surface-alt text-muted';

@@ -23,7 +23,6 @@ import {
   STORAGE_POOLS_EMPTY_STATE_CLASS,
   STORAGE_POOLS_HEADER_ROW_CLASS,
   STORAGE_POOLS_LOADING_STATE_CLASS,
-  STORAGE_POOLS_SCROLL_WRAP_CLASS,
   STORAGE_POOLS_TABLE_CLASS,
   STORAGE_VIEW_OPTIONS,
   shouldShowCephSummaryCard,
@@ -74,7 +73,6 @@ describe('storagePagePresentation', () => {
     expect(STORAGE_CONTENT_CARD_BODY_CLASS).toBe('p-2');
     expect(STORAGE_POOLS_EMPTY_STATE_CLASS).toBe('p-6 text-sm text-muted');
     expect(STORAGE_POOLS_LOADING_STATE_CLASS).toBe('p-6 text-sm text-muted');
-    expect(STORAGE_POOLS_SCROLL_WRAP_CLASS).toBe('overflow-x-auto');
     expect(STORAGE_POOLS_TABLE_CLASS).toBe('w-full table-fixed text-xs');
     expect(STORAGE_POOLS_HEADER_ROW_CLASS).toContain('bg-surface-alt');
     expect(STORAGE_POOLS_BODY_CLASS).toBe('divide-y divide-border');

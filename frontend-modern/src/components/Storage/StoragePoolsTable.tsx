@@ -8,7 +8,6 @@ import {
   STORAGE_POOLS_EMPTY_STATE_CLASS,
   STORAGE_POOLS_HEADER_ROW_CLASS,
   STORAGE_POOLS_LOADING_STATE_CLASS,
-  STORAGE_POOLS_SCROLL_WRAP_CLASS,
   STORAGE_POOLS_TABLE_CLASS,
 } from '@/features/storageBackups/storagePagePresentation';
 import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
@@ -69,100 +68,98 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
             <div class={STORAGE_POOLS_EMPTY_STATE_CLASS}>{getStorageEmptyStateMessage()}</div>
           }
         >
-          <div class={STORAGE_POOLS_SCROLL_WRAP_CLASS}>
-            <Table class={STORAGE_POOLS_TABLE_CLASS}>
-              <colgroup>
+          <Table class={STORAGE_POOLS_TABLE_CLASS}>
+            <colgroup>
+              <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
+                {(column) => <col class={column.colClassName} />}
+              </For>
+            </colgroup>
+            <TableHeader>
+              <TableRow class={STORAGE_POOLS_HEADER_ROW_CLASS}>
                 <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
-                  {(column) => <col class={column.colClassName} />}
-                </For>
-              </colgroup>
-              <TableHeader>
-                <TableRow class={STORAGE_POOLS_HEADER_ROW_CLASS}>
-                  <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
-                    {(column) => (
-                      <TableHead
-                        class={column.className}
-                        aria-label={column.label}
-                        title={column.label}
-                      >
-                        <span aria-hidden="true" class="hidden xl:inline">
-                          {column.label}
-                        </span>
-                        <span aria-hidden="true" class="xl:hidden">
-                          {column.compactLabel}
-                        </span>
-                      </TableHead>
-                    )}
-                  </For>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={STORAGE_POOLS_BODY_CLASS}>
-                <For each={model.groups()}>
-                  {(group) => (
-                    <>
-                      <Show when={group.showHeader}>
-                        {(() => {
-                          const groupSummaryScope = buildStorageSummaryGroupScope(
-                            group,
-                            props.groupBy,
-                          );
-                          return (
-                            <StorageGroupRow
-                              group={group}
-                              groupBy={props.groupBy}
-                              expanded={group.expanded}
-                              onToggle={() => props.toggleGroup(group.key)}
-                              summaryGroupScope={groupSummaryScope}
-                              summaryActive={
-                                props.activeSummaryGroupScope?.id === groupSummaryScope?.id
-                              }
-                              summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
-                              onFocusChange={props.onGroupFocusChange}
-                              onHoverChange={props.onGroupHoverChange}
-                            />
-                          );
-                        })()}
-                      </Show>
-                      <Show when={group.expanded}>
-                        <Index each={group.items}>
-                          {(record) => {
-                            const rowModel = () => model.buildRowModel(record().id, record());
-
-                            return (
-                              <StoragePoolRow
-                                record={record()}
-                                growthDelta={
-                                  props.storageGrowthBySeriesId.get(
-                                    resolveStorageRecordMetricResourceId(record()),
-                                  ) ?? null
-                                }
-                                summarySeriesId={resolveStorageRecordMetricResourceId(record())}
-                                expanded={rowModel().expanded}
-                                summaryHighlighted={
-                                  props.highlightedSummarySeriesId ===
-                                  resolveStorageRecordMetricResourceId(record())
-                                }
-                                summaryGroupMemberState={resolveSummaryGroupMemberInteractionState({
-                                  seriesId: resolveStorageRecordMetricResourceId(record()),
-                                  hoveredGroupScope: props.hoveredSummaryGroupScope,
-                                  focusedGroupScope: props.focusedSummaryGroupScope,
-                                })}
-                                onToggleExpand={() => model.togglePool(record().id)}
-                                onHoverChange={props.onHoverChange}
-                                rowClass={rowModel().rowClass}
-                                physicalDisks={props.physicalDisks}
-                                alertDataAttrs={rowModel().alertDataAttrs}
-                              />
-                            );
-                          }}
-                        </Index>
-                      </Show>
-                    </>
+                  {(column) => (
+                    <TableHead
+                      class={column.className}
+                      aria-label={column.label}
+                      title={column.label}
+                    >
+                      <span aria-hidden="true" class="hidden xl:inline">
+                        {column.label}
+                      </span>
+                      <span aria-hidden="true" class="xl:hidden">
+                        {column.compactLabel}
+                      </span>
+                    </TableHead>
                   )}
                 </For>
-              </TableBody>
-            </Table>
-          </div>
+              </TableRow>
+            </TableHeader>
+            <TableBody class={STORAGE_POOLS_BODY_CLASS}>
+              <For each={model.groups()}>
+                {(group) => (
+                  <>
+                    <Show when={group.showHeader}>
+                      {(() => {
+                        const groupSummaryScope = buildStorageSummaryGroupScope(
+                          group,
+                          props.groupBy,
+                        );
+                        return (
+                          <StorageGroupRow
+                            group={group}
+                            groupBy={props.groupBy}
+                            expanded={group.expanded}
+                            onToggle={() => props.toggleGroup(group.key)}
+                            summaryGroupScope={groupSummaryScope}
+                            summaryActive={
+                              props.activeSummaryGroupScope?.id === groupSummaryScope?.id
+                            }
+                            summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
+                            onFocusChange={props.onGroupFocusChange}
+                            onHoverChange={props.onGroupHoverChange}
+                          />
+                        );
+                      })()}
+                    </Show>
+                    <Show when={group.expanded}>
+                      <Index each={group.items}>
+                        {(record) => {
+                          const rowModel = () => model.buildRowModel(record().id, record());
+
+                          return (
+                            <StoragePoolRow
+                              record={record()}
+                              growthDelta={
+                                props.storageGrowthBySeriesId.get(
+                                  resolveStorageRecordMetricResourceId(record()),
+                                ) ?? null
+                              }
+                              summarySeriesId={resolveStorageRecordMetricResourceId(record())}
+                              expanded={rowModel().expanded}
+                              summaryHighlighted={
+                                props.highlightedSummarySeriesId ===
+                                resolveStorageRecordMetricResourceId(record())
+                              }
+                              summaryGroupMemberState={resolveSummaryGroupMemberInteractionState({
+                                seriesId: resolveStorageRecordMetricResourceId(record()),
+                                hoveredGroupScope: props.hoveredSummaryGroupScope,
+                                focusedGroupScope: props.focusedSummaryGroupScope,
+                              })}
+                              onToggleExpand={() => model.togglePool(record().id)}
+                              onHoverChange={props.onHoverChange}
+                              rowClass={rowModel().rowClass}
+                              physicalDisks={props.physicalDisks}
+                              alertDataAttrs={rowModel().alertDataAttrs}
+                            />
+                          );
+                        }}
+                      </Index>
+                    </Show>
+                  </>
+                )}
+              </For>
+            </TableBody>
+          </Table>
         </Show>
       }
     >

@@ -524,6 +524,8 @@ describe('shared primitive guardrails', () => {
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storagePoolsTableSource,
+      diskListSource,
+      infrastructureSourceManagerSource,
     ]) {
       expect(source).toContain('<Table');
       expect(source).not.toContain('<div class="overflow-x-auto">');
@@ -554,6 +556,9 @@ describe('shared primitive guardrails', () => {
     expect(alertHistoryTableSectionSource).not.toContain(
       'overflow-hidden rounded border border-border',
     );
+    expect(storagePoolsTableSource).not.toContain('STORAGE_POOLS_SCROLL_WRAP_CLASS');
+    expect(diskListSource).not.toContain("from '@/components/shared/Card'");
+    expect(diskListSource).not.toContain('PHYSICAL_DISK_TABLE_SCROLL_CLASS');
     expect(recoveryProtectedInventorySectionSource).toContain('wrapperClass="bg-surface"');
     expect(storageContentCardSource).toContain('<StoragePoolsTable');
   });

@@ -97,7 +97,6 @@ export const STORAGE_CONTENT_CARD_BODY_CLASS = 'p-2';
 
 export const STORAGE_POOLS_EMPTY_STATE_CLASS = 'p-6 text-sm text-muted';
 export const STORAGE_POOLS_LOADING_STATE_CLASS = 'p-6 text-sm text-muted';
-export const STORAGE_POOLS_SCROLL_WRAP_CLASS = 'overflow-x-auto';
 export const STORAGE_POOLS_TABLE_CLASS = 'w-full table-fixed text-xs';
 export const STORAGE_POOLS_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
 export const STORAGE_POOLS_BODY_CLASS = 'divide-y divide-border';

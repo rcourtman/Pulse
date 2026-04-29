@@ -1,5 +1,4 @@
 import { Component, For, Show } from 'solid-js';
-import { Card } from '@/components/shared/Card';
 import {
   buildSummaryDisclosureControlsId,
   createSummaryInteractiveRowPreviewHandlers,
@@ -67,7 +66,6 @@ import {
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS,
   PHYSICAL_DISK_TABLE_ROW_STYLE,
-  PHYSICAL_DISK_TABLE_SCROLL_CLASS,
   getPhysicalDiskEmptyStatePresentation,
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
@@ -136,7 +134,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
   return (
     <div>
       <Show when={model.filteredDisks().length === 0}>
-        <Card padding="lg" class={PHYSICAL_DISK_EMPTY_CARD_CLASS}>
+        <div class={`p-4 sm:p-6 ${PHYSICAL_DISK_EMPTY_CARD_CLASS}`}>
           <div class="">
             <p class={PHYSICAL_DISK_EMPTY_TITLE_CLASS}>{emptyState().title}</p>
             <Show when={emptyState().nodeMessage}>
@@ -173,219 +171,203 @@ export const DiskList: Component<DiskListProps> = (props) => {
               </div>
             </Show>
           </Show>
-        </Card>
+        </div>
       </Show>
 
       <Show when={model.filteredDisks().length > 0}>
-        <Card padding="none" tone="card" class="overflow-hidden">
-          <div
-            class={PHYSICAL_DISK_TABLE_SCROLL_CLASS}
-            style={{ '-webkit-overflow-scrolling': 'touch' }}
-          >
-            <Table class={PHYSICAL_DISK_TABLE_CLASS}>
-              <colgroup>
-                <col class={PHYSICAL_DISK_COL_DISK_CLASS} />
-                <col class={PHYSICAL_DISK_COL_SOURCE_CLASS} />
-                <col class={PHYSICAL_DISK_COL_HOST_CLASS} />
-                <col class={PHYSICAL_DISK_COL_ROLE_CLASS} />
-                <col class={PHYSICAL_DISK_COL_PARENT_CLASS} />
-                <col class={PHYSICAL_DISK_COL_HEALTH_CLASS} />
-                <col class={PHYSICAL_DISK_COL_TEMP_CLASS} />
-                <col class={PHYSICAL_DISK_COL_SIZE_CLASS} />
-              </colgroup>
-              <TableHeader>
-                <TableRow class={PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={PHYSICAL_DISK_HEADER_DISK_CLASS}>Disk</TableHead>
-                  <TableHead
-                    class={PHYSICAL_DISK_HEADER_SOURCE_CLASS}
-                    aria-label="Source"
-                    title="Source"
-                  >
-                    <span aria-hidden="true" class="hidden sm:inline">
-                      Source
-                    </span>
-                    <span aria-hidden="true" class="sm:hidden">
-                      Src
-                    </span>
-                  </TableHead>
-                  <TableHead class={PHYSICAL_DISK_HEADER_HOST_CLASS}>Host</TableHead>
-                  <TableHead class={PHYSICAL_DISK_HEADER_ROLE_CLASS}>Role</TableHead>
-                  <TableHead
-                    class={PHYSICAL_DISK_HEADER_PARENT_CLASS}
-                    aria-label="Belongs To"
-                    title="Belongs To"
-                  >
-                    Belongs
-                  </TableHead>
-                  <TableHead class={PHYSICAL_DISK_HEADER_HEALTH_CLASS}>Health</TableHead>
-                  <TableHead class={PHYSICAL_DISK_HEADER_TEMP_CLASS}>Temp</TableHead>
-                  <TableHead class={PHYSICAL_DISK_HEADER_SIZE_CLASS}>Size</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PHYSICAL_DISK_TABLE_BODY_CLASS}>
-                <For each={model.filteredDisks()}>
-                  {(disk) => {
-                    const data = model.getDiskData(disk);
-                    const status = getPhysicalDiskHealthStatus(data);
-                    const hostLabel = getPhysicalDiskHostLabel(data, disk);
-                    const healthSummary = getPhysicalDiskHealthSummary(status);
-                    const sourceBadge = getPhysicalDiskSourceBadgePresentation(disk);
-                    const isSelected = () => model.selectedDisk()?.id === disk.id;
-                    const summarySeriesId = resolvePhysicalDiskMetricResourceId(disk);
-                    const isSummaryHighlighted = () =>
-                      props.highlightedSummarySeriesId === summarySeriesId;
-                    const detailControlsId = buildSummaryDisclosureControlsId(summarySeriesId);
-                    const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
-                      onPreview: () => props.onHoverChange?.(disk.id),
-                      onPreviewClear: () => props.onHoverChange?.(null),
-                    });
+        <Table class={PHYSICAL_DISK_TABLE_CLASS}>
+          <colgroup>
+            <col class={PHYSICAL_DISK_COL_DISK_CLASS} />
+            <col class={PHYSICAL_DISK_COL_SOURCE_CLASS} />
+            <col class={PHYSICAL_DISK_COL_HOST_CLASS} />
+            <col class={PHYSICAL_DISK_COL_ROLE_CLASS} />
+            <col class={PHYSICAL_DISK_COL_PARENT_CLASS} />
+            <col class={PHYSICAL_DISK_COL_HEALTH_CLASS} />
+            <col class={PHYSICAL_DISK_COL_TEMP_CLASS} />
+            <col class={PHYSICAL_DISK_COL_SIZE_CLASS} />
+          </colgroup>
+          <TableHeader>
+            <TableRow class={PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS}>
+              <TableHead class={PHYSICAL_DISK_HEADER_DISK_CLASS}>Disk</TableHead>
+              <TableHead
+                class={PHYSICAL_DISK_HEADER_SOURCE_CLASS}
+                aria-label="Source"
+                title="Source"
+              >
+                <span aria-hidden="true" class="hidden sm:inline">
+                  Source
+                </span>
+                <span aria-hidden="true" class="sm:hidden">
+                  Src
+                </span>
+              </TableHead>
+              <TableHead class={PHYSICAL_DISK_HEADER_HOST_CLASS}>Host</TableHead>
+              <TableHead class={PHYSICAL_DISK_HEADER_ROLE_CLASS}>Role</TableHead>
+              <TableHead
+                class={PHYSICAL_DISK_HEADER_PARENT_CLASS}
+                aria-label="Belongs To"
+                title="Belongs To"
+              >
+                Belongs
+              </TableHead>
+              <TableHead class={PHYSICAL_DISK_HEADER_HEALTH_CLASS}>Health</TableHead>
+              <TableHead class={PHYSICAL_DISK_HEADER_TEMP_CLASS}>Temp</TableHead>
+              <TableHead class={PHYSICAL_DISK_HEADER_SIZE_CLASS}>Size</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody class={PHYSICAL_DISK_TABLE_BODY_CLASS}>
+            <For each={model.filteredDisks()}>
+              {(disk) => {
+                const data = model.getDiskData(disk);
+                const status = getPhysicalDiskHealthStatus(data);
+                const hostLabel = getPhysicalDiskHostLabel(data, disk);
+                const healthSummary = getPhysicalDiskHealthSummary(status);
+                const sourceBadge = getPhysicalDiskSourceBadgePresentation(disk);
+                const isSelected = () => model.selectedDisk()?.id === disk.id;
+                const summarySeriesId = resolvePhysicalDiskMetricResourceId(disk);
+                const isSummaryHighlighted = () =>
+                  props.highlightedSummarySeriesId === summarySeriesId;
+                const detailControlsId = buildSummaryDisclosureControlsId(summarySeriesId);
+                const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
+                  onPreview: () => props.onHoverChange?.(disk.id),
+                  onPreviewClear: () => props.onHoverChange?.(null),
+                });
 
-                    return (
-                      <>
-                        <TableRow
-                          data-row-id={disk.id}
-                          data-summary-series-id={summarySeriesId}
-                          data-summary-row-active={
-                            isSummaryHighlighted() && !isSelected() ? 'true' : 'false'
-                          }
-                          class={`${PHYSICAL_DISK_TABLE_ROW_CLASS} ${
-                            isSelected()
-                              ? PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS
-                              : PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS
-                          }`.trim()}
-                          style={PHYSICAL_DISK_TABLE_ROW_STYLE}
-                          onClick={() => model.toggleSelectedDisk(disk)}
-                          {...interactiveRowHandlers}
+                return (
+                  <>
+                    <TableRow
+                      data-row-id={disk.id}
+                      data-summary-series-id={summarySeriesId}
+                      data-summary-row-active={
+                        isSummaryHighlighted() && !isSelected() ? 'true' : 'false'
+                      }
+                      class={`${PHYSICAL_DISK_TABLE_ROW_CLASS} ${
+                        isSelected()
+                          ? PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS
+                          : PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS
+                      }`.trim()}
+                      style={PHYSICAL_DISK_TABLE_ROW_STYLE}
+                      onClick={() => model.toggleSelectedDisk(disk)}
+                      {...interactiveRowHandlers}
+                    >
+                      <TableCell class={PHYSICAL_DISK_CELL_DISK_CLASS}>
+                        <div class={PHYSICAL_DISK_NAME_WRAP_CLASS}>
+                          <SummaryRowActionButton
+                            kind="disclosure"
+                            subjectLabel={data.model || 'disk'}
+                            expanded={isSelected()}
+                            controlsId={detailControlsId}
+                            onAction={() => model.toggleSelectedDisk(disk)}
+                            onPreviewClear={() => props.onHoverChange?.(null)}
+                          />
+                          <span
+                            class={PHYSICAL_DISK_NAME_TEXT_CLASS}
+                            title={data.devPath || data.model || disk.name || 'Unknown Disk'}
+                          >
+                            {data.model || 'Unknown Disk'}
+                          </span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell class={PHYSICAL_DISK_CELL_SOURCE_CLASS}>
+                        <span class={sourceBadge.className}>{sourceBadge.label}</span>
+                      </TableCell>
+
+                      <TableCell class={PHYSICAL_DISK_CELL_HOST_CLASS}>
+                        <Show
+                          when={hostLabel}
+                          fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
-                          <TableCell class={PHYSICAL_DISK_CELL_DISK_CLASS}>
-                            <div class={PHYSICAL_DISK_NAME_WRAP_CLASS}>
-                              <SummaryRowActionButton
-                                kind="disclosure"
-                                subjectLabel={data.model || 'disk'}
-                                expanded={isSelected()}
-                                controlsId={detailControlsId}
-                                onAction={() => model.toggleSelectedDisk(disk)}
-                                onPreviewClear={() => props.onHoverChange?.(null)}
-                              />
-                              <span
-                                class={PHYSICAL_DISK_NAME_TEXT_CLASS}
-                                title={data.devPath || data.model || disk.name || 'Unknown Disk'}
-                              >
-                                {data.model || 'Unknown Disk'}
-                              </span>
-                            </div>
-                          </TableCell>
-
-                          <TableCell class={PHYSICAL_DISK_CELL_SOURCE_CLASS}>
-                            <span class={sourceBadge.className}>{sourceBadge.label}</span>
-                          </TableCell>
-
-                          <TableCell class={PHYSICAL_DISK_CELL_HOST_CLASS}>
-                            <Show
-                              when={hostLabel}
-                              fallback={
-                                <span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>
-                              }
-                            >
-                              <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={hostLabel}>
-                                {hostLabel}
-                              </span>
-                            </Show>
-                          </TableCell>
-
-                          <TableCell class={PHYSICAL_DISK_CELL_ROLE_CLASS}>
-                            <Show
-                              when={getPhysicalDiskRoleLabel(data)}
-                              fallback={
-                                <span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>
-                              }
-                            >
-                              <span
-                                class={PHYSICAL_DISK_VALUE_TEXT_CLASS}
-                                title={getPhysicalDiskRoleLabel(data)}
-                              >
-                                {getPhysicalDiskRoleLabel(data)}
-                              </span>
-                            </Show>
-                          </TableCell>
-
-                          <TableCell class={PHYSICAL_DISK_CELL_PARENT_CLASS}>
-                            <Show
-                              when={getPhysicalDiskParentLabel(data)}
-                              fallback={
-                                <span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>
-                              }
-                            >
-                              <span
-                                class={PHYSICAL_DISK_VALUE_TEXT_CLASS}
-                                title={getPhysicalDiskParentLabel(data)}
-                              >
-                                {getPhysicalDiskParentLabel(data)}
-                              </span>
-                            </Show>
-                          </TableCell>
-
-                          <TableCell class={PHYSICAL_DISK_CELL_HEALTH_CLASS}>
-                            <div class={PHYSICAL_DISK_HEALTH_WRAP_CLASS}>
-                              <span class={`${PHYSICAL_DISK_HEALTH_LABEL_CLASS} ${status.tone}`}>
-                                {status.label}
-                              </span>
-                              <Show when={healthSummary}>
-                                <span
-                                  class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS}
-                                  title={healthSummary}
-                                >
-                                  {healthSummary}
-                                </span>
-                              </Show>
-                            </div>
-                          </TableCell>
-
-                          <TableCell class={PHYSICAL_DISK_CELL_TEMP_CLASS}>
-                            <span
-                              class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(data.temperature)}`}
-                            >
-                              {data.temperature > 0 ? formatTemperature(data.temperature) : '—'}
-                            </span>
-                          </TableCell>
-
-                          <TableCell class={PHYSICAL_DISK_CELL_SIZE_CLASS}>
-                            <Show
-                              when={data.size > 0}
-                              fallback={
-                                <span
-                                  class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}
-                                  title="Disk size not reported by SMART/agent"
-                                >
-                                  —
-                                </span>
-                              }
-                            >
-                              <span class={PHYSICAL_DISK_SIZE_VALUE_CLASS}>
-                                {formatBytes(data.size)}
-                              </span>
-                            </Show>
-                          </TableCell>
-                        </TableRow>
-                        <Show when={isSelected()}>
-                          <TableRow data-inline-detail-for={summarySeriesId}>
-                            <TableCell
-                              id={detailControlsId}
-                              colSpan={8}
-                              class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
-                            >
-                              <DiskDetail disk={disk} nodes={props.nodes} />
-                            </TableCell>
-                          </TableRow>
+                          <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={hostLabel}>
+                            {hostLabel}
+                          </span>
                         </Show>
-                      </>
-                    );
-                  }}
-                </For>
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+                      </TableCell>
+
+                      <TableCell class={PHYSICAL_DISK_CELL_ROLE_CLASS}>
+                        <Show
+                          when={getPhysicalDiskRoleLabel(data)}
+                          fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
+                        >
+                          <span
+                            class={PHYSICAL_DISK_VALUE_TEXT_CLASS}
+                            title={getPhysicalDiskRoleLabel(data)}
+                          >
+                            {getPhysicalDiskRoleLabel(data)}
+                          </span>
+                        </Show>
+                      </TableCell>
+
+                      <TableCell class={PHYSICAL_DISK_CELL_PARENT_CLASS}>
+                        <Show
+                          when={getPhysicalDiskParentLabel(data)}
+                          fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
+                        >
+                          <span
+                            class={PHYSICAL_DISK_VALUE_TEXT_CLASS}
+                            title={getPhysicalDiskParentLabel(data)}
+                          >
+                            {getPhysicalDiskParentLabel(data)}
+                          </span>
+                        </Show>
+                      </TableCell>
+
+                      <TableCell class={PHYSICAL_DISK_CELL_HEALTH_CLASS}>
+                        <div class={PHYSICAL_DISK_HEALTH_WRAP_CLASS}>
+                          <span class={`${PHYSICAL_DISK_HEALTH_LABEL_CLASS} ${status.tone}`}>
+                            {status.label}
+                          </span>
+                          <Show when={healthSummary}>
+                            <span class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS} title={healthSummary}>
+                              {healthSummary}
+                            </span>
+                          </Show>
+                        </div>
+                      </TableCell>
+
+                      <TableCell class={PHYSICAL_DISK_CELL_TEMP_CLASS}>
+                        <span
+                          class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(data.temperature)}`}
+                        >
+                          {data.temperature > 0 ? formatTemperature(data.temperature) : '—'}
+                        </span>
+                      </TableCell>
+
+                      <TableCell class={PHYSICAL_DISK_CELL_SIZE_CLASS}>
+                        <Show
+                          when={data.size > 0}
+                          fallback={
+                            <span
+                              class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}
+                              title="Disk size not reported by SMART/agent"
+                            >
+                              —
+                            </span>
+                          }
+                        >
+                          <span class={PHYSICAL_DISK_SIZE_VALUE_CLASS}>
+                            {formatBytes(data.size)}
+                          </span>
+                        </Show>
+                      </TableCell>
+                    </TableRow>
+                    <Show when={isSelected()}>
+                      <TableRow data-inline-detail-for={summarySeriesId}>
+                        <TableCell
+                          id={detailControlsId}
+                          colSpan={8}
+                          class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
+                        >
+                          <DiskDetail disk={disk} nodes={props.nodes} />
+                        </TableCell>
+                      </TableRow>
+                    </Show>
+                  </>
+                );
+              }}
+            </For>
+          </TableBody>
+        </Table>
       </Show>
     </div>
   );
