@@ -182,7 +182,7 @@ describe('dashboardWorkloadRouteModel', () => {
       ),
     ).toEqual([
       { value: 'truenas', label: 'TrueNAS' },
-      { value: 'docker', label: 'Container runtime' },
+      { value: 'docker', label: 'Docker / Podman' },
     ]);
   });
 

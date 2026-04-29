@@ -48,7 +48,7 @@ describe('sourcePlatformBadges', () => {
 
     it('returns container runtime badge for docker source platform', () => {
       const result = getSourcePlatformBadge('docker');
-      expect(result?.label).toBe('Container runtime');
+      expect(result?.label).toBe('Docker / Podman');
     });
 
     it('returns K8s badge for kubernetes', () => {
@@ -108,9 +108,9 @@ describe('sourcePlatformBadges', () => {
     });
 
     it('is case-insensitive', () => {
-      expect(getSourcePlatformBadge('DOCKER')?.label).toBe('Container runtime');
+      expect(getSourcePlatformBadge('DOCKER')?.label).toBe('Docker / Podman');
       expect(getSourcePlatformBadge('Kubernetes')?.label).toBe('K8s');
-      expect(getSourcePlatformBadge('Docker')?.label).toBe('Container runtime');
+      expect(getSourcePlatformBadge('Docker')?.label).toBe('Docker / Podman');
     });
 
     it('returns unknown platform badge for unrecognized platforms', () => {
@@ -121,7 +121,7 @@ describe('sourcePlatformBadges', () => {
 
     it('handles whitespace around platform names', () => {
       const result = getSourcePlatformBadge('  docker  ');
-      expect(result?.label).toBe('Container runtime');
+      expect(result?.label).toBe('Docker / Podman');
     });
 
     it('handles platform names with underscores', () => {

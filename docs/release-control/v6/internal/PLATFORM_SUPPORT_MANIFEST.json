@@ -66,12 +66,13 @@
         "assistant_read": "supported",
         "assistant_control": "supported"
       },
-      "ui_label": "Container runtime",
+      "ui_label": "Docker / Podman",
       "ui_tone": "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-400",
       "aliases": [],
       "display_tokens": [
         "Container runtime",
-        "Docker"
+        "Docker",
+        "Podman"
       ],
       "storage_family": "container"
     },
