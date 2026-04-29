@@ -4,15 +4,21 @@ import { ensureAuthenticated } from './helpers';
 
 const PRO_PLAN_ENTITLEMENTS = {
   capabilities: [
+    'update_alerts',
+    'sso',
+    'ai_patrol',
     'relay',
     'mobile_app',
     'push_notifications',
-    'ai_patrol',
-    'ai_autofix',
+    'long_term_metrics',
     'ai_alerts',
+    'ai_autofix',
     'kubernetes_ai',
+    'agent_profiles',
+    'advanced_sso',
     'rbac',
     'audit_logging',
+    'advanced_reporting',
   ],
   limits: [],
   monitored_system_capacity: {
@@ -118,7 +124,7 @@ test.describe('Self-hosted plans entitlement summary', () => {
     ).toBeVisible();
     await expect(
       currentPlanCard.getByText(
-        /self-hosted monitoring and child-resource volume remain uncapped/i,
+        /self-hosted monitoring and child-resource volume are not metered/i,
       ),
     ).toBeVisible();
     const recurringContinuityNotice = page.getByText(
@@ -126,12 +132,13 @@ test.describe('Self-hosted plans entitlement summary', () => {
     );
     await expect(recurringContinuityNotice).toBeVisible();
     await expect(recurringContinuityNotice).toContainText(
-      /Self-hosted monitoring and child-resource volume remain uncapped/i,
+      /Self-hosted monitoring and child-resource volume are not metered/i,
     );
     await expect(currentPlanCard.getByText(/effective monitored-system limit/i)).toHaveCount(0);
     await expect(page.getByText('Core Monitoring', { exact: true })).toBeVisible();
     await expect(page.getByText('Guest Capacity', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Unlimited').first()).toBeVisible();
+    await expect(page.getByText('Unlimited self-hosted monitoring')).toHaveCount(0);
+    await expect(page.getByText('Included', { exact: true }).first()).toBeVisible();
     await expect(currentPlanCard.getByText('Primary capabilities')).toBeVisible();
     await expect(currentPlanCard.getByText('Included extras')).toBeVisible();
     await expect(
@@ -143,5 +150,37 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(
       currentPlanCard.getByText('Advanced SSO (SAML/Multi-Provider)', { exact: true }),
     ).toBeVisible();
+    await expect(currentPlanCard.getByText('PDF/CSV Reporting', { exact: true })).toBeVisible();
+    await expect(
+      currentPlanCard.getByText('Centralized Agent Profiles', { exact: true }),
+    ).toBeVisible();
+  });
+
+  test('surfaces advertised Pro settings sections when Pro capabilities are active', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only settings coverage');
+
+    await stubSelfHostedPlanEndpoints(page);
+    await ensureAuthenticated(page);
+    await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
+
+    const settingsNav = page.locator('[aria-label="Settings navigation"]');
+    for (const label of [
+      'Data & Reports',
+      'Roles',
+      'Users',
+      'Audit Log',
+      'Audit Webhooks',
+      'Remote Access',
+    ]) {
+      await expect(settingsNav.getByText(label, { exact: true })).toBeVisible();
+    }
+
+    await page.goto('/settings/security-sso', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Add SAML' })).toBeVisible();
+
+    await page.goto('/settings/infrastructure?add=agent', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Manage agent profiles' })).toBeVisible();
   });
 });
