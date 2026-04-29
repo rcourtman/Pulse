@@ -1101,11 +1101,24 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryHistorySectionSource).toContain('RecoveryHistoryTable');
     expect(recoveryHistorySectionSource).toContain('TableCard');
     expect(recoveryHistorySectionSource).toContain('getRecoveryAllHistoryLabel');
+    expect(recoveryHistoryTableSource).toMatch(/<Table(?:\s|>)/);
+    expect(recoveryHistoryTableSource).not.toContain('<div class="overflow-x-auto">');
+    expect(recoveryHistoryTableSource).not.toContain(
+      '<div class="overflow-x-auto bg-surface">',
+    );
     expect(recoveryTablePresentationSource).toContain('getAllFilterOptionLabel');
     expect(recoveryHistorySectionSource).not.toContain(
       'overflow-hidden border-border-subtle bg-surface',
     );
     expect(recoveryProtectedInventorySectionSource).toContain('TableCard');
+    expect(recoveryProtectedInventorySectionSource).toMatch(/<Table(?:\s|>)/);
+    expect(recoveryProtectedInventorySectionSource).toContain('wrapperClass="bg-surface"');
+    expect(recoveryProtectedInventorySectionSource).not.toContain(
+      '<div class="overflow-x-auto">',
+    );
+    expect(recoveryProtectedInventorySectionSource).not.toContain(
+      '<div class="overflow-x-auto bg-surface">',
+    );
     expect(recoveryProtectedInventorySectionSource).not.toContain(
       'overflow-hidden border-border-subtle bg-surface',
     );
@@ -2008,6 +2021,11 @@ describe('frontend resource type boundaries', () => {
     expect(storageContentCardSource).toContain('TableCard');
     expect(storageContentCardSource).toContain('TableCardHeader');
     expect(storageContentCardSource).toContain('STORAGE_CONTENT_CARD_BODY_CLASS');
+    expect(storagePoolsTableSource).toMatch(/<Table(?:\s|>)/);
+    expect(storagePoolsTableSource).not.toContain('<div class="overflow-x-auto">');
+    expect(storagePoolsTableSource).not.toContain(
+      '<div class="overflow-x-auto bg-surface">',
+    );
     expect(storageContentCardSource).not.toContain(
       "props.selectedNodeId() === 'all' ? null : props.selectedNodeId()",
     );

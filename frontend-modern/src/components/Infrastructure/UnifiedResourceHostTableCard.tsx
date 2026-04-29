@@ -75,615 +75,602 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
           showClearAction={table.showHostClearAction()}
           onClear={tableProps.clearPinnedSummaryScope}
         />
-        <div class="overflow-x-auto">
-          <Table class={`whitespace-nowrap ${table.tableShellClass()}`}>
-            <TableHeader>
-              <TableRow class="bg-surface-alt text-muted border-b border-border">
-                <TableHead
-                  class={`text-left pl-2 sm:pl-3 ${table.resourceColumn().className}`}
-                  width={table.resourceColumn().width}
-                  onClick={() => table.handleSort('name')}
-                >
-                  {table.headerLabels().resource} {table.renderSortIndicator('name')}
-                </TableHead>
-                <TableHead
-                  class={table.metricColumn().className}
-                  width={table.metricColumn().width}
-                  onClick={() => table.handleSort('cpu')}
-                >
-                  {table.headerLabels().cpu} {table.renderSortIndicator('cpu')}
-                </TableHead>
-                <TableHead
-                  class={table.metricColumn().className}
-                  width={table.metricColumn().width}
-                  onClick={() => table.handleSort('memory')}
-                >
-                  {table.headerLabels().memory} {table.renderSortIndicator('memory')}
-                </TableHead>
-                <TableHead
-                  class={table.metricColumn().className}
-                  width={table.metricColumn().width}
-                  onClick={() => table.handleSort('disk')}
-                >
-                  {table.headerLabels().disk} {table.renderSortIndicator('disk')}
-                </TableHead>
-                <TableHead
-                  classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
-                  class={table.ioColumn().className}
-                  width={table.ioColumn().width}
-                  onClick={() => table.handleSort('network')}
-                >
-                  {table.headerLabels().network} {table.renderSortIndicator('network')}
-                </TableHead>
-                <TableHead
-                  classList={{ hidden: table.isMobile() || !table.isHostDiskIoVisible() }}
-                  class={table.ioColumn().className}
-                  width={table.ioColumn().width}
-                  onClick={() => table.handleSort('diskio')}
-                >
-                  {table.headerLabels().diskIo} {table.renderSortIndicator('diskio')}
-                </TableHead>
-                <TableHead
-                  classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
-                  class={table.sourceColumn().className}
-                  width={table.sourceColumn().width}
-                  onClick={() => table.handleSort('source')}
-                >
-                  {table.headerLabels().source} {table.renderSortIndicator('source')}
-                </TableHead>
-                <TableHead
-                  classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
-                  class={table.uptimeColumn().className}
-                  width={table.uptimeColumn().width}
-                  onClick={() => table.handleSort('uptime')}
-                >
-                  {table.headerLabels().uptime} {table.renderSortIndicator('uptime')}
-                </TableHead>
-                <TableHead
-                  classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
-                  class={table.tempColumn().className}
-                  width={table.tempColumn().width}
-                  onClick={() => table.handleSort('temp')}
-                >
-                  {table.headerLabels().temp} {table.renderSortIndicator('temp')}
-                </TableHead>
+        <Table class={`whitespace-nowrap ${table.tableShellClass()}`}>
+          <TableHeader>
+            <TableRow class="bg-surface-alt text-muted border-b border-border">
+              <TableHead
+                class={`text-left pl-2 sm:pl-3 ${table.resourceColumn().className}`}
+                width={table.resourceColumn().width}
+                onClick={() => table.handleSort('name')}
+              >
+                {table.headerLabels().resource} {table.renderSortIndicator('name')}
+              </TableHead>
+              <TableHead
+                class={table.metricColumn().className}
+                width={table.metricColumn().width}
+                onClick={() => table.handleSort('cpu')}
+              >
+                {table.headerLabels().cpu} {table.renderSortIndicator('cpu')}
+              </TableHead>
+              <TableHead
+                class={table.metricColumn().className}
+                width={table.metricColumn().width}
+                onClick={() => table.handleSort('memory')}
+              >
+                {table.headerLabels().memory} {table.renderSortIndicator('memory')}
+              </TableHead>
+              <TableHead
+                class={table.metricColumn().className}
+                width={table.metricColumn().width}
+                onClick={() => table.handleSort('disk')}
+              >
+                {table.headerLabels().disk} {table.renderSortIndicator('disk')}
+              </TableHead>
+              <TableHead
+                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                class={table.ioColumn().className}
+                width={table.ioColumn().width}
+                onClick={() => table.handleSort('network')}
+              >
+                {table.headerLabels().network} {table.renderSortIndicator('network')}
+              </TableHead>
+              <TableHead
+                classList={{ hidden: table.isMobile() || !table.isHostDiskIoVisible() }}
+                class={table.ioColumn().className}
+                width={table.ioColumn().width}
+                onClick={() => table.handleSort('diskio')}
+              >
+                {table.headerLabels().diskIo} {table.renderSortIndicator('diskio')}
+              </TableHead>
+              <TableHead
+                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                class={table.sourceColumn().className}
+                width={table.sourceColumn().width}
+                onClick={() => table.handleSort('source')}
+              >
+                {table.headerLabels().source} {table.renderSortIndicator('source')}
+              </TableHead>
+              <TableHead
+                classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                class={table.uptimeColumn().className}
+                width={table.uptimeColumn().width}
+                onClick={() => table.handleSort('uptime')}
+              >
+                {table.headerLabels().uptime} {table.renderSortIndicator('uptime')}
+              </TableHead>
+              <TableHead
+                classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                class={table.tempColumn().className}
+                width={table.tempColumn().width}
+                onClick={() => table.handleSort('temp')}
+              >
+                {table.headerLabels().temp} {table.renderSortIndicator('temp')}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody ref={table.setHostBodyRef}>
+            <Show when={table.hostWindowing.isWindowed() && table.hostTopSpacerHeight() > 0}>
+              <TableRow aria-hidden="true">
+                <TableCell colspan={9} class="border-0 p-0" height={table.hostTopSpacerHeight()} />
               </TableRow>
-            </TableHeader>
-            <TableBody ref={table.setHostBodyRef}>
-              <Show when={table.hostWindowing.isWindowed() && table.hostTopSpacerHeight() > 0}>
-                <TableRow aria-hidden="true">
-                  <TableCell
-                    colspan={9}
-                    class="border-0 p-0"
-                    height={table.hostTopSpacerHeight()}
-                  />
-                </TableRow>
-              </Show>
+            </Show>
 
-              <For each={table.visibleHostTableItems()}>
-                {(item) => {
-                  if (item.type === 'header') {
-                    const group = item.group;
-                    const groupSummaryScope = createMemo<SummarySeriesGroupScope | null>(() =>
-                      table.buildHostSummaryGroupScope(group),
+            <For each={table.visibleHostTableItems()}>
+              {(item) => {
+                if (item.type === 'header') {
+                  const group = item.group;
+                  const groupSummaryScope = createMemo<SummarySeriesGroupScope | null>(() =>
+                    table.buildHostSummaryGroupScope(group),
+                  );
+                  const isSummaryGroupHighlighted = createMemo(
+                    () => tableProps.activeSummaryGroupScope?.id === groupSummaryScope()?.id,
+                  );
+                  const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
+                    tableProps.onGroupHoverChange?.(next);
+                  };
+                  const handleGroupFocusToggle = () => {
+                    const nextScope = groupSummaryScope();
+                    tableProps.onGroupFocusChange?.(
+                      nextScope && tableProps.focusedSummaryGroupId === nextScope.id
+                        ? null
+                        : (nextScope?.id ?? null),
                     );
-                    const isSummaryGroupHighlighted = createMemo(
-                      () => tableProps.activeSummaryGroupScope?.id === groupSummaryScope()?.id,
-                    );
-                    const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
-                      tableProps.onGroupHoverChange?.(next);
-                    };
-                    const handleGroupFocusToggle = () => {
-                      const nextScope = groupSummaryScope();
-                      tableProps.onGroupFocusChange?.(
-                        nextScope && tableProps.focusedSummaryGroupId === nextScope.id
-                          ? null
-                          : (nextScope?.id ?? null),
-                      );
-                    };
-                    const groupRowInteraction = createSummaryInteractiveRowPreviewHandlers({
-                      onPreview: () => handleGroupHoverChange(groupSummaryScope()),
-                      onPreviewClear: () => handleGroupHoverChange(null),
-                    });
-                    return (
-                      <TableRow
-                        class={getInteractiveGroupedTableRowClass()}
-                        data-summary-group-id={groupSummaryScope()?.id ?? undefined}
-                        data-summary-group-series-count={String(
-                          groupSummaryScope()?.seriesIds.length ?? 0,
-                        )}
-                        data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
-                        onClick={handleGroupFocusToggle}
-                        {...groupRowInteraction}
-                      >
-                        <TableCell
-                          colspan={9}
-                          class={getGroupedTableRowCellClass()}
-                        >
-                          <div class="flex items-center gap-2">
-                            <Show
-                              when={group.cluster}
-                              fallback={<span class="text-muted">Standalone</span>}
-                            >
-                              <span>{group.cluster}</span>
-                              <Show when={shouldShowClusterGroupTypeLabel(group.cluster)}>
-                                <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>
-                                  Cluster
-                                </span>
-                              </Show>
+                  };
+                  const groupRowInteraction = createSummaryInteractiveRowPreviewHandlers({
+                    onPreview: () => handleGroupHoverChange(groupSummaryScope()),
+                    onPreviewClear: () => handleGroupHoverChange(null),
+                  });
+                  return (
+                    <TableRow
+                      class={getInteractiveGroupedTableRowClass()}
+                      data-summary-group-id={groupSummaryScope()?.id ?? undefined}
+                      data-summary-group-series-count={String(
+                        groupSummaryScope()?.seriesIds.length ?? 0,
+                      )}
+                      data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
+                      onClick={handleGroupFocusToggle}
+                      {...groupRowInteraction}
+                    >
+                      <TableCell colspan={9} class={getGroupedTableRowCellClass()}>
+                        <div class="flex items-center gap-2">
+                          <Show
+                            when={group.cluster}
+                            fallback={<span class="text-muted">Standalone</span>}
+                          >
+                            <span>{group.cluster}</span>
+                            <Show when={shouldShowClusterGroupTypeLabel(group.cluster)}>
+                              <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>Cluster</span>
                             </Show>
-                            <span class={GROUPED_TABLE_ROW_META_CLASS}>
-                              {group.resources.length}{' '}
-                              {group.resources.length === 1 ? 'resource' : 'resources'}
-                            </span>
-                          </div>
-                          <Show when={tableProps.onDeployCluster}>
-                            <ClusterDeployBanner
-                              group={group}
-                              onDeploy={tableProps.onDeployCluster!}
-                            />
                           </Show>
-                        </TableCell>
-                      </TableRow>
-                    );
+                          <span class={GROUPED_TABLE_ROW_META_CLASS}>
+                            {group.resources.length}{' '}
+                            {group.resources.length === 1 ? 'resource' : 'resources'}
+                          </span>
+                        </div>
+                        <Show when={tableProps.onDeployCluster}>
+                          <ClusterDeployBanner
+                            group={group}
+                            onDeploy={tableProps.onDeployCluster!}
+                          />
+                        </Show>
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+
+                const resource = item.resource;
+                const isExpanded = createMemo(() => tableProps.expandedResourceId === resource.id);
+                const isHighlighted = createMemo(
+                  () => tableProps.highlightedResourceId === resource.id,
+                );
+                const displayName = createMemo(() =>
+                  getPreferredInfrastructureDisplayName(resource),
+                );
+                const summaryGroupMemberState = createMemo(() =>
+                  resolveSummaryGroupMemberInteractionState({
+                    seriesId: resource.id,
+                    hoveredGroupScope: tableProps.hoveredSummaryGroupScope,
+                    focusedGroupScope: tableProps.focusedSummaryGroupScope,
+                  }),
+                );
+                const statusIndicator = createMemo(() =>
+                  getAgentStatusIndicator({ status: resource.status }),
+                );
+                const metricsKey = createMemo(() => buildMetricKeyForUnifiedResource(resource));
+                const detailControlsId = createMemo(() =>
+                  buildSummaryDisclosureControlsId(resource.id),
+                );
+
+                const cpuPercentValue = createMemo(() =>
+                  resource.cpu ? Math.round(getCpuPercent(resource)) : null,
+                );
+                const memoryPercentValue = createMemo(() =>
+                  resource.memory ? Math.round(getMemoryPercent(resource)) : null,
+                );
+                const diskPercentValue = createMemo(() =>
+                  resource.disk ? Math.round(getDiskPercent(resource)) : null,
+                );
+
+                const memorySublabel = createMemo(() => {
+                  if (
+                    !resource.memory ||
+                    resource.memory.used === undefined ||
+                    resource.memory.total === undefined
+                  )
+                    return undefined;
+                  return `${formatBytes(resource.memory.used)}/${formatBytes(resource.memory.total)}`;
+                });
+
+                const diskSublabel = createMemo(() => {
+                  if (
+                    !resource.disk ||
+                    resource.disk.used === undefined ||
+                    resource.disk.total === undefined
+                  )
+                    return undefined;
+                  return `${formatBytes(resource.disk.used)}/${formatBytes(resource.disk.total)}`;
+                });
+                const networkTotal = createMemo(
+                  () => (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0),
+                );
+                const networkEmphasis = createMemo(() =>
+                  getOutlierEmphasis(networkTotal(), table.ioScale().network),
+                );
+                const diskIOTotal = createMemo(
+                  () => (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0),
+                );
+                const diskIOEmphasis = createMemo(() =>
+                  getOutlierEmphasis(diskIOTotal(), table.ioScale().diskIO),
+                );
+
+                const rowClass = createMemo(() => {
+                  const baseHover =
+                    'cursor-pointer transition-all duration-200 relative group hover:bg-surface-hover';
+
+                  if (isExpanded()) {
+                    return 'cursor-pointer transition-all duration-200 relative z-10 group bg-blue-50 dark:bg-blue-900';
                   }
 
-                  const resource = item.resource;
-                  const isExpanded = createMemo(
-                    () => tableProps.expandedResourceId === resource.id,
-                  );
-                  const isHighlighted = createMemo(
-                    () => tableProps.highlightedResourceId === resource.id,
-                  );
-                  const displayName = createMemo(() =>
-                    getPreferredInfrastructureDisplayName(resource),
-                  );
-                  const summaryGroupMemberState = createMemo(() =>
-                    resolveSummaryGroupMemberInteractionState({
-                      seriesId: resource.id,
-                      hoveredGroupScope: tableProps.hoveredSummaryGroupScope,
-                      focusedGroupScope: tableProps.focusedSummaryGroupScope,
-                    }),
-                  );
-                  const statusIndicator = createMemo(() =>
-                    getAgentStatusIndicator({ status: resource.status }),
-                  );
-                  const metricsKey = createMemo(() => buildMetricKeyForUnifiedResource(resource));
-                  const detailControlsId = createMemo(() =>
-                    buildSummaryDisclosureControlsId(resource.id),
-                  );
+                  let className = baseHover;
+                  if (!isResourceOnline(resource)) {
+                    className += ' opacity-60';
+                  }
 
-                  const cpuPercentValue = createMemo(() =>
-                    resource.cpu ? Math.round(getCpuPercent(resource)) : null,
-                  );
-                  const memoryPercentValue = createMemo(() =>
-                    resource.memory ? Math.round(getMemoryPercent(resource)) : null,
-                  );
-                  const diskPercentValue = createMemo(() =>
-                    resource.disk ? Math.round(getDiskPercent(resource)) : null,
-                  );
+                  return className;
+                });
+                const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
+                const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
+                const unifiedSources = createMemo(() => table.getUnifiedSources(resource));
+                const sourceBadges = createMemo(() => getUnifiedSourceBadges(unifiedSources()));
+                const systemBadges = createMemo(() =>
+                  getInfrastructureSystemIdentityBadges(resource),
+                );
+                const systemTitleBadges = createMemo(() =>
+                  dedupeResourceBadges([...systemBadges(), ...sourceBadges()]),
+                );
+                const policyBadges = createMemo(() =>
+                  getResourcePolicyTableBadges(resource.policy),
+                );
+                const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
+                const resourceRowInteraction = createSummaryInteractiveRowPreviewHandlers({
+                  onPreview: () => tableProps.onHoverChange?.(resource.id),
+                  onPreviewClear: () => tableProps.onHoverChange?.(null),
+                });
 
-                  const memorySublabel = createMemo(() => {
-                    if (
-                      !resource.memory ||
-                      resource.memory.used === undefined ||
-                      resource.memory.total === undefined
-                    )
-                      return undefined;
-                    return `${formatBytes(resource.memory.used)}/${formatBytes(resource.memory.total)}`;
-                  });
-
-                  const diskSublabel = createMemo(() => {
-                    if (
-                      !resource.disk ||
-                      resource.disk.used === undefined ||
-                      resource.disk.total === undefined
-                    )
-                      return undefined;
-                    return `${formatBytes(resource.disk.used)}/${formatBytes(resource.disk.total)}`;
-                  });
-                  const networkTotal = createMemo(
-                    () => (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0),
-                  );
-                  const networkEmphasis = createMemo(() =>
-                    getOutlierEmphasis(networkTotal(), table.ioScale().network),
-                  );
-                  const diskIOTotal = createMemo(
-                    () => (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0),
-                  );
-                  const diskIOEmphasis = createMemo(() =>
-                    getOutlierEmphasis(diskIOTotal(), table.ioScale().diskIO),
-                  );
-
-                  const rowClass = createMemo(() => {
-                    const baseHover =
-                      'cursor-pointer transition-all duration-200 relative group hover:bg-surface-hover';
-
-                    if (isExpanded()) {
-                      return 'cursor-pointer transition-all duration-200 relative z-10 group bg-blue-50 dark:bg-blue-900';
-                    }
-
-                    let className = baseHover;
-                    if (!isResourceOnline(resource)) {
-                      className += ' opacity-60';
-                    }
-
-                    return className;
-                  });
-                  const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
-                  const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-                  const unifiedSources = createMemo(() => table.getUnifiedSources(resource));
-                  const sourceBadges = createMemo(() => getUnifiedSourceBadges(unifiedSources()));
-                  const systemBadges = createMemo(() =>
-                    getInfrastructureSystemIdentityBadges(resource),
-                  );
-                  const systemTitleBadges = createMemo(() =>
-                    dedupeResourceBadges([...systemBadges(), ...sourceBadges()]),
-                  );
-                  const policyBadges = createMemo(() =>
-                    getResourcePolicyTableBadges(resource.policy),
-                  );
-                  const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
-                  const resourceRowInteraction = createSummaryInteractiveRowPreviewHandlers({
-                    onPreview: () => tableProps.onHoverChange?.(resource.id),
-                    onPreviewClear: () => tableProps.onHoverChange?.(null),
-                  });
-
-                  return (
-                    <>
-                      <TableRow
-                        data-row-id={resource.id}
-                        data-summary-series-id={resource.id}
-                        data-summary-group-member-active={
-                          summaryGroupMemberState() !== 'default'
-                            ? summaryGroupMemberState()
-                            : undefined
-                        }
-                        data-summary-row-active={
-                          (tableProps.hoveredResourceId === resource.id || isHighlighted()) &&
-                          !isExpanded()
-                            ? 'true'
-                            : 'false'
-                        }
-                        class={`${rowClass()} h-8`}
-                        onClick={() => table.toggleExpand(resource.id)}
-                        {...resourceRowInteraction}
+                return (
+                  <>
+                    <TableRow
+                      data-row-id={resource.id}
+                      data-summary-series-id={resource.id}
+                      data-summary-group-member-active={
+                        summaryGroupMemberState() !== 'default'
+                          ? summaryGroupMemberState()
+                          : undefined
+                      }
+                      data-summary-row-active={
+                        (tableProps.hoveredResourceId === resource.id || isHighlighted()) &&
+                        !isExpanded()
+                          ? 'true'
+                          : 'false'
+                      }
+                      class={`${rowClass()} h-8`}
+                      onClick={() => table.toggleExpand(resource.id)}
+                      {...resourceRowInteraction}
+                    >
+                      <TableCell
+                        class={`pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3 ${table.resourceColumn().className}`}
+                        width={table.resourceColumn().width}
                       >
-                        <TableCell
-                          class={`pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3 ${table.resourceColumn().className}`}
-                          width={table.resourceColumn().width}
-                        >
-                          <div class="flex items-center gap-1.5 min-w-0">
-                            <SummaryRowActionButton
-                              kind="disclosure"
-                              subjectLabel={displayName()}
-                              expanded={isExpanded()}
-                              controlsId={detailControlsId()}
-                              onAction={() => table.toggleExpand(resource.id)}
-                              onPreviewClear={() => tableProps.onHoverChange?.(null)}
-                            />
-                            <StatusDot
-                              variant={statusIndicator().variant}
-                              title={statusIndicator().label}
-                              ariaLabel={statusIndicator().label}
-                              size="xs"
-                            />
-                            <div class="flex min-w-0 flex-1 flex-col">
-                              <div class="flex min-w-0 items-baseline gap-1">
-                                <span
-                                  class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
-                                  title={displayName()}
-                                >
-                                  {displayName()}
+                        <div class="flex items-center gap-1.5 min-w-0">
+                          <SummaryRowActionButton
+                            kind="disclosure"
+                            subjectLabel={displayName()}
+                            expanded={isExpanded()}
+                            controlsId={detailControlsId()}
+                            onAction={() => table.toggleExpand(resource.id)}
+                            onPreviewClear={() => tableProps.onHoverChange?.(null)}
+                          />
+                          <StatusDot
+                            variant={statusIndicator().variant}
+                            title={statusIndicator().label}
+                            ariaLabel={statusIndicator().label}
+                            size="xs"
+                          />
+                          <div class="flex min-w-0 flex-1 flex-col">
+                            <div class="flex min-w-0 items-baseline gap-1">
+                              <span
+                                class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
+                                title={displayName()}
+                              >
+                                {displayName()}
+                              </span>
+                              <Show when={shouldShowResourceAlternateName(resource)}>
+                                <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-muted lg:inline">
+                                  ({resource.name})
                                 </span>
-                                <Show when={shouldShowResourceAlternateName(resource)}>
-                                  <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-muted lg:inline">
-                                    ({resource.name})
-                                  </span>
-                                </Show>
-                              </div>
-                              <Show when={policyBadges().length > 0}>
-                                <div class="mt-0.5 flex flex-wrap gap-1">
-                                  <For each={policyBadges()}>
-                                    {(badge) => (
-                                      <span class={badge.className} title={badge.title}>
-                                        {badge.label}
-                                      </span>
-                                    )}
-                                  </For>
-                                </div>
                               </Show>
-                              <ResourceFacetSummary
-                                recentChanges={resource.recentChanges}
-                                counts={resource.facetCounts}
-                                class="mt-0.5"
-                              />
                             </div>
-                            <Show when={workloadsHref()}>
-                              {(href) => (
-                                <a
-                                  href={href()}
-                                  class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-blue-300 dark:hover:bg-blue-800 dark:hover:text-blue-200"
-                                  title="View related workloads"
-                                  aria-label={`View workloads for ${displayName()}`}
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <svg
-                                    class="h-3.5 w-3.5"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      d="M14 5h5m0 0v5m0-5-8 8"
-                                    />
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      d="M5 10v9h9"
-                                    />
-                                  </svg>
-                                </a>
-                              )}
+                            <Show when={policyBadges().length > 0}>
+                              <div class="mt-0.5 flex flex-wrap gap-1">
+                                <For each={policyBadges()}>
+                                  {(badge) => (
+                                    <span class={badge.className} title={badge.title}>
+                                      {badge.label}
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
                             </Show>
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          <Show
-                            when={cpuPercentValue() !== null}
-                            fallback={
-                              <div class="flex justify-center">
-                                <span class="text-xs">—</span>
-                              </div>
-                            }
-                          >
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercentValue() ?? 0}
-                              type="cpu"
-                              resourceId={table.isMobile() ? undefined : metricsKey()}
-                              isRunning={isResourceOnline(resource)}
-                              showMobile={false}
+                            <ResourceFacetSummary
+                              recentChanges={resource.recentChanges}
+                              counts={resource.facetCounts}
+                              class="mt-0.5"
                             />
+                          </div>
+                          <Show when={workloadsHref()}>
+                            {(href) => (
+                              <a
+                                href={href()}
+                                class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-blue-300 dark:hover:bg-blue-800 dark:hover:text-blue-200"
+                                title="View related workloads"
+                                aria-label={`View workloads for ${displayName()}`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <svg
+                                  class="h-3.5 w-3.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                >
+                                  <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M14 5h5m0 0v5m0-5-8 8"
+                                  />
+                                  <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M5 10v9h9"
+                                  />
+                                </svg>
+                              </a>
+                            )}
                           </Show>
-                        </TableCell>
+                        </div>
+                      </TableCell>
 
-                        <TableCell>
-                          <Show
-                            when={memoryPercentValue() !== null}
-                            fallback={
-                              <div class="flex justify-center">
-                                <span class="text-xs">—</span>
-                              </div>
-                            }
-                          >
-                            <div class="w-full" title={memorySublabel()}>
-                              <StackedMemoryBar
-                                used={resource.memory?.used ?? 0}
-                                total={resource.memory?.total ?? 0}
-                                percentOnly={
-                                  !resource.memory?.total && resource.memory?.current != null
-                                    ? resource.memory.current
-                                    : undefined
-                                }
-                                swapUsed={resource.agent?.memory?.swapUsed ?? 0}
-                                swapTotal={resource.agent?.memory?.swapTotal ?? 0}
-                              />
+                      <TableCell>
+                        <Show
+                          when={cpuPercentValue() !== null}
+                          fallback={
+                            <div class="flex justify-center">
+                              <span class="text-xs">—</span>
                             </div>
-                          </Show>
-                        </TableCell>
-
-                        <TableCell>
-                          <Show
-                            when={diskPercentValue() !== null}
-                            fallback={
-                              <div class="flex justify-center">
-                                <span class="text-xs">—</span>
-                              </div>
-                            }
-                          >
-                            <div class="w-full" title={diskSublabel()}>
-                              <StackedDiskBar
-                                disks={normalizeDiskArray(resource.agent?.disks)}
-                                aggregateDisk={
-                                  resource.disk
-                                    ? ({
-                                        total: resource.disk.total ?? 0,
-                                        used: resource.disk.used ?? 0,
-                                        free: resource.disk.free ?? 0,
-                                        usage: resource.disk.current ?? 0,
-                                      } as Disk)
-                                    : undefined
-                                }
-                              />
-                            </div>
-                          </Show>
-                        </TableCell>
-
-                        <TableCell
-                          classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                          }
                         >
-                          <Show
-                            when={resource.network}
-                            fallback={
-                              <div class="text-center">
-                                <span class="text-xs text-slate-400">—</span>
-                              </div>
+                          <ResponsiveMetricCell
+                            class="w-full"
+                            value={cpuPercentValue() ?? 0}
+                            type="cpu"
+                            resourceId={table.isMobile() ? undefined : metricsKey()}
+                            isRunning={isResourceOnline(resource)}
+                            showMobile={false}
+                          />
+                        </Show>
+                      </TableCell>
+
+                      <TableCell>
+                        <Show
+                          when={memoryPercentValue() !== null}
+                          fallback={
+                            <div class="flex justify-center">
+                              <span class="text-xs">—</span>
+                            </div>
+                          }
+                        >
+                          <div class="w-full" title={memorySublabel()}>
+                            <StackedMemoryBar
+                              used={resource.memory?.used ?? 0}
+                              total={resource.memory?.total ?? 0}
+                              percentOnly={
+                                !resource.memory?.total && resource.memory?.current != null
+                                  ? resource.memory.current
+                                  : undefined
+                              }
+                              swapUsed={resource.agent?.memory?.swapUsed ?? 0}
+                              swapTotal={resource.agent?.memory?.swapTotal ?? 0}
+                            />
+                          </div>
+                        </Show>
+                      </TableCell>
+
+                      <TableCell>
+                        <Show
+                          when={diskPercentValue() !== null}
+                          fallback={
+                            <div class="flex justify-center">
+                              <span class="text-xs">—</span>
+                            </div>
+                          }
+                        >
+                          <div class="w-full" title={diskSublabel()}>
+                            <StackedDiskBar
+                              disks={normalizeDiskArray(resource.agent?.disks)}
+                              aggregateDisk={
+                                resource.disk
+                                  ? ({
+                                      total: resource.disk.total ?? 0,
+                                      used: resource.disk.used ?? 0,
+                                      free: resource.disk.free ?? 0,
+                                      usage: resource.disk.current ?? 0,
+                                    } as Disk)
+                                  : undefined
+                              }
+                            />
+                          </div>
+                        </Show>
+                      </TableCell>
+
+                      <TableCell
+                        classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                      >
+                        <Show
+                          when={resource.network}
+                          fallback={
+                            <div class="text-center">
+                              <span class="text-xs text-slate-400">—</span>
+                            </div>
+                          }
+                        >
+                          <div
+                            class={
+                              table.layoutMode() === 'wide'
+                                ? 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums'
+                                : 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[10px] leading-tight tabular-nums'
                             }
                           >
-                            <div
-                              class={
-                                table.layoutMode() === 'wide'
-                                  ? 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums'
-                                  : 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[10px] leading-tight tabular-nums'
+                            <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+                            <span
+                              class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+                              title={
+                                networkEmphasis().showOutlierHint
+                                  ? `${formatSpeed(resource.network!.rxBytes)} (Top outlier)`
+                                  : formatSpeed(resource.network!.rxBytes)
                               }
                             >
-                              <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
-                              <span
-                                class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-                                title={
-                                  networkEmphasis().showOutlierHint
-                                    ? `${formatSpeed(resource.network!.rxBytes)} (Top outlier)`
-                                    : formatSpeed(resource.network!.rxBytes)
-                                }
-                              >
-                                {formatSpeed(resource.network!.rxBytes)}
-                              </span>
-                              <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
-                              <span
-                                class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-                                title={
-                                  networkEmphasis().showOutlierHint
-                                    ? `${formatSpeed(resource.network!.txBytes)} (Top outlier)`
-                                    : formatSpeed(resource.network!.txBytes)
-                                }
-                              >
-                                {formatSpeed(resource.network!.txBytes)}
-                              </span>
-                            </div>
-                          </Show>
-                        </TableCell>
-
-                        <TableCell
-                          classList={{
-                            hidden: table.isMobile() || !table.isHostDiskIoVisible(),
-                          }}
-                        >
-                          <Show
-                            when={resource.diskIO}
-                            fallback={
-                              <div class="text-center">
-                                <span class="text-xs text-slate-400">—</span>
-                              </div>
-                            }
-                          >
-                            <div
-                              class={
-                                table.layoutMode() === 'wide'
-                                  ? 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums'
-                                  : 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[10px] leading-tight tabular-nums'
+                              {formatSpeed(resource.network!.rxBytes)}
+                            </span>
+                            <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+                            <span
+                              class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+                              title={
+                                networkEmphasis().showOutlierHint
+                                  ? `${formatSpeed(resource.network!.txBytes)} (Top outlier)`
+                                  : formatSpeed(resource.network!.txBytes)
                               }
                             >
-                              <span class="inline-flex w-3 justify-center font-mono text-blue-500">
-                                R
-                              </span>
-                              <span
-                                class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-                                title={
-                                  diskIOEmphasis().showOutlierHint
-                                    ? `${formatSpeed(resource.diskIO!.readRate)} (Top outlier)`
-                                    : formatSpeed(resource.diskIO!.readRate)
-                                }
-                              >
-                                {formatSpeed(resource.diskIO!.readRate)}
-                              </span>
-                              <span class="inline-flex w-3 justify-center font-mono text-amber-500">
-                                W
-                              </span>
-                              <span
-                                class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-                                title={
-                                  diskIOEmphasis().showOutlierHint
-                                    ? `${formatSpeed(resource.diskIO!.writeRate)} (Top outlier)`
-                                    : formatSpeed(resource.diskIO!.writeRate)
-                                }
-                              >
-                                {formatSpeed(resource.diskIO!.writeRate)}
-                              </span>
-                            </div>
-                          </Show>
-                        </TableCell>
+                              {formatSpeed(resource.network!.txBytes)}
+                            </span>
+                          </div>
+                        </Show>
+                      </TableCell>
 
-                        <TableCell
-                          classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                      <TableCell
+                        classList={{
+                          hidden: table.isMobile() || !table.isHostDiskIoVisible(),
+                        }}
+                      >
+                        <Show
+                          when={resource.diskIO}
+                          fallback={
+                            <div class="text-center">
+                              <span class="text-xs text-slate-400">—</span>
+                            </div>
+                          }
                         >
-                          <UnifiedResourceSourceBadgeCell
-                            unifiedBadges={systemBadges()}
-                            platformBadge={platformBadge()}
-                            sourceBadge={sourceBadge()}
-                            titleBadges={systemTitleBadges()}
-                            layoutMode={table.layoutMode()}
+                          <div
+                            class={
+                              table.layoutMode() === 'wide'
+                                ? 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums'
+                                : 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[10px] leading-tight tabular-nums'
+                            }
+                          >
+                            <span class="inline-flex w-3 justify-center font-mono text-blue-500">
+                              R
+                            </span>
+                            <span
+                              class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+                              title={
+                                diskIOEmphasis().showOutlierHint
+                                  ? `${formatSpeed(resource.diskIO!.readRate)} (Top outlier)`
+                                  : formatSpeed(resource.diskIO!.readRate)
+                              }
+                            >
+                              {formatSpeed(resource.diskIO!.readRate)}
+                            </span>
+                            <span class="inline-flex w-3 justify-center font-mono text-amber-500">
+                              W
+                            </span>
+                            <span
+                              class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+                              title={
+                                diskIOEmphasis().showOutlierHint
+                                  ? `${formatSpeed(resource.diskIO!.writeRate)} (Top outlier)`
+                                  : formatSpeed(resource.diskIO!.writeRate)
+                              }
+                            >
+                              {formatSpeed(resource.diskIO!.writeRate)}
+                            </span>
+                          </div>
+                        </Show>
+                      </TableCell>
+
+                      <TableCell
+                        classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                      >
+                        <UnifiedResourceSourceBadgeCell
+                          unifiedBadges={systemBadges()}
+                          platformBadge={platformBadge()}
+                          sourceBadge={sourceBadge()}
+                          titleBadges={systemTitleBadges()}
+                          layoutMode={table.layoutMode()}
+                        />
+                      </TableCell>
+
+                      <TableCell
+                        classList={{
+                          hidden: table.isMobile() || !table.isVisible('supplementary'),
+                        }}
+                      >
+                        <div class="flex justify-center">
+                          <Show
+                            when={resource.uptime}
+                            fallback={<span class="text-xs text-slate-400">—</span>}
+                          >
+                            <span class="text-xs text-base-content whitespace-nowrap">
+                              {formatUptime(resource.uptime ?? 0)}
+                            </span>
+                          </Show>
+                        </div>
+                      </TableCell>
+
+                      <TableCell
+                        classList={{
+                          hidden: table.isMobile() || !table.isVisible('supplementary'),
+                        }}
+                      >
+                        <div class="flex justify-center">
+                          <Show
+                            when={resource.temperature != null}
+                            fallback={<span class="text-xs text-slate-400">—</span>}
+                          >
+                            <span
+                              class={`text-xs whitespace-nowrap font-medium ${
+                                (resource.temperature ?? 0) >= 80
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : (resource.temperature ?? 0) >= 65
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-emerald-600 dark:text-emerald-400'
+                              }`}
+                            >
+                              {formatTemperature(resource.temperature)}
+                            </span>
+                          </Show>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    <Show when={isExpanded()}>
+                      <TableRow data-inline-detail-for={resource.id}>
+                        <TableCell
+                          id={detailControlsId()}
+                          colspan={9}
+                          class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
+                        >
+                          <ResourceDetailDrawer
+                            resource={resource}
+                            resolveResourceLabel={table.resolveResourceLabel}
+                            onClose={() => tableProps.onExpandedResourceChange(null)}
                           />
                         </TableCell>
-
-                        <TableCell
-                          classList={{
-                            hidden: table.isMobile() || !table.isVisible('supplementary'),
-                          }}
-                        >
-                          <div class="flex justify-center">
-                            <Show
-                              when={resource.uptime}
-                              fallback={<span class="text-xs text-slate-400">—</span>}
-                            >
-                              <span class="text-xs text-base-content whitespace-nowrap">
-                                {formatUptime(resource.uptime ?? 0)}
-                              </span>
-                            </Show>
-                          </div>
-                        </TableCell>
-
-                        <TableCell
-                          classList={{
-                            hidden: table.isMobile() || !table.isVisible('supplementary'),
-                          }}
-                        >
-                          <div class="flex justify-center">
-                            <Show
-                              when={resource.temperature != null}
-                              fallback={<span class="text-xs text-slate-400">—</span>}
-                            >
-                              <span
-                                class={`text-xs whitespace-nowrap font-medium ${
-                                  (resource.temperature ?? 0) >= 80
-                                    ? 'text-red-600 dark:text-red-400'
-                                    : (resource.temperature ?? 0) >= 65
-                                      ? 'text-amber-600 dark:text-amber-400'
-                                      : 'text-emerald-600 dark:text-emerald-400'
-                                }`}
-                              >
-                                {formatTemperature(resource.temperature)}
-                              </span>
-                            </Show>
-                          </div>
-                        </TableCell>
                       </TableRow>
-                      <Show when={isExpanded()}>
-                        <TableRow data-inline-detail-for={resource.id}>
-                          <TableCell
-                            id={detailControlsId()}
-                            colspan={9}
-                            class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
-                          >
-                            <ResourceDetailDrawer
-                              resource={resource}
-                              resolveResourceLabel={table.resolveResourceLabel}
-                              onClose={() => tableProps.onExpandedResourceChange(null)}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      </Show>
-                    </>
-                  );
-                }}
-              </For>
+                    </Show>
+                  </>
+                );
+              }}
+            </For>
 
-              <Show when={table.hostWindowing.isWindowed() && table.hostBottomSpacerHeight() > 0}>
-                <TableRow aria-hidden="true">
-                  <TableCell
-                    colspan={9}
-                    class="border-0 p-0"
-                    height={table.hostBottomSpacerHeight()}
-                  />
-                </TableRow>
-              </Show>
-            </TableBody>
-          </Table>
-        </div>
+            <Show when={table.hostWindowing.isWindowed() && table.hostBottomSpacerHeight() > 0}>
+              <TableRow aria-hidden="true">
+                <TableCell
+                  colspan={9}
+                  class="border-0 p-0"
+                  height={table.hostBottomSpacerHeight()}
+                />
+              </TableRow>
+            </Show>
+          </TableBody>
+        </Table>
       </TableCard>
     </Show>
   );

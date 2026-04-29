@@ -158,7 +158,10 @@ cross-source deduplication.
    Infrastructure host and service table cards must consume the
    frontend-primitives-owned `TableCard` frame and `TableCardHeader` header
    band; unified resources owns the resource identity, rows, grouping, and
-   detail presentation, not page-local table-shell chrome.
+   detail presentation, not page-local table-shell chrome. The nested
+   infrastructure tables must use the shared `Table` primitive's scroll frame
+   directly instead of reintroducing page-local `overflow-x-auto` wrappers
+   inside the canonical card shell.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor

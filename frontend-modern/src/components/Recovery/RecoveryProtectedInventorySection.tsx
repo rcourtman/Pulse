@@ -414,205 +414,199 @@ export const RecoveryProtectedInventorySection: Component<
         </Show>
 
         <Show when={props.filteredRollups().length > 0}>
-          <div class="overflow-x-auto bg-surface">
-            <Table
-              class={`w-full border-collapse whitespace-nowrap table-fixed ${
-                props.isMobile ? 'min-w-full' : 'min-w-[640px]'
-              }`}
-            >
-              <TableHeader>
-                <TableRow class="bg-surface-alt/95 text-muted">
-                  {(
-                    [
-                      ['item', getRecoveryArtifactColumnLabel('item', 'Item')],
-                      ['type', getRecoveryArtifactColumnLabel('type', 'Item Type')],
-                      ['platform', getRecoveryArtifactColumnLabel('platform', 'Platform')],
-                      ['lastBackup', 'Latest Point'],
-                      ['outcome', 'Protection State'],
-                    ] as const
-                  ).map(([column, label]) => (
-                    <TableHead
-                      class={`sticky top-0 z-[1] bg-surface-alt/95 px-3 py-2 whitespace-nowrap text-left text-[11px] font-medium cursor-pointer select-none hover:text-base-content transition-colors${
-                        column === 'type'
-                          ? ' hidden md:table-cell w-[96px]'
-                          : column === 'platform'
-                            ? ' hidden lg:table-cell w-[110px]'
-                            : column === 'lastBackup'
-                              ? ' w-[120px]'
-                              : column === 'outcome'
-                                ? ' w-[116px]'
-                                : ''
-                      }`}
-                      onClick={() => toggleProtectedSort(column)}
+          <Table
+            wrapperClass="bg-surface"
+            class={`w-full border-collapse whitespace-nowrap table-fixed ${
+              props.isMobile ? 'min-w-full' : 'min-w-[640px]'
+            }`}
+          >
+            <TableHeader>
+              <TableRow class="bg-surface-alt/95 text-muted">
+                {(
+                  [
+                    ['item', getRecoveryArtifactColumnLabel('item', 'Item')],
+                    ['type', getRecoveryArtifactColumnLabel('type', 'Item Type')],
+                    ['platform', getRecoveryArtifactColumnLabel('platform', 'Platform')],
+                    ['lastBackup', 'Latest Point'],
+                    ['outcome', 'Protection State'],
+                  ] as const
+                ).map(([column, label]) => (
+                  <TableHead
+                    class={`sticky top-0 z-[1] bg-surface-alt/95 px-3 py-2 whitespace-nowrap text-left text-[11px] font-medium cursor-pointer select-none hover:text-base-content transition-colors${
+                      column === 'type'
+                        ? ' hidden md:table-cell w-[96px]'
+                        : column === 'platform'
+                          ? ' hidden lg:table-cell w-[110px]'
+                          : column === 'lastBackup'
+                            ? ' w-[120px]'
+                            : column === 'outcome'
+                              ? ' w-[116px]'
+                              : ''
+                    }`}
+                    onClick={() => toggleProtectedSort(column)}
+                  >
+                    <span class="inline-flex items-center gap-1">
+                      {label}
+                      <Show when={protectedSortCol() === column}>
+                        <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
+                          {protectedSortDir() === 'asc' ? (
+                            <path d="M6 3l3.5 5h-7z" />
+                          ) : (
+                            <path d="M6 9l3.5-5h-7z" />
+                          )}
+                        </svg>
+                      </Show>
+                    </span>
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <For each={sortedRollups()}>
+                {(rollup) => {
+                  const resourceIndex = props.resourcesById();
+                  const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
+                  const secondaryLabel = getRecoveryRollupItemSecondaryLabel(rollup);
+                  const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
+                  const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
+                  const inventoryStatus = getRecoveryRollupInventoryStatus(rollup);
+                  const inventoryStatusLabel =
+                    getRecoveryRollupInventoryStatusLabel(inventoryStatus);
+                  const platforms = getRecoveryRollupPlatforms(rollup)
+                    .map((platform) => String(platform || '').trim())
+                    .filter(Boolean)
+                    .sort((left, right) =>
+                      getSourcePlatformLabel(left).localeCompare(getSourcePlatformLabel(right)),
+                    );
+                  const itemTypePresentation =
+                    getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || null;
+                  const nowMs = Date.now();
+                  const neverSucceeded = inventoryStatus === 'never-succeeded';
+                  const protectionInsight = getProtectionInsight(rollup, inventoryStatus, nowMs);
+
+                  return (
+                    <TableRow
+                      class="cursor-pointer odd:bg-surface even:bg-surface-alt/35 transition-colors hover:bg-surface-hover/95"
+                      onClick={() => props.onSelectRollup(rollup.rollupId)}
                     >
-                      <span class="inline-flex items-center gap-1">
-                        {label}
-                        <Show when={protectedSortCol() === column}>
-                          <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
-                            {protectedSortDir() === 'asc' ? (
-                              <path d="M6 3l3.5 5h-7z" />
-                            ) : (
-                              <path d="M6 9l3.5-5h-7z" />
-                            )}
-                          </svg>
-                        </Show>
-                      </span>
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <For each={sortedRollups()}>
-                  {(rollup) => {
-                    const resourceIndex = props.resourcesById();
-                    const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
-                    const secondaryLabel = getRecoveryRollupItemSecondaryLabel(rollup);
-                    const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
-                    const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
-                    const inventoryStatus = getRecoveryRollupInventoryStatus(rollup);
-                    const inventoryStatusLabel =
-                      getRecoveryRollupInventoryStatusLabel(inventoryStatus);
-                    const platforms = getRecoveryRollupPlatforms(rollup)
-                      .map((platform) => String(platform || '').trim())
-                      .filter(Boolean)
-                      .sort((left, right) =>
-                        getSourcePlatformLabel(left).localeCompare(getSourcePlatformLabel(right)),
-                      );
-                    const itemTypePresentation =
-                      getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || null;
-                    const nowMs = Date.now();
-                    const neverSucceeded = inventoryStatus === 'never-succeeded';
-                    const protectionInsight = getProtectionInsight(rollup, inventoryStatus, nowMs);
-
-                    return (
-                      <TableRow
-                        class="cursor-pointer odd:bg-surface even:bg-surface-alt/35 transition-colors hover:bg-surface-hover/95"
-                        onClick={() => props.onSelectRollup(rollup.rollupId)}
-                      >
-                        <TableCell
-                          class="max-w-[420px] px-3 py-1.5 text-base-content"
-                          title={label}
-                        >
-                          <div class="flex min-w-0 flex-col gap-1">
-                            <div class="flex min-w-0 items-center gap-2">
-                              <StatusDot
-                                variant={getRecoveryRollupInventoryStatusVariant(inventoryStatus)}
-                                size="xs"
-                                pulse={inventoryStatus === 'running'}
-                                title={inventoryStatusLabel}
-                                ariaLabel={inventoryStatusLabel}
-                              />
-                              <div class="flex min-w-0 items-baseline gap-1.5">
-                                <span class="truncate text-[13px] font-medium">{label}</span>
-                                <Show when={secondaryLabel}>
-                                  <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
-                                    {secondaryLabel}
-                                  </span>
-                                </Show>
-                              </div>
-                            </div>
-                            <Show when={protectionInsight}>
-                              <div class="pl-4 text-[10px] leading-4 text-muted">
-                                {protectionInsight}
-                              </div>
-                            </Show>
-                            <div class="flex flex-wrap items-center gap-1.5 text-[10px] md:hidden">
-                              <Show when={itemTypePresentation?.label}>
-                                <span class={itemTypePresentation?.tableBadgeClasses}>
-                                  {itemTypePresentation?.label}
+                      <TableCell class="max-w-[420px] px-3 py-1.5 text-base-content" title={label}>
+                        <div class="flex min-w-0 flex-col gap-1">
+                          <div class="flex min-w-0 items-center gap-2">
+                            <StatusDot
+                              variant={getRecoveryRollupInventoryStatusVariant(inventoryStatus)}
+                              size="xs"
+                              pulse={inventoryStatus === 'running'}
+                              title={inventoryStatusLabel}
+                              ariaLabel={inventoryStatusLabel}
+                            />
+                            <div class="flex min-w-0 items-baseline gap-1.5">
+                              <span class="truncate text-[13px] font-medium">{label}</span>
+                              <Show when={secondaryLabel}>
+                                <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
+                                  {secondaryLabel}
                                 </span>
-                              </Show>
-                              <Show when={platforms.length > 0}>
-                                <For each={platforms.slice(0, 2)}>
-                                  {(platform) => {
-                                    const badge = getSourcePlatformBadge(platform);
-                                    return (
-                                      <span class={`${badge?.classes || ''} lg:hidden`}>
-                                        {badge?.label || getSourcePlatformLabel(platform)}
-                                      </span>
-                                    );
-                                  }}
-                                </For>
                               </Show>
                             </div>
                           </div>
-                        </TableCell>
-
-                        <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-1.5">
-                          <Show
-                            when={itemTypePresentation}
-                            fallback={<span class="text-muted">—</span>}
-                          >
-                            <span class={itemTypePresentation?.tableBadgeClasses}>
-                              {itemTypePresentation?.label}
-                            </span>
+                          <Show when={protectionInsight}>
+                            <div class="pl-4 text-[10px] leading-4 text-muted">
+                              {protectionInsight}
+                            </div>
                           </Show>
-                        </TableCell>
-
-                        <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-1.5">
-                          <div class="flex flex-wrap gap-1.5">
-                            <For each={platforms}>
-                              {(platform) => {
-                                const badge = getSourcePlatformBadge(platform);
-                                return (
-                                  <span class={badge?.classes || ''}>
-                                    {badge?.label || getSourcePlatformLabel(platform)}
-                                  </span>
-                                );
-                              }}
-                            </For>
-                          </div>
-                        </TableCell>
-
-                        <TableCell
-                          class={`whitespace-nowrap px-3 py-1.5 ${getRecoveryRollupAgeTextClass(
-                            rollup,
-                            nowMs,
-                          )}`}
-                          title={
-                            successMs > 0
-                              ? formatAbsoluteTime(successMs)
-                              : attemptMs > 0
-                                ? formatAbsoluteTime(attemptMs)
-                                : undefined
-                          }
-                        >
-                          <div class="flex flex-col">
-                            <span>
-                              {successMs > 0 ? (
-                                formatRelativeTime(successMs)
-                              ) : neverSucceeded ? (
-                                <span class={getRecoverySpecialOutcomeTextClass('never')}>
-                                  never
-                                </span>
-                              ) : (
-                                '—'
-                              )}
-                            </span>
-                            <Show when={inventoryStatus !== 'healthy' && attemptMs > 0}>
-                              <span class="text-[10px] font-normal text-muted">
-                                Attempt {formatRelativeTime(attemptMs)}
+                          <div class="flex flex-wrap items-center gap-1.5 text-[10px] md:hidden">
+                            <Show when={itemTypePresentation?.label}>
+                              <span class={itemTypePresentation?.tableBadgeClasses}>
+                                {itemTypePresentation?.label}
                               </span>
                             </Show>
+                            <Show when={platforms.length > 0}>
+                              <For each={platforms.slice(0, 2)}>
+                                {(platform) => {
+                                  const badge = getSourcePlatformBadge(platform);
+                                  return (
+                                    <span class={`${badge?.classes || ''} lg:hidden`}>
+                                      {badge?.label || getSourcePlatformLabel(platform)}
+                                    </span>
+                                  );
+                                }}
+                              </For>
+                            </Show>
                           </div>
-                        </TableCell>
+                        </div>
+                      </TableCell>
 
-                        <TableCell class="whitespace-nowrap px-3 py-1.5">
-                          <span
-                            class={`text-[11px] font-medium ${getRecoveryRollupInventoryStatusTextClass(
-                              inventoryStatus,
-                            )}`}
-                          >
-                            {inventoryStatusLabel}
+                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-1.5">
+                        <Show
+                          when={itemTypePresentation}
+                          fallback={<span class="text-muted">—</span>}
+                        >
+                          <span class={itemTypePresentation?.tableBadgeClasses}>
+                            {itemTypePresentation?.label}
                           </span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  }}
-                </For>
-              </TableBody>
-            </Table>
-          </div>
+                        </Show>
+                      </TableCell>
+
+                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-1.5">
+                        <div class="flex flex-wrap gap-1.5">
+                          <For each={platforms}>
+                            {(platform) => {
+                              const badge = getSourcePlatformBadge(platform);
+                              return (
+                                <span class={badge?.classes || ''}>
+                                  {badge?.label || getSourcePlatformLabel(platform)}
+                                </span>
+                              );
+                            }}
+                          </For>
+                        </div>
+                      </TableCell>
+
+                      <TableCell
+                        class={`whitespace-nowrap px-3 py-1.5 ${getRecoveryRollupAgeTextClass(
+                          rollup,
+                          nowMs,
+                        )}`}
+                        title={
+                          successMs > 0
+                            ? formatAbsoluteTime(successMs)
+                            : attemptMs > 0
+                              ? formatAbsoluteTime(attemptMs)
+                              : undefined
+                        }
+                      >
+                        <div class="flex flex-col">
+                          <span>
+                            {successMs > 0 ? (
+                              formatRelativeTime(successMs)
+                            ) : neverSucceeded ? (
+                              <span class={getRecoverySpecialOutcomeTextClass('never')}>never</span>
+                            ) : (
+                              '—'
+                            )}
+                          </span>
+                          <Show when={inventoryStatus !== 'healthy' && attemptMs > 0}>
+                            <span class="text-[10px] font-normal text-muted">
+                              Attempt {formatRelativeTime(attemptMs)}
+                            </span>
+                          </Show>
+                        </div>
+                      </TableCell>
+
+                      <TableCell class="whitespace-nowrap px-3 py-1.5">
+                        <span
+                          class={`text-[11px] font-medium ${getRecoveryRollupInventoryStatusTextClass(
+                            inventoryStatus,
+                          )}`}
+                        >
+                          {inventoryStatusLabel}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                }}
+              </For>
+            </TableBody>
+          </Table>
           <div class="flex items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3 text-xs text-muted">
             <div>
               <Show

@@ -523,6 +523,15 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceHostTableCardSource).toContain(
         'onClear={tableProps.clearPinnedSummaryScope}',
       );
+      for (const source of [
+        unifiedResourceHostTableCardSource,
+        unifiedResourcePBSTableSectionSource,
+        unifiedResourcePMGTableSectionSource,
+      ]) {
+        expect(source).toMatch(/<Table(?:\s|>)/);
+        expect(source).not.toContain('<div class="overflow-x-auto">');
+        expect(source).not.toContain('<div class="overflow-x-auto bg-surface">');
+      }
       expect(unifiedResourceServiceInfrastructureCardSource).toContain('TableCard');
       expect(unifiedResourceServiceInfrastructureCardSource).toContain('TableCardHeader');
       expect(unifiedResourceServiceInfrastructureCardSource).toContain('showClearAction');

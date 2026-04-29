@@ -70,7 +70,10 @@ querying, and the operator-facing storage health presentation layer.
    recovery-event, and adjacent table-fallback chrome. Storage/recovery may own
    table content, filters, columns, and rows, but it must not fork
    border/background/overflow table shells, page-local table-title bands, or
-   lighter open-sided Recovery table frames.
+   lighter open-sided Recovery table frames. Recovery and storage tables must
+   use the shared `Table` scroll shell directly; if a table needs the card body
+   surface fill it may pass `wrapperClass`, but it must not nest a local
+   `overflow-x-auto` div around the shared table.
    Recovery inventory protection posture and recovery-event outcome filtering
    must stay separate in that owner: protected inventory uses the route-backed
    `state` query for health, stale, failed, warning, running, unknown, and

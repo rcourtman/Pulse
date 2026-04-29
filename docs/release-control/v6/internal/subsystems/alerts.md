@@ -245,6 +245,9 @@ table subgroup-row contract. `AlertHistoryTableGroupRow` and grouped rows in
 `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` instead
 of local `bg-surface-alt` fills, so alert subgroup hierarchy stays visually
 consistent with Infrastructure, Workloads, Storage, and Recovery tables.
+Alert history table shells must also rely on the shared `TableCard` frame and
+the shared `Table` primitive for horizontal overflow rather than adding
+alert-local bordered or `overflow-x-auto` wrappers inside the history section.
 
 The alert webhook service chooser also now derives its service set from the
 backend webhook template registry, rather than keeping a second frontend-only

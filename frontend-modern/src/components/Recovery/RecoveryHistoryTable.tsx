@@ -15,14 +15,15 @@ import {
 } from '@/components/shared/Table';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { formatBytes } from '@/utils/format';
-import { getRecoveryDrawerCloseButtonClass, getRecoveryEmptyStateActionClass } from '@/utils/recoveryActionPresentation';
+import {
+  getRecoveryDrawerCloseButtonClass,
+  getRecoveryEmptyStateActionClass,
+} from '@/utils/recoveryActionPresentation';
 import {
   getRecoveryHistoryEmptyState,
   getRecoveryPointsLoadingState,
 } from '@/utils/recoveryEmptyStatePresentation';
-import {
-  getRecoveryOutcomeLabel,
-} from '@/utils/recoveryOutcomePresentation';
+import { getRecoveryOutcomeLabel } from '@/utils/recoveryOutcomePresentation';
 import {
   getRecoveryPointDetailsSummary,
   getRecoveryPointItemLabel,
@@ -121,358 +122,361 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
       </div>
     }
   >
-    <div class="overflow-x-auto">
-      <Table
-        class="w-full border-collapse whitespace-nowrap"
-        style={{ 'min-width': props.tableMinWidth(), 'table-layout': 'fixed' }}
-      >
-        <TableHeader>
-          <TableRow class="bg-surface-alt text-muted border-b border-border">
-            <For each={props.mobileVisibleArtifactColumns()}>
-              {(column) => (
-                <TableHead
-                  class={`px-3 py-1.5 text-left text-[11px] font-medium whitespace-nowrap ${getRecoveryArtifactColumnHeaderClass(
-                    column.id,
-                  )}`}
-                >
-                  {column.label}
-                </TableHead>
-              )}
-            </For>
-          </TableRow>
-        </TableHeader>
-        <TableBody class="divide-y divide-border">
-          <For each={props.groupedByDay()}>
-            {(group) => (
-              <>
-                <TableRow class={RECOVERY_GROUP_HEADER_ROW_CLASS}>
-                  <TableCell colSpan={props.tableColumnCount()} class={RECOVERY_GROUP_HEADER_TEXT_CLASS}>
-                    <div class="flex items-center justify-between gap-3">
-                      <div class="flex min-w-0 items-center gap-2">
-                        <span class="truncate" title={group.label}>
-                          {group.label}
-                        </span>
-                      </div>
-                      <span class="shrink-0 text-[10px] tabular-nums text-muted">
-                        {group.items.length} event{group.items.length === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-
-                <For each={group.items}>
-                  {(point) => {
-                    const resourceIndex = props.resourcesById();
-                    const item = getRecoveryPointItemLabel(point, resourceIndex);
-                    const itemSecondary = getRecoveryPointItemSecondaryLabel(point);
-                    const tsMs = getRecoveryPointTimestampMs(point);
-                    const timeOnly =
-                      point.completedAt && Number.isFinite(tsMs)
-                        ? formatRecoveryTimeOnly(tsMs)
-                        : '—';
-                    const itemTypePresentation =
-                      getRecoveryItemTypePresentation(getRecoveryPointItemTypeKey(point));
-                    const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
-                    const outcome =
-                      (String(point.outcome || 'unknown').toLowerCase() as RecoveryOutcome) ||
-                      'unknown';
-                    const outcomeVariant = (() => {
-                      switch (outcome) {
-                        case 'success':
-                          return 'success' as const;
-                        case 'warning':
-                          return 'warning' as const;
-                        case 'failed':
-                          return 'danger' as const;
-                        default:
-                          return 'muted' as const;
-                      }
-                    })();
-                    const repoLabel = getRecoveryPointRepositoryLabel(point);
-                    const detailsSummary = getRecoveryPointDetailsSummary(point);
-                    const verificationLabel =
-                      point.verified === true
-                        ? 'Verified'
-                        : point.verified === false
-                          ? 'Verification failed'
-                          : 'Verification unknown';
-                    const entityId = String(point.entityId || '').trim();
-                    const cluster = String(
-                      point.display?.clusterLabel || point.cluster || '',
-                    ).trim();
-                    const nodeAgent = String(
-                      point.display?.nodeHostLabel || point.display?.nodeAgentLabel || point.node || '',
-                    ).trim();
-                    const namespace = String(
-                      point.display?.namespaceLabel || point.namespace || '',
-                    ).trim();
-
-                    return (
-                      <>
-                        <TableRow
-                          class={`cursor-pointer ${getRecoveryArtifactRowClass(
-                            props.selectedPoint()?.id === point.id,
-                          )}`}
-                          onClick={() => props.toggleSelectedPoint(point)}
-                        >
-                          <For each={props.mobileVisibleArtifactColumns()}>
-                            {(column) => {
-                              switch (column.id) {
-                                case 'time':
-                                  return (
-                                    <TableCell
-                                      class={`whitespace-nowrap px-3 py-1 text-right font-mono text-[11px] tabular-nums ${getRecoveryEventTimeTextClass(
-                                        tsMs,
-                                      )}`}
-                                    >
-                                      {timeOnly}
-                                    </TableCell>
-                                  );
-                                case 'type':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
-                                      <Show
-                                        when={itemTypePresentation}
-                                        fallback={<span class="text-muted">—</span>}
-                                      >
-                                        <span class={itemTypePresentation?.tableBadgeClasses}>
-                                          {itemTypePresentation?.label}
-                                        </span>
-                                      </Show>
-                                    </TableCell>
-                                  );
-                                case 'item':
-                                  return (
-                                    <TableCell
-                                      class="max-w-[420px] whitespace-nowrap px-3 py-1 text-base-content"
-                                      title={item}
-                                    >
-                                      <div class="flex min-w-0 max-w-full items-center gap-2">
-                                        <StatusDot
-                                          variant={outcomeVariant}
-                                          size="xs"
-                                          pulse={outcome === 'running'}
-                                          title={getRecoveryOutcomeLabel(outcome)}
-                                          ariaLabel={getRecoveryOutcomeLabel(outcome)}
-                                        />
-                                        <div class="min-w-0 flex-1">
-                                          <div class="flex min-w-0 items-baseline gap-1.5">
-                                            <span class="min-w-0 truncate text-[12px] font-medium">
-                                              {item}
-                                            </span>
-                                            <Show when={itemSecondary}>
-                                              <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
-                                                {itemSecondary}
-                                              </span>
-                                            </Show>
-                                          </div>
-                                          <Show when={props.isMobile}>
-                                            <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-4 text-muted">
-                                              <span>{getRecoveryPointModeLabel(point.mode)}</span>
-                                              <span>{getSourcePlatformLabel(platform)}</span>
-                                              <Show when={repoLabel}>
-                                                <span class="max-w-full truncate">{repoLabel}</span>
-                                              </Show>
-                                              <span>{verificationLabel}</span>
-                                            </div>
-                                          </Show>
-                                        </div>
-                                      </div>
-                                    </TableCell>
-                                  );
-                                case 'entityId':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono tabular-nums">
-                                      {entityId || '—'}
-                                    </TableCell>
-                                  );
-                                case 'cluster':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
-                                      {cluster || '—'}
-                                    </TableCell>
-                                  );
-                                case 'nodeAgent':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
-                                      {nodeAgent || '—'}
-                                    </TableCell>
-                                  );
-                                case 'namespace':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
-                                      {namespace || '—'}
-                                    </TableCell>
-                                  );
-                                case 'platform': {
-                                  const badge = getSourcePlatformBadge(platform);
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
-                                      <span
-                                        class={`${badge?.classes || ''} inline-flex justify-center px-1.5 py-px text-[9px] font-medium`}
-                                      >
-                                        {badge?.label || getSourcePlatformLabel(platform)}
-                                      </span>
-                                    </TableCell>
-                                  );
-                                }
-                                case 'verified':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
-                                      {typeof point.verified === 'boolean' ? (
-                                        point.verified ? (
-                                          <span
-                                            class="inline-flex min-w-[1.25rem] items-center justify-center text-green-600 dark:text-green-400"
-                                            title="Verified"
-                                          >
-                                            <svg
-                                              class="h-3.5 w-3.5"
-                                              fill="none"
-                                              stroke="currentColor"
-                                              viewBox="0 0 24 24"
-                                            >
-                                              <path
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                stroke-width="2.5"
-                                                d="M5 13l4 4L19 7"
-                                              />
-                                            </svg>
-                                          </span>
-                                        ) : (
-                                          <span
-                                            class="inline-flex min-w-[1.25rem] items-center justify-center text-amber-500 dark:text-amber-400"
-                                            title="Unverified"
-                                          >
-                                            <svg
-                                              class="h-3.5 w-3.5"
-                                              fill="none"
-                                              stroke="currentColor"
-                                              viewBox="0 0 24 24"
-                                            >
-                                              <path
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                stroke-width="2.5"
-                                                d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z"
-                                              />
-                                            </svg>
-                                          </span>
-                                        )
-                                      ) : (
-                                        <span class="text-muted">—</span>
-                                      )}
-                                    </TableCell>
-                                  );
-                                case 'size':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-right font-mono text-[11px] tabular-nums text-muted">
-                                      {point.sizeBytes && point.sizeBytes > 0
-                                        ? formatBytes(point.sizeBytes)
-                                        : '—'}
-                                    </TableCell>
-                                  );
-                                case 'method':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
-                                      <span class={getRecoveryArtifactMetadataTextClass()}>
-                                        {getRecoveryPointModeLabel(point.mode)}
-                                      </span>
-                                    </TableCell>
-                                  );
-                                case 'repository':
-                                  return (
-                                    <TableCell
-                                      class="max-w-[220px] truncate whitespace-nowrap px-3 py-1 text-[11px] leading-4 text-base-content"
-                                      title={repoLabel}
-                                    >
-                                      {repoLabel || '—'}
-                                    </TableCell>
-                                  );
-                                case 'details':
-                                  return (
-                                    <TableCell
-                                      class="max-w-[280px] truncate whitespace-nowrap px-3 py-1 text-[10px] leading-4 text-muted"
-                                      title={detailsSummary}
-                                    >
-                                      {detailsSummary || '—'}
-                                    </TableCell>
-                                  );
-                                case 'outcome':
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
-                                      <span
-                                        class={getRecoveryArtifactOutcomeTextClass(outcome)}
-                                        title={getRecoveryOutcomeLabel(outcome)}
-                                      >
-                                        {titleCaseDelimitedLabel(outcome)}
-                                      </span>
-                                    </TableCell>
-                                  );
-                                default:
-                                  return (
-                                    <TableCell class="whitespace-nowrap px-3 py-1 text-muted">
-                                      -
-                                    </TableCell>
-                                  );
-                              }
-                            }}
-                          </For>
-                        </TableRow>
-
-                        <Show when={props.selectedPoint()?.id === point.id}>
-                          <TableRow>
-                            <TableCell
-                              colSpan={props.tableColumnCount()}
-                              class="bg-surface-alt px-0 sm:px-4 py-4 relative"
-                            >
-                              <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-border">
-                                <h2 class="text-sm font-semibold text-base-content">
-                                  Recovery Point Details
-                                </h2>
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    props.clearSelectedPoint();
-                                  }}
-                                  class={getRecoveryDrawerCloseButtonClass()}
-                                  aria-label="Close details"
-                                >
-                                  <svg
-                                    class="h-5 w-5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      stroke-width="2"
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                </button>
-                              </div>
-                              <div class="px-4">
-                                <RecoveryPointDetails
-                                  point={point}
-                                  relatedPoints={props.relatedPoints()}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        </Show>
-                      </>
-                    );
-                  }}
-                </For>
-              </>
+    <Table
+      class="w-full border-collapse whitespace-nowrap"
+      style={{ 'min-width': props.tableMinWidth(), 'table-layout': 'fixed' }}
+    >
+      <TableHeader>
+        <TableRow class="bg-surface-alt text-muted border-b border-border">
+          <For each={props.mobileVisibleArtifactColumns()}>
+            {(column) => (
+              <TableHead
+                class={`px-3 py-1.5 text-left text-[11px] font-medium whitespace-nowrap ${getRecoveryArtifactColumnHeaderClass(
+                  column.id,
+                )}`}
+              >
+                {column.label}
+              </TableHead>
             )}
           </For>
-        </TableBody>
-      </Table>
-    </div>
+        </TableRow>
+      </TableHeader>
+      <TableBody class="divide-y divide-border">
+        <For each={props.groupedByDay()}>
+          {(group) => (
+            <>
+              <TableRow class={RECOVERY_GROUP_HEADER_ROW_CLASS}>
+                <TableCell
+                  colSpan={props.tableColumnCount()}
+                  class={RECOVERY_GROUP_HEADER_TEXT_CLASS}
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex min-w-0 items-center gap-2">
+                      <span class="truncate" title={group.label}>
+                        {group.label}
+                      </span>
+                    </div>
+                    <span class="shrink-0 text-[10px] tabular-nums text-muted">
+                      {group.items.length} event{group.items.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                </TableCell>
+              </TableRow>
+
+              <For each={group.items}>
+                {(point) => {
+                  const resourceIndex = props.resourcesById();
+                  const item = getRecoveryPointItemLabel(point, resourceIndex);
+                  const itemSecondary = getRecoveryPointItemSecondaryLabel(point);
+                  const tsMs = getRecoveryPointTimestampMs(point);
+                  const timeOnly =
+                    point.completedAt && Number.isFinite(tsMs) ? formatRecoveryTimeOnly(tsMs) : '—';
+                  const itemTypePresentation = getRecoveryItemTypePresentation(
+                    getRecoveryPointItemTypeKey(point),
+                  );
+                  const platform = normalizeSourcePlatformQueryValue(
+                    getRecoveryPointPlatform(point),
+                  );
+                  const outcome =
+                    (String(point.outcome || 'unknown').toLowerCase() as RecoveryOutcome) ||
+                    'unknown';
+                  const outcomeVariant = (() => {
+                    switch (outcome) {
+                      case 'success':
+                        return 'success' as const;
+                      case 'warning':
+                        return 'warning' as const;
+                      case 'failed':
+                        return 'danger' as const;
+                      default:
+                        return 'muted' as const;
+                    }
+                  })();
+                  const repoLabel = getRecoveryPointRepositoryLabel(point);
+                  const detailsSummary = getRecoveryPointDetailsSummary(point);
+                  const verificationLabel =
+                    point.verified === true
+                      ? 'Verified'
+                      : point.verified === false
+                        ? 'Verification failed'
+                        : 'Verification unknown';
+                  const entityId = String(point.entityId || '').trim();
+                  const cluster = String(point.display?.clusterLabel || point.cluster || '').trim();
+                  const nodeAgent = String(
+                    point.display?.nodeHostLabel ||
+                      point.display?.nodeAgentLabel ||
+                      point.node ||
+                      '',
+                  ).trim();
+                  const namespace = String(
+                    point.display?.namespaceLabel || point.namespace || '',
+                  ).trim();
+
+                  return (
+                    <>
+                      <TableRow
+                        class={`cursor-pointer ${getRecoveryArtifactRowClass(
+                          props.selectedPoint()?.id === point.id,
+                        )}`}
+                        onClick={() => props.toggleSelectedPoint(point)}
+                      >
+                        <For each={props.mobileVisibleArtifactColumns()}>
+                          {(column) => {
+                            switch (column.id) {
+                              case 'time':
+                                return (
+                                  <TableCell
+                                    class={`whitespace-nowrap px-3 py-1 text-right font-mono text-[11px] tabular-nums ${getRecoveryEventTimeTextClass(
+                                      tsMs,
+                                    )}`}
+                                  >
+                                    {timeOnly}
+                                  </TableCell>
+                                );
+                              case 'type':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-center">
+                                    <Show
+                                      when={itemTypePresentation}
+                                      fallback={<span class="text-muted">—</span>}
+                                    >
+                                      <span class={itemTypePresentation?.tableBadgeClasses}>
+                                        {itemTypePresentation?.label}
+                                      </span>
+                                    </Show>
+                                  </TableCell>
+                                );
+                              case 'item':
+                                return (
+                                  <TableCell
+                                    class="max-w-[420px] whitespace-nowrap px-3 py-1 text-base-content"
+                                    title={item}
+                                  >
+                                    <div class="flex min-w-0 max-w-full items-center gap-2">
+                                      <StatusDot
+                                        variant={outcomeVariant}
+                                        size="xs"
+                                        pulse={outcome === 'running'}
+                                        title={getRecoveryOutcomeLabel(outcome)}
+                                        ariaLabel={getRecoveryOutcomeLabel(outcome)}
+                                      />
+                                      <div class="min-w-0 flex-1">
+                                        <div class="flex min-w-0 items-baseline gap-1.5">
+                                          <span class="min-w-0 truncate text-[12px] font-medium">
+                                            {item}
+                                          </span>
+                                          <Show when={itemSecondary}>
+                                            <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
+                                              {itemSecondary}
+                                            </span>
+                                          </Show>
+                                        </div>
+                                        <Show when={props.isMobile}>
+                                          <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-4 text-muted">
+                                            <span>{getRecoveryPointModeLabel(point.mode)}</span>
+                                            <span>{getSourcePlatformLabel(platform)}</span>
+                                            <Show when={repoLabel}>
+                                              <span class="max-w-full truncate">{repoLabel}</span>
+                                            </Show>
+                                            <span>{verificationLabel}</span>
+                                          </div>
+                                        </Show>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                );
+                              case 'entityId':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono tabular-nums">
+                                    {entityId || '—'}
+                                  </TableCell>
+                                );
+                              case 'cluster':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
+                                    {cluster || '—'}
+                                  </TableCell>
+                                );
+                              case 'nodeAgent':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
+                                    {nodeAgent || '—'}
+                                  </TableCell>
+                                );
+                              case 'namespace':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
+                                    {namespace || '—'}
+                                  </TableCell>
+                                );
+                              case 'platform': {
+                                const badge = getSourcePlatformBadge(platform);
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-center">
+                                    <span
+                                      class={`${badge?.classes || ''} inline-flex justify-center px-1.5 py-px text-[9px] font-medium`}
+                                    >
+                                      {badge?.label || getSourcePlatformLabel(platform)}
+                                    </span>
+                                  </TableCell>
+                                );
+                              }
+                              case 'verified':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-center">
+                                    {typeof point.verified === 'boolean' ? (
+                                      point.verified ? (
+                                        <span
+                                          class="inline-flex min-w-[1.25rem] items-center justify-center text-green-600 dark:text-green-400"
+                                          title="Verified"
+                                        >
+                                          <svg
+                                            class="h-3.5 w-3.5"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path
+                                              stroke-linecap="round"
+                                              stroke-linejoin="round"
+                                              stroke-width="2.5"
+                                              d="M5 13l4 4L19 7"
+                                            />
+                                          </svg>
+                                        </span>
+                                      ) : (
+                                        <span
+                                          class="inline-flex min-w-[1.25rem] items-center justify-center text-amber-500 dark:text-amber-400"
+                                          title="Unverified"
+                                        >
+                                          <svg
+                                            class="h-3.5 w-3.5"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path
+                                              stroke-linecap="round"
+                                              stroke-linejoin="round"
+                                              stroke-width="2.5"
+                                              d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z"
+                                            />
+                                          </svg>
+                                        </span>
+                                      )
+                                    ) : (
+                                      <span class="text-muted">—</span>
+                                    )}
+                                  </TableCell>
+                                );
+                              case 'size':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-right font-mono text-[11px] tabular-nums text-muted">
+                                    {point.sizeBytes && point.sizeBytes > 0
+                                      ? formatBytes(point.sizeBytes)
+                                      : '—'}
+                                  </TableCell>
+                                );
+                              case 'method':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-center">
+                                    <span class={getRecoveryArtifactMetadataTextClass()}>
+                                      {getRecoveryPointModeLabel(point.mode)}
+                                    </span>
+                                  </TableCell>
+                                );
+                              case 'repository':
+                                return (
+                                  <TableCell
+                                    class="max-w-[220px] truncate whitespace-nowrap px-3 py-1 text-[11px] leading-4 text-base-content"
+                                    title={repoLabel}
+                                  >
+                                    {repoLabel || '—'}
+                                  </TableCell>
+                                );
+                              case 'details':
+                                return (
+                                  <TableCell
+                                    class="max-w-[280px] truncate whitespace-nowrap px-3 py-1 text-[10px] leading-4 text-muted"
+                                    title={detailsSummary}
+                                  >
+                                    {detailsSummary || '—'}
+                                  </TableCell>
+                                );
+                              case 'outcome':
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-center">
+                                    <span
+                                      class={getRecoveryArtifactOutcomeTextClass(outcome)}
+                                      title={getRecoveryOutcomeLabel(outcome)}
+                                    >
+                                      {titleCaseDelimitedLabel(outcome)}
+                                    </span>
+                                  </TableCell>
+                                );
+                              default:
+                                return (
+                                  <TableCell class="whitespace-nowrap px-3 py-1 text-muted">
+                                    -
+                                  </TableCell>
+                                );
+                            }
+                          }}
+                        </For>
+                      </TableRow>
+
+                      <Show when={props.selectedPoint()?.id === point.id}>
+                        <TableRow>
+                          <TableCell
+                            colSpan={props.tableColumnCount()}
+                            class="bg-surface-alt px-0 sm:px-4 py-4 relative"
+                          >
+                            <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-border">
+                              <h2 class="text-sm font-semibold text-base-content">
+                                Recovery Point Details
+                              </h2>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  props.clearSelectedPoint();
+                                }}
+                                class={getRecoveryDrawerCloseButtonClass()}
+                                aria-label="Close details"
+                              >
+                                <svg
+                                  class="h-5 w-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                            <div class="px-4">
+                              <RecoveryPointDetails
+                                point={point}
+                                relatedPoints={props.relatedPoints()}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      </Show>
+                    </>
+                  );
+                }}
+              </For>
+            </>
+          )}
+        </For>
+      </TableBody>
+    </Table>
 
     <div class="flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] text-muted border-t border-border">
       <div>
@@ -481,7 +485,8 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
           fallback={<span>Showing 0 of 0 recovery points</span>}
         >
           <span>
-            Showing {(props.recoveryPoints.meta().page - 1) * props.recoveryPoints.meta().limit + 1} -{' '}
+            Showing {(props.recoveryPoints.meta().page - 1) * props.recoveryPoints.meta().limit + 1}{' '}
+            -{' '}
             {Math.min(
               props.recoveryPoints.meta().page * props.recoveryPoints.meta().limit,
               props.recoveryPoints.meta().total,
@@ -505,7 +510,9 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
         <button
           type="button"
           disabled={props.currentPage() >= props.totalPages()}
-          onClick={() => props.setCurrentPage(Math.min(props.totalPages(), props.currentPage() + 1))}
+          onClick={() =>
+            props.setCurrentPage(Math.min(props.totalPages(), props.currentPage() + 1))
+          }
           class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
         >
           Next

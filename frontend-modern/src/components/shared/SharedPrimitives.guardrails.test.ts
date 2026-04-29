@@ -64,6 +64,7 @@ import summaryCardInteractionSource from '@/components/shared/summaryCardInterac
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
+import tableSource from '@/components/shared/Table.tsx?raw';
 import tableCardHeaderSource from '@/components/shared/TableCardHeader.tsx?raw';
 import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHeader.tsx?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
@@ -134,13 +135,16 @@ import storageGroupRowSource from '@/components/Storage/StorageGroupRow.tsx?raw'
 import storageGroupPresentationSource from '@/features/storageBackups/groupPresentation.ts?raw';
 import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
+import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
+import recoveryHistoryTableSource from '@/components/Recovery/RecoveryHistoryTable.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
+import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
@@ -501,6 +505,57 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowCellClass');
     expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
     expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
+  });
+
+  it('keeps product table scroll frames on the shared table shell', () => {
+    expect(tableSource).toContain('wrapperClass');
+    expect(tableSource).toContain('w-full overflow-x-auto touch-scroll');
+    expect(tableSource).toContain('w-full border-collapse text-left whitespace-nowrap');
+    expect(tableCardSource).toContain('TABLE_CARD_FRAME_CLASS');
+    expect(tableCardSource).toContain('overflow-hidden');
+    expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
+
+    for (const source of [
+      unifiedResourceHostTableCardSource,
+      unifiedResourcePBSTableSectionSource,
+      unifiedResourcePMGTableSectionSource,
+      recoveryHistoryTableSource,
+      recoveryProtectedInventorySectionSource,
+      alertHistoryTableSectionSource,
+      workloadsTableSource,
+      storagePoolsTableSource,
+    ]) {
+      expect(source).toContain('<Table');
+      expect(source).not.toContain('<div class="overflow-x-auto">');
+      expect(source).not.toContain('<div class="overflow-x-auto bg-surface">');
+    }
+
+    for (const source of [
+      unifiedResourceHostTableCardSource,
+      recoveryHistorySectionSource,
+      recoveryProtectedInventorySectionSource,
+      alertHistoryTableSectionSource,
+      workloadsTableSource,
+      storageContentCardSource,
+    ]) {
+      expect(source).toContain('<TableCard');
+    }
+
+    for (const source of [
+      unifiedResourceHostTableCardSource,
+      recoveryHistorySectionSource,
+      recoveryProtectedInventorySectionSource,
+      workloadsTableSource,
+      storageContentCardSource,
+    ]) {
+      expect(source).toContain('TableCardHeader');
+    }
+
+    expect(alertHistoryTableSectionSource).not.toContain(
+      'overflow-hidden rounded border border-border',
+    );
+    expect(recoveryProtectedInventorySectionSource).toContain('wrapperClass="bg-surface"');
+    expect(storageContentCardSource).toContain('<StoragePoolsTable');
   });
 
   it('keeps grouped/list table-mode controls on one shared presentation contract', () => {

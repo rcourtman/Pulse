@@ -465,6 +465,15 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableSectionSource).toContain('export function AlertHistoryTableSection');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableAlertRow');
+    expect(alertHistoryTableSectionSource).toContain('<TableCard');
+    expect(alertHistoryTableSectionSource).toMatch(/<Table(?:\s|>)/);
+    expect(alertHistoryTableSectionSource).not.toContain(
+      'overflow-hidden rounded border border-border',
+    );
+    expect(alertHistoryTableSectionSource).not.toContain('<div class="overflow-x-auto">');
+    expect(alertHistoryTableSectionSource).not.toContain(
+      '<div class="overflow-x-auto bg-surface">',
+    );
     expect(alertHistoryTableSectionSource).not.toContain('IncidentTimelinePanel');
     expect(alertHistoryTableSectionSource).not.toContain('InvestigateAlertButton');
     expect(alertHistoryTableGroupRowSource).toContain('export function AlertHistoryTableGroupRow');

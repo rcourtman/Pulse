@@ -177,7 +177,12 @@ work extends shared components instead of creating new local variants.
    the table data, filters, columns, and row behavior, but the outer
    product-table frame, section header band, and light/dark border treatment
    belong to frontend primitives so Infrastructure, Workloads, Storage, and
-   Recovery do not drift visually.
+   Recovery do not drift visually. The shared `Table` primitive owns the
+   horizontal scroll shell (`overflow-x-auto` plus touch scrolling); feature
+   tables must not wrap it in page-local scroll containers just to restore
+   table sides or mobile overflow. Headerless product tables, including alert
+   history, still use `TableCard` for the outer frame instead of hand-coded
+   rounded/bordered wrappers.
    Product-table subgroup/header rows must likewise consume the shared
    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
    helper and `.grouped-table-row` CSS token contract instead of local

@@ -247,7 +247,10 @@ regression protection.
     title/action band so Workloads, Infrastructure, Storage, and Recovery keep
     one border/background/overflow frame and table-section header treatment
     instead of introducing page-local table shells with different light/dark
-    contrast.
+    contrast. The shared `Table` primitive owns the horizontal scroll container
+    for those hot tables; page-local nested `overflow-x-auto` wrappers are not
+    allowed because they add extra scroll and paint surfaces on the row-heavy
+    path.
     Infrastructure table responsive behavior belongs to that same hot-path
     owner. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
     must derive column visibility from the measured table surface width, with
