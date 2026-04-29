@@ -108,13 +108,13 @@ describe('settings architecture guardrails', () => {
 
   it('keeps self-hosted commercial settings plan-owned under one shared presentation model', () => {
     expect(selfHostedBillingPresentationSource).toContain("navLabel: 'Plans'");
-    expect(selfHostedBillingPresentationSource).toContain("shellTitle: 'Plans & Activation'");
+    expect(selfHostedBillingPresentationSource).toContain("shellTitle: 'Self-hosted plan'");
     expect(selfHostedBillingPresentationSource).toContain(
-      "shellDescription:\n    'Review your current self-hosted plan, activation status, and available capabilities.'",
+      "shellDescription:\n    'Review the plan this instance is using and the optional capabilities connected to it.'",
     );
     expect(selfHostedBillingPresentationSource).toContain("planSectionTitle: 'Current plan'");
     expect(selfHostedBillingPresentationSource).toContain(
-      "recoverySectionTitle: 'Activation & Recovery'",
+      "recoverySectionTitle: 'Existing purchases'",
     );
 
     expect(settingsNavCatalogSource).toContain(

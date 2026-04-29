@@ -33,19 +33,19 @@ export interface SelfHostedProBillingPresentation {
 
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
   navLabel: 'Plans',
-  shellTitle: 'Plans & Activation',
+  shellTitle: 'Self-hosted plan',
   shellDescription:
-    'Review your current self-hosted plan, activation status, and available capabilities.',
+    'Review the plan this instance is using and the optional capabilities connected to it.',
   infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans.',
   infrastructureWorkspaceReferral:
-    'Billing, self-hosted plan changes, activation status, and available capabilities live in Plans, not here.',
+    'Self-hosted plan status, optional activation, and available capabilities live in Plans, not here.',
   sectionSelectorAriaLabel: 'Self-hosted plans section',
   refreshLabel: 'Refresh',
   planTabLabel: 'Plan',
   usageTabLabel: 'Usage',
   planSectionTitle: 'Current plan',
   planSectionDescription:
-    'See which self-hosted tier this instance is using, which capabilities are available, and how plan status or continuity affects this install.',
+    'See which self-hosted tier this instance is using and which capabilities are available on this install.',
   planComparisonSectionTitle: 'Optional extras',
   planComparisonActionLabel: 'See all plans',
   usageSectionTitle: 'Usage',
@@ -66,7 +66,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   purchaseExpiredActionLabel: 'Compare plans',
   purchaseFailedActionLabel: 'Open recovery',
   purchaseUnavailableActionLabel: 'Try again',
-  recoverySectionTitle: 'Activation & Recovery',
+  recoverySectionTitle: 'Existing purchases',
   recoverySectionDescription:
-    'Activate a purchased key, recover a previous self-hosted purchase, or clear a local key from this instance.',
+    'Add an activation key you already have, recover a previous self-hosted purchase, or clear a local key from this instance.',
 };

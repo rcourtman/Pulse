@@ -307,7 +307,7 @@ rather than legacy Community limit enforcement.
     tier-specific extras, with no standing Usage subtab, finite
     policy banner, monitored-system limit row, or pause-new-admissions copy from
     stale volume metadata. Retired `max_monitored_systems` pricing handoffs
-    must land on the neutral Plans & Activation surface, not the usage ledger.
+    must land on the neutral self-hosted plan surface, not the usage ledger.
     Any genuinely bounded monitored-system support context outside those
     recognized plan labels may still land on the explicit usage-focused billing
     state (`/settings/system/billing/usage?details=counting-rules`) so the
@@ -528,8 +528,8 @@ rather than legacy Community limit enforcement.
     hosted mode, direct intent, activation/recovery state, or active entitlement
     makes them relevant. The authenticated app shell must also skip background
     `/api/license/commercial-posture` bootstrap while `presentationPolicy.hideUpgrade`
-    is true; explicit Plans/Activation and hosted or prompt-allowed flows may
-    still refresh the shared posture store.
+    is true; explicit self-hosted plan, activation/recovery, and hosted or
+    prompt-allowed flows may still refresh the shared posture store.
 17. Keep hosted and trial billing construction separate from retired hosted-AI
     quickstart inventory: `pkg/licensing/trial_start.go` and hosted
     entitlement refresh paths may preserve historical billing fields for old
@@ -562,7 +562,7 @@ Retired trial-acquisition intents such as `trial_expired` must not be owned
 pricing handoff destinations; no ordinary self-hosted runtime path should emit
 them as an upgrade reason or plan-page CTA.
 Legacy browser arrivals carrying that stale feature may land on the neutral
-Plans & Activation surface, but must not preserve `trial_expired` into a Pulse
+self-hosted plan surface, but must not preserve `trial_expired` into a Pulse
 Account purchase-start handoff or trial-shaped checkout feature. The shared
 upgrade-action fallback must therefore return no action for retired trial keys,
 while the legacy `/pricing?feature=trial_expired` browser route may strip the
@@ -989,7 +989,7 @@ For self-hosted upgrades, that browser-facing feature metadata is now
 canonically `self_hosted_plan`. Pulse Account may continue normalizing the
 legacy `max_monitored_systems` alias only for already-created checkout records,
 but in-product browser links and fallback helpers must route that alias to the
-neutral Plans & Activation surface instead of the monitored-system
+neutral self-hosted plan surface instead of the monitored-system
 usage/counting-rules surface. The portal proxy contract, checked-in embedded
 bundle, and rendered upgrade copy must treat self-hosted commerce as plan
 selection and paid extras rather than monitored-system-cap expansion. Shared
@@ -1257,28 +1257,28 @@ callback. Pulse product routes
 keep ownership of license status, usage, and activation state; `Pulse Account`
 owns the commerce flow itself. That same self-hosted settings surface is
 plan-owned rather than tier-owned: the navigation label is `Plans`, the
-surface title is `Plans & Activation`, and the canonical plan state must make
-the current unlocked tier plus capabilities immediately obvious so existing
-paid upgrades can confirm what their new key enabled without hunting through
-generic billing details. That entitlement-first summary must stay tier-
-specific and continuity-aware: Relay and Pulse Pro should describe the actual
-paid capabilities unlocked on this instance, while grandfathered pricing must
-make existing-price protection explicit without reviving finite monitored-
-system continuity copy for normalized no-cap self-hosted plans.
+surface title is `Self-hosted plan`, and the canonical plan state must make
+the current tier plus capabilities immediately obvious so existing paid
+upgrades can confirm what their new key enabled without hunting through
+generic billing details. That capability-first summary must stay tier-specific
+and continuity-aware: Relay and Pulse Pro should describe the actual paid
+capabilities available on this instance, while grandfathered pricing must make
+existing-price protection explicit without reviving finite monitored-system
+continuity copy for normalized no-cap self-hosted plans.
 That top card is plan-owned, not raw subscription-state-owned: Community copy
 should describe what is included on this instance in plain language, and the
 current-plan badge must not present the fallback Community state as `Expired`
 just because a prior paid subscription or trial ended.
 Upsell on the self-hosted Plans surface must stay contextual and subordinate
-to entitlement clarity. The top card confirms the current unlocked tier first;
-only below that may Pulse show a factual comparison section for the next higher
+to current-plan clarity. The top card confirms the current tier first; only
+below that may Pulse show a factual comparison section for the next higher
 tiers. Community may compare Relay and Pulse Pro, Relay may compare Pulse Pro,
 and active Pulse Pro should not show a promotional higher-tier block on this
 surface.
 Fresh activation is part of that same governed plan state. After a checkout
 return, trial handoff, or pasted-key activation succeeds, the owned plan
-surface must show an explicit success summary that names the unlocked tier
-and the marquee capabilities now available on this instance, rather than
+surface must show an explicit success summary that names the active tier and
+the marquee capabilities now available on this instance, rather than
 falling back to a generic "activated" banner that leaves the user to infer
 what changed from the steady-state billing card alone.
 That same router-owned billing contract now also includes recovery as a plan
@@ -1519,10 +1519,10 @@ helpers must show Pro's operations, admin, and reporting extras together while
 still framing Community, Relay, and Pro as core monitoring included in every
 self-hosted tier rather than monitored-system capacity tiers. The same factual
 plan surface must keep inactive-state copy neutral: default Community installs
-may say no activation key is active, but they must not foreground paid
-self-hosted activation, v5-era "No Pro license" language, or `unlocked`
-entitlement phrasing before the operator opens an explicit comparison,
-checkout, activation, or recovery path.
+must describe the instance as ready to use rather than as missing an activation
+key, and they must not foreground paid self-hosted activation, v5-era "No Pro
+license" language, or `unlocked` entitlement phrasing before the operator opens
+an explicit comparison, checkout, activation, or recovery path.
 The shared license presentation owner also holds self-hosted Pro settings
 trial-ended notice copy for `ProLicensePlanSection.tsx`; that surface must
 consume canonical helper notices instead of carrying inline upgrade copy or

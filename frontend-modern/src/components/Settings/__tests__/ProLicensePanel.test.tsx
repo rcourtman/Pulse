@@ -192,7 +192,7 @@ describe('ProLicensePanel', () => {
     expect(loadCommercialPostureMock).not.toHaveBeenCalled();
     expect(screen.getByText('License and billing details are hidden')).toBeInTheDocument();
     expect(screen.getByText(/instead of creating a demo license/i)).toBeInTheDocument();
-    expect(screen.queryByText('Plans & Activation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Self-hosted plan')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
@@ -206,7 +206,7 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('Plans & Activation')).toBeInTheDocument();
+    expect(screen.getByText('Self-hosted plan')).toBeInTheDocument();
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
@@ -371,7 +371,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'See which self-hosted tier this instance is using, which capabilities are available, and how plan status or continuity affects this install.',
+        'See which self-hosted tier this instance is using and which capabilities are available on this install.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
@@ -490,7 +490,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
   });
 
-  it('shows Relay entitlement summaries from the paid capabilities unlocked on this instance', async () => {
+  it('shows Relay entitlement summaries from the paid capabilities available on this instance', async () => {
     mockEntitlements = {
       capabilities: ['relay', 'mobile_app', 'push_notifications'],
       limits: [],
@@ -770,7 +770,7 @@ describe('ProLicensePanel', () => {
   it('shows migration guidance when the pasted key looks like a legacy v5 license', async () => {
     renderPanel();
 
-    fireEvent.click(screen.getByText('Redeem existing key'));
+    fireEvent.click(screen.getByText('Use existing key'));
 
     fireEvent.input(screen.getByLabelText(/license or activation key/i), {
       target: { value: 'header.payload.signature' },
@@ -910,7 +910,7 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    const recoveryDisclosure = screen.getAllByText('Redeem existing key')[0]?.closest('details');
+    const recoveryDisclosure = screen.getAllByText('Use existing key')[0]?.closest('details');
     expect(recoveryDisclosure).toHaveAttribute('open');
   });
 

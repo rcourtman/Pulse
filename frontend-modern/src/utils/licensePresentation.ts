@@ -803,22 +803,22 @@ export const getLicenseStatusLoadingState = (): LicenseLoadingStateCopy => ({
 });
 
 export const getNoActiveSelfHostedActivationState = (): LicenseLoadingStateCopy => ({
-  text: 'No activation key is active on this instance.',
+  text: 'Community is ready to use on this instance.',
 });
 
 export const SELF_HOSTED_RECOVERY_PRESENTATION: SelfHostedRecoveryPresentation = {
-  disclosureLabel: 'Redeem existing key',
+  disclosureLabel: 'Use existing key',
   disclosureDescription:
-    'Use this only if you already have an activation key or need to recover a legacy self-hosted purchase on this instance.',
+    'Use this only if you already have an activation key or need to recover a legacy self-hosted purchase.',
   fieldLabel: 'License or Activation Key',
   fieldPlaceholder: 'Paste your license key or activation key',
   helpTextBeforeTerms:
     'Paste the Pulse v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email, but the hosted success page is the primary handoff. You can also paste a legacy Pulse v5 Pro/Lifetime license key and Pulse will exchange it automatically during activation when migration is available. By activating a license, you agree to the',
   helpTextAfterTerms: '.',
   termsLabel: 'Terms of Service',
-  activateIdleLabel: 'Activate License',
+  activateIdleLabel: 'Activate Key',
   activatePendingLabel: 'Activating...',
-  clearIdleLabel: 'Clear License',
+  clearIdleLabel: 'Clear Key',
   clearPendingLabel: 'Clearing...',
   legacyNotice: {
     title: 'Legacy v5 license detected',
