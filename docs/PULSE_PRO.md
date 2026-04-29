@@ -161,7 +161,7 @@ Patrol and the Assistant support tiered autonomy:
 - Everything in Community, plus:
 - 14-day history.
 - Remote access via Relay.
-- Mobile app access and push notifications.
+- Pulse Mobile pairing for handoff and push notifications.
 
 ### Pro
 - Everything in Relay, plus:

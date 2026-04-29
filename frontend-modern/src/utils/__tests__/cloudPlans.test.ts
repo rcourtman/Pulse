@@ -40,7 +40,7 @@ describe('cloudPlans', () => {
         'Managed hosting',
         'Daily backups',
         'Secure agent connectivity via Relay',
-        'Mobile app access and push notifications',
+        'Pulse Mobile pairing and push notifications',
         'Dedicated workspace URL',
       ],
       setupHeading: 'How it works',

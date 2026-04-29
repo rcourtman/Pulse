@@ -64,7 +64,7 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
       pageDescription:
-        'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access to the Pulse web UI, mobile pairing, and push notifications, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
+        'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access to the Pulse web UI, Pulse Mobile pairing, and push notifications, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
@@ -109,7 +109,7 @@ describe('selfHostedPlans', () => {
       'Remote web access, mobile pairing, and push',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
-      'Remote web access, mobile pairing, push notifications, and longer history are available right now.',
+      'Remote web access, Pulse Mobile pairing, push notifications, and longer history are available right now.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary).toContain(
       'Reach your Pulse web UI securely from anywhere',
@@ -121,6 +121,11 @@ describe('selfHostedPlans', () => {
       '14-day metric history',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.includedExtras).toEqual([]);
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain('Pulse Mobile pairing');
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain('No inbound ports required');
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights.join('\n')).not.toMatch(
+      /yourlab\.pulserelay\.pro|custom\s+(?:url|subdomain|domain)/i,
+    );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.billingExtrasSummary).toBe(
       'Analysis, remediation, and admin controls',
     );
@@ -244,6 +249,9 @@ describe('selfHostedPlans', () => {
     }
     expect(paidClaimText).not.toMatch(
       /unlimited|monitoring capacity|guest capacity|hosted quickstart|trial/i,
+    );
+    expect(paidClaimText).not.toMatch(
+      /yourlab\.pulserelay\.pro|custom\s+(?:url|subdomain|domain)/i,
     );
   });
 

@@ -82,7 +82,7 @@ export function getSelfHostedPlanEntitlementSummary(
     case 'community':
       return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.`;
     case 'relay':
-      return `${planLabel} is active on this instance. Remote web access, mobile pairing, push notifications, and longer history are available right now.`;
+      return `${planLabel} is active on this instance. Remote web access, Pulse Mobile pairing, push notifications, and longer history are available right now.`;
     case 'pro':
       return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.`;
   }
@@ -135,13 +135,13 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],
     comparisonSummary:
-      'Reach your Pulse web UI securely from anywhere, pair the mobile app for handoff and push notifications, and keep 14 days of history.',
+      'Reach your Pulse web UI securely from anywhere, pair supported Pulse Mobile clients for handoff and push notifications, and keep 14 days of history.',
     highlights: [
       'Everything in Community',
       'Remote web access via Relay',
-      'Mobile app pairing',
+      'Pulse Mobile pairing',
       'Push notifications',
-      'Custom URL (yourlab.pulserelay.pro)',
+      'No inbound ports required',
       '14-day metric history',
     ],
   },
@@ -196,7 +196,7 @@ export function getSelfHostedPlanDefinitionForBillingTier(
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
   pageDescription:
-    'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access to the Pulse web UI, mobile pairing, and push notifications, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
+    'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access to the Pulse web UI, Pulse Mobile pairing, and push notifications, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',

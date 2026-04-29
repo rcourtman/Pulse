@@ -10,7 +10,8 @@
 
 This document is the single source of truth for Pulse v6 pricing, tiering, feature
 allocation, and conversion mechanics. All code, UI, marketing, and documentation must
-align with this document. If there is a conflict, this document wins.
+align with this document. If there is a conflict with release-control state, the
+release-control source wins and this file must be corrected.
 
 ---
 
@@ -110,7 +111,7 @@ than sold by monitored-system volume.
 | Alert-triggered root-cause analysis | No |
 | Relay | No |
 | Push notifications | No |
-| Custom URL | No |
+| Customer-specific Relay URL | No |
 | RBAC | No |
 | Audit logging | No |
 | SAML SSO | No |
@@ -133,9 +134,9 @@ remediation actions through Pulse.
 | Monitoring scope | **Core self-hosted monitoring included** |
 | Everything in Free | Yes |
 | Relay remote access | **Yes** |
-| Mobile app access | **Yes** |
+| Pulse Mobile pairing | **Yes** (handoff and push notifications) |
 | Push notifications | **Yes** |
-| Custom URL | **yourlab.pulserelay.pro** |
+| Customer-specific Relay URL | No; Relay uses the standard outbound relay service for v6 GA |
 | Metrics history | **14 days** |
 | Safe remediation workflows | No |
 | Alert-triggered root-cause analysis | No |
@@ -143,7 +144,7 @@ remediation actions through Pulse.
 | Reporting | No |
 
 **Positioning:** The convenience tier. It should feel cheap enough to buy on the spot when
-someone wants secure remote access, mobile checks, push notifications, and longer history
+someone wants secure remote access, mobile pairing, push notifications, and longer history
 without changing their self-hosted monitoring scope.
 
 ### Pro — $8.99/month or $79/year
@@ -160,7 +161,7 @@ without changing their self-hosted monitoring scope.
 | SAML SSO | **Yes** |
 | Agent profiles | **Yes** |
 | PDF/CSV reporting | **Yes** |
-| Trial | **14-day, no credit card** |
+| Self-hosted trial acquisition | No; local trial CTAs are retired for v6 GA |
 
 **Positioning:** For serious self-hosted operators who want Pulse to move from monitoring
 into operations. The marketing pitch focuses on three things:
@@ -345,7 +346,7 @@ want to self-host.
 
 ## Self-Hosted Cap Migration
 
-- There is no v6 self-hosted monitored-system cap migration for Community, Relay, Pro, or Pro+
+- There is no v6 self-hosted monitored-system capacity migration for Community, Relay, Pro, or Pro+
 - Existing self-hosted users keep their monitored coverage through the v6 rollout
 - Hosted Cloud and MSP capacity limits remain plan-specific license claims, not self-hosted static tier defaults
 - The UI may still explain monitored-system identity, but it must not frame self-hosted growth as a capacity upsell
@@ -479,7 +480,7 @@ explain monitored-system identity:
 
 ### Frontend
 
-- [x] Remove self-hosted monitored-system cap pressure from billing and pricing surfaces
+- [x] Remove self-hosted monitored-system capacity pressure from billing and pricing surfaces
 - [x] Present the public self-hosted ladder as Community / Relay / Pro
 - [ ] Keep ledger and inventory language focused on what Pulse monitors, not paid capacity pressure
 - [ ] Keep paid prompts out of ordinary self-hosted runtime surfaces; commercial copy belongs in explicit pricing, activation, recovery, hosted, or entitlement-aware paths
@@ -521,7 +522,7 @@ explain monitored-system identity:
 | Date | Change | Author |
 |---|---|---|
 | 2026-04-29 | Replaced stale capacity-style monitoring phrasing with core-monitoring-included language across active v6 docs and upgrade-return copy so Community does not read like a former capacity upsell. | Codex |
-| 2026-04-23 | Removed stale self-hosted monitored-system cap and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as current public self-hosted tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
+| 2026-04-23 | Removed stale self-hosted monitored-system capacity and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as current public self-hosted tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
 | 2026-03-17 | Re-locked the self-hosted commercial model around monitored systems rather than installed agents. New self-hosted public pricing: Relay $4.99/$39, Pro $8.99/$79, Pro+ $14.99/$129. Added free-tier grace policy and marked the monitored-system counting migration as still required in code. | Codex + Richard |
 | 2026-02-25 | Initial v6 pricing structure finalized | Richard + Claude + Codex |
 | 2026-02-25 | Changed counting to agents-only model. Only installed Pulse Unified Agents count toward limits. PVE/PBS/PMG/Docker/K8s connections and discovered resources don't count. This makes limits much more generous in practice (5 agents can monitor an entire multi-node cluster). | Richard + Claude |

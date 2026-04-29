@@ -1542,7 +1542,13 @@ it as a current public Pulse Pro+ package. When direct plan-selection intent
 opens the explicit self-hosted comparison surface, the shared presentation
 helpers must show Pro's operations, admin, and reporting extras together while
 still framing Community, Relay, and Pro as core monitoring included in every
-self-hosted tier rather than monitored-system capacity tiers. The same factual
+self-hosted tier rather than monitored-system capacity tiers. Relay copy in
+that shared owner must describe the current v6 GA product as standard Relay
+remote access, supported Pulse Mobile pairing, push notifications, and 14-day
+history, and it must not market a customer-specific Relay URL until that
+routing surface exists as a backed product capability. Cloud common-inclusion
+copy follows the same mobile-language rule: describe supported Pulse Mobile
+pairing and push notifications rather than generic mobile app access. The same factual
 plan surface must keep inactive-state copy neutral: default Community installs
 must describe the instance as ready to use rather than as missing an activation
 key, and they must not foreground paid self-hosted activation, v5-era "No Pro

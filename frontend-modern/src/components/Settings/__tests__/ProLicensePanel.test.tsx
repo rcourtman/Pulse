@@ -546,7 +546,7 @@ describe('ProLicensePanel', () => {
 
     expect(
       screen.getByText(
-        'Relay is active on this instance. Remote web access, mobile pairing, push notifications, and longer history are available right now.',
+        'Relay is active on this instance. Remote web access, Pulse Mobile pairing, push notifications, and longer history are available right now.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();

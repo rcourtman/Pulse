@@ -426,7 +426,7 @@ describe('licensePresentation', () => {
       cards: [
         {
           title: 'What Relay adds',
-          body: 'Reach your Pulse web UI securely from anywhere, pair the mobile app for handoff and push notifications, and keep 14 days of history.',
+          body: 'Reach your Pulse web UI securely from anywhere, pair supported Pulse Mobile clients for handoff and push notifications, and keep 14 days of history.',
           highlights: [
             'Pulse Relay (Remote Access)',
             'Mobile App Pairing',

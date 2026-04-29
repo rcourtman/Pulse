@@ -48,6 +48,10 @@ FORBIDDEN_PUBLIC_COPY_PATTERNS: tuple[tuple[str, str], ...] = (
     ("hosted model credits", r"\b(?:ai|model)\s+credits?\b"),
     ("hosted Patrol quickstart", r"\bhosted\s+(?:patrol\s+)?quickstart\b"),
     ("bundled Patrol run allowance", r"\b25\s+runs,\s+no\s+api\s+key\b"),
+    (
+        "customer-specific Relay URL promise",
+        r"\byourlab\.pulserelay\.pro\b|\ba\s+custom\s+url\b|custom\s+url\s*\([^)]*pulserelay",
+    ),
 )
 
 
@@ -84,6 +88,17 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
     ),
     CopyAuditFileSpec(
         repo="pulse",
+        relative_path="docs/architecture/v6-pricing-and-tiering.md",
+        required_patterns=(
+            r"monitored systems are not the paid\s+gate",
+            r"Customer-specific Relay URL.*standard outbound relay service",
+            r"Self-hosted trial acquisition.*No",
+            r"Metrics history.*14 days",
+            r"Metrics history.*90 days",
+        ),
+    ),
+    CopyAuditFileSpec(
+        repo="pulse",
         relative_path="frontend-modern/src/utils/selfHostedPlans.ts",
         required_patterns=(
             r"Self-hosted Pulse includes core monitoring for free",
@@ -95,10 +110,20 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
     ),
     CopyAuditFileSpec(
         repo="pulse-pro",
+        relative_path="MONETIZATION.md",
+        required_patterns=(
+            r"Relay Tier.*14-day history",
+            r"Pulse Relay.*secure remote access",
+            r"No inbound firewall ports",
+            r"Self-hosted Pro should be sold on root-cause analysis",
+        ),
+    ),
+    CopyAuditFileSpec(
+        repo="pulse-pro",
         relative_path="landing-page/index.html",
         required_patterns=(
             r"Community keeps core monitoring free",
-            r"mobile app pairing, push notifications, and 14-day history",
+            r"(?:Pulse Mobile|mobile app) pairing, push notifications, and 14-day history",
             r"root-cause analysis, safe remediation workflows, and 90-day history",
             r"Do Relay or Pro charge by server\?",
             r"Existing Pulse Pro and legacy Pro\+ holders keep their paid runtime access",
@@ -109,9 +134,19 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
         relative_path="license-server/public_pricing.go",
         required_patterns=(
             r"Community keeps core monitoring free",
-            r"mobile app pairing, push notifications, and 14-day history",
+            r"(?:Pulse Mobile|mobile app) pairing, push notifications, and 14-day history",
             r"root-cause analysis, safe remediation workflows, team controls, and 90-day history",
             r"not as the self-hosted paid gate",
+        ),
+    ),
+    CopyAuditFileSpec(
+        repo="pulse-pro",
+        relative_path="license-server/scripts/create-v6-stripe-prices.sh",
+        required_patterns=(
+            r"Pulse Relay",
+            r"Pulse Mobile pairing",
+            r"no inbound firewall ports",
+            r"14-day history",
         ),
     ),
 )
@@ -234,6 +269,7 @@ def build_command_specs(args: argparse.Namespace) -> list[CommandSpec]:
                 "test",
                 "--",
                 "src/utils/__tests__/selfHostedPlans.test.ts",
+                "src/utils/__tests__/cloudPlans.test.ts",
                 "src/utils/__tests__/commercialBillingModel.test.ts",
                 "src/utils/__tests__/licensePresentation.test.ts",
                 "src/stores/__tests__/license.test.ts",
