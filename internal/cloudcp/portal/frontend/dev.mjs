@@ -482,9 +482,9 @@ function routeCommercialAPI(request, response, url, scenario) {
   if (request.method === 'GET' && route === '/v1/public/pricing-model') {
     sendJSON(response, 200, {
       title: 'Simple self-hosted pricing for Pulse',
-      description: 'Community keeps monitoring free and unlimited. Relay lets you reach Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+      description: 'Community keeps core monitoring free. Relay lets you reach Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       explainer:
-        'Community keeps monitoring free and unlimited. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+        'Community keeps core monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       plans: [
         {
           badge: 'Recommended',
@@ -495,7 +495,7 @@ function routeCommercialAPI(request, response, url, scenario) {
           period: '$39/year available too',
           blurb: 'The reach-it-anywhere tier for secure remote access, mobile access, and push notifications.',
           features: [
-            { tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' },
+            { tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' },
             { tone: 'check', html: 'Secure remote access' },
             { tone: 'check', html: 'Mobile access' },
             { tone: 'check', html: 'Push notifications' },
@@ -512,7 +512,7 @@ function routeCommercialAPI(request, response, url, scenario) {
           period: '$79/year available too',
           blurb: 'The operator tier for root-cause analysis, safe remediation workflows, and 90-day history.',
           features: [
-            { tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' },
+            { tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' },
             { tone: 'check', html: 'Everything in Relay' },
             { tone: 'check', html: 'Alert-triggered root-cause analysis' },
             { tone: 'check', html: 'Safe remediation workflows with approval or autonomous mode' },

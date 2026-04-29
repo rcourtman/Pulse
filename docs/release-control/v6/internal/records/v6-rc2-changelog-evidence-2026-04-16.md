@@ -9,8 +9,8 @@ on 2026-04-16._
 
 ## 1. Self-hosted core monitoring is no longer paywalled by monitored-system count
 
-- **Claim:** Community, Relay, and Pro now keep self-hosted core monitoring unlimited, while public self-hosted checkout is focused on Relay and Pro rather than monitored-system-cap expansion.
-- **Why it is true:** The canonical self-hosted monitored-system limits now set Community, Relay, Pro, Pro+, annual Pro, and Lifetime to `0` meaning unlimited. The shared self-hosted plan definitions now present Community / Relay / Pro as unlimited-monitoring plans, and the license server treats Relay and Pro as the public v6 self-hosted checkout tiers while normalizing self-hosted entitlements back to unlimited monitoring.
+- **Claim:** Community, Relay, and Pro now keep self-hosted core monitoring outside monitored-system metering, while public self-hosted checkout is focused on Relay and Pro rather than monitored-system-cap expansion.
+- **Why it is true:** The canonical self-hosted monitored-system limits now set Community, Relay, Pro, Pro+, annual Pro, and Lifetime to `0`, which means no monitored-system volume gate in the current self-hosted model. The shared self-hosted plan definitions present Community / Relay / Pro around included core monitoring plus paid extras, and the license server treats Relay and Pro as the public v6 self-hosted checkout tiers while normalizing self-hosted entitlements away from monitored-system metering.
 - **Key files:**
   - `pulse@pulse/v6-release pkg/licensing/features.go:62-74`
   - `pulse@pulse/v6-release frontend-modern/src/utils/selfHostedPlans.ts:40-90`
@@ -20,7 +20,7 @@ on 2026-04-16._
   - `pulse-pro@main license-server/v6_schema.go:784-794`
   - `pulse-pro@main license-server/v6_store.go:879-888`
 - **Surface:** User-visible, operator-visible, commercial/runtime.
-- **Consequence:** `rc.2` should be presented as no-cap self-hosted monitoring on the current public self-hosted model rather than as a higher-cap variant of `rc.1`.
+- **Consequence:** `rc.2` should be presented as core monitoring outside the self-hosted paid gate rather than as a higher-cap variant of `rc.1`.
 - **Current-branch confidence:** High.
 
 ## 2. Paid-customer continuity is explicit and uncapped where promised

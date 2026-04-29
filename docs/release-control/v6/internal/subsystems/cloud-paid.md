@@ -218,6 +218,10 @@ rather than legacy Community limit enforcement.
    `Summary` destination. The top of `Workspaces` may surface one quiet inline
    facts line plus one next-action row before the list, but it must not turn
    that summary into a second overview deck, metric grid, or competing shell.
+   Pulse Account self-hosted upgrade and pricing-preview copy must describe
+   Community as included core monitoring plus paid Relay/Pro extras. It must
+   not frame self-hosted checkout as buying unlimited monitoring or monitored-
+   system volume.
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
 8. Add or change activation/grant lifecycle, release build helper gating, or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/testing_helpers.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go`
