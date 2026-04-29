@@ -5,6 +5,7 @@ import {
   getRecoveryArtifactColumnHeaderClass,
   getRecoveryArtifactRowClass,
   getRecoveryArtifactTableMinWidth,
+  getRecoveryAllHistoryLabel,
   getRecoveryAllItemTypesLabel,
   getRecoveryAllPlatformsLabel,
   getRecoveryAnyItemLabel,
@@ -21,6 +22,7 @@ import {
   isRecoveryRollupStale,
   RECOVERY_ADVANCED_FILTER_FIELD_CLASS,
   RECOVERY_ADVANCED_FILTER_LABEL_CLASS,
+  RECOVERY_ALL_HISTORY_LABEL,
   RECOVERY_ALL_ITEM_TYPES_LABEL,
   RECOVERY_ALL_PLATFORMS_LABEL,
   RECOVERY_ANY_ITEM_LABEL,
@@ -43,6 +45,7 @@ describe('recoveryTablePresentation', () => {
     expect(RECOVERY_PROTECTED_SEARCH_PLACEHOLDER).toBe('Search protected items...');
     expect(RECOVERY_HISTORY_SEARCH_PLACEHOLDER).toBe('Search recovery history...');
     expect(RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE).toBe('Recent searches appear here.');
+    expect(RECOVERY_ALL_HISTORY_LABEL).toBe('All history');
     expect(RECOVERY_ALL_ITEM_TYPES_LABEL).toBe('All item types');
     expect(RECOVERY_ALL_PLATFORMS_LABEL).toBe('All platforms');
     expect(RECOVERY_ANY_ITEM_LABEL).toBe('Any item');
@@ -50,6 +53,7 @@ describe('recoveryTablePresentation', () => {
     expect(getRecoveryProtectedSearchPlaceholder()).toBe('Search protected items...');
     expect(getRecoveryHistorySearchPlaceholder()).toBe('Search recovery history...');
     expect(getRecoverySearchHistoryEmptyMessage()).toBe('Recent searches appear here.');
+    expect(getRecoveryAllHistoryLabel()).toBe('All history');
     expect(getRecoveryAllItemTypesLabel()).toBe('All item types');
     expect(getRecoveryAllPlatformsLabel()).toBe('All platforms');
     expect(getRecoveryAnyItemLabel()).toBe('Any item');

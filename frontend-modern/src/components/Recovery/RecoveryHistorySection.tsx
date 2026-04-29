@@ -37,6 +37,7 @@ import {
 import { normalizeRecoveryModeQueryValue } from '@/utils/recoveryRecordPresentation';
 import {
   getRecoveryArtifactColumnLabel,
+  getRecoveryAllHistoryLabel,
   getRecoveryAllItemTypesLabel,
   getRecoveryAllPlatformsLabel,
   getRecoveryHistorySearchPlaceholder,
@@ -250,7 +251,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                               }}
                               class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                             >
-                              <option value="all">All history</option>
+                              <option value="all">{getRecoveryAllHistoryLabel()}</option>
                               <option value="workload">Workloads only</option>
                             </select>
                           </label>

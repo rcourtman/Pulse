@@ -228,6 +228,9 @@ Alert history filter defaults such as the all-time period option must likewise
 come from the alert overview/history presentation helper and the shared
 filter-option label primitive rather than hard-coded title-case strings in the
 history filter card.
+Alert configuration select options share that same rule: all-channel
+escalation labels must come from `alertConfigPresentation.ts` plus the shared
+filter-option primitive, not a schedule-page-local `All Channels` string.
 Thresholds empty states that hand operators to Infrastructure settings must use
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
 canonical `Settings → Infrastructure` label instead of hard-coding generic

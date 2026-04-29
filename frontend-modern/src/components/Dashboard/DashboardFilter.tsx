@@ -6,6 +6,7 @@ import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { DashboardFilterProps } from './dashboardFilterModel';
+import { DASHBOARD_WORKLOAD_TYPE_OPTIONS } from './dashboardWorkloadFilterConfigModel';
 import { useDashboardFilterState } from './useDashboardFilterState';
 
 export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
@@ -153,11 +154,9 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           }
           selectClass="min-w-[7rem]"
         >
-          <option value="all">All</option>
-          <option value="vm">VMs</option>
-          <option value="system-container">System Containers</option>
-          <option value="app-container">App Containers</option>
-          <option value="pod">Pods</option>
+          <For each={DASHBOARD_WORKLOAD_TYPE_OPTIONS}>
+            {(option) => <option value={option.value}>{option.label}</option>}
+          </For>
         </LabeledFilterSelect>
 
         <LabeledFilterSelect

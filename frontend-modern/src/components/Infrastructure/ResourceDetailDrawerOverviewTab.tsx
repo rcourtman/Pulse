@@ -18,6 +18,7 @@ import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import {
   getResourceRoutingScopeLabel,
@@ -69,7 +70,7 @@ const vmwareRowToneClass = (tone?: 'default' | 'accent' | 'warning'): string => 
 };
 
 const timelineKindOptions: Array<{ label: string; value: ResourceChangeKind | '' }> = [
-  { label: 'All kinds', value: '' },
+  { label: getAllFilterOptionLabel('kinds'), value: '' },
   ...RESOURCE_CHANGE_KIND_ORDER.map((kind) => ({
     label: getResourceChangeKindPresentation(kind).label,
     value: kind,
@@ -77,7 +78,7 @@ const timelineKindOptions: Array<{ label: string; value: ResourceChangeKind | ''
 ];
 
 const timelineSourceTypeOptions: Array<{ label: string; value: ResourceChangeSourceType | '' }> = [
-  { label: 'All sources', value: '' },
+  { label: getAllFilterOptionLabel('sources'), value: '' },
   ...RESOURCE_CHANGE_SOURCE_TYPE_ORDER.map((sourceType) => ({
     label: getResourceChangeSourceTypePresentation(sourceType).label,
     value: sourceType,
@@ -88,7 +89,7 @@ const timelineSourceAdapterOptions: Array<{
   label: string;
   value: ResourceChangeSourceAdapter | '';
 }> = [
-  { label: 'All adapters', value: '' },
+  { label: getAllFilterOptionLabel('adapters'), value: '' },
   ...RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER.map((sourceAdapter) => ({
     label: getResourceChangeSourceAdapterPresentation(sourceAdapter).label,
     value: sourceAdapter,

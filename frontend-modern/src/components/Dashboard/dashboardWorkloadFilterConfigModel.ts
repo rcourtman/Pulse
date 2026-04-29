@@ -1,9 +1,23 @@
 import type { ViewMode } from '@/types/workloads';
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import type { DashboardToolbarFilterConfig } from './dashboardFilterModel';
 import type { DashboardWorkloadNodeOption } from './dashboardWorkloadRouteModel';
 
-export const DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL = 'K8s Cluster';
-export const DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL = 'All K8s clusters';
+export const DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL = 'K8s cluster';
+export const DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL =
+  getAllFilterOptionLabel('K8s clusters');
+export const DASHBOARD_CONTAINER_RUNTIME_ALL_OPTION_LABEL =
+  getAllFilterOptionLabel('runtimes');
+export const DASHBOARD_PLATFORM_ALL_OPTION_LABEL = getAllFilterOptionLabel('platforms');
+export const DASHBOARD_NODE_ALL_OPTION_LABEL = getAllFilterOptionLabel('nodes');
+export const DASHBOARD_NAMESPACE_ALL_OPTION_LABEL = getAllFilterOptionLabel('namespaces');
+export const DASHBOARD_WORKLOAD_TYPE_OPTIONS: Array<{ value: ViewMode; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'vm', label: 'VMs' },
+  { value: 'system-container', label: 'System containers' },
+  { value: 'app-container', label: 'App containers' },
+  { value: 'pod', label: 'Pods' },
+];
 
 interface DashboardContainerRuntimeFilterConfigOptions {
   isWorkloadsRoute: boolean;
@@ -29,7 +43,7 @@ export const buildDashboardContainerRuntimeFilterConfig = ({
     label: 'Runtime',
     value: containerRuntime,
     options: [
-      { value: '', label: 'All runtimes' },
+      { value: '', label: DASHBOARD_CONTAINER_RUNTIME_ALL_OPTION_LABEL },
       ...runtimeOptions.map((value) => ({ value, label: value })),
     ],
     onChange,
@@ -57,7 +71,7 @@ export const buildDashboardPlatformFilterConfig = ({
     id: 'workloads-platform-filter',
     label: 'Platform',
     value: selectedPlatform ?? '',
-    options: [{ value: '', label: 'All platforms' }, ...platformOptions],
+    options: [{ value: '', label: DASHBOARD_PLATFORM_ALL_OPTION_LABEL }, ...platformOptions],
     onChange,
   };
 };
@@ -102,7 +116,7 @@ export const buildDashboardHostFilterConfig = ({
     id: 'workloads-node-filter',
     label: 'Node',
     value: selectedNode ?? '',
-    options: [{ value: '', label: 'All nodes' }, ...workloadNodeOptions],
+    options: [{ value: '', label: DASHBOARD_NODE_ALL_OPTION_LABEL }, ...workloadNodeOptions],
     onChange: onNodeChange,
   };
 };
@@ -131,7 +145,7 @@ export const buildDashboardNamespaceFilterConfig = ({
     label: 'Namespace',
     value: selectedNamespace ?? '',
     options: [
-      { value: '', label: 'All namespaces' },
+      { value: '', label: DASHBOARD_NAMESPACE_ALL_OPTION_LABEL },
       ...namespaceOptions.map((value) => ({ value, label: value })),
     ],
     onChange,

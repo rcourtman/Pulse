@@ -1,4 +1,5 @@
 import type { Accessor } from 'solid-js';
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
 import {
   DEFAULT_PHYSICAL_DISK_FACET_FILTER,
@@ -196,7 +197,9 @@ export const hasActiveStorageFilters = (state: StorageFilterActivityState): bool
     DEFAULT_STORAGE_DISK_GROUP_FILTER;
 
 export const getStorageNodeFilterLabel = (view: StorageView): string =>
-  view === 'disks' ? 'All disk hosts' : 'All nodes';
+  view === 'disks'
+    ? getAllFilterOptionLabel('disk hosts')
+    : getAllFilterOptionLabel('nodes');
 
 export const readStorageRouteValue = (value: string | undefined, defaultValue: string): string => {
   const normalized = (value || '').trim();

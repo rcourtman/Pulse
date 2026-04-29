@@ -208,9 +208,12 @@ regression protection.
     header row exposes names such as Uptime, Image, Context, and Node instead
     of collapsing to only the visible text columns.
     Pod-mode workload filters must use the workload-owned
-    `K8s Cluster` / `All K8s clusters` labels for Kubernetes context selection,
+    `K8s cluster` / `All K8s clusters` labels for Kubernetes context selection,
     rather than a generic `Cluster` label that can be confused with Proxmox
-    cluster terminology on adjacent infrastructure surfaces.
+    cluster terminology on adjacent infrastructure surfaces, and all workload
+    default filter-option labels must flow through the shared all-option
+    presentation helper via the workload filter config model instead of the
+    hot-path shell hard-coding local `All ...` strings.
 26. Keep long-range workload chart capping time-proportional across `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`, `frontend-modern/src/api/charts.ts`, and `internal/api/router.go`: when the workload hot path caps mixed-cadence history for top cards, it must bucket by time window rather than raw point index so 7-day and 30-day workload cards stay visually even without relaxing the protected payload budget.
 27. Keep summary hover/focus and sticky-card behavior on shared hot paths: infrastructure, workloads, and storage summary shells must reuse one page/group/entity scope model plus `frontend-modern/src/components/shared/StickySummarySection.tsx` inside the app scroll shell instead of per-page scroll listeners or per-card hover derivations, so row scrubbing highlights all cards, workload group headers, infrastructure cluster headers, and storage pool-group headers scope the summary coherently, pinned group focus remains route-backed and reversible, and the hot path does not multiply render or scroll work. That hot path stays row-first rather than adding fallback chrome: the on-screen row or group header is the scoped state, and any explicit reset belongs to one compact shared table-header action plus the shared `Escape` path, not to page-level scope strips, search-row widgets, or filter-bar badges. Background whitespace clearing may exist as a convenience, but the hot path must not depend on brittle dead-space hit testing as the only reversible control. The same hot path must therefore keep one page-level reset owner for filters plus pinned summary selections, and it must keep chart-backed summary-card geometry explicit and stable so hover rerenders, synchronized readouts, or idle header metadata cannot feed layout loops that grow or shrink the top cards over time. Recovery’s summary rail is not part of this interactive hot path; it may share summary-card framing, but it must remain non-interactive until a separately governed model says otherwise.
     The input path for that hot summary contract must stay shared too:
@@ -805,6 +808,10 @@ The dashboard-owned filter-config assembly now lives in
 filter runtime changes must extend through those owners instead of
 reintroducing dashboard-local state, reset drift, or inline config assembly
 into the shell.
+Workload type option labels are part of that filter-config model ownership:
+`DashboardFilter.tsx` must render the exported workload type option catalog
+instead of embedding its own `System containers` / `App containers` wording in
+the shell.
 The dashboard threshold slider now follows that same pattern: the shell stays
 in `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`, while
 metric-type text and fill presentation live in

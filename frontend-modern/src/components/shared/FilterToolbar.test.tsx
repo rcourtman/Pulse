@@ -115,7 +115,7 @@ describe('FilterHeader', () => {
           }
         : {
             id: 'workloads-k8s-context-filter',
-            label: 'K8s Cluster',
+            label: 'K8s cluster',
             options: [{ value: '', label: 'All K8s clusters' }],
           };
 
@@ -142,7 +142,7 @@ describe('FilterHeader', () => {
     screen.getByRole('button', { name: 'Show pods' }).click();
 
     await waitFor(() =>
-      expect(screen.getByLabelText('K8s Cluster')).toBe(screen.getByTestId('dynamic-filter')),
+      expect(screen.getByLabelText('K8s cluster')).toBe(screen.getByTestId('dynamic-filter')),
     );
   });
 

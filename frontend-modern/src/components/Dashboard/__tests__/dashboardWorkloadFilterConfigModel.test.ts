@@ -5,8 +5,13 @@ import {
   buildDashboardHostFilterConfig,
   buildDashboardNamespaceFilterConfig,
   buildDashboardPlatformFilterConfig,
+  DASHBOARD_CONTAINER_RUNTIME_ALL_OPTION_LABEL,
   DASHBOARD_KUBERNETES_CONTEXT_ALL_OPTION_LABEL,
   DASHBOARD_KUBERNETES_CONTEXT_FILTER_LABEL,
+  DASHBOARD_NAMESPACE_ALL_OPTION_LABEL,
+  DASHBOARD_NODE_ALL_OPTION_LABEL,
+  DASHBOARD_PLATFORM_ALL_OPTION_LABEL,
+  DASHBOARD_WORKLOAD_TYPE_OPTIONS,
 } from '../dashboardWorkloadFilterConfigModel';
 
 describe('dashboardWorkloadFilterConfigModel', () => {
@@ -25,6 +30,11 @@ describe('dashboardWorkloadFilterConfigModel', () => {
       id: 'workloads-container-runtime-filter',
       label: 'Runtime',
       value: 'docker',
+      options: [
+        { value: '', label: DASHBOARD_CONTAINER_RUNTIME_ALL_OPTION_LABEL },
+        { value: 'containerd', label: 'containerd' },
+        { value: 'docker', label: 'docker' },
+      ],
     });
 
     expect(
@@ -79,6 +89,10 @@ describe('dashboardWorkloadFilterConfigModel', () => {
       id: 'workloads-node-filter',
       label: 'Node',
       value: 'cluster-a-node-a',
+      options: [
+        { value: '', label: DASHBOARD_NODE_ALL_OPTION_LABEL },
+        { value: 'cluster-a-node-a', label: 'node-a' },
+      ],
     });
   });
 
@@ -97,6 +111,11 @@ describe('dashboardWorkloadFilterConfigModel', () => {
       id: 'workloads-k8s-namespace-filter',
       label: 'Namespace',
       value: 'default',
+      options: [
+        { value: '', label: DASHBOARD_NAMESPACE_ALL_OPTION_LABEL },
+        { value: 'default', label: 'default' },
+        { value: 'kube-system', label: 'kube-system' },
+      ],
     });
 
     expect(
@@ -128,10 +147,20 @@ describe('dashboardWorkloadFilterConfigModel', () => {
       label: 'Platform',
       value: 'truenas',
       options: [
-        { value: '', label: 'All platforms' },
+        { value: '', label: DASHBOARD_PLATFORM_ALL_OPTION_LABEL },
         { value: 'docker', label: 'Docker' },
         { value: 'truenas', label: 'TrueNAS' },
       ],
     });
+  });
+
+  it('keeps workload type filter labels in the presentation model', () => {
+    expect(DASHBOARD_WORKLOAD_TYPE_OPTIONS).toEqual([
+      { value: 'all', label: 'All' },
+      { value: 'vm', label: 'VMs' },
+      { value: 'system-container', label: 'System containers' },
+      { value: 'app-container', label: 'App containers' },
+      { value: 'pod', label: 'Pods' },
+    ]);
   });
 });

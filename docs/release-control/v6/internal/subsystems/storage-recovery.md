@@ -869,6 +869,10 @@ controls, and source selectors are also canonical presentation contracts:
 storage surfaces must consume `frontend-modern/src/components/Storage/storagePageState.ts`
 and `frontend-modern/src/utils/storageSources.ts` rather than re-declaring
 page-local title casing or alternate all-option labels.
+Recovery all-history, all-item-type, and all-platform defaults follow the same
+shared filter-option contract through
+`frontend-modern/src/utils/recoveryTablePresentation.ts`, so recovery history
+and protected-item tables do not invent separate default-filter wording.
 Physical-disk role and group filter defaults plus disk-type display labels
 must likewise come from `frontend-modern/src/features/storageBackups/diskPresentation.ts`;
 storage pages must not reintroduce local `All Roles`, `All Groups`, or

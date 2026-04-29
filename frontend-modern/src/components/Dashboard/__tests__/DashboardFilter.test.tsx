@@ -86,7 +86,9 @@ describe('DashboardFilter', () => {
 
       const options = typeSelect.querySelectorAll('option');
       const values = Array.from(options).map((o) => o.value);
+      const labels = Array.from(options).map((o) => o.textContent);
       expect(values).toEqual(['all', 'vm', 'system-container', 'app-container', 'pod']);
+      expect(labels).toEqual(['All', 'VMs', 'System containers', 'App containers', 'Pods']);
     });
 
     it('renders the Status filter select with all options', () => {

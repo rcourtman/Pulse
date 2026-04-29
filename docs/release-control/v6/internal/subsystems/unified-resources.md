@@ -1192,6 +1192,11 @@ timeline reads as the primary inspection surface instead of opening on a form.
 When that reveal is open, the controls still stack vertically instead of using
 a paired filter grid, so the filter state reads as one subordinate control
 column instead of a competing secondary layout.
+Timeline filter default options such as all kinds, all sources, and all
+adapters must use the shared frontend all-option presentation helper through
+`ResourceDetailDrawerOverviewTab.tsx`, not drawer-local hard-coded strings, so
+future wording changes stay aligned with workload, storage, recovery, and alert
+filters.
 When filters are active, the filtered facet bundle drives both the summary
 chips and the event log, so the header and the list stay aligned instead of
 showing stale unfiltered counts above filtered results.

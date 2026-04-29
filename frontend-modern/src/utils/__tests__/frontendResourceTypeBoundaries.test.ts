@@ -697,6 +697,7 @@ describe('frontend resource type boundaries', () => {
     expect(sourcePlatformsSource).toContain('titleCaseDelimitedLabel');
     expect(sourcePlatformsSource).not.toContain('const titleize =');
     expect(storageSourcesSource).toContain('titleCaseDelimitedLabel');
+    expect(storageSourcesSource).toContain('getAllFilterOptionLabel');
     expect(storageSourcesSource).not.toContain('const titleCaseLabel =');
     expect(workloadsSource).toContain('export const normalizeWorkloadViewModeParam');
     expect(orgScopeSource).toContain("export const DEFAULT_ORG_SCOPE = 'default'");
@@ -803,6 +804,10 @@ describe('frontend resource type boundaries', () => {
     );
     expect(dashboardWorkloadFilterConfigModelSource).toContain(
       'export const buildDashboardHostFilterConfig',
+    );
+    expect(dashboardWorkloadFilterConfigModelSource).toContain('getAllFilterOptionLabel');
+    expect(dashboardWorkloadFilterConfigModelSource).toContain(
+      'DASHBOARD_WORKLOAD_TYPE_OPTIONS',
     );
     expect(dashboardWorkloadFilterConfigModelSource).toContain(
       'export const buildDashboardNamespaceFilterConfig',
@@ -989,6 +994,7 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowSource).not.toContain('buildGuestId');
     expect(tagBadgesSource).toContain("from '@/components/shared/Tooltip'");
     expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');
     expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );
@@ -1111,6 +1117,8 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryHistorySectionSource).toContain('useRecoveryHistorySectionState');
     expect(recoveryHistorySectionSource).toContain('RecoveryHistoryTable');
     expect(recoveryHistorySectionSource).toContain('TableCard');
+    expect(recoveryHistorySectionSource).toContain('getRecoveryAllHistoryLabel');
+    expect(recoveryTablePresentationSource).toContain('getAllFilterOptionLabel');
     expect(recoveryHistorySectionSource).not.toContain(
       'overflow-hidden border-border-subtle bg-surface',
     );
@@ -2428,6 +2436,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageStateSource).toContain('export const countActiveStorageFilters');
     expect(storagePageStateSource).toContain('export const hasActiveStorageFilters');
     expect(storagePageStateSource).toContain('export const getStorageNodeFilterLabel');
+    expect(storagePageStateSource).toContain('getAllFilterOptionLabel');
     expect(storagePageStateSource).toContain('export const readStorageRouteValue');
     expect(storagePageStateSource).toContain('export const writeStorageRouteValue');
     expect(storagePageStateSource).toContain('export const coerceSelectedStorageNodeId');
@@ -2470,6 +2479,7 @@ describe('frontend resource type boundaries', () => {
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsDrawerPresentation');
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsEmptyState');
     expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsLoadingState');
+    expect(k8sDeploymentPresentationSource).toContain('getAllFilterOptionLabel');
     expect(k8sDeploymentsDrawerSource).not.toContain('const statusTone =');
     expect(k8sDeploymentsDrawerSource).not.toContain('Desired state controllers (not Pods)');
     expect(k8sDeploymentsDrawerSource).not.toContain('Search deployments...');

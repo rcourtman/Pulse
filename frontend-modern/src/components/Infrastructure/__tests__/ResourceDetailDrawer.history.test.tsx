@@ -122,6 +122,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(discoveryTabSource).not.toContain('triggerDiscovery(');
     expect(discoveryTabSource).not.toContain('updateDiscoveryNotes(');
     expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');
+    expect(resourceDetailDrawerOverviewSource).not.toContain("'All kinds'");
+    expect(resourceDetailDrawerOverviewSource).not.toContain("'All sources'");
+    expect(resourceDetailDrawerOverviewSource).not.toContain("'All adapters'");
     expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );

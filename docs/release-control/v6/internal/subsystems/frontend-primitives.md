@@ -1677,6 +1677,14 @@ fetch orchestration. The shell must not re-accumulate localStorage or API
 runtime logic inline. Audit-log filter option labels must come from
 `frontend-modern/src/utils/auditLogPresentation.ts` and the shared filter-option
 label primitive instead of hard-coded title-case strings in the settings shell.
+That shared filter-option primitive is also the canonical owner for default
+`All <scope>` option wording wherever a product surface exposes filter selects
+or segmented filter choices. Workloads/dashboard filters, storage source
+filters, recovery history and platform/type filters, Kubernetes namespace
+drawers, resource-change timeline filters, and alert configuration options must
+call `frontend-modern/src/components/shared/filterOptionPresentation.ts` through
+their nearest presentation/model owner instead of hard-coding page-local `All
+...` labels.
 
 The audit webhook settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx` stays the

@@ -1,8 +1,10 @@
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
+
 export const K8S_DEPLOYMENTS_DRAWER_TITLE = 'Deployments';
 export const K8S_DEPLOYMENTS_DRAWER_DESCRIPTION = 'Desired state controllers (not Pods)';
 export const K8S_DEPLOYMENTS_SEARCH_PLACEHOLDER = 'Search deployments...';
 export const K8S_DEPLOYMENTS_NAMESPACE_FILTER_LABEL = 'Namespace';
-export const K8S_DEPLOYMENTS_ALL_NAMESPACES_LABEL = 'All namespaces';
+export const K8S_DEPLOYMENTS_ALL_NAMESPACES_LABEL = getAllFilterOptionLabel('namespaces');
 export const K8S_DEPLOYMENTS_OPEN_PODS_LABEL = 'Open Pods';
 export const K8S_DEPLOYMENTS_VIEW_PODS_LABEL = 'View Pods';
 export const K8S_DEPLOYMENTS_COLUMN_DEPLOYMENT_LABEL = 'Deployment';

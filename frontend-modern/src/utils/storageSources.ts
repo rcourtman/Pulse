@@ -1,4 +1,5 @@
 import type { Storage } from '@/types/api';
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getSourcePlatformLabel, normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
@@ -19,7 +20,7 @@ export interface StorageSourceOption {
 
 const ALL_STORAGE_SOURCE_OPTION: StorageSourceOption = {
   key: 'all',
-  label: 'All sources',
+  label: getAllFilterOptionLabel('sources'),
   tone: 'slate',
 };
 

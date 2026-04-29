@@ -140,7 +140,7 @@ describe('alertConfigPresentation', () => {
     );
     expect(ALERT_CONFIG_ESCALATION_NOTIFY_EMAIL).toBe('Email');
     expect(ALERT_CONFIG_ESCALATION_NOTIFY_WEBHOOKS).toBe('Webhooks');
-    expect(ALERT_CONFIG_ESCALATION_NOTIFY_ALL).toBe('All Channels');
+    expect(ALERT_CONFIG_ESCALATION_NOTIFY_ALL).toBe('All channels');
     expect(ALERT_CONFIG_SUMMARY_TITLE).toBe('Configuration summary');
     expect(ALERT_CONFIG_SUMMARY_DESCRIPTION).toBe(
       'Preview of the active schedule settings.',
@@ -193,7 +193,7 @@ describe('alertConfigPresentation', () => {
     );
     expect(getAlertConfigEscalationNotifyLabel('email')).toBe('Email');
     expect(getAlertConfigEscalationNotifyLabel('webhook')).toBe('Webhooks');
-    expect(getAlertConfigEscalationNotifyLabel('all')).toBe('All Channels');
+    expect(getAlertConfigEscalationNotifyLabel('all')).toBe('All channels');
     expect(getAlertConfigSummaryRecoveryEnabled()).toBe(
       ALERT_CONFIG_SUMMARY_RECOVERY,
     );

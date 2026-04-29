@@ -1,3 +1,5 @@
+import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
+
 export const ALERT_CONFIG_UNSAVED_CHANGES = 'You have unsaved changes';
 export const ALERT_CONFIG_SAVE_CHANGES = 'Save Changes';
 export const ALERT_CONFIG_RESET_DEFAULTS = 'Reset to defaults';
@@ -69,7 +71,7 @@ export const ALERT_CONFIG_ESCALATION_NOTIFY_LABEL = 'Notify';
 export const ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX = 'min';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_EMAIL = 'Email';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_WEBHOOKS = 'Webhooks';
-export const ALERT_CONFIG_ESCALATION_NOTIFY_ALL = 'All Channels';
+export const ALERT_CONFIG_ESCALATION_NOTIFY_ALL = getAllFilterOptionLabel('channels');
 export const ALERT_CONFIG_ESCALATION_REMOVE_TITLE = 'Remove escalation level';
 export const ALERT_CONFIG_ESCALATION_ADD_LABEL = 'Add Escalation Level';
 export const ALERT_CONFIG_SUMMARY_TITLE = 'Configuration summary';
