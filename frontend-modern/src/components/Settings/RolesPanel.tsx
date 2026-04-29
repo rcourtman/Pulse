@@ -47,77 +47,75 @@ export const RolesPanel: Component = () => {
         </Show>
 
         <Show when={!state.loading() && state.featureGate.rbacEnabled()}>
-          <div class="w-full overflow-x-auto">
-            <PulseDataGrid
-              data={state.roles()}
-              columns={[
-                {
-                  key: 'role',
-                  label: 'Role',
-                  render: (role) => (
-                    <div class="flex flex-col">
-                      <span class="font-medium text-base-content flex items-center gap-1">
-                        {role.name}
-                        <Show when={role.isBuiltIn}>
-                          <BadgeCheck class="w-4 h-4 text-blue-500" />
-                        </Show>
-                      </span>
-                      <span class="text-xs text-muted">{role.description}</span>
-                    </div>
-                  ),
-                },
-                {
-                  key: 'permissions',
-                  label: 'Permissions',
-                  render: (role) => (
-                    <div class="flex flex-wrap gap-1">
-                      <For each={role.permissions}>
-                        {(perm) => (
-                          <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border">
-                            {perm.action}:{perm.resource}
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                  ),
-                },
-                {
-                  key: 'actions',
-                  label: 'Actions',
-                  align: 'right',
-                  render: (role) => (
-                    <div class="inline-flex items-center gap-1">
-                      <Show when={!role.isBuiltIn}>
-                        <button
-                          type="button"
-                          onClick={() => state.openEditRole(role)}
-                          class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300"
-                          title="Edit role"
-                        >
-                          <Pencil class="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => state.handleDeleteRole(role)}
-                          class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
-                          title="Delete role"
-                        >
-                          <Trash2 class="w-4 h-4" />
-                        </button>
-                      </Show>
+          <PulseDataGrid
+            data={state.roles()}
+            columns={[
+              {
+                key: 'role',
+                label: 'Role',
+                render: (role) => (
+                  <div class="flex flex-col">
+                    <span class="font-medium text-base-content flex items-center gap-1">
+                      {role.name}
                       <Show when={role.isBuiltIn}>
-                        <span class="text-xs text-slate-400 italic">Read-only</span>
+                        <BadgeCheck class="w-4 h-4 text-blue-500" />
                       </Show>
-                    </div>
-                  ),
-                },
-              ]}
-              keyExtractor={(role) => role.id}
-              emptyState={getRolesEmptyState()}
-              desktopMinWidth="620px"
-              class="border-x-0 sm:border-x"
-            />
-          </div>
+                    </span>
+                    <span class="text-xs text-muted">{role.description}</span>
+                  </div>
+                ),
+              },
+              {
+                key: 'permissions',
+                label: 'Permissions',
+                render: (role) => (
+                  <div class="flex flex-wrap gap-1">
+                    <For each={role.permissions}>
+                      {(perm) => (
+                        <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border">
+                          {perm.action}:{perm.resource}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                ),
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                align: 'right',
+                render: (role) => (
+                  <div class="inline-flex items-center gap-1">
+                    <Show when={!role.isBuiltIn}>
+                      <button
+                        type="button"
+                        onClick={() => state.openEditRole(role)}
+                        class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300"
+                        title="Edit role"
+                      >
+                        <Pencil class="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => state.handleDeleteRole(role)}
+                        class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+                        title="Delete role"
+                      >
+                        <Trash2 class="w-4 h-4" />
+                      </button>
+                    </Show>
+                    <Show when={role.isBuiltIn}>
+                      <span class="text-xs text-slate-400 italic">Read-only</span>
+                    </Show>
+                  </div>
+                ),
+              },
+            ]}
+            keyExtractor={(role) => role.id}
+            emptyState={getRolesEmptyState()}
+            desktopMinWidth="620px"
+            frame="flush"
+          />
         </Show>
       </SettingsPanel>
 

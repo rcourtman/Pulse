@@ -21,6 +21,7 @@ describe('PulseDataGrid', () => {
   it('keeps the shared pulse data grid on shell, runtime, and model owners', () => {
     expect(pulseDataGridSource).toContain('usePulseDataGridState');
     expect(pulseDataGridSource).toContain('getPulseDataGridAlignClass');
+    expect(pulseDataGridSource).toContain('getPulseDataGridFrameClass');
     expect(pulseDataGridSource).toContain('getPulseDataGridWidthAttr');
     expect(pulseDataGridSource).toContain('isPulseDataGridInteractiveTarget');
     expect(pulseDataGridSource).toContain("from '@/components/shared/Table'");
@@ -41,6 +42,13 @@ describe('PulseDataGrid', () => {
     expect(pulseDataGridStateSource).toContain('reconcile(');
 
     expect(pulseDataGridModelSource).toContain('export const getPulseDataGridAlignClass');
+    expect(pulseDataGridModelSource).toContain(
+      "export type PulseDataGridFrame = 'default' | 'flush'",
+    );
+    expect(pulseDataGridModelSource).toContain('export const getPulseDataGridFrameClass');
+    expect(pulseDataGridModelSource).toContain(
+      "flush: 'overflow-hidden rounded-none border-0 bg-surface'",
+    );
     expect(pulseDataGridModelSource).toContain('export const getPulseDataGridWidthAttr');
     expect(pulseDataGridModelSource).toContain('export const isPulseDataGridInteractiveTarget');
     expect(pulseDataGridModelSource).toContain('target.closest(');
@@ -112,6 +120,25 @@ describe('PulseDataGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(onRemove).toHaveBeenCalledTimes(1);
     expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it('applies the shared flush frame for grids embedded inside existing panels', () => {
+    render(() => (
+      <PulseDataGrid<TestRow>
+        data={[{ id: '1', name: 'Tower' }]}
+        columns={[{ key: 'name', label: 'Name' }]}
+        keyExtractor={(row) => row.id}
+        frame="flush"
+      />
+    ));
+
+    const table = screen.getByRole('table');
+    const frame = table.parentElement?.parentElement;
+
+    expect(frame).not.toBeNull();
+    expect(frame).toHaveClass('rounded-none');
+    expect(frame).toHaveClass('border-0');
+    expect(frame).not.toHaveClass('rounded-md');
   });
 
   it('keeps the same row DOM node when data refreshes with the same key', () => {

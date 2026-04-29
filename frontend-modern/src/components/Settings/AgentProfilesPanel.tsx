@@ -157,66 +157,64 @@ export const AgentProfilesPanel: Component = () => {
             </Show>
 
             <Show when={!loading() && profiles().length > 0}>
-              <div class="w-full overflow-x-auto">
-                <PulseDataGrid
-                  data={profiles()}
-                  columns={[
-                    {
-                      key: 'name',
-                      label: 'Name',
-                      render: (profile) => (
-                        <span class="font-medium text-base-content">{profile.name}</span>
-                      ),
-                    },
-                    {
-                      key: 'settings',
-                      label: 'Settings',
-                      render: (profile) => (
-                        <span class="text-muted">{getSettingsCount(profile)}</span>
-                      ),
-                    },
-                    {
-                      key: 'agents',
-                      label: 'Agents',
-                      render: (profile) => (
-                        <span class="inline-flex items-center gap-1 text-muted">
-                          <Users class="w-4 h-4" />
-                          {getAssignmentCount(profile.id)}
-                        </span>
-                      ),
-                    },
-                    {
-                      key: 'actions',
-                      label: 'Actions',
-                      align: 'right',
-                      render: (profile) => (
-                        <div class="inline-flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(profile)}
-                            class="p-1.5 rounded-md hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900"
-                            title="Edit profile"
-                          >
-                            <Pencil class="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(profile)}
-                            class="p-1.5 rounded-md hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
-                            title="Delete profile"
-                          >
-                            <Trash2 class="w-4 h-4" />
-                          </button>
-                        </div>
-                      ),
-                    },
-                  ]}
-                  keyExtractor={(profile) => profile.id}
-                  emptyState={getAgentProfilesEmptyState()}
-                  desktopMinWidth="600px"
-                  class="border-x-0 sm:border-x border-border"
-                />
-              </div>
+              <PulseDataGrid
+                data={profiles()}
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Name',
+                    render: (profile) => (
+                      <span class="font-medium text-base-content">{profile.name}</span>
+                    ),
+                  },
+                  {
+                    key: 'settings',
+                    label: 'Settings',
+                    render: (profile) => (
+                      <span class="text-muted">{getSettingsCount(profile)}</span>
+                    ),
+                  },
+                  {
+                    key: 'agents',
+                    label: 'Agents',
+                    render: (profile) => (
+                      <span class="inline-flex items-center gap-1 text-muted">
+                        <Users class="w-4 h-4" />
+                        {getAssignmentCount(profile.id)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    align: 'right',
+                    render: (profile) => (
+                      <div class="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(profile)}
+                          class="p-1.5 rounded-md hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900"
+                          title="Edit profile"
+                        >
+                          <Pencil class="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(profile)}
+                          class="p-1.5 rounded-md hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+                          title="Delete profile"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </button>
+                      </div>
+                    ),
+                  },
+                ]}
+                keyExtractor={(profile) => profile.id}
+                emptyState={getAgentProfilesEmptyState()}
+                desktopMinWidth="600px"
+                frame="flush"
+              />
             </Show>
           </SettingsPanel>
 
@@ -235,93 +233,88 @@ export const AgentProfilesPanel: Component = () => {
             </Show>
 
             <Show when={connectedAgents().length > 0}>
-              <div class="w-full overflow-x-auto">
-                <PulseDataGrid
-                  data={connectedAgents()}
-                  columns={[
-                    {
-                      key: 'agent',
-                      label: 'Agent',
-                      render: (agent) => (
-                        <div>
-                          <span class="font-medium text-base-content">
-                            {agent.displayName || agent.hostname}
-                          </span>
-                          <Show when={agent.displayName && agent.hostname !== agent.displayName}>
-                            <span class="ml-2 text-xs text-muted">({agent.hostname})</span>
-                          </Show>
-                        </div>
-                      ),
-                    },
-                    {
-                      key: 'profile',
-                      label: 'Profile',
-                      render: (agent) => {
-                        const assignment = () => getAgentAssignment(agent.assignmentId);
-                        return (
-                          <FormSelect
-                            label={`Profile for ${agent.displayName || agent.hostname}`}
-                            labelClass="sr-only"
-                            fieldBaseClass="contents"
-                            value={assignment()?.profile_id || ''}
-                            onChange={(e) =>
-                              handleAssign(agent.assignmentId, e.currentTarget.value)
-                            }
-                            selectBaseClass="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="">No profile</option>
-                            <Show
-                              when={
-                                assignment()?.profile_id &&
-                                !getProfileById(assignment()!.profile_id)
-                              }
-                            >
-                              <option value={assignment()!.profile_id}>
-                                {getProfileOptionLabel(assignment()!.profile_id)}
-                              </option>
-                            </Show>
-                            <For each={profiles()}>
-                              {(profile) => (
-                                <option value={profile.id}>
-                                  {getProfileOptionLabel(profile.id)}
-                                </option>
-                              )}
-                            </For>
-                          </FormSelect>
-                        );
-                      },
-                    },
-                    {
-                      key: 'status',
-                      label: 'Status',
-                      render: (agent) => {
-                        const indicator = () => getAgentStatusIndicator({ status: agent.status });
-                        return (
-                          <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(indicator().variant)}`}
-                          >
-                            {indicator().label}
-                          </span>
-                        );
-                      },
-                    },
-                    {
-                      key: 'lastSeen',
-                      label: 'Last Seen',
-                      hiddenOnMobile: true,
-                      render: (agent) => (
-                        <span class="text-muted">
-                          {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
+              <PulseDataGrid
+                data={connectedAgents()}
+                columns={[
+                  {
+                    key: 'agent',
+                    label: 'Agent',
+                    render: (agent) => (
+                      <div>
+                        <span class="font-medium text-base-content">
+                          {agent.displayName || agent.hostname}
                         </span>
-                      ),
+                        <Show when={agent.displayName && agent.hostname !== agent.displayName}>
+                          <span class="ml-2 text-xs text-muted">({agent.hostname})</span>
+                        </Show>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'profile',
+                    label: 'Profile',
+                    render: (agent) => {
+                      const assignment = () => getAgentAssignment(agent.assignmentId);
+                      return (
+                        <FormSelect
+                          label={`Profile for ${agent.displayName || agent.hostname}`}
+                          labelClass="sr-only"
+                          fieldBaseClass="contents"
+                          value={assignment()?.profile_id || ''}
+                          onChange={(e) => handleAssign(agent.assignmentId, e.currentTarget.value)}
+                          selectBaseClass="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="">No profile</option>
+                          <Show
+                            when={
+                              assignment()?.profile_id && !getProfileById(assignment()!.profile_id)
+                            }
+                          >
+                            <option value={assignment()!.profile_id} selected>
+                              {getProfileOptionLabel(assignment()!.profile_id)}
+                            </option>
+                          </Show>
+                          <For each={profiles()}>
+                            {(profile) => (
+                              <option value={profile.id}>
+                                {getProfileOptionLabel(profile.id)}
+                              </option>
+                            )}
+                          </For>
+                        </FormSelect>
+                      );
                     },
-                  ]}
-                  keyExtractor={(agent) => agent.id}
-                  emptyState={getAgentProfileAssignmentsEmptyState()}
-                  desktopMinWidth="800px"
-                  class="border-x-0 sm:border-x"
-                />
-              </div>
+                  },
+                  {
+                    key: 'status',
+                    label: 'Status',
+                    render: (agent) => {
+                      const indicator = () => getAgentStatusIndicator({ status: agent.status });
+                      return (
+                        <span
+                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(indicator().variant)}`}
+                        >
+                          {indicator().label}
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    key: 'lastSeen',
+                    label: 'Last Seen',
+                    hiddenOnMobile: true,
+                    render: (agent) => (
+                      <span class="text-muted">
+                        {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
+                      </span>
+                    ),
+                  },
+                ]}
+                keyExtractor={(agent) => agent.id}
+                emptyState={getAgentProfileAssignmentsEmptyState()}
+                desktopMinWidth="800px"
+                frame="flush"
+              />
             </Show>
           </SettingsPanel>
 

@@ -158,6 +158,11 @@ credential, capability, status, and action cells, but table scroll framing must
 stay on the shared `Table` primitive. If a configured-node table needs bounded
 vertical height, apply it through `Table` `wrapperClass` instead of an outer
 lifecycle-local scroll container.
+Agent profile management tables follow that same presentation boundary:
+`frontend-modern/src/components/Settings/AgentProfilesPanel.tsx` may own agent
+profile and assignment columns, but embedded table framing must route through
+`PulseDataGrid`'s shared frame variants instead of lifecycle-local
+`overflow-x-auto` or side-border wrappers.
 
 ## Extension Points
 

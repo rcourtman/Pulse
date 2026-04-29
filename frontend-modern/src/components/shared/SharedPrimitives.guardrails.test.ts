@@ -163,9 +163,17 @@ import pmgMailGatewaySource from '@/components/PMG/MailGateway.tsx?raw';
 import pmgInstancePanelSource from '@/components/PMG/PMGInstancePanel.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
+import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
+import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
+import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
+import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
+import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
+import organizationOverviewMembersSectionSource from '@/components/Settings/OrganizationOverviewMembersSection.tsx?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
+import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
+import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -593,9 +601,31 @@ describe('shared primitive guardrails', () => {
     expect(configuredNodeTablesSource).toContain('wrapperClass="max-h-[600px] overflow-y-auto"');
     expect(storageContentCardSource).toContain('<StoragePoolsTable');
     expect(pulseDataGridSource).toContain('wrapperClass="scrollbar-hide"');
+    expect(pulseDataGridSource).toContain('getPulseDataGridFrameClass');
     expect(pulseDataGridSource).not.toContain(
       '<div class="overflow-x-auto touch-scroll scrollbar-hide">',
     );
+
+    for (const source of [
+      agentProfilesPanelSource,
+      apiTokenManagerSource,
+      organizationAccessMembersSectionSource,
+      organizationIncomingSharesSectionSource,
+      organizationOutgoingSharesSectionSource,
+      organizationOverviewMembersSectionSource,
+      rolesPanelSource,
+      userAssignmentsPanelSource,
+    ]) {
+      expect(source).toContain('<PulseDataGrid');
+      expect(source).not.toContain('overflow-x-auto');
+      expect(source).not.toContain('-mx-4');
+      expect(source).not.toContain('border-x-0 sm:border-x');
+    }
+
+    expect(agentProfilesPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(2);
+    expect(apiTokenManagerSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
+    expect(rolesPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
+    expect(userAssignmentsPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
 
     for (const source of [
       deployCandidatesStepSource,

@@ -880,6 +880,7 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
               "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts"
             ]
           },
@@ -1656,7 +1657,8 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
             ]
           },
           {
@@ -3949,6 +3951,7 @@
               "frontend-modern/src/components/Settings/__tests__/OrganizationOverviewPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
@@ -4624,6 +4627,7 @@
               "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts"
             ]
           },

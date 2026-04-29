@@ -270,152 +270,149 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             </button>
           </div>
 
-          <div class="w-full overflow-x-auto">
-            <PulseDataGrid
-              data={sortedTokens()}
-              columns={[
-                {
-                  key: 'name',
-                  label: 'Name',
-                  render: (token) => (
-                    <span class="font-medium text-base-content">{token.name || 'Untitled'}</span>
-                  ),
+          <PulseDataGrid
+            data={sortedTokens()}
+            columns={[
+              {
+                key: 'name',
+                label: 'Name',
+                render: (token) => (
+                  <span class="font-medium text-base-content">{token.name || 'Untitled'}</span>
+                ),
+              },
+              {
+                key: 'hint',
+                label: 'Hint',
+                render: (token) => (
+                  <span class="font-mono text-xs text-muted">{tokenHint(token)}</span>
+                ),
+              },
+              {
+                key: 'scopes',
+                label: 'Scopes',
+                render: (token) => {
+                  const rawScopes = token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
+                  const scopeBadges = rawScopes.includes('*')
+                    ? [{ value: '*', label: 'Full' }]
+                    : rawScopes.map((scope) => ({
+                        value: scope,
+                        label: API_SCOPE_LABELS[scope] ?? scope,
+                      }));
+                  return (
+                    <div class="flex flex-wrap gap-1.5">
+                      <For each={scopeBadges}>
+                        {(scope) => {
+                          const isWildcard = scope.value === '*';
+                          return (
+                            <span
+                              class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                isWildcard
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                                  : 'bg-surface-alt text-base-content'
+                              }`}
+                              title={scope.value}
+                            >
+                              {scope.label}
+                            </span>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  );
                 },
-                {
-                  key: 'hint',
-                  label: 'Hint',
-                  render: (token) => (
-                    <span class="font-mono text-xs text-muted">{tokenHint(token)}</span>
-                  ),
-                },
-                {
-                  key: 'scopes',
-                  label: 'Scopes',
-                  render: (token) => {
-                    const rawScopes =
-                      token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
-                    const scopeBadges = rawScopes.includes('*')
-                      ? [{ value: '*', label: 'Full' }]
-                      : rawScopes.map((scope) => ({
-                          value: scope,
-                          label: API_SCOPE_LABELS[scope] ?? scope,
-                        }));
-                    return (
-                      <div class="flex flex-wrap gap-1.5">
-                        <For each={scopeBadges}>
-                          {(scope) => {
-                            const isWildcard = scope.value === '*';
-                            return (
-                              <span
-                                class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                  isWildcard
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-                                    : 'bg-surface-alt text-base-content'
-                                }`}
-                                title={scope.value}
-                              >
-                                {scope.label}
-                              </span>
-                            );
-                          }}
-                        </For>
-                      </div>
+              },
+              {
+                key: 'usage',
+                label: 'Usage',
+                render: (token) => {
+                  const dockerUsageEntry = dockerTokenUsage().get(token.id);
+                  const agentUsageEntry = agentTokenUsage().get(token.id);
+                  const usageSegments: string[] = [];
+                  const usageTitleSegments: string[] = [];
+                  if (dockerUsageEntry) {
+                    usageSegments.push(
+                      dockerUsageEntry.count === 1
+                        ? (dockerUsageEntry.items[0]?.label ?? 'Container runtime')
+                        : `${dockerUsageEntry.count} container runtimes`,
                     );
-                  },
-                },
-                {
-                  key: 'usage',
-                  label: 'Usage',
-                  render: (token) => {
-                    const dockerUsageEntry = dockerTokenUsage().get(token.id);
-                    const agentUsageEntry = agentTokenUsage().get(token.id);
-                    const usageSegments: string[] = [];
-                    const usageTitleSegments: string[] = [];
-                    if (dockerUsageEntry) {
-                      usageSegments.push(
-                        dockerUsageEntry.count === 1
-                          ? (dockerUsageEntry.items[0]?.label ?? 'Container runtime')
-                          : `${dockerUsageEntry.count} container runtimes`,
-                      );
-                      usageTitleSegments.push(
-                        `Container runtimes: ${dockerUsageEntry.items.map((runtime) => runtime.label).join(', ')}`,
-                      );
-                    }
-                    if (agentUsageEntry) {
-                      usageSegments.push(
-                        agentUsageEntry.count === 1
-                          ? `${agentUsageEntry.items[0]?.label ?? 'Agent'}`
-                          : `${agentUsageEntry.count} agents`,
-                      );
-                      usageTitleSegments.push(
-                        `Agents: ${agentUsageEntry.items.map((agent) => agent.label).join(', ')}`,
-                      );
-                    }
-                    const usageSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
-                    return (
-                      <div
-                        class="flex flex-wrap items-center gap-2"
-                        title={
-                          usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined
-                        }
-                      >
-                        <span class="text-muted">{usageSummary}</span>
-                        <Show when={agentUsageEntry && agentUsageEntry.count > 1}>
-                          <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                            <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                              <path
-                                fill-rule="evenodd"
-                                d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
-                                clip-rule="evenodd"
-                              />
-                            </svg>
-                            Agents sharing this token ({agentUsageEntry!.count})
-                          </span>
-                        </Show>
-                      </div>
+                    usageTitleSegments.push(
+                      `Container runtimes: ${dockerUsageEntry.items.map((runtime) => runtime.label).join(', ')}`,
                     );
-                  },
-                },
-                {
-                  key: 'createdAt',
-                  label: 'Created',
-                  render: (token) => (
-                    <span class="text-muted">
-                      {formatRelativeTime(new Date(token.createdAt).getTime())}
-                    </span>
-                  ),
-                },
-                {
-                  key: 'lastUsedAt',
-                  label: 'Last used',
-                  render: (token) => (
-                    <span class="text-muted">
-                      {token.lastUsedAt
-                        ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
-                        : 'Never'}
-                    </span>
-                  ),
-                },
-                {
-                  key: 'action',
-                  label: 'Action',
-                  align: 'right',
-                  render: (token) => (
-                    <button
-                      onClick={() => handleDelete(token)}
-                      disabled={!canManage()}
-                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+                  }
+                  if (agentUsageEntry) {
+                    usageSegments.push(
+                      agentUsageEntry.count === 1
+                        ? `${agentUsageEntry.items[0]?.label ?? 'Agent'}`
+                        : `${agentUsageEntry.count} agents`,
+                    );
+                    usageTitleSegments.push(
+                      `Agents: ${agentUsageEntry.items.map((agent) => agent.label).join(', ')}`,
+                    );
+                  }
+                  const usageSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
+                  return (
+                    <div
+                      class="flex flex-wrap items-center gap-2"
+                      title={
+                        usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined
+                      }
                     >
-                      Revoke
-                    </button>
-                  ),
+                      <span class="text-muted">{usageSummary}</span>
+                      <Show when={agentUsageEntry && agentUsageEntry.count > 1}>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                          <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path
+                              fill-rule="evenodd"
+                              d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
+                              clip-rule="evenodd"
+                            />
+                          </svg>
+                          Agents sharing this token ({agentUsageEntry!.count})
+                        </span>
+                      </Show>
+                    </div>
+                  );
                 },
-              ]}
-              keyExtractor={(token) => token.id}
-              desktopMinWidth="1000px"
-              class="border-x-0 sm:border-x border-t-0 rounded-t-none"
-            />
-          </div>
+              },
+              {
+                key: 'createdAt',
+                label: 'Created',
+                render: (token) => (
+                  <span class="text-muted">
+                    {formatRelativeTime(new Date(token.createdAt).getTime())}
+                  </span>
+                ),
+              },
+              {
+                key: 'lastUsedAt',
+                label: 'Last used',
+                render: (token) => (
+                  <span class="text-muted">
+                    {token.lastUsedAt
+                      ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                      : 'Never'}
+                  </span>
+                ),
+              },
+              {
+                key: 'action',
+                label: 'Action',
+                align: 'right',
+                render: (token) => (
+                  <button
+                    onClick={() => handleDelete(token)}
+                    disabled={!canManage()}
+                    class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+                  >
+                    Revoke
+                  </button>
+                ),
+              },
+            ]}
+            keyExtractor={(token) => token.id}
+            desktopMinWidth="1000px"
+            frame="flush"
+          />
         </Card>
       </Show>
 

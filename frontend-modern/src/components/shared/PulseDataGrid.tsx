@@ -9,6 +9,7 @@ import {
 } from '@/components/shared/Table';
 import {
   getPulseDataGridAlignClass,
+  getPulseDataGridFrameClass,
   getPulseDataGridWidthAttr,
   isPulseDataGridInteractiveTarget,
   type PulseDataGridProps,
@@ -36,12 +37,13 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
     'desktopMinWidth',
     'mobileMinWidth',
     'class',
+    'frame',
   ]);
 
   const grid = usePulseDataGridState(local);
 
   return (
-    <div class={`overflow-hidden rounded-md border border-border bg-surface ${local.class || ''}`}>
+    <div class={`${getPulseDataGridFrameClass(local.frame)} ${local.class || ''}`}>
       <Table
         wrapperClass="scrollbar-hide"
         class="w-full border-collapse"

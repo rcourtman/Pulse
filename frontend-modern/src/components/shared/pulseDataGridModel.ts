@@ -52,12 +52,25 @@ export interface PulseDataGridProps<T> {
 
   /** Custom classes applied to the root container */
   class?: string;
+
+  /** Root frame treatment. Use flush when embedding directly inside an existing panel/card frame. */
+  frame?: PulseDataGridFrame;
 }
+
+export type PulseDataGridFrame = 'default' | 'flush';
+
+const PULSE_DATA_GRID_FRAME_CLASS: Record<PulseDataGridFrame, string> = {
+  default: 'overflow-hidden rounded-md border border-border bg-surface',
+  flush: 'overflow-hidden rounded-none border-0 bg-surface',
+};
 
 export type PulseDataGridStableRow<T> = {
   __pulseKey: string | number;
   value: T;
 };
+
+export const getPulseDataGridFrameClass = (frame?: PulseDataGridFrame) =>
+  PULSE_DATA_GRID_FRAME_CLASS[frame ?? 'default'];
 
 export const getPulseDataGridAlignClass = (align?: 'left' | 'center' | 'right') => {
   switch (align) {

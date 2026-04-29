@@ -195,7 +195,11 @@ work extends shared components instead of creating new local variants.
    tables, Ceph tables, PMG resource panels, and `PulseDataGrid`, must follow
    the same rule: feature owners may pass `wrapperClass` for bounded height,
    border, radius, or scrollbar hiding, but they must not add raw table markup
-   or local scroll wrappers around the shared table primitive.
+   or local scroll wrappers around the shared table primitive. `PulseDataGrid`
+   also owns its root frame variants: feature surfaces embedded directly inside
+   an existing panel/card frame must use the shared `frame="flush"` mode rather
+   than caller-local border overrides, horizontal-scroll wrappers, or negative
+   margin compensation.
    Product-table subgroup/header rows must likewise consume the shared
    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
    helper and `.grouped-table-row` CSS token contract instead of local

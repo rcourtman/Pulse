@@ -75,58 +75,56 @@ export const UserAssignmentsPanel: Component = () => {
             state.filteredAssignments().length > 0
           }
         >
-          <div class="w-full overflow-x-auto">
-            <PulseDataGrid
-              data={state.filteredAssignments()}
-              columns={[
-                {
-                  key: 'username',
-                  label: 'Username',
-                  render: (assignment) => (
-                    <span class="font-medium text-base-content">{assignment.username}</span>
-                  ),
-                },
-                {
-                  key: 'assignedRoles',
-                  label: 'Assigned Roles',
-                  render: (assignment) => (
-                    <div class="flex flex-wrap gap-1">
-                      <Show when={assignment.roleIds.length === 0}>
-                        <span class="text-xs text-slate-400 italic">No roles assigned</span>
-                      </Show>
-                      <For each={assignment.roleIds}>
-                        {(roleId) => (
-                          <span class="inline-flex items-center gap-1 rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
-                            <Shield class="w-3 h-3" />
-                            {state.getRoleName(roleId)}
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                  ),
-                },
-                {
-                  key: 'actions',
-                  label: 'Actions',
-                  align: 'right',
-                  render: (assignment) => (
-                    <button
-                      type="button"
-                      onClick={() => state.openManageAccess(assignment)}
-                      class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
-                    >
-                      <Pencil class="w-4 h-4" />
-                      Manage Access
-                    </button>
-                  ),
-                },
-              ]}
-              keyExtractor={(assignment) => assignment.username}
-              emptyState={emptyStateCopy().title}
-              desktopMinWidth="620px"
-              class="border-x-0 sm:border-x"
-            />
-          </div>
+          <PulseDataGrid
+            data={state.filteredAssignments()}
+            columns={[
+              {
+                key: 'username',
+                label: 'Username',
+                render: (assignment) => (
+                  <span class="font-medium text-base-content">{assignment.username}</span>
+                ),
+              },
+              {
+                key: 'assignedRoles',
+                label: 'Assigned Roles',
+                render: (assignment) => (
+                  <div class="flex flex-wrap gap-1">
+                    <Show when={assignment.roleIds.length === 0}>
+                      <span class="text-xs text-slate-400 italic">No roles assigned</span>
+                    </Show>
+                    <For each={assignment.roleIds}>
+                      {(roleId) => (
+                        <span class="inline-flex items-center gap-1 rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
+                          <Shield class="w-3 h-3" />
+                          {state.getRoleName(roleId)}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                ),
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                align: 'right',
+                render: (assignment) => (
+                  <button
+                    type="button"
+                    onClick={() => state.openManageAccess(assignment)}
+                    class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
+                  >
+                    <Pencil class="w-4 h-4" />
+                    Manage Access
+                  </button>
+                ),
+              },
+            ]}
+            keyExtractor={(assignment) => assignment.username}
+            emptyState={emptyStateCopy().title}
+            desktopMinWidth="620px"
+            frame="flush"
+          />
         </Show>
       </SettingsPanel>
 
