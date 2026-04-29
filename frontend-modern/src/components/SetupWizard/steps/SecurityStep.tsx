@@ -21,6 +21,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const [useCustomPassword, setUseCustomPassword] = createSignal(false);
   const [password, setPassword] = createSignal('');
   const [confirmPassword, setConfirmPassword] = createSignal('');
+  const [showPassword, setShowPassword] = createSignal(false);
   const [isSettingUp, setIsSettingUp] = createSignal(false);
 
   const generatePassword = () => {
@@ -114,16 +115,16 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
   };
 
   return (
-    <div class="max-w-lg mx-auto bg-surface border border-border overflow-hidden animate-fade-in relative rounded-md">
-      {' '}
+    <div class="max-w-lg mx-auto bg-surface border border-border overflow-hidden relative rounded-md">
       <div class="p-8 border-b border-border relative z-10 text-center">
-        <h2 class="text-3xl font-bold tracking-tight text-base-content">Secure Pulse</h2>
-        <p class="text-slate-500 dark:text-blue-200 mt-2 font-light">
-          Create your root administrator account, then choose the first infrastructure source.
+        <h2 class="text-2xl font-bold tracking-tight text-base-content">
+          Create your admin account
+        </h2>
+        <p class="text-sm text-muted mt-2">
+          The next step is to choose the first infrastructure source.
         </p>
       </div>
       <div class="p-8 space-y-6 relative z-10">
-        {/* Username */}
         <div>
           <label class="block text-sm font-medium text-base-content mb-2">Username</label>
           <input
@@ -135,7 +136,6 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           />
         </div>
 
-        {/* Password choice */}
         <div>
           <label class="block text-sm font-medium text-base-content mb-3">Password</label>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
@@ -148,7 +148,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                   : 'bg-surface border-border text-muted hover:bg-surface-hover'
               }`}
             >
-              Generate Secure
+              Auto-generate
             </button>
             <button
               type="button"
@@ -159,44 +159,55 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                   : 'bg-surface border-border text-muted hover:bg-surface-hover'
               }`}
             >
-              Custom Password
+              Custom password
             </button>
           </div>
 
           <Show when={useCustomPassword()}>
-            <div class="space-y-4 animate-fade-in">
+            <div class="space-y-2">
+              <div class="relative">
+                <input
+                  type={showPassword() ? 'text' : 'password'}
+                  value={password()}
+                  onInput={(e) => setPassword(e.currentTarget.value)}
+                  class="w-full px-5 py-3.5 pr-20 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                  placeholder="Password (min 12 characters)"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword())}
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted hover:text-base-content transition-colors px-2 py-1"
+                >
+                  {showPassword() ? 'Hide' : 'Show'}
+                </button>
+              </div>
               <input
-                type="password"
-                value={password()}
-                onInput={(e) => setPassword(e.currentTarget.value)}
-                class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
-                placeholder="Password"
-              />
-              <input
-                type="password"
+                type={showPassword() ? 'text' : 'password'}
                 value={confirmPassword()}
                 onInput={(e) => setConfirmPassword(e.currentTarget.value)}
                 class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                 placeholder="Confirm password"
               />
+              <p class="text-xs text-muted">Minimum 12 characters.</p>
             </div>
           </Show>
 
           <Show when={!useCustomPassword()}>
-            <div class="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md p-4 animate-fade-in">
-              <p class="text-sm text-blue-800 dark:text-blue-200 font-medium">
-                A secure 20-character password will be generated and shown after setup.
-              </p>
-            </div>
+            <p class="text-sm text-muted">
+              A secure 20-character password will be generated and shown on the next screen.
+            </p>
           </Show>
         </div>
 
-        {/* Info */}
-        <div class="bg-base rounded-md p-4 border border-border">
-          <p class="text-sm text-muted">
-            This creates your admin account and an API token for automation. Credentials are
-            displayed once - save them securely.
-          </p>
+        <div class="bg-base rounded-md p-4 border border-border text-left">
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">
+            On the next screen
+          </div>
+          <ul class="text-sm text-muted space-y-1">
+            <li>• Your username and password</li>
+            <li>• An admin API token for automation</li>
+          </ul>
+          <p class="mt-2 text-xs text-muted">Save them before continuing, they are shown once.</p>
         </div>
       </div>
       {/* Actions */}

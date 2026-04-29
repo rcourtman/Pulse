@@ -160,106 +160,62 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
   return (
     <div class="text-center relative">
-      {/* Logo */}
-      <div class="mb-10 relative z-10">
+      <div class="mb-8 relative z-10">
         <img
           src="/logo.svg"
           alt="Pulse Logo"
-          class="w-24 h-24 rounded-md mb-8 mx-auto dark:shadow-none"
+          class="w-20 h-20 rounded-md mb-6 mx-auto dark:shadow-none"
         />
-        <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-base-content mb-4 animate-fade-in delay-100">
+        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-base-content mb-3">
           Welcome to Pulse
         </h1>
-        <p class="text-xl dark:text-blue-200 font-light animate-fade-in delay-200 max-w-md mx-auto">
-          Unified infrastructure intelligence
+        <p class="text-base text-muted max-w-xl mx-auto">
+          Three steps:{' '}
+          <span class="text-base-content font-medium">Unlock this Pulse server</span>,{' '}
+          <span class="text-base-content font-medium">Create the admin account</span>, then{' '}
+          <span class="text-base-content font-medium">Choose the first source</span>.
         </p>
-        <p class="mt-4 text-sm text-muted max-w-xl mx-auto animate-fade-in delay-300">
-          You are about to do three things: unlock setup on this Pulse server, create your admin
-          account, and choose the first infrastructure source Pulse should monitor.
+        <p class="text-sm text-muted max-w-xl mx-auto mt-2">
+          <span>Connect a platform API, install Pulse Agent, or use both for full coverage.</span>
         </p>
       </div>
 
-      <div class="mb-8 grid gap-3 text-left sm:grid-cols-3">
-        <div class="rounded-md border border-border bg-surface px-4 py-3">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            Step 1
-          </div>
-          <div class="mt-1 text-sm font-semibold text-base-content">Unlock this Pulse server</div>
-          <p class="mt-1 text-xs text-muted">
-            Read the one-time bootstrap token from the system where Pulse is installed.
-          </p>
-        </div>
-        <div class="rounded-md border border-border bg-surface px-4 py-3">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            Step 2
-          </div>
-          <div class="mt-1 text-sm font-semibold text-base-content">Create the admin account</div>
-          <p class="mt-1 text-xs text-muted">
-            Set the first login and let Pulse generate the credentials you need to save.
-          </p>
-        </div>
-        <div class="rounded-md border border-border bg-surface px-4 py-3">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            Step 3
-          </div>
-          <div class="mt-1 text-sm font-semibold text-base-content">Choose the first source</div>
-          <p class="mt-1 text-xs text-muted">
-            Connect a platform API, install Pulse Agent, or use both for full coverage.
-          </p>
-        </div>
-      </div>
-
-      {/* Bootstrap token unlock */}
       <Show when={!props.isUnlocked}>
-        <div class="p-8 max-w-lg mx-auto bg-surface border border-border rounded-md text-left animate-slide-up delay-300 relative group">
-          <div class="relative z-10">
-            <h3 class="text-xl font-semibold text-base-content mb-2 tracking-tight">
-              Unlock Setup
-            </h3>
-            <p class="text-sm text-muted mb-6">
-              Run the following command on the Pulse server to retrieve the one-time bootstrap token
-              that unlocks this wizard. Do not paste the raw `.bootstrap_token` file contents
-              directly.
-            </p>
+        <div class="p-6 sm:p-8 max-w-2xl mx-auto bg-surface border border-border rounded-md text-left">
+          <h3 class="text-lg font-semibold text-base-content mb-2 tracking-tight">Unlock setup</h3>
+          <p class="text-sm text-muted mb-5">{deploymentHint()}</p>
 
-            <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-950/40">
-              <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                Where to run it
+          <div class="mb-5">
+            <div class="bg-base rounded-md p-4 font-mono text-sm text-emerald-400 border border-border-subtle flex items-center justify-between">
+              <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
+                <Terminal class="w-4 h-4 flex-shrink-0" />
+                <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
               </div>
-              <div class="mt-1 flex items-center gap-2">
-                <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                  {deploymentLabel()}
-                </span>
-              </div>
-              <p class="mt-2 text-sm text-base-content">{deploymentHint()}</p>
+              <button
+                onClick={copyCommand}
+                class="ml-4 flex-shrink-0 p-2 rounded-md bg-surface hover:bg-slate-700 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-0"
+                title="Copy command"
+              >
+                <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>
+                  <Check class="w-4 h-4 text-emerald-400" />
+                </Show>
+              </button>
             </div>
-
-            <div class="mb-8">
-              <div class="bg-base rounded-md p-4 font-mono text-sm text-emerald-400 border border-border-subtle flex items-center justify-between">
-                <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
-                  <Terminal class="w-4 h-4 flex-shrink-0" />
-                  <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
-                </div>
-                <button
-                  onClick={copyCommand}
-                  class="ml-4 flex-shrink-0 p-2 rounded-md bg-surface hover:bg-slate-700 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-0"
-                  title="Copy command"
-                >
-                  <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>
-                    <Check class="w-4 h-4 text-emerald-400" />
-                  </Show>
-                </button>
-              </div>
+            <div class="mt-2 flex items-center gap-2 text-[11px] text-muted">
+              <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                {deploymentLabel()}
+              </span>
             </div>
+          </div>
 
-            <div class="mb-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/40">
-              <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                What this token does
-              </div>
-              <p class="mt-2 text-sm text-base-content">{unlockHelp()}</p>
+          <div class="mb-5 text-left">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              What this token does
             </div>
+            <p class="mt-1 text-sm text-muted">{unlockHelp()}</p>
+          </div>
 
-            <div class="space-y-4">
+          <div class="space-y-3">
               <input
                 type="text"
                 value={props.bootstrapToken}
@@ -324,12 +280,11 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 )}
               </button>
             </div>
-          </div>
         </div>
       </Show>
 
       <Show when={props.isUnlocked}>
-        <div class="animate-enter delay-200">
+        <div>
           <button
             onClick={props.onNext}
             class="py-4 px-10 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-md transition-colors duration-200"

@@ -172,7 +172,7 @@ Keep these credentials secure!
   const completionViewModel = createMemo(() => buildSetupCompletionViewModel(connectedSystems()));
 
   return (
-    <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden animate-fade-in relative rounded-md p-6 sm:p-8 text-center text-base-content">
+    <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden relative rounded-md p-6 sm:p-8 text-center text-base-content">
       <div class="relative z-10">
         <div class="mb-8">
           <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 mb-6 border border-emerald-200 dark:border-emerald-800">
@@ -378,15 +378,6 @@ Keep these credentials secure!
                 </div>
               </div>
 
-              <div class="bg-surface-hover dark:bg-black border border-border rounded-md p-3">
-                <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
-                  Infrastructure
-                </div>
-                <code class="text-base-content font-mono text-xs break-all">
-                  {ADD_INFRASTRUCTURE_PATH}
-                </code>
-              </div>
-
               <button
                 onClick={downloadCredentials}
                 class="w-full mt-2 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1.5 bg-blue-50 dark:bg-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-md transition-colors border border-blue-100 dark:border-blue-900"
@@ -472,16 +463,17 @@ Keep these credentials secure!
               <div class="text-[11px] font-medium uppercase tracking-wider text-muted">
                 Source choices
               </div>
-              <div class="mt-2 grid gap-2 sm:grid-cols-3">
+              <ul class="mt-2 space-y-1.5 text-left">
                 <For each={SOURCE_STRATEGY_OPTIONS}>
                   {(option) => (
-                    <div class="rounded-md border border-border bg-surface px-3 py-2.5">
-                      <div class="text-xs font-semibold text-base-content">{option.title}</div>
-                      <p class="mt-1 text-[11px] leading-4 text-muted">{option.description}</p>
-                    </div>
+                    <li class="text-xs leading-snug">
+                      <span class="font-semibold text-base-content">{option.title}</span>
+                      <span class="text-muted">{' — '}</span>
+                      <span class="text-muted">{option.description}</span>
+                    </li>
                   )}
                 </For>
-              </div>
+              </ul>
             </div>
           </div>
         </div>
