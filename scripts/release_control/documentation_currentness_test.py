@@ -130,11 +130,11 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         )
         self.assertNotIn("Upgrade to Assisted", autonomy_doc)
         self.assertIn(
-            "| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Pro / hosted Cloud |",
+            "| **Investigate** | Investigates findings and proposes fixes. All remediation actions require approval. | Pro / hosted Cloud |",
             pulse_pro_doc,
         )
         self.assertNotIn(
-            "| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Community / Relay |",
+            "| **Investigate** | Investigates findings and proposes fixes. All remediation actions require approval. | Community / Relay |",
             pulse_pro_doc,
         )
 

@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-04-21
+Last updated: 2026-04-29
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -126,6 +126,13 @@ infrastructure.
 Pulse should win by giving operators one coherent place to monitor,
 investigate, and safely act across mixed estates rather than by accumulating
 opportunistic platform-specific surfaces.
+Ordinary self-hosted Pulse v6 must stay free-first: core monitoring, discovered
+resource breadth, and BYOK Patrol should not be weakened, capacity-metered, or
+used as default in-app paid-service pressure. Paid value should be explicit and
+defensible through service-backed or business-oriented surfaces such as Relay,
+push delivery, Cloud, MSP, support, activation, recovery, audit/compliance, and
+existing paid-entitlement management, where the operator has deliberately
+entered that commercial context.
 New platform work must therefore strengthen that mixed-estate operator surface
 and follow `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`
 instead of being admitted ad hoc.
