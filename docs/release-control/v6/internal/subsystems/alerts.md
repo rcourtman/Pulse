@@ -187,7 +187,10 @@ between visible alert tabs and URLs. The operator-facing Notifications tab
 must use `/alerts/notifications` as its canonical route because the visible
 navigation label is Notifications; `/alerts/destinations` is a legacy alias
 only and must normalize through `tabFromPath` / `pathForTab` instead of being
-reintroduced as canonical UI vocabulary.
+reintroduced as canonical UI vocabulary. The page header for that tab must use
+`Notifications` as its title; destination wording may describe concrete email,
+Apprise, or webhook endpoints, but it must not reappear as the primary tab or
+page identity.
 That shared alert presentation boundary now also has explicit alerts ownership.
 `frontend-modern/src/utils/alertWebhookPresentation.ts` is the canonical owner
 for webhook setup copy, service labels, mention-help phrasing, custom-field

@@ -90,7 +90,7 @@ describe('alertOverviewPresentation', () => {
     expect(ALERTS_PAGE_DEFAULT_TITLE).toBe('Alerts');
     expect(ALERTS_PAGE_OVERVIEW_TITLE).toBe('Alerts Overview');
     expect(ALERTS_PAGE_THRESHOLDS_TITLE).toBe('Alert Thresholds');
-    expect(ALERTS_PAGE_DESTINATIONS_TITLE).toBe('Notification Destinations');
+    expect(ALERTS_PAGE_DESTINATIONS_TITLE).toBe('Notifications');
     expect(ALERTS_PAGE_SCHEDULE_TITLE).toBe('Maintenance Schedule');
     expect(ALERTS_PAGE_HISTORY_TITLE).toBe('Alert History');
     expect(ALERTS_PAGE_DEFAULT_DESCRIPTION).toBe(
@@ -123,7 +123,7 @@ describe('alertOverviewPresentation', () => {
           'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.',
       },
       destinations: {
-        title: 'Notification Destinations',
+        title: 'Notifications',
         description: 'Route alert notifications to email, Apprise, and webhook destinations.',
       },
       schedule: {
