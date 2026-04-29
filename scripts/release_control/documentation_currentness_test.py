@@ -140,8 +140,10 @@ class DocumentationCurrentnessTest(unittest.TestCase):
 
     def test_public_self_hosted_docs_avoid_unlimited_monitoring_claims(self) -> None:
         public_docs = (
+            "README.md",
             "docs/PULSE_PRO.md",
             "docs/UPGRADE_v6.md",
+            "docs/architecture/v6-pricing-and-tiering.md",
             "docs/releases/RELEASE_NOTES_v6.md",
             "docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md",
             "docs/releases/V6_CHANGELOG.md",
@@ -161,6 +163,7 @@ class DocumentationCurrentnessTest(unittest.TestCase):
             "no cap",
             "remain uncapped",
             "remains uncapped",
+            "| unlimited |",
         )
         for rel in public_docs:
             content = read(rel).lower()

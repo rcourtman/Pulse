@@ -176,7 +176,7 @@ profiles) are included, but they are supporting value rather than the headline.
 Existing Pro+ entitlements remain supported for continuity, but Pro+ is no longer part of
 the public v6 self-hosted ladder because monitored-system volume is not the paid boundary.
 Runtime feature access matches Pro, while grandfathered recurring or lifetime continuity can
-still preserve uncapped self-hosted monitoring and child-resource volume where applicable.
+still preserve self-hosted monitoring and child-resource volume as not metered where applicable.
 
 ---
 
@@ -314,8 +314,9 @@ High-intent product moments should stay useful without becoming sales surfaces:
 
 ### 6. No self-hosted monitored-system overflow gate
 Self-hosted Community users should not need a temporary monitored-system overflow path because
-core self-hosted monitoring is unlimited. Onboarding can still surface Relay and Pro value when
-users try remote access, push notifications, longer history, alert investigation, or safe remediation workflows.
+core self-hosted monitoring is included by default and not metered. Onboarding can still surface
+Relay and Pro value when users try remote access, push notifications, longer history, alert
+investigation, or safe remediation workflows.
 
 ### 7. Transparent monitored-system ledger
 The ledger remains important for inventory truth, hosted/MSP limits, and support. It should
@@ -371,7 +372,7 @@ customer-facing GA funnel.
 ```
   Community     Relay           Pro
   $0            $39/yr          $79/yr
-  Unlimited     Unlimited       Unlimited
+  Included      Included        Included
   monitoring    monitoring      monitoring
 
   [Get Started] [Buy Relay]     [Choose Pro]
@@ -472,7 +473,7 @@ explain monitored-system identity:
 ### Pulse runtime
 
 - [x] Treat self-hosted Community / Relay / Pro and legacy Pro+ continuity defaults as core monitoring included without a monitored-system volume gate
-- [x] Preserve grandfathered v5 recurring plans as uncapped continuity states while subscriptions remain active
+- [x] Preserve grandfathered v5 recurring plans as not-metered continuity states while subscriptions remain active
 - [x] Keep hosted Cloud / MSP capacity out of static self-hosted tier defaults and in plan-specific license claims
 - [ ] Keep refining monitored-system identity and ledger truth for inventory, hosted/MSP limits, and support workflows
 
@@ -519,7 +520,7 @@ explain monitored-system identity:
 
 | Date | Change | Author |
 |---|---|---|
-| 2026-04-29 | Replaced stale unlimited-monitoring phrasing with core-monitoring-included language across active v6 docs and upgrade-return copy so Community does not read like a former capacity upsell. | Codex |
+| 2026-04-29 | Replaced stale capacity-style monitoring phrasing with core-monitoring-included language across active v6 docs and upgrade-return copy so Community does not read like a former capacity upsell. | Codex |
 | 2026-04-23 | Removed stale self-hosted monitored-system cap and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as current public self-hosted tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
 | 2026-03-17 | Re-locked the self-hosted commercial model around monitored systems rather than installed agents. New self-hosted public pricing: Relay $4.99/$39, Pro $8.99/$79, Pro+ $14.99/$129. Added free-tier grace policy and marked the monitored-system counting migration as still required in code. | Codex + Richard |
 | 2026-02-25 | Initial v6 pricing structure finalized | Richard + Claude + Codex |
