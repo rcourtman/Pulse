@@ -92,7 +92,7 @@ func TestGetFeatureDisplayNameCoversKnownFeaturesAndFallback(t *testing.T) {
 		{feature: FeatureSSO, want: "Basic SSO (OIDC)"},
 		{feature: FeatureAdvancedSSO, want: "Advanced SSO (SAML/Multi-Provider)"},
 		{feature: FeatureRelay, want: "Pulse Relay (Remote Access)"},
-		{feature: FeatureMobileApp, want: "Mobile App Access"},
+		{feature: FeatureMobileApp, want: "Mobile App Pairing"},
 		{feature: FeaturePushNotifications, want: "Push Notifications"},
 		{feature: FeatureAdvancedReporting, want: "PDF/CSV Reporting"},
 		{feature: FeatureLongTermMetrics, want: "Extended Metric History"},

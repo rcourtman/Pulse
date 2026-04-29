@@ -97,8 +97,8 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   },
   {
     "key": "mobile_app",
-    "displayName": "Mobile App Access",
-    "comparisonName": "Mobile App Access",
+    "displayName": "Mobile App Pairing",
+    "comparisonName": "Mobile App Pairing",
     "showInComparisonTable": true,
     "displayableInSelfHostedPlan": true,
     "roles": {

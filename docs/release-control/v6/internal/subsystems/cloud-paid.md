@@ -222,6 +222,13 @@ rather than legacy Community limit enforcement.
    Community as included core monitoring plus paid Relay/Pro extras. It must
    not frame self-hosted checkout as buying unlimited monitoring or monitored-
    system volume.
+   Relay pricing presentation should be annual-first at the existing public
+   $39/year price, with $4.99/month as the secondary option, so Relay reads as
+   an optional support/convenience tier rather than a pressure upgrade. Relay
+   copy must describe secure remote access to the Pulse web UI, mobile app
+   pairing, push notifications, and 14-day history; it must not imply that the
+   native mobile app is a full monitoring dashboard until that product surface
+   exists.
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
 8. Add or change activation/grant lifecycle, release build helper gating, or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/testing_helpers.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go`

@@ -237,7 +237,7 @@ func TestGetFeatureDisplayName(t *testing.T) {
 		{FeatureSSO, "Basic SSO (OIDC)"},
 		{FeatureAdvancedSSO, "Advanced SSO (SAML/Multi-Provider)"},
 		{FeatureRelay, "Pulse Relay (Remote Access)"},
-		{FeatureMobileApp, "Mobile App Access"},
+		{FeatureMobileApp, "Mobile App Pairing"},
 		{FeaturePushNotifications, "Push Notifications"},
 		{FeatureAdvancedReporting, "PDF/CSV Reporting"},
 		{FeatureLongTermMetrics, "Extended Metric History"},

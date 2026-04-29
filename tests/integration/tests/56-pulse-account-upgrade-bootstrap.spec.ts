@@ -78,11 +78,11 @@ test.describe("Pulse Account upgrade bootstrap", () => {
         "Pulse Account will return completed checkout directly to the Plans page in Pulse.",
       ),
     ).toBeVisible();
-    await expect(
-      page.getByText(
-        "Community keeps monitoring free and unlimited. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.",
-      ),
-    ).toBeVisible();
+	    await expect(
+	      page.getByText(
+	        "Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.",
+	      ),
+	    ).toBeVisible();
     await expect(
       page.getByText(
         "Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right Plans page automatically.",

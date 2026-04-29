@@ -160,8 +160,8 @@ Self-hosted tiers:
 | Plan | Price | Core monitoring | Metric history | Main value |
 |---|---:|---|---:|---|
 | Community | Free | Included | 7 days | Full self-hosted monitoring |
-| Relay | $4.99/mo or $39/yr | Included | 14 days | Remote access, mobile, and push notifications |
-| Pro | $8.99/mo or $79/yr | Included | 90 days | Root-cause analysis, safe remediation workflows, and operations tooling |
+| Relay | $39/yr or $4.99/mo | Included | 14 days | Remote web access, mobile app pairing, and push notifications |
+| Pro | $79/yr or $8.99/mo | Included | 90 days | Root-cause analysis, safe remediation workflows, and operations tooling |
 
 Pulse still counts top-level monitored systems once no matter how they are
 collected. VMs, containers, pods, disks, backups, and other child resources

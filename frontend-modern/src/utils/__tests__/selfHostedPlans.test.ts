@@ -52,7 +52,7 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
       pageDescription:
-        'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
+        'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access to the Pulse web UI, mobile pairing, and push notifications, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
@@ -94,17 +94,17 @@ describe('selfHostedPlans', () => {
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.includedExtras).toEqual([]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.billingExtrasSummary).toBe(
-      'Remote access, mobile, and push',
+      'Remote web access, mobile pairing, and push',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
-      'Remote access, mobile, push, and longer history are available right now.',
+      'Remote web access, mobile pairing, push notifications, and longer history are available right now.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary).toContain(
-      'Reach this Pulse instance securely from anywhere',
+      'Reach your Pulse web UI securely from anywhere',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual([
       'Pulse Relay (Remote Access)',
-      'Mobile App Access',
+      'Mobile App Pairing',
       'Push Notifications',
       '14-day metric history',
     ]);

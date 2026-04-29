@@ -36,7 +36,7 @@ Current self-hosted v6 packaging is:
 | Plan | Core monitoring | Metric history | Paid value |
 |---|---|---:|---|
 | Community | Included | 7 days | Full self-hosted monitoring |
-| Relay | Included | 14 days | Remote access, mobile, push, and convenience |
+| Relay | Included | 14 days | Remote web access, mobile app pairing, push, and convenience |
 | Pro | Included | 90 days | Relay plus AI operations, automation, and advanced admin features |
 
 Legacy `Pro+` remains continuity-only for existing holders. It is not a public

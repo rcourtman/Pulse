@@ -52,7 +52,7 @@ more monitored-system capacity.
 Instead, the self-hosted paid story is now consistently:
 
 - Relay:
-  remote access, mobile, push, and convenience
+  remote web access, mobile app pairing, push, and convenience
 - Pro:
   Relay plus AI operations, automation, governance, and longer history
 

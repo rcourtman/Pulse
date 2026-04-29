@@ -105,8 +105,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureMobileApp: {
 		Key:                   FeatureMobileApp,
-		DisplayName:           "Mobile App Access",
-		ComparisonName:        "Mobile App Access",
+		DisplayName:           "Mobile App Pairing",
+		ComparisonName:        "Mobile App Pairing",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -114,7 +114,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRolePrimaryPillar,
 			Pro:       SelfHostedFeatureRoleIncluded,
 		},
-		UpgradeReason:   "Get Relay so you can check Pulse from your phone when you are away from the dashboard.",
+		UpgradeReason:   "Get Relay so the mobile app can pair with this instance for secure handoff and notifications.",
 		UpgradePriority: 1,
 	},
 	FeaturePushNotifications: {

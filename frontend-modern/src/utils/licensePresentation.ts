@@ -421,7 +421,7 @@ const getSelfHostedActivePlanSummary = (
     case 'community':
       return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.`;
     case 'relay':
-      return `${planLabel} is active on this instance. Remote access, mobile, push, and longer history are available right now.`;
+      return `${planLabel} is active on this instance. Remote web access, mobile pairing, push notifications, and longer history are available right now.`;
     case 'pro':
       return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.`;
     default:

@@ -270,7 +270,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('What Relay adds')).toBeInTheDocument();
     expect(screen.getByText('What Pulse Pro adds')).toBeInTheDocument();
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
-    expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
+    expect(screen.getByText('Mobile App Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
     expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
@@ -546,7 +546,7 @@ describe('ProLicensePanel', () => {
 
     expect(
       screen.getByText(
-        'Relay is active on this instance. Remote access, mobile, push, and longer history are available right now.',
+        'Relay is active on this instance. Remote web access, mobile pairing, push notifications, and longer history are available right now.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
@@ -554,7 +554,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'See all plans' })).not.toBeInTheDocument();
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
-    expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
+    expect(screen.getByText('Mobile App Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
   });
 
@@ -675,7 +675,9 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Why is continuity still pending?')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
-      screen.queryByText('New top-level additions are paused until this legacy continuity state is reviewed.'),
+      screen.queryByText(
+        'New top-level additions are paused until this legacy continuity state is reviewed.',
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -731,9 +733,7 @@ describe('ProLicensePanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Legacy monitoring continuity')).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/observed legacy estate available/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/observed legacy estate available/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Legacy continuity')).not.toBeInTheDocument();
     expect(screen.queryByText('23 monitored systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
@@ -793,7 +793,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('PDF/CSV Reporting')).toBeInTheDocument();
     expect(screen.getByText('Centralized Agent Profiles')).toBeInTheDocument();
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
-    expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
+    expect(screen.getByText('Mobile App Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
     expect(screen.queryByText('Multi-Tenant Mode')).not.toBeInTheDocument();

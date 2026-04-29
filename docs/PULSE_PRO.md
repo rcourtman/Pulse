@@ -32,8 +32,8 @@ Self-hosted pricing is:
 | Plan | Price | Core monitoring | Metric history | Purpose |
 |---|---:|---|---:|---|
 | Community | Free | Included | 7 days | Full self-hosted monitoring for normal homelab use |
-| Relay | $4.99/mo or $39/yr | Included | 14 days | Remote access, mobile, push, and convenience |
-| Pro | $8.99/mo or $79/yr | Included | 90 days | AI operations and advanced admin features |
+| Relay | $39/yr or $4.99/mo | Included | 14 days | Remote web access, mobile pairing, push, and convenience |
+| Pro | $79/yr or $8.99/mo | Included | 90 days | AI operations and advanced admin features |
 
 Counted examples:
 - Proxmox PVE node

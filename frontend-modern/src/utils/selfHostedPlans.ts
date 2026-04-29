@@ -108,20 +108,20 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
   {
     tier: 'relay',
     name: 'Relay',
-    price: '$4.99/month',
-    subline: 'or $39/year',
+    price: '$39/year',
+    subline: 'or $4.99/month',
     metricHistoryDays: 14,
-    billingExtrasSummary: 'Remote access, mobile, and push',
+    billingExtrasSummary: 'Remote web access, mobile pairing, and push',
     entitlementSummary:
-      'Relay is active on this instance. Remote access, mobile, push, and longer history are available right now.',
+      'Relay is active on this instance. Remote web access, mobile pairing, push notifications, and longer history are available right now.',
     entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],
     comparisonSummary:
-      'Reach this Pulse instance securely from anywhere, check it from mobile, get push notifications, and keep 14 days of history.',
+      'Reach your Pulse web UI securely from anywhere, pair the mobile app for handoff and push notifications, and keep 14 days of history.',
     highlights: [
       'Everything in Community',
-      'Remote access via Relay',
-      'Mobile app access',
+      'Remote web access via Relay',
+      'Mobile app pairing',
       'Push notifications',
       'Custom URL (yourlab.pulserelay.pro)',
       '14-day metric history',
@@ -130,8 +130,8 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
   {
     tier: 'pro',
     name: 'Pro',
-    price: '$8.99/month',
-    subline: 'or $79/year',
+    price: '$79/year',
+    subline: 'or $8.99/month',
     metricHistoryDays: 90,
     billingExtrasSummary: 'Analysis, remediation, and admin controls',
     entitlementSummary:
@@ -179,7 +179,7 @@ export function getSelfHostedPlanDefinitionForBillingTier(
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
   pageDescription:
-    'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
+    'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access to the Pulse web UI, mobile pairing, and push notifications, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',

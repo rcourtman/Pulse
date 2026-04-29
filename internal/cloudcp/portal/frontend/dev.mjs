@@ -482,34 +482,34 @@ function routeCommercialAPI(request, response, url, scenario) {
   if (request.method === 'GET' && route === '/v1/public/pricing-model') {
     sendJSON(response, 200, {
       title: 'Simple self-hosted pricing for Pulse',
-      description: 'Community keeps core monitoring free. Relay lets you reach Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+      description: 'Community keeps core monitoring free. Relay gives secure remote access to the Pulse web UI, mobile app pairing, push notifications, and 14-day history. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       explainer:
-        'Community keeps core monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+        'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       plans: [
         {
           badge: 'Recommended',
           highlight: true,
           tierKicker: 'Relay',
           title: 'Relay',
-          price: '$4.99',
-          period: '$39/year available too',
-          blurb: 'The reach-it-anywhere tier for secure remote access, mobile access, and push notifications.',
+          price: '$39/year',
+          period: 'or $4.99/month',
+          blurb: 'Secure remote access to your Pulse web UI, mobile app pairing, and push notifications.',
           features: [
             { tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' },
-            { tone: 'check', html: 'Secure remote access' },
-            { tone: 'check', html: 'Mobile access' },
+            { tone: 'check', html: 'Secure remote web access' },
+            { tone: 'check', html: 'Mobile app pairing' },
             { tone: 'check', html: 'Push notifications' },
           ],
           buttons: [
-            { kind: 'checkout', className: 'btn btn-secondary', tier: 'relay', planKey: 'price_relay_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
             { kind: 'checkout', className: 'btn btn-primary', tier: 'relay', planKey: 'price_relay_annual', billingCycle: 'annual', label: 'Buy Annual' },
+            { kind: 'checkout', className: 'btn btn-secondary', tier: 'relay', planKey: 'price_relay_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
           ],
         },
         {
           tierKicker: 'Pro',
           title: 'Pro',
-          price: '$8.99',
-          period: '$79/year available too',
+          price: '$79/year',
+          period: 'or $8.99/month',
           blurb: 'The operator tier for root-cause analysis, safe remediation workflows, and 90-day history.',
           features: [
             { tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' },
@@ -519,8 +519,8 @@ function routeCommercialAPI(request, response, url, scenario) {
             { tone: 'check', html: '90-day history' },
           ],
           buttons: [
-            { kind: 'checkout', className: 'btn btn-secondary', tier: 'pro', planKey: 'price_pro_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
             { kind: 'checkout', className: 'btn btn-primary', tier: 'pro', planKey: 'price_pro_annual', billingCycle: 'annual', label: 'Buy Annual' },
+            { kind: 'checkout', className: 'btn btn-secondary', tier: 'pro', planKey: 'price_pro_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
           ],
         },
       ],

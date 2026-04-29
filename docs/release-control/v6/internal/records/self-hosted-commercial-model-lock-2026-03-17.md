@@ -5,6 +5,12 @@ Target: `v6-rc-stabilization`
 Lanes: `L2`, `L13`
 Status: Superseded on 2026-04-16 by `self-hosted-core-monitoring-free`; this record now preserves the capped RC1 self-hosted model as historical context only and is not the final GA pricing direction.
 
+Current replacement: Pulse v6 GA treats self-hosted core monitoring as included
+for Community, Relay, and Pro. Relay is presented annual-first at `$39/year` with
+`$4.99/month` as the secondary option, and it sells secure remote access to the
+Pulse web UI, mobile app pairing, push notifications, and 14-day history rather
+than monitored-system headroom or native mobile monitoring.
+
 ## Historical Decision
 
 On 2026-03-17, Pulse v6 self-hosted commercial packaging was locked to this capped RC1 model:
@@ -56,20 +62,11 @@ Rules:
 
 ## User-Facing Copy
 
-Counted-unit explainer:
-
-> Pulse counts monitored systems, not everything underneath them. Each top-level machine or cluster counts once, no matter how Pulse collects it. VMs, containers, pods, disks, backups, and services under that system are included.
-
-Plan taglines:
-- Community: Monitor up to 5 systems for free.
-- Relay: Get a bit more room and monitor from anywhere.
-- Pro: Pulse does not just watch your infrastructure. It helps operate it.
-- Pro+: Everything in Pro, with more room for larger labs.
-
-Boundary-upgrade copy:
-- Community to Relay: Need a little more room? Upgrade to Relay for 3 extra monitored systems plus remote access, mobile, and push notifications.
-- Relay to Pro: Want Pulse to do more than alert? Upgrade to Pro for AI investigation, auto-fix, and 90-day history.
-- Grace copy: Your existing monitoring will keep working for now, but new systems will not be added until you remove one or upgrade.
+The capped RC1 copy that originally lived here is intentionally not retained as
+reusable wording. Current user-facing copy must come from the replacement policy
+above and from the shared self-hosted plan definitions, where self-hosted core
+monitoring is included and Relay is positioned around remote web access, mobile
+app pairing, push notifications, and 14-day history.
 
 ## Implementation Slices
 

@@ -240,13 +240,13 @@ describe('services view', function() {
       title: 'Pricing',
       description: 'Canonical pricing model',
       explainer:
-        'Community keeps core monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+        'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       plans: [
         {
           tierKicker: 'Pro',
           title: 'Pro',
-          price: '$8.99',
-          period: '$79/year available too',
+          price: '$79/year',
+          period: 'or $8.99/month',
           blurb: 'The operator tier for root-cause analysis, safe remediation workflows, and 90-day history.',
           features: [{ tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' }],
           buttons: [
@@ -273,7 +273,7 @@ describe('services view', function() {
       'Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right Plans page automatically.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Community keeps core monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+      'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toMatch(
       /Unlimited[\s\S]{0,80}self-hosted monitoring/i,
@@ -300,9 +300,9 @@ describe('services view', function() {
         {
           tierKicker: 'Relay',
           title: 'Relay',
-          price: '$4.99',
-          period: '$39/year available too',
-          blurb: 'Secure remote access and mobile access.',
+          price: '$39/year',
+          period: 'or $4.99/month',
+          blurb: 'Secure remote web access and mobile app pairing.',
           features: [{ tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' }],
           buttons: [
             {

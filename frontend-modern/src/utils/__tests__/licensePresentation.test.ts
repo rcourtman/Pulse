@@ -100,7 +100,7 @@ describe('licensePresentation', () => {
 
   it('returns canonical feature labels', () => {
     expect(getLicenseFeatureLabel('ai_patrol')).toBe('Pulse Patrol');
-    expect(getLicenseFeatureLabel('mobile_app')).toBe('Mobile App Access');
+    expect(getLicenseFeatureLabel('mobile_app')).toBe('Mobile App Pairing');
     expect(getLicenseFeatureLabel('update_alerts')).toBe('Update Alerts');
     expect(getLicenseFeatureLabel('relay')).toBe('Pulse Relay (Remote Access)');
     expect(getLicenseFeatureLabel('custom_feature')).toBe('Custom Feature');
@@ -290,7 +290,7 @@ describe('licensePresentation', () => {
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
-          'Mobile App Access',
+          'Mobile App Pairing',
           'Safe Remediation Workflows',
         ],
       }),
@@ -393,10 +393,10 @@ describe('licensePresentation', () => {
       cards: [
         {
           title: 'What Relay adds',
-          body: 'Reach this Pulse instance securely from anywhere, check it from mobile, get push notifications, and keep 14 days of history.',
+          body: 'Reach your Pulse web UI securely from anywhere, pair the mobile app for handoff and push notifications, and keep 14 days of history.',
           highlights: [
             'Pulse Relay (Remote Access)',
-            'Mobile App Access',
+            'Mobile App Pairing',
             'Push Notifications',
             '14-day metric history',
           ],
@@ -472,7 +472,7 @@ describe('licensePresentation', () => {
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
-          'Mobile App Access',
+          'Mobile App Pairing',
           'Push Notifications',
           'Safe Remediation Workflows',
         ],
@@ -506,7 +506,7 @@ describe('licensePresentation', () => {
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
-          'Mobile App Access',
+          'Mobile App Pairing',
           'Push Notifications',
         ],
         source: 'manual',
@@ -518,7 +518,7 @@ describe('licensePresentation', () => {
       highlightsLabel: 'Available now on this instance',
       highlights: [
         'Pulse Relay (Remote Access)',
-        'Mobile App Access',
+        'Mobile App Pairing',
         'Push Notifications',
         '14-day metric history',
       ],

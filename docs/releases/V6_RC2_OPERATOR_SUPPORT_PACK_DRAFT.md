@@ -40,7 +40,7 @@ inventory language, but they are no longer the self-hosted paid gate.
 - Community:
   core monitoring included, 7-day history
 - Relay:
-  Community plus remote access, mobile, push notifications, and 14-day history
+  Community plus remote web access, mobile app pairing, push notifications, and 14-day history
 - Pro:
   Relay plus AI operations, automation, advanced admin features, and 90-day
   history

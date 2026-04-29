@@ -96,7 +96,7 @@ The telemetry implementation is in [`internal/telemetry/telemetry.go`](../intern
 Pulse can make outbound connections when you enable specific features:
 
 - **AI providers**: when AI features are configured, Pulse sends only the context required for your request to the provider you chose. Local providers stay on your network; non-local providers such as OpenAI or Anthropic receive provider-bound context directly from your Pulse instance. AI prompts from self-managed installs do not transit Pulse infrastructure. Before non-local model requests leave the instance, governed resource details use the same resource-policy redaction shown in Data Handling: local-only resource details are omitted from detailed prompt sections or replaced with policy-safe summaries, and known restricted resource identifiers are redacted where they appear in provider-bound context. See `docs/AI.md`.
-- **Relay / Remote Access**: when relay is enabled, Pulse connects to the configured relay endpoint to enable mobile access. See Settings → Remote Access.
+- **Relay / Remote Access**: when relay is enabled, Pulse connects to the configured relay endpoint to enable secure remote web access, mobile app pairing, and push notifications. See Settings → Remote Access.
 - **Update checks**: Pulse can check for new releases/updates (for example via GitHub release metadata) depending on your deployment and configuration.
 
 ### Local-only commercial handoff events
