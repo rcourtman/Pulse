@@ -403,6 +403,58 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 	if got := svc.Status().MaxMonitoredSystems; got != 0 {
 		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped self-hosted continuity", got)
 	}
+
+	entReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	entRec := httptest.NewRecorder()
+	handlers.HandleEntitlements(entRec, entReq)
+	if entRec.Code != http.StatusOK {
+		t.Fatalf("license entitlements=%d, want %d: %s", entRec.Code, http.StatusOK, entRec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(entRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode entitlements: %v", err)
+	}
+	if payload.Tier != string(pkglicensing.TierPro) {
+		t.Fatalf("entitlements.tier=%q, want %q", payload.Tier, pkglicensing.TierPro)
+	}
+	if payload.MaxHistoryDays != pkglicensing.TierHistoryDays[pkglicensing.TierPro] {
+		t.Fatalf(
+			"entitlements.max_history_days=%d, want %d for migrated v5 Pro continuity",
+			payload.MaxHistoryDays,
+			pkglicensing.TierHistoryDays[pkglicensing.TierPro],
+		)
+	}
+	capabilities := make(map[string]bool, len(payload.Capabilities))
+	for _, capability := range payload.Capabilities {
+		capabilities[capability] = true
+	}
+	for _, capability := range []string{
+		pkglicensing.FeatureRelay,
+		pkglicensing.FeatureMobileApp,
+		pkglicensing.FeaturePushNotifications,
+		pkglicensing.FeatureLongTermMetrics,
+		pkglicensing.FeatureAIAlerts,
+		pkglicensing.FeatureAIAutoFix,
+		pkglicensing.FeatureAgentProfiles,
+		pkglicensing.FeatureAdvancedSSO,
+		pkglicensing.FeatureRBAC,
+		pkglicensing.FeatureAuditLogging,
+		pkglicensing.FeatureAdvancedReporting,
+	} {
+		if !capabilities[capability] {
+			t.Fatalf("migrated v5 Pro entitlements missing capability %q in %v", capability, payload.Capabilities)
+		}
+	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored-system capacity payload")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "unlimited" || payload.MonitoredSystemCapacity.Limit != 0 {
+		t.Fatalf(
+			"expected uncapped monitored-system capacity for migrated v5 Pro, got %+v",
+			payload.MonitoredSystemCapacity,
+		)
+	}
 	if activationState, err := persistence.LoadActivationState(); err != nil {
 		t.Fatalf("load activation state: %v", err)
 	} else if activationState == nil {
