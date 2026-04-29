@@ -234,6 +234,14 @@ the canonical monitored-system blocked payload.
 2. Update frontend API types in lockstep with backend contract changes.
    Websocket-backed API consumers such as `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` may read runtime context only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx`, because payload ownership remains in the API contract rather than the root shell.
 3. Add dedicated contract tests for new stable payloads
+3a. Route diagnostics payload fields and user-facing diagnostics copy through
+    `internal/api/diagnostics.go`,
+    `internal/api/diagnostics_additional_test.go`, and
+    `internal/api/diagnostics_memory_test.go` together. Docker and Podman
+    agent health notes emitted by diagnostics must lead with Docker / Podman
+    agent language and route operator recovery to the Infrastructure and
+    Security settings surfaces rather than generic runtime family wording or
+    retired agent-management destinations.
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
    That same resource payload contract owns `aggregations.policyPosture` on
    `/api/resources` and `/api/resources/stats`. The aggregation must be derived

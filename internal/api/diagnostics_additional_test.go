@@ -489,6 +489,46 @@ func TestBuildDockerAgentDiagnostic(t *testing.T) {
 	if diag.AgentsNeedingAttention == 0 {
 		t.Fatalf("expected agents needing attention")
 	}
+
+	diagnosticText := strings.Join(diag.Notes, "\n")
+	for _, attention := range diag.Attention {
+		diagnosticText += "\n" + strings.Join(attention.Issues, "\n")
+	}
+	if strings.Contains(strings.ToLower(diagnosticText), "container runtime") {
+		t.Fatalf("Docker diagnostics should not expose generic container-runtime copy, got %q", diagnosticText)
+	}
+	for _, want := range []string{
+		"Docker / Podman agent is still using the shared API token",
+		"1 Docker / Podman agent is out of date",
+		"Settings → Infrastructure",
+	} {
+		if !strings.Contains(diagnosticText, want) {
+			t.Fatalf("expected Docker / Podman diagnostic copy %q in %q", want, diagnosticText)
+		}
+	}
+}
+
+func TestBuildDockerAgentDiagnosticEmptyUsesDockerPodmanCopy(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor := newMonitorForDiagnostics(t, cfg)
+
+	diag := buildDockerAgentDiagnostic(monitor, "1.0.0")
+	if diag == nil {
+		t.Fatalf("expected diagnostics")
+	}
+
+	notes := strings.Join(diag.Notes, "\n")
+	if strings.Contains(strings.ToLower(notes), "container runtime") {
+		t.Fatalf("empty Docker diagnostics should not expose generic container-runtime copy, got %q", notes)
+	}
+	for _, want := range []string{
+		"No Docker / Podman agents have reported in yet",
+		"Settings → Infrastructure",
+	} {
+		if !strings.Contains(notes, want) {
+			t.Fatalf("expected empty Docker / Podman diagnostic copy %q in %q", want, notes)
+		}
+	}
 }
 
 func TestBuildAlertsDiagnostic_LegacySettings(t *testing.T) {

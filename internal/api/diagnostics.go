@@ -1339,7 +1339,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	}
 
 	if len(hosts) == 0 {
-		appendNote("No container runtime agents have reported in yet. Use Settings → Agents to install the container-side agent and unlock remote commands.")
+		appendNote("No Docker / Podman agents have reported in yet. Use Settings → Infrastructure to install the Docker / Podman agent and unlock remote commands.")
 		return diag
 	}
 
@@ -1378,11 +1378,11 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		issues := make([]string, 0, 4)
 
 		if status != "online" && status != "" {
-			issues = append(issues, fmt.Sprintf("Container runtime reports status %q.", status))
+			issues = append(issues, fmt.Sprintf("Docker / Podman agent reports status %q.", status))
 		}
 
 		if versionStr == "" {
-			issues = append(issues, "Agent has not reported a version (pre v4.24). Reinstall using Settings → Agents.")
+			issues = append(issues, "Agent has not reported a version (pre v4.24). Reinstall using Settings → Infrastructure.")
 		} else if serverVer != nil {
 			if agentVer, err := updates.ParseVersion(versionStr); err == nil {
 				if agentVer.Compare(serverVer) < 0 {
@@ -1395,7 +1395,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		}
 
 		if strings.TrimSpace(host.TokenID()) == "" {
-			issues = append(issues, "Container runtime is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
+			issues = append(issues, "Docker / Podman agent is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
 		}
 
 		if !host.LastSeen().IsZero() && now.Sub(host.LastSeen().UTC()) > 10*time.Minute {
@@ -1417,7 +1417,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 
 		if host.PendingUninstall() {
 			diag.AgentsPendingUninstall++
-			issues = append(issues, "Container runtime is pending uninstall; confirm the agent container stopped or clear the flag.")
+			issues = append(issues, "Docker / Podman agent is pending uninstall; confirm the agent container stopped or clear the flag.")
 		}
 
 		if len(issues) == 0 {
@@ -1443,25 +1443,46 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	diag.AgentsNeedingAttention = len(diag.Attention)
 
 	if legacyTokenHosts > 0 {
-		appendNote(fmt.Sprintf("%d container runtime(s) still rely on the shared API token. Migrate each runtime to a dedicated token via Settings → Security and rerun the installer.", legacyTokenHosts))
+		appendNote(fmt.Sprintf("%s still %s on the shared API token. Migrate each agent to a dedicated token via Settings → Security and rerun the installer.", dockerPodmanAgentCount(legacyTokenHosts), pluralVerb(legacyTokenHosts, "relies", "rely")))
 	}
 	if diag.AgentsOutdatedVersion > 0 {
-		appendNote(fmt.Sprintf("%d container runtime(s) run an out-of-date agent. Re-run the installer from Settings → Agents to upgrade them.", diag.AgentsOutdatedVersion))
+		appendNote(fmt.Sprintf("%s %s out of date. Re-run the installer from Settings → Infrastructure to upgrade.", dockerPodmanAgentCount(diag.AgentsOutdatedVersion), pluralVerb(diag.AgentsOutdatedVersion, "is", "are")))
 	}
 	if diag.AgentsWithoutVersion > 0 {
-		appendNote(fmt.Sprintf("%d container runtime(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.AgentsWithoutVersion))
+		appendNote(fmt.Sprintf("%s %s not reported an agent version yet. Reinstall from Settings → Infrastructure to enable the new command system.", dockerPodmanAgentCount(diag.AgentsWithoutVersion), pluralVerb(diag.AgentsWithoutVersion, "has", "have")))
 	}
 	if diag.AgentsWithStaleCommand > 0 {
-		appendNote(fmt.Sprintf("%d container runtime command(s) appear stuck. Use the 'Allow reconnect' action in Settings → Infrastructure to reset them.", diag.AgentsWithStaleCommand))
+		appendNote(fmt.Sprintf("%s %s stuck. Use the 'Allow reconnect' action in Settings → Infrastructure to reset.", dockerPodmanAgentCommandCount(diag.AgentsWithStaleCommand), pluralVerb(diag.AgentsWithStaleCommand, "appears", "appear")))
 	}
 	if diag.AgentsPendingUninstall > 0 {
-		appendNote(fmt.Sprintf("%d container runtime(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Agents.", diag.AgentsPendingUninstall))
+		appendNote(fmt.Sprintf("%s %s pending uninstall. Confirm the uninstall or clear the flag from Settings → Infrastructure.", dockerPodmanAgentCount(diag.AgentsPendingUninstall), pluralVerb(diag.AgentsPendingUninstall, "is", "are")))
 	}
 	if diag.AgentsNeedingAttention == 0 {
-		appendNote("All container runtime agents are reporting with dedicated tokens and the expected version.")
+		appendNote("All Docker / Podman agents are reporting with dedicated tokens and the expected version.")
 	}
 
 	return diag
+}
+
+func dockerPodmanAgentCount(count int) string {
+	if count == 1 {
+		return "1 Docker / Podman agent"
+	}
+	return fmt.Sprintf("%d Docker / Podman agents", count)
+}
+
+func dockerPodmanAgentCommandCount(count int) string {
+	if count == 1 {
+		return "1 Docker / Podman agent command"
+	}
+	return fmt.Sprintf("%d Docker / Podman agent commands", count)
+}
+
+func pluralVerb(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
 }
 
 func buildAlertsDiagnostic(m *monitoring.Monitor) *AlertsDiagnostic {

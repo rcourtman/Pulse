@@ -97,6 +97,11 @@ querying, and the operator-facing storage health presentation layer.
    through the shared `Table` wrapper rather than page-local scroll divs or
    inline overflow styles.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   Shared diagnostics routes may include Docker and Podman agent health notes,
+   but storage/recovery does not own a recovery-local runtime vocabulary for
+   those notes. Recovery-adjacent diagnostics consumers must preserve the
+   source-specific Docker / Podman wording and recovery destinations governed
+   by the shared diagnostics API contract.
    That same adjacent API/security boundary owns CSRF replacement-token
    concurrency for browser mutations. Storage and recovery forms may benefit
    from the shared retry behavior when parallel requests receive replacement

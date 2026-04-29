@@ -1659,6 +1659,11 @@ funnel diagnostics stay org-scoped at the cache boundary: when
 lifecycle diagnostics, the shared diagnostics cache must key by authenticated
 org context so lifecycle-adjacent admin surfaces do not cross-tenant leak local
 commerce telemetry.
+Lifecycle-adjacent Docker and Podman agent diagnostics are part of that same
+shared backend dependency. When `internal/api/diagnostics.go` emits agent
+health notes for Docker and Podman, the copy must keep Infrastructure as the
+operator recovery surface and must not send users back to retired agent-only
+management routes.
 That same shared `internal/api/` dependency now also assumes auth persistence
 compatibility is handled as an explicit migration/import boundary: legacy
 raw-token `sessions.json` and `csrf_tokens.json` files may load for upgrade

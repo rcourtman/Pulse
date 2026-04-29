@@ -1645,6 +1645,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/api/diagnostics_additional_test.go",
               "internal/api/diagnostics_memory_test.go"
             ]
           },
