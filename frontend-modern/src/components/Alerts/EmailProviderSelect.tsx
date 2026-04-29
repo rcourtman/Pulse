@@ -36,6 +36,7 @@ import {
   useEmailProviderSelectState,
   type EmailProviderSelectStateProps,
 } from './useEmailProviderSelectState';
+import { FormSelect } from '@/components/shared/FormSelect';
 
 interface EmailProviderSelectProps extends EmailProviderSelectStateProps {
   config: UIEmailConfig;
@@ -51,12 +52,14 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
   return (
     <div class="space-y-4 text-sm overflow-hidden">
       <div class={formField}>
-        <label class={labelClass()}>{ALERT_EMAIL_PROVIDER_LABEL}</label>
-        <div class="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
-          <select
+        <div class="flex w-full flex-wrap items-end gap-2 sm:flex-nowrap">
+          <FormSelect
+            id="alert-email-provider-select"
+            label={ALERT_EMAIL_PROVIDER_LABEL}
             value={props.config.provider}
             onChange={(e) => state.handleProviderChange(e.currentTarget.value)}
-            class={`${controlClass('px-2 py-1.5')} sm:w-auto sm:min-w-[180px]`}
+            selectBaseClass={controlClass('px-2 py-1.5')}
+            selectClass="sm:w-auto sm:min-w-[180px]"
           >
             <option value="">{ALERT_EMAIL_MANUAL_CONFIGURATION_LABEL}</option>
             <For each={state.providers()}>
@@ -64,7 +67,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 <option value={provider.name}>{getAlertEmailProviderOptionLabel(provider)}</option>
               )}
             </For>
-          </select>
+          </FormSelect>
           <Show when={props.config.provider}>
             <button
               type="button"
@@ -212,27 +215,28 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         <Show when={state.showAdvanced()}>
           <div class="mt-3 space-y-3 text-xs text-base-content">
             <div class="grid gap-3 sm:grid-cols-3">
-              <div class="flex items-center gap-2">
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                  {ALERT_EMAIL_SECURITY_LABEL}
-                </label>
-                <select
-                  value={props.config.tls ? 'tls' : props.config.startTLS ? 'starttls' : 'none'}
-                  onChange={(e) => {
-                    const value = e.currentTarget.value;
-                    props.onChange({
-                      ...props.config,
-                      tls: value === 'tls',
-                      startTLS: value === 'starttls',
-                    });
-                  }}
-                  class={`${controlClass('px-2 py-1 text-sm')} min-w-[120px]`}
-                >
-                  <option value="none">{ALERT_EMAIL_SECURITY_NONE_LABEL}</option>
-                  <option value="starttls">{ALERT_EMAIL_SECURITY_STARTTLS_LABEL}</option>
-                  <option value="tls">{ALERT_EMAIL_SECURITY_TLS_LABEL}</option>
-                </select>
-              </div>
+              <FormSelect
+                id="alert-email-security-select"
+                label={ALERT_EMAIL_SECURITY_LABEL}
+                value={props.config.tls ? 'tls' : props.config.startTLS ? 'starttls' : 'none'}
+                onChange={(e) => {
+                  const value = e.currentTarget.value;
+                  props.onChange({
+                    ...props.config,
+                    tls: value === 'tls',
+                    startTLS: value === 'starttls',
+                  });
+                }}
+                fieldBaseClass="flex"
+                fieldClass="flex-row items-center gap-2"
+                labelClass="text-xs uppercase tracking-[0.08em]"
+                selectBaseClass={controlClass('px-2 py-1 text-sm')}
+                selectClass="min-w-[120px]"
+              >
+                <option value="none">{ALERT_EMAIL_SECURITY_NONE_LABEL}</option>
+                <option value="starttls">{ALERT_EMAIL_SECURITY_STARTTLS_LABEL}</option>
+                <option value="tls">{ALERT_EMAIL_SECURITY_TLS_LABEL}</option>
+              </FormSelect>
               <div class="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
                 <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                   {ALERT_EMAIL_RATE_LIMIT_LABEL}

@@ -20,6 +20,7 @@ import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import filterButtonGroupModelSource from '@/components/shared/filterButtonGroupModel.ts?raw';
 import filterOptionPresentationSource from '@/components/shared/filterOptionPresentation.ts?raw';
+import formSelectSource from '@/components/shared/FormSelect.tsx?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
@@ -202,6 +203,20 @@ describe('shared primitive guardrails', () => {
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).not.toContain('getReportingToggleButtonClass');
     expect(reportingPanelSource).not.toContain('<For each={REPORTING_RANGE_OPTIONS}>');
+  });
+
+  it('keeps native form selects on the shared labelled primitive', () => {
+    expect(formSelectSource).toContain("from '@/components/shared/Form'");
+    expect(formSelectSource).toContain('createUniqueId');
+    expect(formSelectSource).toContain('splitProps');
+    expect(formSelectSource).toContain('interface FormSelectProps');
+    expect(formSelectSource).toContain('label: JSX.Element');
+    expect(formSelectSource).toContain('<label for={selectId()}');
+    expect(formSelectSource).toContain('<select');
+    expect(formSelectSource).toContain('id={selectId()}');
+    expect(formSelectSource).toContain('aria-describedby={describedBy()}');
+    expect(formSelectSource).toContain('local.selectBaseClass ?? formSelect');
+    expect(formSelectSource).toContain('local.fieldBaseClass ?? formField');
   });
 
   it('routes selectable settings cards through SelectionCardGroup', () => {

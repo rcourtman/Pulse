@@ -43,12 +43,9 @@ import {
   controlClass,
   labelClass,
 } from '@/components/shared/Form';
+import { FormSelect } from '@/components/shared/FormSelect';
 
-import type {
-  CustomFieldInput,
-  HeaderInput,
-  WebhookConfigFormData,
-} from './useWebhookConfigState';
+import type { CustomFieldInput, HeaderInput, WebhookConfigFormData } from './useWebhookConfigState';
 
 type SetterLike<T> = (value: T | ((prev: T) => T)) => T;
 
@@ -86,10 +83,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
             onClick={() => props.setShowServiceDropdown((open) => !open)}
             class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
           >
-            {getAlertWebhookServiceLabelFromTemplates(
-              props.formData().service,
-              props.templates(),
-            )}{' '}
+            {getAlertWebhookServiceLabelFromTemplates(props.formData().service, props.templates())}{' '}
             →
           </button>
         </div>
@@ -131,28 +125,25 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           <input
             type="text"
             value={props.formData().name}
-            onInput={(e) =>
-              props.setFormData((prev) => ({ ...prev, name: e.currentTarget.value }))
-            }
+            onInput={(e) => props.setFormData((prev) => ({ ...prev, name: e.currentTarget.value }))}
             placeholder={getAlertWebhookNamePlaceholder(props.currentTemplate()?.name)}
             class={controlClass('px-2 py-1.5')}
           />
         </div>
 
-        <div class={formField}>
-          <label class={labelClass()}>HTTP method</label>
-          <select
-            value={props.formData().method}
-            onChange={(e) =>
-              props.setFormData((prev) => ({ ...prev, method: e.currentTarget.value }))
-            }
-            class={controlClass('px-2 py-1.5 pr-8 appearance-none')}
-          >
-            <option value="POST">POST</option>
-            <option value="PUT">PUT</option>
-            <option value="PATCH">PATCH</option>
-          </select>
-        </div>
+        <FormSelect
+          id="alert-webhook-http-method"
+          label="HTTP method"
+          value={props.formData().method}
+          onChange={(e) =>
+            props.setFormData((prev) => ({ ...prev, method: e.currentTarget.value }))
+          }
+          selectBaseClass={controlClass('px-2 py-1.5 pr-8 appearance-none')}
+        >
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="PATCH">PATCH</option>
+        </FormSelect>
       </div>
 
       <div class={formField}>
@@ -160,9 +151,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
         <input
           type="url"
           value={props.formData().url}
-          onInput={(e) =>
-            props.setFormData((prev) => ({ ...prev, url: e.currentTarget.value }))
-          }
+          onInput={(e) => props.setFormData((prev) => ({ ...prev, url: e.currentTarget.value }))}
           placeholder={getAlertWebhookUrlPlaceholder(props.currentTemplate()?.urlPattern)}
           class={controlClass('px-2 py-1.5 font-mono')}
         />
@@ -171,14 +160,18 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           <code class="font-mono text-[11px] text-muted">
             {ALERT_WEBHOOK_URL_HELP_TEMPLATE_VARIABLE}
           </code>
-          . Use{' '}
-          <code class="font-mono text-[11px] text-muted">{ALERT_WEBHOOK_URL_HELP_PATH}</code> or{' '}
-          <code class="font-mono text-[11px] text-muted">{ALERT_WEBHOOK_URL_HELP_QUERY}</code> to
+          . Use <code class="font-mono text-[11px] text-muted">{ALERT_WEBHOOK_URL_HELP_PATH}</code>{' '}
+          or <code class="font-mono text-[11px] text-muted">{ALERT_WEBHOOK_URL_HELP_QUERY}</code> to
           keep dynamic values URL-safe.
         </p>
       </div>
 
-      <Show when={hasAlertWebhookMentionSupportFromTemplates(props.formData().service, props.templates())}>
+      <Show
+        when={hasAlertWebhookMentionSupportFromTemplates(
+          props.formData().service,
+          props.templates(),
+        )}
+      >
         <div class={formField}>
           <label class={labelClass('flex items-center gap-2')}>
             Mention
@@ -203,10 +196,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
             )}
           >
             <p class={formHelpText + ' mt-1'}>
-              {getAlertWebhookMentionHelpFromTemplates(
-                props.formData().service,
-                props.templates(),
-              )}
+              {getAlertWebhookMentionHelpFromTemplates(props.formData().service, props.templates())}
             </p>
           </Show>
         </div>
@@ -321,9 +311,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                 <input
                   type="text"
                   value={header().value}
-                  onInput={(e) =>
-                    props.updateHeaderInput(index, { value: e.currentTarget.value })
-                  }
+                  onInput={(e) => props.updateHeaderInput(index, { value: e.currentTarget.value })}
                   placeholder={ALERT_WEBHOOK_HEADER_VALUE_PLACEHOLDER}
                   class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
                 />

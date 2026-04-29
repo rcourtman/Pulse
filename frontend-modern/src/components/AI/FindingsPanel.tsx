@@ -13,6 +13,7 @@
 import { Component, createSignal, createEffect, Show, For, createMemo } from 'solid-js';
 import { A, useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
@@ -1170,14 +1171,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </For>
           </div>
           <Show when={patrolFindings().length > 1}>
-            <select
+            <FormSelect
+              label="Sort findings"
+              labelClass="sr-only"
+              fieldBaseClass="contents"
               value={sortBy()}
               onChange={(e) => setSortBy(e.currentTarget.value as 'severity' | 'time')}
-              class="text-xs px-2 py-1 rounded border border-border bg-surface"
+              selectBaseClass="text-xs px-2 py-1 rounded border border-border bg-surface"
             >
               <option value="severity">By Severity</option>
               <option value="time">By Time</option>
-            </select>
+            </FormSelect>
           </Show>
         </div>
       </Show>

@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import type { HistoryTimeRange } from '@/api/charts';
 import {
@@ -56,16 +57,19 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
           <div class={STORAGE_DETAIL_CARD_CLASS}>
             <div class={STORAGE_DETAIL_HEADER_ROW_CLASS}>
               <h4 class={STORAGE_DETAIL_SECTION_TITLE_CLASS}>Capacity Trend</h4>
-              <select
+              <FormSelect
+                label="Capacity trend range"
+                labelClass="sr-only"
+                fieldBaseClass="contents"
                 value={chartRange()}
                 onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
-                class={STORAGE_DETAIL_SELECT_CLASS}
+                selectBaseClass={STORAGE_DETAIL_SELECT_CLASS}
                 style={STORAGE_DETAIL_SELECT_STYLE}
               >
                 <For each={STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS}>
                   {(option) => <option value={option.value}>{option.label}</option>}
                 </For>
-              </select>
+              </FormSelect>
             </div>
             <HistoryChart
               resourceType={chartTarget().resourceType}

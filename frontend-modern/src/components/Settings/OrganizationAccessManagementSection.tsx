@@ -1,5 +1,6 @@
 import type { OrganizationRole } from '@/api/orgs';
 import { Component, For, Show } from 'solid-js';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { ORGANIZATION_MEMBER_ROLE_OPTIONS } from '@/utils/organizationRolePresentation';
 import { getOrganizationAccessManageRequiredMessage } from '@/utils/organizationSettingsPresentation';
 import type { useOrganizationAccessPanelState } from './useOrganizationAccessPanelState';
@@ -26,12 +27,15 @@ export const OrganizationAccessManagementSection: Component<
                 placeholder="username"
                 class="w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <select
+              <FormSelect
+                label="Invite role"
+                labelClass="sr-only"
+                fieldBaseClass="contents"
                 value={props.state.inviteRole()}
                 onChange={(event) =>
                   props.state.setInviteRole(event.currentTarget.value as OrganizationRole)
                 }
-                class="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                selectBaseClass="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <For
                   each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(
@@ -41,7 +45,7 @@ export const OrganizationAccessManagementSection: Component<
                 >
                   {(option) => <option value={option.value}>{option.label}</option>}
                 </For>
-              </select>
+              </FormSelect>
               <button
                 type="button"
                 onClick={props.state.inviteMember}

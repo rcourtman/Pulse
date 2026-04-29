@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { FormSelect } from '@/components/shared/FormSelect';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import {
   AI_SETTINGS_ASSISTANT_SESSIONS_TITLE,
@@ -45,7 +46,12 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
       <Show when={state.showChatMaintenance()}>
@@ -76,21 +82,29 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
             <Show when={!state.chatSessionsError()}>
               <Show
                 when={state.chatSessions().length > 0}
-                fallback={<div class="text-xs text-muted">{getAIChatSessionsEmptyState().text}</div>}
+                fallback={
+                  <div class="text-xs text-muted">{getAIChatSessionsEmptyState().text}</div>
+                }
               >
-                <select
+                <FormSelect
+                  label="Pulse Assistant session"
+                  labelClass="sr-only"
+                  fieldBaseClass="contents"
                   value={state.selectedSessionId()}
                   onChange={(e) => state.setSelectedSessionId(e.currentTarget.value)}
-                  class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded"
+                  selectBaseClass="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded"
                   disabled={state.saving()}
                 >
                   <For each={state.chatSessions()}>
-                    {(session) => <option value={session.id}>{state.formatSessionLabel(session)}</option>}
+                    {(session) => (
+                      <option value={session.id}>{state.formatSessionLabel(session)}</option>
+                    )}
                   </For>
-                </select>
+                </FormSelect>
                 <Show when={state.selectedChatSession()}>
                   <p class="text-[10px] text-muted mt-1">
-                    Last updated {new Date(state.selectedChatSession()!.updated_at).toLocaleString()}
+                    Last updated{' '}
+                    {new Date(state.selectedChatSession()!.updated_at).toLocaleString()}
                   </p>
                 </Show>
               </Show>
@@ -104,7 +118,9 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
               disabled={!state.selectedSessionId() || state.sessionActionLoading() !== null}
               class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-border bg-surface text-base-content hover:bg-surface-hover disabled:opacity-50"
             >
-              {state.sessionActionLoading() === 'summarize' ? 'Summarizing...' : 'Summarize session'}
+              {state.sessionActionLoading() === 'summarize'
+                ? 'Summarizing...'
+                : 'Summarize session'}
             </button>
             <button
               type="button"
@@ -123,7 +139,9 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
               {state.sessionActionLoading() === 'revert' ? 'Reverting...' : 'Revert changes'}
             </button>
           </div>
-          <p class="text-[10px] text-muted">These actions apply to the selected chat session only.</p>
+          <p class="text-[10px] text-muted">
+            These actions apply to the selected chat session only.
+          </p>
         </div>
       </Show>
     </div>

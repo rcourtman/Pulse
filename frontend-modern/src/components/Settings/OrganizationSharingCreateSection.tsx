@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { CANONICAL_RESOURCE_TYPES } from '@/utils/canonicalResourceTypes';
 import {
   ORGANIZATION_SHARE_ROLE_OPTIONS,
@@ -20,66 +21,59 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
           <h4 class="text-sm font-semibold text-base-content">Create Share</h4>
 
           <div class="grid gap-3 lg:grid-cols-2">
-            <label class="space-y-1">
-              <span class="text-xs font-medium uppercase tracking-wide text-muted">
-                Target Organization
-              </span>
-              <select
+            <div class="space-y-1">
+              <FormSelect
+                label="Target Organization"
+                labelClass="text-xs font-medium uppercase tracking-wide text-muted"
                 value={props.state.targetOrgId()}
                 onChange={(event) => props.state.updateTargetOrg(event.currentTarget.value)}
-                class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.state.targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
+                selectBaseClass={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.state.targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
               >
                 <option value="">Select organization</option>
                 <For each={props.state.targetOrgOptions()}>
                   {(target) => <option value={target.id}>{target.displayName || target.id}</option>}
                 </For>
-              </select>
+              </FormSelect>
               <Show when={props.state.targetOrgError() !== ''}>
-                <p class="text-xs text-red-600 dark:text-red-400">
-                  {props.state.targetOrgError()}
-                </p>
+                <p class="text-xs text-red-600 dark:text-red-400">{props.state.targetOrgError()}</p>
               </Show>
-            </label>
+            </div>
 
-            <label class="space-y-1">
-              <span class="text-xs font-medium uppercase tracking-wide text-muted">
-                Access Role
-              </span>
-              <select
-                value={props.state.accessRole()}
-                onChange={(event) =>
-                  props.state.setAccessRole(event.currentTarget.value as ShareAccessRole)
-                }
-                class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <For each={ORGANIZATION_SHARE_ROLE_OPTIONS}>
-                  {(option) => <option value={option.value}>{option.label}</option>}
-                </For>
-              </select>
-            </label>
+            <FormSelect
+              label="Access Role"
+              labelClass="text-xs font-medium uppercase tracking-wide text-muted"
+              fieldBaseClass="space-y-1"
+              value={props.state.accessRole()}
+              onChange={(event) =>
+                props.state.setAccessRole(event.currentTarget.value as ShareAccessRole)
+              }
+              selectBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <For each={ORGANIZATION_SHARE_ROLE_OPTIONS}>
+                {(option) => <option value={option.value}>{option.label}</option>}
+              </For>
+            </FormSelect>
           </div>
 
           <Show when={props.state.unifiedResourceOptions().length > 0}>
             <div class="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900">
-              <label class="space-y-1 block">
-                <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                  Quick Pick Resource
-                </span>
-                <select
-                  value={props.state.selectedQuickPick()}
-                  onChange={(event) => props.state.applyResourceQuickPick(event.currentTarget.value)}
-                  class="w-full rounded-md border border-blue-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700"
-                >
-                  <option value="">Select resource</option>
-                  <For each={props.state.unifiedResourceOptions()}>
-                    {(resource) => (
-                      <option value={`${resource.type}::${resource.id}`}>
-                        {resource.name} ({resource.type})
-                      </option>
-                    )}
-                  </For>
-                </select>
-              </label>
+              <FormSelect
+                label="Quick Pick Resource"
+                labelClass="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300"
+                fieldBaseClass="space-y-1 block"
+                value={props.state.selectedQuickPick()}
+                onChange={(event) => props.state.applyResourceQuickPick(event.currentTarget.value)}
+                selectBaseClass="w-full rounded-md border border-blue-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700"
+              >
+                <option value="">Select resource</option>
+                <For each={props.state.unifiedResourceOptions()}>
+                  {(resource) => (
+                    <option value={`${resource.type}::${resource.id}`}>
+                      {resource.name} ({resource.type})
+                    </option>
+                  )}
+                </For>
+              </FormSelect>
               <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p class="text-xs text-blue-700 dark:text-blue-300">
                   Choose a discovered resource, or switch to manual entry.

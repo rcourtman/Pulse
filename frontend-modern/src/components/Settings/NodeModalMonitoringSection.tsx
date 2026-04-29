@@ -1,8 +1,15 @@
 import { Component, Show } from 'solid-js';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { SectionHeader } from '@/components/shared/SectionHeader';
-import { controlClass, formCheckbox, formField, formHelpText, labelClass } from '@/components/shared/Form';
+import {
+  controlClass,
+  formCheckbox,
+  formField,
+  formHelpText,
+  labelClass,
+} from '@/components/shared/Form';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import {
   getNodeMonitoringCoverageCopy,
@@ -97,9 +104,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             />
             <div>
               <div>Containers</div>
-              <p class="text-xs text-muted mt-1">
-                LXC container state and resource usage.
-              </p>
+              <p class="text-xs text-muted mt-1">LXC container state and resource usage.</p>
             </div>
           </label>
 
@@ -127,9 +132,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             />
             <div>
               <div>Backups</div>
-              <p class="text-xs text-muted mt-1">
-                vzdump schedules and recent backup activity.
-              </p>
+              <p class="text-xs text-muted mt-1">vzdump schedules and recent backup activity.</p>
             </div>
           </label>
         </div>
@@ -164,8 +167,11 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             <Show when={state.formData().monitorPhysicalDisks}>
               <div class="mt-3 flex items-center gap-2 border-t border-border pt-3">
                 <label class="text-xs text-muted">Poll every</label>
-                <select
-                  class="rounded border bg-surface px-2 py-1 text-xs text-base-content"
+                <FormSelect
+                  label="Physical disk health polling interval"
+                  labelClass="sr-only"
+                  fieldBaseClass="contents"
+                  selectBaseClass="rounded border bg-surface px-2 py-1 text-xs text-base-content"
                   value={state.formData().physicalDiskPollingMinutes}
                   onChange={(event) =>
                     state.updateField(
@@ -178,7 +184,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
                   <option value={15}>15 minutes</option>
                   <option value={30}>30 minutes</option>
                   <option value={60}>1 hour</option>
-                </select>
+                </FormSelect>
               </div>
             </Show>
           </div>
@@ -189,9 +195,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
                 <div>
                   <p class="font-medium text-base-content">Temperature monitoring</p>
                   <p class="mt-1 text-xs text-muted">
-                    Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this
-                    node. Disable if you don't need temperature data or haven't deployed the proxy
-                    yet.
+                    Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this node.
+                    Disable if you don't need temperature data or haven't deployed the proxy yet.
                   </p>
                 </div>
                 <TogglePrimitive
@@ -211,8 +216,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               </div>
               <Show when={!state.temperatureMonitoringEnabledValue()}>
                 <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                  Pulse will skip SSH temperature polling for this node. Existing dashboard
-                  readings will stop refreshing.
+                  Pulse will skip SSH temperature polling for this node. Existing dashboard readings
+                  will stop refreshing.
                 </p>
               </Show>
               <Show when={modalProps.temperatureMonitoringLocked}>
@@ -234,8 +239,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             titleClass="text-base-content"
           />
           <p class="text-xs text-muted">
-            Control which Proxmox Backup Server surfaces Pulse ingests. Disable collectors you
-            don't need.
+            Control which Proxmox Backup Server surfaces Pulse ingests. Disable collectors you don't
+            need.
           </p>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
@@ -266,9 +271,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             />
             <div>
               <div>Sync jobs</div>
-              <p class="text-xs text-muted mt-1">
-                Remote sync schedules and their last-run state.
-              </p>
+              <p class="text-xs text-muted mt-1">Remote sync schedules and their last-run state.</p>
             </div>
           </label>
 
@@ -283,9 +286,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             />
             <div>
               <div>Verify jobs</div>
-              <p class="text-xs text-muted mt-1">
-                Backup verification schedules and outcomes.
-              </p>
+              <p class="text-xs text-muted mt-1">Backup verification schedules and outcomes.</p>
             </div>
           </label>
 
@@ -334,15 +335,17 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             titleClass="text-base-content"
           />
           <p class="text-xs text-muted">
-            Control which PMG data sets Pulse ingests. Disable individual collectors if you want
-            to limit API usage.
+            Control which PMG data sets Pulse ingests. Disable individual collectors if you want to
+            limit API usage.
           </p>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
               checked={state.formData().monitorMailStats}
-              onChange={(event) => state.updateField('monitorMailStats', event.currentTarget.checked)}
+              onChange={(event) =>
+                state.updateField('monitorMailStats', event.currentTarget.checked)
+              }
               class={formCheckbox + ' mt-0.5'}
             />
             <div>

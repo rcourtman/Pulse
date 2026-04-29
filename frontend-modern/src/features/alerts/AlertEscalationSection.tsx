@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 
 import { controlClass, formHelpText } from '@/components/shared/Form';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import {
@@ -62,34 +63,34 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
                       min="5"
                       max="180"
                       value={level.after}
-                      onChange={(event) => props.setEscalationAfter(index(), event.currentTarget.value)}
+                      onChange={(event) =>
+                        props.setEscalationAfter(index(), event.currentTarget.value)
+                      }
                       class={`${controlClass('px-2 py-1 text-sm')} w-20`}
                     />
-                    <span class="text-xs text-muted">
-                      {ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX}
-                    </span>
+                    <span class="text-xs text-muted">{ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX}</span>
                   </div>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-medium text-muted">
-                      {ALERT_CONFIG_ESCALATION_NOTIFY_LABEL}
-                    </span>
-                    <select
-                      value={level.notify}
-                      onChange={(event) =>
-                        props.setEscalationNotify(
-                          index(),
-                          event.currentTarget.value as EscalationNotifyTarget,
-                        )
-                      }
-                      class={`${controlClass('px-2 py-1 text-sm')} flex-1`}
-                    >
-                      <option value="email">{getAlertConfigEscalationNotifyLabel('email')}</option>
-                      <option value="webhook">
-                        {getAlertConfigEscalationNotifyLabel('webhook')}
-                      </option>
-                      <option value="all">{getAlertConfigEscalationNotifyLabel('all')}</option>
-                    </select>
-                  </div>
+                  <FormSelect
+                    id={`alert-escalation-notify-${index()}`}
+                    label={ALERT_CONFIG_ESCALATION_NOTIFY_LABEL}
+                    value={level.notify}
+                    onChange={(event) =>
+                      props.setEscalationNotify(
+                        index(),
+                        event.currentTarget.value as EscalationNotifyTarget,
+                      )
+                    }
+                    fieldBaseClass="flex"
+                    fieldClass="items-center gap-2"
+                    labelClass="text-xs font-medium text-muted"
+                    selectBaseClass={`${controlClass('px-2 py-1 text-sm')} flex-1`}
+                  >
+                    <option value="email">{getAlertConfigEscalationNotifyLabel('email')}</option>
+                    <option value="webhook">
+                      {getAlertConfigEscalationNotifyLabel('webhook')}
+                    </option>
+                    <option value="all">{getAlertConfigEscalationNotifyLabel('all')}</option>
+                  </FormSelect>
                 </div>
                 <button
                   type="button"

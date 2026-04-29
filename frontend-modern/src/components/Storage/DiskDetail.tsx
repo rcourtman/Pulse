@@ -1,5 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import type { Resource } from '@/types/resource';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import type { HistoryTimeRange } from '@/api/charts';
 import {
@@ -59,12 +60,8 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
       {/* Header: Info & Selector */}
       <div class={STORAGE_DISK_DETAIL_HEADER_CLASS}>
         <div class={STORAGE_DETAIL_META_ROW_CLASS}>
-          <span class={STORAGE_DISK_DETAIL_MODEL_CLASS}>
-            {diskData().model || 'Unknown Disk'}
-          </span>
-          <span class={STORAGE_DETAIL_MONO_CHIP_CLASS}>
-            {diskData().devPath}
-          </span>
+          <span class={STORAGE_DISK_DETAIL_MODEL_CLASS}>{diskData().model || 'Unknown Disk'}</span>
+          <span class={STORAGE_DETAIL_MONO_CHIP_CLASS}>{diskData().devPath}</span>
           <span class={STORAGE_DISK_DETAIL_NODE_CLASS}>{diskData().node}</span>
           <Show when={diskData().serial}>
             <span class={STORAGE_DISK_DETAIL_SERIAL_CLASS}>S/N: {diskData().serial}</span>
@@ -75,16 +72,19 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         <div class={STORAGE_DISK_DETAIL_HISTORY_CONTROL_CLASS}>
           <span class={STORAGE_DETAIL_INLINE_LABEL_CLASS}>History:</span>
           <div class={STORAGE_DISK_DETAIL_HISTORY_SELECT_WRAP_CLASS}>
-            <select
+            <FormSelect
+              label="Disk history range"
+              labelClass="sr-only"
+              fieldBaseClass="contents"
               value={chartRange()}
               onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
-              class={STORAGE_DETAIL_HEADER_SELECT_CLASS}
+              selectBaseClass={STORAGE_DETAIL_HEADER_SELECT_CLASS}
               style={STORAGE_DETAIL_HEADER_SELECT_STYLE}
             >
               <For each={DISK_DETAIL_HISTORY_RANGE_OPTIONS}>
                 {(option) => <option value={option.value}>{option.label}</option>}
               </For>
-            </select>
+            </FormSelect>
           </div>
         </div>
       </div>
@@ -107,11 +107,11 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
       {/* Live Performance Sparklines */}
       <Show when={metricResourceId()}>
         <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
-          <h4 class={`${STORAGE_DETAIL_SECTION_TITLE_CLASS} ${STORAGE_DISK_DETAIL_SECTION_HEADING_CLASS}`}>
+          <h4
+            class={`${STORAGE_DETAIL_SECTION_TITLE_CLASS} ${STORAGE_DISK_DETAIL_SECTION_HEADING_CLASS}`}
+          >
             Live I/O (30m)
-            <span class={STORAGE_DETAIL_BADGE_CLASS}>
-              {getDiskDetailLiveBadgeLabel()}
-            </span>
+            <span class={STORAGE_DETAIL_BADGE_CLASS}>{getDiskDetailLiveBadgeLabel()}</span>
           </h4>
           <div class={STORAGE_DISK_DETAIL_LIVE_GRID_CLASS}>
             <For each={DISK_DETAIL_LIVE_CHARTS}>
@@ -146,9 +146,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
       <Show
         when={historyResourceId()}
         fallback={
-          <div class={STORAGE_DETAIL_EMPTY_CLASS}>
-            {getDiskDetailHistoryFallbackMessage()}
-          </div>
+          <div class={STORAGE_DETAIL_EMPTY_CLASS}>{getDiskDetailHistoryFallbackMessage()}</div>
         }
       >
         <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>

@@ -1,5 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
+import { FormSelect } from '@/components/shared/FormSelect';
 import type { Permission, Role } from '@/types/rbac';
 import { RBAC_PERMISSION_ACTIONS, RBAC_PERMISSION_RESOURCES } from '@/utils/rbacPermissions';
 import Plus from 'lucide-solid/icons/plus';
@@ -98,29 +99,35 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
               <For each={props.formPermissions}>
                 {(permission, index) => (
                   <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <select
+                    <FormSelect
+                      label={`Permission ${index() + 1} action`}
+                      labelClass="sr-only"
+                      fieldBaseClass="contents"
                       value={permission.action}
                       onChange={(event) =>
                         props.onUpdatePermission(index(), 'action', event.currentTarget.value)
                       }
-                      class="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
+                      selectBaseClass="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
                     >
                       <For each={RBAC_PERMISSION_ACTIONS}>
                         {(action) => <option value={action}>{action}</option>}
                       </For>
-                    </select>
+                    </FormSelect>
                     <span class="hidden sm:inline text-slate-400 text-sm">:</span>
-                    <select
+                    <FormSelect
+                      label={`Permission ${index() + 1} resource`}
+                      labelClass="sr-only"
+                      fieldBaseClass="contents"
                       value={permission.resource}
                       onChange={(event) =>
                         props.onUpdatePermission(index(), 'resource', event.currentTarget.value)
                       }
-                      class="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
+                      selectBaseClass="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
                     >
                       <For each={RBAC_PERMISSION_RESOURCES}>
                         {(resource) => <option value={resource}>{resource}</option>}
                       </For>
-                    </select>
+                    </FormSelect>
                     <button
                       type="button"
                       onClick={() => props.onRemovePermission(index())}

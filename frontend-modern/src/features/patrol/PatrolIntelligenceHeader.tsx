@@ -8,6 +8,7 @@ import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Toggle, TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { groupModelsByProvider } from '@/utils/patrolFormat';
@@ -57,7 +58,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             <span>{headerMeta.title}</span>
           </span>
         }
-        class="mb-3"
+        class="relative z-[200] mb-3"
         actions={
           <div class="flex flex-wrap items-center justify-end gap-3">
             <Show when={recency().timestamp}>
@@ -126,7 +127,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             <span class="text-sm font-medium text-base-content">{runtimePresentation().label}</span>
           </div>
 
-          <div class="relative ml-auto" ref={state.setAdvancedSettingsRef}>
+          <div class="relative z-[120] ml-auto" ref={state.setAdvancedSettingsRef}>
             <button
               onClick={() => state.setShowAdvancedSettings(!state.showAdvancedSettings())}
               disabled={!state.patrolEnabledLocal()}
@@ -137,7 +138,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             </button>
 
             <Show when={state.showAdvancedSettings()}>
-              <div class="absolute right-0 top-10 z-50 w-[340px] p-5 bg-surface rounded-md shadow-sm border border-border animate-slide-up transform origin-top-right">
+              <div class="fixed right-4 top-32 z-[9999] isolate w-[calc(100vw-2rem)] p-5 bg-surface rounded-md shadow-sm border border-border animate-slide-up transform origin-top-right sm:right-8 sm:top-[17.5rem] sm:w-[340px]">
                 <div class="flex items-center justify-between mb-5 pb-3 border-b border-border-subtle">
                   <h4 class="text-base font-semibold tracking-tight text-base-content">
                     Patrol Configuration
@@ -152,56 +153,52 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
 
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                      <label class="text-xs font-semibold uppercase tracking-wider text-muted">
-                        Provider model
-                      </label>
-                      <select
-                        ref={state.setPatrolModelSelectRef}
-                        value={state.patrolModel()}
-                        onChange={(e) => state.handleModelChange(e.currentTarget.value)}
-                        disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
-                        class="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                      >
-                        <option value="">
-                          Default ({state.defaultModel().split(':').pop() || 'not set'})
+                    <FormSelect
+                      label="Provider model"
+                      labelClass="text-xs font-semibold uppercase tracking-wider text-muted"
+                      fieldClass="space-y-1.5"
+                      ref={state.setPatrolModelSelectRef}
+                      value={state.patrolModel()}
+                      onChange={(e) => state.handleModelChange(e.currentTarget.value)}
+                      disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
+                      selectBaseClass="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                    >
+                      <option value="">
+                        Default ({state.defaultModel().split(':').pop() || 'not set'})
+                      </option>
+                      <Show when={patrolModelStale()}>
+                        <option value={state.patrolModel()} disabled>
+                          {state.patrolModel().split(':').pop()} (unavailable)
                         </option>
-                        <Show when={patrolModelStale()}>
-                          <option value={state.patrolModel()} disabled>
-                            {state.patrolModel().split(':').pop()} (unavailable)
-                          </option>
-                        </Show>
-                        {Array.from(groupModelsByProvider(state.availableModels()).entries()).map(
-                          ([provider, models]) => (
-                            <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
-                              {models.map((model) => (
-                                <option value={model.id}>
-                                  {model.name || model.id.split(':').pop()}
-                                </option>
-                              ))}
-                            </optgroup>
-                          ),
-                        )}
-                      </select>
-                    </div>
+                      </Show>
+                      {Array.from(groupModelsByProvider(state.availableModels()).entries()).map(
+                        ([provider, models]) => (
+                          <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
+                            {models.map((model) => (
+                              <option value={model.id}>
+                                {model.name || model.id.split(':').pop()}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ),
+                      )}
+                    </FormSelect>
 
-                    <div class="space-y-1.5">
-                      <label class="text-xs font-semibold uppercase tracking-wider text-muted">
-                        Run Every
-                      </label>
-                      <select
-                        value={state.patrolInterval()}
-                        onChange={(e) =>
-                          state.handleIntervalChange(parseInt(e.currentTarget.value, 10))
-                        }
-                        disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
-                        class="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                      >
-                        <For each={scheduleOptions()}>
-                          {(preset) => <option value={preset.value}>{preset.label}</option>}
-                        </For>
-                      </select>
-                    </div>
+                    <FormSelect
+                      label="Run Every"
+                      labelClass="text-xs font-semibold uppercase tracking-wider text-muted"
+                      fieldClass="space-y-1.5"
+                      value={state.patrolInterval()}
+                      onChange={(e) =>
+                        state.handleIntervalChange(parseInt(e.currentTarget.value, 10))
+                      }
+                      disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
+                      selectBaseClass="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                    >
+                      <For each={scheduleOptions()}>
+                        {(preset) => <option value={preset.value}>{preset.label}</option>}
+                      </For>
+                    </FormSelect>
                   </div>
 
                   <div class="space-y-2">
@@ -365,7 +362,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     <button
                       onClick={state.saveAdvancedSettings}
                       disabled={state.isSavingAdvanced()}
-                      class="w-full py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-70 flex items-center justify-center gap-2"
+                      class="w-full py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:hover:bg-blue-300 dark:disabled:bg-blue-900 flex items-center justify-center gap-2"
                     >
                       <Show when={state.isSavingAdvanced()}>
                         <div class="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>

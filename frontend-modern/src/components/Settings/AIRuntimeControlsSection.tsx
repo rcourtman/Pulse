@@ -2,6 +2,7 @@ import { Component, Show } from 'solid-js';
 import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { HelpIcon } from '@/components/shared/HelpIcon';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { Toggle } from '@/components/shared/Toggle';
 import { TERMS_DOC_URL } from '@/utils/docsLinks';
@@ -25,7 +26,9 @@ interface AIRuntimeControlsSectionProps {
 export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> = (props) => {
   const { state } = props;
   const showAutonomousControlOption = () =>
-    !state.autoFixLocked() || state.showUpgradePrompts() || state.form.controlLevel === 'autonomous';
+    !state.autoFixLocked() ||
+    state.showUpgradePrompts() ||
+    state.form.controlLevel === 'autonomous';
 
   return (
     <>
@@ -93,26 +96,26 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
 
             <Show when={state.form.discoveryEnabled}>
               <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-muted w-32 flex-shrink-0">
-                    Scan Interval
-                  </label>
-                  <select
-                    class="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface"
-                    value={state.form.discoveryIntervalHours}
-                    onChange={(e) =>
-                      state.setForm('discoveryIntervalHours', parseInt(e.currentTarget.value, 10))
-                    }
-                    disabled={state.saving()}
-                  >
-                    <option value={0}>Manual only</option>
-                    <option value={6}>Every 6 hours</option>
-                    <option value={12}>Every 12 hours</option>
-                    <option value={24}>Every 24 hours</option>
-                    <option value={48}>Every 2 days</option>
-                    <option value={168}>Every 7 days</option>
-                  </select>
-                </div>
+                <FormSelect
+                  id="ai-workload-discovery-scan-interval"
+                  label="Scan Interval"
+                  value={state.form.discoveryIntervalHours}
+                  onChange={(e) =>
+                    state.setForm('discoveryIntervalHours', parseInt(e.currentTarget.value, 10))
+                  }
+                  disabled={state.saving()}
+                  fieldBaseClass="flex"
+                  fieldClass="items-center gap-3"
+                  labelClass="text-xs font-medium text-muted w-32 flex-shrink-0"
+                  selectBaseClass="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface"
+                >
+                  <option value={0}>Manual only</option>
+                  <option value={6}>Every 6 hours</option>
+                  <option value={12}>Every 12 hours</option>
+                  <option value={24}>Every 24 hours</option>
+                  <option value={48}>Every 2 days</option>
+                  <option value={168}>Every 7 days</option>
+                </FormSelect>
                 <p class="text-[10px] text-muted ml-32 pl-3">
                   {state.form.discoveryIntervalHours === 0
                     ? 'Workload discovery runs only when you click "Update Discovery" on a resource'
@@ -235,26 +238,28 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
           </Show>
         </div>
 
-        <div class="flex items-center gap-3">
-          <label class="text-xs font-medium text-muted w-28 flex-shrink-0">Control mode</label>
-          <select
-            value={state.form.controlLevel}
-            onChange={(e) => state.setForm('controlLevel', e.currentTarget.value as AIControlLevel)}
-            class="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
-            disabled={state.saving()}
-          >
-            <option value="read_only">Read Only - Pulse Assistant can only observe</option>
-            <option value="controlled">
-              Controlled - Pulse Assistant executes with your approval
+        <FormSelect
+          id="ai-control-mode-select"
+          label="Control mode"
+          value={state.form.controlLevel}
+          onChange={(e) => state.setForm('controlLevel', e.currentTarget.value as AIControlLevel)}
+          disabled={state.saving()}
+          fieldBaseClass="flex"
+          fieldClass="items-center gap-3"
+          labelClass="text-xs font-medium text-muted w-28 flex-shrink-0"
+          selectBaseClass="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
+        >
+          <option value="read_only">Read Only - Pulse Assistant can only observe</option>
+          <option value="controlled">
+            Controlled - Pulse Assistant executes with your approval
+          </option>
+          <Show when={showAutonomousControlOption()}>
+            <option value="autonomous">
+              Autonomous - Pulse Assistant executes without approval
+              {state.autoFixLocked() && state.showUpgradePrompts() ? ' (Pro)' : ''}
             </option>
-            <Show when={showAutonomousControlOption()}>
-              <option value="autonomous">
-                Autonomous - Pulse Assistant executes without approval
-                {state.autoFixLocked() && state.showUpgradePrompts() ? ' (Pro)' : ''}
-              </option>
-            </Show>
-          </select>
-        </div>
+          </Show>
+        </FormSelect>
         <p class="text-[10px] text-muted ml-[7.5rem]">
           {getAIControlLevelDescription(state.form.controlLevel)}
         </p>

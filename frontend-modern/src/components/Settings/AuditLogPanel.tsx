@@ -8,6 +8,7 @@ import X from 'lucide-solid/icons/x';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { FormSelect } from '@/components/shared/FormSelect';
 import Toggle from '@/components/shared/Toggle';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
@@ -185,17 +186,20 @@ export default function AuditLogPanel() {
             <Filter class="w-4 h-4 text-slate-400" />
             <span class="text-sm font-medium text-base-content">Filters:</span>
           </div>
-          <select
+          <FormSelect
+            label="Audit event type"
+            labelClass="sr-only"
+            fieldBaseClass="contents"
             value={eventFilter()}
             onChange={(e) => setEventFilter(e.currentTarget.value)}
-            class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
+            selectBaseClass="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
           >
             <option value="">{AUDIT_EVENT_FILTER_ALL_LABEL}</option>
             <option value="login">Login</option>
             <option value="logout">Logout</option>
             <option value="config_change">{AUDIT_EVENT_CONFIG_CHANGE_LABEL}</option>
             <option value="startup">Startup</option>
-          </select>
+          </FormSelect>
           <input
             type="text"
             placeholder="Filter by user..."
@@ -203,35 +207,44 @@ export default function AuditLogPanel() {
             onInput={(e) => setUserFilter(e.currentTarget.value)}
             class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content placeholder-gray-400"
           />
-          <select
+          <FormSelect
+            label="Audit outcome"
+            labelClass="sr-only"
+            fieldBaseClass="contents"
             value={successFilter()}
             onChange={(e) => setSuccessFilter(e.currentTarget.value)}
-            class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
+            selectBaseClass="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
           >
             <option value="all">All</option>
             <option value="success">{AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL}</option>
             <option value="failed">{AUDIT_SUCCESS_FILTER_FAILED_ONLY_LABEL}</option>
-          </select>
-          <select
+          </FormSelect>
+          <FormSelect
+            label="Audit verification status"
+            labelClass="sr-only"
+            fieldBaseClass="contents"
             value={verificationFilter()}
             onChange={(e) => setVerificationFilter(e.currentTarget.value)}
-            class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
+            selectBaseClass="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
           >
             <option value="all">{AUDIT_VERIFICATION_FILTER_ALL_LABEL}</option>
             <option value="needs">{AUDIT_VERIFICATION_FILTER_NEEDS_LABEL}</option>
             <option value="verified">Verified</option>
             <option value="failed">Failed/Error</option>
-          </select>
-          <select
+          </FormSelect>
+          <FormSelect
+            label="Audit page size"
+            labelClass="sr-only"
+            fieldBaseClass="contents"
             value={String(pageSize())}
             onChange={(e) => setPageSize(Number(e.currentTarget.value))}
-            class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
+            selectBaseClass="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
           >
             <option value="25">25 / page</option>
             <option value="50">50 / page</option>
             <option value="100">100 / page</option>
             <option value="200">200 / page</option>
-          </select>
+          </FormSelect>
           <button
             onClick={applyFilters}
             class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"

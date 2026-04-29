@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { For, Show, createSignal } from 'solid-js';
+import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
@@ -434,26 +435,22 @@ export const InfrastructureInstallerSection: Component = () => {
                   </div>
 
                   <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
-                    <label
-                      for="install-profile-select"
-                      class="mb-1.5 block text-xs font-medium text-base-content"
-                    >
-                      Target profile (optional)
-                    </label>
-                    <select
+                    <FormSelect
                       id="install-profile-select"
+                      label="Target profile (optional)"
+                      labelClass="mb-1.5 block text-xs font-medium text-base-content"
                       value={state.installProfile()}
                       onChange={(event) =>
                         state.handleInstallProfileChange(
                           event.currentTarget.value as InstallProfile,
                         )
                       }
-                      class="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                      selectBaseClass="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                     >
                       <For each={INSTALL_PROFILE_OPTIONS}>
                         {(option) => <option value={option.value}>{option.label}</option>}
                       </For>
-                    </select>
+                    </FormSelect>
                     <p class="mt-1.5 text-xs text-muted">
                       {state.getSelectedInstallProfile().description}
                     </p>

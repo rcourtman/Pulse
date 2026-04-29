@@ -2,6 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
@@ -258,12 +259,15 @@ export const AgentProfilesPanel: Component = () => {
                       render: (agent) => {
                         const assignment = () => getAgentAssignment(agent.assignmentId);
                         return (
-                          <select
+                          <FormSelect
+                            label={`Profile for ${agent.displayName || agent.hostname}`}
+                            labelClass="sr-only"
+                            fieldBaseClass="contents"
                             value={assignment()?.profile_id || ''}
                             onChange={(e) =>
                               handleAssign(agent.assignmentId, e.currentTarget.value)
                             }
-                            class="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            selectBaseClass="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
                             <option value="">No profile</option>
                             <Show
@@ -283,7 +287,7 @@ export const AgentProfilesPanel: Component = () => {
                                 </option>
                               )}
                             </For>
-                          </select>
+                          </FormSelect>
                         );
                       },
                     },
@@ -422,18 +426,21 @@ export const AgentProfilesPanel: Component = () => {
                               </button>
                             </Show>
                             <Show when={setting.type === 'select'}>
-                              <select
+                              <FormSelect
+                                label={`${setting.label} value`}
+                                labelClass="sr-only"
+                                fieldBaseClass="contents"
                                 value={(formSettings()[setting.key] as string) || ''}
                                 onChange={(e) =>
                                   updateSetting(setting.key, e.currentTarget.value || undefined)
                                 }
-                                class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                selectBaseClass="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
                                 <option value="">Default</option>
                                 <For each={(setting as SelectSetting).options}>
                                   {(opt) => <option value={opt}>{opt}</option>}
                                 </For>
-                              </select>
+                              </FormSelect>
                             </Show>
                             <Show when={setting.type === 'duration'}>
                               <input

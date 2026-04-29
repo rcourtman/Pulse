@@ -806,9 +806,7 @@ describe('frontend resource type boundaries', () => {
       'export const buildDashboardHostFilterConfig',
     );
     expect(dashboardWorkloadFilterConfigModelSource).toContain('getAllFilterOptionLabel');
-    expect(dashboardWorkloadFilterConfigModelSource).toContain(
-      'DASHBOARD_WORKLOAD_TYPE_OPTIONS',
-    );
+    expect(dashboardWorkloadFilterConfigModelSource).toContain('DASHBOARD_WORKLOAD_TYPE_OPTIONS');
     expect(dashboardWorkloadFilterConfigModelSource).toContain(
       'export const buildDashboardNamespaceFilterConfig',
     );
@@ -1764,6 +1762,9 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolDetailSource).toContain('STORAGE_DETAIL_CARD_CLASS');
     expect(storagePoolDetailSource).toContain('useStoragePoolDetailModel');
     expect(storagePoolDetailSource).toContain('STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS');
+    expect(storagePoolDetailSource).toContain('FormSelect');
+    expect(storagePoolDetailSource).toContain('label="Capacity trend range"');
+    expect(storagePoolDetailSource).not.toContain('<select');
     expect(storagePoolDetailSource).not.toContain('const ConfigRow: Component');
     expect(storagePoolDetailSource).not.toContain('const chartResourceType = createMemo');
     expect(storagePoolDetailSource).not.toContain('const chartResourceId = createMemo');
@@ -1785,6 +1786,9 @@ describe('frontend resource type boundaries', () => {
     expect(diskDetailSource).toContain('STORAGE_DETAIL_CARD_CLASS');
     expect(diskDetailSource).toContain('STORAGE_DISK_DETAIL_HEADER_CLASS');
     expect(diskDetailSource).toContain('useDiskDetailModel');
+    expect(diskDetailSource).toContain('FormSelect');
+    expect(diskDetailSource).toContain('label="Disk history range"');
+    expect(diskDetailSource).not.toContain('<select');
     expect(diskDetailSource).not.toContain('const AttrCard: Component');
     expect(diskDetailSource).not.toContain('function extractDiskData(');
     expect(diskDetailSource).not.toContain('const getMetricResourceId = () => {');

@@ -484,7 +484,10 @@ describe('aiFindingPresentation', () => {
 
     it('only shows the sort control when there are multiple Patrol findings to sort', () => {
       expect(findingsPanelSource).toContain('<Show when={patrolFindings().length > 1}>');
+      expect(findingsPanelSource).toContain('FormSelect');
+      expect(findingsPanelSource).toContain('label="Sort findings"');
       expect(findingsPanelSource).toContain('<option value="severity">By Severity</option>');
+      expect(findingsPanelSource).not.toContain('<select');
     });
 
     it('hides the filter bar when there are no Patrol findings or special buckets to navigate', () => {

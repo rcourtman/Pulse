@@ -5,8 +5,8 @@ import {
   formField,
   formHelpText,
   formLabel,
-  formSelect,
 } from '@/components/shared/Form';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
 import { MonitoredSystemAdmissionPreview } from '../../MonitoredSystemAdmissionPreview';
 import type { TrueNASConnection } from '@/api/truenas';
@@ -113,23 +113,20 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               How often Pulse should refresh this TrueNAS connection.
             </span>
           </label>
-          <label class={formField}>
-            <span class={formLabel}>Authentication</span>
-            <select
-              class={formSelect}
-              value={props.state.form().authMode}
-              onChange={(event) =>
-                props.state.updateForm({
-                  authMode: event.currentTarget.value as 'apiKey' | 'userpass',
-                  apiKey: '',
-                  password: '',
-                })
-              }
-            >
-              <option value="apiKey">API key</option>
-              <option value="userpass">Username and password</option>
-            </select>
-          </label>
+          <FormSelect
+            label="Authentication"
+            value={props.state.form().authMode}
+            onChange={(event) =>
+              props.state.updateForm({
+                authMode: event.currentTarget.value as 'apiKey' | 'userpass',
+                apiKey: '',
+                password: '',
+              })
+            }
+          >
+            <option value="apiKey">API key</option>
+            <option value="userpass">Username and password</option>
+          </FormSelect>
         </div>
 
         <Show when={props.state.form().authMode === 'apiKey'}>
@@ -141,9 +138,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               value={props.state.form().apiKey}
               onInput={(event) => props.state.updateForm({ apiKey: event.currentTarget.value })}
               placeholder={
-                props.state.form().hasStoredApiKey
-                  ? 'Saved API key retained unless replaced'
-                  : ''
+                props.state.form().hasStoredApiKey ? 'Saved API key retained unless replaced' : ''
               }
             />
             <Show when={props.state.form().hasStoredApiKey}>
@@ -159,9 +154,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               <input
                 class={formControl}
                 value={props.state.form().username}
-                onInput={(event) =>
-                  props.state.updateForm({ username: event.currentTarget.value })
-                }
+                onInput={(event) => props.state.updateForm({ username: event.currentTarget.value })}
                 placeholder="admin"
               />
             </label>
@@ -171,9 +164,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                 class={formControl}
                 type="password"
                 value={props.state.form().password}
-                onInput={(event) =>
-                  props.state.updateForm({ password: event.currentTarget.value })
-                }
+                onInput={(event) => props.state.updateForm({ password: event.currentTarget.value })}
                 placeholder={
                   props.state.form().hasStoredPassword
                     ? 'Saved password retained unless replaced'
@@ -396,9 +387,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             type="button"
             class={buttonClass}
             onClick={() => void props.state.previewCurrentForm()}
-            disabled={
-              props.state.saving() || props.state.testing() || props.state.previewing()
-            }
+            disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
           >
             {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
           </button>

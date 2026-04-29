@@ -12,6 +12,7 @@ import Pause from 'lucide-solid/icons/pause';
 import Play from 'lucide-solid/icons/play';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Terminal from 'lucide-solid/icons/terminal';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { useSystemLogsPanelState } from './useSystemLogsPanelState';
 
 export const SystemLogsPanel: Component = () => {
@@ -28,20 +29,20 @@ export const SystemLogsPanel: Component = () => {
         {/* Controls */}
         <div class="p-4 sm:p-6">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div class="flex items-center space-x-3">
-              <label class="text-sm font-medium text-base-content">
-                {SYSTEM_LOGS_PANEL_COPY.levelLabel}
-              </label>
-              <select
-                value={state.level()}
-                onChange={(e) => void state.handleLevelChange(e.currentTarget.value)}
-                class="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-border bg-surface text-muted focus:ring-primary-500 focus:border-primary-500"
-              >
-                <For each={SYSTEM_LOG_LEVEL_OPTIONS}>
-                  {(option) => <option value={option.value}>{option.label}</option>}
-                </For>
-              </select>
-            </div>
+            <FormSelect
+              id="system-log-level-select"
+              label={SYSTEM_LOGS_PANEL_COPY.levelLabel}
+              value={state.level()}
+              onChange={(e) => void state.handleLevelChange(e.currentTarget.value)}
+              fieldBaseClass="flex"
+              fieldClass="items-center space-x-3"
+              labelClass="text-sm font-medium text-base-content"
+              selectBaseClass="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-border bg-surface text-muted focus:ring-primary-500 focus:border-primary-500"
+            >
+              <For each={SYSTEM_LOG_LEVEL_OPTIONS}>
+                {(option) => <option value={option.value}>{option.label}</option>}
+              </For>
+            </FormSelect>
 
             <div class="flex items-center space-x-2">
               <button

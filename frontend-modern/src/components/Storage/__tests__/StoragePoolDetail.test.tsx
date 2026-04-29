@@ -7,7 +7,12 @@ import type { Resource } from '@/types/resource';
 const historyChartSpy = vi.fn();
 
 vi.mock('@/components/shared/HistoryChart', () => ({
-  HistoryChart: (props: { resourceType: string; resourceId: string; metric: string; range?: string }) => {
+  HistoryChart: (props: {
+    resourceType: string;
+    resourceId: string;
+    metric: string;
+    range?: string;
+  }) => {
     historyChartSpy(props);
     return (
       <div data-testid="history-chart">
@@ -82,7 +87,9 @@ describe('StoragePoolDetail', () => {
       </table>
     ));
 
-    const rangeSelector = screen.getByRole('combobox') as HTMLSelectElement;
+    const rangeSelector = screen.getByRole('combobox', {
+      name: 'Capacity trend range',
+    }) as HTMLSelectElement;
     expect(Array.from(rangeSelector.options).map((option) => option.value)).toEqual([
       '24h',
       '7d',

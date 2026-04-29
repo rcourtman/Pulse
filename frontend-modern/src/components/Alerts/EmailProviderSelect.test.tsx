@@ -115,6 +115,24 @@ describe('EmailProviderSelect', () => {
     expect(screen.getByText('Recipients (one per line)')).toBeInTheDocument();
   });
 
+  it('exposes canonical labels for provider and security selects', () => {
+    render(() => (
+      <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />
+    ));
+
+    expect(screen.getByRole('combobox', { name: 'Email provider' })).toHaveAttribute(
+      'id',
+      'alert-email-provider-select',
+    );
+
+    fireEvent.click(screen.getByText('Show advanced options'));
+
+    expect(screen.getByRole('combobox', { name: 'Security' })).toHaveAttribute(
+      'id',
+      'alert-email-security-select',
+    );
+  });
+
   it('loads providers from the API and populates the select', async () => {
     render(() => (
       <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />

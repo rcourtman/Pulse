@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { ORGANIZATION_MEMBER_ROLE_OPTIONS } from '@/utils/organizationRolePresentation';
 import { formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
@@ -12,9 +13,9 @@ interface OrganizationAccessMembersSectionProps {
   state: ReturnType<typeof useOrganizationAccessPanelState>;
 }
 
-export const OrganizationAccessMembersSection: Component<
-  OrganizationAccessMembersSectionProps
-> = (props) => (
+export const OrganizationAccessMembersSection: Component<OrganizationAccessMembersSectionProps> = (
+  props,
+) => (
   <Show when={props.state.org()}>
     {(currentOrg) => (
       <div class="mt-4">
@@ -43,7 +44,10 @@ export const OrganizationAccessMembersSection: Component<
                       </span>
                     }
                   >
-                    <select
+                    <FormSelect
+                      label={`Role for ${member.userId}`}
+                      labelClass="sr-only"
+                      fieldBaseClass="contents"
                       value={role}
                       onChange={(event) => {
                         void props.state.updateRole(
@@ -55,7 +59,7 @@ export const OrganizationAccessMembersSection: Component<
                         props.state.saving() ||
                         (isOwner() && props.currentUser !== currentOrg().ownerUserId)
                       }
-                      class="rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      selectBaseClass="rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <For
                         each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(
@@ -66,7 +70,7 @@ export const OrganizationAccessMembersSection: Component<
                       >
                         {(option) => <option value={option.value}>{option.label}</option>}
                       </For>
-                    </select>
+                    </FormSelect>
                   </Show>
                 );
               },
@@ -74,9 +78,7 @@ export const OrganizationAccessMembersSection: Component<
             {
               key: 'addedAt',
               label: 'Added',
-              render: (member) => (
-                <span class="text-muted">{formatOrgDate(member.addedAt)}</span>
-              ),
+              render: (member) => <span class="text-muted">{formatOrgDate(member.addedAt)}</span>,
             },
             {
               key: 'actions',

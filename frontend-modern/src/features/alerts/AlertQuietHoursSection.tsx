@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 
 import { controlClass, formField, labelClass } from '@/components/shared/Form';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import {
@@ -82,20 +83,18 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
                 class={controlClass('font-mono')}
               />
             </div>
-            <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                {ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL}
-              </label>
-              <select
-                value={props.quietHours.timezone}
-                onChange={(event) => props.setQuietHoursTimezone(event.currentTarget.value)}
-                class={controlClass('pr-8')}
-              >
-                <For each={ALERT_SCHEDULE_TIMEZONES}>
-                  {(timezone) => <option value={timezone}>{timezone}</option>}
-                </For>
-              </select>
-            </div>
+            <FormSelect
+              id="alert-quiet-hours-timezone"
+              label={ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL}
+              labelClass="text-xs uppercase tracking-[0.08em]"
+              value={props.quietHours.timezone}
+              onChange={(event) => props.setQuietHoursTimezone(event.currentTarget.value)}
+              selectBaseClass={controlClass('pr-8')}
+            >
+              <For each={ALERT_SCHEDULE_TIMEZONES}>
+                {(timezone) => <option value={timezone}>{timezone}</option>}
+              </For>
+            </FormSelect>
           </div>
 
           <div>
@@ -133,9 +132,7 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
               <For each={props.quietHourSuppressOptions}>
                 {(option) => (
                   <label
-                    class={getAlertQuietSuppressCardClass(
-                      props.quietHours.suppress[option.key],
-                    )}
+                    class={getAlertQuietSuppressCardClass(props.quietHours.suppress[option.key])}
                   >
                     <input
                       type="checkbox"
@@ -158,11 +155,7 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
                           stroke="currentColor"
                           stroke-width="3"
                         >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </Show>
                     </div>

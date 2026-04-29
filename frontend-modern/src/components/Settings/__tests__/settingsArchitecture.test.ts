@@ -3,6 +3,7 @@ import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
+import aiChatMaintenanceSectionSource from '../AIChatMaintenanceSection.tsx?raw';
 import aiModelSelectionSectionSource from '../AIModelSelectionSection.tsx?raw';
 import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
@@ -16,7 +17,12 @@ import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
+import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
+import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
+import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
+import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
+import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
@@ -27,17 +33,28 @@ import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
 import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx?raw';
 import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSection.tsx?raw';
+import nodeModalMonitoringSectionSource from '../NodeModalMonitoringSection.tsx?raw';
 import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
 import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
 import vmwareCredentialSlotSource from '../ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
+import organizationAccessManagementSectionSource from '../OrganizationAccessManagementSection.tsx?raw';
+import organizationAccessMembersSectionSource from '../OrganizationAccessMembersSection.tsx?raw';
+import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
+import rolesEditorDialogSource from '../RolesEditorDialog.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
 import auditLogPresentationSource from '../../../utils/auditLogPresentation.ts?raw';
+
+const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEditor/**/*.tsx'], {
+  query: '?raw',
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
   it('keeps Settings on the canonical page shell boundary', () => {
@@ -183,6 +200,35 @@ describe('settings architecture guardrails', () => {
     expect(auditLogPresentationSource).toContain(
       "AUDIT_VERIFICATION_FILTER_ALL_LABEL = getAllFilterOptionLabel('verification')",
     );
+  });
+
+  it('keeps settings native select controls on the shared labelled primitive', () => {
+    const rawSelectUsers = Object.entries(settingsRuntimeSources)
+      .filter(([, source]) => source.includes('<select'))
+      .map(([path]) => path)
+      .sort();
+
+    expect(rawSelectUsers).toEqual([]);
+
+    for (const source of [
+      aiChatMaintenanceSectionSource,
+      aiRuntimeControlsSectionSource,
+      auditLogPanelSource,
+      recoverySettingsPanelSource,
+      systemLogsPanelSource,
+      updatesSettingsPanelSource,
+      agentProfilesPanelSource,
+      infrastructureInstallerSectionSource,
+      nodeModalMonitoringSectionSource,
+      trueNASCredentialSlotSource,
+      organizationAccessManagementSectionSource,
+      organizationAccessMembersSectionSource,
+      organizationSharingCreateSectionSource,
+      rolesEditorDialogSource,
+    ]) {
+      expect(source).toContain("import { FormSelect } from '@/components/shared/FormSelect';");
+      expect(source).toContain('<FormSelect');
+    }
   });
 
   it('keeps system AI model catalogs on the shared searchable picker boundary', () => {

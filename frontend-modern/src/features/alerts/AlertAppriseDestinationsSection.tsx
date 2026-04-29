@@ -3,12 +3,8 @@ import { Show } from 'solid-js';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
 import { Toggle } from '@/components/shared/Toggle';
-import {
-  formControl,
-  formField,
-  formHelpText,
-  labelClass,
-} from '@/components/shared/Form';
+import { formControl, formField, formHelpText, labelClass } from '@/components/shared/Form';
+import { FormSelect } from '@/components/shared/FormSelect';
 import type { UIAppriseConfig } from './types';
 import {
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
@@ -84,23 +80,21 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
       bodyClass="space-y-4"
     >
       <div class="space-y-4">
-        <div class={formField}>
-          <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-            {ALERT_DESTINATIONS_APPRISE_MODE_LABEL}
-          </label>
-          <select
-            class={formControl}
-            value={props.config.mode}
-            onInput={(event) => {
-              props.updateApprise({ mode: event.currentTarget.value as 'cli' | 'http' });
-              props.setHasUnsavedChanges(true);
-            }}
-          >
-            <option value="cli">{ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL}</option>
-            <option value="http">{ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL}</option>
-          </select>
-          <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_MODE_HELP}</p>
-        </div>
+        <FormSelect
+          id="alert-apprise-delivery-mode"
+          label={ALERT_DESTINATIONS_APPRISE_MODE_LABEL}
+          labelClass="text-xs uppercase tracking-[0.08em]"
+          value={props.config.mode}
+          onInput={(event) => {
+            props.updateApprise({ mode: event.currentTarget.value as 'cli' | 'http' });
+            props.setHasUnsavedChanges(true);
+          }}
+          selectBaseClass={formControl}
+          help={ALERT_DESTINATIONS_APPRISE_MODE_HELP}
+        >
+          <option value="cli">{ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL}</option>
+          <option value="http">{ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL}</option>
+        </FormSelect>
 
         <div class={formField}>
           <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
