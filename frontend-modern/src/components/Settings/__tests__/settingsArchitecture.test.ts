@@ -28,9 +28,11 @@ import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
+import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
+import agentProfileSettingsSource from '../agentProfileSettings.ts?raw';
 import connectionsTableSource from '../ConnectionsTable.tsx?raw';
 import monitoredSystemAdmissionPreviewSource from '../MonitoredSystemAdmissionPreview.tsx?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
@@ -238,6 +240,24 @@ describe('settings architecture guardrails', () => {
       expect(source).not.toContain('Container runtime');
       expect(source).not.toContain('container runtimes');
       expect(source).not.toContain('Container runtimes');
+    }
+  });
+
+  it('keeps infrastructure Docker and Podman settings copy on shared source-platform labels', () => {
+    expect(infrastructureOperationsModelSource).toContain("getSourcePlatformLabel('docker')");
+    expect(agentProfileSettingsSource).toContain("getSourcePlatformLabel('docker')");
+    expect(diagnosticsResultsPanelSource).toContain("getSourcePlatformLabel('docker')");
+
+    for (const source of [
+      infrastructureOperationsModelSource,
+      agentProfileSettingsSource,
+      diagnosticsResultsPanelSource,
+    ]) {
+      expect(source).not.toContain('Container Runtime Agents');
+      expect(source).not.toContain('Agent-backed container runtime monitoring');
+      expect(source).not.toContain('Force container runtime monitoring');
+      expect(source).not.toContain('Force a specific container runtime');
+      expect(source).not.toContain('Docker Runtime');
     }
   });
 

@@ -24,6 +24,7 @@ import {
   DIAGNOSTICS_EMPTY_STATE_COPY,
   DIAGNOSTICS_PANEL_COPY,
 } from '@/utils/diagnosticsPresentation';
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 import type {
   CommercialFunnelDimensionBreakdown,
@@ -32,6 +33,8 @@ import type {
   InfrastructureOnboardingPlatformBreakdown,
   InfrastructureOnboardingStageCounts,
 } from '@/components/Settings/diagnosticsModel';
+
+const DOCKER_PODMAN_SOURCE_LABEL = getSourcePlatformLabel('docker');
 
 const DiagnosticCard: Component<{
   children: JSX.Element;
@@ -780,8 +783,12 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                   <Database class="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <h4 class="text-sm font-semibold text-base-content">Container Runtime Agents</h4>
-                  <p class="text-xs text-muted">Agent-backed container runtime monitoring</p>
+                  <h4 class="text-sm font-semibold text-base-content">
+                    {DOCKER_PODMAN_SOURCE_LABEL} agents
+                  </h4>
+                  <p class="text-xs text-muted">
+                    Agent-backed {DOCKER_PODMAN_SOURCE_LABEL} monitoring
+                  </p>
                 </div>
                 <div class="ml-auto text-right">
                   <div class="text-lg font-bold text-base-content">

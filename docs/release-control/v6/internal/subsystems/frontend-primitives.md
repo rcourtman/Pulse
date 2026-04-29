@@ -1751,6 +1751,11 @@ activation summaries, `DiagnosticsResultsPanel.tsx` and `diagnosticsModel.ts`
 must own the card composition, label humanization, and typed payload shape,
 while the shell remains a layout/composition owner and does not reintroduce
 inline diagnostics fetches or commerce-specific rendering logic.
+Diagnostics cards that summarize Docker and Podman agent coverage must use the
+shared `docker` source-platform label from
+`frontend-modern/src/utils/sourcePlatforms.ts` for their heading and body copy,
+so diagnostics results stay aligned with the governed settings/source-platform
+vocabulary instead of inventing a local runtime family label.
 
 The settings shell registry now also treats extracted feature prop contracts as
 canonical shell inputs instead of reaching back into feature panels for type

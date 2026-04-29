@@ -164,6 +164,17 @@ describe('infrastructure operations model', () => {
     expect(autoProfile?.description).toContain('every detected PVE / PBS service');
   });
 
+  it('keeps the Docker install profile aligned with the shared Docker and Podman label', () => {
+    const dockerProfile = INSTALL_PROFILE_OPTIONS.find((option) => option.value === 'docker');
+
+    expect(dockerProfile).toBeDefined();
+    expect(dockerProfile?.label).toBe('Docker / Podman runtime');
+    expect(dockerProfile?.description).toBe(
+      'Force Docker / Podman monitoring when automatic detection is restricted.',
+    );
+    expect(dockerProfile?.description).not.toContain('container runtime');
+  });
+
   it('keeps Proxmox node profiles explicit about per-node telemetry coverage', () => {
     const pveProfile = INSTALL_PROFILE_OPTIONS.find((option) => option.value === 'proxmox-pve');
     const pbsProfile = INSTALL_PROFILE_OPTIONS.find((option) => option.value === 'proxmox-pbs');

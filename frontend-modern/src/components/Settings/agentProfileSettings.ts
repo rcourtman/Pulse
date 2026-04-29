@@ -1,3 +1,5 @@
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
+
 export interface BooleanSetting {
   key: string;
   type: 'boolean';
@@ -30,6 +32,8 @@ export interface StringSetting {
 
 export type KnownSetting = BooleanSetting | SelectSetting | DurationSetting | StringSetting;
 
+const DOCKER_PODMAN_SOURCE_LABEL = getSourcePlatformLabel('docker');
+
 // Settings that the agent actually supports (from applyRemoteSettings in cmd/pulse-agent/main.go)
 export const KNOWN_SETTINGS: KnownSetting[] = [
   // Core monitoring
@@ -42,14 +46,14 @@ export const KNOWN_SETTINGS: KnownSetting[] = [
   {
     key: 'enable_docker',
     type: 'boolean',
-    label: 'Enable Docker Monitoring',
-    description: 'Monitor Docker or Podman containers on this agent',
+    label: `Enable ${DOCKER_PODMAN_SOURCE_LABEL} monitoring`,
+    description: `Monitor ${DOCKER_PODMAN_SOURCE_LABEL} containers on this agent`,
   },
   {
     key: 'docker_runtime',
     type: 'select',
-    label: 'Docker Runtime',
-    description: 'Force a specific container runtime',
+    label: `${DOCKER_PODMAN_SOURCE_LABEL} runtime`,
+    description: `Force Docker or Podman, or keep ${DOCKER_PODMAN_SOURCE_LABEL} runtime detection automatic`,
     options: ['auto', 'docker', 'podman'],
   },
   {

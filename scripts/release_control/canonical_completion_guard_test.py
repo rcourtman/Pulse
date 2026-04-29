@@ -1974,6 +1974,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                     ],
                 }
             ],
@@ -2225,6 +2226,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                     ],
                 }
             ],

@@ -153,6 +153,14 @@ describe('DiagnosticsResultsPanel', () => {
         ],
         notes: ['More probed addresses miss than detect a supported API-backed platform.'],
       },
+      dockerAgents: {
+        agentsOnline: 1,
+        agentsTotal: 2,
+        agentsReportingVersion: 2,
+        agentsWithTokenBinding: 1,
+        agentsWithoutTokenBinding: 1,
+        agentsNeedingAttention: 1,
+      },
       errors: [],
     };
 
@@ -174,5 +182,8 @@ describe('DiagnosticsResultsPanel', () => {
     expect(screen.getByText('Credentials Opened')).toBeInTheDocument();
     expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
     expect(screen.getByText('API')).toBeInTheDocument();
+    expect(screen.getByText('Docker / Podman agents')).toBeInTheDocument();
+    expect(screen.getByText('Agent-backed Docker / Podman monitoring')).toBeInTheDocument();
+    expect(screen.queryByText('Container Runtime Agents')).not.toBeInTheDocument();
   });
 });

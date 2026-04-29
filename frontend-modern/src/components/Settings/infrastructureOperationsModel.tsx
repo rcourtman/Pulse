@@ -1,6 +1,7 @@
 import type { JSX } from 'solid-js';
 import type { ConnectedInfrastructureItem, ConnectedInfrastructureSurface } from '@/types/api';
 import { getAgentCapabilityLabel, type AgentCapability } from '@/utils/agentCapabilityPresentation';
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { type PlatformConnectionsView } from './platformConnectionsModel';
 import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 
@@ -88,6 +89,8 @@ export type InstallProfileOption = {
   description: string;
   flags: string[];
 };
+
+const DOCKER_PODMAN_SOURCE_LABEL = getSourcePlatformLabel('docker');
 
 export type InfrastructureCommandSnippet = {
   label: string;
@@ -301,8 +304,8 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
   },
   {
     value: 'docker',
-    label: 'Docker / Podman runtime',
-    description: 'Force container runtime monitoring even when detection is restricted.',
+    label: `${DOCKER_PODMAN_SOURCE_LABEL} runtime`,
+    description: `Force ${DOCKER_PODMAN_SOURCE_LABEL} monitoring when automatic detection is restricted.`,
     flags: ['--enable-docker', '--disable-host'],
   },
   {

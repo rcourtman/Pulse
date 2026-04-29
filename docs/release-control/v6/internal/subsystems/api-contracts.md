@@ -109,6 +109,11 @@ Own canonical runtime payload shapes between backend and frontend.
 11. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `security-privacy`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
 12. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `agent-lifecycle`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 13. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+    Docker and Podman install-profile labels and descriptions in that shared
+    model must derive their customer-facing source name from
+    `frontend-modern/src/utils/sourcePlatforms.ts` rather than page-local
+    wording, because those install choices set API-token and install-command
+    expectations for the operator.
 13. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 16. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 17. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
