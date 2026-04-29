@@ -98,7 +98,7 @@ export const buildSelfHostedCommercialPlanModel = (
       summary: [
         {
           label: 'Core Monitoring',
-          value: 'Unlimited',
+          value: 'Included',
         },
         {
           label: 'Metric History',
@@ -119,7 +119,7 @@ export const buildSelfHostedCommercialPlanModel = (
         ? [
             {
               label: 'Core Monitoring',
-              value: 'Unlimited',
+              value: 'Included',
             },
             {
               label: 'Plan Status',

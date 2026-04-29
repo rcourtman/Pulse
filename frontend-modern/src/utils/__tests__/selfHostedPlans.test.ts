@@ -9,7 +9,7 @@ import {
 } from '../selfHostedPlans';
 
 describe('selfHostedPlans', () => {
-  it('keeps unlimited self-hosted monitoring aligned across tier cards and comparison rows', () => {
+  it('keeps core monitoring aligned as an included self-hosted baseline', () => {
     expect(SELF_HOSTED_PLAN_DEFINITIONS.map((tier) => tier.name)).toEqual([
       'Community',
       'Relay',
@@ -21,10 +21,10 @@ describe('selfHostedPlans', () => {
     );
     expect(monitoringScopeRow).toEqual({
       key: 'core_monitoring_scope',
-      name: 'Core Monitoring Scope',
-      community: 'Unlimited',
-      relay: 'Unlimited',
-      pro: 'Unlimited',
+      name: 'Core Monitoring',
+      community: 'Included',
+      relay: 'Included',
+      pro: 'Included',
     });
 
     expect(SELF_HOSTED_FEATURE_ROWS).toEqual(
@@ -52,7 +52,7 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
       pageDescription:
-        'Core monitoring is free and unlimited for self-hosted Pulse. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
+        'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
@@ -76,7 +76,7 @@ describe('selfHostedPlans', () => {
   });
 
   it('keeps Community copy free-first and Pro copy focused on operational extras', () => {
-    expect(SELF_HOSTED_PLAN_BY_TIER.community.subline).toBe('Unlimited self-hosted monitoring');
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.subline).toBe('Core monitoring included');
     expect(SELF_HOSTED_PLAN_BY_TIER.community.billingExtrasSummary).toBe(
       'Patrol, alerts, and OIDC',
     );
@@ -87,7 +87,7 @@ describe('selfHostedPlans', () => {
       'Community covers self-hosted monitoring and core operations on this instance.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementHighlights).toEqual([
-      'Unlimited self-hosted monitoring',
+      'Real-time monitoring',
       '7-day metric history',
       'Pulse Patrol (BYOK)',
       'Update alerts',
@@ -131,13 +131,15 @@ describe('selfHostedPlans', () => {
       'Centralized Agent Profiles',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
-      expect.arrayContaining(['Unlimited self-hosted monitoring', 'Pulse Patrol (BYOK)']),
+      expect.arrayContaining(['Real-time monitoring', 'Pulse Patrol (BYOK)']),
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).not.toContain(
       'Hosted Patrol quickstart with activated entitlement: 25 runs, no API key',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain('14-day metric history');
-    expect(SELF_HOSTED_PLAN_BY_TIER.pro.highlights).toContain('Unlimited self-hosted monitoring');
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.highlights.join('\n')).not.toMatch(
+      /unlimited.*self-hosted.*monitoring/i,
+    );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).not.toContain(
       'Patrol quickstart: 25 runs, no API key',
     );

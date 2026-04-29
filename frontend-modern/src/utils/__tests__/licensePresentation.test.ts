@@ -85,7 +85,7 @@ describe('licensePresentation', () => {
         'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
       planSelectionPromptTitle: 'Compare self-hosted plans',
       planSelectionPromptBody:
-        'Community includes unlimited self-hosted monitoring. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+        'Community includes core monitoring at no cost. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
       planSelectionPromptActionLabel: 'Compare plans',
       purchaseActivatedPlanActionLabel: 'Review plan',
       purchaseCancelledActionLabel: 'Compare plans',
@@ -197,7 +197,7 @@ describe('licensePresentation', () => {
     });
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'active')?.body,
-    ).toContain('Self-hosted monitoring and child-resource volume remain uncapped');
+    ).toContain('Self-hosted monitoring and child-resource volume are not metered');
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'active')?.body,
     ).not.toContain('guest capacity');
@@ -244,7 +244,7 @@ describe('licensePresentation', () => {
       body: 'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
       unlockedFeaturesLabel: 'Included on this instance',
       unlockedFeatures: [
-        'Unlimited self-hosted monitoring',
+        'Real-time monitoring',
         '7-day metric history',
         'Pulse Patrol (BYOK)',
         'Update alerts',
@@ -374,7 +374,7 @@ describe('licensePresentation', () => {
       ],
       supplementalBadges: ['Grandfathered price'],
       supplementalSummary:
-        'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy.',
+        'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume are not metered under the current v6 policy.',
     });
   });
 

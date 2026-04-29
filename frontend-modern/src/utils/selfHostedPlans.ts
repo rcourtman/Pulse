@@ -82,13 +82,13 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     tier: 'community',
     name: 'Community',
     price: 'Free forever',
-    subline: 'Unlimited self-hosted monitoring',
+    subline: 'Core monitoring included',
     metricHistoryDays: 7,
     billingExtrasSummary: 'Patrol, alerts, and OIDC',
     entitlementSummary:
       'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
     entitlementHighlights: [
-      'Unlimited self-hosted monitoring',
+      'Real-time monitoring',
       '7-day metric history',
       'Pulse Patrol (BYOK)',
       'Update alerts',
@@ -98,7 +98,6 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       'Community covers self-hosted monitoring and core operations on this instance.',
     highlights: [
       'Real-time monitoring',
-      'Unlimited self-hosted monitoring',
       '7-day metric history',
       'Pulse Patrol (BYOK)',
       'Update alerts',
@@ -148,7 +147,6 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       '90-day metric history',
       'RBAC, audit logging, SAML SSO',
       'Agent profiles · PDF/CSV reports',
-      'Unlimited self-hosted monitoring',
     ],
   },
 ] as const;
@@ -181,7 +179,7 @@ export function getSelfHostedPlanDefinitionForBillingTier(
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
   pageDescription:
-    'Core monitoring is free and unlimited for self-hosted Pulse. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
+    'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',
@@ -213,10 +211,10 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
   },
   {
     key: 'core_monitoring_scope',
-    name: 'Core Monitoring Scope',
-    community: 'Unlimited',
-    relay: 'Unlimited',
-    pro: 'Unlimited',
+    name: 'Core Monitoring',
+    community: 'Included',
+    relay: 'Included',
+    pro: 'Included',
   },
   {
     key: 'history',

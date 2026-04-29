@@ -297,7 +297,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
   });
 
-  it('shows active recurring v5 plan terms as uncapped even if stale limit metadata is present', async () => {
+  it('shows active recurring v5 plan terms as unmetered even if stale limit metadata is present', async () => {
     mockEntitlements = {
       capabilities: ['ai_patrol'],
       limits: [{ key: 'max_monitored_systems', limit: 12, current: 5, state: 'ok' }],
@@ -339,7 +339,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(
       within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
-        'Unlimited',
+        'Included',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
@@ -349,7 +349,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
   });
 
-  it('shows lifetime grandfathered plans as uncapped', async () => {
+  it('shows lifetime grandfathered plans as unmetered', async () => {
     mockEntitlements = {
       capabilities: ['ai_patrol'],
       limits: [],
@@ -381,11 +381,11 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Included').length).toBeGreaterThan(0);
     expect(screen.queryByText('5 / 12')).not.toBeInTheDocument();
   });
 
-  it('shows recurring grandfathered v5 Pro plans as uncapped while they remain active', async () => {
+  it('shows recurring grandfathered v5 Pro plans as unmetered while they remain active', async () => {
     const tests = [
       {
         name: 'monthly',
@@ -429,12 +429,12 @@ describe('ProLicensePanel', () => {
       ).not.toBeInTheDocument();
       expect(
         screen.getAllByText(
-          /self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy/i,
+          /self-hosted monitoring and child-resource volume are not metered under the current v6 policy/i,
         ).length,
       ).toBeGreaterThan(0);
       expect(
         within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
-          'Unlimited',
+          'Included',
         ),
       ).toBeInTheDocument();
       expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
@@ -442,14 +442,14 @@ describe('ProLicensePanel', () => {
       expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
       expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
       expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
-      expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Included').length).toBeGreaterThan(0);
       expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
 
       cleanup();
     }
   });
 
-  it('uses shared current-plan metadata for uncapped retail self-hosted tiers', async () => {
+  it('uses shared current-plan metadata for unmetered retail self-hosted tiers', async () => {
     mockEntitlements = {
       capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_patrol', 'ai_autofix'],
       limits: [],
@@ -571,7 +571,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(
       within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
-        'Unlimited',
+        'Included',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Migration continuity verification pending')).not.toBeInTheDocument();
@@ -630,7 +630,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(
       within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
-        'Unlimited',
+        'Included',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/already monitoring 23/i)).not.toBeInTheDocument();
@@ -691,7 +691,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(
       within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
-        'Unlimited',
+        'Included',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Grandfathered monitored-system floor')).not.toBeInTheDocument();

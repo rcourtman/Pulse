@@ -16,14 +16,14 @@ const createBaseInput = () => ({
 });
 
 describe('commercialBillingModel', () => {
-  it('uses shared current retail plan metadata for uncapped self-hosted plans', () => {
+  it('uses shared current retail plan metadata without capacity entitlement copy', () => {
     const model = buildSelfHostedCommercialPlanModel({
       ...createBaseInput(),
       retailPlanDefinition: SELF_HOSTED_PLAN_BY_TIER.pro,
     });
 
     expect(model.summary).toEqual([
-      { label: 'Core Monitoring', value: 'Unlimited' },
+      { label: 'Core Monitoring', value: 'Included' },
       { label: 'Metric History', value: '90 days' },
       { label: 'Included Extras', value: 'Analysis, remediation, and admin controls' },
     ]);
@@ -36,7 +36,7 @@ describe('commercialBillingModel', () => {
     ]);
   });
 
-  it('keeps uncapped grandfathered continuity focused on core monitoring', () => {
+  it('keeps grandfathered continuity focused on unmetered core monitoring', () => {
     const model = buildSelfHostedCommercialPlanModel({
       ...createBaseInput(),
       planTerms: 'V5 Pro Monthly (Grandfathered)',
@@ -44,7 +44,7 @@ describe('commercialBillingModel', () => {
     });
 
     expect(model.summary).toEqual([
-      { label: 'Core Monitoring', value: 'Unlimited' },
+      { label: 'Core Monitoring', value: 'Included' },
       { label: 'Plan Status', value: 'Active' },
     ]);
     expect(model.details.map((item) => item.label)).not.toContain('Included Monitored Systems');

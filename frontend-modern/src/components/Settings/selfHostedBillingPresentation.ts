@@ -59,7 +59,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
   planSelectionPromptTitle: 'Compare self-hosted plans',
   planSelectionPromptBody:
-    'Community includes unlimited self-hosted monitoring. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+    'Community includes core monitoring at no cost. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
   planSelectionPromptActionLabel: 'Compare plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',

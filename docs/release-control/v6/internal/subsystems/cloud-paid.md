@@ -188,9 +188,9 @@ server already observed.
 That same public-pricing boundary also owns the machine-readable v6 pricing
 validator and launch checklist in `pulse-pro:scripts/validate_public_pricing_model.py`
 and `pulse-pro:V6_LAUNCH_CHECKLIST.md`. Those operator surfaces must describe
-self-hosted Pulse as uncapped core monitoring, must not reintroduce monitored-system
-upsell language, and must verify the no-cap release posture rather than legacy
-Community limit enforcement.
+self-hosted Pulse as core monitoring included by default, must not reintroduce
+monitored-system upsell language, and must verify the no-cap release posture
+rather than legacy Community limit enforcement.
 
 ## Extension Points
 
@@ -303,8 +303,8 @@ Community limit enforcement.
     monitored-system limit, continuity, or `max_monitored_systems` metadata
     as support/audit context rather than as the customer-facing plan model:
     Community, Relay, Pro, Pro+, lifetime, and eligible grandfathered recurring
-    plan labels render through the normal plan surface as unlimited core
-    monitoring plus tier-specific extras, with no standing Usage subtab, finite
+    plan labels render through the normal plan surface as core monitoring plus
+    tier-specific extras, with no standing Usage subtab, finite
     policy banner, monitored-system limit row, or pause-new-admissions copy from
     stale volume metadata. Retired `max_monitored_systems` pricing handoffs
     must land on the neutral Plans & Activation surface, not the usage ledger.
@@ -1450,23 +1450,24 @@ That Pro-license presentation rule is explicit UX, not only hidden metadata:
 when a migrated recurring v5 plan is active or in grace, the settings surface
 must render plan terms and a continuity notice that makes it clear the
 existing recurring price remains in force until cancellation, while
-self-hosted monitoring and child-resource volume stay uncapped under the
+self-hosted monitoring and child-resource volume are not metered under the
 current v6 policy. The same plan summary must not render a separate
 `Guest Capacity`, child-resource allowance, or equivalent volume-cap row for
 uncapped/grandfathered self-hosted plans; the customer-facing continuity story
-is existing-price protection plus uncapped self-hosted monitoring and
-child-resource volume, not a new paid guest-capacity benefit.
+is existing-price protection plus unmetered self-hosted monitoring and
+child-resource volume under the current v6 policy, not a new paid
+guest-capacity benefit.
 The self-hosted commercial presentation on that same surface is now locked to
 the no-cap monitored-system model as well. `ProLicensePanel.tsx`,
 `CommercialBillingSections.tsx`, and
 `frontend-modern/src/utils/commercialBillingModel.ts` must present current v6
-self-hosted packages as unlimited core monitoring plus plan-specific extras:
-Community stays free for core monitoring, Relay adds remote access/mobile/push
-convenience and 14-day history, Pro adds Relay plus AI operations, automation,
-root-cause analysis, safe remediation, advanced administration, and 90-day
-history, while Pro+ remains legacy
-continuity only. Cloud/MSP pricing semantics stay separate, and grandfathered
-v5 continuity copy remains an explicit boundary policy.
+self-hosted packages as core monitoring included in every self-hosted tier plus
+plan-specific extras: Community stays free for core monitoring, Relay adds
+remote access/mobile/push convenience and 14-day history, Pro adds Relay plus
+AI operations, automation, root-cause analysis, safe remediation, advanced
+administration, and 90-day history, while Pro+ remains legacy continuity only.
+Cloud/MSP pricing semantics stay separate, and grandfathered v5 continuity copy
+remains an explicit boundary policy.
 That same settings-owned presentation must distinguish between active
 grandfathered recurring v5 continuity and stale bounded legacy fallback
 metadata. Active grandfathered recurring v5 plans must render the existing
@@ -1478,7 +1479,7 @@ plan labels must follow the same customer-facing no-cap rule even if a
 `useProLicensePanelState.ts` must suppress the Usage tab, monitored-system
 policy section, continuity notice, plan-limit detail rows, and
 pause-new-admissions copy, while `licensePresentation.ts` must keep current
-plan summaries focused on unlimited core monitoring plus the actual tier
+plan summaries focused on core monitoring plus the actual tier
 extras. Bounded fallback continuity may only be displayed for a support context
 that is not already normalized to a recognized self-hosted v6 package.
 That same pricing boundary now also owns the shared frontend plan-definition
@@ -1502,11 +1503,11 @@ The same rule applies to self-hosted commercial framing inside product-owned
 billing and activation surfaces: plan names, counted-unit copy, and upgrade
 adjacency must come from the shared self-hosted plan-definition owner rather
 than page-local strings. That owner must also keep Community, Relay, and Pro
-framed as unlimited core monitoring plus their bundle-specific extras rather
-than drifting back to bounded monitored-system sales copy, vague `systems`, or
-device-style language. The same shared owner must also provide the billing
-surface bundle summary and metric-history facts for current uncapped
-self-hosted tiers, so `commercialBillingModel.ts` and
+framed as core monitoring included in every self-hosted tier plus their
+bundle-specific extras rather than drifting back to bounded monitored-system
+sales copy, vague `systems`, or device-style language. The same shared owner
+must also provide the billing surface bundle summary and metric-history facts
+for current unmetered self-hosted tiers, so `commercialBillingModel.ts` and
 `useProLicensePanelState.ts` do not regress back to legacy guest-capacity or
 meter-style entitlement fields on retail Community, Relay, or Pro plans. Pro+
 may appear only as a legacy continuity tier, and
@@ -1515,8 +1516,9 @@ accordingly in tier, plan, and plan-version presentation instead of rendering
 it as a current public Pulse Pro+ package. When direct plan-selection intent
 opens the explicit self-hosted comparison surface, the shared presentation
 helpers must show Pro's operations, admin, and reporting extras together while
-still framing Community, Relay, and Pro as unlimited core monitoring rather
-than monitored-system capacity tiers. The same factual plan surface must keep
+still framing Community, Relay, and Pro as core monitoring included in every
+self-hosted tier rather than monitored-system capacity tiers. The same factual
+plan surface must keep
 inactive-state copy neutral: default Community installs may say no activation
 key is active, but they must not foreground paid self-hosted activation or
 v5-era "No Pro license" language before the operator opens an explicit
