@@ -17,13 +17,12 @@ import (
 
 func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 	tests := []struct {
-		name            string
-		statusCode      int
-		responseBody    map[string]any
-		wantState       pkglicensing.CommercialMigrationState
-		wantReason      pkglicensing.CommercialMigrationReason
-		wantAction      pkglicensing.CommercialMigrationAction
-		wantTrialReason string
+		name         string
+		statusCode   int
+		responseBody map[string]any
+		wantState    pkglicensing.CommercialMigrationState
+		wantReason   pkglicensing.CommercialMigrationReason
+		wantAction   pkglicensing.CommercialMigrationAction
 	}{
 		{
 			name:       "exchange_unavailable_retryable",
@@ -33,10 +32,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 				"message":   "exchange unavailable",
 				"retryable": true,
 			},
-			wantState:       pkglicensing.CommercialMigrationStatePending,
-			wantReason:      pkglicensing.CommercialMigrationReasonExchangeUnavailable,
-			wantAction:      pkglicensing.CommercialMigrationActionRetryActivation,
-			wantTrialReason: "commercial_migration_pending",
+			wantState:  pkglicensing.CommercialMigrationStatePending,
+			wantReason: pkglicensing.CommercialMigrationReasonExchangeUnavailable,
+			wantAction: pkglicensing.CommercialMigrationActionRetryActivation,
 		},
 		{
 			name:       "exchange_rate_limited",
@@ -46,10 +44,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 				"message":   "try again later",
 				"retryable": true,
 			},
-			wantState:       pkglicensing.CommercialMigrationStatePending,
-			wantReason:      pkglicensing.CommercialMigrationReasonExchangeRateLimited,
-			wantAction:      pkglicensing.CommercialMigrationActionRetryActivation,
-			wantTrialReason: "commercial_migration_pending",
+			wantState:  pkglicensing.CommercialMigrationStatePending,
+			wantReason: pkglicensing.CommercialMigrationReasonExchangeRateLimited,
+			wantAction: pkglicensing.CommercialMigrationActionRetryActivation,
 		},
 		{
 			name:       "exchange_conflict",
@@ -59,10 +56,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 				"message":   "activation already exists",
 				"retryable": false,
 			},
-			wantState:       pkglicensing.CommercialMigrationStatePending,
-			wantReason:      pkglicensing.CommercialMigrationReasonExchangeConflict,
-			wantAction:      pkglicensing.CommercialMigrationActionRetryActivation,
-			wantTrialReason: "commercial_migration_pending",
+			wantState:  pkglicensing.CommercialMigrationStatePending,
+			wantReason: pkglicensing.CommercialMigrationReasonExchangeConflict,
+			wantAction: pkglicensing.CommercialMigrationActionRetryActivation,
 		},
 		{
 			name:       "exchange_malformed",
@@ -72,10 +68,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 				"message":   "malformed legacy key",
 				"retryable": false,
 			},
-			wantState:       pkglicensing.CommercialMigrationStateFailed,
-			wantReason:      pkglicensing.CommercialMigrationReasonExchangeMalformed,
-			wantAction:      pkglicensing.CommercialMigrationActionEnterSupportedV5,
-			wantTrialReason: "commercial_migration_failed",
+			wantState:  pkglicensing.CommercialMigrationStateFailed,
+			wantReason: pkglicensing.CommercialMigrationReasonExchangeMalformed,
+			wantAction: pkglicensing.CommercialMigrationActionEnterSupportedV5,
 		},
 		{
 			name:       "exchange_invalid",
@@ -85,10 +80,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 				"message":   "legacy key invalid",
 				"retryable": false,
 			},
-			wantState:       pkglicensing.CommercialMigrationStateFailed,
-			wantReason:      pkglicensing.CommercialMigrationReasonExchangeInvalid,
-			wantAction:      pkglicensing.CommercialMigrationActionEnterSupportedV5,
-			wantTrialReason: "commercial_migration_failed",
+			wantState:  pkglicensing.CommercialMigrationStateFailed,
+			wantReason: pkglicensing.CommercialMigrationReasonExchangeInvalid,
+			wantAction: pkglicensing.CommercialMigrationActionEnterSupportedV5,
 		},
 		{
 			name:       "exchange_revoked",
@@ -98,10 +92,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 				"message":   "license revoked",
 				"retryable": false,
 			},
-			wantState:       pkglicensing.CommercialMigrationStateFailed,
-			wantReason:      pkglicensing.CommercialMigrationReasonExchangeRevoked,
-			wantAction:      pkglicensing.CommercialMigrationActionUseV6Activation,
-			wantTrialReason: "commercial_migration_failed",
+			wantState:  pkglicensing.CommercialMigrationStateFailed,
+			wantReason: pkglicensing.CommercialMigrationReasonExchangeRevoked,
+			wantAction: pkglicensing.CommercialMigrationActionUseV6Activation,
 		},
 		{
 			name:       "exchange_non_migratable",
@@ -111,10 +104,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 				"message":   "license already retired",
 				"retryable": false,
 			},
-			wantState:       pkglicensing.CommercialMigrationStateFailed,
-			wantReason:      pkglicensing.CommercialMigrationReasonExchangeNonMigratable,
-			wantAction:      pkglicensing.CommercialMigrationActionUseV6Activation,
-			wantTrialReason: "commercial_migration_failed",
+			wantState:  pkglicensing.CommercialMigrationStateFailed,
+			wantReason: pkglicensing.CommercialMigrationReasonExchangeNonMigratable,
+			wantAction: pkglicensing.CommercialMigrationActionUseV6Activation,
 		},
 	}
 
@@ -196,7 +188,7 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 			assert.Equal(t, tt.wantReason, entitlements.CommercialMigration.Reason)
 			assert.Equal(t, tt.wantAction, entitlements.CommercialMigration.RecommendedAction)
 			assert.False(t, entitlements.TrialEligible, "commercial migration work must block trial start")
-			assert.Equal(t, tt.wantTrialReason, entitlements.TrialEligibilityReason)
+			assert.Empty(t, entitlements.TrialEligibilityReason, "retired self-hosted trial acquisition must not leak a trial start reason")
 			assert.Equal(t, "expired", entitlements.SubscriptionState)
 			assert.Equal(t, "free", entitlements.Tier)
 		})
