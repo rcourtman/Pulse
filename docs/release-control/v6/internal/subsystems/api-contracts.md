@@ -428,22 +428,21 @@ the canonical monitored-system blocked payload.
     `internal/api/router_routes_monitoring.go`, `internal/api/router.go`,
     `internal/api/types.go`, and `internal/api/contract_test.go` must route
     optional infrastructure-summary `metrics` filters through one governed
-    transport contract, so dashboard-specific consumers can request only CPU
-    and memory without inventing a second summary endpoint or silently widening
-    back to disk/network payloads. The same contract must carry those requested
-    metric filters through the shared guest-chart batch loader in
+    transport contract, so route-owned consumers can request only the series
+    they render without inventing a second summary endpoint or silently
+    widening back to disk/network payloads. The same contract must carry those
+    requested metric filters through the shared guest-chart batch loader in
     `internal/monitoring/monitor_metrics.go` instead of fetching the full guest
     metric set and trimming after the API payload is already assembled.
-37. Keep the compact dashboard overview route canonical on that same shared API
-    surface. `internal/api/resources.go`,
-    `internal/api/router_routes_monitoring.go`,
-    `frontend-modern/src/api/resources.ts`,
-    `frontend-modern/src/hooks/useDashboardOverview.ts`, and frontend dashboard
-    consumers must route KPI cards, problem-resource rows, governed resource
-    labels, top-infrastructure identity, and canonical metrics-target join keys
-    through `/api/resources/dashboard-summary` instead of reconstructing that
-    shell from the paginated `/api/resources` list payload or guessing how
-    dashboard trend identities map onto infrastructure chart series.
+37. Keep the retired compact dashboard overview route absent from that same
+    shared API surface. `internal/api/resources.go`,
+    `internal/api/router_routes_monitoring.go`, and
+    `frontend-modern/src/api/resources.ts` must not restore
+    `/api/resources/dashboard-summary`, `useDashboardOverview`, or frontend
+    dashboard consumers as compatibility paths for KPI cards, problem-resource
+    rows, governed resource labels, top-infrastructure identity, or metrics-
+    target join keys. New summary payloads must be owned by their product
+    route and pinned in the API contract there.
 38. Keep mock and demo chart reads on the same canonical unified snapshot as
     the rest of the API surface. `internal/api/router.go`,
     `internal/api/contract_test.go`, and chart consumers must route
@@ -594,7 +593,7 @@ the canonical monitored-system blocked payload.
     boundary: when
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
     receives a successful connected-agent lookup result, the canonical install
-    flow must expose direct navigation into `/dashboard` and
+    flow must expose direct navigation into `/infrastructure` and
     `/settings/infrastructure/operations` rather than leaving the operator on a
     transport-only status readout.
 21. Keep the shared first-host detection contract explicit on `/api/state` as
@@ -699,7 +698,7 @@ the canonical monitored-system blocked payload.
     the status payload flips `hasAuthentication` to `false`, preserves
     `bootstrapTokenPath`, and allows browser-owned first-session proof to
     re-enter the real setup wizard instead of silently falling back to an
-    authenticated dashboard state. That recovery transport may expose the
+    already-authenticated app state. That recovery transport may expose the
     bootstrap token file path, but it must not emit the token value into
     automatic runtime logs.
 30. Keep shared SSO test and metadata-preview transport fail-closed: SAML
@@ -924,7 +923,7 @@ that internal grant.
 That same shared API contract now also owns browser-proofed read separation.
 Non-billing browser journeys such as
 `tests/integration/tests/11-first-session.spec.ts`,
-`tests/integration/tests/journeys/01-smoke-bootstrap-login-dashboard.spec.ts`,
+`tests/integration/tests/journeys/01-smoke-bootstrap-login-infrastructure.spec.ts`,
 and `tests/integration/tests/journeys/03-relay-pairing.spec.ts` may call
 `/api/license/runtime-capabilities` for feature truth, but they must assert
 zero browser requests to `/api/license/entitlements`. Billing activation,
@@ -1604,9 +1603,9 @@ That correlations route now reads through the canonical AI intelligence
 facade first, so the handler and its payload keep the detector behind one
 shared access layer instead of routing directly to Patrol-local correlation
 state.
-That store now also owns the dashboard load bundle used by the Patrol page,
-so the page refresh path stays aligned on one store-owned orchestration layer
-instead of re-encoding the AI bundle inline.
+That store now also owns the Patrol page load bundle, so the page refresh path
+stays aligned on one store-owned orchestration layer instead of re-encoding
+the AI bundle inline.
 The AI summary page now also renders the canonical
 `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 card for policy posture, so sensitivity, routing, and redaction counts are

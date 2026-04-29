@@ -267,7 +267,7 @@ runtime gating as separate unlinked claims.
     they must not turn `trial_eligible`, `trial_eligibility_reason`, or an
     expired trial marker into a default Pro CTA or banner.
 17. Add or change monitored-system ledger, disclosure, or admission-preview presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The Dashboard shell must not carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
+18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The retired Dashboard shell must not be restored to carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
     Public demo and other read-only presentation policy states must suppress
     relay setup and upsell onboarding instead of inviting pairing or commercial
     action from a governed non-manageable surface.
@@ -359,11 +359,11 @@ runtime gating as separate unlinked claims.
     RBAC, SSO, audit logging, reporting, and agent profiles may remain present,
     but they are secondary included value and must not displace that operator
     outcome framing on owned commercial surfaces.
-24. Keep public-demo dashboard bootstrap route-owned on the adjacent
+24. Keep public-demo route bootstrap owned on the adjacent
     commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
-    may prewarm shared infrastructure summary caches for non-dashboard routes,
-    but public-demo dashboard arrival must not front-run a broader
-    infrastructure-summary fetch than the route actually renders. Commercial
+    may prewarm shared infrastructure summary caches for route-owned surfaces,
+    but public-demo arrival must not front-run a broader infrastructure-summary
+    fetch than the route actually renders. Commercial
     posture on `v6-demo` therefore stays governed by the route-owned
     presentation policy and summary scope rather than by app-shell-wide
     bootstrap heuristics. That same app-shell boundary must also keep the
@@ -641,7 +641,7 @@ contract, but shared billing and upgrade surfaces now hide or suppress
 themselves from the resolved `presentationPolicy` payload instead of teaching
 mock mode, response-header inference, or frontend-only feature flags to
 bypass the real licensing model. That includes settings billing tabs,
-public-demo banner and monitored-system/trial nudges, dashboard relay
+public-demo banner and monitored-system/trial nudges, app-wide relay
 paywalls, Patrol upgrade CTAs, and history-lock upsells. Demo readiness
 therefore means presentation isolation, not a license exemption.
 That same public-demo boundary now also owns route-level commercial
@@ -713,12 +713,12 @@ surfaces such as `frontend-modern/src/components/Settings/useProLicensePanelStat
 may still force refresh through the same shared store when plan, activation, or
 recovery actions mutate commercial truth.
 Non-billing browser journeys must also stay off
-`/api/license/entitlements` entirely. Dashboard, infrastructure, alerts,
+`/api/license/entitlements` entirely. Infrastructure, Workloads, alerts,
 first-session gated routes, and relay settings must take feature truth from
 `/api/license/runtime-capabilities` or already loaded commercial posture, and
 the governed browser proof in
 `tests/integration/tests/11-first-session.spec.ts`,
-`tests/integration/tests/journeys/01-smoke-bootstrap-login-dashboard.spec.ts`,
+`tests/integration/tests/journeys/01-smoke-bootstrap-login-infrastructure.spec.ts`,
 and `tests/integration/tests/journeys/03-relay-pairing.spec.ts` must continue
 to assert zero browser-shell entitlement requests outside owned billing flows.
 That same authenticated-shell commercial boundary may surface prerelease
@@ -1375,12 +1375,12 @@ That same authenticated route shell also owns the canonical post-auth landing
 path. `frontend-modern/src/App.tsx` and
 `frontend-modern/src/pages/RuntimeHome.tsx` must send authenticated `/`
 through the runtime-home landing contract first: existing operators and
-self-hosted sessions land on the governed dashboard route, while hosted
-workspaces with no connected infrastructure forward into the canonical
-infrastructure onboarding contract before the workspace normalizes back to the
-single `/settings/infrastructure` shell. That same shared landing contract
-must not regress into a root-only redirect straight to the infrastructure
-workspace or a dashboard-only shortcut that strands first-time hosted tenants.
+self-hosted sessions land on the governed Infrastructure route, while hosted
+workspaces with no connected infrastructure stay on the same Infrastructure
+and Add infrastructure ownership path before the workspace normalizes back to
+the single `/settings/infrastructure` shell. That same shared landing contract
+must not regress into a root-only settings redirect or a dashboard-only
+shortcut that strands first-time hosted tenants.
 That same landing contract also owns authenticated `/login`: once the browser
 has a valid session, `frontend-modern/src/App.tsx` must route `/login`
 through that same runtime-home landing boundary instead of leaving the
@@ -1580,10 +1580,11 @@ license state for Community users and leave discovery of paid tiers to
 surfaces outside the plan page.
 That same no-funnel rule extends beyond Settings -> Plan. The self-hosted
 frontend must not render blanket trial/upgrade marketing to Community users
-from the main dashboard shell, the setup wizard completion screen, or any
+from the main app shell, the setup wizard completion screen, or any
 app-wide surface that fires without the user having explicitly engaged with
-a paid feature. In particular the Dashboard overview may not carry a
-`RelayOnboardingCard` paywall or equivalent `Start trial` prompt, the
+a paid feature. In particular the retired Dashboard overview must not be
+restored to carry a `RelayOnboardingCard` paywall or equivalent `Start trial`
+prompt, the
 `SetupCompletionPanel` may not carry a `Monitor from Anywhere` Relay trial
 block, and no time-triggered "active use" nudge such as `ActiveUseTrialNudge`
 may auto-appear for Community users. Feature-gated discovery that fires only
@@ -1673,10 +1674,10 @@ owns relay config/status polling and pairing runtime, and
 `frontend-modern/src/components/Settings/RelayPairingSection.tsx` owns the QR
 pairing surface. Future relay settings work must extend that split instead of
 pulling polling and QR-generation lifecycle back into the shell component.
-The Dashboard shell must not host a Relay onboarding card or equivalent
-blanket Relay upsell. Relay discovery belongs to the owning Settings surface
-above; the Dashboard stays a monitoring-first view with no app-wide paywall
-onboarding composed into it.
+The retired Dashboard shell must not be restored to host a Relay onboarding
+card or equivalent blanket Relay upsell. Relay discovery belongs to the owning
+Settings surface above; Infrastructure and Workloads stay monitoring-first
+views with no app-wide paywall onboarding composed into them.
 That relay pairing boundary now also includes backend-owned mobile credential
 lifecycle: when the settings surface generates a mobile pairing QR, it must ask
 the server for a fresh scoped Pulse Mobile relay access token, fetch the
@@ -2096,7 +2097,7 @@ canonical browser bootstrap signal, and shared billing or upgrade surfaces
 must hide or suppress themselves from that contract rather than teaching mock
 mode, response-header inference, or frontend-only feature flags to bypass the
 real licensing model. That includes settings billing tabs, public-demo banner
-and monitored-system/trial nudges, dashboard relay paywalls, Patrol upgrade
+and monitored-system/trial nudges, app-wide relay paywalls, Patrol upgrade
 CTAs, and history-lock upsells. Demo readiness therefore means presentation
 isolation, not a license exemption.
 That same bootstrap owner must also avoid protected pre-auth noise. When auth

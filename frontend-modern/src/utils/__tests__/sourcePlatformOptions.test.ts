@@ -34,4 +34,11 @@ describe('sourcePlatformOptions', () => {
       'kubernetes',
     ]);
   });
+
+  it('keeps the Docker runtime discoverable in customer-facing source options', () => {
+    expect(DEFAULT_INFRASTRUCTURE_SOURCE_OPTIONS.find((option) => option.key === 'docker')).toEqual({
+      key: 'docker',
+      label: 'Docker / Podman',
+    });
+  });
 });

@@ -458,7 +458,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           <p class="mt-1 text-sm leading-5 text-muted">
             This is the source map Pulse uses to understand the estate. Confirm the API inventory,
             agent telemetry, scan scope, and any pending discovery candidates before relying on
-            dashboards or automation.
+            monitoring views or automation.
           </p>
         </div>
 

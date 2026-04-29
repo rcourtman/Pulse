@@ -1,5 +1,5 @@
 import { Component, Show, createMemo, JSX } from 'solid-js';
-import { MetricBar } from '@/components/Dashboard/MetricBar';
+import { MetricBar } from '@/components/Workloads/MetricBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatPercent } from '@/utils/format';
 import { getMetricSeverity } from '@/utils/metricThresholds';

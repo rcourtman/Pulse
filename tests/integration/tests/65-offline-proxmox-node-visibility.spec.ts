@@ -84,75 +84,6 @@ const OFFLINE_RESOURCE = {
   },
 } as const;
 
-const DASHBOARD_SUMMARY_RESPONSE = {
-  health: {
-    totalResources: 1,
-    byStatus: {
-      online: 0,
-      offline: 1,
-      running: 0,
-      stopped: 0,
-      degraded: 0,
-      paused: 0,
-      unknown: 0,
-    },
-  },
-  infrastructure: {
-    total: 1,
-    byStatus: {
-      online: 0,
-      offline: 1,
-      running: 0,
-      stopped: 0,
-      degraded: 0,
-      paused: 0,
-      unknown: 0,
-    },
-    byType: {
-      agent: 1,
-    },
-    topCPU: [],
-    topMemory: [],
-  },
-  workloads: {
-    total: 0,
-    running: 0,
-    stopped: 0,
-    byType: {},
-  },
-  storage: {
-    total: 0,
-    totalCapacity: 0,
-    totalUsed: 0,
-    warningCount: 0,
-    criticalCount: 0,
-  },
-  problemResources: [
-    {
-      id: 'offline-pve',
-      type: 'agent',
-      name: 'PVE Offline',
-      status: 'offline',
-      sources: ['proxmox'],
-      aiSafeSummary: '',
-      canonicalIdentity: {
-        displayName: 'PVE Offline',
-        hostname: 'pve-offline.lab.local',
-        platformId: 'offline-pve',
-      },
-      policy: {
-        sensitivity: 'internal',
-        routing: {
-          scope: 'local-first',
-        },
-      },
-      problems: ['Offline'],
-      worstValue: 200,
-      lastSeen: '2026-04-21T20:00:00Z',
-    },
-  ],
-} as const;
-
 const EMPTY_INFRASTRUCTURE_CHARTS = {
   nodeData: {},
   agentData: {},
@@ -197,7 +128,7 @@ const EMPTY_RECOVERY_ROLLUPS = {
 test.describe('Offline Proxmox node visibility', () => {
   test.setTimeout(180_000);
 
-  test('keeps an offline Proxmox node visible on dashboard and infrastructure surfaces', async ({
+  test('keeps an offline Proxmox node visible on the infrastructure surface', async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
@@ -209,15 +140,6 @@ test.describe('Offline Proxmox node visibility', () => {
 
     await page.route('**/api/resources**', async (route) => {
       const requestUrl = new URL(route.request().url());
-
-      if (requestUrl.pathname === '/api/resources/dashboard-summary') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(DASHBOARD_SUMMARY_RESPONSE),
-        });
-        return;
-      }
 
       if (requestUrl.pathname === '/api/resources') {
         await route.fulfill({
@@ -262,15 +184,6 @@ test.describe('Offline Proxmox node visibility', () => {
         body: JSON.stringify(EMPTY_RECOVERY_ROLLUPS),
       });
     });
-
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('dashboard-page')).toBeVisible();
-
-    const dashboardProblemTable = page.locator('table').filter({
-      has: page.getByText('PVE Offline', { exact: true }),
-    }).first();
-    await expect(dashboardProblemTable).toContainText('PVE Offline');
-    await expect(dashboardProblemTable).toContainText('Offline');
 
     await page.goto('/infrastructure?source=proxmox-pve', { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('infrastructure-page')).toBeVisible();

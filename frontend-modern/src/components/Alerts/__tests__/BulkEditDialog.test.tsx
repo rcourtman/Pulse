@@ -5,7 +5,7 @@ import { createSignal } from 'solid-js';
 import { BulkEditDialog, normalizeMetricKey } from '../BulkEditDialog';
 
 // Mock ThresholdSlider — renders a range input that calls onChange on input events
-vi.mock('../../Dashboard/ThresholdSlider', () => ({
+vi.mock('../../Workloads/ThresholdSlider', () => ({
   ThresholdSlider: (props: {
     type: string;
     min: number;

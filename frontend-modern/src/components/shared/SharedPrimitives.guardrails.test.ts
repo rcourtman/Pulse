@@ -70,7 +70,7 @@ import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?ra
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableModeSegmentedControlSource from '@/components/shared/GroupedTableModeSegmentedControl.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
-import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
+import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
 import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
 import infrastructureSourceManagerSource from '@/components/Settings/InfrastructureSourceManager.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
@@ -118,11 +118,11 @@ import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
-import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
-import dashboardWorkloadTableSource from '@/components/Dashboard/DashboardWorkloadTable.tsx?raw';
-import workloadPanelSource from '@/components/Dashboard/WorkloadPanel.tsx?raw';
-import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
-import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
+import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
+import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
+import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
+import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
+import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
@@ -306,7 +306,7 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableCardHeaderSource).toContain("from './TableCardHeader'");
     expect(summaryTableCardHeaderSource).not.toContain('border-b border-border bg-surface-hover');
     for (const source of [
-      dashboardWorkloadTableSource,
+      workloadsTableSource,
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
@@ -328,7 +328,7 @@ describe('shared primitive guardrails', () => {
     expect(tableCardSource).toContain('<Card');
 
     for (const source of [
-      dashboardWorkloadTableSource,
+      workloadsTableSource,
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
@@ -369,10 +369,10 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain('onHoverSyncChange');
     expect(densityMapModelSource).toContain('onHoverSyncChange');
 
-    expect(dashboardSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
-    expect(dashboardSelectionStateSource).toContain('hoveredWorkloadGroupScope');
-    expect(dashboardSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
-    expect(dashboardSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
+    expect(workloadSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
+    expect(workloadSelectionStateSource).toContain('hoveredWorkloadGroupScope');
+    expect(workloadSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
+    expect(workloadSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
 
     expect(summaryJumpToRowButtonSource).toContain('<span>Jump to row</span>');
     expect(summaryJumpToRowButtonSource).toContain('props.onClick');
@@ -519,7 +519,7 @@ describe('shared primitive guardrails', () => {
       "import ListIcon from 'lucide-solid/icons/list'",
     );
 
-    for (const source of [dashboardFilterSource, infrastructurePageSurfaceSource]) {
+    for (const source of [workloadsFilterSource, infrastructurePageSurfaceSource]) {
       expect(source).toContain('GroupedTableModeSegmentedControl');
       expect(source).not.toContain("title: 'Group by node'");
       expect(source).not.toContain("title: 'Grouped table view'");
@@ -821,7 +821,7 @@ describe('shared primitive guardrails', () => {
     expect(guestRowSource).not.toContain("from './TagBadges'");
     expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
     expect(resourceDetailDrawerOverviewSource).not.toContain(
-      "from '@/components/Dashboard/TagBadges'",
+      "from '@/components/Workloads/TagBadges'",
     );
   });
 
@@ -1290,7 +1290,7 @@ describe('shared primitive guardrails', () => {
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
     expect(whatsNewModalModelSource).toContain('MIGRATION_GUIDE_DOC_URL');
     expect(whatsNewModalModelSource).toContain('Telemetry details');
-    expect(whatsNewModalModelSource).toContain("title: 'Dashboard'");
+    expect(whatsNewModalModelSource).toContain("title: 'Infrastructure'");
   });
 
   it('keeps dialog stack visibility in the shared dialog runtime', () => {

@@ -34,7 +34,6 @@ import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import thresholdsTabModelSource from '@/features/alerts/thresholds/thresholdsTabModel.ts?raw';
-import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsTableAgentDisksSectionSource from '@/components/Alerts/ThresholdsTableAgentDisksSection.tsx?raw';
@@ -539,9 +538,6 @@ describe('tab path helpers', () => {
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.bulkAcknowledge');
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.acknowledge');
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.unacknowledge');
-    expect(recentAlertsPanelSource).toContain('useAlertAcknowledgementState');
-    expect(recentAlertsPanelSource).not.toContain('AlertsAPI.bulkAcknowledge');
-    expect(recentAlertsPanelSource).not.toContain('AlertsAPI.acknowledge');
     expect(alertScheduleTabSource).toContain('useAlertScheduleState');
     expect(alertScheduleTabSource).not.toContain('createDefaultQuietHours');
     expect(alertScheduleTabSource).not.toContain('createDefaultCooldown');

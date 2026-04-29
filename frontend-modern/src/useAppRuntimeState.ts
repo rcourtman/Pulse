@@ -80,7 +80,6 @@ export type AppConnectionStatus = {
 };
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
-const ROOT_DASHBOARD_PATH = '/dashboard';
 
 const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>
   pathname === '/' || pathname === '/login';
@@ -138,7 +137,6 @@ export const useAppRuntimeState = () => {
     const pathname = window.location.pathname;
     if (!pathname) return true;
     if (pathname === ROOT_INFRASTRUCTURE_PATH) return false;
-    if (pathname === ROOT_DASHBOARD_PATH) return false;
     return true;
   };
 

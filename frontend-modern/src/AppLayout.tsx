@@ -2,7 +2,6 @@ import { For, Show, Suspense, createEffect, createMemo, createSignal, onCleanup 
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import BoxesIcon from 'lucide-solid/icons/boxes';
-import LayoutDashboardIcon from 'lucide-solid/icons/layout-dashboard';
 import ServerIcon from 'lucide-solid/icons/server';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import ArchiveIcon from 'lucide-solid/icons/archive';
@@ -31,7 +30,6 @@ import { preloadRouteModule } from '@/routing/routePreload';
 import {
   buildInfrastructurePath,
   buildWorkloadsPath,
-  DASHBOARD_PATH,
 } from '@/routing/resourceLinks';
 import { buildStorageRecoveryTabSpecs } from '@/routing/platformTabs';
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
@@ -229,8 +227,8 @@ export function AppLayout(props: AppLayoutProps) {
       !normalizedPath.startsWith('/alerts/overview/') &&
       !normalizedPath.startsWith('/alerts/history/');
 
-    if ((isBlocked || isAlertConfigTab) && normalizedPath !== DASHBOARD_PATH) {
-      navigate(DASHBOARD_PATH, { replace: true });
+    if ((isBlocked || isAlertConfigTab) && normalizedPath !== ROOT_INFRASTRUCTURE_PATH) {
+      navigate(ROOT_INFRASTRUCTURE_PATH, { replace: true });
     }
   });
 
@@ -268,17 +266,6 @@ export function AppLayout(props: AppLayoutProps) {
 
   const platformTabs = createMemo<PlatformTab[]>(() => {
     const allPlatforms: PlatformTab[] = [
-      {
-        id: 'dashboard',
-        label: 'Dashboard',
-        route: DASHBOARD_PATH,
-        settingsRoute: '/settings',
-        tooltip: 'Environment overview and command center',
-        enabled: true,
-        live: true,
-        icon: LayoutDashboardIcon,
-        alwaysShow: true,
-      },
       {
         id: 'infrastructure',
         label: 'Infrastructure',

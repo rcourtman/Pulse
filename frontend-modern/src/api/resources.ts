@@ -6,8 +6,6 @@ import type {
   ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
   ResourceFacetCounts,
-  ResourceMetricsTarget,
-  ResourcePolicy,
   ResourceRelationship,
 } from '@/types/resource';
 
@@ -30,61 +28,6 @@ export interface ResourceFacetBundle {
   relationships?: ResourceRelationship[];
   recentChanges: ResourceChange[];
   counts: ResourceFacetCounts;
-}
-
-export interface DashboardOverviewSummaryTopResource {
-  id: string;
-  name: string;
-  percent: number;
-  metricsTarget?: ResourceMetricsTarget;
-}
-
-export interface DashboardOverviewSummaryProblemResource {
-  id: string;
-  type: string;
-  name: string;
-  status: string;
-  lastSeen?: string;
-  sources?: string[];
-  aiSafeSummary?: string;
-  policy?: ResourcePolicy;
-  canonicalIdentity?: {
-    displayName?: string;
-    hostname?: string;
-    platformId?: string;
-    primaryId?: string;
-    aliases?: string[];
-  };
-  problems: string[];
-  worstValue: number;
-}
-
-export interface DashboardOverviewSummaryResponse {
-  health: {
-    totalResources: number;
-    byStatus: Record<string, number>;
-  };
-  infrastructure: {
-    total: number;
-    byStatus: Record<string, number>;
-    byType: Record<string, number>;
-    topCPU: DashboardOverviewSummaryTopResource[];
-    topMemory: DashboardOverviewSummaryTopResource[];
-  };
-  workloads: {
-    total: number;
-    running: number;
-    stopped: number;
-    byType: Record<string, number>;
-  };
-  storage: {
-    total: number;
-    totalCapacity: number;
-    totalUsed: number;
-    warningCount: number;
-    criticalCount: number;
-  };
-  problemResources: DashboardOverviewSummaryProblemResource[];
 }
 
 const normalizeResourceId = (resourceId: string): string => resourceId.trim();
@@ -122,10 +65,6 @@ const fetchFacet = async <T>(url: string): Promise<T> =>
   });
 
 export class ResourceAPI {
-  static async getDashboardSummary(): Promise<DashboardOverviewSummaryResponse> {
-    return fetchFacet<DashboardOverviewSummaryResponse>('/api/resources/dashboard-summary');
-  }
-
   static async getTimeline(
     resourceId: string,
     options?: ResourceTimelineQueryOptions,

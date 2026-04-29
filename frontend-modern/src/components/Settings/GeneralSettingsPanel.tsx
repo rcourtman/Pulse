@@ -182,8 +182,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <div class="text-sm text-muted min-w-0">
               <p class="font-medium text-base-content truncate">Navigation guide</p>
               <p class="text-xs text-muted line-clamp-2">
-                Replay the five-stop walkthrough of Dashboard, Infrastructure, Workloads, Storage,
-                and Recovery.
+                Replay the four-stop walkthrough of Infrastructure, Workloads, Storage, and
+                Recovery.
               </p>
             </div>
           </div>

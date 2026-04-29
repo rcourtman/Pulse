@@ -9,7 +9,7 @@ HTMLElement.prototype.scrollIntoView = vi.fn();
 
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
-    window.history.replaceState({}, '', '/dashboard');
+    window.history.replaceState({}, '', '/infrastructure');
     aiChatStore.close();
     aiChatStore.setEnabled(true);
   });
@@ -24,7 +24,7 @@ describe('AppLayout navigation icons', () => {
     render(() => (
       <Router>
         <Route
-          path="/dashboard"
+          path="/infrastructure"
           component={() => (
             <AppLayout
               connectionStatus={() => ({
@@ -58,7 +58,7 @@ describe('AppLayout navigation icons', () => {
               showOrgSwitcher={() => false}
               onSwitchOrg={() => {}}
             >
-              <div>Dashboard body</div>
+              <div>Infrastructure body</div>
             </AppLayout>
           )}
         />
@@ -96,7 +96,7 @@ describe('AppLayout navigation icons', () => {
     const mobilePatrolTab = within(mobileTablist).getByRole('button', { name: 'Patrol' });
     expect(mobilePatrolTab.querySelector('svg')).toBeTruthy();
 
-    expect(container).toHaveTextContent('Dashboard body');
+    expect(container).toHaveTextContent('Infrastructure body');
   });
 
   it('keeps connected brand motion on the logo while the wordmark stays static', () => {

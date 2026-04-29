@@ -100,8 +100,7 @@ cross-source deduplication.
 74. `frontend-modern/src/components/PMG/ServiceHealthBadge.tsx`
 75. `frontend-modern/src/utils/resourceIdentity.ts`
 76. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
-77. `frontend-modern/src/hooks/useDashboardTrends.ts`
-78. `frontend-modern/src/hooks/useUnifiedResources.ts`
+77. `frontend-modern/src/hooks/useUnifiedResources.ts`
 79. `frontend-modern/src/types/resource.ts`
 80. `frontend-modern/src/utils/sourcePlatforms.ts`
 81. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
@@ -228,7 +227,7 @@ AI-only summary payloads, or page-local heuristics.
    canonicalization boundary: REST may hydrate the initial snapshot and
    unsupported filtered queries, but supported snapshot freshness must come
    from websocket `state.resources` instead of layering confirmatory
-   dashboard/infrastructure REST refetch loops over already-owned resource
+   route-local REST refetch loops over already-owned resource
    updates.
    That shared store/adapter/hook path must also preserve canonical row shape
    across transport boundaries: thinner realtime `state.resources` payloads
@@ -243,20 +242,19 @@ AI-only summary payloads, or page-local heuristics.
    explicit cluster identity such as Kubernetes context or platform cluster
    labels; standalone resource names must never be repurposed as synthetic
    `clusterId` values.
-10. Keep the dashboard overview shell on the compact governed summary route
-    rather than the unfiltered list transport. `frontend-modern/src/pages/Dashboard.tsx`
-    and `frontend-modern/src/hooks/useDashboardOverview.ts` may consume the
-    canonical `/api/resources/dashboard-summary` payload for KPI cards,
-    problem-resource rows, and top-resource identity, but they must not
-    recreate those summaries by mounting `useUnifiedResources()` just to count
-    or rank resources on the dashboard shell.
+10. Keep the retired dashboard overview shell absent from unified-resource
+    consumers. `frontend-modern/src/pages/Dashboard.tsx`,
+    `frontend-modern/src/hooks/useDashboardOverview.ts`, and
+    `/api/resources/dashboard-summary` must not be restored as compatibility
+    readers for KPI cards, problem-resource rows, or top-resource identity.
+    Infrastructure and Workloads must consume their owning unified-resource
+    projections directly.
 11. Keep summary consumers on the payload they were already given.
-    `frontend-modern/src/hooks/useDashboardTrends.ts` and
     `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
     may derive chart identity, storage presence, and infrastructure rollups
-    from the compact dashboard overview or resource snapshot they already own,
-    but they must not reopen `useResources()` or start a second unfiltered
-    unified-resource fetch path under the dashboard summary surface.
+    from the resource snapshot it already owns, but it must not reopen
+    `useResources()` or start a second unfiltered unified-resource fetch path
+    as a replacement dashboard summary surface.
 12. Keep shared selector hydration visibility-bound. Reusable shells such as
     `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
     may consume `frontend-modern/src/hooks/useUnifiedResources.ts`, but hidden
@@ -420,13 +418,13 @@ AI-only summary payloads, or page-local heuristics.
     through the canonical frontend-to-`ResourceType` resolver before slicing
     the snapshot, so compatibility values such as `disk` / `physical_disk`
     stay on one cache truth instead of falling back to ad hoc filter aliases.
-18. Keep dashboard storage trend target selection on canonical unified-resource
-    truth. `frontend-modern/src/hooks/useDashboardTrends.ts` may detect
-    storage presence from canonical `isStorage(...)` resources and their
-    shared metrics-target IDs, but once storage exists it must reuse the owned
-    compact `/api/charts/storage-summary` contract instead of rebuilding
-    page-local per-resource storage history fetches, storage-type aliases, or
-    full storage-page `/api/storage-charts` fetches.
+18. Keep storage summary target selection on canonical unified-resource truth.
+    Storage-summary consumers may detect storage presence from canonical
+    `isStorage(...)` resources and their shared metrics-target IDs, but once
+    storage exists they must reuse the owned compact
+    `/api/charts/storage-summary` contract instead of rebuilding page-local
+    per-resource storage history fetches, storage-type aliases, or full
+    storage-page `/api/storage-charts` fetches.
 19. Keep infrastructure page-header framing presentation-only on the page
     shell. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
     may render the shared `PageHeader`, but canonical source/status/search
@@ -584,8 +582,8 @@ Seeded unified-resource snapshots are part of that same registry ownership.
 `internal/unifiedresources/registry.go` must rebuild the canonical `bySource`
 index from source-owned facets already present on seeded unified resources
 before manual links, overlays, or metrics-target resolution run, so
-`/api/resources/dashboard-summary`, `/api/resources`, dashboard trend joins,
-and other chart consumers keep resolving history through canonical source
+`/api/resources`, infrastructure summary joins, storage summary joins, and
+other chart consumers keep resolving history through canonical source
 coordinates instead of silently falling back to hashed unified resource IDs.
 That same registry/view boundary now also applies to provider-backed storage.
 `internal/unifiedresources/registry.go` must attach the resolved
@@ -836,20 +834,14 @@ shape: `InfrastructureSummary.tsx` is the render shell,
 org-scope lifecycle, and focused-summary state, and
 `infrastructureSummaryModel.ts` owns chart matching, focused-summary display
 selection, empty-state wording, and summary-series/metric derivation.
-The dashboard overview trend hook now follows that same canonical consumer
-contract for infrastructure sparklines: `frontend-modern/src/hooks/useDashboardTrends.ts`
-must consume the infrastructure summary chart cache and shared unified-resource
-series matching logic instead of issuing bespoke per-resource
-`/api/metrics-store/history` fetches for top-CPU and top-memory cards. That
-keeps dashboard summary sparklines aligned with canonical resource identity
-matching, agent-facet fallback behavior, and first-sample empty-state semantics
-already owned by the infrastructure summary surface.
-The same contract now also treats dashboard top-card sparkline hydration as a
-summary projection concern, not a per-resource history concern: top-CPU and
-top-memory selections may still come from dashboard overview ranking, but the
-series attached to those selections must be resolved through the same
-resource-to-chart matching path used by infrastructure summary cards so agent
-fallback and canonical identity aliases do not drift between the two surfaces.
+The retired dashboard overview trend hook must not return as a second
+infrastructure sparkline consumer. Infrastructure summary surfaces must consume
+the infrastructure summary chart cache and shared unified-resource series
+matching logic instead of issuing bespoke per-resource
+`/api/metrics-store/history` fetches for overview cards. That keeps summary
+sparklines aligned with canonical resource identity matching, agent-facet
+fallback behavior, and first-sample empty-state semantics already owned by the
+infrastructure summary surface.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
@@ -943,7 +935,7 @@ card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops.
 The unified-resource detail drawer now also routes resource-tag presentation
 through the shared `frontend-modern/src/components/shared/TagBadges.tsx`
-primitive instead of importing a dashboard-local badge helper into the
+primitive instead of importing a workload-local badge helper into the
 resource surface. Future drawer tag presentation changes must extend through
 that shared primitive boundary rather than recreating tag-dot logic inside the
 drawer or pulling feature-local badge components across subsystem lines.
@@ -1033,9 +1025,9 @@ drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the relationship and timeline inline.
 The canonical routing owner now also lives in
 `frontend-modern/src/routing/resourceLinks.ts`, including the
-workload-to-infrastructure href builder used by dashboard row and drawer
+workload-to-infrastructure href builder used by Workloads row and drawer
 consumers. Future workload-to-resource navigation changes must extend through
-that shared routing contract instead of reintroducing dashboard-local path
+that shared routing contract instead of reintroducing workload-local path
 builders.
 That same shared routing boundary now also owns the canonical Patrol
 destination used by cross-surface findings and drill-down links. Shared
@@ -1418,15 +1410,15 @@ mock-history paths, so cluster, node, pod, and deployment charts all bind to
 one runtime key family instead of each layer rebuilding Kubernetes IDs from
 cluster name, namespace, or surface-local aliases.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
-IDs, so the resource-detail path and the dashboard path stay aligned on the
+IDs, so the resource-detail path and the Workloads path stay aligned on the
 same cluster-name source of truth.
-The dashboard workload projection and workloads-link route helpers also share
+The workload projection and workloads-link route helpers also share
 the same Kubernetes context prefix helper in the shared agent-resource
 layer, so pod grouping and cluster navigation keep the same cluster-context
 prefix before any surface-specific display fallback is applied.
 The unified-resource projection also reuses that same prefix helper for
 projected Kubernetes `clusterId`, so the shared resource store stays aligned
-with the dashboard and detail surfaces on the same canonical cluster-context
+with the Workloads and detail surfaces on the same canonical cluster-context
 source of truth.
 That same contract also owns the canonical resource display-name fallback, so
 name-or-ID presentation stays consistent between the unified AI adapter, the
@@ -1796,8 +1788,8 @@ Docker-routed control target.
 That same contract applies to the frontend workload state boundary:
 `frontend-modern/src/hooks/useWorkloads.ts`,
 `frontend-modern/src/utils/workloads.ts`,
-`frontend-modern/src/components/Dashboard/workloadTopology.ts`, and
-`frontend-modern/src/components/Dashboard/useGuestRowState.ts` may reuse
+`frontend-modern/src/components/Workloads/workloadTopology.ts`, and
+`frontend-modern/src/components/Workloads/useGuestRowState.ts` may reuse
 shared `DockerData` for runtime metadata, but they must keep Docker-only
 action identifiers and update affordances scoped to Docker-managed
 app-containers. TrueNAS-backed `app-container` workloads must still navigate

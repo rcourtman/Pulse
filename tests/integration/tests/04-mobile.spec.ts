@@ -14,7 +14,7 @@ test.describe('Mobile viewport flows', () => {
 
   test('bottom nav bar is visible on mobile', async ({ page }) => {
     await dismissWhatsNewModal(page);
-    await page.goto('/dashboard');
+    await page.goto('/infrastructure');
     await expect(page.locator('#root')).toBeVisible();
 
     const bottomNav = page.locator(
@@ -40,7 +40,7 @@ test.describe('Mobile viewport flows', () => {
 
   test('MobileNavBar has safe-area padding on nav', async ({ page }) => {
     await dismissWhatsNewModal(page);
-    await page.goto('/dashboard');
+    await page.goto('/infrastructure');
     await expect(page.locator('#root')).toBeVisible();
 
     const nav = page.locator('nav.md\\:hidden, nav[class*="md:hidden"]').first();
@@ -125,8 +125,8 @@ test.describe('Mobile viewport flows', () => {
     await expect(discoveryTab).toBeVisible({ timeout: 10000 });
   });
 
-  test('Dashboard loads without horizontal overflow at mobile viewport', async ({ page }) => {
-    await page.goto('/dashboard');
+  test('Infrastructure landing loads without horizontal overflow at mobile viewport', async ({ page }) => {
+    await page.goto('/infrastructure');
     await expect(page.locator('#root')).toBeVisible();
 
     const viewportWidth = await getViewportWidth(page);
@@ -135,7 +135,7 @@ test.describe('Mobile viewport flows', () => {
   });
 
   test('AI assistant button is visible above nav bar', async ({ page }) => {
-    await page.goto('/dashboard');
+    await page.goto('/infrastructure');
     await expect(page.locator('#root')).toBeVisible();
 
     const nav = page.locator('nav.md\\:hidden, nav[class*="md:hidden"]').first();

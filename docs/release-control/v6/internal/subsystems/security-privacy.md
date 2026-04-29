@@ -155,6 +155,11 @@ Security-facing settings remain intentionally shared with `frontend-primitives`
 because shell framing and presentation consistency still belong there, but the
 meaning of those surfaces now lives here so auth posture, token controls, and
 privacy toggles stop borrowing their governance only from adjacent lanes.
+That settings presentation boundary also owns trust-sensitive vocabulary around
+operator access. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+and `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` must use
+monitoring/workspace wording for tours and read-only token presets instead of
+reviving Dashboard-specific labels after the Dashboard route has been retired.
 The Data Handling settings surface extends that trust boundary to resource
 policy posture. It may expose the canonical sensitivity, handling-boundary,
 and redaction counts that Pulse already applies to resources, but it must stay

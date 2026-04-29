@@ -99,10 +99,10 @@ work extends shared components instead of creating new local variants.
 73. `frontend-modern/src/utils/reportableResourceTypes.ts`
 74. `frontend-modern/src/utils/reportingResourceTypes.ts`
 75. `frontend-modern/src/utils/problemResourcePresentation.ts`
-76. `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`
-77. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
-78. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
-79. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
+76. `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`
+77. `frontend-modern/src/utils/workloadGuestPresentation.ts`
+78. `frontend-modern/src/utils/emptyStatePresentation.ts`
+79. `frontend-modern/src/utils/semanticTonePresentation.ts`
 80. `frontend-modern/src/components/Toast/Toast.tsx`
 81. `frontend-modern/src/utils/toast.ts`
 82. `frontend-modern/src/utils/semanticTonePresentation.ts`
@@ -194,10 +194,10 @@ work extends shared components instead of creating new local variants.
    icon components may keep their standalone labels, but the nav must treat
    those icons as decorative inside tab buttons so names come from the tab
    label plus meaningful badge counts, not duplicated icon titles.
-   Dashboard overview primitives under `frontend-modern/src/features/` must keep
-   grouped resource labels operator-readable: count-led labels may aggregate
-   repeated resources, but uncountable or category-like resource types such as
-   storage must use resource wording instead of naive pluralization.
+   Shared grouped-resource presentation primitives must keep grouped resource
+   labels operator-readable: count-led labels may aggregate repeated resources,
+   but uncountable or category-like resource types such as storage must use
+   resource wording instead of naive pluralization.
    Infrastructure filter chrome under `frontend-modern/src/features/infrastructure/`
    must use mode-oriented labels for table presentation controls: grouped table
    mode is `Grouped`, not `Cluster`, because cluster remains a
@@ -536,9 +536,8 @@ work extends shared components instead of creating new local variants.
 16. Keep assistant availability bootstrap on the shared app-shell boundary.
     `frontend-modern/src/useAppRuntimeState.ts`,
     `frontend-modern/src/App.tsx`,
-    `frontend-modern/src/stores/aiChat.ts`,
-    `frontend-modern/src/components/AI/Chat/index.tsx`, and
-    `frontend-modern/src/hooks/useDashboardActions.ts` must consume the
+    `frontend-modern/src/stores/aiChat.ts`, and
+    `frontend-modern/src/components/AI/Chat/index.tsx` must consume the
     backend-owned `/api/security/status.sessionCapabilities.assistantEnabled`
     fact instead of probing `/api/settings/ai` or `/api/ai/*` during ordinary
     route bootstrap. Closed assistant chrome and non-AI settings panels may
@@ -674,7 +673,7 @@ work extends shared components instead of creating new local variants.
    instead of importing generic commercial presentation helpers directly into
    hosted settings route shells.
 8. Keep first-session dashboard empty-state copy on
-   `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`, and make
+   `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`, and make
    infrastructure setup guidance name the canonical destination explicitly
    instead of falling back to generic settings CTA labels.
 9. Keep the live first-session wizard on the canonical three-step runtime
@@ -722,10 +721,11 @@ work extends shared components instead of creating new local variants.
     and the `Add infrastructure` entry point on it, not by a second landing route,
     so first-time operators and returning operators see one consistent
     infrastructure surface by default.
-14. Keep dashboard onboarding copy on the shared presentation owner in
-    `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
-    infrastructure empty state and the dashboard route's no-resources state
-    must route first-time operators into the canonical
+14. Keep Infrastructure and Workloads onboarding copy on the shared
+    presentation owner in
+    `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`. Both the
+    infrastructure empty state and the Workloads no-resources state must route
+    first-time operators into the canonical
     `/settings/infrastructure?add=pick` source picker, describe platform API
     inventory and Pulse Agent telemetry as equal source strategies, and avoid
     falling back to either passive “nothing here yet” wording or the retired
@@ -778,14 +778,14 @@ work extends shared components instead of creating new local variants.
     storage summary emphasis, and workloads summary emphasis must all route through
     that helper instead of maintaining page-local copies of the same hover/focus
     rules.
-    `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
-    the governed dashboard empty state route first-time operators into the
-    `Add infrastructure` source picker, instead of preserving a separate
-    root-only jump to `/infrastructure` or an agent-only install jump that
-    drifts from the rest of the onboarding contract.
+    `frontend-modern/src/App.tsx` must land `/` on the Infrastructure route and
+    let the governed Infrastructure empty state route first-time operators into
+    the `Add infrastructure` source picker, instead of preserving a separate
+    root-only compatibility shell or an agent-only install jump that drifts from
+    the rest of the onboarding contract.
     The same entry-shell contract must also canonicalize authenticated
     `/login`: once auth succeeds, the shared shell must resolve that route back
-    onto the governed dashboard landing path instead of rendering a page-local
+    onto the governed Infrastructure landing path instead of rendering a page-local
     not-found state inside the authenticated chrome.
 24. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
@@ -1213,9 +1213,9 @@ activity support surface or integrated summary panel must remain factual
 activity copy rather than shifting into a second Patrol verdict label while a
 run is underway.
 `frontend-modern/src/components/shared/TagBadges.tsx` is now also the
-canonical tag-badge primitive. Dashboard workload rows and the unified-resource
-detail drawer must import that shared owner instead of keeping a dashboard-local
-tag badge variant or importing a feature-local path into infrastructure
+canonical tag-badge primitive. Workload rows and the unified-resource detail
+drawer must import that shared owner instead of keeping a workload-local tag
+badge variant or importing a feature-local path into infrastructure
 surfaces.
 That same owner now also holds the CSP-safe tag-dot rendering contract: tag
 color and active-state emphasis must travel through SVG fill/stroke attributes
@@ -1322,33 +1322,21 @@ metadata. The shell may expose `data-active-series-display` and
 runtime/model owners may decide whether a hovered or focused series is merely
 emphasized or fully isolated; feature shells must not fork their own row-hover
 line filtering.
-The dashboard overview trend cards now also have an explicit shared-shell
-obligation: `frontend-modern/src/features/dashboardOverview/TrendCharts.tsx`
-must treat missing infrastructure history as a governed empty state rather than
-as a silent blank sparkline box. Error copy and empty-history copy belong to
-the feature shell, while the data path and chart-shaping logic must stay in the
-owned hook/model layers that feed it.
-That same dashboard overview shell also owns workload discoverability copy on
-the KPI strip. `frontend-modern/src/features/dashboardOverview/KPIStrip.tsx`
-and `frontend-modern/src/utils/dashboardKpiPresentation.ts` must keep the
-`Workloads` card explicit that the unified workloads surface contains VMs,
-containers, and pods, rather than assuming operators will infer that mapping
-from the route label alone.
-That same dashboard boundary now also owns the shared dashboard presentation
-helpers through `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
-`frontend-modern/src/utils/dashboardGuestPresentation.ts`,
-`frontend-modern/src/utils/dashboardKpiPresentation.ts`,
-`frontend-modern/src/utils/dashboardMetricPresentation.ts`, and
-`frontend-modern/src/utils/dashboardTrendPresentation.ts`. Dashboard loading,
-disconnect, and empty states; guest backup/disk fallback copy; KPI card
-framing; status-badge, delta, percent, and action-priority formatting; and
-trend palette/error copy must extend those helpers instead of being redefined
-inline in route shells, guest rows, or overview cards.
-That shell must also stay passive with respect to data ownership: dashboard
-trend cards may render the summary-range controls and operator-facing empty or
-error copy, but they must not reintroduce route-local metrics-history fetch
-loops for CPU and memory sparklines when the canonical infrastructure summary
-surface already owns the chart contract.
+The retired dashboard overview route must not regain feature-local trend,
+KPI, problem-resource, or card shells. Workload-table and guest-row fallback
+copy that lives under `frontend-modern/src/components/Workloads/` must keep
+using `frontend-modern/src/utils/workloadEmptyStatePresentation.ts` and
+`frontend-modern/src/utils/workloadGuestPresentation.ts`. New route-level empty
+states, tone mapping, or compact issue copy must extend the shared
+`emptyStatePresentation`, `semanticTonePresentation`, and
+`problemResourcePresentation` helpers instead of reviving deleted
+dashboard-only KPI, metric, storage, recovery, or trend presentation helpers.
+That shell must also stay passive with respect to data ownership: future
+overview trend cards may render summary-range controls and operator-facing
+empty or error copy only after they have a governed owner, and they must not
+reintroduce route-local metrics-history fetch loops for CPU and memory
+sparklines when the canonical infrastructure summary surface already owns the
+chart contract.
 The shared density map now follows that same owner split.
 `frontend-modern/src/components/shared/DensityMap.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDensityMapState.ts` owns hover
@@ -1685,7 +1673,7 @@ runtime logic inline. Audit-log filter option labels must come from
 label primitive instead of hard-coded title-case strings in the settings shell.
 That shared filter-option primitive is also the canonical owner for default
 `All <scope>` option wording wherever a product surface exposes filter selects
-or segmented filter choices. Workloads/dashboard filters, storage source
+or segmented filter choices. Workloads filters, storage source
 filters, recovery history and platform/type filters, Kubernetes namespace
 drawers, resource-change timeline filters, and alert configuration options must
 call `frontend-modern/src/components/shared/filterOptionPresentation.ts` through
@@ -1736,49 +1724,15 @@ public demo posture must keep those support entries hidden from the Settings
 navigation instead of reviving a standalone operations page.
 that are unavailable in demo mode.
 
-The dashboard overview route now follows that same feature-owner pattern for
-its dashboard-specific summary surfaces. `frontend-modern/src/pages/Dashboard.tsx`
-stays the route shell, while `frontend-modern/src/features/dashboardOverview/`
-owns the dashboard-specific action, KPI, problem-resource, trend, and
-customization surfaces. Lane-owned widgets like recent alerts, storage,
-and recovery must continue to route through their own subsystem owners instead
-of drifting back into a page-local dashboard panel cluster.
-That same dashboard overview boundary owns the first-viewport estate
-orientation contract for the v6 landing page. `EstateSummaryPanel.tsx` and
-`estateSummaryModel.ts` in `frontend-modern/src/features/dashboardOverview/`
-must derive system count, health, source coverage, and freshness from the
-canonical connected-infrastructure projection, fall back only to the compact
-dashboard summary that the route already owns, and keep the explicit
-Infrastructure handoff above detailed problem, storage, recovery, or trend
-rows without restoring platform-special navigation.
-Source coverage is part of that first-viewport proof and must remain readable
-at mobile and tablet shell widths; the estate summary may wrap that provider
-inventory across lines, but it must not truncate the canonical source mix with
-ellipsis in the default dashboard viewport.
-That compact fallback must keep speaking in system terms. When the connected
-projection has not arrived yet, estate orientation copy may say how many
-systems are reporting or syncing, but it must not slide back to generic
-resource-count language that blurs the v6 system model.
-That first-viewport copy must distinguish system-level estate health from
-resource, alert, storage, or recovery issues that remain elsewhere on the
-dashboard, and partial/empty dashboard states must describe synchronization or
-infrastructure-source onboarding in operator terms instead of exposing
-implementation fallback language.
-The estate summary may surface resource and alert issue counts only as
-below-the-summary detail references; it must not claim the whole dashboard has
-no issues when storage or recovery widgets still own independent health
-signals. Those detail references must use governed dashboard section anchors so
-the first viewport can move focus to Problem Resources or Alerts without
-inventing separate dashboard drill-down routes.
-The dashboard may add an optional Pulse Brief below that estate orientation
-only when Assistant and Patrol are actually enabled and configured. That brief
-must stay additive to the factual dashboard source of truth, derive its first
-render from the already-owned estate, overview, action, storage, and recovery
-facts, and hand off to Pulse Assistant through a structured context prompt
-instead of replacing the route's canonical numbers, tables, or lane-owned
-widgets with model prose. `PulseBriefPanel.tsx`, `useDashboardPulseBrief.ts`,
-and `dashboardPulseBriefModel.ts` own that presentation and deterministic
-first-render summary contract under `frontend-modern/src/features/dashboardOverview/`.
+The dashboard overview route and its feature-owned summary surfaces are
+retired. Authenticated root entry now lands on Infrastructure, so first-
+viewport estate orientation belongs to the Infrastructure page and Add
+infrastructure flow rather than a separate dashboard shell. Future overview or
+brief-style surfaces must be governed as new product surfaces before they add
+route-level data orchestration, section anchors, or Assistant prompt handoffs;
+they must not restore `frontend-modern/src/pages/Dashboard.tsx`,
+`frontend-modern/src/features/dashboardOverview/`, or deleted dashboard-only
+presentation helpers as compatibility paths.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may
@@ -1882,28 +1836,19 @@ status-shaped names such as `storage (offline)` into first-viewport prose or
 grouped-row sublabels; when the resource name is only a type plus status, the
 surface should summarize the type-level issue in operator language instead of
 repeating raw backend-shaped labels.
-That same dashboard overview boundary must consume the governed Patrol finding
-presentation helpers when it surfaces Patrol findings in compact form. In
-`frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx`,
-Patrol-owned runtime findings must use the shared compact badge, title, and
-primary-action/manual-control contracts from
-`frontend-modern/src/utils/aiFindingPresentation.ts` rather than rendering raw
-`Pulse Patrol:` titles or generic snooze/dismiss controls that the Patrol
-runtime lifecycle rejects.
-That same boundary must also consume the shared attention-queue ordering from
-`frontend-modern/src/utils/aiFindingPresentation.ts` through
-`frontend-modern/src/hooks/useDashboardActions.ts`, so Patrol-blinding runtime
-issues sort ahead of same-severity infrastructure findings in the dashboard
-action panel instead of inheriting arbitrary store order.
+The retired dashboard action queue must not be reintroduced as a compact
+Patrol or infrastructure issue panel. Patrol-owned runtime findings remain
+governed by `frontend-modern/src/utils/aiFindingPresentation.ts` and their
+own Patrol route/store surfaces; any future cross-surface issue queue needs a
+new governed owner rather than reviving dashboard action-panel files.
 
 Feature-owned alert shells under `frontend-modern/src/features/alerts/` now
 also treat shared action runtime as a first-class feature owner instead of
-rebuilding it per surface. The overview shell and dashboard recent-alerts panel
-must both compose
+rebuilding it per surface. The overview shell must compose
 `frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts` for
 acknowledge/restore behavior rather than keeping duplicate API and notification
-logic inline in `useAlertOverviewState.ts` or
-`frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`.
+logic inline in `useAlertOverviewState.ts` or a revived dashboard recent-alert
+panel.
 The same feature-owner rule now applies to the alert scheduling surface:
 `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` must remain the
 schedule render shell, while
@@ -2622,7 +2567,7 @@ path inside Infrastructure.
 `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
 `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
 `frontend-modern/src/components/Settings/settingsNavigationModel.ts`,
-`frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
+`frontend-modern/src/utils/workloadEmptyStatePresentation.ts`,
 `frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`, and
 adjacent setup guidance must use `Add infrastructure` as the operator-facing
 first-run label for API-backed onboarding, resolve that label to the shared
@@ -2707,8 +2652,7 @@ That same shared app-shell boundary now also owns assistant bootstrap silence
 on non-AI routes. `frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/App.tsx`,
 `frontend-modern/src/stores/aiChat.ts`,
-`frontend-modern/src/components/AI/Chat/index.tsx`, and
-`frontend-modern/src/hooks/useDashboardActions.ts` must treat
+`frontend-modern/src/components/AI/Chat/index.tsx` must treat
 `/api/security/status.sessionCapabilities.assistantEnabled` as the only
 general-route assistant availability fact, while closed assistant chrome and
 non-AI settings panels stay off `/api/settings/ai` and `/api/ai/*` until an

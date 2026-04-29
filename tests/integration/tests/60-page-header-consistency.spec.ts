@@ -13,13 +13,6 @@ type WorkerFixtures = {
 
 const PAGE_HEADER_ROUTES = [
   {
-    slug: "dashboard",
-    route: "/dashboard",
-    title: "Dashboard",
-    description:
-      "Track infrastructure health, active risks, storage pressure, and recovery readiness from one overview.",
-  },
-  {
     slug: "workloads",
     route: "/workloads",
     title: "Workloads",
@@ -74,7 +67,6 @@ const ALIGNED_PAGE_HEADER_ROUTES = [
   PAGE_HEADER_ROUTES[1],
   PAGE_HEADER_ROUTES[2],
   PAGE_HEADER_ROUTES[3],
-  PAGE_HEADER_ROUTES[4],
 ] as const;
 
 const test = base.extend<{}, WorkerFixtures>({

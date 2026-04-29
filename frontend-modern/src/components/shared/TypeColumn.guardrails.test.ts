@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import guestRowModelSource from '@/components/Dashboard/guestRowModel.tsx?raw';
+import guestRowModelSource from '@/components/Workloads/guestRowModel.tsx?raw';
 import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
 import responsiveSource from '@/types/responsive.ts?raw';
 import typeColumnDefinitionSource from '@/utils/typeColumnDefinition.ts?raw';
@@ -92,7 +92,7 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(typeColumnUsers).toEqual([
-      '../Dashboard/guestRowModel.tsx',
+      '../Workloads/guestRowModel.tsx',
       '../Recovery/Recovery.tsx',
     ]);
 
@@ -127,7 +127,7 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(directHelperImportUsers).toEqual([
-      '../Dashboard/guestRowModel.tsx',
+      '../Workloads/guestRowModel.tsx',
       '../Recovery/Recovery.tsx',
     ]);
   });

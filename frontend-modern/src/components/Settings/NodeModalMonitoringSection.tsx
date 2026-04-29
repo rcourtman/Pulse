@@ -75,7 +75,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           />
           <p class="text-xs text-muted">
             Control which Proxmox VE resources Pulse ingests. Disable individual collectors to
-            reduce API load or trim dashboard noise.
+            reduce API load or trim workload noise.
           </p>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
@@ -216,7 +216,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               </div>
               <Show when={!state.temperatureMonitoringEnabledValue()}>
                 <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                  Pulse will skip SSH temperature polling for this node. Existing dashboard readings
+                  Pulse will skip SSH temperature polling for this node. Existing monitoring readings
                   will stop refreshing.
                 </p>
               </Show>

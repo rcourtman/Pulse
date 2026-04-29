@@ -39,7 +39,6 @@ export const WORKLOADS_QUERY_PARAMS = {
 
 export const WORKLOADS_PATH = '/workloads';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
-export const DASHBOARD_PATH = '/dashboard';
 export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const PATROL_PATH = '/patrol';
 // Deprecated compatibility alias while older callers migrate off `/ai`.

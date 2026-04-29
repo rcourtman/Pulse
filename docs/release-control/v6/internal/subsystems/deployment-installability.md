@@ -247,9 +247,10 @@ server-side update execution surfaces.
 7. Keep managed-runtime first-session helpers deterministic: shared browser
    helpers under `tests/integration/tests/helpers.ts` may only drive the live
    setup wizard through the current managed runtime after refreshing the
-   canonical dev reset route, and any helper changes that rely on hot-dev
-   browser/backend behavior must keep a managed-runtime recovery proof updated
-   in the same slice.
+   canonical dev reset route, authenticated completion must expect the
+   Infrastructure landing path rather than the retired `/dashboard` route, and
+   any helper changes that rely on hot-dev browser/backend behavior must keep a
+   managed-runtime recovery proof updated in the same slice.
 8. Keep root-level Playwright wrapper routing on the canonical managed browser
    truth. `playwright.config.ts`, `tests/integration/playwright.config.ts`,
    and `tests/integration/tests/runtime-defaults.ts` must resolve the same
@@ -690,7 +691,8 @@ requests together with `page.request` or other direct API helper calls.
 Managed runtime recovery and browser bootstrap proofs therefore need to keep
 helper coverage that demonstrates browser-shell request tracking remains
 trustworthy when the same test also performs direct health or security-status
-API probes.
+API probes, and that authenticated bootstrap does not fall back to the retired
+Dashboard route.
 `scripts/hot-dev-bg.sh` must also supervise `scripts/hot-dev.sh` in an isolated
 child session so an unexpected owner-process death cannot leave orphaned
 watchers or health monitors behind. When the supervisor replaces the managed

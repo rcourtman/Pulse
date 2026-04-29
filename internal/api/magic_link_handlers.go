@@ -214,7 +214,7 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 		return
 	}
 
-	http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/infrastructure", http.StatusTemporaryRedirect)
 }
 
 func (h *MagicLinkHandlers) findOrgForEmail(email string) (string, bool, error) {

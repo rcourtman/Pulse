@@ -61,10 +61,8 @@ const ALLOWLIST = new Set([
   'src/utils/agentCapabilityPresentation.ts',
   'src/utils/unifiedAgentInventoryPresentation.ts',
   'src/utils/unifiedAgentStatusPresentation.ts',
-  'src/utils/dashboardAlertPresentation.ts',
-  'src/utils/dashboardEmptyStatePresentation.ts',
-  'src/utils/dashboardStoragePresentation.ts',
-  'src/utils/dashboardRecoveryPresentation.ts',
+  'src/utils/alertOverviewPresentation.ts',
+  'src/utils/workloadEmptyStatePresentation.ts',
   'src/utils/temperature.ts',
   'src/utils/licensePresentation.ts',
   'src/utils/k8sStatusPresentation.ts',
@@ -142,10 +140,7 @@ const ALLOWLIST = new Set([
   'src/utils/k8sDeploymentPresentation.ts',
   'src/utils/k8sNamespacePresentation.ts',
   'src/components/shared/EnvironmentLockBadge.tsx',
-  'src/utils/dashboardCompositionPresentation.ts',
-  'src/utils/dashboardGuestPresentation.ts',
-  'src/utils/dashboardMetricPresentation.ts',
-  'src/utils/dashboardTrendPresentation.ts',
+  'src/utils/workloadGuestPresentation.ts',
   'src/utils/deployFlowPresentation.ts',
   'src/utils/infrastructureEmptyStatePresentation.ts',
 ]);
@@ -335,11 +330,11 @@ const HELPER_RULES = [
       'Do not define local infrastructure empty-state copy in page code. Use @/utils/infrastructureEmptyStatePresentation instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-dashboard-empty-state-copy',
+    rule: 'canonical-workloads/no-local-workload-empty-state-copy',
     regex:
       /No infrastructure hosts connected|No guests found|Install the Pulse agent to connect a host and unlock v6 infrastructure data, or add a Proxmox connection in Settings → Infrastructure → Proxmox\.|No guests match your current filters|No guests match your search |Loading dashboard data\.\.\.|Connecting to monitoring service|Reconnecting to monitoring service…|Real-time data is currently unavailable\. Showing last-known state\.|Real-time data is reconnecting\. Showing last-known state\.|Dashboard unavailable|Real-time dashboard data is currently unavailable\. Reconnect to try again\.|No resources yet|Once connected platforms report resources, your dashboard overview will appear here\./g,
     message:
-      'Do not define local dashboard empty-state copy in component code. Use @/utils/dashboardEmptyStatePresentation instead.',
+      'Do not define local Workloads empty-state copy in component code. Use @/utils/workloadEmptyStatePresentation instead.',
   },
   {
     rule: 'canonical-shared/no-local-empty-state-tone-maps',
@@ -530,16 +525,16 @@ const HELPER_RULES = [
       'Do not define local recovery chart range selected-button classes in page code. Use the shared segmented button contract instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-trend-range-selected-classes',
+    rule: 'canonical-overview/no-local-trend-range-selected-classes',
     regex: /\bselectedRange\(\)\s*===\s*range\b[\s\S]{0,260}bg-blue-600\s+text-white/g,
     message:
-      'Do not define local dashboard trend range selected-button classes in page code. Use the shared segmented button contract instead.',
+      'Do not define local overview trend range selected-button classes in page code. Use the shared segmented button contract instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-trend-error-copy',
+    rule: 'canonical-overview/no-local-trend-error-copy',
     regex: /Unable to load trends/g,
     message:
-      'Do not define local dashboard trend error copy in panel code. Use @/utils/dashboardTrendPresentation instead.',
+      'Do not define local overview trend error copy in panel code. Use the governed route presentation helper instead.',
   },
   {
     rule: 'canonical-ai/no-local-findings-filter-selected-classes',
@@ -644,30 +639,30 @@ const HELPER_RULES = [
       'Do not define local unified-agent lookup status helpers in component code. Use @/utils/unifiedAgentStatusPresentation instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-problem-status-variant',
+    rule: 'canonical-overview/no-local-problem-status-variant',
     regex: /\b(?:const|function)\s+statusVariant\s*\(\s*pr\s*:\s*ProblemResource\s*\)/g,
     message:
-      'Do not define local dashboard problem-resource status helpers in page code. Use @/utils/problemResourcePresentation instead.',
+      'Do not define local problem-resource status helpers in page code. Use @/utils/problemResourcePresentation instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-alerts-tone',
+    rule: 'canonical-alerts/no-local-alerts-tone',
     regex: /\b(?:const|function)\s+alertsTone\b/g,
     message:
-      'Do not define local dashboard alert summary tone helpers in page code. Use @/utils/dashboardAlertPresentation instead.',
+      'Do not define local alert summary tone helpers in page code. Use @/utils/alertOverviewPresentation instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-storage-recovery-or-alert-copy',
+    rule: 'canonical-overview/no-local-storage-recovery-or-alert-copy',
     regex:
       /No active alerts|No storage resources|No recovery data available|Last recovery point over 24 hours ago/g,
     message:
-      'Do not define local dashboard storage, recovery, or alert empty-state/staleness copy in page code. Use the shared dashboard presentation utilities instead.',
+      'Do not define local storage, recovery, or alert empty-state/staleness copy in page code. Use the owning shared presentation utilities instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-composition-or-ai-empty-state-copy',
+    rule: 'canonical-overview/no-local-composition-or-ai-empty-state-copy',
     regex:
       /No resources detected|Loading usage…|No usage data yet\.|No daily USD trend yet\.|No daily token trend yet\.|No issues found/g,
     message:
-      'Do not define local dashboard or AI empty-state copy in component code. Use the shared presentation utilities instead.',
+      'Do not define local overview or AI empty-state copy in component code. Use the shared presentation utilities instead.',
   },
   {
     rule: 'canonical-ai/no-local-chat-empty-state-copy',
@@ -789,7 +784,7 @@ const HELPER_RULES = [
       'Do not define local ResourcePicker filter labels or hardcoded filter lists in component code. Use @/utils/reportableResourceTypes instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-threshold-slider-color-map',
+    rule: 'canonical-shared/no-local-threshold-slider-color-map',
     regex:
       /\bconst\s+colorMap\s*:\s*Record<ThresholdSliderProps\['type'\],\s*string>\s*=\s*\{[\s\S]{0,220}cpu:[\s\S]{0,220}memory:[\s\S]{0,220}disk:[\s\S]{0,220}temperature:/g,
     message:
@@ -1027,24 +1022,24 @@ const HELPER_RULES = [
       'Do not define local recovery timeline chart presentation in component code. Use @/utils/recoveryTimelineChartPresentation instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-dashboard-helper-implementations',
+    rule: 'canonical-overview/no-local-helper-implementations',
     regex:
       /\bexport function statusBadgeClass\b|\bexport function priorityBadgeClass\b|\bexport function deltaColorClass\b/g,
     message:
-      'Do not define dashboard metric presentation functions in page-local helpers. Use @/utils/dashboardMetricPresentation instead.',
+      'Do not define metric presentation functions in page-local helpers. Use the governed route presentation helper instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-composition-icon-map',
+    rule: 'canonical-overview/no-local-composition-icon-map',
     regex: /\bconst\s+TYPE_ICONS\s*:\s*Record<string,\s*any>\s*=/g,
     message:
-      'Do not define local dashboard composition icon maps in page code. Use @/utils/dashboardCompositionPresentation instead.',
+      'Do not define local composition icon maps in page code. Use the governed route presentation helper instead.',
   },
   {
-    rule: 'canonical-dashboard/no-local-guest-backup-status-map',
+    rule: 'canonical-workloads/no-local-guest-backup-status-map',
     regex:
       /\bconst\s+BACKUP_STATUS_CONFIG\s*:\s*Record<|No backup found|No IP assigned|No filesystems found\. VM may be booting or using a Live ISO\./g,
     message:
-      'Do not define local dashboard guest fallback copy or backup status maps in component code. Use @/utils/dashboardGuestPresentation instead.',
+      'Do not define local Workloads guest fallback copy or backup status maps in component code. Use @/utils/workloadGuestPresentation instead.',
   },
   {
     rule: 'canonical-infrastructure/no-local-deploy-flow-copy',

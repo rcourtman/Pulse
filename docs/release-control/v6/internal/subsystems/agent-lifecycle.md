@@ -307,16 +307,16 @@ helper instead of carrying lifecycle-local background or hover classes.
     That same presentation-only boundary must preserve canonical millisecond timestamps when it serializes chart points, so lifecycle-adjacent first-host and fleet surfaces do not misread rounded chart samples as duplicate or restarted heartbeat evidence.
     The same rule now applies to storage summary interaction. Shared sticky-card or row-hover focus behavior on infrastructure, workloads, and storage may reuse the canonical chart transport, but lifecycle-adjacent install, enrollment, and fleet surfaces must not treat highlighted summary series or sticky-shell state as agent freshness or setup progress.
     The same rule now applies to infrastructure-summary metric filters. Shared
-    dashboard and infrastructure consumers may narrow the canonical
+    infrastructure and other route-owned consumers may narrow the canonical
     `/api/charts/infrastructure` payload with a `metrics` query for
     presentation hot paths, but lifecycle surfaces must not reinterpret
     omitted disk or network series as missing lifecycle telemetry, missing
     agent capabilities, or reduced fleet freshness truth.
-    The same rule now applies to compact dashboard summary payloads. Shared
-    `internal/api/resources.go` summary routes may collapse resource counts,
-    problem rows, and top-resource rankings for dashboard hot paths, but
-    lifecycle surfaces must not treat `/api/resources/dashboard-summary` as
-    install inventory authority, enrollment proof, or fleet freshness truth.
+    The same rule now applies to retired compact dashboard summary payloads.
+    Shared `internal/api/resources.go` routes must not restore
+    `/api/resources/dashboard-summary` as a compatibility read; lifecycle
+    surfaces must continue to use install inventory, enrollment proof, and
+    fleet freshness truth from their owning contracts.
     The same presentation-only boundary now covers compact storage summary
     chart reads as well. Shared `/api/charts/storage-summary` transport may
     request only the canonical `used` and `avail` storage series needed for the
@@ -597,8 +597,8 @@ helper instead of carrying lifecycle-local background or hover classes.
     platform-management shell. The secondary agent handoff must land on
     `/settings/infrastructure?add=agent`.
     When the first host reports successfully, the install workflow must treat
-    that as a completion handoff with direct navigation into `/dashboard` and
-    `/settings/infrastructure/operations` instead of leaving operators on a
+    that as a completion handoff with direct navigation into `/infrastructure`
+    and `/settings/infrastructure/operations` instead of leaving operators on a
     generic lookup result. When the workspace starts from zero active connected
     infrastructure and install commands are available, the same lifecycle path
     must auto-watch the canonical `/api/state` projection for the first

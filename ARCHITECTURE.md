@@ -97,7 +97,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 
 9. **Recovery Engine (`internal/recovery`)**
    - Aggregates backup data (PBS snapshots, ZFS snapshots, replication tasks) into a unified recovery point timeline.
-   - Provides faceted queries: filter by type, source, status. Rollup summaries for dashboards.
+   - Provides faceted queries: filter by type, source, status, and source health.
    - API: `/api/recovery/points`, `/api/recovery/series`, `/api/recovery/facets`, `/api/recovery/rollups`.
 
 10. **Audit Logging (`pkg/audit`)**
@@ -137,7 +137,6 @@ Navigation is organised by **task**, not by platform:
 | `/storage` | Storage | Proxmox storage, ZFS pools, Ceph |
 | `/recovery` | Recovery | Backups, snapshots, replication |
 | `/ceph` | Ceph | Detailed Ceph cluster view |
-| `/dashboard` | Dashboard | Summary panels and metrics |
 | `/alerts/*` | Alerts | Alert rules, active alerts, history |
 | `/ai/*` | AI Intelligence | Patrol findings, investigations, forecasts |
 | `/settings/*` | Settings | Configuration, security, diagnostics, reporting, AI, relay |

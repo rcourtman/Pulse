@@ -182,7 +182,7 @@ func TestHandleSAMLLogin_SuccessGetAndPost(t *testing.T) {
 		t.Fatalf("expected redirect to idp, got %q", loc)
 	}
 
-	body := bytes.NewBufferString(`{"returnTo":"/dashboard"}`)
+	body := bytes.NewBufferString(`{"returnTo":"/infrastructure"}`)
 	req = httptest.NewRequest(http.MethodPost, "/api/saml/okta/login", body)
 	rr = httptest.NewRecorder()
 	router.handleSAMLLogin(rr, req)

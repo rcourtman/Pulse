@@ -21,6 +21,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
 
     try {
       await ensureAuthenticated(page);
+      await expect(page).not.toHaveURL(/\/dashboard(?:[/?#]|$)/);
 
       await expect
         .poll(() => securityStatusRequests.count(), {

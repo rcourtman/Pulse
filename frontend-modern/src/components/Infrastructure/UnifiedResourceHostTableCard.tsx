@@ -21,8 +21,8 @@ import {
 } from '@/components/shared/Table';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
-import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
+import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   dedupeResourceBadges,

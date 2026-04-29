@@ -9,7 +9,6 @@ RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
     "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
     "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
     "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "tests/integration/tests/17-recovery-layout.spec.ts",
 ]
@@ -357,7 +356,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(performance_match["lane_context"]["lane_id"], "L10")
         self.assertEqual(
             performance_match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
         unified_resources_match = matches_by_subsystem["unified-resources"]
@@ -409,7 +408,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(performance_match["lane_context"]["lane_id"], "L10")
         self.assertEqual(
             performance_match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
         self.assertIn(
             "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
@@ -461,8 +460,8 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
         )
 
-    def test_lookup_paths_assigns_recent_alerts_panel_to_alerts(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx"])
+    def test_lookup_paths_assigns_bulk_edit_dialog_to_alerts(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Alerts/BulkEditDialog.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -476,7 +475,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L6")
         self.assertEqual(match["verification_requirement"]["id"], "alerts-frontend-surface")
         self.assertIn(
-            "frontend-modern/src/components/Alerts/__tests__/RecentAlertsPanel.test.tsx",
+            "frontend-modern/src/components/Alerts/__tests__/BulkEditDialog.test.tsx",
             match["verification_requirement"]["exact_files"],
         )
 
@@ -734,85 +733,32 @@ class SubsystemLookupTest(unittest.TestCase):
             RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
-    def test_lookup_paths_assigns_dashboard_page_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/pages/Dashboard.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
+    def test_lookup_paths_reports_retired_dashboard_page_as_unowned(self) -> None:
+        path = "frontend-modern/src/pages/Dashboard.tsx"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(
-            match["verification_requirement"]["id"],
-            "dashboard-storage-recovery-surface",
-        )
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/pages/__tests__/DashboardPage.test.tsx",
-            ],
-        )
+        self.assertEqual(file_entry["matches"], [])
 
-    def test_lookup_paths_assigns_dashboard_widgets_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
+    def test_lookup_paths_reports_retired_dashboard_widgets_as_unowned(self) -> None:
+        path = "frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
+        self.assertEqual(file_entry["matches"], [])
 
-    def test_lookup_paths_assigns_dashboard_overview_problem_resources_to_frontend_primitives(self) -> None:
-        result = lookup_paths(["frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"frontend-primitives"},
-        )
+    def test_lookup_paths_reports_retired_dashboard_overview_as_unowned(self) -> None:
+        path = "frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"frontend-primitives"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
-        )
-        self.assertEqual(match["lane_context"]["lane_id"], "L8")
-        self.assertEqual(
-            match["verification_requirement"]["id"],
-            "dashboard-overview-feature-surface",
-        )
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/features/dashboardOverview/__tests__/KPIStrip.test.tsx",
-                "frontend-modern/src/features/dashboardOverview/__tests__/ProblemResourcesTable.test.tsx",
-                "frontend-modern/src/features/dashboardOverview/__tests__/TrendCharts.test.tsx",
-                "frontend-modern/src/features/dashboardOverview/__tests__/dashboardPulseBriefModel.test.ts",
-                "frontend-modern/src/pages/__tests__/DashboardPage.test.tsx",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                "frontend-modern/src/utils/__tests__/problemResourcePresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/typeColumnPresentation.test.ts",
-            ],
-        )
+        self.assertEqual(file_entry["matches"], [])
 
     def test_lookup_paths_assigns_recovery_points_hook_to_storage_recovery(self) -> None:
         result = lookup_paths(["frontend-modern/src/hooks/useRecoveryPoints.ts"])
@@ -886,8 +832,17 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L15")
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
 
-    def test_lookup_paths_assigns_dashboard_recovery_hook_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/hooks/useDashboardRecovery.ts"])
+    def test_lookup_paths_reports_retired_dashboard_recovery_hook_as_unowned(self) -> None:
+        path = "frontend-modern/src/hooks/useDashboardRecovery.ts"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(file_entry["matches"], [])
+
+    def test_lookup_paths_assigns_recovery_summary_component_to_storage_recovery(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Recovery/RecoverySummary.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -904,44 +859,17 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L15")
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
 
-    def test_lookup_paths_assigns_recovery_status_panel_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
+    def test_lookup_paths_reports_retired_dashboard_recovery_presentation_as_unowned(self) -> None:
+        path = "frontend-modern/src/utils/dashboardRecoveryPresentation.ts"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-
-    def test_lookup_paths_assigns_dashboard_recovery_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/dashboardRecoveryPresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
+        self.assertEqual(file_entry["matches"], [])
 
     def test_lookup_paths_assigns_storage_panel_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Storage/DashboardStoragePanel.tsx"])
+        result = lookup_paths(["frontend-modern/src/components/Storage/Storage.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -960,7 +888,6 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
-                "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
@@ -976,54 +903,18 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
                 "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
-                "frontend-modern/src/utils/__tests__/dashboardStoragePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
 
-    def test_lookup_paths_assigns_dashboard_storage_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/dashboardStoragePresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
+    def test_lookup_paths_reports_retired_dashboard_storage_presentation_as_unowned(self) -> None:
+        path = "frontend-modern/src/utils/dashboardStoragePresentation.ts"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
-        )
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "storage-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/useStoragePageSummary.test.ts",
-                "frontend-modern/src/components/Storage/code_standards.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storageAlertState.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storageDomain.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
-                "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
-                "frontend-modern/src/utils/__tests__/dashboardStoragePresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
-        )
+        self.assertEqual(file_entry["matches"], [])
 
     def test_lookup_paths_assigns_storage_page_to_storage_recovery(self) -> None:
         result = lookup_paths(["frontend-modern/src/pages/Storage.tsx"])
@@ -2234,13 +2125,13 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
         )
 
-    def test_lookup_paths_assigns_dashboard_guest_row_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_guest_row_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/GuestRow.tsx",
-                "frontend-modern/src/components/Dashboard/GuestRowCells.tsx",
-                "frontend-modern/src/components/Dashboard/guestRowModel.tsx",
-                "frontend-modern/src/components/Dashboard/useGuestRowState.ts",
+                "frontend-modern/src/components/Workloads/GuestRow.tsx",
+                "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+                "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+                "frontend-modern/src/components/Workloads/useGuestRowState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2262,12 +2153,12 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_guest_metadata_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_guest_metadata_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts"]
+            ["frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -2287,21 +2178,21 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_workload_route_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workload_route_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/dashboardWorkloadFilterConfigModel.ts",
-                "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts",
-                "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteStateModel.ts",
-                "frontend-modern/src/components/Dashboard/dashboardWorkloadUrlSyncModel.ts",
-                "frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts",
-                "frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts",
-                "frontend-modern/src/components/Dashboard/useDashboardWorkloadUrlSync.ts",
+                "frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts",
+                "frontend-modern/src/components/Workloads/workloadRouteModel.ts",
+                "frontend-modern/src/components/Workloads/workloadRouteStateModel.ts",
+                "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
+                "frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts",
+                "frontend-modern/src/components/Workloads/useWorkloadRouteState.ts",
+                "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2322,16 +2213,16 @@ class SubsystemLookupTest(unittest.TestCase):
             )
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_selection_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workloads_selection_model_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/dashboardSelectionModel.ts",
-                "frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts",
+                "frontend-modern/src/components/Workloads/workloadSelectionModel.ts",
+                "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2352,14 +2243,14 @@ class SubsystemLookupTest(unittest.TestCase):
             )
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_workload_table_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workload_table_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx"]
+            ["frontend-modern/src/components/Workloads/WorkloadsTable.tsx"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -2379,13 +2270,13 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_workload_panel_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workload_panel_runtime_to_performance_and_scalability(
         self,
     ) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Dashboard/WorkloadPanel.tsx"])
+        result = lookup_paths(["frontend-modern/src/components/Workloads/WorkloadPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -2404,41 +2295,14 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_workload_header_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workload_header_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx"]
-        )
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"performance-and-scalability"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"performance-and-scalability"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
-        )
-        self.assertEqual(
-            match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
-        )
-
-    def test_lookup_paths_assigns_dashboard_selection_runtime_to_performance_and_scalability(
-        self,
-    ) -> None:
-        result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts"]
+            ["frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -2458,14 +2322,14 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_workload_url_sync_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workloads_selection_state_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/useDashboardWorkloadUrlSync.ts"]
+            ["frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -2485,14 +2349,14 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_workload_derived_state_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workload_url_sync_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts"]
+            ["frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -2512,14 +2376,14 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_workload_viewport_sync_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workload_derived_state_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts"]
+            ["frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -2539,14 +2403,14 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_controls_state_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workload_viewport_sync_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/useDashboardControlsState.ts"]
+            ["frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -2566,14 +2430,41 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_grouped_windowing_runtime_to_performance_and_scalability(
+    def test_lookup_paths_assigns_workloads_controls_state_runtime_to_performance_and_scalability(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts"]
+            ["frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"performance-and-scalability"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"performance-and-scalability"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "workloads-hot-path",
+        )
+
+    def test_lookup_paths_assigns_workloads_grouped_windowing_runtime_to_performance_and_scalability(
+        self,
+    ) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -2594,20 +2485,20 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L10")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
         self.assertIn(
-            "frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts",
+            "frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts",
             match["verification_requirement"]["exact_files"],
         )
 
-    def test_lookup_paths_assigns_dashboard_guest_drawer_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_guest_drawer_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/GuestDrawer.tsx",
-                "frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx",
-                "frontend-modern/src/components/Dashboard/guestDrawerModel.ts",
-                "frontend-modern/src/components/Dashboard/useGuestDrawerState.ts",
+                "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+                "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+                "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+                "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2628,14 +2519,14 @@ class SubsystemLookupTest(unittest.TestCase):
             )
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
 
-    def test_lookup_paths_assigns_dashboard_workload_topology_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workload_topology_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/workloadTopology.ts",
-                "frontend-modern/src/components/Dashboard/useGuestDrawerState.ts",
-                "frontend-modern/src/components/Dashboard/useGuestRowState.ts",
-                "frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts",
-                "frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts",
+                "frontend-modern/src/components/Workloads/workloadTopology.ts",
+                "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
+                "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+                "frontend-modern/src/components/Workloads/useWorkloadRouteState.ts",
+                "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2657,15 +2548,15 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_disk_list_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_disk_list_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/DiskList.tsx",
-                "frontend-modern/src/components/Dashboard/diskListModel.ts",
-                "frontend-modern/src/components/Dashboard/useDiskListState.ts",
+                "frontend-modern/src/components/Workloads/DiskList.tsx",
+                "frontend-modern/src/components/Workloads/diskListModel.ts",
+                "frontend-modern/src/components/Workloads/useDiskListState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2687,15 +2578,15 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_filter_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_filter_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/DashboardFilter.tsx",
-                "frontend-modern/src/components/Dashboard/dashboardFilterModel.ts",
-                "frontend-modern/src/components/Dashboard/useDashboardFilterState.ts",
+                "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+                "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
+                "frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2717,15 +2608,15 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_threshold_slider_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_threshold_slider_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/ThresholdSlider.tsx",
-                "frontend-modern/src/components/Dashboard/thresholdSliderModel.ts",
-                "frontend-modern/src/components/Dashboard/useThresholdSliderState.ts",
+                "frontend-modern/src/components/Workloads/ThresholdSlider.tsx",
+                "frontend-modern/src/components/Workloads/thresholdSliderModel.ts",
+                "frontend-modern/src/components/Workloads/useThresholdSliderState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2747,7 +2638,7 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
     def test_lookup_paths_assigns_threshold_slider_presentation_to_performance_and_scalability(
@@ -2773,15 +2664,15 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L10")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-workload-hot-path",
+            "workloads-hot-path",
         )
 
-    def test_lookup_paths_assigns_dashboard_stacked_disk_bar_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_stacked_disk_bar_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/StackedDiskBar.tsx",
-                "frontend-modern/src/components/Dashboard/stackedDiskBarModel.ts",
-                "frontend-modern/src/components/Dashboard/useStackedDiskBarState.ts",
+                "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+                "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+                "frontend-modern/src/components/Workloads/useStackedDiskBarState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2803,19 +2694,19 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_stacked_memory_bar_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_stacked_memory_bar_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx",
-                "frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts",
-                "frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts",
+                "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx",
+                "frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts",
+                "frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2837,15 +2728,15 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_metric_bar_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_metric_bar_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/MetricBar.tsx",
-                "frontend-modern/src/components/Dashboard/metricBarModel.ts",
-                "frontend-modern/src/components/Dashboard/useMetricBarState.ts",
+                "frontend-modern/src/components/Workloads/MetricBar.tsx",
+                "frontend-modern/src/components/Workloads/metricBarModel.ts",
+                "frontend-modern/src/components/Workloads/useMetricBarState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2867,15 +2758,15 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
-    def test_lookup_paths_assigns_dashboard_enhanced_cpu_bar_runtime_to_performance_and_scalability(self) -> None:
+    def test_lookup_paths_assigns_workloads_enhanced_cpu_bar_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx",
-                "frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts",
-                "frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts",
+                "frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx",
+                "frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts",
+                "frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -2897,7 +2788,7 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
             self.assertEqual(
                 match["verification_requirement"]["id"],
-                "dashboard-workload-hot-path",
+                "workloads-hot-path",
             )
 
     def test_lookup_paths_assigns_settings_page_shell_to_frontend_primitives(self) -> None:
@@ -4874,7 +4765,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
                 "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                 "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
-                "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
                 "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
                 "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
                 "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",

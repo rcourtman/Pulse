@@ -46,18 +46,18 @@ vi.mock('@/components/shared/TemperatureGauge', () => ({
   TemperatureGauge: () => <div data-testid="temperature-gauge">temp</div>,
 }));
 
-vi.mock('@/components/Dashboard/EnhancedCPUBar', () => ({
+vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
   EnhancedCPUBar: (props: unknown) => {
     enhancedCpuBarMock(props);
     return <div data-testid="enhanced-cpu-bar">cpu</div>;
   },
 }));
 
-vi.mock('@/components/Dashboard/StackedMemoryBar', () => ({
+vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
   StackedMemoryBar: () => <div data-testid="stacked-memory-bar">memory</div>,
 }));
 
-vi.mock('@/components/Dashboard/StackedDiskBar', () => ({
+vi.mock('@/components/Workloads/StackedDiskBar', () => ({
   StackedDiskBar: () => <div data-testid="stacked-disk-bar">disk</div>,
 }));
 
@@ -134,7 +134,7 @@ describe('InfrastructureSummaryTable', () => {
       <InfrastructureSummaryTable
         nodes={[makeNode({ linkedAgentId: 'agent-host-1' })]}
         selectedNode={null}
-        currentTab="dashboard"
+        currentTab="workloads"
         onNodeClick={vi.fn()}
       />
     ));
@@ -153,7 +153,7 @@ describe('InfrastructureSummaryTable', () => {
       <InfrastructureSummaryTable
         nodes={[makeNode({ id: 'node-2', name: 'pve2' })]}
         selectedNode={null}
-        currentTab="dashboard"
+        currentTab="workloads"
         onNodeClick={vi.fn()}
       />
     ));
@@ -170,7 +170,7 @@ describe('InfrastructureSummaryTable', () => {
       <InfrastructureSummaryTable
         nodes={[makeNode()]}
         selectedNode={null}
-        currentTab="dashboard"
+        currentTab="workloads"
         onNodeClick={vi.fn()}
       />
     ));
@@ -196,10 +196,12 @@ describe('InfrastructureSummaryTable', () => {
                 hostname: 'pve1.internal',
               },
             },
-          } as Partial<Agent> & { platformData: { linkedAgentId: string; agent: { hostname: string } } }),
+          } as Partial<Agent> & {
+            platformData: { linkedAgentId: string; agent: { hostname: string } };
+          }),
         ]}
         selectedNode="node-1"
-        currentTab="dashboard"
+        currentTab="workloads"
         onNodeClick={vi.fn()}
       />
     ));

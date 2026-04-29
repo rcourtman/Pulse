@@ -14,7 +14,6 @@ type SpotlightRect = {
 };
 
 const DESKTOP_TAB_SELECTOR_BY_TARGET = {
-  dashboard: '[role="tab"][title="Environment overview and command center"]',
   infrastructure: '[role="tab"][title="All agents and nodes across platforms"]',
   workloads: '[role="tab"][title="VMs, containers, and Kubernetes workloads"]',
   storage: '[role="tab"][title="Storage pools, disks, and datastores"]',
@@ -22,7 +21,6 @@ const DESKTOP_TAB_SELECTOR_BY_TARGET = {
 } as const;
 
 const MOBILE_TAB_SELECTOR_BY_TARGET = {
-  dashboard: 'button[data-tab-id="dashboard"]',
   infrastructure: 'button[data-tab-id="infrastructure"]',
   workloads: 'button[data-tab-id="workloads"]',
   storage: 'button[data-tab-id="storage"]',
@@ -39,7 +37,7 @@ const getInitialStepIndexForPath = (): number => {
     if (path.startsWith('/storage')) return 'storage';
     if (path.startsWith('/workloads')) return 'workloads';
     if (path.startsWith('/infrastructure')) return 'infrastructure';
-    return 'dashboard';
+    return 'infrastructure';
   })();
   const index = WHATS_NEW_FEATURE_CARDS.findIndex((card) => card.target === target);
   return index >= 0 ? index : 0;

@@ -7,9 +7,9 @@ import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { formatTemperature } from '@/utils/temperature';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
-import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
-import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
+import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { getNodeStatusIndicator, getPBSStatusIndicator } from '@/utils/status';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -394,7 +394,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
           </TableCell>
         </Show>
 
-        <Show when={props.tableProps.currentTab === 'dashboard'}>
+        <Show when={props.tableProps.currentTab === 'workloads'}>
           <TableCell class={tdClass}>
             <div class="flex justify-center">
               <span class={online() ? 'text-xs text-base-content' : 'text-xs text-muted'}>

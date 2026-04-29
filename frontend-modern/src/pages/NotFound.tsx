@@ -4,11 +4,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
-import {
-  DASHBOARD_PATH,
-  buildRecoveryPath,
-  buildInfrastructurePath,
-} from '@/routing/resourceLinks';
+import { buildRecoveryPath, buildInfrastructurePath } from '@/routing/resourceLinks';
 
 const NotFound: Component = () => {
   const location = useLocation();
@@ -38,13 +34,6 @@ const NotFound: Component = () => {
                 onClick={() => navigate(buildInfrastructurePath())}
               >
                 Go to Infrastructure
-              </button>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-surface-hover"
-                onClick={() => navigate(DASHBOARD_PATH)}
-              >
-                Go to Dashboard
               </button>
             </div>
           }

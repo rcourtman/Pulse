@@ -100,13 +100,13 @@ describe('SetupCompletionPanel guardrails', () => {
     );
     expect(setupCompletionPanelSource).toContain('Recommended next step');
     expect(setupCompletionPanelSource).toContain('aria-label="Setup next step"');
-    expect(setupCompletionPanelSource).toContain('Go to Dashboard');
+    expect(setupCompletionPanelSource).toContain('Open Infrastructure');
     expect(setupCompletionModelSource).toContain("heroTitle: 'First monitored system connected'");
     expect(setupCompletionModelSource).toContain(
       "heroTitle: 'Choose your first infrastructure source'",
     );
     expect(setupCompletionPanelSource).toContain(
-      "completionViewModel().primaryAction === 'dashboard'",
+      "completionViewModel().primaryAction === 'infrastructure'",
     );
     expect(setupCompletionPanelSource).toContain(
       'completionViewModel().showAddInfrastructureAction',

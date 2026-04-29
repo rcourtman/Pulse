@@ -12,7 +12,7 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   );
 }
 
-logger.info('Pulse monitoring dashboard starting');
+logger.info('Pulse monitoring workspace starting');
 
 if (root) {
   logger.debug('[Index] Root element found, rendering App...');

@@ -176,7 +176,7 @@ describe('SetupCompletionPanel', () => {
     expect(screen.queryByText('password')).not.toBeInTheDocument();
   });
 
-  it('still shows connected systems from polled resources and allows dashboard handoff', async () => {
+  it('still shows connected systems from polled resources and allows Infrastructure handoff', async () => {
     const onComplete = vi.fn();
     apiFetchJSONMock.mockResolvedValue({
       resources: [
@@ -199,18 +199,18 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('First monitored system connected')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Add infrastructure when you want another Pulse Agent or platform API source.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open Infrastructure to inspect the first system, then return to Add infrastructure when you want another Pulse Agent or platform API source.',
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Open the dashboard to review your first connected system.'),
+      screen.getByText('Open Infrastructure to review your first connected system.'),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
         'Add infrastructure stays available for more Pulse Agent systems or platform API inventory when a platform manages the estate.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Go to Dashboard' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Open Infrastructure' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Add infrastructure' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
     expect(trackAgentFirstConnectedMock).toHaveBeenCalledWith(
@@ -218,12 +218,12 @@ describe('SetupCompletionPanel', () => {
       'first_agent',
     );
 
-    const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
+    const nextStepHeading = screen.getByRole('heading', { name: 'Open Infrastructure' });
     const nextStepCard = nextStepHeading.closest('[aria-label="Setup next step"]');
     expect(nextStepCard).not.toBeNull();
 
     fireEvent.click(
-      within(nextStepCard as HTMLElement).getByRole('button', { name: 'Go to Dashboard' }),
+      within(nextStepCard as HTMLElement).getByRole('button', { name: 'Open Infrastructure' }),
     );
     expect(onComplete).toHaveBeenCalledWith('/');
   });
@@ -260,7 +260,7 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('First monitored system connected')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Add infrastructure when you want another platform API or Pulse Agent source.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open Infrastructure to inspect the first system, then return to Add infrastructure when you want another platform API or Pulse Agent source.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -268,12 +268,12 @@ describe('SetupCompletionPanel', () => {
         'Add infrastructure stays available for more API-backed systems or Pulse Agent telemetry when a system needs node-local coverage.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Go to Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Infrastructure' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
     expect(trackAgentFirstConnectedMock).not.toHaveBeenCalled();
 
-    const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
+    const nextStepHeading = screen.getByRole('heading', { name: 'Open Infrastructure' });
     const nextStepCard = nextStepHeading.closest('[aria-label="Setup next step"]');
     expect(nextStepCard).not.toBeNull();
 
@@ -316,7 +316,7 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('VMware vSphere')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Add infrastructure when you want another platform API or Pulse Agent source.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open Infrastructure to inspect the first system, then return to Add infrastructure when you want another platform API or Pulse Agent source.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
@@ -365,7 +365,7 @@ describe('SetupCompletionPanel', () => {
 
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Add infrastructure when you want another platform API or Agent source.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open Infrastructure to inspect the first system, then return to Add infrastructure when you want another platform API or Agent source.',
       ),
     ).toBeInTheDocument();
     expect(

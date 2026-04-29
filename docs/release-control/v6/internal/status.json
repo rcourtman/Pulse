@@ -2898,21 +2898,6 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Dashboard/Dashboard.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
           "kind": "file"
         },
@@ -2929,6 +2914,21 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
           "kind": "file"
         },
         {

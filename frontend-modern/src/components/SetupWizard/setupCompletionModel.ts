@@ -15,7 +15,7 @@ import {
 } from '@/utils/resourceIdentity';
 
 export type SetupCompletionConnectionPath = 'agent' | 'api';
-export type SetupCompletionPrimaryAction = 'dashboard' | 'sources';
+export type SetupCompletionPrimaryAction = 'infrastructure' | 'sources';
 
 export interface ConnectedSetupSystem {
   id: string;
@@ -149,7 +149,7 @@ const buildConnectedHeroDescription = (
   hasApiConnectedSystems: boolean,
 ): string => {
   const prefix =
-    'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview';
+    'Your admin account is ready and Pulse is already receiving telemetry. Open Infrastructure to inspect the first system';
 
   if (hasAgentConnectedSystems && hasApiConnectedSystems) {
     return `${prefix}, then return to Add infrastructure when you want another platform API or Agent source.`;
@@ -164,7 +164,7 @@ const buildCredentialsContinuationText = (
   _hasAgentConnectedSystems: boolean,
   _hasApiConnectedSystems: boolean,
 ): string => {
-  return 'the dashboard or Add infrastructure.';
+  return 'Infrastructure or Add infrastructure.';
 };
 
 const buildConnectedNextStepDetail = (
@@ -192,8 +192,8 @@ export function buildSetupCompletionViewModel(
   const connectedSystemNoun = connectedSystems.length === 1 ? 'system' : 'systems';
   const nextStepSummary =
     connectedSystems.length === 1
-      ? 'Open the dashboard to review your first connected system.'
-      : 'Open the dashboard to review your connected systems.';
+      ? 'Open Infrastructure to review your first connected system.'
+      : 'Open Infrastructure to review your connected systems.';
 
   if (!hasConnectedSystems) {
     return {
@@ -231,8 +231,8 @@ export function buildSetupCompletionViewModel(
     heroTitle: 'First monitored system connected',
     nextStepDetail: buildConnectedNextStepDetail(hasAgentConnectedSystems, hasApiConnectedSystems),
     nextStepSummary,
-    nextStepTitle: 'Open your first dashboard view',
-    primaryAction: 'dashboard',
+    nextStepTitle: 'Open Infrastructure',
+    primaryAction: 'infrastructure',
     showAddInfrastructureAction: hasConnectedSystems,
     showAgentInstallAction: false,
   };

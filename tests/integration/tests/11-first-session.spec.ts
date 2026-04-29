@@ -63,7 +63,7 @@ test.describe.serial('First-session experience', () => {
     await expect(page.getByText('TrueNAS', { exact: false }).first()).toBeVisible();
   });
 
-  test('dashboard shows key navigation elements', async ({ page }, testInfo) => {
+  test('shell shows key navigation elements', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
 
     await ensureAuthenticated(page);

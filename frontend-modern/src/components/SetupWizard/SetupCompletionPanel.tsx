@@ -165,7 +165,7 @@ Keep these credentials secure!
     props.onComplete(AGENT_INSTALL_PATH);
   };
 
-  const handleGoToDashboard = () => {
+  const handleOpenInfrastructure = () => {
     props.onComplete('/');
   };
 
@@ -441,14 +441,14 @@ Keep these credentials secure!
             <div class="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={() =>
-                  completionViewModel().primaryAction === 'dashboard'
-                    ? handleGoToDashboard()
+                  completionViewModel().primaryAction === 'infrastructure'
+                    ? handleOpenInfrastructure()
                     : handleOpenAddInfrastructure()
                 }
                 class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
               >
-                {completionViewModel().primaryAction === 'dashboard'
-                  ? 'Go to Dashboard'
+                {completionViewModel().primaryAction === 'infrastructure'
+                  ? 'Open Infrastructure'
                   : 'Add infrastructure'}
               </button>
               <Show when={completionViewModel().showAddInfrastructureAction}>

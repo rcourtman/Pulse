@@ -3,7 +3,6 @@ import {
   buildRecoveryPath,
   buildStoragePath,
   buildWorkloadsPath,
-  DASHBOARD_PATH,
   PATROL_PATH,
 } from '@/routing/resourceLinks';
 
@@ -31,12 +30,6 @@ function normalizeRoute(route: string): string {
 }
 
 const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
-  {
-    id: 'dashboard',
-    matches: (route) => route === DASHBOARD_PATH,
-    preload: () =>
-      import('@/pages/Dashboard').then(() => undefined),
-  },
   {
     id: 'infrastructure',
     matches: (route) => route === ROOT_INFRASTRUCTURE_PATH,

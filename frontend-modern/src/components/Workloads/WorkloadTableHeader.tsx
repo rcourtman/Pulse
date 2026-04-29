@@ -1,0 +1,68 @@
+import { For } from 'solid-js';
+
+import { TableHead, TableHeader, TableRow } from '@/components/shared/Table';
+
+import { getGuestColumnStyle } from './guestRowModel';
+import type { WorkloadsState, WorkloadSortKey } from './useWorkloadsState';
+
+type WorkloadTableHeaderProps = Pick<
+  WorkloadsState,
+  | 'handleSort'
+  | 'isMobile'
+  | 'sortDirection'
+  | 'sortKey'
+  | 'visibleColumns'
+  | 'workloadTableLayoutMode'
+  | 'workloadTableVisibleColumnIds'
+  | 'workloadTableVisibleColumns'
+>;
+
+export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
+  return (
+    <TableHeader>
+      <TableRow class="bg-surface-alt text-muted border-b border-border">
+        <For each={props.workloadTableVisibleColumns()}>
+          {(col) => {
+            const isFirst = () => col.id === props.visibleColumns()[0]?.id;
+            const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
+            const isSortable = !!sortKeyForCol;
+            const isSorted = () => sortKeyForCol && props.sortKey() === sortKeyForCol;
+
+            return (
+              <TableHead
+                class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
+ ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'} align-middle
+ ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
+                data-workload-col={col.id}
+                style={getGuestColumnStyle(
+                  col.id,
+                  props.isMobile(),
+                  props.workloadTableLayoutMode(),
+                  props.workloadTableVisibleColumnIds(),
+                )}
+                onClick={() => isSortable && props.handleSort(sortKeyForCol!)}
+                title={col.icon ? col.label : undefined}
+              >
+                <div
+                  class={`flex min-h-[14px] items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`}
+                >
+                  {col.icon ? (
+                    <>
+                      <span class="flex items-center" aria-hidden="true">
+                        {col.icon}
+                      </span>
+                      <span class="sr-only">{col.label}</span>
+                    </>
+                  ) : (
+                    col.label
+                  )}
+                  {isSorted() && (props.sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
+              </TableHead>
+            );
+          }}
+        </For>
+      </TableRow>
+    </TableHeader>
+  );
+}

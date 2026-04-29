@@ -1,6 +1,5 @@
 import { For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import LayoutDashboardIcon from 'lucide-solid/icons/layout-dashboard';
 import ServerIcon from 'lucide-solid/icons/server';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
@@ -27,8 +26,6 @@ import { useWhatsNewModalState } from './useWhatsNewModalState';
 
 function WhatsNewFeatureIcon(props: { card: WhatsNewFeatureCard }) {
   switch (props.card.icon) {
-    case 'dashboard':
-      return <LayoutDashboardIcon class="h-4 w-4" />;
     case 'infrastructure':
       return <ServerIcon class="h-4 w-4" />;
     case 'workloads':

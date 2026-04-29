@@ -144,7 +144,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain("'All sources'");
     expect(resourceDetailDrawerOverviewSource).not.toContain("'All adapters'");
     expect(resourceDetailDrawerOverviewSource).not.toContain(
-      "from '@/components/Dashboard/TagBadges'",
+      "from '@/components/Workloads/TagBadges'",
     );
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerOverviewTab'");
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");

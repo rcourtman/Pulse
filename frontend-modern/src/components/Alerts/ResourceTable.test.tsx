@@ -92,7 +92,7 @@ vi.mock('@/components/shared/SectionHeader', () => ({
   SectionHeader: (props: any) => <h3 data-testid="section-header">{props.title}</h3>,
 }));
 
-vi.mock('@/components/Dashboard/ThresholdSlider', () => ({
+vi.mock('@/components/Workloads/ThresholdSlider', () => ({
   ThresholdSlider: (props: any) => (
     <input
       data-testid="threshold-slider"

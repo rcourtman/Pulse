@@ -3,7 +3,7 @@ import RotateCcw from 'lucide-solid/icons/rotate-ccw';
 
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
+import { ThresholdSlider } from '@/components/Workloads/ThresholdSlider';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
   getAlertResourceTableCustomBadgeLabel,

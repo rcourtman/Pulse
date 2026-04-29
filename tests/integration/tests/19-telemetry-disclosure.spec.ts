@@ -140,25 +140,24 @@ test.describe('Telemetry disclosure', () => {
       localStorage.removeItem('pulse_whats_new_v2_shown');
     });
 
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await page.goto('/infrastructure', { waitUntil: 'domcontentloaded' });
 
     const dialog = page.getByRole('dialog');
     const spotlight = page.locator('[data-tour-spotlight]');
     const assistantLauncher = page.getByRole('button', { name: 'Expand Pulse Assistant' });
-    const dashboardTab = page.locator(
-      '[role="tab"][title="Environment overview and command center"]',
-    );
     const infrastructureTab = page.locator(
       '[role="tab"][title="All agents and nodes across platforms"]',
     );
-    await expect(dialog).toHaveAttribute('aria-label', 'Welcome to Pulse v6');
-    await expect(dialog.getByText('Step 1 of 5')).toBeVisible();
-    await expect(dialog.getByText('Quick Tour')).toBeVisible();
+    await expect(dialog).toHaveAttribute('aria-label', 'Pulse navigation guide');
+    await expect(dialog.getByText('Step 1 of 4')).toBeVisible();
+    await expect(dialog.getByText('Nav guide')).toBeVisible();
     await expect(assistantLauncher).toBeHidden();
-    await expect(spotlight).toHaveAttribute('data-tour-step', 'dashboard');
-    await expect(dialog).toHaveAttribute('data-tour-step', 'dashboard');
-    await expectSpotlightAround(spotlight, dashboardTab);
-    await expect(dialog.getByText(/Start here for health, alerts, capacity/i)).toBeVisible();
+    await expect(spotlight).toHaveAttribute('data-tour-step', 'infrastructure');
+    await expect(dialog).toHaveAttribute('data-tour-step', 'infrastructure');
+    await expectSpotlightAround(spotlight, infrastructureTab);
+    await expect(
+      dialog.getByText(/Start here to add, inspect, and manage infrastructure sources/i),
+    ).toBeVisible();
     await expect(dialog.getByRole('link', { name: 'Telemetry details' })).toBeVisible();
 
     const privacyLink = dialog.getByRole('link', { name: 'Telemetry details' });
@@ -178,11 +177,6 @@ test.describe('Telemetry disclosure', () => {
       '/docs/MIGRATION_UNIFIED_NAV.md',
       'Migration Guide: Unified Navigation',
     );
-
-    await dialog.getByRole('button', { name: 'Next' }).click();
-    await expect(dialog).toHaveAttribute('data-tour-step', 'infrastructure');
-    await expect(spotlight).toHaveAttribute('data-tour-step', 'infrastructure');
-    await expectSpotlightAround(spotlight, infrastructureTab);
 
     for (let step = 0; step < 3; step += 1) {
       await dialog.getByRole('button', { name: 'Next' }).click();

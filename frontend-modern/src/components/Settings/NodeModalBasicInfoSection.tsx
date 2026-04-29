@@ -34,7 +34,7 @@ export const NodeModalBasicInfoSection: Component<NodeModalBasicInfoSectionProps
             type="text"
             value={state.formData().name}
             onInput={(event) => state.updateField('name', event.currentTarget.value)}
-            placeholder="Pulse uses this label across dashboards"
+            placeholder="Pulse uses this label across monitoring views"
             required
             class={controlClass()}
           />

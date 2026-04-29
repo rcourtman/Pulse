@@ -47,11 +47,7 @@ querying, and the operator-facing storage health presentation layer.
 20. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
 21. `frontend-modern/src/pages/Recovery.tsx`
 22. `frontend-modern/src/routing/resourceLinks.ts`
-23. `frontend-modern/src/pages/Dashboard.tsx`
-24. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
-25. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
-26. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
-27. `frontend-modern/src/types/recovery.ts`
+23. `frontend-modern/src/types/recovery.ts`
 28. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
 29. `frontend-modern/src/utils/recoveryTablePresentation.ts`
 30. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
@@ -84,17 +80,11 @@ querying, and the operator-facing storage health presentation layer.
    protected-inventory-only state so hidden filters cannot make valid history
    look empty.
 3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
-   Dashboard route composition may place storage and recovery widgets beside
-   the estate summary, but estate-summary copy must not present storage or
-   recovery health as resolved. Storage and recovery readiness claims remain
-   owned by `DashboardStoragePanel` and `DashboardRecoveryStatusPanel`; estate
-   summary anchors may focus the dashboard alerts or problem-resource sections
-   but must not redirect into storage or recovery ownership. Optional dashboard
-   Pulse Brief copy may summarize storage and recovery facts that are already on
-   the route, but it must not become the owner of storage capacity, storage
-   health, protected-item, or recovery-outcome readiness claims. The Assistant
-   handoff safety mode for that brief remains an AI runtime/API contract concern
-   and must not move storage or recovery readiness truth into model prose.
+   The retired dashboard route must not reintroduce storage or recovery
+   widgets as compatibility panels. Storage capacity, storage health,
+   protected-item, and recovery-outcome readiness claims belong on the Storage
+   and Recovery surfaces or their shared summary components, not in a restored
+   dashboard panel cluster or Assistant brief.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    That same adjacent API/security boundary owns CSRF replacement-token
    concurrency for browser mutations. Storage and recovery forms may benefit
@@ -348,24 +338,13 @@ querying, and the operator-facing storage health presentation layer.
     In mock mode, that same compact route must stay aggregate-only and
     sampler-prewarmed; storage and recovery must not trigger per-pool chart
     reconstruction on the first dashboard request after each mock refresh.
-34. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and storage/recovery-adjacent dashboard composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
-    That same dashboard composition boundary also owns compact summary reads.
-    When `frontend-modern/src/pages/Dashboard.tsx` renders storage and
-    recovery-adjacent cards from `/api/resources/dashboard-summary` and
-    `/api/charts/storage-summary`, those cards may reuse the compact payloads
-    they were already given, but they must not reopen paginated
-    `useUnifiedResources()` transport or reintroduce per-pool
-    `/api/metrics-store/history` fan-out under the dashboard hot path.
-    Any route-owned dashboard additions composed above those cards must remain
-    adjacent composition only: they must not replace the recovery/storage
-    dashboard panels, suppress the governed no-resources handoff, or move
-    storage/recovery summary ownership out of the compact dashboard route.
-    Dashboard estate-orientation additions follow that same rule: they may
-    compose above the storage/recovery cards to prove Pulse sees the connected
-    estate, but they must consume `appRuntime` connected-infrastructure state
-    and the existing compact dashboard summary fallback rather than adding new
-    storage/recovery fetches or reclassifying storage/recovery widgets as
-    dashboard-owned summary panels.
+34. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and adjacent summary/detail composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
+    That same dashboard composition boundary is now a retired negative space.
+    Storage and recovery-adjacent summaries may reuse
+    `/api/charts/storage-summary` through their owning summary components, but
+    they must not restore `/api/resources/dashboard-summary`, paginated
+    `useUnifiedResources()` transport, or per-pool `/api/metrics-store/history`
+    fan-out under a dashboard hot path.
 35. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated
@@ -387,7 +366,7 @@ querying, and the operator-facing storage health presentation layer.
     plane boundary.
     Authenticated `/login` must follow that same shared app-shell contract:
     once login succeeds, `frontend-modern/src/App.tsx` must hand the browser
-    back to the governed dashboard landing route instead of leaving
+    back to the governed Infrastructure landing route instead of leaving
     storage/recovery-adjacent authenticated shells on a page-local not-found
     route.
     Authenticated-shell demo organization suppression on `frontend-modern/src/App.tsx`
@@ -453,18 +432,17 @@ querying, and the operator-facing storage health presentation layer.
     runtime as populated mock inventory, but they must not expose
     `demo_fixtures`, billing identity, or alternate entitlement semantics as
     recovery-local transport or operator-facing storage metadata.
-37. Keep dashboard storage summary fetches scope-owned on the shared summary
-    caches. `frontend-modern/src/components/Storage/StorageSummary.tsx`,
+37. Keep storage summary fetches scope-owned on the shared summary caches.
+    `frontend-modern/src/components/Storage/StorageSummary.tsx`,
     `frontend-modern/src/utils/storageSummaryCache.ts`,
-    `frontend-modern/src/utils/storageSummaryTrendCache.ts`, and
-    `frontend-modern/src/pages/Dashboard.tsx` may reuse cached org/range
-    storage summaries for first paint, but they must not refetch the full
-    `/api/storage-charts` payload once per additional dashboard resource page
-    or invent a dashboard-only storage summary transport path outside the
+    and `frontend-modern/src/utils/storageSummaryTrendCache.ts` may reuse
+    cached org/range storage summaries for first paint, but they must not
+    refetch the full `/api/storage-charts` payload once per adjacent summary
+    card or invent a dashboard-only storage summary transport path outside the
     canonical cache owners.
 38. Keep storage and recovery route framing additive and owner-neutral.
     `frontend-modern/src/components/Storage/Storage.tsx` and storage/recovery-
-    adjacent dashboard composition may use the shared `PageHeader` shell for
+    adjacent route composition may use the shared `PageHeader` shell for
     top-level route framing, but that header must stay additive on top of the
     canonical storage page model, recovery presenters, and shared summary
     caches. Header chrome must not become a second owner for storage filters,
@@ -528,19 +506,14 @@ querying, and the operator-facing storage health presentation layer.
    widening it into a broad short-name collapse across distinct FQDNs.
 5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen
 6. Keep at least one browser-level desktop recovery proof in the governed `recovery-product-surface` policy so right-edge column visibility and wrapper-fit regressions are caught at rendered layout time instead of only through unit-level width math
-7. Keep the dashboard route's no-resources state on an explicit first-session
-   handoff. `frontend-modern/src/pages/Dashboard.tsx` may stay storage/recovery-
-   owned for dashboard composition, but when no resources have reported yet it
-   must route operators to `/settings/infrastructure/install` instead of
-   leaving the dashboard as a passive dead end.
-8. Keep dashboard storage/recovery composition on the shared all-resources
-   snapshot. `frontend-modern/src/pages/Dashboard.tsx` may stay
-   storage/recovery-owned for dashboard widget composition, but it must reuse
-   the canonical `all-resources` cache key from
-   `frontend-modern/src/hooks/useUnifiedResources.ts` so storage/recovery
-   widgets do not fork a dashboard-only resource snapshot and force adjacent
-   infrastructure handoffs back through transient loading shells once the
-   broader dashboard data is already warm.
+7. Keep the retired dashboard route from becoming a passive no-resources
+   compatibility shell. First-session handoff now belongs to Infrastructure
+   and Add infrastructure, and storage/recovery must not restore dashboard
+   composition just to route operators to setup.
+8. Keep storage/recovery summaries on their owning snapshots after dashboard
+   retirement. They may reuse the canonical `all-resources` cache key from
+   `frontend-modern/src/hooks/useUnifiedResources.ts` only through their owned
+   page or shared drawer surfaces, not as a dashboard-only resource snapshot.
 9. Keep shared OIDC/SAML callback redirects on the canonical local-target
    helper contract when storage- or recovery-adjacent routes inherit shared
    auth browser handoff through `internal/api/`, so adjacent surfaces do not
@@ -1520,42 +1493,13 @@ boundary: raw compatibility fields such as `provider` / `providers` may be
 accepted from older `/api/recovery/*` payloads, but the runtime values they
 return to the rest of the recovery UI must be canonical `platform` /
 `platforms` models.
-That same rule applies to the dashboard recovery entry points too:
-`frontend-modern/src/hooks/useDashboardRecovery.ts`,
-`frontend-modern/src/pages/Dashboard.tsx`,
-`frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`,
-`frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`, and
-`frontend-modern/src/utils/dashboardRecoveryPresentation.ts` must stay on
-explicit direct dashboard/recovery proof routing instead of inheriting
-coverage only through the full recovery route or broader dashboard shells.
-The storage dashboard entry point must be treated the same way on the storage
-side: `frontend-modern/src/pages/Dashboard.tsx`,
-`frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`, and
-`frontend-modern/src/components/Storage/DashboardStoragePanel.tsx` and
-`frontend-modern/src/utils/dashboardStoragePresentation.ts` must stay on
-explicit direct dashboard/storage proof routing instead of borrowing release-
-control coverage only from the broader storage page, component, and model
-surfaces.
-That same dashboard storage surface must also render its capacity meter through
-the shared `frontend-modern/src/components/shared/ProgressBar.tsx` primitive
-and attribute-driven fill geometry instead of owner-local inline width styles,
-so the live dashboard remains CSP-safe while still reporting the canonical
-storage summary.
-That route shell now also composes the recent-alerts widget directly from the
-alert-owned `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
-surface instead of via a dashboard-panels-local alert implementation, so the
-dashboard route stays storage/recovery-owned while alert widget runtime remains
-owned by the alerts subsystem. That route handoff must stay thin: the dashboard
-page should pass the live alert list into `RecentAlertsPanel` and let the
-alert-owned surface derive its own summary and acknowledgement state instead of
-rebuilding alert summary counts or alert-action runtime inside the
-storage/recovery-governed dashboard route.
-That same route shell also owns the top-of-dashboard scan order. When
-`frontend-modern/src/pages/Dashboard.tsx` renders both the KPI strip and the
-problem-resources table, the route must keep the operator snapshot above the
-detail table so the page reads as action queue, summary, then problem detail
-rather than dropping operators straight into a long exception list before the
-dashboard baseline is visible.
+The retired dashboard recovery and storage entry points must stay removed:
+`useDashboardRecovery`, `DashboardRecoveryStatusPanel`,
+`DashboardStoragePanel`, dashboard storage/recovery presentation helpers, and
+dashboard widget orchestration must not return as direct proof surfaces. New
+storage or recovery summary proof must attach to the owning Storage,
+Recovery, Infrastructure drawer, or shared summary component instead of
+borrowing coverage through a broader dashboard shell.
 The shared recovery type contract must be pinned the same way:
 `frontend-modern/src/types/recovery.ts` must stay on the explicit
 `recovery-product-surface` proof path instead of riding indirectly on route or
@@ -2624,13 +2568,12 @@ collector, agent-id/device fallback stream, or separate "real-time" history
 store once monitoring and `/api/metrics-store/history` already own the disk
 timeline.
 The same shell/runtime split now applies to websocket consumers:
-`frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`,
-`frontend-modern/src/components/Storage/useStoragePageResources.ts`, and
-`frontend-modern/src/pages/Dashboard.tsx` may consume websocket state only
-through `frontend-modern/src/contexts/appRuntime.ts`. They must not import
-`@/App` or create storage/recovery-local shell coupling, because provider
-placement remains app-shell-owned and storage/recovery surfaces must stay
-lazy-load safe.
+`frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx` and
+`frontend-modern/src/components/Storage/useStoragePageResources.ts` may consume
+websocket state only through `frontend-modern/src/contexts/appRuntime.ts`.
+They must not import `@/App` or create storage/recovery-local shell coupling,
+because provider placement remains app-shell-owned and storage/recovery
+surfaces must stay lazy-load safe.
 That same adjacent `internal/api/` boundary now also governs public-demo
 commercial redaction for storage and recovery viewers. Shared storage/recovery
 surfaces may run beside a demo runtime that has real internal entitlements,

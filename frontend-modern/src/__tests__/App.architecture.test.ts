@@ -11,7 +11,6 @@ const appStylesSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8
 
 describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
-    expect(appSource).toContain('DASHBOARD_PATH,');
     expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
     expect(appSource).toContain("import { aiChatStore } from './stores/aiChat';");
     expect(appSource).toContain(
@@ -28,7 +27,7 @@ describe('App architecture', () => {
     expect(appSource).toContain('setAppScrollShellRef');
     expect(appSource).toContain('readPendingAppShellRestoreTop');
     expect(appSource).toContain('clearPendingAppShellRestoreTop');
-    expect(appSource).toContain('const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;');
+    expect(appSource).toContain('const INFRASTRUCTURE_ROUTE_PATH = buildInfrastructurePath();');
     expect(appSource).toContain('const ROOT_PATROL_PATH = PATROL_PATH;');
     expect(appSource).toContain("import { preloadRouteModule } from '@/routing/routePreload';");
     expect(appSource).toContain('const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
@@ -37,7 +36,10 @@ describe('App architecture', () => {
     expect(appSource).toContain('await preloadRouteModule(route);');
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
-    expect(appSource).toContain('<Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />');
+    expect(appSource).toContain(
+      '<Route path={INFRASTRUCTURE_ROUTE_PATH} component={InfrastructurePage} />',
+    );
+    expect(appSource).not.toContain('DashboardPage');
     expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");
     expect(appSource).toContain('<Route path="/login" component={RuntimeHomePage} />');
     expect(appSource).toContain('<Route path="/" component={RuntimeHomePage} />');
@@ -67,7 +69,7 @@ describe('App architecture', () => {
       "const StorageComponent = lazy(() => import('./components/Storage/Storage'));",
     );
     expect(appSource).not.toContain(
-      "const WorkloadsView = lazy(() => import('./components/Dashboard/Dashboard'));",
+      "const WorkloadsView = lazy(() => import('./components/Workloads/WorkloadsSurface'));",
     );
     expect(appSource).not.toContain(
       "const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));",
@@ -244,8 +246,10 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       "eventBus.on('websocket_reconnected', handleWebSocketReconnected);",
     );
-    expect(appRuntimeStateSource).toContain("const ROOT_DASHBOARD_PATH = '/dashboard';");
-    expect(appRuntimeStateSource).toContain('if (pathname === ROOT_DASHBOARD_PATH) return false;');
+    expect(appRuntimeStateSource).toContain(
+      'const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();',
+    );
+    expect(appRuntimeStateSource).not.toContain("const ROOT_DASHBOARD_PATH = '/dashboard';");
     expect(appRuntimeStateSource).not.toContain(
       "import { startMetricsCollector } from '@/stores/metricsCollector';",
     );
@@ -257,9 +261,10 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain(
       'const routePreloadCache = new Map<string, Promise<void>>();',
     );
+    expect(routePreloadSource).toContain("import('@/pages/Infrastructure')");
     expect(routePreloadSource).toContain("import('@/pages/Workloads')");
     expect(routePreloadSource).toContain("import('@/pages/Recovery')");
-    expect(routePreloadSource).not.toContain("import('@/components/Dashboard/Dashboard')");
+    expect(routePreloadSource).not.toContain("import('@/components/Workloads/WorkloadsSurface')");
     expect(routePreloadSource).not.toContain("import('@/pages/RecoveryRoute')");
     expect(appRuntimeContextSource).toContain(
       "import { createContext, useContext } from 'solid-js';",

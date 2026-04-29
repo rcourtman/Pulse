@@ -13,7 +13,7 @@ import {
 } from '@/utils/agentResources';
 
 export interface InfrastructureSelectorProps {
-  currentTab: 'dashboard' | 'storage' | 'recovery';
+  currentTab: 'workloads' | 'storage' | 'recovery';
   globalTemperatureMonitoringEnabled?: boolean;
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
   onNamespaceSelect?: (namespace: string) => void;

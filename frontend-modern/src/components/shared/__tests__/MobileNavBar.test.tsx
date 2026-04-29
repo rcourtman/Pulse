@@ -12,7 +12,9 @@ window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
   return 1;
 }) as typeof window.requestAnimationFrame;
 
-const DashboardIcon: Component<{ class?: string }> = (props) => <span class={props.class}>DB</span>;
+const InfrastructureIcon: Component<{ class?: string }> = (props) => (
+  <span class={props.class}>IN</span>
+);
 const StorageIcon: Component<{ class?: string }> = (props) => <span class={props.class}>ST</span>;
 const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
 const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
@@ -78,8 +80,19 @@ describe('MobileNavBar', () => {
 
     const { container } = render(() => (
       <MobileNavBar
-        activeTab={() => 'dashboard'}
+        activeTab={() => 'infrastructure'}
         platformTabs={() => [
+          {
+            id: 'infrastructure',
+            label: 'Infrastructure',
+            route: '/infrastructure',
+            settingsRoute: '/settings',
+            tooltip: 'Infrastructure',
+            enabled: true,
+            live: true,
+            icon: InfrastructureIcon,
+            alwaysShow: true,
+          },
           {
             id: 'storage',
             label: 'Storage',
@@ -89,17 +102,6 @@ describe('MobileNavBar', () => {
             enabled: true,
             live: true,
             icon: StorageIcon,
-            alwaysShow: true,
-          },
-          {
-            id: 'dashboard',
-            label: 'Dashboard',
-            route: '/dashboard',
-            settingsRoute: '/settings/dashboard',
-            tooltip: 'Dashboard',
-            enabled: true,
-            live: true,
-            icon: DashboardIcon,
             alwaysShow: true,
           },
         ]}
@@ -138,7 +140,7 @@ describe('MobileNavBar', () => {
     fireEvent.scroll(navList);
 
     const buttons = container.querySelectorAll('button[data-tab-id]');
-    expect(buttons[0]).toHaveAttribute('data-tab-id', 'dashboard');
+    expect(buttons[0]).toHaveAttribute('data-tab-id', 'infrastructure');
     expect(buttons[1]).toHaveAttribute('data-tab-id', 'storage');
     expect(buttons[2]).toHaveAttribute('data-tab-id', 'alerts');
     expect(buttons[3]).toHaveAttribute('data-tab-id', 'settings');

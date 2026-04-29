@@ -19,8 +19,8 @@ func TestSanitizeOIDCReturnTo(t *testing.T) {
 		// Valid paths
 		{
 			name: "simple path",
-			raw:  "/dashboard",
-			want: "/dashboard",
+			raw:  "/infrastructure",
+			want: "/infrastructure",
 		},
 		{
 			name: "root path",
@@ -92,18 +92,18 @@ func TestSanitizeOIDCReturnTo(t *testing.T) {
 		// Whitespace handling
 		{
 			name: "leading whitespace",
-			raw:  "  /dashboard",
-			want: "/dashboard",
+			raw:  "  /infrastructure",
+			want: "/infrastructure",
 		},
 		{
 			name: "trailing whitespace",
-			raw:  "/dashboard  ",
-			want: "/dashboard",
+			raw:  "/infrastructure  ",
+			want: "/infrastructure",
 		},
 		{
 			name: "both whitespace",
-			raw:  "  /dashboard  ",
-			want: "/dashboard",
+			raw:  "  /infrastructure  ",
+			want: "/infrastructure",
 		},
 	}
 
@@ -190,10 +190,10 @@ func TestAddQueryParam(t *testing.T) {
 		// Basic cases
 		{
 			name:  "add to simple path",
-			path:  "/dashboard",
+			path:  "/infrastructure",
 			key:   "foo",
 			value: "bar",
-			want:  "/dashboard?foo=bar",
+			want:  "/infrastructure?foo=bar",
 		},
 		{
 			name:  "add to root",

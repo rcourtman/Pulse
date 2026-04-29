@@ -177,11 +177,11 @@ export const STORAGE_KEYS = {
   RECOVERY_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
   RECOVERY_SEARCH_HISTORY: 'backupsSearchHistory',
 
-  // Dashboard settings
-  DASHBOARD_SHOW_FILTERS: 'dashboardShowFilters',
-  DASHBOARD_CARD_VIEW: 'dashboardCardView',
-  DASHBOARD_AUTO_REFRESH: 'dashboardAutoRefresh',
-  DASHBOARD_SEARCH_HISTORY: 'dashboardSearchHistory',
+  // Workloads settings
+  WORKLOADS_SHOW_FILTERS: 'workloadsShowFilters',
+  WORKLOADS_CARD_VIEW: 'workloadsCardView',
+  WORKLOADS_AUTO_REFRESH: 'workloadsAutoRefresh',
+  WORKLOADS_SEARCH_HISTORY: 'workloadsSearchHistory',
   WORKLOADS_SUMMARY_RANGE: 'workloadsSummaryRange',
   WORKLOADS_SUMMARY_COLLAPSED: 'workloadsSummaryCollapsed',
   INFRASTRUCTURE_SUMMARY_RANGE: 'infrastructureSummaryRange',
@@ -197,7 +197,7 @@ export const STORAGE_KEYS = {
   TEMPERATURE_UNIT: 'temperatureUnit', // 'celsius' | 'fahrenheit'
 
   // Column visibility
-  DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
+  WORKLOADS_HIDDEN_COLUMNS: 'workloadsHiddenColumns',
   RECOVERY_HIDDEN_COLUMNS: 'backupsHiddenColumns',
   STORAGE_HIDDEN_COLUMNS: 'storageHiddenColumns',
 

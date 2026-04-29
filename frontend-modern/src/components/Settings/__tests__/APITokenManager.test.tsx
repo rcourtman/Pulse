@@ -347,7 +347,7 @@ describe('APITokenManager', () => {
     fireEvent.input(screen.getByPlaceholderText('e.g. Container pipeline'), {
       target: { value: 'Blocked token' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Dashboard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {

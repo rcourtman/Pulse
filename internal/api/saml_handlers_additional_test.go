@@ -114,7 +114,7 @@ func TestRedirectSAMLError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
-	router.redirectSAMLError(rec, req, "/dashboard", "session_failed")
+	router.redirectSAMLError(rec, req, "/infrastructure", "session_failed")
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("expected status %d, got %d", http.StatusFound, rec.Code)

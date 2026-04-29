@@ -7,54 +7,53 @@ import { InfrastructureSelector } from '@/components/shared/InfrastructureSelect
 import { buildInfrastructureSelectorAgents } from '@/components/shared/infrastructureSelectorModel';
 import type { Resource } from '@/types/resource';
 
-const useUnifiedResourcesMock = vi.fn(
-  (options?: { enabled?: () => boolean }) => ({
-    resources: () =>
-      options?.enabled?.() === false
-        ? []
-        : [
-            {
-              id: 'node-1',
-              type: 'agent',
-              name: 'pve1',
-              status: 'online',
+const useUnifiedResourcesMock = vi.fn((options?: { enabled?: () => boolean }) => ({
+  resources: () =>
+    options?.enabled?.() === false
+      ? []
+      : [
+          {
+            id: 'node-1',
+            type: 'agent',
+            name: 'pve1',
+            status: 'online',
+            instance: 'main',
+            uptime: 120,
+            platformData: {
+              type: 'node',
+              node: 'pve1',
               instance: 'main',
-              uptime: 120,
-              platformData: {
-                type: 'node',
-                node: 'pve1',
-                instance: 'main',
-                pveVersion: '8.0',
-                cpu: 0.2,
-                memory: { total: 8, used: 4, free: 4, usage: 50 },
-                disk: { total: 100, used: 25, free: 75, usage: 25 },
-                loadAverage: [0.1, 0.2, 0.3],
-              },
-              memory: { total: 8, used: 4, free: 4, current: 50 },
-              agent: {
-                platform: 'linux',
-                memory: { total: 8, used: 4, free: 4, usage: 50 },
-                disks: [],
-                networkInterfaces: [],
-                raid: [],
-              },
+              pveVersion: '8.0',
+              cpu: 0.2,
+              memory: { total: 8, used: 4, free: 4, usage: 50 },
+              disk: { total: 100, used: 25, free: 75, usage: 25 },
+              loadAverage: [0.1, 0.2, 0.3],
             },
-          ],
-    refetch: vi.fn(),
-    mutate: vi.fn(),
-    loading: () => false,
-    error: () => null,
-  }),
-);
+            memory: { total: 8, used: 4, free: 4, current: 50 },
+            agent: {
+              platform: 'linux',
+              memory: { total: 8, used: 4, free: 4, usage: 50 },
+              disks: [],
+              networkInterfaces: [],
+              raid: [],
+            },
+          },
+        ],
+  refetch: vi.fn(),
+  mutate: vi.fn(),
+  loading: () => false,
+  error: () => null,
+}));
 
-const useRecoveryRollupsMock = vi.fn(
-  (_query?: (() => unknown) | undefined) => ({
-    rollups: () => [],
-  }),
-);
+const useRecoveryRollupsMock = vi.fn((_query?: (() => unknown) | undefined) => ({
+  rollups: () => [],
+}));
 
 const infrastructureSummaryTableMock = vi.fn(
-  (props: { onNodeClick: (nodeId: string, nodeType: 'pve' | 'pbs') => void; selectedNode: string | null }) => (
+  (props: {
+    onNodeClick: (nodeId: string, nodeType: 'pve' | 'pbs') => void;
+    selectedNode: string | null;
+  }) => (
     <button
       type="button"
       data-testid="infrastructure-selector-table"
@@ -97,20 +96,14 @@ describe('InfrastructureSelector', () => {
       'export function useInfrastructureSelectorState',
     );
 
-    expect(infrastructureSelectorModelSource).toContain(
-      'buildInfrastructureSelectorAgents',
-    );
-    expect(infrastructureSelectorModelSource).toContain(
-      'buildInfrastructureSelectorBackupCounts',
-    );
-    expect(infrastructureSelectorModelSource).toContain(
-      'buildInfrastructureSelectorUnifiedNodes',
-    );
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorAgents');
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorBackupCounts');
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorUnifiedNodes');
     expect(infrastructureSelectorModelSource).toContain('isAgentFacetInfrastructureResource');
   });
 
   it('disables selector data hooks when the node summary is hidden', () => {
-    render(() => <InfrastructureSelector currentTab="dashboard" showNodeSummary={false} />);
+    render(() => <InfrastructureSelector currentTab="workloads" showNodeSummary={false} />);
 
     expect(screen.queryByTestId('infrastructure-selector-table')).not.toBeInTheDocument();
     expect(useUnifiedResourcesMock).toHaveBeenCalledTimes(1);
@@ -123,9 +116,7 @@ describe('InfrastructureSelector', () => {
     expect(unifiedOptions?.cacheKey).toBe('all-resources');
     expect(unifiedOptions?.enabled?.()).toBe(false);
 
-    const recoveryQuery = useRecoveryRollupsMock.mock.calls[0]?.[0] as
-      | (() => unknown)
-      | undefined;
+    const recoveryQuery = useRecoveryRollupsMock.mock.calls[0]?.[0] as (() => unknown) | undefined;
     expect(recoveryQuery?.()).toBeNull();
   });
 
@@ -133,7 +124,7 @@ describe('InfrastructureSelector', () => {
     const onNodeSelect = vi.fn();
 
     render(() => (
-      <InfrastructureSelector currentTab="dashboard" showNodeSummary onNodeSelect={onNodeSelect} />
+      <InfrastructureSelector currentTab="workloads" showNodeSummary onNodeSelect={onNodeSelect} />
     ));
 
     const table = screen.getByTestId('infrastructure-selector-table');

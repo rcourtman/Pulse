@@ -47,7 +47,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           Public URL
         </h4>
         <div class="space-y-2">
-          <label class="text-sm font-medium text-base-content">Dashboard URL for Notifications</label>
+          <label class="text-sm font-medium text-base-content">Pulse URL for Notifications</label>
           <p class="text-xs text-muted">
             The URL included in email alerts to link back to Pulse. Required for Docker deployments
             with custom ports.
@@ -148,7 +148,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           Embedding
         </h4>
         <p class="text-xs text-muted">
-          Allow Pulse to be embedded in iframes (e.g., Homepage dashboard)
+          Allow Pulse to be embedded in iframes (e.g., Homepage)
         </p>
         <div class="space-y-3">
           <div class="flex items-center gap-2">
@@ -183,11 +183,11 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
                   props.setAllowedEmbedOrigins(e.currentTarget.value);
                   props.setHasUnsavedChanges(true);
                 }}
-                placeholder="https://my.domain, https://dashboard.example.com"
+                placeholder="https://my.domain, https://pulse.example.com"
                 class="w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md border-border bg-surface"
               />
               <p class="text-xs text-muted">
-                Example: If Pulse is at <code>pulse.my.domain</code> and your dashboard is at{' '}
+                Example: If Pulse is at <code>pulse.my.domain</code> and your homepage is at{' '}
                 <code>my.domain</code>, add <code>https://my.domain</code> here.
               </p>
             </div>

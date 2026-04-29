@@ -146,12 +146,12 @@ async function completeSetupWizard(
     name: "Open Platform connections",
     exact: true,
   });
-  const secureDashboardHeading = wizard.getByText("Secure Your Dashboard");
+  const securePulseHeading = wizard.getByText("Secure Pulse");
   const continueButton = wizard.getByRole("button", {
     name: /verify bootstrap token|continue to setup|continue/i,
   });
   const finishButton = wizard.getByRole("button", {
-    name: /go to dashboard|skip for now/i,
+    name: /open infrastructure|skip for now/i,
   });
   const bootstrapTokenInput = page.getByPlaceholder(
     "Paste your bootstrap token",
@@ -178,7 +178,7 @@ async function completeSetupWizard(
       return "completion";
     }
     if (
-      await secureDashboardHeading
+      await securePulseHeading
         .isVisible({ timeout: 100 })
         .catch(() => false)
     ) {
@@ -401,7 +401,7 @@ export async function ensureFirstRunExperience(
   const firstRunLandingPattern =
     completionTarget === "platforms"
       ? SETUP_COMPLETION_HANDOFFS.platforms.urlPattern
-      : /\/(settings\/infrastructure\/install|proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
+      : /\/(settings\/infrastructure\/install|proxmox|nodes|hosts|docker|infrastructure)/;
   if (!firstRunLandingPattern.test(page.url())) {
     if (completionTarget === "platforms") {
       throw new Error(
@@ -423,8 +423,8 @@ export async function loginAsAdmin(page: Page) {
   await page.fill('input[name="password"]', E2E_CREDENTIALS.password);
   await page.click('button[type="submit"]');
 
-  // Wait for redirect to dashboard
-  await page.waitForURL(/\/(dashboard|nodes|proxmox)/);
+  // Wait for redirect to the authenticated application shell.
+  await page.waitForURL(/\/(infrastructure|nodes|proxmox)/);
 }
 
 export async function login(page: Page, credentials = E2E_CREDENTIALS) {
@@ -432,7 +432,7 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
   await waitForAppShell(page);
 
   const authenticatedURL =
-    /\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
+    /\/(proxmox|nodes|hosts|docker|infrastructure)/;
   const usernameInput = page.locator('input[name="username"]');
 
   const state = await Promise.race([
@@ -528,7 +528,7 @@ export async function ensureAuthenticated(page: Page) {
   await maybeCompleteSetupWizard(page);
   await login(page);
   await expect(page).toHaveURL(
-    /\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/,
+    /\/(proxmox|nodes|hosts|docker|infrastructure)/,
   );
 }
 

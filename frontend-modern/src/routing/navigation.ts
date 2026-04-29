@@ -1,7 +1,6 @@
 import { INFRASTRUCTURE_PATH, PATROL_PATH, WORKLOADS_PATH } from './resourceLinks';
 
 export type AppTabId =
-  | 'dashboard'
   | 'infrastructure'
   | 'workloads'
   | 'storage'
@@ -11,7 +10,6 @@ export type AppTabId =
   | 'settings';
 
 export function getActiveTabForPath(path: string): AppTabId {
-  if (path.startsWith('/dashboard')) return 'dashboard';
   if (path.startsWith(INFRASTRUCTURE_PATH)) return 'infrastructure';
   if (path.startsWith(WORKLOADS_PATH)) return 'workloads';
   if (path.startsWith('/storage')) return 'storage';

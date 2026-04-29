@@ -35,7 +35,6 @@ export type MobileNavBarProps = {
 };
 
 const MOBILE_NAV_PLATFORM_PRIORITY = [
-  'dashboard',
   'infrastructure',
   'workloads',
   'storage',

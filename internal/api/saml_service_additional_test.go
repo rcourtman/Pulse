@@ -42,7 +42,7 @@ func TestProcessResponse_InvalidResponse(t *testing.T) {
 		sp: &saml.ServiceProvider{},
 	}
 
-	body := strings.NewReader("RelayState=/dashboard&SAMLResponse=")
+	body := strings.NewReader("RelayState=/infrastructure&SAMLResponse=")
 	req := httptest.NewRequest(http.MethodPost, "/acs", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -50,7 +50,7 @@ func TestProcessResponse_InvalidResponse(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid response")
 	}
-	if relay != "/dashboard" {
+	if relay != "/infrastructure" {
 		t.Fatalf("unexpected relay state: %q", relay)
 	}
 }

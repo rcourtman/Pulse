@@ -25,7 +25,7 @@ operator-facing alert routing behavior for live runtime alerts.
 3. `internal/alerts/canonical_metric.go`
 4. `internal/alerts/canonical_lifecycle.go`
 5. `internal/alerts/unified_incidents.go`
-6. `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
+6. `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`
 7. `frontend-modern/src/utils/alertOverviewPresentation.ts`
 8. `frontend-modern/src/utils/alertResourceTablePresentation.ts`
 9. `frontend-modern/src/utils/alertDestinationsPresentation.ts`
@@ -501,31 +501,25 @@ inline in `frontend-modern/src/features/alerts/OverviewTab.tsx`.
 The canonical shared alert-acknowledgement runtime owner is now
 `frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts`, which
 owns optimistic single/bulk acknowledge control flow, restore behavior, and
-notification feedback for both
-`frontend-modern/src/features/alerts/useAlertOverviewState.ts` and
-`frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`.
+notification feedback for `frontend-modern/src/features/alerts/useAlertOverviewState.ts`
+and the alert overview render shells.
 `frontend-modern/src/features/alerts/useAlertOverviewState.ts` now owns the
 derived alert read-model and Last 24 Hours stat refresh for
 `frontend-modern/src/features/alerts/OverviewTab.tsx`, while composing that
 shared acknowledgement owner instead of keeping its own alert mutation fork.
-Future overview or dashboard recent-alert action behavior should extend that
-shared acknowledgement hook instead of putting acknowledge mutations back into
-either render shell.
+Future overview action behavior should extend that shared acknowledgement hook
+instead of putting acknowledge mutations back into render shells.
 Render-heavy alert overview ownership now routes through
 `frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
 and `frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx` instead
 of rebuilding stats-card, active-alert, and timeline-card presentation inline
 inside `frontend-modern/src/features/alerts/OverviewTab.tsx`.
-Dashboard recent-alert rendering and dashboard alert summary/tone copy now
-route through that same alert overview presentation owner and the alert-owned
-`frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx` surface instead
-of living as a dashboard-page-local panel plus a second dashboard-only alert
-presentation helper.
-That same dashboard recent-alert surface must rank structural health warnings
-above state-only warning messages such as powered-off, stopped, or paused
-workloads before falling back to recency, so chosen workload state does not
-hide active infrastructure or storage problems on the first dashboard screen.
+The retired dashboard recent-alert panel must not be reintroduced as a
+parallel alert surface. Alert summary/tone copy belongs to the alert overview
+presentation owner, and any future compact alert surface must compose the
+shared alert read-model and acknowledgement hook rather than creating a
+dashboard-only panel.
 
 Alert threshold and schedule surfaces must now also treat
 `discoveryTarget` as optional frontend input and keep grouping-card state on

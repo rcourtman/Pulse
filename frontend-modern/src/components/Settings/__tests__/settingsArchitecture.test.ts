@@ -32,6 +32,8 @@ import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
 import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx?raw';
+import networkBoundarySettingsSectionSource from '../NetworkBoundarySettingsSection.tsx?raw';
+import nodeModalBasicInfoSectionSource from '../NodeModalBasicInfoSection.tsx?raw';
 import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSection.tsx?raw';
 import nodeModalMonitoringSectionSource from '../NodeModalMonitoringSection.tsx?raw';
 import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
@@ -229,6 +231,22 @@ describe('settings architecture guardrails', () => {
       expect(source).toContain("import { FormSelect } from '@/components/shared/FormSelect';");
       expect(source).toContain('<FormSelect');
     }
+  });
+
+  it('keeps settings copy aligned with Infrastructure as the default workspace', () => {
+    expect(generalSettingsPanelSource).toContain(
+      'Replay the four-stop walkthrough of Infrastructure, Workloads, Storage, and',
+    );
+    expect(generalSettingsPanelSource).not.toContain('Dashboard, Infrastructure');
+    expect(networkBoundarySettingsSectionSource).toContain('Pulse URL for Notifications');
+    expect(networkBoundarySettingsSectionSource).not.toContain('Dashboard URL for Notifications');
+    expect(nodeModalBasicInfoSectionSource).toContain('monitoring views');
+    expect(nodeModalBasicInfoSectionSource).not.toContain('dashboards');
+    expect(nodeModalMonitoringSectionSource).toContain('trim workload noise');
+    expect(nodeModalMonitoringSectionSource).toContain('Existing monitoring readings');
+    expect(nodeModalMonitoringSectionSource).not.toContain('dashboard readings');
+    expect(recoverySettingsPanelSource).toContain('Required for workload backup status');
+    expect(recoverySettingsPanelSource).not.toContain('dashboard backup status');
   });
 
   it('keeps system AI model catalogs on the shared searchable picker boundary', () => {

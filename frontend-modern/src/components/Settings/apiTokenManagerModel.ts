@@ -40,7 +40,7 @@ const API_TOKEN_SCOPE_GROUP_ORDER: ScopeGroup[] = ['Monitoring', 'Agents', 'Sett
 
 export const getAPITokenScopePresets = (): APITokenPreset[] => [
   {
-    label: 'Kiosk / Dashboard',
+    label: 'Kiosk / Monitoring',
     scopes: [MONITORING_READ_SCOPE],
     description:
       'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',

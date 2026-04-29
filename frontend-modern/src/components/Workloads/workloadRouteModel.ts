@@ -1,0 +1,117 @@
+import type { WorkloadGuest, ViewMode } from '@/types/workloads';
+import { normalizeWorkloadViewModeParam, resolveWorkloadType } from '@/utils/workloads';
+import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
+import type { WorkloadsFilterSelectOption } from './workloadsFilterModel';
+import {
+  getKubernetesContextKey,
+  getWorkloadHostLabel,
+  workloadHostScopeId,
+} from './workloadTopology';
+
+export type WorkloadNodeOption = WorkloadsFilterSelectOption;
+
+export const deserializeWorkloadViewMode = (raw: unknown): ViewMode => {
+  if (typeof raw !== 'string') return 'all';
+  return normalizeWorkloadViewModeParam(raw) ?? 'all';
+};
+
+export const buildWorkloadNodeOptions = (
+  guests: WorkloadGuest[],
+): WorkloadNodeOption[] => {
+  const labelsByScope = new Map<string, string>();
+  const scopesByLabel = new Map<string, Set<string>>();
+
+  for (const guest of guests) {
+    const type = resolveWorkloadType(guest);
+    if (type === 'pod') continue;
+    const scope = workloadHostScopeId(guest);
+    if (!scope || scope === '-') continue;
+    const nodeName = (guest.node || '').trim();
+    const label = getWorkloadHostLabel(guest);
+    if (!label) continue;
+    const disambiguationLabel = type === 'app-container' ? label : nodeName;
+    if (!disambiguationLabel) continue;
+    const scopes = scopesByLabel.get(disambiguationLabel) ?? new Set<string>();
+    scopes.add(scope);
+    scopesByLabel.set(disambiguationLabel, scopes);
+  }
+
+  for (const guest of guests) {
+    const type = resolveWorkloadType(guest);
+    if (type === 'pod') continue;
+    const scope = workloadHostScopeId(guest);
+    if (!scope || scope === '-' || labelsByScope.has(scope)) continue;
+    if (type === 'app-container') {
+      const hostLabel = getWorkloadHostLabel(guest);
+      if (!hostLabel) continue;
+      const hasDuplicateHostLabel = (scopesByLabel.get(hostLabel)?.size ?? 0) > 1;
+      labelsByScope.set(
+        scope,
+        hasDuplicateHostLabel && scope !== hostLabel ? `${hostLabel} (${scope})` : hostLabel,
+      );
+      continue;
+    }
+    const nodeName = (guest.node || '').trim();
+    const instance = (guest.instance || '').trim();
+    if (!nodeName) continue;
+    const hasDuplicateNodeName = (scopesByLabel.get(nodeName)?.size ?? 0) > 1;
+    const label = hasDuplicateNodeName && instance ? `${nodeName} (${instance})` : nodeName;
+    labelsByScope.set(scope, label);
+  }
+
+  return Array.from(labelsByScope.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+};
+
+export const buildWorkloadsKubernetesContextOptions = (guests: WorkloadGuest[]): string[] => {
+  const contexts = new Set<string>();
+  for (const guest of guests) {
+    if (resolveWorkloadType(guest) !== 'pod') continue;
+    const context = getKubernetesContextKey(guest);
+    if (context) {
+      contexts.add(context);
+    }
+  }
+  return Array.from(contexts).sort((a, b) => a.localeCompare(b));
+};
+
+export const buildWorkloadsKubernetesNamespaceOptions = (
+  guests: WorkloadGuest[],
+  selectedContext: string | null,
+): string[] => {
+  const namespaces = new Set<string>();
+  const contextFilter = (selectedContext || '').trim();
+  for (const guest of guests) {
+    if (resolveWorkloadType(guest) !== 'pod') continue;
+    if (contextFilter && getKubernetesContextKey(guest) !== contextFilter) continue;
+    const namespace = (guest.namespace || '').trim();
+    if (namespace) namespaces.add(namespace);
+  }
+  return Array.from(namespaces).sort((a, b) => a.localeCompare(b));
+};
+
+export const buildWorkloadsContainerRuntimeOptions = (guests: WorkloadGuest[]): string[] => {
+  const runtimes = new Set<string>();
+  for (const guest of guests) {
+    if (resolveWorkloadType(guest) !== 'app-container') continue;
+    const runtime = (guest.containerRuntime || '').trim();
+    if (runtime) {
+      runtimes.add(runtime);
+    }
+  }
+  return Array.from(runtimes).sort((a, b) => a.localeCompare(b));
+};
+
+export const buildWorkloadsPlatformOptions = (
+  guests: WorkloadGuest[],
+  viewMode: ViewMode,
+): WorkloadsFilterSelectOption[] =>
+  buildSourcePlatformOptions(
+    guests
+      .filter((guest) => viewMode === 'all' || resolveWorkloadType(guest) === viewMode)
+      .map((guest) => guest.platformType || ''),
+  ).map((option) => ({
+    value: option.key,
+    label: option.label,
+  }));

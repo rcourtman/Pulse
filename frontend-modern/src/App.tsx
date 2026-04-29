@@ -23,7 +23,6 @@ import { aiChatStore } from './stores/aiChat';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
-  DASHBOARD_PATH,
   PATROL_PATH,
   buildRecoveryPath,
   buildInfrastructurePath,
@@ -54,7 +53,6 @@ const AlertsPage = lazy(() =>
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
-const DashboardPage = lazy(() => import('./pages/Dashboard'));
 const WorkloadsPage = lazy(() => import('./pages/Workloads'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
@@ -67,7 +65,6 @@ const SetupCompletionPreviewPage = lazy(() =>
     default: module.SetupCompletionPreview,
   })),
 );
-const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;
 const INFRASTRUCTURE_ROUTE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
@@ -455,7 +452,6 @@ function App() {
     <Router root={RootLayout}>
       <Route path="/pricing" component={PricingHandoffPage} />
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
-      <Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />
       <Route path="/login" component={RuntimeHomePage} />
       <Route path="/" component={RuntimeHomePage} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsPage} />

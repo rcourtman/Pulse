@@ -206,6 +206,19 @@ describe('infrastructure operations model', () => {
     );
   });
 
+  it('keeps first-host completion handoff on Infrastructure instead of the retired dashboard', async () => {
+    const installStateSource = await import('../useInfrastructureInstallState.tsx?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
+
+    expect(infrastructureInstallerSectionSource).toContain('Open infrastructure');
+    expect(infrastructureInstallerSectionSource).not.toContain('Open dashboard');
+    expect(installStateSource).toContain('const openInfrastructure = () => {');
+    expect(installStateSource).toContain('navigate(buildInfrastructureWorkspacePath())');
+    expect(installStateSource).not.toContain('openDashboard');
+    expect(installStateSource).not.toContain("navigate('/dashboard')");
+  });
+
   it('does not reintroduce the retired reporting state hook on the operations state', async () => {
     const operationsStateSource = await import(
       '../useInfrastructureOperationsState?raw'

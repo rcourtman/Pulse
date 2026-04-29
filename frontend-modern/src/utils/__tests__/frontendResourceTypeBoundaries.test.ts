@@ -157,7 +157,6 @@ import recoveryHistoryTableSource from '@/components/Recovery/RecoveryHistoryTab
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import recoveryHistorySectionStateSource from '@/components/Recovery/useRecoveryHistorySectionState.ts?raw';
 import recoverySurfaceStateSource from '@/features/recovery/useRecoverySurfaceState.ts?raw';
-import dashboardRecoverySource from '@/hooks/useDashboardRecovery.ts?raw';
 import recoveryOutcomePresentationSource from '@/utils/recoveryOutcomePresentation.ts?raw';
 import recoveryArtifactModePresentationSource from '@/utils/recoveryArtifactModePresentation.ts?raw';
 import recoveryFilterChipPresentationSource from '@/utils/recoveryFilterChipPresentation.ts?raw';
@@ -171,76 +170,64 @@ import recoverySummaryPresentationSource from '@/utils/recoverySummaryPresentati
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import recoveryTimelineChartPresentationSource from '@/utils/recoveryTimelineChartPresentation.ts?raw';
 import recoveryTimelinePresentationSource from '@/utils/recoveryTimelinePresentation.ts?raw';
-import dashboardSource from '@/components/Dashboard/Dashboard.tsx?raw';
-import dashboardStateCardsSource from '@/components/Dashboard/DashboardStateCards.tsx?raw';
-import dashboardStatsStripSource from '@/components/Dashboard/DashboardStatsStrip.tsx?raw';
-import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
-import dashboardWorkloadTableSource from '@/components/Dashboard/DashboardWorkloadTable.tsx?raw';
-import workloadPanelSource from '@/components/Dashboard/WorkloadPanel.tsx?raw';
-import workloadTableHeaderSource from '@/components/Dashboard/WorkloadTableHeader.tsx?raw';
-import dashboardFilterModelSource from '@/components/Dashboard/dashboardFilterModel.ts?raw';
-import dashboardControlsStateSource from '@/components/Dashboard/useDashboardControlsState.ts?raw';
-import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboardGuestMetadataState.ts?raw';
-import dashboardSelectionModelSource from '@/components/Dashboard/dashboardSelectionModel.ts?raw';
-import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
-import dashboardWorkloadDerivedStateSource from '@/components/Dashboard/useDashboardWorkloadDerivedState.ts?raw';
-import dashboardWorkloadViewportSyncSource from '@/components/Dashboard/useDashboardWorkloadViewportSync.ts?raw';
-import dashboardWorkloadFilterOptionsSource from '@/components/Dashboard/useDashboardWorkloadFilterOptions.ts?raw';
-import dashboardWorkloadFilterConfigModelSource from '@/components/Dashboard/dashboardWorkloadFilterConfigModel.ts?raw';
-import dashboardWorkloadRouteModelSource from '@/components/Dashboard/dashboardWorkloadRouteModel.ts?raw';
-import dashboardWorkloadRouteStateModelSource from '@/components/Dashboard/dashboardWorkloadRouteStateModel.ts?raw';
-import dashboardWorkloadUrlSyncModelSource from '@/components/Dashboard/dashboardWorkloadUrlSyncModel.ts?raw';
-import dashboardWorkloadRouteStateSource from '@/components/Dashboard/useDashboardWorkloadRouteState.ts?raw';
-import dashboardWorkloadUrlSyncSource from '@/components/Dashboard/useDashboardWorkloadUrlSync.ts?raw';
-import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?raw';
-import dashboardFilterStateSource from '@/components/Dashboard/useDashboardFilterState.ts?raw';
-import workloadTopologySource from '@/components/Dashboard/workloadTopology.ts?raw';
-import groupedTableWindowingSource from '@/components/Dashboard/useGroupedTableWindowing.ts?raw';
-import thresholdSliderModelSource from '@/components/Dashboard/thresholdSliderModel.ts?raw';
-import thresholdSliderStateSource from '@/components/Dashboard/useThresholdSliderState.ts?raw';
-import enhancedCpuBarSource from '@/components/Dashboard/EnhancedCPUBar.tsx?raw';
-import enhancedCpuBarModelSource from '@/components/Dashboard/enhancedCpuBarModel.ts?raw';
-import enhancedCpuBarStateSource from '@/components/Dashboard/useEnhancedCPUBarState.ts?raw';
-import stackedDiskBarSource from '@/components/Dashboard/StackedDiskBar.tsx?raw';
-import stackedDiskBarModelSource from '@/components/Dashboard/stackedDiskBarModel.ts?raw';
-import stackedDiskBarStateSource from '@/components/Dashboard/useStackedDiskBarState.ts?raw';
-import stackedMemoryBarSource from '@/components/Dashboard/StackedMemoryBar.tsx?raw';
-import stackedMemoryBarModelSource from '@/components/Dashboard/stackedMemoryBarModel.ts?raw';
-import stackedMemoryBarStateSource from '@/components/Dashboard/useStackedMemoryBarState.ts?raw';
+import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
+import workloadsStateCardsSource from '@/components/Workloads/WorkloadsStateCards.tsx?raw';
+import workloadsStatsStripSource from '@/components/Workloads/WorkloadsStatsStrip.tsx?raw';
+import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
+import workloadsWorkloadTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
+import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
+import workloadTableHeaderSource from '@/components/Workloads/WorkloadTableHeader.tsx?raw';
+import workloadsFilterModelSource from '@/components/Workloads/workloadsFilterModel.ts?raw';
+import workloadsControlsStateSource from '@/components/Workloads/useWorkloadsControlsState.ts?raw';
+import workloadsGuestMetadataStateSource from '@/components/Workloads/useWorkloadGuestMetadataState.ts?raw';
+import workloadSelectionModelSource from '@/components/Workloads/workloadSelectionModel.ts?raw';
+import workloadsSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
+import workloadsWorkloadDerivedStateSource from '@/components/Workloads/useWorkloadsDerivedState.ts?raw';
+import workloadsWorkloadViewportSyncSource from '@/components/Workloads/useWorkloadViewportSync.ts?raw';
+import workloadsWorkloadFilterOptionsSource from '@/components/Workloads/useWorkloadFilterOptions.ts?raw';
+import workloadFilterConfigModelSource from '@/components/Workloads/workloadFilterConfigModel.ts?raw';
+import workloadRouteModelSource from '@/components/Workloads/workloadRouteModel.ts?raw';
+import workloadRouteStateModelSource from '@/components/Workloads/workloadRouteStateModel.ts?raw';
+import workloadUrlSyncModelSource from '@/components/Workloads/workloadUrlSyncModel.ts?raw';
+import workloadsWorkloadRouteStateSource from '@/components/Workloads/useWorkloadRouteState.ts?raw';
+import workloadsWorkloadUrlSyncSource from '@/components/Workloads/useWorkloadUrlSync.ts?raw';
+import workloadsStateSource from '@/components/Workloads/useWorkloadsState.ts?raw';
+import workloadsFilterStateSource from '@/components/Workloads/useWorkloadsFilterState.ts?raw';
+import workloadTopologySource from '@/components/Workloads/workloadTopology.ts?raw';
+import groupedTableWindowingSource from '@/components/Workloads/useGroupedTableWindowing.ts?raw';
+import thresholdSliderModelSource from '@/components/Workloads/thresholdSliderModel.ts?raw';
+import thresholdSliderStateSource from '@/components/Workloads/useThresholdSliderState.ts?raw';
+import enhancedCpuBarSource from '@/components/Workloads/EnhancedCPUBar.tsx?raw';
+import enhancedCpuBarModelSource from '@/components/Workloads/enhancedCpuBarModel.ts?raw';
+import enhancedCpuBarStateSource from '@/components/Workloads/useEnhancedCPUBarState.ts?raw';
+import stackedDiskBarSource from '@/components/Workloads/StackedDiskBar.tsx?raw';
+import stackedDiskBarModelSource from '@/components/Workloads/stackedDiskBarModel.ts?raw';
+import stackedDiskBarStateSource from '@/components/Workloads/useStackedDiskBarState.ts?raw';
+import stackedMemoryBarSource from '@/components/Workloads/StackedMemoryBar.tsx?raw';
+import stackedMemoryBarModelSource from '@/components/Workloads/stackedMemoryBarModel.ts?raw';
+import stackedMemoryBarStateSource from '@/components/Workloads/useStackedMemoryBarState.ts?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
-import dashboardRouteSource from '@/pages/Dashboard.tsx?raw';
-import dashboardMetricPresentationSource from '@/utils/dashboardMetricPresentation.ts?raw';
-import dashboardTrendPresentationSource from '@/utils/dashboardTrendPresentation.ts?raw';
-import trendChartsSource from '@/features/dashboardOverview/TrendCharts.tsx?raw';
-import thresholdSliderSource from '@/components/Dashboard/ThresholdSlider.tsx?raw';
-import problemResourcesTableSource from '@/features/dashboardOverview/ProblemResourcesTable.tsx?raw';
+import thresholdSliderSource from '@/components/Workloads/ThresholdSlider.tsx?raw';
 import problemResourcePresentationSource from '@/utils/problemResourcePresentation.ts?raw';
-import kpiStripSource from '@/features/dashboardOverview/KPIStrip.tsx?raw';
-import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?raw';
-import storagePanelSource from '@/components/Storage/DashboardStoragePanel.tsx?raw';
-import recoveryStatusPanelSource from '@/components/Recovery/DashboardRecoveryStatusPanel.tsx?raw';
-import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
-import guestRowCellsSource from '@/components/Dashboard/GuestRowCells.tsx?raw';
-import guestRowModelSource from '@/components/Dashboard/guestRowModel.tsx?raw';
-import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
-import dashboardDiskListSource from '@/components/Dashboard/DiskList.tsx?raw';
-import dashboardDiskListModelSource from '@/components/Dashboard/diskListModel.ts?raw';
-import dashboardDiskListStateSource from '@/components/Dashboard/useDiskListState.ts?raw';
-import metricBarSource from '@/components/Dashboard/MetricBar.tsx?raw';
-import metricBarModelSource from '@/components/Dashboard/metricBarModel.ts?raw';
-import metricBarStateSource from '@/components/Dashboard/useMetricBarState.ts?raw';
-import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
-import guestDrawerOverviewSource from '@/components/Dashboard/GuestDrawerOverview.tsx?raw';
-import guestDrawerModelSource from '@/components/Dashboard/guestDrawerModel.ts?raw';
-import guestDrawerStateSource from '@/components/Dashboard/useGuestDrawerState.ts?raw';
-import dashboardGuestPresentationSource from '@/utils/dashboardGuestPresentation.ts?raw';
+import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
+import guestRowCellsSource from '@/components/Workloads/GuestRowCells.tsx?raw';
+import guestRowModelSource from '@/components/Workloads/guestRowModel.tsx?raw';
+import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
+import workloadsDiskListSource from '@/components/Workloads/DiskList.tsx?raw';
+import workloadsDiskListModelSource from '@/components/Workloads/diskListModel.ts?raw';
+import workloadsDiskListStateSource from '@/components/Workloads/useDiskListState.ts?raw';
+import metricBarSource from '@/components/Workloads/MetricBar.tsx?raw';
+import metricBarModelSource from '@/components/Workloads/metricBarModel.ts?raw';
+import metricBarStateSource from '@/components/Workloads/useMetricBarState.ts?raw';
+import guestDrawerSource from '@/components/Workloads/GuestDrawer.tsx?raw';
+import guestDrawerOverviewSource from '@/components/Workloads/GuestDrawerOverview.tsx?raw';
+import guestDrawerModelSource from '@/components/Workloads/guestDrawerModel.ts?raw';
+import guestDrawerStateSource from '@/components/Workloads/useGuestDrawerState.ts?raw';
+import workloadGuestPresentationSource from '@/utils/workloadGuestPresentation.ts?raw';
 import orgScopeSource from '@/utils/orgScope.ts?raw';
-import workloadsSource from '@/utils/workloads.ts?raw';
+import workloadsUtilitySource from '@/utils/workloads.ts?raw';
 import infrastructureSummaryCacheSource from '@/utils/infrastructureSummaryCache.ts?raw';
-import dashboardStoragePresentationSource from '@/utils/dashboardStoragePresentation.ts?raw';
-import dashboardRecoveryPresentationSource from '@/utils/dashboardRecoveryPresentation.ts?raw';
-import dashboardKpiPresentationSource from '@/utils/dashboardKpiPresentation.ts?raw';
-import dashboardEmptyStatePresentationSource from '@/utils/dashboardEmptyStatePresentation.ts?raw';
+import workloadEmptyStatePresentationSource from '@/utils/workloadEmptyStatePresentation.ts?raw';
 import throughputPresentationSource from '@/utils/throughputPresentation.ts?raw';
 import resourceChangeSummarySource from '@/components/Infrastructure/ResourceChangeSummary.tsx?raw';
 import resourceChangePresentationSource from '@/utils/resourceChangePresentation.ts?raw';
@@ -699,203 +686,203 @@ describe('frontend resource type boundaries', () => {
     expect(storageSourcesSource).toContain('titleCaseDelimitedLabel');
     expect(storageSourcesSource).toContain('getAllFilterOptionLabel');
     expect(storageSourcesSource).not.toContain('const titleCaseLabel =');
-    expect(workloadsSource).toContain('export const normalizeWorkloadViewModeParam');
+    expect(workloadsUtilitySource).toContain('export const normalizeWorkloadViewModeParam');
     expect(orgScopeSource).toContain("export const DEFAULT_ORG_SCOPE = 'default'");
     expect(orgScopeSource).toContain('export const normalizeOrgScope');
-    expect(dashboardSource).toContain('useDashboardState');
-    expect(dashboardSource).toContain('DashboardStateCards');
-    expect(dashboardSource).toContain('DashboardStatsStrip');
-    expect(dashboardSource).toContain('DashboardWorkloadTable');
-    expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
-    expect(dashboardStateSource).toContain('useDashboardControlsState');
-    expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
-    expect(dashboardStateSource).toContain('useDashboardSelectionState');
-    expect(dashboardStateSource).toContain('useDashboardWorkloadDerivedState');
-    expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
-    expect(dashboardStateSource).toContain('filterWorkloads(params)');
-    expect(dashboardStateSource).not.toContain('useBreakpoint');
-    expect(dashboardStateSource).not.toContain('useColumnVisibility');
-    expect(dashboardStateSource).not.toContain('blurFocusedTypeToSearch');
-    expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
-    expect(dashboardWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
-    expect(dashboardSource).not.toContain('function normalizeViewModeParam');
-    expect(dashboardSource).not.toContain('workloadSummaryGuestId');
-    expect(dashboardSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(workloadsSurfaceSource).toContain('useWorkloadsState');
+    expect(workloadsSurfaceSource).toContain('WorkloadsStateCards');
+    expect(workloadsSurfaceSource).toContain('WorkloadsStatsStrip');
+    expect(workloadsSurfaceSource).toContain('WorkloadsTable');
+    expect(workloadsSurfaceSource).not.toContain('const [search, setSearch] = createSignal(');
+    expect(workloadsStateSource).toContain('useWorkloadsControlsState');
+    expect(workloadsStateSource).toContain('useWorkloadGuestMetadataState');
+    expect(workloadsStateSource).toContain('useWorkloadSelectionState');
+    expect(workloadsStateSource).toContain('useWorkloadsDerivedState');
+    expect(workloadsStateSource).toContain('useWorkloadRouteState');
+    expect(workloadsStateSource).toContain('filterWorkloads(params)');
+    expect(workloadsStateSource).not.toContain('useBreakpoint');
+    expect(workloadsStateSource).not.toContain('useColumnVisibility');
+    expect(workloadsStateSource).not.toContain('blurFocusedTypeToSearch');
+    expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadUrlSync');
+    expect(workloadsWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
+    expect(workloadsSurfaceSource).not.toContain('function normalizeViewModeParam');
+    expect(workloadsSurfaceSource).not.toContain('workloadSummaryGuestId');
+    expect(workloadsSurfaceSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
     expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
-    expect(dashboardWorkloadTableSource).not.toContain(
+    expect(workloadsWorkloadTableSource).not.toContain(
       'createMemo(() => getCanonicalWorkloadId(guest()))',
     );
-    expect(dashboardGuestMetadataStateSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(dashboardStateSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
-    expect(dashboardStateSource).not.toContain('const normalizeOrgScope =');
-    expect(dashboardStateSource).not.toContain('GuestMetadataAPI.getAllMetadata()');
-    expect(dashboardGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
-    expect(dashboardGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
-    expect(dashboardStateSource).not.toContain('buildWorkloadsPath({');
-    expect(dashboardStateSource).not.toContain('parseWorkloadsLinkSearch');
-    expect(dashboardStateSource).not.toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
-    expect(dashboardStateSource).not.toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
-    expect(dashboardStateSource).not.toContain('groupWorkloads(');
-    expect(dashboardStateSource).not.toContain('computeWorkloadStats(');
-    expect(dashboardStateSource).not.toContain('computeWorkloadIOEmphasis(');
-    expect(dashboardStateSource).not.toContain('buildNodeByInstance(');
-    expect(dashboardStateSource).not.toContain('buildGuestParentNodeMap(');
-    expect(dashboardWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
-    expect(dashboardWorkloadRouteStateSource).not.toContain(
+    expect(workloadsGuestMetadataStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(workloadsStateSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
+    expect(workloadsStateSource).not.toContain('const normalizeOrgScope =');
+    expect(workloadsStateSource).not.toContain('GuestMetadataAPI.getAllMetadata()');
+    expect(workloadsGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
+    expect(workloadsGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
+    expect(workloadsStateSource).not.toContain('buildWorkloadsPath({');
+    expect(workloadsStateSource).not.toContain('parseWorkloadsLinkSearch');
+    expect(workloadsStateSource).not.toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
+    expect(workloadsStateSource).not.toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
+    expect(workloadsStateSource).not.toContain('groupWorkloads(');
+    expect(workloadsStateSource).not.toContain('computeWorkloadStats(');
+    expect(workloadsStateSource).not.toContain('computeWorkloadIOEmphasis(');
+    expect(workloadsStateSource).not.toContain('buildNodeByInstance(');
+    expect(workloadsStateSource).not.toContain('buildGuestParentNodeMap(');
+    expect(workloadsWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
+    expect(workloadsWorkloadRouteStateSource).not.toContain(
       'const workloadNodeOptions = createMemo',
     );
-    expect(dashboardWorkloadRouteStateSource).not.toContain(
+    expect(workloadsWorkloadRouteStateSource).not.toContain(
       'const containerRuntimeFilterConfig = createMemo',
     );
-    expect(dashboardWorkloadRouteStateSource).not.toContain(
+    expect(workloadsWorkloadRouteStateSource).not.toContain(
       'const [handledTypeParam, setHandledTypeParam]',
     );
-    expect(dashboardWorkloadRouteStateSource).not.toContain(
+    expect(workloadsWorkloadRouteStateSource).not.toContain(
       'const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)',
     );
-    expect(dashboardWorkloadRouteStateSource).toContain(
-      "from './dashboardWorkloadRouteStateModel'",
+    expect(workloadsWorkloadRouteStateSource).toContain(
+      "from './workloadRouteStateModel'",
     );
-    expect(dashboardWorkloadRouteStateSource).toContain('resolveDashboardWorkloadNodeSelection({');
-    expect(dashboardWorkloadRouteStateSource).toContain('DASHBOARD_WORKLOAD_ROUTE_RESET_STATE');
-    expect(dashboardWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
-    expect(dashboardWorkloadUrlSyncSource).not.toContain('normalizeWorkloadViewModeParam');
-    expect(dashboardWorkloadUrlSyncSource).not.toContain('parseWorkloadsLinkSearch');
-    expect(dashboardWorkloadUrlSyncSource).toContain("from './dashboardWorkloadRouteModel'");
-    expect(dashboardWorkloadUrlSyncSource).toContain("from './dashboardWorkloadUrlSyncModel'");
-    expect(dashboardWorkloadUrlSyncSource).toContain(
+    expect(workloadsWorkloadRouteStateSource).toContain('resolveWorkloadsWorkloadNodeSelection({');
+    expect(workloadsWorkloadRouteStateSource).toContain('WORKLOADS_WORKLOAD_ROUTE_RESET_STATE');
+    expect(workloadsWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
+    expect(workloadsWorkloadUrlSyncSource).not.toContain('normalizeWorkloadViewModeParam');
+    expect(workloadsWorkloadUrlSyncSource).not.toContain('parseWorkloadsLinkSearch');
+    expect(workloadsWorkloadUrlSyncSource).toContain("from './workloadRouteModel'");
+    expect(workloadsWorkloadUrlSyncSource).toContain("from './workloadUrlSyncModel'");
+    expect(workloadsWorkloadUrlSyncSource).toContain(
       'const [handledTypeParam, setHandledTypeParam]',
     );
-    expect(dashboardWorkloadUrlSyncSource).toContain('parseDashboardWorkloadUrlParams');
-    expect(dashboardWorkloadUrlSyncSource).toContain(
-      'resolveDashboardManagedWorkloadsNavigateTarget({',
+    expect(workloadsWorkloadUrlSyncSource).toContain('parseWorkloadsWorkloadUrlParams');
+    expect(workloadsWorkloadUrlSyncSource).toContain(
+      'resolveWorkloadsManagedWorkloadsNavigateTarget({',
     );
-    expect(dashboardWorkloadUrlSyncModelSource).toContain('parseWorkloadsLinkSearch(search)');
-    expect(dashboardWorkloadUrlSyncModelSource).toContain('buildWorkloadsPath({');
-    expect(dashboardWorkloadUrlSyncModelSource).toContain(
-      'resolveDashboardManagedWorkloadsNavigateTarget',
+    expect(workloadUrlSyncModelSource).toContain('parseWorkloadsLinkSearch(search)');
+    expect(workloadUrlSyncModelSource).toContain('buildWorkloadsPath({');
+    expect(workloadUrlSyncModelSource).toContain(
+      'resolveWorkloadsManagedWorkloadsNavigateTarget',
     );
-    expect(dashboardWorkloadUrlSyncModelSource).toContain('resolveDashboardWorkloadRuntimeParam');
-    expect(dashboardWorkloadUrlSyncModelSource).toContain(
+    expect(workloadUrlSyncModelSource).toContain('resolveWorkloadsWorkloadRuntimeParam');
+    expect(workloadUrlSyncModelSource).toContain(
       'normalizeWorkloadViewModeParam(params.type)',
     );
-    expect(dashboardControlsStateSource).toContain('useBreakpoint');
-    expect(dashboardControlsStateSource).toContain('useColumnVisibility');
-    expect(dashboardControlsStateSource).toContain('usePersistentSignal');
-    expect(dashboardControlsStateSource).toContain('blurFocusedTypeToSearch');
-    expect(dashboardControlsStateSource).toContain('DEFAULT_DASHBOARD_SORT_KEY');
-    expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadFilterOptions');
-    expect(dashboardWorkloadFilterOptionsSource).toContain(
-      "from './dashboardWorkloadFilterConfigModel'",
+    expect(workloadsControlsStateSource).toContain('useBreakpoint');
+    expect(workloadsControlsStateSource).toContain('useColumnVisibility');
+    expect(workloadsControlsStateSource).toContain('usePersistentSignal');
+    expect(workloadsControlsStateSource).toContain('blurFocusedTypeToSearch');
+    expect(workloadsControlsStateSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
+    expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadFilterOptions');
+    expect(workloadsWorkloadFilterOptionsSource).toContain(
+      "from './workloadFilterConfigModel'",
     );
-    expect(dashboardWorkloadFilterOptionsSource).toContain(
-      'buildDashboardWorkloadNodeOptions(options.allGuests())',
+    expect(workloadsWorkloadFilterOptionsSource).toContain(
+      'buildWorkloadNodeOptions(options.allGuests())',
     );
-    expect(dashboardWorkloadFilterOptionsSource).not.toContain(
+    expect(workloadsWorkloadFilterOptionsSource).not.toContain(
       'const onContextChange = (value: string) =>',
     );
-    expect(dashboardWorkloadFilterOptionsSource).toContain(
-      'buildDashboardContainerRuntimeFilterConfig({',
+    expect(workloadsWorkloadFilterOptionsSource).toContain(
+      'buildWorkloadsContainerRuntimeFilterConfig({',
     );
-    expect(dashboardWorkloadFilterOptionsSource).toContain('buildDashboardHostFilterConfig({');
-    expect(dashboardWorkloadFilterOptionsSource).toContain('buildDashboardNamespaceFilterConfig({');
-    expect(dashboardWorkloadFilterConfigModelSource).toContain(
-      'export const buildDashboardContainerRuntimeFilterConfig',
+    expect(workloadsWorkloadFilterOptionsSource).toContain('buildWorkloadsHostFilterConfig({');
+    expect(workloadsWorkloadFilterOptionsSource).toContain('buildWorkloadsNamespaceFilterConfig({');
+    expect(workloadFilterConfigModelSource).toContain(
+      'export const buildWorkloadsContainerRuntimeFilterConfig',
     );
-    expect(dashboardWorkloadFilterConfigModelSource).toContain(
-      'export const buildDashboardHostFilterConfig',
+    expect(workloadFilterConfigModelSource).toContain(
+      'export const buildWorkloadsHostFilterConfig',
     );
-    expect(dashboardWorkloadFilterConfigModelSource).toContain('getAllFilterOptionLabel');
-    expect(dashboardWorkloadFilterConfigModelSource).toContain('DASHBOARD_WORKLOAD_TYPE_OPTIONS');
-    expect(dashboardWorkloadFilterConfigModelSource).toContain(
-      'export const buildDashboardNamespaceFilterConfig',
+    expect(workloadFilterConfigModelSource).toContain('getAllFilterOptionLabel');
+    expect(workloadFilterConfigModelSource).toContain('WORKLOAD_TYPE_OPTIONS');
+    expect(workloadFilterConfigModelSource).toContain(
+      'export const buildWorkloadsNamespaceFilterConfig',
     );
-    expect(dashboardWorkloadRouteModelSource).toContain(
-      'export const deserializeDashboardWorkloadViewMode',
+    expect(workloadRouteModelSource).toContain(
+      'export const deserializeWorkloadViewMode',
     );
-    expect(dashboardWorkloadRouteModelSource).toContain(
+    expect(workloadRouteModelSource).toContain(
       "normalizeWorkloadViewModeParam(raw) ?? 'all'",
     );
-    expect(dashboardWorkloadRouteModelSource).not.toContain(
-      'export const buildDashboardContainerRuntimeFilterConfig',
+    expect(workloadRouteModelSource).not.toContain(
+      'export const buildWorkloadsContainerRuntimeFilterConfig',
     );
-    expect(dashboardWorkloadRouteModelSource).not.toContain(
-      'export const buildDashboardHostFilterConfig',
+    expect(workloadRouteModelSource).not.toContain(
+      'export const buildWorkloadsHostFilterConfig',
     );
-    expect(dashboardWorkloadRouteModelSource).not.toContain(
-      'export const buildDashboardNamespaceFilterConfig',
+    expect(workloadRouteModelSource).not.toContain(
+      'export const buildWorkloadsNamespaceFilterConfig',
     );
-    expect(dashboardWorkloadRouteStateModelSource).toContain(
-      'export const DASHBOARD_WORKLOAD_ROUTE_RESET_STATE',
+    expect(workloadRouteStateModelSource).toContain(
+      'export const WORKLOADS_WORKLOAD_ROUTE_RESET_STATE',
     );
-    expect(dashboardWorkloadRouteStateModelSource).toContain(
-      'export const resolveDashboardWorkloadNodeSelection',
+    expect(workloadRouteStateModelSource).toContain(
+      'export const resolveWorkloadsWorkloadNodeSelection',
     );
-    expect(dashboardWorkloadRouteStateModelSource).toContain(
-      'export const deserializeDashboardContainerRuntime',
+    expect(workloadRouteStateModelSource).toContain(
+      'export const deserializeWorkloadsContainerRuntime',
     );
-    expect(dashboardWorkloadDerivedStateSource).toContain('groupWorkloads(');
-    expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
-    expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
-    expect(dashboardWorkloadDerivedStateSource).toContain("from './workloadTopology'");
-    expect(dashboardWorkloadDerivedStateSource).toContain('buildNodeByInstance(');
-    expect(dashboardWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
-    expect(dashboardWorkloadRouteStateSource).not.toContain("from './workloadTopology'");
-    expect(dashboardWorkloadRouteModelSource).toContain("from './workloadTopology'");
-    expect(dashboardWorkloadRouteModelSource).toContain('workloadHostScopeId');
-    expect(dashboardWorkloadRouteModelSource).toContain('getKubernetesContextKey');
-    expect(dashboardWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
-    expect(dashboardSelectionStateSource).toContain(
+    expect(workloadsWorkloadDerivedStateSource).toContain('groupWorkloads(');
+    expect(workloadsWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
+    expect(workloadsWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
+    expect(workloadsWorkloadDerivedStateSource).toContain("from './workloadTopology'");
+    expect(workloadsWorkloadDerivedStateSource).toContain('buildNodeByInstance(');
+    expect(workloadsWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
+    expect(workloadsWorkloadRouteStateSource).not.toContain("from './workloadTopology'");
+    expect(workloadRouteModelSource).toContain("from './workloadTopology'");
+    expect(workloadRouteModelSource).toContain('workloadHostScopeId');
+    expect(workloadRouteModelSource).toContain('getKubernetesContextKey');
+    expect(workloadsWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
+    expect(workloadsSelectionStateSource).toContain(
       'const [selectedGuestId, setSelectedGuestIdRaw]',
     );
-    expect(dashboardSelectionStateSource).toContain(
+    expect(workloadsSelectionStateSource).toContain(
       'const [hoveredWorkloadId, setHoveredWorkloadId]',
     );
-    expect(dashboardSelectionStateSource).toContain('setHandledResourceId(null)');
-    expect(dashboardSelectionStateSource).toContain("from './dashboardSelectionModel'");
-    expect(dashboardSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
-    expect(dashboardSelectionStateSource).not.toContain('getCanonicalWorkloadId');
-    expect(dashboardSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
-    expect(dashboardSelectionModelSource).toContain('getCanonicalWorkloadId');
-    expect(dashboardSelectionModelSource).toContain('resolveDashboardResourceSelection');
-    expect(dashboardSelectionModelSource).toContain('dashboardHasHoveredWorkload');
-    expect(dashboardStateSource).not.toContain('const guestId = () => {');
-    expect(dashboardFilterSource).toContain('useDashboardFilterState');
-    expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
-    expect(dashboardFilterSource).not.toContain('useBreakpoint');
-    expect(dashboardFilterSource).not.toContain("props.setSortKey('name')");
-    expect(dashboardFilterStateSource).toContain('countActiveDashboardFilters');
-    expect(dashboardFilterStateSource).not.toContain('props.containerRuntimeFilter?.onChange');
-    expect(dashboardFilterStateSource).toContain('useBreakpoint');
-    expect(dashboardFilterStateSource).toContain('DEFAULT_DASHBOARD_SORT_KEY');
-    expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
-    expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
-    expect(dashboardFilterModelSource).toContain(
-      "DEFAULT_DASHBOARD_SORT_KEY: DashboardSortKey = 'type'",
+    expect(workloadsSelectionStateSource).toContain('setHandledResourceId(null)');
+    expect(workloadsSelectionStateSource).toContain("from './workloadSelectionModel'");
+    expect(workloadsSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
+    expect(workloadsSelectionStateSource).not.toContain('getCanonicalWorkloadId');
+    expect(workloadSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
+    expect(workloadSelectionModelSource).toContain('getCanonicalWorkloadId');
+    expect(workloadSelectionModelSource).toContain('resolveWorkloadResourceSelection');
+    expect(workloadSelectionModelSource).toContain('workloadsHasHoveredWorkload');
+    expect(workloadsStateSource).not.toContain('const guestId = () => {');
+    expect(workloadsFilterSource).toContain('useWorkloadsFilterState');
+    expect(workloadsFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
+    expect(workloadsFilterSource).not.toContain('useBreakpoint');
+    expect(workloadsFilterSource).not.toContain("props.setSortKey('name')");
+    expect(workloadsFilterStateSource).toContain('countActiveWorkloadsFilters');
+    expect(workloadsFilterStateSource).not.toContain('props.containerRuntimeFilter?.onChange');
+    expect(workloadsFilterStateSource).toContain('useBreakpoint');
+    expect(workloadsFilterStateSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
+    expect(workloadsFilterModelSource).toContain('export const countActiveWorkloadsFilters');
+    expect(workloadsFilterModelSource).toContain('export const hasActiveWorkloadsFilters');
+    expect(workloadsFilterModelSource).toContain(
+      "DEFAULT_WORKLOADS_SORT_KEY: WorkloadsSortKey = 'type'",
     );
-    expect(dashboardStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
-    expect(dashboardStateSource).not.toContain('useGroupedTableWindowing');
-    expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
-    expect(dashboardWorkloadRouteStateSource).toContain('containerRuntimeFilterConfig');
-    expect(dashboardWorkloadRouteStateSource).toContain('hostFilterConfig');
-    expect(dashboardWorkloadRouteStateSource).toContain('namespaceFilterConfig');
-    expect(dashboardWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
-    expect(dashboardWorkloadDerivedStateSource).toContain('useDashboardWorkloadViewportSync');
-    expect(dashboardWorkloadDerivedStateSource).not.toContain('window.addEventListener');
-    expect(dashboardWorkloadDerivedStateSource).not.toContain('getBoundingClientRect');
-    expect(dashboardStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
-    expect(dashboardStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
-    expect(dashboardStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
+    expect(workloadsStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
+    expect(workloadsStateSource).not.toContain('useGroupedTableWindowing');
+    expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadUrlSync');
+    expect(workloadsWorkloadRouteStateSource).toContain('containerRuntimeFilterConfig');
+    expect(workloadsWorkloadRouteStateSource).toContain('hostFilterConfig');
+    expect(workloadsWorkloadRouteStateSource).toContain('namespaceFilterConfig');
+    expect(workloadsWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
+    expect(workloadsWorkloadDerivedStateSource).toContain('useWorkloadViewportSync');
+    expect(workloadsWorkloadDerivedStateSource).not.toContain('window.addEventListener');
+    expect(workloadsWorkloadDerivedStateSource).not.toContain('getBoundingClientRect');
+    expect(workloadsStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
+    expect(workloadsStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
+    expect(workloadsStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
     expect(groupedTableWindowingSource).toContain('const DEFAULT_WINDOW_SIZE');
     expect(groupedTableWindowingSource).toContain('const DEFAULT_ENABLE_THRESHOLD');
     expect(groupedTableWindowingSource).toContain('const DEFAULT_OVERSCAN_ROWS');
     expect(groupedTableWindowingSource).toContain('getVisibleSlice');
     expect(groupedTableWindowingSource).toContain('onScroll');
     expect(groupedTableWindowingSource).toContain('revealIndex');
-    expect(dashboardWorkloadViewportSyncSource).toContain('window.addEventListener');
-    expect(dashboardWorkloadViewportSyncSource).toContain('window.removeEventListener');
-    expect(dashboardWorkloadViewportSyncSource).toContain('getBoundingClientRect');
-    expect(dashboardWorkloadViewportSyncSource).toContain('groupedWindowing.onScroll');
+    expect(workloadsWorkloadViewportSyncSource).toContain('window.addEventListener');
+    expect(workloadsWorkloadViewportSyncSource).toContain('window.removeEventListener');
+    expect(workloadsWorkloadViewportSyncSource).toContain('getBoundingClientRect');
+    expect(workloadsWorkloadViewportSyncSource).toContain('groupedWindowing.onScroll');
     expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
     expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
     expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');
@@ -994,7 +981,7 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
     expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');
     expect(resourceDetailDrawerOverviewSource).not.toContain(
-      "from '@/components/Dashboard/TagBadges'",
+      "from '@/components/Workloads/TagBadges'",
     );
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerOverviewTab'");
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
@@ -1058,12 +1045,12 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
     expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
     expect(guestDrawerOverviewSource).toContain('DiskList');
-    expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');
-    expect(dashboardWorkloadTableSource).toContain('WorkloadTableHeader');
-    expect(dashboardWorkloadTableSource).toContain('WorkloadPanel');
-    expect(dashboardWorkloadTableSource).not.toContain('<TableHead');
-    expect(dashboardWorkloadTableSource).not.toContain('NodeGroupHeader');
-    expect(dashboardWorkloadTableSource).not.toContain('GuestDrawer');
+    expect(workloadsStateCardsSource).toContain('workloadsDisconnectedState().actionLabel');
+    expect(workloadsWorkloadTableSource).toContain('WorkloadTableHeader');
+    expect(workloadsWorkloadTableSource).toContain('WorkloadPanel');
+    expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
+    expect(workloadsWorkloadTableSource).not.toContain('NodeGroupHeader');
+    expect(workloadsWorkloadTableSource).not.toContain('GuestDrawer');
     expect(workloadTableHeaderSource).toContain('TableHead');
     expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
     expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
@@ -1071,7 +1058,7 @@ describe('frontend resource type boundaries', () => {
     expect(workloadPanelSource).toContain('GuestDrawer');
     expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
     expect(workloadPanelSource).not.toContain('TableHead');
-    expect(dashboardStatsStripSource).toContain('totalStats().running');
+    expect(workloadsStatsStripSource).toContain('totalStats().running');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
     expect(emptyStateSource).not.toContain(
@@ -1101,8 +1088,6 @@ describe('frontend resource type boundaries', () => {
       "const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string>",
     );
     expect(recoverySummarySource).not.toContain('const normalizeOutcome =');
-    expect(dashboardRecoverySource).toContain('normalizeRecoveryOutcome');
-    expect(dashboardRecoverySource).not.toContain('const normalizeOutcome =');
     expect(recoveryArtifactModePresentationSource).toContain(
       'export function getRecoveryArtifactModePresentation',
     );
@@ -1402,20 +1387,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(recoverySummarySource).not.toContain('function getAttentionChipClass(');
     expect(recoverySummarySource).not.toContain('function getAttentionDotClass(');
-    expect(dashboardMetricPresentationSource).toContain(
-      'export function getDashboardStatusBadgeClass',
-    );
-    expect(dashboardMetricPresentationSource).toContain(
-      'export function getDashboardPriorityBadgeClass',
-    );
-    expect(trendChartsSource).toContain('getDashboardTrendColor');
-    expect(trendChartsSource).toContain('getDashboardTrendErrorState');
-    expect(trendChartsSource).not.toContain('RESOURCE_COLORS');
-    expect(trendChartsSource).not.toContain('Unable to load trends');
-    expect(dashboardTrendPresentationSource).toContain('export function getDashboardTrendColor');
-    expect(dashboardTrendPresentationSource).toContain(
-      'export function getDashboardTrendErrorState',
-    );
     expect(systemSettingsPresentationSource).toContain('export const PVE_POLLING_PRESETS');
     expect(systemSettingsPresentationSource).toContain('export const BACKUP_INTERVAL_OPTIONS');
     expect(systemSettingsPresentationSource).toContain(
@@ -1687,47 +1658,8 @@ describe('frontend resource type boundaries', () => {
     );
     expect(agentProfileSuggestionPresentationSource).toContain('titleCaseDelimitedLabel');
     expect(agentProfileSuggestionPresentationSource).not.toContain('const titleize =');
-    expect(trendChartsSource).toContain("segmentedButtonClass(active(), false, 'accent')");
-    expect(trendChartsSource).not.toContain(
-      "'px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-medium'",
-    );
-    expect(problemResourcesTableSource).toContain('getProblemResourceStatusVariant');
-    expect(problemResourcesTableSource).not.toContain(
-      'function statusVariant(pr: ProblemResource)',
-    );
     expect(problemResourcePresentationSource).toContain(
       'export function getProblemResourceStatusVariant',
-    );
-    expect(kpiStripSource).toContain('getDashboardAlertTone');
-    expect(kpiStripSource).toContain('getDashboardKpiPresentation');
-    expect(kpiStripSource).not.toContain('const alertsTone =');
-    expect(kpiStripSource).not.toContain('border-l-[3px] border-l-blue-500');
-    expect(dashboardKpiPresentationSource).toContain('export function getDashboardKpiPresentation');
-    expect(recentAlertsPanelSource).toContain('getAlertSeverityCompactLabel');
-    expect(recentAlertsPanelSource).toContain('@/utils/alertOverviewPresentation');
-    expect(recentAlertsPanelSource).not.toContain('getAlertSeverityTextClass');
-    expect(recentAlertsPanelSource).not.toContain("alert.level === 'critical' ? 'CRIT' : 'WARN'");
-    expect(recentAlertsPanelSource).not.toContain('No active alerts');
-    expect(dashboardRouteSource).toContain("from '@/features/dashboardOverview'");
-    expect(alertOverviewPresentationSource).toContain('export function getDashboardAlertTone');
-    expect(alertOverviewPresentationSource).toContain(
-      'export function getDashboardAlertSummaryText',
-    );
-    expect(storagePanelSource).toContain('@/utils/dashboardStoragePresentation');
-    expect(storagePanelSource).toContain('@/utils/dashboardMetricPresentation');
-    expect(storagePanelSource).not.toContain('./dashboardHelpers');
-    expect(storagePanelSource).not.toContain('No storage resources');
-    expect(recoveryStatusPanelSource).toContain('@/utils/dashboardRecoveryPresentation');
-    expect(recoveryStatusPanelSource).not.toContain('No recovery data available');
-    expect(recoveryStatusPanelSource).not.toContain('Last recovery point over 24 hours ago');
-    expect(dashboardStoragePresentationSource).toContain(
-      'export function computeDashboardStorageCapacityPercent',
-    );
-    expect(dashboardStoragePresentationSource).toContain(
-      'export function getDashboardStorageIssueBadges',
-    );
-    expect(dashboardRecoveryPresentationSource).toContain(
-      'export const DASHBOARD_RECOVERY_EMPTY_STATE',
     );
     expect(diskListSource).toContain('getTemperatureTextClass');
     expect(diskListSource).not.toContain('const getTemperatureTone =');
@@ -3296,8 +3228,8 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerSource).not.toContain('const discoveryResourceType = () =>');
     expect(guestDrawerSource).not.toContain('const urlTargetLabel = () =>');
     expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
-    expect(workloadsSource).toContain('export const getDiscoveryResourceTypeForWorkload');
-    expect(workloadsSource).toContain('export const getWebInterfaceTargetLabelForWorkload');
+    expect(workloadsUtilitySource).toContain('export const getDiscoveryResourceTypeForWorkload');
+    expect(workloadsUtilitySource).toContain('export const getWebInterfaceTargetLabelForWorkload');
     expect(infrastructureDetailsDrawerSource).toContain('getDiscoveryLoadingState');
     expect(resourceDetailDrawerSource).toContain('getDiscoveryLoadingState');
     expect(discoveryTabSource).not.toContain('const getURLSuggestionSourceLabel =');
@@ -4589,86 +4521,69 @@ describe('frontend resource type boundaries', () => {
     expect(remediationPresentationSource).toContain('export function getRemediationPresentation');
   });
 
-  it('keeps dashboard empty-state copy in a shared presentation utility', () => {
-    expect(dashboardStateSource).toContain('getDashboardInfrastructureEmptyState');
-    expect(dashboardStateSource).toContain('getDashboardGuestsEmptyState');
-    expect(dashboardStateSource).toContain('getDashboardLoadingState');
-    expect(dashboardStateSource).toContain('getDashboardDisconnectedState');
-    expect(dashboardSource).not.toContain('Loading dashboard data...');
-    expect(dashboardSource).not.toContain('Connection lost');
-    expect(dashboardSource).not.toContain('Attempting to reconnect…');
-    expect(dashboardSource).not.toContain('Unable to connect to the backend server');
-    expect(dashboardSource).not.toContain('Reconnect now');
-    expect(dashboardRouteSource).toContain('getDashboardDisconnectedBannerState');
-    expect(dashboardRouteSource).toContain('getDashboardUnavailableState');
-    expect(dashboardRouteSource).toContain('getDashboardNoResourcesState');
-    expect(dashboardRouteSource).not.toContain(
-      'Real-time data is currently unavailable. Showing last-known state.',
+  it('keeps workloads empty-state copy in a shared presentation utility', () => {
+    expect(workloadsStateSource).toContain('getWorkloadsInfrastructureEmptyState');
+    expect(workloadsStateSource).toContain('getWorkloadsGuestsEmptyState');
+    expect(workloadsStateSource).toContain('getWorkloadsLoadingState');
+    expect(workloadsStateSource).toContain('getWorkloadsDisconnectedState');
+    expect(workloadsSurfaceSource).not.toContain('Loading workloads data...');
+    expect(workloadsSurfaceSource).not.toContain('Connection lost');
+    expect(workloadsSurfaceSource).not.toContain('Attempting to reconnect…');
+    expect(workloadsSurfaceSource).not.toContain('Unable to connect to the backend server');
+    expect(workloadsSurfaceSource).not.toContain('Reconnect now');
+    expect(workloadEmptyStatePresentationSource).toContain(
+      'export function getWorkloadsInfrastructureEmptyState',
     );
-    expect(dashboardRouteSource).not.toContain(
-      'Real-time data is reconnecting. Showing last-known state.',
+    expect(workloadEmptyStatePresentationSource).toContain(
+      'export function getWorkloadsGuestsEmptyState',
     );
-    expect(dashboardRouteSource).not.toContain('Dashboard unavailable');
-    expect(dashboardRouteSource).not.toContain(
-      'Real-time dashboard data is currently unavailable. Reconnect to try again.',
+    expect(workloadEmptyStatePresentationSource).toContain(
+      'export function getWorkloadsLoadingState',
     );
-    expect(dashboardRouteSource).not.toContain('No resources yet');
-    expect(dashboardRouteSource).not.toContain(
-      'Once connected platforms report resources, your dashboard overview will appear here.',
+    expect(workloadEmptyStatePresentationSource).toContain(
+      'export function getWorkloadsDisconnectedState',
     );
-    expect(dashboardEmptyStatePresentationSource).toContain(
-      'export function getDashboardInfrastructureEmptyState',
+    expect(workloadEmptyStatePresentationSource).toContain(
+      'export function getWorkloadsDisconnectedBannerState',
     );
-    expect(dashboardEmptyStatePresentationSource).toContain(
-      'export function getDashboardGuestsEmptyState',
+    expect(workloadEmptyStatePresentationSource).toContain(
+      'export function getWorkloadsUnavailableState',
     );
-    expect(dashboardEmptyStatePresentationSource).toContain(
-      'export function getDashboardLoadingState',
-    );
-    expect(dashboardEmptyStatePresentationSource).toContain(
-      'export function getDashboardDisconnectedState',
-    );
-    expect(dashboardEmptyStatePresentationSource).toContain(
-      'export function getDashboardDisconnectedBannerState',
-    );
-    expect(dashboardEmptyStatePresentationSource).toContain(
-      'export function getDashboardUnavailableState',
-    );
-    expect(dashboardEmptyStatePresentationSource).toContain(
-      'export function getDashboardNoResourcesState',
+    expect(workloadEmptyStatePresentationSource).toContain(
+      'export function getWorkloadsNoResourcesState',
     );
   });
 
-  it('keeps dashboard guest fallback copy in a shared presentation utility', () => {
-    expect(guestRowCellsSource).toContain('getDashboardGuestBackupStatusPresentation');
-    expect(guestRowCellsSource).toContain('getDashboardGuestBackupTooltip');
-    expect(guestRowCellsSource).toContain('getDashboardGuestNetworkEmptyState');
-    expect(guestRowSource).toContain('getDashboardGuestDiskStatusMessage');
+  it('keeps workloads guest fallback copy in a shared presentation utility', () => {
+    expect(guestRowCellsSource).toContain('getWorkloadsGuestBackupStatusPresentation');
+    expect(guestRowCellsSource).toContain('getWorkloadsGuestBackupTooltip');
+    expect(guestRowCellsSource).toContain('getWorkloadsGuestNetworkEmptyState');
+    expect(guestRowSource).toContain('getWorkloadGuestDiskStatusMessage');
     expect(guestRowSource).not.toContain('No backup found');
     expect(guestRowSource).not.toContain('No IP assigned');
     expect(guestRowSource).not.toContain(
       'No filesystems found. VM may be booting or using a Live ISO.',
     );
-    expect(dashboardDiskListSource).toContain('useDiskListState');
-    expect(dashboardDiskListSource).not.toContain('getDashboardGuestDiskStatusMessage');
-    expect(dashboardDiskListSource).not.toContain('const getUsagePercent =');
-    expect(dashboardDiskListStateSource).toContain('getDashboardGuestDiskStatusMessage');
-    expect(dashboardDiskListModelSource).toContain('export const buildDashboardDiskPresentation');
-    expect(dashboardDiskListModelSource).toContain('export const getDashboardDiskUsagePercent');
-    expect(dashboardDiskListSource).not.toContain(
+    expect(workloadsDiskListSource).toContain('useDiskListState');
+    expect(workloadsDiskListSource).not.toContain('getWorkloadGuestDiskStatusMessage');
+    expect(workloadsDiskListSource).not.toContain('const getUsagePercent =');
+    expect(workloadsDiskListStateSource).toContain('getWorkloadGuestDiskStatusMessage');
+    expect(workloadsDiskListModelSource).toContain('export const buildWorkloadsDiskPresentation');
+    expect(workloadsDiskListModelSource).toContain('export const getWorkloadsDiskUsagePercent');
+    expect(workloadsDiskListSource).not.toContain(
       'No filesystems found. VM may be booting or using a Live ISO.',
     );
-    expect(dashboardGuestPresentationSource).toContain(
-      'export function getDashboardGuestBackupStatusPresentation',
+    expect(workloadGuestPresentationSource).toContain(
+      'export function getWorkloadsGuestBackupStatusPresentation',
     );
-    expect(dashboardGuestPresentationSource).toContain(
-      'export function getDashboardGuestBackupTooltip',
+    expect(workloadGuestPresentationSource).toContain(
+      'export function getWorkloadsGuestBackupTooltip',
     );
-    expect(dashboardGuestPresentationSource).toContain(
-      'export function getDashboardGuestNetworkEmptyState',
+    expect(workloadGuestPresentationSource).toContain(
+      'export function getWorkloadsGuestNetworkEmptyState',
     );
-    expect(dashboardGuestPresentationSource).toContain(
-      'export function getDashboardGuestDiskStatusMessage',
+    expect(workloadGuestPresentationSource).toContain(
+      'export function getWorkloadGuestDiskStatusMessage',
     );
   });
 
@@ -4798,9 +4713,6 @@ describe('frontend resource type boundaries', () => {
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.bulkAcknowledge');
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.acknowledge');
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.unacknowledge');
-    expect(recentAlertsPanelSource).toContain('useAlertAcknowledgementState');
-    expect(recentAlertsPanelSource).not.toContain('AlertsAPI.bulkAcknowledge');
-    expect(recentAlertsPanelSource).not.toContain('AlertsAPI.acknowledge');
     expect(alertScheduleTabSource).toContain('useAlertScheduleState');
     expect(alertScheduleTabSource).not.toContain('createDefaultQuietHours');
     expect(alertScheduleTabSource).not.toContain('createDefaultCooldown');

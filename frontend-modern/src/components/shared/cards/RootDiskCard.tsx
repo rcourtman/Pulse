@@ -1,7 +1,7 @@
 import { Component } from 'solid-js';
 import { Node } from '@/types/api';
 import { formatBytes } from '@/utils/format';
-import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
+import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 
 interface RootDiskCardProps {
   node: Node;

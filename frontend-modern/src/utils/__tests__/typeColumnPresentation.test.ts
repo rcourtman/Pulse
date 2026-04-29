@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
-import problemResourcesTableSource from '@/features/dashboardOverview/ProblemResourcesTable.tsx?raw';
 import { TYPE_COLUMN_LABEL } from '@/utils/typeColumnContract';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 
@@ -16,7 +15,6 @@ describe('typeColumnPresentation', () => {
   });
 
   it('keeps fixed runtime Type headers on the shared label utility', () => {
-    expect(problemResourcesTableSource).toContain('getTypeColumnLabel()');
     expect(alertHistoryTableSectionSource).toContain('getTypeColumnLabel()');
   });
 
@@ -34,7 +32,6 @@ describe('typeColumnPresentation', () => {
 
     expect(directTypeLabelHelperUsers).toEqual([
       '../../features/alerts/AlertHistoryTableSection.tsx',
-      '../../features/dashboardOverview/ProblemResourcesTable.tsx',
     ]);
   });
 });

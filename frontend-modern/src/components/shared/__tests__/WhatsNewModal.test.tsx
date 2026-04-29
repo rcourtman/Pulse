@@ -69,7 +69,7 @@ describe('WhatsNewModal', () => {
       'https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md',
     );
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
-    expect(whatsNewModalModelSource).toContain("title: 'Dashboard'");
+    expect(whatsNewModalModelSource).toContain("title: 'Infrastructure'");
   });
 
   it('renders when the navigation modal has not been seen yet', async () => {
@@ -77,10 +77,10 @@ describe('WhatsNewModal', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Pulse navigation guide' });
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByText('Step 1 of 5')).toBeInTheDocument();
+    expect(within(dialog).getByText('Step 1 of 4')).toBeInTheDocument();
     expect(within(dialog).getByText('Nav guide')).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/Start here for the live estate overview/i),
+      within(dialog).getByText(/Start here to add, inspect, and manage infrastructure sources/i),
     ).toBeInTheDocument();
     expect(within(dialog).queryByText('Where Things Moved')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Navigation guide' })).toBeInTheDocument();
@@ -137,10 +137,8 @@ describe('WhatsNewModal', () => {
   it('advances through the guided tour and finishes on the last step', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/Start here for the live estate overview/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(
-      await screen.findByText(/Use this to add and manage infrastructure sources/i),
+      await screen.findByText(/Start here to add, inspect, and manage infrastructure sources/i),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByText(/Use this for VMs, containers, pods/i)).toBeInTheDocument();
@@ -156,12 +154,14 @@ describe('WhatsNewModal', () => {
   it('lets the user jump to a tour stop directly from the stop map', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/Start here for the live estate overview/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Start here to add, inspect, and manage infrastructure sources/i),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Workloads/i }));
 
     expect(await screen.findByText(/Use this for VMs, containers, pods/i)).toBeInTheDocument();
-    expect(screen.getByText('Step 3 of 5')).toBeInTheDocument();
+    expect(screen.getByText('Step 2 of 4')).toBeInTheDocument();
   });
 
   it('routes the docs CTA through the navigation guide', async () => {
@@ -177,7 +177,7 @@ describe('WhatsNewModal', () => {
     render(() => <WhatsNewModal />);
 
     const dialog = await screen.findByRole('dialog', { name: 'Pulse navigation guide' });
-    expect(within(dialog).getByText('Step 5 of 5')).toBeInTheDocument();
+    expect(within(dialog).getByText('Step 4 of 4')).toBeInTheDocument();
     expect(
       within(dialog).getByText(/Use this for backup coverage, snapshots, replication/i),
     ).toBeInTheDocument();

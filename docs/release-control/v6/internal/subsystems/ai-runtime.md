@@ -247,7 +247,7 @@ assistant drawer may dock and push the authenticated shell only when the
 viewport is wide enough to preserve a usable primary operating surface; once
 the available viewport drops below that shell threshold, the drawer must
 become an overlay owned by `frontend-modern/src/components/AI/Chat/index.tsx`
-instead of compressing Infrastructure, Dashboard, Storage, or other primary
+instead of compressing Infrastructure, Workloads, Storage, or other primary
 runtime pages into an unusable narrow column or forking page-local layout
 exceptions.
 The closed assistant launcher follows the same shared-shell rule. While the
@@ -875,19 +875,19 @@ The `/api/ai/intelligence/changes` endpoint should also route through the
 canonical unified-intelligence recent-change accessor before any
 patrol-local detector fallback, so the API surface reads the same unified
 timeline source that powers the summary payload.
-Dashboard Pulse Brief context follows the same monitoring-first AI boundary:
-Pulse may surface an Assistant-ready operator paragraph on the dashboard, but
-the first render must be fact-bound to governed dashboard, Patrol, storage,
-recovery, and alert summaries and must pass those facts as structured context
-when the operator asks Assistant to continue. Future server-generated dashboard
-briefs must keep that structured fact contract and policy boundary rather than
-letting an unbounded prompt become the dashboard's source of truth.
-The dashboard-to-Assistant handoff must also keep its execution mode scoped to
-the request. When a Pulse Brief opens Assistant from the dashboard, the drawer
-may prefill the governed dashboard prompt and context, but the submitted chat
-request must set `autonomous_mode:false`, preserve the operator's persistent
-Assistant control-level setting, and disclose the temporary approval-required
-mode in the drawer instead of showing the generic Autonomous warning.
+Retired dashboard Pulse Brief context follows the same monitoring-first AI
+boundary in negative space: `frontend-modern/src/features/dashboardOverview/`
+and the Dashboard route must not be restored just to create an Assistant-ready
+operator paragraph. Future overview or brief surfaces need a governed product
+owner first, must pass fact-bound structured context from owning Infrastructure,
+Workloads, Patrol, storage, recovery, and alert summaries, and must not let an
+unbounded prompt become a route's source of truth.
+Future route-to-Assistant handoffs must also keep their execution mode scoped
+to the request. When an overview brief opens Assistant, the drawer may prefill
+only governed prompt/context data, but the submitted chat request must set
+`autonomous_mode:false`, preserve the operator's persistent Assistant
+control-level setting, and disclose the temporary approval-required mode in
+the drawer instead of showing the generic Autonomous warning.
 Those backend AI and Patrol change summaries should derive their canonical
 labels and provenance fragments from
 `internal/unifiedresources/change_presentation.go`, so the resource-model

@@ -117,7 +117,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
     <div class="max-w-lg mx-auto bg-surface border border-border overflow-hidden animate-fade-in relative rounded-md">
       {' '}
       <div class="p-8 border-b border-border relative z-10 text-center">
-        <h2 class="text-3xl font-bold tracking-tight text-base-content">Secure Your Dashboard</h2>
+        <h2 class="text-3xl font-bold tracking-tight text-base-content">Secure Pulse</h2>
         <p class="text-slate-500 dark:text-blue-200 mt-2 font-light">
           Create your root administrator account, then choose the first infrastructure source.
         </p>

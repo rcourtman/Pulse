@@ -294,7 +294,7 @@ class ApiClient {
   }
 
   private loadStoredAuth() {
-    // First, check for token in URL query parameter (for kiosk/dashboard mode)
+    // First, check for token in URL query parameter (for kiosk mode)
     // This allows visiting ?token=xxx to auto-authenticate without cookies
     try {
       if (typeof window !== 'undefined' && window.location?.search) {

@@ -67,8 +67,8 @@ test.describe('Release candidate shell', () => {
       }),
     );
 
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
+    await page.goto('/infrastructure', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/infrastructure/, { timeout: 15_000 });
 
     await expect(
       page.getByRole('status').filter({ hasText: 'public v6 release candidate' }),

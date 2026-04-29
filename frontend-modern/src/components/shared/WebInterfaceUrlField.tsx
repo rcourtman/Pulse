@@ -113,7 +113,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
         </Show>
 
         <p class="mt-1.5 text-[10px] text-muted">
-          Add a URL to quickly access this {state.targetLabel()}'s web interface from the dashboard.
+          Add a URL to quickly access this {state.targetLabel()}'s web interface from Workloads.
         </p>
       </div>
     </Show>

@@ -14,7 +14,7 @@ const truthy = (value: string | undefined) => {
 };
 
 test.describe.serial('Core E2E flows', () => {
-  test('Bootstrap flow - setup wizard and dashboard', async ({ page }) => {
+  test('Bootstrap flow - setup wizard and infrastructure landing', async ({ page }) => {
     await ensureAuthenticated(page);
     // v6 default landing page is /infrastructure (was /proxmox/overview in v5)
     await expect(page).toHaveURL(/\/(infrastructure|proxmox\/overview)/);

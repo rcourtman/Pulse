@@ -21,8 +21,8 @@ export const AUDIT_READ_SCOPE = 'audit:read';
 export const API_SCOPE_OPTIONS: APIScopeOption[] = [
   {
     value: MONITORING_READ_SCOPE,
-    label: 'Dashboards & alerts (read)',
-    description: 'View monitoring data, dashboards, and alert history.',
+    label: 'Monitoring & alerts (read)',
+    description: 'View monitoring data, infrastructure, workloads, and alert history.',
     group: 'Monitoring',
   },
   {

@@ -18,7 +18,7 @@ export interface InfrastructureSummaryTableProps {
   diskCounts?: Record<string, number>;
   agents?: Agent[];
   backupCounts?: Record<string, number>;
-  currentTab: 'dashboard' | 'storage' | 'recovery';
+  currentTab: 'workloads' | 'storage' | 'recovery';
   selectedNode: string | null;
   globalTemperatureMonitoringEnabled?: boolean;
   onNodeClick: (nodeId: string, nodeType: 'pve' | 'pbs') => void;

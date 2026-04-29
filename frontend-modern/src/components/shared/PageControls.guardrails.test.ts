@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import pageControlsSource from '@/components/shared/PageControls.tsx?raw';
-import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
+import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
 import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
@@ -29,9 +29,9 @@ describe('page controls guardrails', () => {
     expect(pageControlsSource).toContain('const activeSearchTrailing = () => (mobileControlsEnabled() ? undefined : local.searchTrailing);');
     expect(pageControlsSource).toContain('searchAccessory={activeSearchTrailing() ?? mobileSearchAccessory()}');
 
-    expect(dashboardFilterSource).toContain('PageControls');
-    expect(dashboardFilterSource).not.toContain('<FilterHeader');
-    expect(dashboardFilterSource).not.toContain('<ColumnPicker');
+    expect(workloadsFilterSource).toContain('PageControls');
+    expect(workloadsFilterSource).not.toContain('<FilterHeader');
+    expect(workloadsFilterSource).not.toContain('<ColumnPicker');
 
     expect(recoveryProtectedInventorySectionSource).toContain('PageControls');
     expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');

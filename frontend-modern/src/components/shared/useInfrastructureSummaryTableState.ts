@@ -33,7 +33,7 @@ export function useInfrastructureSummaryTableState(props: InfrastructureSummaryT
   const totalColumnCount = createMemo(() => {
     let count = 6;
     if (hasAnyTemperatureData()) count += 1;
-    if (props.currentTab === 'dashboard') count += 2;
+    if (props.currentTab === 'workloads') count += 2;
     else if (props.currentTab === 'storage') count += 2;
     else if (props.currentTab === 'recovery') count += 1;
     return count;

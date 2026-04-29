@@ -613,8 +613,8 @@ export const InfrastructureInstallerSection: Component = () => {
                           >
                             {isConnected()
                               ? state.lookupWasAutoDetected()
-                                ? `${agent().displayName || agent().hostname} started reporting and Pulse detected it automatically. Open the dashboard to verify your first overview, or open Inventory to inspect this host and add more infrastructure.`
-                                : `${agent().displayName || agent().hostname} is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or open Inventory to inspect this host and add more infrastructure.`
+                                ? `${agent().displayName || agent().hostname} started reporting and Pulse detected it automatically. Open Infrastructure to inspect this host and add more infrastructure.`
+                                : `${agent().displayName || agent().hostname} is reporting live telemetry to Pulse. Open Infrastructure to inspect this host and add more infrastructure.`
                               : `${agent().displayName || agent().hostname} has been found, but Pulse is not receiving a live check-in yet. Keep the installer running on that machine and check again.`}
                           </p>
                         </div>
@@ -650,10 +650,10 @@ export const InfrastructureInstallerSection: Component = () => {
                         <div class="flex flex-col gap-2 sm:flex-row">
                           <button
                             type="button"
-                            onClick={state.openDashboard}
+                            onClick={state.openInfrastructure}
                             class="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
                           >
-                            Open dashboard
+                            Open infrastructure
                           </button>
                           <button
                             type="button"

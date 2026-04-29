@@ -3,8 +3,8 @@ import { MIGRATION_GUIDE_DOC_URL, PRIVACY_DOC_URL } from '@/utils/docsLinks';
 export interface WhatsNewFeatureCard {
   accent: string;
   description: string;
-  icon: 'dashboard' | 'infrastructure' | 'workloads' | 'storage' | 'recovery';
-  target: 'dashboard' | 'infrastructure' | 'workloads' | 'storage' | 'recovery';
+  icon: 'infrastructure' | 'workloads' | 'storage' | 'recovery';
+  target: 'infrastructure' | 'workloads' | 'storage' | 'recovery';
   title: string;
 }
 
@@ -13,17 +13,9 @@ export const WHATS_NEW_PRIVACY_URL = PRIVACY_DOC_URL;
 
 export const WHATS_NEW_FEATURE_CARDS: WhatsNewFeatureCard[] = [
   {
-    accent: 'border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-900',
-    description:
-      'Start here for the live estate overview: health, alerts, capacity, and recent activity.',
-    icon: 'dashboard',
-    target: 'dashboard',
-    title: 'Dashboard',
-  },
-  {
     accent: 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900',
     description:
-      'Use this to add and manage infrastructure sources: platform API inventory, Pulse Agent telemetry, and discovered candidates.',
+      'Start here to add, inspect, and manage infrastructure sources: platform API inventory, Pulse Agent telemetry, and discovered candidates.',
     icon: 'infrastructure',
     target: 'infrastructure',
     title: 'Infrastructure',

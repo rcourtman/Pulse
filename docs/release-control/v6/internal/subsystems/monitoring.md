@@ -322,17 +322,17 @@ sampler generation instead of regenerating or re-downsampling the same seeded
 timeline on every endpoint hit. When seeded mock history is rebuilt or a live
 mock tick advances, monitoring must invalidate that cache so preview charts
 stay current without paying repeated per-request synthesis cost.
-That same sampler-owned cache contract also covers compact dashboard summary
-reads. When live mock ticks advance, monitoring must repopulate the canonical
-24-hour aggregate `/api/charts/storage-summary` cache inside the sampler path
-instead of leaving the first operator request after each tick to rebuild
-per-pool mock storage charts on demand.
+That same sampler-owned cache contract also covers compact summary reads after
+the dashboard overview retirement. When live mock ticks advance, monitoring
+must repopulate the canonical 24-hour aggregate `/api/charts/storage-summary`
+cache inside the sampler path instead of leaving the first operator request
+after each tick to rebuild per-pool mock storage charts on demand.
 That same metrics-hot-path ownership also includes metric-type selection for
-compact summary reads. When dashboard infrastructure or storage summary routes
-request only a subset of canonical chart series, `internal/monitoring/monitor_metrics.go`
-must preserve that narrowed metric set through the batch store fallback path
-instead of querying every metric type for each resource and discarding most of
-the payload afterward.
+compact summary reads. When infrastructure or storage summary routes request
+only a subset of canonical chart series,
+`internal/monitoring/monitor_metrics.go` must preserve that narrowed metric
+set through the batch store fallback path instead of querying every metric type
+for each resource and discarding most of the payload afterward.
 That same mock-runtime owner now also owns demo-scenario curation.
 `internal/mock/fixture_graph.go`, `internal/mock/platform_fixtures.go`, and
 `internal/mock/demo_scenarios.go` may project an authored demo estate over

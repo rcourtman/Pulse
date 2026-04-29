@@ -1,6 +1,6 @@
 import { Show, For, createSignal, createEffect } from 'solid-js';
 import { Dialog } from '../shared/Dialog';
-import { ThresholdSlider } from '../Dashboard/ThresholdSlider';
+import { ThresholdSlider } from '../Workloads/ThresholdSlider';
 import {
   ALERT_BULK_EDIT_CANCEL_LABEL,
   ALERT_BULK_EDIT_CLEAR_LABEL,

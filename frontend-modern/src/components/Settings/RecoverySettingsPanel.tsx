@@ -64,7 +64,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
               <div>
                 <p class="text-sm font-medium text-base-content">Enable backup polling</p>
                 <p class="text-xs text-muted">
-                  Required for dashboard backup status, storage snapshots, and alerting.
+                  Required for workload backup status, storage snapshots, and alerting.
                 </p>
               </div>
               <label class="relative inline-flex items-center cursor-pointer">

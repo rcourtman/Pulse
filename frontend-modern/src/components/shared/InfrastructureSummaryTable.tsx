@@ -81,7 +81,7 @@ export const InfrastructureSummaryTable: Component<InfrastructureSummaryTablePro
                 Temp {table.renderSortIndicator('temperature')}
               </TableHead>
             </Show>
-            <Show when={props.currentTab === 'dashboard'}>
+            <Show when={props.currentTab === 'workloads'}>
               <TableHead
                 class={thClass}
                 style={{ width: '50px', 'min-width': '50px', 'max-width': '50px' }}

@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["ai-runtime", "api-contracts", "cloud-paid", "frontend-primitives", "storage-recovery", "unified-resources"]
+  "dependency_subsystem_ids": ["api-contracts", "frontend-primitives"]
 }
 ```
 
@@ -25,63 +25,63 @@ regression protection.
 3. `pkg/metrics/store_slo_test.go`
 4. `internal/api/slo.go`
 5. `internal/api/slo_bench_test.go`
-6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
-7. `frontend-modern/src/components/Dashboard/DashboardStateCards.tsx`
-8. `frontend-modern/src/components/Dashboard/DashboardStatsStrip.tsx`
-9. `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`
-10. `frontend-modern/src/components/Dashboard/WorkloadPanel.tsx`
-11. `frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx`
-12. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-13. `frontend-modern/src/components/Dashboard/useDashboardControlsState.ts`
-14. `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`
-15. `frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts`
-16. `frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts`
-17. `frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts`
-18. `frontend-modern/src/components/Dashboard/useDashboardWorkloadUrlSync.ts`
-19. `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`
-20. `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts`
-21. `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`
-22. `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
-23. `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts`
-24. `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts`
-25. `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx`
-26. `frontend-modern/src/components/Dashboard/stackedDiskBarModel.ts`
-27. `frontend-modern/src/components/Dashboard/useStackedDiskBarState.ts`
-28. `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`
-29. `frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts`
-30. `frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts`
-31. `frontend-modern/src/components/Dashboard/MetricBar.tsx`
-32. `frontend-modern/src/components/Dashboard/metricBarModel.ts`
-33. `frontend-modern/src/components/Dashboard/useMetricBarState.ts`
-34. `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`
-35. `frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts`
-36. `frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts`
-37. `frontend-modern/src/components/Dashboard/DiskList.tsx`
-38. `frontend-modern/src/components/Dashboard/diskListModel.ts`
-39. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
-40. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
-41. `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`
-42. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
-43. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
-44. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
-45. `frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx`
-46. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
-47. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
-48. `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`
-49. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-50. `frontend-modern/src/components/Dashboard/workloadTopology.ts`
-51. `frontend-modern/src/components/Dashboard/dashboardSelectionModel.ts`
-52. `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts`
-53. `frontend-modern/src/components/Dashboard/dashboardWorkloadFilterConfigModel.ts`
-54. `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteStateModel.ts`
-55. `frontend-modern/src/components/Dashboard/dashboardWorkloadUrlSyncModel.ts`
-56. `frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts`
-57. `frontend-modern/src/components/Dashboard/__tests__/dashboardSelectionModel.test.ts`
-58. `frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadFilterConfigModel.test.ts`
-59. `frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteModel.test.ts`
-60. `frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteStateModel.test.ts`
-61. `frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadUrlSyncModel.test.ts`
-62. `frontend-modern/src/components/Dashboard/__tests__/workloadTopology.test.ts`
+6. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+7. `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`
+8. `frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx`
+9. `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
+10. `frontend-modern/src/components/Workloads/WorkloadPanel.tsx`
+11. `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx`
+12. `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+13. `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts`
+14. `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
+15. `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts`
+16. `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`
+17. `frontend-modern/src/components/Workloads/useWorkloadRouteState.ts`
+18. `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts`
+19. `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`
+20. `frontend-modern/src/components/Workloads/workloadsFilterModel.ts`
+21. `frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts`
+22. `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
+23. `frontend-modern/src/components/Workloads/thresholdSliderModel.ts`
+24. `frontend-modern/src/components/Workloads/useThresholdSliderState.ts`
+25. `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`
+26. `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts`
+27. `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts`
+28. `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
+29. `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts`
+30. `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts`
+31. `frontend-modern/src/components/Workloads/MetricBar.tsx`
+32. `frontend-modern/src/components/Workloads/metricBarModel.ts`
+33. `frontend-modern/src/components/Workloads/useMetricBarState.ts`
+34. `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`
+35. `frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts`
+36. `frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts`
+37. `frontend-modern/src/components/Workloads/DiskList.tsx`
+38. `frontend-modern/src/components/Workloads/diskListModel.ts`
+39. `frontend-modern/src/components/Workloads/useDiskListState.ts`
+40. `frontend-modern/src/components/Workloads/GuestRow.tsx`
+41. `frontend-modern/src/components/Workloads/GuestRowCells.tsx`
+42. `frontend-modern/src/components/Workloads/guestRowModel.tsx`
+43. `frontend-modern/src/components/Workloads/useGuestRowState.ts`
+44. `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
+45. `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`
+46. `frontend-modern/src/components/Workloads/guestDrawerModel.ts`
+47. `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`
+48. `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`
+49. `frontend-modern/src/components/Workloads/workloadSelectors.ts`
+50. `frontend-modern/src/components/Workloads/workloadTopology.ts`
+51. `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`
+52. `frontend-modern/src/components/Workloads/workloadRouteModel.ts`
+53. `frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts`
+54. `frontend-modern/src/components/Workloads/workloadRouteStateModel.ts`
+55. `frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts`
+56. `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`
+57. `frontend-modern/src/components/Workloads/__tests__/workloadSelectionModel.test.ts`
+58. `frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts`
+59. `frontend-modern/src/components/Workloads/__tests__/workloadRouteModel.test.ts`
+60. `frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts`
+61. `frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts`
+62. `frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`
 63. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
 64. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
 65. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
@@ -95,33 +95,30 @@ regression protection.
 73. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
 74. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
 75. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-76. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-77. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
-78. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
-79. `frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts`
-80. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
-81. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
-82. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
-83. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
-84. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
-85. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
-86. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
-87. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
-88. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
-89. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
-90. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-91. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-92. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-93. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
+76. `frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx`
+77. `frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx`
+78. `frontend-modern/src/components/Workloads/__tests__/useWorkloadsFilterState.test.ts`
+79. `frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts`
+80. `frontend-modern/src/components/Workloads/MetricBar.test.tsx`
+81. `frontend-modern/src/components/Workloads/__tests__/useMetricBarState.test.tsx`
+82. `frontend-modern/src/components/Workloads/__tests__/EnhancedCPUBar.test.tsx`
+83. `frontend-modern/src/components/Workloads/__tests__/useEnhancedCPUBarState.test.tsx`
+84. `frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx`
+85. `frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts`
+86. `frontend-modern/src/components/Workloads/__tests__/StackedDiskBar.test.tsx`
+87. `frontend-modern/src/components/Workloads/__tests__/useStackedDiskBarState.test.tsx`
+88. `frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx`
+89. `frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx`
+90. `frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx`
+91. `frontend-modern/src/components/Workloads/__tests__/GuestRow.test.tsx`
+92. `frontend-modern/src/components/Workloads/GuestDrawer.test.tsx`
+93. `frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts`
 94. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
-95. `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`
-96. `frontend-modern/src/components/Dashboard/__tests__/useDashboardWorkloadViewportSync.test.tsx`
+95. `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`
+96. `frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx`
 97. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
 98. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 99. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-100. `frontend-modern/src/hooks/useDashboardTrends.ts`
-101. `frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts`
-102. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
 103. `frontend-modern/src/components/Storage/StorageSummary.tsx`
 104. `frontend-modern/src/utils/storageSummaryCache.ts`
 105. `frontend-modern/src/pages/Workloads.tsx`
@@ -168,40 +165,36 @@ regression protection.
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather
    than replacing the old callback with persistence-backed router probes.
-5. Extend dashboard hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Dashboard/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
-   Dashboard landing-page estate orientation is part of that same hot-path
-   discipline. First-viewport system count, health, source coverage, and
-   freshness must be derived from app-runtime connected-infrastructure state
-   and the already-loaded compact dashboard summary fallback; it must not
-   introduce a new `useUnifiedResources()` subscription, platform-specific
-   fetch, or chart/history request just to make the dashboard feel oriented.
-   Dashboard Pulse Brief handoff belongs to that existing route state too:
-   `frontend-modern/src/pages/Dashboard.tsx` may open Assistant with the
-   already-derived compact prompt and a per-request approval-required override,
-   but it must not introduce extra dashboard polling, model/settings fetches,
-   or chart/history reads before the Assistant drawer is actually used.
-6. Normalize dashboard workload view-mode aliases through `frontend-modern/src/utils/workloads.ts` instead of keeping local URL/storage parsing in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
-7. Deduplicate dashboard workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
-8. Render dashboard row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
+5. Extend workload hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Workloads/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+   The retired dashboard overview route must not return as a hot-path
+   orientation shortcut. First-viewport system count, health, source coverage,
+   and freshness now belong to Infrastructure and Add infrastructure, derived
+   from their existing runtime/resource state rather than a dashboard-specific
+   compact summary fallback. Any future brief-style Assistant handoff needs a
+   newly governed owner and must not add route-global polling, model/settings
+   fetches, or chart/history reads to the authenticated root path.
+6. Normalize workload view-mode aliases through `frontend-modern/src/utils/workloads.ts` instead of keeping local URL/storage parsing in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+7. Deduplicate workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+8. Render workload row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 9. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-10. Extend dashboard row contract and per-row hot-path derivations through `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and `frontend-modern/src/components/Dashboard/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Dashboard/GuestRow.tsx`
-11. Extend dashboard drawer derivations and runtime wiring through `frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
-12. Extend dashboard disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Dashboard/diskListModel.ts` and `frontend-modern/src/components/Dashboard/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Dashboard/DiskList.tsx`
-13. Extend dashboard guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts` rather than rebuilding dashboard-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-14. Extend dashboard deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Dashboard/dashboardSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`; canonical typed workload IDs such as `app-container:<host>:<provider-id>` must remain exact route/selection keys and must not be reinterpreted into synthetic node scopes
-15. Extend dashboard workload route ownership, route-driven option catalogs, and toolbar filter config through `frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts`, `frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts`, `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts`, `frontend-modern/src/components/Dashboard/dashboardWorkloadFilterConfigModel.ts`, and `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteStateModel.ts`, and extend query-param synchronization plus managed workload URL semantics through `frontend-modern/src/components/Dashboard/useDashboardWorkloadUrlSync.ts` and `frontend-modern/src/components/Dashboard/dashboardWorkloadUrlSyncModel.ts`, rather than rebuilding route sync, alias parsing, option derivation, toolbar callback/config wiring, reset policy, node-selection compatibility rules, param precedence, or managed workload URLs inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-    Workloads route host scopes must resolve through `frontend-modern/src/components/Dashboard/workloadTopology.ts`: app-container scopes use the canonical Docker/runtime host id before host labels or node fallbacks, while VM and system-container scopes keep the instance-node key. Route `agent` filters and option catalogs must consume that shared scope so Infrastructure related-workload links cannot drift from Workloads filtering.
-16. Extend grouped dashboard workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`, extend viewport-driven grouped table synchronization through `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`, and extend node parent mapping through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, scroll listeners, or topology lookups inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-17. Extend dashboard control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Dashboard/useDashboardControlsState.ts` and `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-18. Extend dashboard filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`
-19. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts` and `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
-20. Extend stacked disk-bar capacity math, segment/tooltip derivation, and resize-observer runtime through `frontend-modern/src/components/Dashboard/stackedDiskBarModel.ts` and `frontend-modern/src/components/Dashboard/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx`
-21. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`
-22. Extend metric-bar width, label-fit logic, and resize-observer runtime through `frontend-modern/src/components/Dashboard/metricBarModel.ts` and `frontend-modern/src/components/Dashboard/useMetricBarState.ts` rather than rebuilding metric-local state and threshold mapping inside `frontend-modern/src/components/Dashboard/MetricBar.tsx`
-23. Extend enhanced CPU bar usage/anomaly presentation and tooltip runtime through `frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts` and `frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts` rather than rebuilding tooltip-local state and CPU-threshold formatting inside `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`
-23. Extend grouped dashboard row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`, and extend viewport event wiring through `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts` rather than rebuilding scroll handlers, mounted-row budgets, viewport listeners, or group-slice math inside `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`
-24. Extend dashboard shell rendering through `frontend-modern/src/components/Dashboard/DashboardStateCards.tsx`, `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`, and `frontend-modern/src/components/Dashboard/DashboardStatsStrip.tsx` rather than accreting loading cards, workload table markup, or stats-strip presentation back into `frontend-modern/src/components/Dashboard/Dashboard.tsx`
-25. Extend dashboard workload table shell ownership through `frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Dashboard/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`
+10. Extend workload row contract and per-row hot-path derivations through `frontend-modern/src/components/Workloads/guestRowModel.tsx` and `frontend-modern/src/components/Workloads/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Workloads/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Workloads/GuestRow.tsx`
+11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
+12. Extend workload disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Workloads/diskListModel.ts` and `frontend-modern/src/components/Workloads/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Workloads/DiskList.tsx`
+13. Extend workload guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts` rather than rebuilding workload-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+14. Extend workload deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`; canonical typed workload IDs such as `app-container:<host>:<provider-id>` must remain exact route/selection keys and must not be reinterpreted into synthetic node scopes
+15. Extend workload route ownership, route-driven option catalogs, and toolbar filter config through `frontend-modern/src/components/Workloads/useWorkloadRouteState.ts`, `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`, `frontend-modern/src/components/Workloads/workloadRouteModel.ts`, `frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts`, and `frontend-modern/src/components/Workloads/workloadRouteStateModel.ts`, and extend query-param synchronization plus managed workload URL semantics through `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts` and `frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts`, rather than rebuilding route sync, alias parsing, option derivation, toolbar callback/config wiring, reset policy, node-selection compatibility rules, param precedence, or managed workload URLs inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+    Workloads route host scopes must resolve through `frontend-modern/src/components/Workloads/workloadTopology.ts`: app-container scopes use the canonical Docker/runtime host id before host labels or node fallbacks, while VM and system-container scopes keep the instance-node key. Route `agent` filters and option catalogs must consume that shared scope so Infrastructure related-workload links cannot drift from Workloads filtering.
+16. Extend grouped workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`, extend viewport-driven grouped table synchronization through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`, and extend node parent mapping through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, scroll listeners, or topology lookups inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+17. Extend workload control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts` and `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` and `frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`
+19. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Workloads/thresholdSliderModel.ts` and `frontend-modern/src/components/Workloads/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
+20. Extend stacked disk-bar capacity math, segment/tooltip derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`
+21. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
+22. Extend metric-bar width, label-fit logic, and resize-observer runtime through `frontend-modern/src/components/Workloads/metricBarModel.ts` and `frontend-modern/src/components/Workloads/useMetricBarState.ts` rather than rebuilding metric-local state and threshold mapping inside `frontend-modern/src/components/Workloads/MetricBar.tsx`
+23. Extend enhanced CPU bar usage/anomaly presentation and tooltip runtime through `frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts` and `frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts` rather than rebuilding tooltip-local state and CPU-threshold formatting inside `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`
+23. Extend grouped workload row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, and extend viewport event wiring through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts` rather than rebuilding scroll handlers, mounted-row budgets, viewport listeners, or group-slice math inside `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
+24. Extend Workloads shell rendering through `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`, `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`, and `frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx` rather than accreting loading cards, workload table markup, or stats-strip presentation back into `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+25. Extend workload table shell ownership through `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Workloads/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
     Compact icon headers inside `WorkloadTableHeader.tsx` may stay visually
     dense for responsive workload tables, but the icon must be decorative and
     the column label must remain present through an `sr-only` label so the
@@ -253,14 +246,14 @@ regression protection.
     show the host and service tables dropping lower-priority columns without
     introducing horizontal overflow.
     Dashboard workload table responsive behavior belongs to the same hot-path
-    owner. `frontend-modern/src/components/Dashboard/useDashboardControlsState.ts`
+    owner. `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts`
     must derive workload table layout stages from live viewport width, and
-    `frontend-modern/src/components/Dashboard/guestRowModel.tsx` must own the
-    responsive workload column priority and width model. `DashboardWorkloadTable`,
+    `frontend-modern/src/components/Workloads/guestRowModel.tsx` must own the
+    responsive workload column priority and width model. `WorkloadsTable`,
     `WorkloadTableHeader`, and `WorkloadPanel` must consume one shared
     layout-visible column set so headers, colgroups, and rows stay aligned during
     live resize. View-mode-specific column sets in
-    `frontend-modern/src/components/Dashboard/guestRowModel.tsx` must retain
+    `frontend-modern/src/components/Workloads/guestRowModel.tsx` must retain
     core monitoring metrics when narrowing scope: app-container mode keeps CPU,
     memory, disk, and the responsive Net I/O and Disk I/O columns available,
     while the layout priority model decides when detail-heavy I/O columns are
@@ -287,7 +280,14 @@ regression protection.
     performance work must not add filesystem reads, GitHub release lookups, or
     other per-request version discovery on activation, legacy exchange, or
     grant-refresh traffic just to stamp authenticated install metadata.
-30. Keep dashboard summary-chart fetches scope-owned rather than page-churn-owned: `frontend-modern/src/hooks/useDashboardTrends.ts` must hydrate infrastructure and storage summaries once per org/range scope from the canonical summary caches and recompute card presentation locally as the compact dashboard overview changes, rather than refetching the infrastructure-summary transport in `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, the dashboard storage-summary trend transport in `frontend-modern/src/utils/storageSummaryTrendCache.ts`, or the storage-page summary transport in `frontend-modern/src/utils/storageSummaryCache.ts` for every top-resource or card reshuffle on the same dashboard load. That dashboard infrastructure path must also request only the metrics it renders through the canonical infrastructure-summary route owned by `internal/api/router_routes_monitoring.go` and `internal/api/router.go`; the dashboard may not pay for disk or network summary series when it only renders CPU and memory. App-shell prewarm in `frontend-modern/src/useAppRuntimeState.ts` must not front-run that dashboard-specific route while the operator is already on the root dashboard route owned by `frontend-modern/src/App.tsx`.
+30. Keep retired dashboard summary-chart paths absent rather than replacing
+them with new hot-path fetches. Infrastructure summary cards must continue to
+hydrate through `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+and the canonical infrastructure-summary route owned by
+`internal/api/router_routes_monitoring.go` and `internal/api/router.go`; storage
+summary cards must use the storage summary cache owners. The authenticated
+root path in `frontend-modern/src/App.tsx` must not prewarm a deleted
+dashboard-specific overview, trend, or summary transport.
     The same hot path must keep mock/demo chart identity on the canonical
     unified snapshot too: when mock mode is enabled, `internal/api/router.go`
     may not read `/api/charts`, `/api/charts/infrastructure`, or
@@ -320,7 +320,7 @@ regression protection.
     hot-path contract: `frontend-modern/src/useAppRuntimeState.ts` may reload
     the org list from the shared `organizations_changed` event, but that refresh
     must stay event-driven and route-safe rather than expanding into a second
-    full app bootstrap, a pre-auth org probe, or a dashboard-route prewarm
+    full app bootstrap, a pre-auth org probe, or a deleted dashboard-route prewarm
     that duplicates the canonical summary fetch path.
     into another summary-fetch or org-bootstrap hot path.
     The same protected hot path also owns Patrol route compatibility: if
@@ -334,7 +334,7 @@ regression protection.
     work before the canonical Settings URL takes over.
     Authenticated `/login` recovery belongs to that same app-shell boundary:
     `frontend-modern/src/App.tsx` must redirect that route back to the
-    canonical dashboard landing path instead of leaving the freshly
+    canonical Infrastructure landing path instead of leaving the freshly
     authenticated shell on a not-found page that immediately pays another cold
     bootstrap.
     The same protected hot path now also owns proof harness steadiness.
@@ -343,27 +343,25 @@ regression protection.
     must wait for deferred metrics-store startup maintenance to quiesce before
     timing steady-state reads, so one-time retention or auto-vacuum cleanup does
     not masquerade as summary-route or chart-batch regression latency.
-31. Keep the dashboard overview hot path compact and route-owned. `frontend-modern/src/pages/Dashboard.tsx`, `frontend-modern/src/api/resources.ts`, and `frontend-modern/src/hooks/useDashboardOverview.ts` must hydrate KPI cards, problem-resource rows, and top-infrastructure identities through the compact dashboard-summary API contract owned by the adjacent `api-contracts` and `unified-resources` surfaces, rather than booting the full unfiltered paginated unified-resource list just to derive summary cards.
-    Any commercial or relay-owned dashboard affordances composed into that
-    route must remain additive shells on top of the same compact summary
-    payload instead of reintroducing route-local `all-resources` fetches,
-    summary recomputation, or page-level layout churn that displaces the
-    protected overview widgets.
-    Estate-summary issue copy on that route must use the already-hydrated
-    compact overview problem-resource and alert counts; it must not introduce a
-    second resource scan, alert fetch, storage read, or recovery read just to
-    clarify first-viewport copy. In-page issue anchors must therefore remain
-    pure section focus links against already-rendered dashboard sections rather
-    than triggering new data hydration.
-    Dashboard Pulse Brief composition belongs to that same hot-path rule: the
-    first render may issue the existing non-blocking AI runtime settings
-    readiness read and consume existing action-state signals, but it must not
-    issue an LLM request, mount a second resource scan, or block estate/KPI
-    rendering just to produce prose. Its Assistant handoff may add a scoped
-    `autonomous_mode:false` flag only when the operator submits the prefilled
-    prompt; that request-level safety override must not become a dashboard
-    render dependency or a persistent settings write on the hot path.
-32. Keep infrastructure summary consumers on the compact dashboard overview rather than reopening the all-resources hook. `frontend-modern/src/hooks/useDashboardTrends.ts`, `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, and adjacent dashboard summary consumers may derive chart identity and storage presence from the overview payload they were already given, but they must not call `useResources()` or mount a second unfiltered unified-resource fetch path inside the dashboard hot path. That rule also applies to globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`: closed assistant surfaces must read the live websocket snapshot or existing unified-resource cache rather than forcing the dashboard to pay for `all-resources` just because the shell component is mounted. When that assistant shell changes presentation, `frontend-modern/src/utils/aiChatPresentation.ts` must remain the canonical owner for launcher, drawer, session-menu, and empty-state copy so hot-path consumers do not grow one-off inline strings or extra state branches alongside the mounted shell. Blocking shared dialogs must also suppress closed assistant affordances through the shared dialog runtime instead of leaving the mounted shell clickable behind another overlay.
+31. Keep the retired dashboard overview route absent from the protected hot
+path. `frontend-modern/src/pages/Dashboard.tsx`,
+`frontend-modern/src/hooks/useDashboardOverview.ts`, and
+`/api/resources/dashboard-summary` must not be restored as compatibility
+surfaces for KPI cards, problem-resource rows, or top-infrastructure
+identities. New summary cards must live on their owning product route and
+prove their data path there.
+32. Keep infrastructure and assistant consumers off deleted dashboard summary
+state. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+and globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`
+must read the live websocket snapshot or existing unified-resource cache
+rather than forcing root navigation to pay for a replacement dashboard
+overview transport. When the assistant shell changes presentation,
+`frontend-modern/src/utils/aiChatPresentation.ts` must remain the canonical
+owner for launcher, drawer, session-menu, and empty-state copy so hot-path
+consumers do not grow one-off inline strings or extra state branches alongside
+the mounted shell. Blocking shared dialogs must also suppress closed assistant
+affordances through the shared dialog runtime instead of leaving the mounted
+shell clickable behind another overlay.
     Approval presentation inside that mounted assistant shell must stay
     state-local to the existing drawer/session state and backend approval
     endpoints. Deny/skip failure handling may preserve the pending approval
@@ -383,21 +381,19 @@ regression protection.
     must not hydrate `all-resources` or recovery rollups behind a hidden node
     summary; selector-owned data hooks must be explicitly visibility-gated so
     `/workloads` only pays for workload-owned transports.
-34. Keep dashboard page-header framing additive on the compact hot path.
-    `frontend-modern/src/pages/Dashboard.tsx` may render the shared
-    `PageHeader` for route-level shell consistency, but that header must stay
-    pure presentation on top of the existing compact overview, trends,
-    actions, and recovery/storage widget hydration. It must not introduce a
-    second dashboard data load, widen suspense ownership, or force dashboard
-    summaries back through full-resource fetch paths just to satisfy page
+34. Keep the retired dashboard page-header path absent from the compact hot
+    path. New page headers must stay pure presentation on their owning route
+    and must not introduce a second data load, widen suspense ownership, or
+    force deleted dashboard summaries back through full-resource fetch paths
+    just to satisfy page
     chrome.
-35. Keep the dashboard workloads table CSP-safe on the hot path. The renderers
-    in `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`,
-    `frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx`,
-    `frontend-modern/src/components/Dashboard/GuestRow.tsx`,
-    `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`,
-    `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`, and
-    `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx` may still
+35. Keep the Workloads table CSP-safe on the hot path. The renderers
+    in `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`,
+    `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx`,
+    `frontend-modern/src/components/Workloads/GuestRow.tsx`,
+    `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`,
+    `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`, and
+    `frontend-modern/src/components/Workloads/StackedDiskBar.tsx` may still
     use shared models plus SVG or HTML attributes for widths, offsets, and
     colors, but they must not fall back to inline `style=` attributes on the
     public shell just to express virtualization spacers, alert accents, or
@@ -444,7 +440,7 @@ health-state counts (offline, degraded, alerting) instead of raw online/offline
 splits. `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` add
 `degraded` and `alerting` resource counts; `StorageSummary.tsx` and
 `useStoragePageSummary.ts` add `poolsDegraded` and `disksFailing` indicators;
-`WorkloadsSummary.tsx` and `useDashboardWorkloadDerivedState.ts` add an
+`WorkloadsSummary.tsx` and `useWorkloadsDerivedState.ts` add an
 alerting count derived from `activeAlerts`. These additions must remain
 read-only projections from existing websocket state — they must not introduce
 new polling loops or widen fetch scope on the hot-path boundary.
@@ -474,10 +470,10 @@ snapshot-owned sources; the hot path must fail closed until the monitor has
 both observed an initial baseline for every active connection and rebuilt the
 canonical store at or after the latest provider watermark.
 
-The dashboard workload selector path and the dashboard runtime that consumes it
+The Workloads selector path and the Workloads runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
-the explicit dashboard performance proof policy in the subsystem registry.
+the explicit Workloads performance proof policy in the subsystem registry.
 Route-backed workload `resource` focus on that hot path is contextual state
 only, not inferred filter state: opening or closing an inline drawer must not
 invent, retain, or clear `agent` or node-scope filters unless those filters
@@ -502,15 +498,15 @@ That same hot path now also owns dashboard freshness discipline. Supported
 unified-resource dashboard reads may hydrate from REST for first paint, but
 once websocket `state.resources` is available they must consume that canonical
 live snapshot directly instead of turning each websocket update into a second
-REST fetch. Dashboard trend loading must also key off stable target identity
+REST fetch. Route-owned trend loading must also key off stable target identity
 and selected range only; reconciled resource snapshots that do not change the
-effective target set must not trigger duplicate infrastructure or storage
-chart requests.
+effective target set must not trigger duplicate infrastructure or storage chart
+requests.
 That same protected metrics-store boundary now also owns selected-series batch
-queries. Compact dashboard routes that request only CPU/memory or only
-storage `used`/`avail` capacity must keep that metric-type filter all the way
-through `pkg/metrics/store.go` instead of fetching every series for every
-resource and discarding the extra payload in higher layers.
+queries. Compact route consumers that request only CPU/memory or only storage
+`used`/`avail` capacity must keep that metric-type filter all the way through
+`pkg/metrics/store.go` instead of fetching every series for every resource and
+discarding the extra payload in higher layers.
 That same protected workload-chart hot path now also owns rendered-metric
 budgeting. `internal/api/router.go` may parallelize VM, container, pod, and
 docker-container workload batch reads, but `/api/charts/workloads` and
@@ -566,7 +562,7 @@ rows and infrastructure resource rows must expose summary-linked activity
 through the shared `data-summary-row-active` marker and let the shared frontend
 primitive render the emphasis, instead of layering lane-local row-fill classes
 that diverge across pages or wash out inline metric bars.
-`frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts` must
+`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts` must
 write workload selection back into the workloads route through the shared
 same-path route-state scheduler, but the actual shell-position handoff for
 query-only row focus must go through `frontend-modern/src/utils/appShellScrollRestoration.ts`
@@ -619,23 +615,22 @@ must include API-backed systems such as top-level TrueNAS appliances through
 the shared `isAgentFacetInfrastructureResource(...)` helper instead of a local
 `resource.type` branch, so the summary poll/cache path stays on one canonical
 infrastructure selector contract.
-That same protected dashboard hot path now includes storage trend loading too.
-`frontend-modern/src/hooks/useDashboardTrends.ts` and
-`internal/api/router.go` must keep dashboard storage trends on one compact
-`/api/charts/storage-summary` request backed by
-`GetStorageMetricsForChartBatch(...)`, so the dashboard does not pull the full
-storage-page `/api/storage-charts` payload or reopen an N+1 per-pool
-`/api/metrics-store/history` fan-out just to compute the shared 24-hour
-storage capacity delta.
-That same dashboard shell boundary also owns empty-state action routing in
-`frontend-modern/src/components/Dashboard/DashboardStateCards.tsx`. When the
-dashboard has no connected infrastructure, the CTA must hand operators
+That same protected hot path keeps storage trend loading route-owned after the
+dashboard overview retirement. `internal/api/router.go` must continue serving
+the compact `/api/charts/storage-summary` request backed by
+`GetStorageMetricsForChartBatch(...)` for the surfaces that still own storage
+summary presentation, but no deleted dashboard trend hook may reopen the full
+storage-page `/api/storage-charts` payload or an N+1 per-pool
+`/api/metrics-store/history` fan-out.
+That same Workloads shell boundary also owns empty-state action routing in
+`frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`. When the
+Workloads route has no connected infrastructure, the CTA must hand operators
 directly to the canonical infrastructure install route via
 `buildInfrastructureWorkspacePath('install')` instead of bouncing through a
 generic settings landing page.
 That workload route now also treats readiness as a route-owned contract instead
-of a raw websocket proxy signal: `frontend-modern/src/components/Dashboard/Dashboard.tsx`
-and `frontend-modern/src/components/Dashboard/useDashboardState.ts` must keep
+of a raw websocket proxy signal: `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+and `frontend-modern/src/components/Workloads/useWorkloadsState.ts` must keep
 filters, stats, and table visibility driven by the workload route's own
 REST-backed health so websocket churn does not hide already-fetched workloads
 or swap the protected hot path into a false disconnected shell. The first
@@ -657,47 +652,48 @@ served stale mixed-cadence chart shapes after the backend timeline model has
 already been corrected.
 stay on one ordered index scan plus Go-side bucket aggregation rather than
 forcing SQLite to `GROUP BY` computed buckets through a temp B-tree on the
-fleet-scale dashboard path.
+fleet-scale workload path.
 That runtime is now intentionally split by concern:
-`frontend-modern/src/components/Dashboard/useDashboardState.ts` owns
-top-level dashboard orchestration, workload loading, and composition across
-the canonical dashboard owners, while
-`frontend-modern/src/components/Dashboard/useDashboardControlsState.ts`
+`frontend-modern/src/components/Workloads/useWorkloadsState.ts` owns
+top-level Workloads orchestration, workload loading, and composition across
+the canonical Workloads owners, while
+`frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts`
 owns persistent control defaults, keyboard-reset semantics, sort/search/tag
 behavior, column visibility, and summary display preferences, while
-`frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`
+`frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
 owns grouped workload derivation, summary fallbacks, parent-node mapping,
 and grouped/windowed table math, while
-`frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`
+`frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`
 owns grouped workload viewport synchronization and the scroll/resize listener
 lifecycle, while
-`frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts`
+`frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts`
 owns guest metadata cache persistence, optimistic custom-URL updates,
 org-scope switching, and metadata refresh, and
-`frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts`
+`frontend-modern/src/components/Workloads/useWorkloadRouteState.ts`
 owns workload-route synchronization, deep-link normalization, and route-scoped
-filter contracts. Future dashboard hot-path changes must extend through those
-owners instead of accreting back into `frontend-modern/src/components/Dashboard/Dashboard.tsx`.
+filter contracts. Future workload hot-path changes must extend through those
+owners within the Workloads surface, and new overview-route work must not
+accrete back into `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`.
 That same route-owned filter contract now also includes canonical workload
-`platform` scoping for API-backed runtimes. Dashboard URL-sync, filter-option
+`platform` scoping for API-backed runtimes. Workloads URL-sync, filter-option
 assembly, and workload drill-down routes must preserve
 `platform=<owned-source-key>` for surfaces such as TrueNAS app-containers,
 while treating host or cluster identity as secondary scope instead of
 collapsing those routes back to generic agent-only semantics. The derived
 workload hot path must also tolerate transient async route/data gaps by
 treating missing filtered-workload collections as empty until the route and
-resource snapshots converge, rather than crashing the dashboard between sync
+resource snapshots converge, rather than crashing Workloads between sync
 phases.
 That same workload hot path also owns the split between canonical
 app-container routing and Docker-only actions. `frontend-modern/src/hooks/useWorkloads.ts`,
-`frontend-modern/src/components/Dashboard/workloadTopology.ts`, and
-`frontend-modern/src/components/Dashboard/useGuestRowState.ts` must preserve a
+`frontend-modern/src/components/Workloads/workloadTopology.ts`, and
+`frontend-modern/src/components/Workloads/useGuestRowState.ts` must preserve a
 canonical app-container navigation path while keeping Docker runtime action
-identifiers explicit. Discovery affordances on the dashboard drawer must follow
+identifiers explicit. Discovery affordances on the Workloads drawer must follow
 the canonical `discoveryTarget` contract, not generic app-container host
 fallbacks. TrueNAS app-containers may reuse runtime metadata such as image and
 runtime strings, but they must not inherit Docker-only update affordances or
-agent-only Discovery tabs on the dashboard row path unless the unified
+agent-only Discovery tabs on the Workloads row path unless the unified
 resource contract explicitly supplies discovery ownership.
 That same row-and-selection boundary also requires canonical app-container
 identity to stay intact on the workload surface. `/workloads` rows, deep links,
@@ -729,50 +725,50 @@ When a row is only known through an agent or container runtime, the table must
 prefer reported OS/appliance identity before falling back to Docker/runtime
 capability labels.
 That derived workload owner now also routes grouped row windowing through
-`frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`, which
+`frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, which
 owns row-window thresholds, overscan behavior, reveal-index clamping, and
-per-group visible-slice derivation. Future dashboard table windowing changes
+per-group visible-slice derivation. Future Workloads table windowing changes
 must extend through that hook instead of rebuilding scroll math or mounted-row
-budgets inline inside `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`.
+budgets inline inside `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`.
 Viewport-driven grouped table synchronization now also routes through
-`frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`,
-which owns the dashboard table body measurement and the scroll/resize listener
+`frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`,
+which owns the Workloads table body measurement and the scroll/resize listener
 lifecycle. Future viewport sync changes must extend through that hook rather
 than rebuilding browser-event wiring or table-body geometry reads inside
-`frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`.
-The dashboard guest-row path now follows the same pattern: the render shell
-stays in `frontend-modern/src/components/Dashboard/GuestRow.tsx`, tooltip-backed
-cell presentation lives in `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`,
+`frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`.
+The workload guest-row path now follows the same pattern: the render shell
+stays in `frontend-modern/src/components/Workloads/GuestRow.tsx`, tooltip-backed
+cell presentation lives in `frontend-modern/src/components/Workloads/GuestRowCells.tsx`,
 and the canonical row contract and per-row hot-path derivations live in
-`frontend-modern/src/components/Dashboard/guestRowModel.tsx` and
-`frontend-modern/src/components/Dashboard/useGuestRowState.ts`. Future row
+`frontend-modern/src/components/Workloads/guestRowModel.tsx` and
+`frontend-modern/src/components/Workloads/useGuestRowState.ts`. Future row
 identity, column, cell-tooltip, anomaly-correlation, and link-state changes
 must extend through those owners instead of rebuilding row-local state inside
 the shell.
 That per-row link state now also consumes the shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
-helper instead of a dashboard-local routing shim. Future infrastructure-link
-changes for dashboard rows must extend through the shared routing owner rather
+helper instead of a workload-local routing shim. Future infrastructure-link
+changes for workload rows must extend through the shared routing owner rather
 than recreating feature-local path builders.
 That shell now also routes tag-dot rendering through the shared
 `frontend-modern/src/components/shared/TagBadges.tsx` primitive instead of
-keeping a dashboard-local badge helper. Future guest-row tag presentation
+keeping a workload-local badge helper. Future guest-row tag presentation
 changes must extend through that shared owner rather than reintroducing a
-dashboard-only tag-badge variant.
-The dashboard guest drawer now follows that same ownership rule: the shell
-stays in `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`, the
+workload-only tag-badge variant.
+The Workloads guest drawer now follows that same ownership rule: the shell
+stays in `frontend-modern/src/components/Workloads/GuestDrawer.tsx`, the
 overview card surface lives in
-`frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx`, and
+`frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, and
 drawer-local normalization, backup/tag formatting, discovery identity wiring,
 and workload-derived navigation state live in
-`frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and
-`frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`. Future
+`frontend-modern/src/components/Workloads/guestDrawerModel.ts` and
+`frontend-modern/src/components/Workloads/useGuestDrawerState.ts`. Future
 drawer runtime and overview-surface changes must extend through those owners
 instead of adding more mixed state and helper drift back into the shell.
 That drawer state now also consumes the same shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper, so row and drawer navigation stay aligned without a second
-dashboard-local link-mapping file.
+workload-local link-mapping file.
 The shared infrastructure mapper hot path now stays intentionally narrow:
 `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 continues to own sensor-label presentation and hot-path host/agent projection,
@@ -790,86 +786,86 @@ service-model helpers, while
 stays a thin render shell. Future running-task visibility changes must extend
 through the shared model and accepted performance proof file instead of adding
 per-row PBS status parsing or inline job scans in the table render path.
-The dashboard disk list now follows the same pattern: the shell stays in
-`frontend-modern/src/components/Dashboard/DiskList.tsx`, while disk-row
+The Workloads disk list now follows the same pattern: the shell stays in
+`frontend-modern/src/components/Workloads/DiskList.tsx`, while disk-row
 presentation derivations and fallback tooltip/runtime wiring live in
-`frontend-modern/src/components/Dashboard/diskListModel.ts` and
-`frontend-modern/src/components/Dashboard/useDiskListState.ts`. Future disk
+`frontend-modern/src/components/Workloads/diskListModel.ts` and
+`frontend-modern/src/components/Workloads/useDiskListState.ts`. Future disk
 usage math, threshold-color routing, and fallback handling must extend
 through those owners instead of accreting back into the shell.
-The dashboard filter now follows that same ownership rule: the shell
-stays in `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`, while
+The Workloads filter now follows that same ownership rule: the shell
+stays in `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`, while
 toolbar defaults, active-filter counting, and reset semantics live in
-`frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and
-`frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`.
-Dashboard table-mode controls must also keep their accessible group name aligned
+`frontend-modern/src/components/Workloads/workloadsFilterModel.ts` and
+`frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts`.
+Workloads table-mode controls must also keep their accessible group name aligned
 with the shared table presentation contract by using `Group by` for the
 grouped/list selector instead of reintroducing local `Group By` casing or
 platform-specific cluster wording. Dense workload toolbar variants must keep
 that same row wrap-capable so optional runtime, chart, column, and reset
 controls remain reachable on desktop instead of forcing a single no-wrap row
 that clips trailing actions.
-The dashboard-owned filter-config assembly now lives in
-`frontend-modern/src/components/Dashboard/useDashboardState.ts`, so future
+The Workloads-owned filter-config assembly now lives in
+`frontend-modern/src/components/Workloads/useWorkloadsState.ts`, so future
 filter runtime changes must extend through those owners instead of
-reintroducing dashboard-local state, reset drift, or inline config assembly
+reintroducing workload-local state, reset drift, or inline config assembly
 into the shell.
 Workload type option labels are part of that filter-config model ownership:
-`DashboardFilter.tsx` must render the exported workload type option catalog
+`WorkloadsFilter.tsx` must render the exported workload type option catalog
 instead of embedding its own `System containers` / `App containers` wording in
 the shell.
 The dashboard threshold slider now follows that same pattern: the shell stays
-in `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`, while
+in `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`, while
 metric-type text and fill presentation live in
 `frontend-modern/src/utils/thresholdSliderPresentation.ts`, while
 slider bounds math, thumb-position transforms, and title/label derivations
-live in `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts`
+live in `frontend-modern/src/components/Workloads/thresholdSliderModel.ts`
 and drag scroll-lock lifecycle lives in
-`frontend-modern/src/components/Dashboard/useThresholdSliderState.ts`.
+`frontend-modern/src/components/Workloads/useThresholdSliderState.ts`.
 Future slider runtime changes must extend through those owners instead of
 reintroducing mixed drag state, type-color formatting, and presentation logic
 into the shell.
 The dashboard stacked disk bar now follows that same pattern: the shell stays
-in `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx`, while
+in `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`, while
 disk-capacity math, segment and tooltip derivation, max-disk labeling, and
 mode-specific presentation live in
-`frontend-modern/src/components/Dashboard/stackedDiskBarModel.ts` and
+`frontend-modern/src/components/Workloads/stackedDiskBarModel.ts` and
 resize-observer plus tooltip lifecycle live in
-`frontend-modern/src/components/Dashboard/useStackedDiskBarState.ts`.
+`frontend-modern/src/components/Workloads/useStackedDiskBarState.ts`.
 Future disk-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and presentation branching into the shell.
 The dashboard stacked memory bar now follows that same pattern: the shell
-stays in `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`,
+stays in `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`,
 while memory-capacity math, balloon/swap tooltip derivation, anomaly label
 presentation, and sublabel-fit logic live in
-`frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts` and
+`frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts` and
 resize-observer plus tooltip lifecycle live in
-`frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts`.
+`frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts`.
 Future memory-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state, balloon branching, and tooltip shaping into
 the shell.
 The dashboard metric bar now follows that same pattern: the shell stays in
-`frontend-modern/src/components/Dashboard/MetricBar.tsx`, while width,
+`frontend-modern/src/components/Workloads/MetricBar.tsx`, while width,
 show-label, sublabel-fit, and threshold-color derivation live in
-`frontend-modern/src/components/Dashboard/metricBarModel.ts` and
+`frontend-modern/src/components/Workloads/metricBarModel.ts` and
 resize-observer lifecycle lives in
-`frontend-modern/src/components/Dashboard/useMetricBarState.ts`. Future
+`frontend-modern/src/components/Workloads/useMetricBarState.ts`. Future
 metric-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and label-fit logic into the shell.
 The dashboard enhanced CPU bar now follows that same pattern: the shell stays
-in `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`, while usage
+in `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`, while usage
 formatting, anomaly presentation, tooltip load-average formatting, and
 threshold-driven label state live in
-`frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts` and
+`frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts` and
 tooltip lifecycle lives in
-`frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts`. Future
+`frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts`. Future
 CPU-bar runtime changes must extend through those owners instead of
 reintroducing mixed tooltip state and formatting logic into the shell.
 
 The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource
 consumer boundary. The remaining performance work is no longer top-level
-ownership ambiguity on the main dashboard or infrastructure tables.
+ownership ambiguity on the main Infrastructure or Workloads tables.
 The table's reactive runtime, grouping, and row-windowing owner now lives in
 `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
 while pure table-state derivation, service sorting, sort-cycle policy, and
@@ -975,7 +971,7 @@ The shared workloads-link helper used by the resource drawer and table now
 also routes its Kubernetes-cluster fallback through the same preferred
 resource display contract, so navigation context does not leak raw
 `displayName` values for governed clusters.
-That same workloads-link path and the dashboard workload projection now also
+That same workloads-link path and the workload projection now also
 share the canonical cluster-name helpers in the shared agent-resource layer,
 so route labels, pod grouping, and cluster-name fetch keys keep using the
 same source of truth instead of rebuilding the `clusterName`/`context`/
@@ -1084,7 +1080,7 @@ doing range selection and fallback. Feature-local polling loops or browser-side
 disk ring buffers are forbidden because they duplicate live sampling work and
 drift out of sync with the governed history timeline.
 That same hot-path ownership now also requires lazy-load-safe websocket
-consumption. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
+consumption. `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 may read connection and alert state only through
 `frontend-modern/src/contexts/appRuntime.ts`; it must not import `@/App` or
 create a reverse dependency into the root shell just to read websocket state.
@@ -1093,15 +1089,15 @@ Shared shells may consume the small `/api/license/runtime-capabilities`
 contract for feature truth, but commercial demo routes stay hidden and the
 browser must not keep retrying `/api/license/commercial-posture`,
 `/api/license/entitlements`, `/auth/license-purchase-start`, or other hidden
-commercial endpoints from performance-sensitive settings or dashboard shells.
-Dashboard and infrastructure summary consumers now also keep null-tolerant read
+commercial endpoints from performance-sensitive settings or route shells.
+Workloads and infrastructure summary consumers now also keep null-tolerant read
 models on the shared hot path. Guest rows, stacked bars, anomaly summaries, and
 resource detail mappers may accept partial platform metadata or undefined
 ratios, but they must normalize those values once in the shared model layer
 instead of scattering non-null assertions or per-component count coercion
-through the dashboard runtime.
+through the Workloads runtime.
 That same workload-table hot path now also owns a single width contract.
-`frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`,
+`frontend-modern/src/components/Workloads/WorkloadsTable.tsx`,
 `WorkloadTableHeader.tsx`, `GuestRow.tsx`, and `guestRowModel.tsx` must remain
 the canonical owners for desktop and mobile workload column sizing. Global CSS
 must not reintroduce competing `.workload-table [data-workload-col=…]` width

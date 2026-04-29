@@ -16,11 +16,11 @@
 
 ## 🚀 Overview
 
-Pulse is a modern, unified dashboard for monitoring your **infrastructure** across Proxmox, Docker, Kubernetes, and TrueNAS. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
+Pulse is a modern, unified monitoring workspace for your **infrastructure** across Proxmox, Docker, Kubernetes, and TrueNAS. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
 
 Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" without the complexity of enterprise monitoring stacks.
 
-![Pulse Dashboard](docs/images/01-dashboard.jpg)
+![Pulse Infrastructure](docs/images/01-dashboard.jpg)
 
 ## 🧭 Unified Navigation
 
@@ -94,7 +94,7 @@ docker run -d \
   rcourtman/pulse:vX.Y.Z
 ```
 
-Access the dashboard at `http://<your-ip>:7655`.
+Open Pulse at `http://<your-ip>:7655`.
 
 ## Local Development
 

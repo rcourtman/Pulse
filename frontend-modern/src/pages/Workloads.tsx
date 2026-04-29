@@ -1,4 +1,4 @@
-import { Dashboard as WorkloadsSurface } from '@/components/Dashboard/Dashboard';
+import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 
 export function Workloads() {
   return <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />;

@@ -126,7 +126,7 @@ test.describe('Local docs links', () => {
       });
     });
 
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await page.goto('/infrastructure', { waitUntil: 'domcontentloaded' });
 
     const securityGuideLink = page.getByRole('link', { name: 'Learn More' }).first();
     await expect(securityGuideLink).toHaveAttribute('href', '/docs/SECURITY.md');

@@ -150,7 +150,6 @@ RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
     "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
     "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
     "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "tests/integration/tests/17-recovery-layout.spec.ts",
 ]
@@ -769,7 +768,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
-                        "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
                         "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
                         "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
                         "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
@@ -1149,65 +1147,13 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
 
     def test_dashboard_page_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(["frontend-modern/src/pages/Dashboard.tsx"])
-        self.assertEqual(set(required), {"storage-recovery"})
-
-        recovery = required["storage-recovery"]
-        self.assertEqual(
-            recovery["contract"],
-            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
-        )
-        self.assertEqual(
-            recovery["touched_runtime_files"],
-            ["frontend-modern/src/pages/Dashboard.tsx"],
-        )
-        self.assertEqual(
-            recovery["verification_requirements"],
-            [
-                {
-                    "id": "dashboard-storage-recovery-surface",
-                    "label": "dashboard storage and recovery surface proof",
-                    "touched_runtime_files": ["frontend-modern/src/pages/Dashboard.tsx"],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/pages/__tests__/DashboardPage.test.tsx",
-                    ],
-                }
-            ],
-        )
+        self.assertEqual(required, {})
 
     def test_dashboard_widgets_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(
             ["frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"]
         )
-        self.assertEqual(set(required), {"storage-recovery"})
-
-        recovery = required["storage-recovery"]
-        self.assertEqual(
-            recovery["contract"],
-            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
-        )
-        self.assertEqual(
-            recovery["touched_runtime_files"],
-            ["frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"],
-        )
-        self.assertEqual(
-            recovery["verification_requirements"],
-            [
-                {
-                    "id": "dashboard-storage-recovery-surface",
-                    "label": "dashboard storage and recovery surface proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/pages/__tests__/DashboardPage.test.tsx",
-                    ],
-                }
-            ],
-        )
+        self.assertEqual(required, {})
 
     def test_recovery_points_hook_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(["frontend-modern/src/hooks/useRecoveryPoints.ts"])
@@ -1267,16 +1213,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
 
     def test_dashboard_recovery_hook_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(["frontend-modern/src/hooks/useDashboardRecovery.ts"])
-        self.assertEqual(set(required), {"storage-recovery"})
-        recovery = required["storage-recovery"]
-        self.assertEqual(
-            recovery["verification_requirements"][0]["id"],
-            "recovery-product-surface",
-        )
-        self.assertEqual(
-            recovery["touched_runtime_files"],
-            ["frontend-modern/src/hooks/useDashboardRecovery.ts"],
-        )
+        self.assertEqual(required, {})
 
     def test_recovery_status_panel_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(
@@ -1285,32 +1222,30 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         self.assertEqual(set(required), {"storage-recovery"})
         recovery = required["storage-recovery"]
         self.assertEqual(
-            recovery["verification_requirements"][0]["id"],
-            "recovery-product-surface",
-        )
-        self.assertEqual(
-            recovery["touched_runtime_files"],
-            ["frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx"],
+            recovery["verification_requirements"],
+            [
+                {
+                    "id": "recovery-product-surface",
+                    "label": "recovery product surface proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
+                }
+            ],
         )
 
     def test_dashboard_recovery_presentation_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(
             ["frontend-modern/src/utils/dashboardRecoveryPresentation.ts"]
         )
-        self.assertEqual(set(required), {"storage-recovery"})
-        recovery = required["storage-recovery"]
-        self.assertEqual(
-            recovery["verification_requirements"][0]["id"],
-            "recovery-product-surface",
-        )
-        self.assertEqual(
-            recovery["touched_runtime_files"],
-            ["frontend-modern/src/utils/dashboardRecoveryPresentation.ts"],
-        )
+        self.assertEqual(required, {})
 
     def test_storage_panel_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(
-            ["frontend-modern/src/components/Storage/DashboardStoragePanel.tsx"]
+            ["frontend-modern/src/components/Storage/Storage.tsx"]
         )
         self.assertEqual(set(required), {"storage-recovery"})
 
@@ -1321,7 +1256,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             recovery["touched_runtime_files"],
-            ["frontend-modern/src/components/Storage/DashboardStoragePanel.tsx"],
+            ["frontend-modern/src/components/Storage/Storage.tsx"],
         )
         self.assertEqual(
             recovery["verification_requirements"],
@@ -1330,12 +1265,11 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "id": "storage-product-surface",
                     "label": "storage product surface proof",
                     "touched_runtime_files": [
-                        "frontend-modern/src/components/Storage/DashboardStoragePanel.tsx"
+                        "frontend-modern/src/components/Storage/Storage.tsx"
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
-                        "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
@@ -1351,7 +1285,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
                         "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
                         "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
-                        "frontend-modern/src/utils/__tests__/dashboardStoragePresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                     ],
                 }
@@ -1362,51 +1295,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         required = infer_impacted_subsystems(
             ["frontend-modern/src/utils/dashboardStoragePresentation.ts"]
         )
-        self.assertEqual(set(required), {"storage-recovery"})
-
-        recovery = required["storage-recovery"]
-        self.assertEqual(
-            recovery["contract"],
-            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
-        )
-        self.assertEqual(
-            recovery["touched_runtime_files"],
-            ["frontend-modern/src/utils/dashboardStoragePresentation.ts"],
-        )
-        self.assertEqual(
-            recovery["verification_requirements"],
-            [
-                {
-                    "id": "storage-product-surface",
-                    "label": "storage product surface proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/utils/dashboardStoragePresentation.ts"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
-                        "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
-                        "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
-                        "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
-                        "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
-                        "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
-                        "frontend-modern/src/components/Storage/__tests__/useStoragePageSummary.test.ts",
-                        "frontend-modern/src/components/Storage/code_standards.test.ts",
-                        "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",
-                        "frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts",
-                        "frontend-modern/src/features/storageBackups/__tests__/storageAlertState.test.ts",
-                        "frontend-modern/src/features/storageBackups/__tests__/storageDomain.test.ts",
-                        "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
-                        "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
-                        "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
-                        "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
-                        "frontend-modern/src/utils/__tests__/dashboardStoragePresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
-                }
-            ],
-        )
+        self.assertEqual(required, {})
 
     def test_storage_page_route_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(["frontend-modern/src/pages/Storage.tsx"])
@@ -2934,7 +2823,6 @@ index 1111111..2222222 100644
                         "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
                         "frontend-modern/src/components/Alerts/__tests__/BulkEditDialog.test.tsx",
                         "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
-                        "frontend-modern/src/components/Alerts/__tests__/RecentAlertsPanel.test.tsx",
                         "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
@@ -3127,44 +3015,44 @@ index 1111111..2222222 100644
             performance["verification_requirements"],
             [
                 {
-                    "id": "dashboard-workload-hot-path",
-                    "label": "dashboard workload selector proof",
+                    "id": "workloads-hot-path",
+                    "label": "Workloads hot-path proof",
                     "touched_runtime_files": [
                         "frontend-modern/src/utils/thresholdSliderPresentation.ts"
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
-                        "frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx",
-                        "frontend-modern/src/components/Dashboard/MetricBar.test.tsx",
-                        "frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx",
-                        "frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/dashboardSelectionModel.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadFilterConfigModel.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteModel.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteStateModel.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadUrlSyncModel.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/useDashboardWorkloadViewportSync.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx",
-                        "frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts",
-                        "frontend-modern/src/components/Dashboard/__tests__/workloadTopology.test.ts",
                         "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
                         "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+                        "frontend-modern/src/components/Workloads/GuestDrawer.test.tsx",
+                        "frontend-modern/src/components/Workloads/MetricBar.test.tsx",
+                        "frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx",
+                        "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
                         "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/EnhancedCPUBar.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/GuestRow.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/StackedDiskBar.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/useEnhancedCPUBarState.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/useMetricBarState.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/useStackedDiskBarState.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx",
+                        "frontend-modern/src/components/Workloads/__tests__/useWorkloadsFilterState.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/workloadRouteModel.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/workloadSelectionModel.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/workloadSelectors.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts",
+                        "frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts",
                         "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
                         "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
                     ],
