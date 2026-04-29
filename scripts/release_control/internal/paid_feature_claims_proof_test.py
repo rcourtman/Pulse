@@ -23,6 +23,74 @@ def run_main(argv: list[str]) -> tuple[int, str]:
     return exit_code, buffer.getvalue()
 
 
+def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
+    pulse_dir = root / "pulse"
+    pulse_pro_dir = root / "pulse-pro"
+    (pulse_dir / "docs").mkdir(parents=True)
+    (pulse_dir / "frontend-modern" / "src" / "utils").mkdir(parents=True)
+    (pulse_pro_dir / "landing-page").mkdir(parents=True)
+    (pulse_pro_dir / "license-server").mkdir(parents=True)
+    (pulse_pro_dir / "relay-server").mkdir(parents=True)
+
+    (pulse_dir / "docs" / "PULSE_PRO.md").write_text(
+        """
+        monitored-system volume is no longer the paid gate.
+        Relay gives 14-day history.
+        Pro gives 90-day history.
+        Alert-triggered root-cause analysis.
+        Safe remediation workflows.
+        """,
+        encoding="utf-8",
+    )
+    (pulse_dir / "docs" / "AI.md").write_text(
+        """
+        Pulse Patrol is available to everyone on the Community plan with BYOK.
+        Pro adds alert-triggered root-cause analysis and safe remediation workflows.
+        Community and Relay installs can still run scheduled Patrol findings with BYOK.
+        """,
+        encoding="utf-8",
+    )
+    (pulse_dir / "docs" / "UPGRADE_v6.md").write_text(
+        """
+        monitoring stays available across Community, Relay, and Pro.
+        Relay raises history to 14 days.
+        Pro raises it to 90 days.
+        Self-hosted v6 does not expose a general in-app trial.
+        """,
+        encoding="utf-8",
+    )
+    (pulse_dir / "frontend-modern" / "src" / "utils" / "selfHostedPlans.ts").write_text(
+        """
+        Self-hosted Pulse includes core monitoring for free.
+        Remote web access, mobile pairing, and push.
+        14-day metric history.
+        Root-cause analysis, safe remediation workflows, 90-day history.
+        admin/reporting extras.
+        """,
+        encoding="utf-8",
+    )
+    (pulse_pro_dir / "landing-page" / "index.html").write_text(
+        """
+        Community keeps core monitoring free.
+        mobile app pairing, push notifications, and 14-day history.
+        root-cause analysis, safe remediation workflows, and 90-day history.
+        Do Relay or Pro charge by server?
+        Existing Pulse Pro and legacy Pro+ holders keep their paid runtime access.
+        """,
+        encoding="utf-8",
+    )
+    (pulse_pro_dir / "license-server" / "public_pricing.go").write_text(
+        """
+        Community keeps core monitoring free.
+        mobile app pairing, push notifications, and 14-day history.
+        root-cause analysis, safe remediation workflows, team controls, and 90-day history.
+        not as the self-hosted paid gate.
+        """,
+        encoding="utf-8",
+    )
+    return pulse_dir, pulse_pro_dir
+
+
 class PaidFeatureClaimsProofTest(unittest.TestCase):
     def test_default_paths_resolve_from_internal_script_location(self) -> None:
         self.assertEqual(proof.default_pulse_dir(), Path(proof.__file__).resolve().parents[3])
@@ -69,6 +137,90 @@ class PaidFeatureClaimsProofTest(unittest.TestCase):
             self.assertIn("pulse-frontend-paid-claim-contract", names)
             self.assertIn("pulse-pro-public-pricing-and-checkout-contract", names)
             self.assertIn("pulse-pro-relay-entitlement-runtime", names)
+
+    def test_public_copy_audit_passes_for_current_claim_floor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse_dir, pulse_pro_dir = write_public_copy_fixture(Path(tmp))
+            args = proof.parse_args(
+                [
+                    "--pulse-dir",
+                    str(pulse_dir),
+                    "--pulse-pro-license-server-dir",
+                    str(pulse_pro_dir / "license-server"),
+                    "--pulse-pro-relay-server-dir",
+                    str(pulse_pro_dir / "relay-server"),
+                ]
+            )
+
+            result = proof.run_public_paid_claim_copy_audit(args)
+
+            self.assertTrue(result.ok)
+            self.assertEqual(result.detail, "checked 6 public paid-claim files")
+
+    def test_public_copy_audit_rejects_stale_limit_and_trial_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse_dir, pulse_pro_dir = write_public_copy_fixture(Path(tmp))
+            plans = pulse_dir / "frontend-modern" / "src" / "utils" / "selfHostedPlans.ts"
+            plans.write_text(
+                plans.read_text(encoding="utf-8")
+                + "\nUpgrade for higher limits and start a 14-day Pro trial.\n",
+                encoding="utf-8",
+            )
+            args = proof.parse_args(
+                [
+                    "--pulse-dir",
+                    str(pulse_dir),
+                    "--pulse-pro-license-server-dir",
+                    str(pulse_pro_dir / "license-server"),
+                    "--pulse-pro-relay-server-dir",
+                    str(pulse_pro_dir / "relay-server"),
+                ]
+            )
+
+            result = proof.run_public_paid_claim_copy_audit(args)
+
+            self.assertFalse(result.ok)
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("higher monitoring limits", result.detail)
+            self.assertIn("start trial CTA", result.detail)
+
+    def test_run_proof_includes_public_copy_audit_before_command_specs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse_dir, pulse_pro_dir = write_public_copy_fixture(Path(tmp))
+            args = proof.parse_args(
+                [
+                    "--pulse-dir",
+                    str(pulse_dir),
+                    "--pulse-pro-license-server-dir",
+                    str(pulse_pro_dir / "license-server"),
+                    "--pulse-pro-relay-server-dir",
+                    str(pulse_pro_dir / "relay-server"),
+                ]
+            )
+            original_build_command_specs = proof.build_command_specs
+            original_run_command = proof.run_command
+            try:
+                proof.build_command_specs = lambda _args: [  # type: ignore[assignment]
+                    proof.CommandSpec(name="fake-command", cwd=str(pulse_dir), command=["true"])
+                ]
+                proof.run_command = lambda spec: proof.CommandResult(  # type: ignore[assignment]
+                    name=spec.name,
+                    cwd=spec.cwd,
+                    command=spec.command,
+                    ok=True,
+                    exit_code=0,
+                    detail="pass",
+                )
+
+                results = proof.run_proof(args)
+            finally:
+                proof.build_command_specs = original_build_command_specs  # type: ignore[assignment]
+                proof.run_command = original_run_command  # type: ignore[assignment]
+
+            self.assertEqual(
+                [result.name for result in results],
+                ["pulse-public-paid-claim-copy-audit", "fake-command"],
+            )
 
     def test_run_command_success_and_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
