@@ -471,7 +471,9 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableGroupRowSource).toContain('export function AlertHistoryTableGroupRow');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupSummaryLabel');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
+    expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowCellClass');
     expect(alertResourceTableDesktopSource).toContain('getGroupedTableRowClass');
+    expect(alertResourceTableDesktopSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableAlertRowSource).toContain('export function AlertHistoryTableAlertRow');
     expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTableAlertRowSource).toContain('InvestigateAlertButton');

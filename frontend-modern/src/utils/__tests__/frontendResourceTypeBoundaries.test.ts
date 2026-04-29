@@ -1265,7 +1265,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryTablePresentationSource).toContain(
       'export function getRecoveryArtifactColumnHeaderClass',
     );
-    expect(recoveryTablePresentationSource).toContain('GROUPED_TABLE_ROW_BASE_CLASS');
+    expect(recoveryTablePresentationSource).toContain('getGroupedTableRowCellClass');
     expect(recoveryTablePresentationSource).toContain('getRecoveryItemTypeLabel');
     expect(recoveryTablePresentationSource).toContain('getRecoveryLocationFacetLabel');
     expect(recoveryTablePresentationSource).not.toContain('const titleize =');

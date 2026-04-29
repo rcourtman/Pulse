@@ -18,7 +18,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { getGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
+import {
+  getGroupedTableRowCellClass,
+  getGroupedTableRowClass,
+} from '@/components/shared/groupedTableRowPresentation';
 import {
   connectionAgentVersionPresentation,
   fleetSignalClassName,
@@ -619,7 +622,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                     const discoveredRows = () => groupedDiscoveredRows().get(product.type) ?? [];
                     const groupRowClass = () =>
                       getGroupedTableRowClass('border-b border-border-subtle');
-                    const groupLabelClass = () => 'text-[15px] font-semibold text-base-content';
 
                     return (
                       <>
@@ -627,18 +629,18 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                           when={actionColumnVisible()}
                           fallback={
                             <TableRow class={groupRowClass()}>
-                              <TableCell colspan={5} class="px-3 py-1.5">
+                              <TableCell colspan={5} class={getGroupedTableRowCellClass()}>
                                 <div class="flex min-w-0 items-center gap-2">
-                                  <span class={groupLabelClass()}>{product.label}</span>
+                                  <span>{product.label}</span>
                                 </div>
                               </TableCell>
                             </TableRow>
                           }
                         >
                           <TableRow class={groupRowClass()}>
-                            <TableCell colspan={6} class="px-3 py-1.5">
+                            <TableCell colspan={6} class={getGroupedTableRowCellClass()}>
                               <div class="flex items-center justify-between gap-2 whitespace-nowrap">
-                                <span class={groupLabelClass()}>{product.label}</span>
+                                <span>{product.label}</span>
                                 <Show when={!props.readOnly && props.onAddSource}>
                                   <button
                                     type="button"

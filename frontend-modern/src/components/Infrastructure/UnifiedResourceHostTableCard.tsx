@@ -3,7 +3,12 @@ import type { Component } from 'solid-js';
 import type { Disk } from '@/types/api';
 import { formatBytes, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
-import { getInteractiveGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
+import {
+  GROUPED_TABLE_ROW_BADGE_CLASS,
+  GROUPED_TABLE_ROW_META_CLASS,
+  getGroupedTableRowCellClass,
+  getInteractiveGroupedTableRowClass,
+} from '@/components/shared/groupedTableRowPresentation';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TableCard } from '@/components/shared/TableCard';
 import {
@@ -193,7 +198,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                       >
                         <TableCell
                           colspan={9}
-                          class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"
+                          class={getGroupedTableRowCellClass()}
                         >
                           <div class="flex items-center gap-2">
                             <Show
@@ -202,12 +207,12 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                             >
                               <span>{group.cluster}</span>
                               <Show when={shouldShowClusterGroupTypeLabel(group.cluster)}>
-                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>
                                   Cluster
                                 </span>
                               </Show>
                             </Show>
-                            <span class="text-[10px] text-muted font-normal">
+                            <span class={GROUPED_TABLE_ROW_META_CLASS}>
                               {group.resources.length}{' '}
                               {group.resources.length === 1 ? 'resource' : 'resources'}
                             </span>

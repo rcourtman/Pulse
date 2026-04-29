@@ -3,7 +3,11 @@ import type { Node } from '@/types/api';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator } from '@/utils/status';
-import { getGroupedTableRowClass } from './groupedTableRowPresentation';
+import {
+  GROUPED_TABLE_ROW_BADGE_CLASS,
+  getGroupedTableRowCellClass,
+  getGroupedTableRowClass,
+} from './groupedTableRowPresentation';
 
 interface NodeGroupHeaderProps {
   node: Node;
@@ -50,11 +54,11 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
 
       <Show when={props.node.isClusterMember !== undefined}>
         <span
-          class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${
+          class={
             props.node.isClusterMember
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-surface-alt text-muted'
-          }`}
+              ? GROUPED_TABLE_ROW_BADGE_CLASS
+              : 'rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted'
+          }
         >
           {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}
         </span>
@@ -76,17 +80,14 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
       when={props.renderAs === 'tr'}
       fallback={
         <div class="bg-surface-alt w-full">
-          <div class="py-0.5 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content">
+          <div class={getGroupedTableRowCellClass()}>
             <InnerContent />
           </div>
         </div>
       }
     >
       <tr class={getGroupedTableRowClass(props.trClass)} {...props.trProps}>
-        <td
-          colspan={props.colspan}
-          class="py-0.5 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"
-        >
+        <td colspan={props.colspan} class={getGroupedTableRowCellClass()}>
           <InnerContent />
         </td>
       </tr>

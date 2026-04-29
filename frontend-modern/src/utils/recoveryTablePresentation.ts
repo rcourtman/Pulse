@@ -1,4 +1,7 @@
-import { GROUPED_TABLE_ROW_BASE_CLASS } from '@/components/shared/groupedTableRowPresentation';
+import {
+  getGroupedTableRowCellClass,
+  getGroupedTableRowClass,
+} from '@/components/shared/groupedTableRowPresentation';
 import type { ProtectionRollup, RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
 import {
   getRecoveryItemTypeBadgeClass,
@@ -15,9 +18,8 @@ import type { RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
 export const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 export const AGING_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000;
 
-export const RECOVERY_GROUP_HEADER_ROW_CLASS = GROUPED_TABLE_ROW_BASE_CLASS;
-export const RECOVERY_GROUP_HEADER_TEXT_CLASS =
-  'py-1 pr-3 pl-4 text-[11px] font-medium text-base-content';
+export const RECOVERY_GROUP_HEADER_ROW_CLASS = getGroupedTableRowClass();
+export const RECOVERY_GROUP_HEADER_TEXT_CLASS = getGroupedTableRowCellClass();
 export const RECOVERY_ADVANCED_FILTER_LABEL_CLASS = 'text-[11px] font-medium text-muted';
 export const RECOVERY_ADVANCED_FILTER_FIELD_CLASS =
   'min-h-[2.25rem] w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content outline-none focus:border-blue-500';

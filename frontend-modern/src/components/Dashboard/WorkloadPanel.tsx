@@ -1,7 +1,11 @@
 import { createMemo, Index, Show } from 'solid-js';
 
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
-import { getInteractiveGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
+import {
+  GROUPED_TABLE_ROW_BADGE_CLASS,
+  getGroupedTableRowCellClass,
+  getInteractiveGroupedTableRowClass,
+} from '@/components/shared/groupedTableRowPresentation';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { createSummaryInteractiveRowPreviewHandlers } from '@/components/shared/summaryInteractionA11y';
 import { buildSummaryDisclosureControlsId } from '@/components/shared/summaryInteractionA11y';
@@ -119,7 +123,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     >
                       <TableCell
                         colspan={props.totalColumns()}
-                        class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-base-content"
+                        class={getGroupedTableRowCellClass()}
                       >
                         {(() => {
                           const label = props.getGroupLabel(groupKey(), fullGroupGuests());
@@ -127,7 +131,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                             <div class="flex items-center gap-3">
                               <span>{label.name}</span>
                               <Show when={label.type}>
-                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>
                                   {label.type}
                                 </span>
                               </Show>

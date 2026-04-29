@@ -439,6 +439,8 @@ describe('shared primitive guardrails', () => {
     );
     expect(frontendIndexCssSource).not.toContain('--color-grouped-table-row-bg: theme(');
     expect(groupedTableRowPresentationSource).toContain('GROUPED_TABLE_ROW_CLASS');
+    expect(groupedTableRowPresentationSource).toContain('GROUPED_TABLE_ROW_CELL_CLASS');
+    expect(groupedTableRowPresentationSource).toContain('getGroupedTableRowCellClass');
     expect(groupedTableRowPresentationSource).not.toContain('GROUPED_TABLE_ROW_DIVIDER_CLASS');
 
     expect(guestRowSource).toContain('data-summary-row-active');
@@ -463,14 +465,21 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolRowSource).toContain('data-summary-group-member-active');
     expect(storageGroupRowSource).toContain('STORAGE_GROUP_ROW_CLASS');
     expect(storageGroupPresentationSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(storageGroupPresentationSource).toContain('getGroupedTableRowCellClass');
     expect(nodeGroupHeaderSource).toContain('getGroupedTableRowClass');
+    expect(nodeGroupHeaderSource).toContain('getGroupedTableRowCellClass');
     expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
     expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
-    expect(recoveryTablePresentationSource).toContain('GROUPED_TABLE_ROW_BASE_CLASS');
+    expect(unifiedResourceHostTableCardSource).toContain('getGroupedTableRowCellClass');
+    expect(recoveryTablePresentationSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
+    expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).not.toContain('class="bg-surface-alt"');
     expect(alertResourceTableDesktopSource).toContain('getGroupedTableRowClass');
+    expect(alertResourceTableDesktopSource).toContain('getGroupedTableRowCellClass');
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowClass');
+    expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowCellClass');
     expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
     expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
   });

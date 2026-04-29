@@ -775,6 +775,7 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).toContain('data-summary-group-id');
       expect(workloadPanelSource).toContain('setHoveredWorkloadGroupScope');
       expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
       expect(workloadPanelSource).not.toContain('cursor-pointer bg-surface-alt');
       expect(dashboardWorkloadTableSource).not.toContain(
         'createMemo(() => getCanonicalWorkloadId(guest()))',
@@ -985,6 +986,7 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(workloadPanelSource).toContain('resolveSummaryGroupMemberInteractionState');
       expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
       expect(workloadPanelSource).not.toContain('style={{');
       expect(workloadPanelSource).not.toContain('style={');
       expect(workloadPanelSource).not.toContain('kind="scope"');

@@ -516,6 +516,7 @@ describe('UnifiedResourceTable performance contract', () => {
 
       expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
       expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(unifiedResourceHostTableCardSource).toContain('getGroupedTableRowCellClass');
       expect(unifiedResourceHostTableCardSource).not.toContain('cursor-pointer bg-surface-alt');
       expect(unifiedResourceHostTableCardSource).toContain('TableCard');
       expect(unifiedResourceHostTableCardSource).toContain('TableCardHeader');

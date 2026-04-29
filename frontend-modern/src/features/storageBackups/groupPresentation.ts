@@ -1,5 +1,8 @@
 import { formatPercent } from '@/utils/format';
-import { getInteractiveGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
+import {
+  getGroupedTableRowCellClass,
+  getInteractiveGroupedTableRowClass,
+} from '@/components/shared/groupedTableRowPresentation';
 import type { NormalizedHealth } from './models';
 import type { StorageGroupedRecords } from '@/components/Storage/useStorageModel';
 import { getStorageHealthPresentation } from './healthPresentation';
@@ -21,7 +24,7 @@ export interface StorageGroupRowPresentation {
 }
 
 export const STORAGE_GROUP_ROW_CLASS = getInteractiveGroupedTableRowClass('border-b border-border');
-export const STORAGE_GROUP_ROW_CELL_CLASS = 'px-1.5 sm:px-2 py-0.5';
+export const STORAGE_GROUP_ROW_CELL_CLASS = getGroupedTableRowCellClass();
 export const STORAGE_GROUP_ROW_CONTENT_CLASS = 'flex items-center gap-3';
 export const STORAGE_GROUP_ROW_LABEL_CLASS =
   'text-[11px] font-semibold text-base-content w-[140px] flex-shrink-0 truncate';
