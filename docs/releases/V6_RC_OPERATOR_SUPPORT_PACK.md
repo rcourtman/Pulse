@@ -91,9 +91,9 @@ Canonical short reply:
 
 ### Will old bookmarks and familiar v5 pages still work?
 
-Not necessarily. v6 reorganizes the product around Dashboard, Infrastructure,
-Workloads, Storage, and Recovery. Old platform-era aliases and runbook links
-should be updated to canonical v6 routes.
+Not necessarily. v6 reorganizes the product around Infrastructure, Workloads,
+Storage, and Recovery, with Infrastructure as the default landing surface. Old
+platform-era aliases and runbook links should be updated to canonical v6 routes.
 
 ## Recommended Evaluation Path
 

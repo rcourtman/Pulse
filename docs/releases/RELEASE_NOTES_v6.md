@@ -3,10 +3,10 @@
 `v6.0.0` is the first stable release of Pulse v6. It promotes the validated
 `v6.0.0-rc.1` and `v6.0.0-rc.2` line into the default supported v6 release.
 
-Pulse v6 reorganizes the product around `Dashboard`, `Infrastructure`,
-`Workloads`, `Storage`, and `Recovery`, keeps the governed v5-to-v6 upgrade and
-Unified Agent continuity path, and ships the corrected self-hosted commercial
-model that was validated during `rc.2`.
+Pulse v6 reorganizes the product around `Infrastructure`, `Workloads`,
+`Storage`, and `Recovery`, keeps the governed v5-to-v6 upgrade and Unified Agent
+continuity path, and ships the corrected self-hosted commercial model that was
+validated during `rc.2`.
 
 ## Pulse v5 Support Transition
 
@@ -19,9 +19,9 @@ I publish an explicit exception.
 
 ### Unified v6 product layout
 
-Pulse v6 changes the default product shape. The primary surfaces are now:
+Pulse v6 changes the default product shape. Authenticated users now land on
+`Infrastructure`, and the primary surfaces are:
 
-- `Dashboard`
 - `Infrastructure`
 - `Workloads`
 - `Storage`

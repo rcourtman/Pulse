@@ -8,8 +8,8 @@ _This changelog describes the shipped stable `v6.0.0` release compared with
 
 Pulse v6 changes both the shape of the product and the shape of the runtime
 behind it. Pulse v5 was organized mainly around Proxmox and separate
-platform-specific views. Pulse v6 is organized around five primary surfaces:
-`Dashboard`, `Infrastructure`, `Workloads`, `Storage`, and `Recovery`.
+platform-specific views. Pulse v6 is organized around the primary operational
+surfaces: `Infrastructure`, `Workloads`, `Storage`, and `Recovery`.
 
 For existing Pulse v5 operators, this is not just a visual refresh. The
 default routes change, the main live-state contract changes, install and
@@ -21,9 +21,9 @@ volume.
 ## Major product and workflow changes
 
 - **The top-level product layout is different.** Opening Pulse no longer drops
-  directly into a Proxmox overview. The v6 default route lands on `Dashboard`,
-  with separate primary views for `Infrastructure`, `Workloads`, `Storage`,
-  and `Recovery`.
+  directly into a Proxmox overview. The v6 default route lands on
+  `Infrastructure`, with separate primary views for `Workloads`, `Storage`, and
+  `Recovery`.
 
 - **Recovery is a first-class surface.** In v5, backup-related behavior was
   centered on backup-specific pages and route families. In v6, recovery is

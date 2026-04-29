@@ -152,6 +152,35 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertNotIn("guest-capacity continuity", support_pack)
                 self.assertNotIn("core monitoring unlimited", normalize_ws(support_pack))
 
+    def test_stable_release_packet_keeps_infrastructure_as_current_landing_surface(self) -> None:
+        stable_docs = {
+            "release_notes": read("docs/releases/RELEASE_NOTES_v6.md"),
+            "changelog": read("docs/releases/V6_CHANGELOG.md"),
+            "operator_support_pack": read("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md"),
+        }
+
+        for name, content in stable_docs.items():
+            with self.subTest(name=name):
+                normalized = normalize_ws(content)
+                self.assertIn("Infrastructure", content)
+                self.assertNotIn("default route lands on `Dashboard`", normalized)
+                self.assertNotIn("around Dashboard, Infrastructure", normalized)
+                self.assertNotIn(
+                    "`Dashboard`, `Infrastructure`, `Workloads`, `Storage`, and `Recovery`",
+                    content,
+                )
+                self.assertNotIn("- `Dashboard`", content)
+
+        self.assertIn(
+            "Authenticated users now land on `Infrastructure`",
+            normalize_ws(stable_docs["release_notes"]),
+        )
+        self.assertIn("default route lands on `Infrastructure`", normalize_ws(stable_docs["changelog"]))
+        self.assertIn(
+            "Infrastructure as the default landing surface",
+            stable_docs["operator_support_pack"],
+        )
+
     def test_rc1_changelog_keeps_current_free_first_licensing_posture(self) -> None:
         changelog = read("docs/releases/V6_CHANGELOG_RC1.md")
         normalized = normalize_ws(changelog)

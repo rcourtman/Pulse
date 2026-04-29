@@ -150,6 +150,10 @@ server-side update execution surfaces.
    historical RC context may be preserved, but current self-hosted v6 guidance
    must not present monitored-system volume, child-resource volume, guest
    capacity, or trial eligibility as the active paid model.
+   Current stable release notes, changelog packets, and operator support packs
+   must also preserve the Infrastructure-first navigation contract: they may
+   mention Dashboard only as historical context or generic custom-user tooling,
+   not as the current default landing route or a current primary v6 surface.
    The active prerelease cut must keep the repo-root `VERSION` file aligned
    with the current RC packet itself: when the governed line moves from `rc.1`
    to `rc.2` or later, the staged release-notes packet, changelog packet, and
