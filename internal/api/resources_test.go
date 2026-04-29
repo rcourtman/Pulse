@@ -1044,8 +1044,10 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 		}
 		var payload struct {
-			ResourceID    string                   `json:"resourceId"`
-			RecentChanges []unified.ResourceChange `json:"recentChanges"`
+			ResourceID    string                         `json:"resourceId"`
+			Capabilities  []unified.ResourceCapability   `json:"capabilities"`
+			Relationships []unified.ResourceRelationship `json:"relationships"`
+			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
 			Counts        struct {
 				RecentChanges              int                                 `json:"recentChanges"`
 				RecentChangeKinds          map[unified.ChangeKind]int          `json:"recentChangeKinds"`
@@ -1058,6 +1060,12 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if payload.ResourceID != "vm:42" || payload.Counts.RecentChanges != 3 || len(payload.RecentChanges) != 1 {
 			t.Fatalf("unexpected facets payload: %#v", payload)
+		}
+		if len(payload.Capabilities) != 1 || payload.Capabilities[0].Name != "restart" {
+			t.Fatalf("unexpected facets capabilities: %#v", payload.Capabilities)
+		}
+		if len(payload.Relationships) != 1 || payload.Relationships[0].TargetID != "node-1" {
+			t.Fatalf("unexpected facets relationships: %#v", payload.Relationships)
 		}
 		if got := payload.Counts.RecentChangeKinds; len(got) != 2 || got[unified.ChangeRestart] != 1 || got[unified.ChangeAnomaly] != 2 {
 			t.Fatalf("unexpected recent change kind counts: %#v", got)

@@ -1,5 +1,5 @@
 import { createMemo, type Accessor } from 'solid-js';
-import type { Resource } from '@/types/resource';
+import type { Resource, ResourceRelationship } from '@/types/resource';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { ResourceVMwareMeta } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
@@ -72,13 +72,18 @@ interface UseResourceDetailDrawerDerivedStateOptions {
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   debugEnabled: Accessor<boolean>;
   resourceIntelligence: Accessor<ResourceIntelligence | null>;
+  resourceRelationships?: Accessor<readonly ResourceRelationship[] | null | undefined>;
 }
 
 export const useResourceDetailDrawerDerivedState = (
   options: UseResourceDetailDrawerDerivedStateOptions,
 ) => {
-  const { resource, resolveResourceLabel: resolveResourceLabelInput, debugEnabled, resourceIntelligence } =
-    options;
+  const {
+    resource,
+    resolveResourceLabel: resolveResourceLabelInput,
+    debugEnabled,
+    resourceIntelligence,
+  } = options;
 
   const displayName = createMemo(() => getPreferredInfrastructureDisplayName(resource));
   const kubernetesClusterName = createMemo(() => getPreferredResourceClusterName(resource) ?? '');
@@ -161,6 +166,9 @@ export const useResourceDetailDrawerDerivedState = (
   const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
   const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
   const resourceCorrelations = createMemo(() => resourceIntelligence()?.correlations ?? []);
+  const resourceRelationships = createMemo(
+    () => options.resourceRelationships?.() ?? resource.relationships ?? [],
+  );
   const hasMeaningfulResourceIntelligence = createMemo(() => {
     const intel = resourceIntelligence();
     if (!intel) return false;
@@ -171,14 +179,12 @@ export const useResourceDetailDrawerDerivedState = (
       (intel.health.prediction?.trim() ?? '') !== '' ||
       (intel.health.factors?.length ?? 0) > 0 ||
       (intel.note_count ?? 0) > 0 ||
-      (intel.recent_changes?.length ?? 0) > 0 ||
-      resourceDependencies().length > 0 ||
-      resourceDependents().length > 0 ||
-      resourceCorrelations().length > 0
+      (intel.recent_changes?.length ?? 0) > 0
     );
   });
   const hasCorrelationContext = createMemo(
     () =>
+      resourceRelationships().length > 0 ||
       resourceDependencies().length > 0 ||
       resourceDependents().length > 0 ||
       resourceCorrelations().length > 0,
@@ -192,11 +198,6 @@ export const useResourceDetailDrawerDerivedState = (
 
     if (intel && hasMeaningfulResourceIntelligence()) {
       summary.push(formatResourceAnalysisSummary(intel.health.grade, intel.health.score));
-    }
-    if (resourceCorrelations().length > 0) {
-      summary.push(
-        `${resourceCorrelations().length} correlation${resourceCorrelations().length === 1 ? '' : 's'}`,
-      );
     }
     if (resource.policy?.routing.scope && !hasDefaultResourcePolicyPosture(resource.policy)) {
       summary.push(`Routing ${getResourceRoutingScopeLabel(resource.policy.routing.scope)}`);
@@ -280,8 +281,8 @@ export const useResourceDetailDrawerDerivedState = (
   const hasAccessContext = createMemo(
     () => Boolean(discoveryConfig()) || relatedLinks().length > 0,
   );
-  const hasRuntimeOperationalContext = createMemo(
-    () => buildHasRuntimeOperationalContext(kubernetesCapabilityBadges()),
+  const hasRuntimeOperationalContext = createMemo(() =>
+    buildHasRuntimeOperationalContext(kubernetesCapabilityBadges()),
   );
 
   const sourceSections = createMemo(() => buildSourceSections(platformData()));
@@ -355,6 +356,7 @@ export const useResourceDetailDrawerDerivedState = (
     resourceDependencies,
     resourceDependents,
     resourceCorrelations,
+    resourceRelationships,
     hasCorrelationContext,
     hasMeaningfulResourceIntelligence,
     hasInvestigationContext,
@@ -399,4 +401,6 @@ export const useResourceDetailDrawerDerivedState = (
   };
 };
 
-export type ResourceDetailDrawerDerivedState = ReturnType<typeof useResourceDetailDrawerDerivedState>;
+export type ResourceDetailDrawerDerivedState = ReturnType<
+  typeof useResourceDetailDrawerDerivedState
+>;

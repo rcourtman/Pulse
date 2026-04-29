@@ -522,6 +522,19 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
           </Show>
         </div>
 
+        <Show when={drawer.hasCorrelationContext()}>
+          <ResourceCorrelationSummary
+            dataTestId="resource-relationship-map-section"
+            title="Relationship map"
+            relationships={drawer.resourceRelationships()}
+            dependencies={drawer.resourceDependencies()}
+            dependents={drawer.resourceDependents()}
+            correlations={drawer.resourceCorrelations()}
+            resolveResourceLabel={drawer.resolveResourceLabel}
+            showLastSeen
+          />
+        </Show>
+
         <Show when={drawer.actionAuditAvailable()}>
           <ResourceActionHistory
             audits={drawer.sortedActionAudits()}
@@ -683,37 +696,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                         maxChanges={1}
                         compact
                       />
-                      <Show when={drawer.hasCorrelationContext()}>
-                        <div data-testid="resource-correlation-context" class="space-y-1.5">
-                          <div class="flex flex-wrap items-center justify-between gap-2">
-                            <span class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                              Correlations
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => drawer.setShowCorrelationContext((value) => !value)}
-                              class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-surface-hover"
-                            >
-                              {drawer.showCorrelationContext()
-                                ? 'Hide correlations'
-                                : 'Show correlations'}
-                            </button>
-                          </div>
-
-                          <Show when={drawer.showCorrelationContext()}>
-                            <div class="pt-1">
-                              <ResourceCorrelationSummary
-                                title="Correlations"
-                                dependencies={drawer.resourceDependencies()}
-                                dependents={drawer.resourceDependents()}
-                                correlations={drawer.resourceCorrelations()}
-                                resolveResourceLabel={drawer.resolveResourceLabel}
-                                showLastSeen
-                              />
-                            </div>
-                          </Show>
-                        </div>
-                      </Show>
                     </div>
                   )}
                 </Show>

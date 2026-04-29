@@ -62,6 +62,19 @@ describe('ResourceAPI', () => {
   it('fetches the resource history bundle from the facet endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       resourceId: 'vm:42',
+      capabilities: [{ name: 'restart', type: 'common' }],
+      relationships: [
+        {
+          sourceId: 'vm:42',
+          targetId: 'node-1',
+          type: 'runs_on',
+          confidence: 1,
+          active: true,
+          discoverer: 'proxmox_adapter',
+          observedAt: '2026-03-18T12:00:00Z',
+          lastSeenAt: '2026-03-18T12:00:00Z',
+        },
+      ],
       recentChanges: [{ id: 'change-1' }],
       counts: {
         recentChanges: 3,
@@ -96,6 +109,19 @@ describe('ResourceAPI', () => {
     );
     expect(result).toEqual({
       resourceId: 'vm:42',
+      capabilities: [{ name: 'restart', type: 'common' }],
+      relationships: [
+        {
+          sourceId: 'vm:42',
+          targetId: 'node-1',
+          type: 'runs_on',
+          confidence: 1,
+          active: true,
+          discoverer: 'proxmox_adapter',
+          observedAt: '2026-03-18T12:00:00Z',
+          lastSeenAt: '2026-03-18T12:00:00Z',
+        },
+      ],
       recentChanges: [{ id: 'change-1' }],
       counts: {
         recentChanges: 3,

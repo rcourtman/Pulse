@@ -848,6 +848,11 @@ func TestResourceRelationshipModelUsesCanonicalEdgeComment(t *testing.T) {
 	requiredSnippets := []string{
 		"// ResourceRelationship represents a typed relationship edge between two unified resources.",
 		"type ResourceRelationship struct {",
+		"const parentRelationshipDiscoverer = \"resource_registry\"",
+		"func ResourceRelationshipsWithCanonicalParent(resource Resource) []ResourceRelationship",
+		"relationshipType := parentRelationshipType(resource.Type)",
+		"Metadata: map[string]any{",
+		"func parentRelationshipType(resourceType ResourceType) RelationshipType",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

@@ -176,6 +176,12 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerHistoryStateSource).toContain('AIAPI.getResourceIntelligence');
     expect(resourceDetailDrawerHistoryStateSource).toContain('ActionAuditAPI.listActionAudits');
     expect(resourceDetailDrawerOverviewSource).toContain("from './ResourceActionHistory'");
+    expect(resourceDetailDrawerOverviewSource).toContain(
+      'dataTestId="resource-relationship-map-section"',
+    );
+    expect(resourceDetailDrawerHistoryStateSource).toContain('resourceFacetRelationships');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('options.resourceRelationships?.()');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('resource.relationships ?? []');
     expect(resourceActionHistorySource).toContain('getActionAuditStatePresentation');
     expect(resourceActionHistorySource).toContain('formatActionApprovalPolicyLabel');
     expect(actionAuditApiSource).toContain('/api/audit/actions');
@@ -362,6 +368,18 @@ describe('ResourceDetailDrawer change history section', () => {
       platformType: 'proxmox-pve',
       tags: ['timeline-tag'],
       platformData: { sources: ['proxmox'] },
+      relationships: [
+        {
+          sourceId: 'node:pve-1',
+          targetId: 'vm:42',
+          type: 'runs_on',
+          confidence: 1,
+          active: true,
+          discoverer: 'proxmox_adapter',
+          observedAt: '2026-03-18T12:00:00Z',
+          lastSeenAt: '2026-03-18T12:05:00Z',
+        },
+      ],
     });
 
     render(() => (
@@ -370,11 +388,13 @@ describe('ResourceDetailDrawer change history section', () => {
         resolveResourceLabel={(resourceId) =>
           resourceId === 'node:pve-1'
             ? 'PVE Node 1'
-            : resourceId === 'storage-1'
-              ? 'Storage 1 alias'
-              : resourceId === 'vm-child'
-                ? 'VM Child'
-                : resourceId
+            : resourceId === 'vm:42'
+              ? 'VM 42'
+              : resourceId === 'storage-1'
+                ? 'Storage 1 alias'
+                : resourceId === 'vm-child'
+                  ? 'VM Child'
+                  : resourceId
         }
       />
     ));
@@ -478,10 +498,21 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getAllByText('Proxmox adapter 1')).toHaveLength(1);
     expect(changeHistorySection.querySelectorAll('.mt-1.grid').length).toBe(0);
     expect(screen.queryByText('Quick links')).toBeNull();
+    const relationshipMap = within(screen.getByTestId('resource-relationship-map-section'));
+    expect(screen.getByText('Relationship map')).toBeInTheDocument();
+    expect(relationshipMap.getByText('Canonical relationships')).toBeInTheDocument();
+    expect(
+      relationshipMap.getByRole('link', {
+        name: 'Open source resource PVE Node 1 in Infrastructure',
+      }),
+    ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
+    expect(relationshipMap.getByText('Runs On')).toBeInTheDocument();
+    expect(screen.getByText('Depends on')).toBeInTheDocument();
+    expect(screen.getByText('Used by')).toBeInTheDocument();
+    expect(screen.getByText('Correlations')).toBeInTheDocument();
+    expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
+    expect(screen.getByText('VM Child')).toBeInTheDocument();
     expect(screen.getByText('Context')).toBeInTheDocument();
-    expect(screen.queryByText('Correlations')).toBeNull();
-    expect(screen.queryByText('Storage 1 alias')).toBeNull();
-    expect(screen.queryByText('VM Child')).toBeNull();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();
     expect(screen.queryByText('Analysis')).toBeNull();
@@ -503,15 +534,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('stable')).toBeInTheDocument();
     expect(screen.getByText('Notes')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(
-      screen.getByTestId('resource-correlation-context').querySelector('.rounded.border'),
-    ).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show correlations' }));
-    expect(
-      screen
-        .getByRole('button', { name: 'Hide correlations' })
-        .parentElement?.querySelector('.mt-0\\.5.text-\\[10px\\].text-muted'),
-    ).toBeNull();
+    expect(screen.queryByTestId('resource-correlation-context')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show correlations' })).toBeNull();
   });
 
   it('keeps default internal cloud-summary posture out of the investigation context drawer block', async () => {

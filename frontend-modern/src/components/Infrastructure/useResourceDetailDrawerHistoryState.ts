@@ -1,9 +1,11 @@
 import { createMemo, createSignal } from 'solid-js';
 import type {
   Resource,
+  ResourceCapability,
   ResourceChangeKind,
   ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
+  ResourceRelationship,
 } from '@/types/resource';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { AIAPI } from '@/api/ai';
@@ -119,6 +121,12 @@ export const useResourceDetailDrawerHistoryState = (
   const resourceTimeline = createMemo(
     () => resourceFacets()?.recentChanges ?? resource.recentChanges ?? [],
   );
+  const resourceFacetCapabilities = createMemo<readonly ResourceCapability[]>(
+    () => resourceFacets()?.capabilities ?? resource.capabilities ?? [],
+  );
+  const resourceFacetRelationships = createMemo<readonly ResourceRelationship[]>(
+    () => resourceFacets()?.relationships ?? resource.relationships ?? [],
+  );
   const resourceFacetCounts = createMemo(
     () => resourceFacets()?.counts ?? resource.facetCounts ?? null,
   );
@@ -203,6 +211,8 @@ export const useResourceDetailDrawerHistoryState = (
     setTimelineSourceAdapterFilter,
     resourceIntelligence,
     resourceTimeline,
+    resourceFacetCapabilities,
+    resourceFacetRelationships,
     historyFacetCounts,
     historyRecentChanges,
     hasTimelineFilters,

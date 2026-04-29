@@ -1,4 +1,5 @@
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
+import type { ResourceRelationship } from '@/types/resource';
 import { formatDurationMs } from '@/utils/patrolFormat';
 import { formatConfidencePercentage } from '@/utils/confidencePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -85,7 +86,59 @@ export function sortResourceCorrelations(
 
     const leftTime = Date.parse(left.last_seen || '');
     const rightTime = Date.parse(right.last_seen || '');
-    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+    return (
+      (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0)
+    );
+  });
+}
+
+export function formatResourceRelationshipType(relationship: ResourceRelationship): string {
+  return humanizeCorrelationToken(relationship.type);
+}
+
+export function formatResourceRelationshipEndpoint(
+  relationship: ResourceRelationship,
+  role: 'source' | 'target',
+): string {
+  return (
+    asTrimmedString(role === 'source' ? relationship.sourceId : relationship.targetId) ||
+    'Unknown resource'
+  );
+}
+
+export function formatResourceRelationshipSummary(relationship: ResourceRelationship): string {
+  const parts: string[] = [];
+
+  if (typeof relationship.confidence === 'number' && Number.isFinite(relationship.confidence)) {
+    parts.push(`${formatConfidencePercentage(relationship.confidence)} confidence`);
+  }
+
+  const discoverer = humanizeCorrelationToken(relationship.discoverer);
+  if (discoverer && discoverer !== 'Correlation') {
+    parts.push(discoverer);
+  }
+
+  if (relationship.active === false) {
+    parts.push('Historical');
+  }
+
+  return parts.join(' · ');
+}
+
+export function sortResourceRelationships(
+  relationships: readonly ResourceRelationship[],
+): ResourceRelationship[] {
+  return [...relationships].sort((left, right) => {
+    if (left.active !== right.active) return left.active ? -1 : 1;
+
+    const confidenceDiff = (right.confidence || 0) - (left.confidence || 0);
+    if (confidenceDiff !== 0) return confidenceDiff;
+
+    const leftTime = Date.parse(left.lastSeenAt || left.observedAt || '');
+    const rightTime = Date.parse(right.lastSeenAt || right.observedAt || '');
+    return (
+      (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0)
+    );
   });
 }
 
@@ -96,6 +149,7 @@ const formatSummaryParts = (parts: Array<string | null | undefined>): string =>
   parts.filter((part): part is string => Boolean(part && part.trim())).join(' · ');
 
 export function formatResourceCorrelationSummaryText(options: {
+  relationshipsCount?: number;
   dependenciesCount: number;
   dependentsCount: number;
   correlationsCount: number;
@@ -104,6 +158,13 @@ export function formatResourceCorrelationSummaryText(options: {
   return (
     options.summaryText?.trim() ||
     formatSummaryParts([
+      options.relationshipsCount && options.relationshipsCount > 0
+        ? formatPluralCount(
+            options.relationshipsCount,
+            'canonical relationship',
+            'canonical relationships',
+          )
+        : null,
       options.dependenciesCount > 0
         ? formatPluralCount(options.dependenciesCount, 'dependency', 'dependencies')
         : null,

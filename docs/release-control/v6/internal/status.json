@@ -2794,6 +2794,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/AppLayout.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/Settings.tsx",
           "kind": "file"
         },
@@ -2809,17 +2814,12 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/features/dashboardOverview/estateSummaryModel.ts",
+          "path": "frontend-modern/src/pages/Infrastructure.tsx",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/features/dashboardOverview/EstateSummaryPanel.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/pages/Dashboard.tsx",
+          "path": "frontend-modern/src/pages/RuntimeHome.tsx",
           "kind": "file"
         },
         {
@@ -2829,7 +2829,7 @@
         },
         {
           "repo": "pulse",
-          "path": "tests/integration/tests/71-dashboard-estate-orientation.spec.ts",
+          "path": "tests/integration/tests/19-telemetry-disclosure.spec.ts",
           "kind": "file"
         }
       ]
@@ -3549,7 +3549,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Resource change intelligence now has a first-class governed floor: canonical resource relationships, durable resource-change envelopes, AI/Patrol recent-change presentation, dedicated resource timeline/facet reads, and relationship-aware resource timelines are all owned by the unified-resource and API-contract boundary. Broader surfaced timeline IA, relationship graph exploration, enterprise correlation depth, and cross-resource investigation workflows remain a named post-RC hardening track.",
+        "summary": "Resource change intelligence now has a first-class governed floor: canonical resource relationships, durable resource-change envelopes, AI/Patrol recent-change presentation, dedicated resource timeline/facet reads, relationship-aware resource timelines, and an operator-visible resource relationship map are all owned by the unified-resource and API-contract boundary. Broader surfaced timeline IA, enterprise correlation depth, and cross-resource investigation workflows remain a named post-RC hardening track.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -3562,6 +3562,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/resource-relationship-map-surface-2026-04-29.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
           "kind": "file"
         },
@@ -3572,12 +3577,62 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/api/resources.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/__tests__/ResourceCorrelationSummary.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
           "kind": "file"
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/types/resource.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/resourceCorrelationPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/utils/resourceChangePresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/resourceCorrelationPresentation.ts",
           "kind": "file"
         },
         {
@@ -3588,6 +3643,11 @@
         {
           "repo": "pulse",
           "path": "internal/ai/patrol_ai.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
           "kind": "file"
         },
         {
@@ -4697,7 +4757,7 @@
     },
     {
       "id": "first-session-post-rc-polish",
-      "summary": "Track broader first-session polish and parity work that is intentionally outside the RC stabilization floor, including the dashboard-home requirement that the first viewport preserves immediate estate orientation for v5-upgrade users through the canonical connected-infrastructure projection.",
+      "summary": "Track broader first-session polish and parity work that is intentionally outside the RC stabilization floor after the default landing surface moved to Infrastructure; future first-session orientation belongs to Infrastructure and Add infrastructure, not a dashboard-home surface.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -4839,7 +4899,7 @@
     },
     {
       "id": "resource-change-intelligence-post-rc-hardening",
-      "summary": "Track broader resource-change intelligence hardening beyond the current canonical timeline floor, including surfaced cross-resource timeline IA, relationship graph exploration, enterprise correlation depth, and investigation workflows that promote relationship-aware timelines from backend foundation into a primary operator experience.",
+      "summary": "Track broader resource-change intelligence hardening beyond the current canonical timeline and relationship-map floor, including surfaced cross-resource timeline IA, enterprise correlation depth, and investigation workflows that promote relationship-aware timelines from backend foundation into deeper operator workflows.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",
@@ -5359,7 +5419,7 @@
     },
     {
       "id": "dashboard-home-estate-orientation-contract",
-      "summary": "The v6 dashboard remains the default landing surface only if its first viewport immediately proves that Pulse sees the operator's estate: the page must surface canonical connected-infrastructure system count, health, source coverage, freshness, and an explicit Infrastructure handoff before detailed dashboard rows, without restoring platform-special navigation or widening the dashboard hot path.",
+      "summary": "Superseded by `infrastructure-default-landing-surface`: Dashboard no longer remains the default landing surface or a preserved overview path. The prior estate-orientation requirement now belongs to Infrastructure and Add infrastructure.",
       "kind": "contract",
       "decided_at": "2026-04-23",
       "subsystem_ids": [
@@ -5390,6 +5450,19 @@
       "subsystem_ids": [],
       "lane_ids": [
         "L5"
+      ]
+    },
+    {
+      "id": "infrastructure-default-landing-surface",
+      "summary": "Pulse v6 lands authenticated users directly on Infrastructure. The Dashboard page, route, primary-nav item, dashboard summary API, and dashboard-specific overview widgets are retired rather than preserved as a wallboard or compatibility surface; first-session and setup completion handoffs must route users into Infrastructure or Add infrastructure.",
+      "kind": "contract",
+      "decided_at": "2026-04-29",
+      "subsystem_ids": [
+        "frontend-primitives"
+      ],
+      "lane_ids": [
+        "L8",
+        "L13"
       ]
     }
   ]

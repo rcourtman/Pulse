@@ -30,10 +30,12 @@ describe('ResourceCorrelationSummary', () => {
 
     expect(screen.getByText('Learned correlations')).toBeInTheDocument();
     expect(screen.getByText('5 total')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open source resource Storage 1 in Infrastructure' }))
-      .toHaveAttribute('href', '/infrastructure?resource=storage-1');
-    expect(screen.getByRole('link', { name: 'Open target resource Host 1 in Infrastructure' }))
-      .toHaveAttribute('href', '/infrastructure?resource=host-1');
+    expect(
+      screen.getByRole('link', { name: 'Open source resource Storage 1 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=storage-1');
+    expect(
+      screen.getByRole('link', { name: 'Open target resource Host 1 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=host-1');
     expect(screen.getByText('Disk Full → Restart')).toBeInTheDocument();
     expect(screen.getByText(/2 occurrences · avg delay 2m · 88% confidence/)).toBeInTheDocument();
     expect(screen.getByText('Disk pressure often precedes restarts')).toBeInTheDocument();
@@ -44,14 +46,28 @@ describe('ResourceCorrelationSummary', () => {
     render(() => (
       <ResourceCorrelationSummary
         title="Correlation context"
+        relationships={[
+          {
+            sourceId: 'node:pve-1',
+            targetId: 'vm-child',
+            type: 'runs_on',
+            confidence: 1,
+            active: true,
+            discoverer: 'proxmox_adapter',
+            observedAt: '2026-03-18T12:00:00Z',
+            lastSeenAt: '2026-03-18T12:05:00Z',
+          },
+        ]}
         dependencies={['storage-1']}
         dependents={['vm-child']}
         resolveResourceLabel={(resourceId) =>
-          resourceId === 'storage-1'
-            ? 'Storage 1 alias'
-            : resourceId === 'vm-child'
-              ? 'VM Child'
-              : resourceId
+          resourceId === 'node:pve-1'
+            ? 'PVE 1'
+            : resourceId === 'storage-1'
+              ? 'Storage 1 alias'
+              : resourceId === 'vm-child'
+                ? 'VM Child'
+                : resourceId
         }
         correlations={[
           {
@@ -74,18 +90,30 @@ describe('ResourceCorrelationSummary', () => {
     ));
 
     expect(screen.getByText('Correlation context')).toBeInTheDocument();
-    expect(screen.getByText('1 dependency · 1 dependent · 1 correlation')).toBeInTheDocument();
+    expect(
+      screen.getByText('1 canonical relationship · 1 dependency · 1 dependent · 1 correlation'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Canonical relationships')).toBeInTheDocument();
     expect(screen.getByText('Depends on')).toBeInTheDocument();
     expect(screen.getByText('Used by')).toBeInTheDocument();
     expect(screen.getByText('Correlations')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Open dependency resource Storage 1 alias in Infrastructure' }),
+      screen.getByRole('link', { name: 'Open source resource PVE 1 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
+    expect(
+      screen.getByRole('link', { name: 'Open target resource VM Child in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=vm-child');
+    expect(screen.getByText('Runs On')).toBeInTheDocument();
+    expect(screen.getByText(/100% confidence · Proxmox Adapter · last seen/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', {
+        name: 'Open dependency resource Storage 1 alias in Infrastructure',
+      }),
     ).toHaveAttribute('href', '/infrastructure?resource=storage-1');
     expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Open dependent resource VM Child in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=vm-child');
-    expect(screen.getByText('VM Child')).toBeInTheDocument();
-    expect(screen.getByText(/last seen/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/last seen/i).length).toBeGreaterThanOrEqual(2);
   });
 });

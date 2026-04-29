@@ -928,8 +928,15 @@ correlation evidence through the shared
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 card, so the same learned-edge list stays governed by one frontend surface
 instead of separate page-local implementations. That shared card also owns
-the correlation ordering and truncation rule, so callers pass raw correlation
-lists instead of encoding their own sort or top-N behavior.
+the first-class relationship-map surface for canonical `resource.relationships`,
+the correlation ordering, and the truncation rule, so callers pass raw
+relationships and correlation lists instead of encoding their own sort or
+top-N behavior.
+Canonical parent edges now also originate in this subsystem: `ParentID` is
+folded into the facet relationship set through
+`ResourceRelationshipsWithCanonicalParent` before any drawer or Patrol
+consumer renders a relationship map, so pages do not rederive parent topology
+from raw resource fields or invent relationship-map fallbacks locally.
 The same surfaces now also render recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
@@ -1006,6 +1013,10 @@ write when the target database still requires it.
 `/api/resources/{id}/timeline` reads, while the bundled `/api/resources/{id}/facets`
 surface keeps the facet summary and recent-change history available without
 forcing consumers to parse the full resource payload.
+The facet bundle's relationship slice must be produced with
+`ResourceRelationshipsWithCanonicalParent`, preserving explicit resource
+relationships and adding a canonical parent edge from `ParentID` only when an
+equivalent typed edge is not already present.
 Those resource-owned timeline and facet reads are relationship-aware at the
 API boundary: when the drawer requests a resource timeline, the store must
 return direct changes for that canonical ID plus changes whose
@@ -1541,10 +1552,12 @@ recent-change presentation unowned or rebuilding helper-local labels inside AI,
 Patrol, performance, or infrastructure surfaces.
 The shared correlation and policy-posture presentation boundaries are also
 owned here now. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-is the canonical shared card for dependency, dependent, and learned-correlation
-context, while `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
-owns endpoint labels, headline formatting, summary wording, and canonical
-correlation ordering. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
+is the canonical shared card for canonical resource relationships, dependency,
+dependent, and learned-correlation context, while
+`frontend-modern/src/utils/resourceCorrelationPresentation.ts` owns endpoint
+labels, relationship labels, headline formatting, summary wording, and canonical
+relationship/correlation ordering.
+`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 is the canonical shared card for governed policy-posture counts, while
 `frontend-modern/src/utils/resourcePolicyPresentation.ts` owns the canonical
 sensitivity, routing, and redaction labels and aggregate count summaries.

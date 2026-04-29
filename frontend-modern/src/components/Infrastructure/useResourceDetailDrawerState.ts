@@ -1,7 +1,4 @@
-import {
-  createEffect,
-  createSignal,
-} from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
@@ -24,7 +21,6 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showHistoryFilters, setShowHistoryFilters] = createSignal(false);
   const [showAccessContext, setShowAccessContext] = createSignal(false);
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
-  const [showCorrelationContext, setShowCorrelationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(false);
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
@@ -39,6 +35,7 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
     resourceIntelligence: history.resourceIntelligence,
+    resourceRelationships: history.resourceFacetRelationships,
   });
   const dockerActions = useResourceDetailDrawerDockerActionsState({
     dockerHostSourceId: derived.dockerHostSourceId,
@@ -95,8 +92,6 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     setShowAccessContext,
     showInvestigationContext,
     setShowInvestigationContext,
-    showCorrelationContext,
-    setShowCorrelationContext,
     showDiscoveryContext,
     setShowDiscoveryContext,
     showHostDetails,

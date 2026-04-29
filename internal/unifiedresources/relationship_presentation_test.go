@@ -1,6 +1,9 @@
 package unifiedresources
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestRelationshipTypeLabel(t *testing.T) {
 	cases := map[RelationshipType]string{
@@ -107,6 +110,51 @@ func TestFormatResourceRelationshipContext(t *testing.T) {
 	}
 	if contains(ctx, "Depends on") {
 		t.Fatalf("expected relationship limit to truncate entries, got %q", ctx)
+	}
+}
+
+func TestResourceRelationshipsWithCanonicalParent(t *testing.T) {
+	parentID := "k8s-cluster-1"
+	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
+	resource := Resource{
+		ID:       "agent-1",
+		Type:     ResourceTypeAgent,
+		ParentID: &parentID,
+		LastSeen: now,
+	}
+
+	relationships := ResourceRelationshipsWithCanonicalParent(resource)
+	if len(relationships) != 1 {
+		t.Fatalf("expected one canonical parent relationship, got %#v", relationships)
+	}
+	relationship := relationships[0]
+	if relationship.SourceID != "agent-1" || relationship.TargetID != parentID {
+		t.Fatalf("unexpected relationship endpoints: %#v", relationship)
+	}
+	if relationship.Type != RelOwnedBy {
+		t.Fatalf("relationship type = %q, want %q", relationship.Type, RelOwnedBy)
+	}
+	if relationship.Discoverer != parentRelationshipDiscoverer {
+		t.Fatalf("discoverer = %q, want %q", relationship.Discoverer, parentRelationshipDiscoverer)
+	}
+	if relationship.Metadata["source"] != "parentId" {
+		t.Fatalf("expected parentId provenance metadata, got %#v", relationship.Metadata)
+	}
+
+	relationships = ResourceRelationshipsWithCanonicalParent(Resource{
+		ID:       "agent-1",
+		Type:     ResourceTypeAgent,
+		ParentID: &parentID,
+		Relationships: []ResourceRelationship{
+			{
+				SourceID: "agent-1",
+				TargetID: parentID,
+				Type:     RelOwnedBy,
+			},
+		},
+	})
+	if len(relationships) != 1 {
+		t.Fatalf("expected existing canonical parent relationship to be reused, got %#v", relationships)
 	}
 }
 

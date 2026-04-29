@@ -10931,8 +10931,10 @@ func TestContract_ResourceTimelineAnomalyJSONSnapshot(t *testing.T) {
 func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
 	payload := struct {
-		ResourceID    string                            `json:"resourceId"`
-		RecentChanges []unifiedresources.ResourceChange `json:"recentChanges"`
+		ResourceID    string                                  `json:"resourceId"`
+		Capabilities  []unifiedresources.ResourceCapability   `json:"capabilities,omitempty"`
+		Relationships []unifiedresources.ResourceRelationship `json:"relationships,omitempty"`
+		RecentChanges []unifiedresources.ResourceChange       `json:"recentChanges"`
 		Counts        struct {
 			RecentChanges              int                                          `json:"recentChanges"`
 			RecentChangeKinds          map[unifiedresources.ChangeKind]int          `json:"recentChangeKinds"`
@@ -10941,6 +10943,30 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 		} `json:"counts"`
 	}{
 		ResourceID: "vm:42",
+		Capabilities: []unifiedresources.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unifiedresources.CapabilityTypeCommon,
+				Description:          "Restart the VM",
+				MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+			},
+		},
+		Relationships: []unifiedresources.ResourceRelationship{
+			{
+				SourceID:   "vm:42",
+				TargetID:   "node-1",
+				Type:       unifiedresources.RelRunsOn,
+				Confidence: 1,
+				Active:     true,
+				Discoverer: "proxmox_adapter",
+				ObservedAt: now,
+				LastSeenAt: now,
+				Metadata: map[string]any{
+					"source":  "live",
+					"cluster": "pve-prod",
+				},
+			},
+		},
 		RecentChanges: []unifiedresources.ResourceChange{
 			{
 				ID:               "chg-42",
@@ -10986,6 +11012,27 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 
 	const want = `{
 		"resourceId":"vm:42",
+		"capabilities":[
+			{
+				"name":"restart",
+				"type":"common",
+				"description":"Restart the VM",
+				"minimumApprovalLevel":"admin"
+			}
+		],
+		"relationships":[
+			{
+				"sourceId":"vm:42",
+				"targetId":"node-1",
+				"type":"runs_on",
+				"confidence":1,
+				"active":true,
+				"discoverer":"proxmox_adapter",
+				"observedAt":"2026-03-18T17:00:00Z",
+				"lastSeenAt":"2026-03-18T17:00:00Z",
+				"metadata":{"cluster":"pve-prod","source":"live"}
+			}
+		],
 		"recentChanges":[
 			{
 				"id":"chg-42",
@@ -11017,6 +11064,47 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 				"proxmox_adapter":1
 			}
 		}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_ResourceFacetsDeriveCanonicalParentRelationship(t *testing.T) {
+	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
+	parentID := "k8s-cluster-1"
+	payload := struct {
+		ResourceID    string                                  `json:"resourceId"`
+		Relationships []unifiedresources.ResourceRelationship `json:"relationships,omitempty"`
+	}{
+		ResourceID: "agent-1",
+		Relationships: unifiedresources.ResourceRelationshipsWithCanonicalParent(unifiedresources.Resource{
+			ID:       "agent-1",
+			Type:     unifiedresources.ResourceTypeAgent,
+			ParentID: &parentID,
+			LastSeen: now,
+		}),
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal derived parent relationship facets response: %v", err)
+	}
+
+	const want = `{
+		"resourceId":"agent-1",
+		"relationships":[
+			{
+				"sourceId":"agent-1",
+				"targetId":"k8s-cluster-1",
+				"type":"owned_by",
+				"confidence":1,
+				"active":true,
+				"discoverer":"resource_registry",
+				"observedAt":"2026-03-18T17:00:00Z",
+				"lastSeenAt":"2026-03-18T17:00:00Z",
+				"metadata":{"source":"parentId"}
+			}
+		]
 	}`
 
 	assertJSONSnapshot(t, got, want)

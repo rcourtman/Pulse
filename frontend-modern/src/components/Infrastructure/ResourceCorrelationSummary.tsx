@@ -1,5 +1,6 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
+import type { ResourceRelationship } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import {
@@ -8,15 +9,20 @@ import {
   formatResourceCorrelationPattern,
   formatResourceCorrelationSummary,
   formatResourceCorrelationSummaryText,
+  formatResourceRelationshipSummary,
+  formatResourceRelationshipType,
   sortResourceCorrelations,
+  sortResourceRelationships,
 } from '@/utils/resourceCorrelationPresentation';
 
 interface ResourceCorrelationSummaryProps {
-  correlations?: ResourceCorrelation[] | null;
-  dependencies?: string[] | null;
-  dependents?: string[] | null;
+  correlations?: readonly ResourceCorrelation[] | null;
+  relationships?: readonly ResourceRelationship[] | null;
+  dependencies?: readonly string[] | null;
+  dependents?: readonly string[] | null;
   title?: string;
   summaryText?: string;
+  dataTestId?: string;
   buildResourceHref?: (resourceId: string) => string | null | undefined;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   showLastSeen?: boolean;
@@ -27,15 +33,20 @@ interface ResourceCorrelationSummaryProps {
 export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryProps> = (props) => {
   const className = () => props.class?.trim() ?? '';
   const correlations = createMemo(() => sortResourceCorrelations(props.correlations ?? []));
+  const relationships = createMemo(() => sortResourceRelationships(props.relationships ?? []));
   const dependencies = () => props.dependencies ?? [];
   const dependents = () => props.dependents ?? [];
   const buildResourceHref = props.buildResourceHref ?? buildInfrastructureResourceHref;
   const resolveResourceLabel = props.resolveResourceLabel;
   const maxCorrelations = () => props.maxCorrelations ?? 3;
   const hasContent = () =>
-    dependencies().length > 0 || dependents().length > 0 || correlations().length > 0;
+    relationships().length > 0 ||
+    dependencies().length > 0 ||
+    dependents().length > 0 ||
+    correlations().length > 0;
   const summaryText = () =>
     formatResourceCorrelationSummaryText({
+      relationshipsCount: relationships().length,
       dependenciesCount: dependencies().length,
       dependentsCount: dependents().length,
       correlationsCount: correlations().length,
@@ -44,7 +55,10 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
 
   return (
     <Show when={hasContent()}>
-      <div class={`rounded-md border border-border-subtle bg-base p-4 ${className()}`.trim()}>
+      <div
+        data-testid={props.dataTestId}
+        class={`rounded-md border border-border-subtle bg-base p-4 ${className()}`.trim()}
+      >
         <div class="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 class="text-sm font-semibold text-base-content">
@@ -55,6 +69,80 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
             </Show>
           </div>
         </div>
+
+        <Show when={relationships().length > 0}>
+          <div class="mt-3" data-testid="resource-canonical-relationships">
+            <div class="text-[9px] uppercase tracking-wide text-muted">Canonical relationships</div>
+            <div class="mt-1 space-y-1.5">
+              <For each={relationships().slice(0, maxCorrelations())}>
+                {(relationship) => {
+                  const sourceLabel =
+                    resolveResourceLabel?.(relationship.sourceId)?.trim() || relationship.sourceId;
+                  const targetLabel =
+                    resolveResourceLabel?.(relationship.targetId)?.trim() || relationship.targetId;
+                  const sourceHref = buildResourceHref(relationship.sourceId);
+                  const targetHref = buildResourceHref(relationship.targetId);
+                  const typeLabel = formatResourceRelationshipType(relationship);
+                  const summary = formatResourceRelationshipSummary(relationship);
+                  const lastSeenLabel =
+                    props.showLastSeen && relationship.lastSeenAt
+                      ? formatRelativeTime(relationship.lastSeenAt, {
+                          compact: true,
+                          emptyText: 'just now',
+                        })
+                      : '';
+
+                  return (
+                    <div class="rounded bg-surface px-2 py-1">
+                      <div class="flex flex-wrap items-center gap-1 text-[10px] text-base-content">
+                        {sourceHref ? (
+                          <a
+                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                            href={sourceHref}
+                            aria-label={`Open source resource ${sourceLabel} in Infrastructure`}
+                          >
+                            {sourceLabel}
+                          </a>
+                        ) : (
+                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                            {sourceLabel}
+                          </span>
+                        )}
+                        <span class="text-muted">→</span>
+                        {targetHref ? (
+                          <a
+                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                            href={targetHref}
+                            aria-label={`Open target resource ${targetLabel} in Infrastructure`}
+                          >
+                            {targetLabel}
+                          </a>
+                        ) : (
+                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                            {targetLabel}
+                          </span>
+                        )}
+                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted">
+                          {typeLabel}
+                        </span>
+                      </div>
+                      <Show when={summary || lastSeenLabel}>
+                        <div class="mt-0.5 text-[10px] text-muted">
+                          {summary}
+                          <Show when={lastSeenLabel}>
+                            <>
+                              {summary ? ' · ' : ''}last seen {lastSeenLabel}
+                            </>
+                          </Show>
+                        </div>
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+          </div>
+        </Show>
 
         <Show when={dependencies().length > 0}>
           <div class="mt-3">
@@ -123,12 +211,13 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                   const sourceLabel = formatResourceCorrelationEndpoint(correlation, 'source');
                   const targetLabel = formatResourceCorrelationEndpoint(correlation, 'target');
                   const patternLabel = formatResourceCorrelationPattern(correlation);
-                  const lastSeenLabel = props.showLastSeen && correlation.last_seen
-                    ? formatRelativeTime(correlation.last_seen, {
-                        compact: true,
-                        emptyText: 'just now',
-                      })
-                    : '';
+                  const lastSeenLabel =
+                    props.showLastSeen && correlation.last_seen
+                      ? formatRelativeTime(correlation.last_seen, {
+                          compact: true,
+                          emptyText: 'just now',
+                        })
+                      : '';
                   return (
                     <div class="rounded bg-surface px-2 py-1" title={headline}>
                       <div class="flex flex-wrap items-center gap-1 text-[10px] text-base-content">
@@ -166,7 +255,7 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                       <div class="mt-0.5 text-[10px] text-muted">
                         {summary}
                         <Show when={lastSeenLabel}>
-                          <>{' '}· last seen {lastSeenLabel}</>
+                          <> · last seen {lastSeenLabel}</>
                         </Show>
                       </div>
                       <Show when={correlation.description}>

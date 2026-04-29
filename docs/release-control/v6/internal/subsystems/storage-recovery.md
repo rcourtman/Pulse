@@ -1279,6 +1279,15 @@ consume now also carries grouped `recentChangeKinds` counts by canonical change
 kind, so storage and recovery surfaces can show the distribution of restarts,
 anomalies, relationships, and capability changes without re-deriving their own
 timeline breakdowns.
+That same facet bundle may include the selected resource's canonical
+capabilities and relationships for shared detail drawers, but storage and
+recovery surfaces must treat that topology/action metadata as adjacent
+API/unified-resource context rather than storage protection, restore, or
+recovery ownership.
+Derived parent relationships in that facet bundle are still topology context:
+storage and recovery may render or link them through the shared resource
+drawer, but they must not reinterpret those parent edges as backup coverage,
+restore eligibility, or recovery-event evidence.
 That same shared facet bundle now also carries grouped
 `recentChangeSourceTypes` counts by canonical source type, so storage and
 recovery surfaces can separate platform events, pulse diffs, heuristics,

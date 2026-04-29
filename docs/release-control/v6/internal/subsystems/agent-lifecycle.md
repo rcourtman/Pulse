@@ -981,6 +981,14 @@ at the API boundary: lifecycle-adjacent fleet views may consume the direct plus
 `relatedResources` history returned by `internal/api/resources.go`, but they
 must not rebuild cross-resource timeline joins inside lifecycle-owned routes or
 change the direct-only store default used by other callers.
+The bundled facet read may also expose the selected resource's canonical
+capabilities and relationships for shared drawers, but lifecycle-adjacent
+surfaces must treat those fields as API/unified-resource facts rather than
+agent-lifecycle-owned install, approval, or topology state.
+Agent-host, Kubernetes, and runtime parentage exposed through `ParentID` must
+therefore enter shared drawers as facet relationships from
+`internal/api/resources.go`; lifecycle surfaces must not rederive those edges
+from agent install state, cluster names, or local fleet table grouping.
 That same shared `internal/api/` boundary now also exposes a dedicated VM
 inventory export route for reporting. Fleet and install surfaces may coexist
 with that export, but `internal/api/reporting_inventory_handlers.go` and

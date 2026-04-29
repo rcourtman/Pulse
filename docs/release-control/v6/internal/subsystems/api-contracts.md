@@ -228,6 +228,10 @@ the canonical monitored-system blocked payload.
    includes direct changes and changes that name the resource in
    `relatedResources` instead of hiding child or dependency activity from the
    owning resource.
+   The same facet bundle must return the selected resource's backend-authored
+   `capabilities` and canonical `relationships` alongside recent changes and
+   grouped counts, so frontend detail surfaces consume one governed API payload
+   instead of rebuilding capability or topology context from the list response.
 7. Route unified-resource list ordering through `internal/api/resources.go`, `internal/api/contract_test.go`, and the owned unified-resource registry helpers together; list payloads must stay deterministic for equal-name resources by carrying one canonical `name -> type -> id` tie-break across cold seed, REST pagination, and websocket-backed refreshes instead of inheriting map order or page-local re-sorts
    That same shared API contract also owns the external resource `type`, canonical display name, and cluster identity published through `/api/resources` and `/api/state`; the websocket/state hydrate path must not emit legacy aliases or raw store labels once the unified resource contract has normalized them.
 8. Route unified-agent installer and binary download headers through `internal/api/unified_agent.go` and `internal/api/contract_test.go` together; published release downloads must keep the canonical `X-Checksum-Sha256` plus `X-Signature-Ed25519` contract for updater clients and the base64-encoded `X-Signature-SSHSIG` contract for installer clients whether the asset is served locally or proxied from the matching GitHub release, instead of leaving callers to infer trust from source location alone.
@@ -1176,6 +1180,10 @@ in addition to policy and identity metadata, so the backend payload contract
 stays aligned with the timeline and control-plane model instead of flattening
 those fields away. The frontend consumer, however, only preserves the
 timeline-first `recentChanges` slice and its counts on the bundle contract.
+Relationship facets include explicit `resource.relationships` plus the
+canonical parent edge derived from `ParentID` by the unified-resource model
+when no equivalent edge already exists, so topology hydration stays
+backend-owned and one-hop relationship maps do not vary by page.
 The same resource contract now also exposes a dedicated
 `/api/resources/{id}/timeline` history endpoint and bundled facet reads under
 `/api/resources/{id}/facets`, so operators can inspect change history without
@@ -1575,6 +1583,14 @@ The same API contract now also owns the dedicated frontend resource facet
 client in `frontend-modern/src/api/resources.ts`, which fetches the governed
 capability, relationship, and timeline surfaces from `internal/api/resources.go`
 instead of teaching the drawer or list views to reconstruct them inline.
+Those facet reads now explicitly include the selected resource's canonical
+`capabilities` and `relationships`, so action affordances and relationship-map
+surfaces remain hydrated from the same backend-owned resource contract as
+recent changes and facet counts.
+The relationship facet must call the shared unified-resource parent-edge
+deriver rather than serializing only the raw resource relationship slice, so
+resources parented through the registry still expose the same canonical
+relationship-map contract as resources with adapter-supplied edges.
 The same AI resource-intelligence payload now also carries dependency and
 dependent correlation arrays plus correlation evidence, so the drawer can render
 canonical correlation context from the shared AI contract instead of inferring it

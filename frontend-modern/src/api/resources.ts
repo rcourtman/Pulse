@@ -1,5 +1,6 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type {
+  ResourceCapability,
   ResourceChange,
   ResourceChangeKind,
   ResourceChangeSourceAdapter,
@@ -7,6 +8,7 @@ import type {
   ResourceFacetCounts,
   ResourceMetricsTarget,
   ResourcePolicy,
+  ResourceRelationship,
 } from '@/types/resource';
 
 export interface ResourceTimelineQueryOptions {
@@ -24,6 +26,8 @@ export interface ResourceTimelineResponse {
 }
 
 export interface ResourceFacetBundle {
+  capabilities?: ResourceCapability[];
+  relationships?: ResourceRelationship[];
   recentChanges: ResourceChange[];
   counts: ResourceFacetCounts;
 }

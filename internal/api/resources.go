@@ -303,9 +303,11 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 type resourceFacetCountsResponse = unified.ResourceFacetCounts
 
 type resourceFacetBundleResponse struct {
-	ResourceID    string                      `json:"resourceId"`
-	RecentChanges []unified.ResourceChange    `json:"recentChanges"`
-	Counts        resourceFacetCountsResponse `json:"counts"`
+	ResourceID    string                         `json:"resourceId"`
+	Capabilities  []unified.ResourceCapability   `json:"capabilities,omitempty"`
+	Relationships []unified.ResourceRelationship `json:"relationships,omitempty"`
+	RecentChanges []unified.ResourceChange       `json:"recentChanges"`
+	Counts        resourceFacetCountsResponse    `json:"counts"`
 }
 
 // HandleResourceRoutes dispatches nested resource routes.
@@ -369,7 +371,7 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		return
 	}
 
-	_, ok := registry.Get(resourceID)
+	resource, ok := registry.Get(resourceID)
 	if !ok {
 		http.Error(w, "Resource not found", http.StatusNotFound)
 		return
@@ -429,6 +431,8 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resourceFacetBundleResponse{
 		ResourceID:    resourceID,
+		Capabilities:  append([]unified.ResourceCapability(nil), resource.Capabilities...),
+		Relationships: unified.ResourceRelationshipsWithCanonicalParent(*resource),
 		RecentChanges: recentChanges,
 		Counts: resourceFacetCountsResponse{
 			RecentChanges:              changeCount,

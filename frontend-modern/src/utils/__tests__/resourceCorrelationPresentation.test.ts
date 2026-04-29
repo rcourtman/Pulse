@@ -6,7 +6,11 @@ import {
   formatResourceCorrelationPattern,
   formatResourceCorrelationSummary,
   formatResourceCorrelationSummaryText,
+  formatResourceRelationshipEndpoint,
+  formatResourceRelationshipSummary,
+  formatResourceRelationshipType,
   sortResourceCorrelations,
+  sortResourceRelationships,
 } from '@/utils/resourceCorrelationPresentation';
 
 describe('resourceCorrelationPresentation utils', () => {
@@ -23,6 +27,17 @@ describe('resourceCorrelationPresentation utils', () => {
     confidence: 0.875,
     last_seen: '2026-03-18T12:00:00Z',
     description: 'Disk pressure often precedes restarts',
+  } as const;
+
+  const relationship = {
+    sourceId: 'node:pve-1',
+    targetId: 'vm-42',
+    type: 'runs_on',
+    confidence: 0.98,
+    active: true,
+    discoverer: 'proxmox_adapter',
+    observedAt: '2026-03-18T12:00:00Z',
+    lastSeenAt: '2026-03-18T12:05:00Z',
   } as const;
 
   it('formats correlation endpoints and headline labels', () => {
@@ -87,14 +102,47 @@ describe('resourceCorrelationPresentation utils', () => {
     expect(sorted.map((item) => item.source_id)).toEqual(['storage-3', 'storage-1', 'storage-2']);
   });
 
+  it('formats and sorts canonical resource relationships', () => {
+    expect(formatResourceRelationshipEndpoint(relationship, 'source')).toBe('node:pve-1');
+    expect(formatResourceRelationshipEndpoint(relationship, 'target')).toBe('vm-42');
+    expect(formatResourceRelationshipType(relationship)).toBe('Runs On');
+    expect(formatResourceRelationshipSummary(relationship)).toBe(
+      '98% confidence · Proxmox Adapter',
+    );
+
+    const sorted = sortResourceRelationships([
+      {
+        ...relationship,
+        sourceId: 'historical',
+        active: false,
+        confidence: 1,
+        lastSeenAt: '2026-03-18T13:00:00Z',
+      },
+      {
+        ...relationship,
+        sourceId: 'lower-confidence',
+        confidence: 0.75,
+        lastSeenAt: '2026-03-18T13:00:00Z',
+      },
+      relationship,
+    ]);
+
+    expect(sorted.map((item) => item.sourceId)).toEqual([
+      'node:pve-1',
+      'lower-confidence',
+      'historical',
+    ]);
+  });
+
   it('formats canonical correlation summary text', () => {
     expect(
       formatResourceCorrelationSummaryText({
+        relationshipsCount: 1,
         dependenciesCount: 2,
         dependentsCount: 1,
         correlationsCount: 3,
       }),
-    ).toBe('2 dependencies · 1 dependent · 3 correlations');
+    ).toBe('1 canonical relationship · 2 dependencies · 1 dependent · 3 correlations');
     expect(
       formatResourceCorrelationSummaryText({
         dependenciesCount: 0,

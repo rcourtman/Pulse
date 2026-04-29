@@ -936,6 +936,9 @@ still reading totals from the shared resource contract. The drawer history
 surface reuses the same governed resource route helpers for relationship and
 related-resource links, so cross-resource navigation stays within the existing
 infrastructure surface rather than branching into custom detail-only routing.
+Relationship-map detail now stays on that same drawer-only path: canonical
+relationships come from the bundled resource facet payload when a resource is
+opened, not from additional table-row hydration or a second all-resources pass.
 The detail drawer now follows the same default posture by collapsing its
 history overview down to timeline counts and timeline-summary chips, so the
 performance-sensitive shared presentation path stays aligned with the

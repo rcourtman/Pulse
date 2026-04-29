@@ -194,6 +194,46 @@ export interface ResourceFacetCounts {
   recentChangeSourceAdapters?: Partial<Record<ResourceFacetSourceAdapter, number>>;
 }
 
+export type ResourceRelationshipType =
+  | 'runs_on'
+  | 'depends_on'
+  | 'mounted_to'
+  | 'exposed_by'
+  | 'owned_by'
+  | string;
+
+export interface ResourceRelationship {
+  sourceId: string;
+  targetId: string;
+  type: ResourceRelationshipType;
+  confidence: number;
+  active: boolean;
+  discoverer: string;
+  observedAt: string;
+  lastSeenAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ResourceCapabilityParam {
+  name: string;
+  type: string;
+  required: boolean;
+  enum?: string[];
+  pattern?: string;
+  defaultValue?: unknown;
+  isSensitive: boolean;
+  description?: string;
+}
+
+export interface ResourceCapability {
+  name: string;
+  type: string;
+  description?: string;
+  minimumApprovalLevel?: string;
+  platform?: string;
+  params?: ResourceCapabilityParam[];
+}
+
 export interface ResourceChange {
   id: string;
   observedAt: string;
@@ -526,6 +566,8 @@ export interface Resource {
   canonicalIdentity?: ResourceCanonicalIdentity;
   policy?: ResourcePolicy;
   aiSafeSummary?: string;
+  capabilities?: ResourceCapability[];
+  relationships?: ResourceRelationship[];
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;
 
