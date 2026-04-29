@@ -3,6 +3,11 @@ import {
   BACKUP_INTERVAL_MAX_MINUTES,
   BACKUP_INTERVAL_OPTIONS,
   COMMON_DISCOVERY_SUBNETS,
+  DOCKER_UPDATE_ACTIONS_ENV_VAR,
+  DOCKER_UPDATE_ACTIONS_SECTION_DESCRIPTION,
+  DOCKER_UPDATE_ACTIONS_SECTION_TITLE,
+  DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION,
+  DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL,
   getBackupIntervalSelectValue,
   getBackupIntervalSummary,
   getCheckForUpdatesErrorMessage,
@@ -54,6 +59,18 @@ describe('systemSettingsPresentation', () => {
     ]);
   });
 
+  it('exports canonical Docker and Podman update-action settings copy', () => {
+    expect(DOCKER_UPDATE_ACTIONS_ENV_VAR).toBe('PULSE_DISABLE_DOCKER_UPDATE_ACTIONS');
+    expect(DOCKER_UPDATE_ACTIONS_SECTION_TITLE).toBe('Docker / Podman updates');
+    expect(DOCKER_UPDATE_ACTIONS_SECTION_DESCRIPTION).toBe(
+      'Control how Docker / Podman update actions appear across Pulse.',
+    );
+    expect(DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL).toBe('Hide update buttons');
+    expect(DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION).toBe(
+      'When enabled, Docker / Podman "Update" actions are hidden across Pulse. Update detection still runs, so available updates remain visible.',
+    );
+  });
+
   it('returns canonical backup interval select values', () => {
     expect(getBackupIntervalSelectValue(false, 0)).toBe('0');
     expect(getBackupIntervalSelectValue(false, 300)).toBe('300');
@@ -80,7 +97,7 @@ describe('systemSettingsPresentation', () => {
       'Unable to update local login visibility.',
     );
     expect(getDockerUpdateActionsUpdateErrorMessage()).toBe(
-      'Unable to update container update actions.',
+      'Unable to update Docker / Podman update actions.',
     );
     expect(getReduceUpsellNoiseUpdateErrorMessage()).toBe(
       'Unable to update commercial prompt preferences.',

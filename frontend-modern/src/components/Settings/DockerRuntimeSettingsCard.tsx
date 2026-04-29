@@ -1,6 +1,13 @@
 import { Component, Accessor, Show } from 'solid-js';
 import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
 import { ENVIRONMENT_LOCK_BUTTON_TITLE } from '@/utils/environmentLockPresentation';
+import {
+  DOCKER_UPDATE_ACTIONS_ENV_VAR,
+  DOCKER_UPDATE_ACTIONS_SECTION_DESCRIPTION,
+  DOCKER_UPDATE_ACTIONS_SECTION_TITLE,
+  DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION,
+  DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL,
+} from '@/utils/systemSettingsPresentation';
 
 interface DockerRuntimeSettingsCardProps {
   disableDockerUpdateActions: Accessor<boolean>;
@@ -13,17 +20,21 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
   <div class="rounded-xl border border-border bg-surface p-5 shadow-sm">
     <div class="space-y-4">
       <div class="space-y-1">
-        <h3 class="text-base font-semibold text-base-content">Container Updates</h3>
-        <p class="text-sm text-muted">Control how container update actions appear across Pulse.</p>
+        <h3 class="text-base font-semibold text-base-content">
+          {DOCKER_UPDATE_ACTIONS_SECTION_TITLE}
+        </h3>
+        <p class="text-sm text-muted">{DOCKER_UPDATE_ACTIONS_SECTION_DESCRIPTION}</p>
       </div>
 
       <div class="flex items-start justify-between gap-4 rounded-md border border-border bg-surface-hover p-4">
         <div class="flex-1 space-y-1">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-base-content">Hide update buttons</span>
+            <span class="text-sm font-medium text-base-content">
+              {DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL}
+            </span>
             <Show when={props.disableDockerUpdateActionsLocked()}>
               <EnvironmentLockBadge
-                envVar="PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"
+                envVar={DOCKER_UPDATE_ACTIONS_ENV_VAR}
                 icon={(props) => (
                   <svg
                     class={props.class}
@@ -42,14 +53,11 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
               />
             </Show>
           </div>
-          <p class="text-xs text-muted">
-            When enabled, container "Update" actions are hidden across Pulse. Update detection still
-            runs, so available updates remain visible.
-          </p>
+          <p class="text-xs text-muted">{DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION}</p>
           <p class="text-xs text-muted mt-1">
             Can also be set via environment variable:{' '}
             <code class="px-1 py-0.5 rounded bg-surface-hover text-base-content">
-              PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
+              {DOCKER_UPDATE_ACTIONS_ENV_VAR}=true
             </code>
           </p>
         </div>

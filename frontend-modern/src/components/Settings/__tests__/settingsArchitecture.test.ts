@@ -8,6 +8,7 @@ import aiModelSelectionSectionSource from '../AIModelSelectionSection.tsx?raw';
 import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
+import dockerRuntimeSettingsCardSource from '../DockerRuntimeSettingsCard.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
@@ -190,6 +191,17 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
     expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
     expect(aiRuntimeControlsSectionSource).not.toContain('without approval (Pro)');
+  });
+
+  it('keeps Docker and Podman update-action copy on the system settings presentation owner', () => {
+    expect(dockerRuntimeSettingsCardSource).toContain('DOCKER_UPDATE_ACTIONS_SECTION_TITLE');
+    expect(dockerRuntimeSettingsCardSource).toContain('DOCKER_UPDATE_ACTIONS_ENV_VAR');
+    expect(dockerRuntimeSettingsCardSource).not.toContain('Container Updates');
+    expect(dockerRuntimeSettingsCardSource).not.toContain('container update actions');
+
+    expect(systemSettingsPresentationSource).toContain("getSourcePlatformLabel('docker')");
+    expect(systemSettingsPresentationSource).toContain('DOCKER_UPDATE_ACTIONS_SECTION_TITLE');
+    expect(systemSettingsPresentationSource).toContain('DOCKER_UPDATE_ACTIONS_ENV_VAR');
   });
 
   it('keeps audit-log filter labels on the audit presentation owner', () => {

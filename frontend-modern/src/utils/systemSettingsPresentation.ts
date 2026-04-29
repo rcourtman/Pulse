@@ -1,3 +1,5 @@
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
+
 export const PVE_POLLING_MIN_SECONDS = 10;
 export const PVE_POLLING_MAX_SECONDS = 3600;
 
@@ -27,6 +29,14 @@ export const COMMON_DISCOVERY_SUBNETS = [
   '172.16.0.0/24',
   '192.168.10.0/24',
 ] as const;
+
+const DOCKER_PODMAN_SOURCE_LABEL = getSourcePlatformLabel('docker');
+
+export const DOCKER_UPDATE_ACTIONS_ENV_VAR = 'PULSE_DISABLE_DOCKER_UPDATE_ACTIONS';
+export const DOCKER_UPDATE_ACTIONS_SECTION_TITLE = `${DOCKER_PODMAN_SOURCE_LABEL} updates`;
+export const DOCKER_UPDATE_ACTIONS_SECTION_DESCRIPTION = `Control how ${DOCKER_PODMAN_SOURCE_LABEL} update actions appear across Pulse.`;
+export const DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL = 'Hide update buttons';
+export const DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION = `When enabled, ${DOCKER_PODMAN_SOURCE_LABEL} "Update" actions are hidden across Pulse. Update detection still runs, so available updates remain visible.`;
 
 export function getBackupIntervalSelectValue(
   backupPollingUseCustom: boolean,
@@ -73,7 +83,7 @@ export function getHideLocalLoginUpdateErrorMessage(message?: string): string {
 }
 
 export function getDockerUpdateActionsUpdateErrorMessage(message?: string): string {
-  return message || 'Unable to update container update actions.';
+  return message || `Unable to update ${DOCKER_PODMAN_SOURCE_LABEL} update actions.`;
 }
 
 export function getReduceUpsellNoiseUpdateErrorMessage(message?: string): string {

@@ -296,6 +296,14 @@ work extends shared components instead of creating new local variants.
    shell must keep it under the Security group, route it through the canonical
    registry/header/navigation model, and avoid trial, upgrade, paid-plan, or
    monitoring-limit copy when commercial presentation is hidden.
+   General settings runtime cards that present source-platform actions must
+   consume `frontend-modern/src/utils/systemSettingsPresentation.ts` and the
+   shared source-platform vocabulary rather than card-local product names.
+   `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+   owns the local toggle layout, but Docker and Podman update-action titles,
+   descriptions, environment variable display, and failure copy belong to
+   `systemSettingsPresentation.ts` so settings surfaces do not drift back to
+   generic container wording.
    Shared sparkline primitives must also stay CSP-safe by construction:
    `frontend-modern/src/components/shared/InteractiveSparkline.tsx` may use SVG
    attributes and shared state/model helpers for cursor, axis-label, and
