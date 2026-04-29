@@ -4,6 +4,11 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
+import {
+  API_TOKEN_NAME_PLACEHOLDER,
+  getAPITokenDockerPodmanUsageSummary,
+  getAPITokenDockerPodmanUsageTitle,
+} from '@/utils/apiTokenPresentation';
 import { useAPITokenManagerState } from './useAPITokenManagerState';
 
 interface APITokenManagerProps {
@@ -330,14 +335,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   const usageSegments: string[] = [];
                   const usageTitleSegments: string[] = [];
                   if (dockerUsageEntry) {
-                    usageSegments.push(
-                      dockerUsageEntry.count === 1
-                        ? (dockerUsageEntry.items[0]?.label ?? 'Container runtime')
-                        : `${dockerUsageEntry.count} container runtimes`,
-                    );
-                    usageTitleSegments.push(
-                      `Container runtimes: ${dockerUsageEntry.items.map((runtime) => runtime.label).join(', ')}`,
-                    );
+                    usageSegments.push(getAPITokenDockerPodmanUsageSummary(dockerUsageEntry));
+                    usageTitleSegments.push(getAPITokenDockerPodmanUsageTitle(dockerUsageEntry));
                   }
                   if (agentUsageEntry) {
                     usageSegments.push(
@@ -449,7 +448,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 type="text"
                 value={nameInput()}
                 onInput={(e) => setNameInput(e.currentTarget.value)}
-                placeholder="e.g. Container pipeline"
+                placeholder={API_TOKEN_NAME_PLACEHOLDER}
                 disabled={!canManage()}
                 class="w-full min-h-10 sm:min-h-10 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-500"
               />

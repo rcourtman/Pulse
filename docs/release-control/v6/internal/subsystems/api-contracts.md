@@ -33,6 +33,7 @@ Own canonical runtime payload shapes between backend and frontend.
 6. `frontend-modern/src/api/responseUtils.ts`
 7. `frontend-modern/src/components/Settings/APITokenManager.tsx`
 8. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
+9. `frontend-modern/src/constants/apiScopes.ts`
 9. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
 10. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
 11. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
@@ -101,6 +102,10 @@ Own canonical runtime payload shapes between backend and frontend.
     must inherit embedded table framing from `frontend-primitives`
     `PulseDataGrid` rather than carrying API-token-local scroll or border
     wrappers around the grid.
+    Docker and Podman token usage copy must come from
+    `frontend-modern/src/utils/apiTokenPresentation.ts` and its shared source
+    platform label, so API-token tables, revoke warnings, and token presets do
+    not reintroduce generic `container runtime` operator-facing labels.
 11. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `security-privacy`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
 12. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `agent-lifecycle`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 13. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
@@ -125,8 +130,14 @@ Own canonical runtime payload shapes between backend and frontend.
 24. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `agent-lifecycle`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
 25. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
 26. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+27. `frontend-modern/src/constants/apiScopes.ts` shared with `security-privacy`: the API token scope catalog is both a security/privacy token-management trust surface and a canonical API token payload boundary.
+    Docker and Podman scope labels must use the shared source platform label
+    rather than generic `container` copy, because those labels surface directly
+    in token presets, custom scopes, and inventory badges.
 28. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
 29. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `security-privacy`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
+    It owns the operator-facing Docker / Podman token vocabulary used by API
+    Access, token presets, usage summaries, and revoke warnings.
 30. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `agent-lifecycle`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 31. `internal/api/access_control_handlers.go` shared with `organization-settings`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.
     The shared node setup boundary above owns the guided/manual setup split

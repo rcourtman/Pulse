@@ -1,3 +1,5 @@
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
+
 export interface APIScopeOption {
   value: string;
   label: string;
@@ -18,6 +20,8 @@ export const SETTINGS_READ_SCOPE = 'settings:read';
 export const SETTINGS_WRITE_SCOPE = 'settings:write';
 export const AUDIT_READ_SCOPE = 'audit:read';
 
+const DOCKER_PODMAN_SOURCE_LABEL = getSourcePlatformLabel('docker');
+
 export const API_SCOPE_OPTIONS: APIScopeOption[] = [
   {
     value: MONITORING_READ_SCOPE,
@@ -33,14 +37,14 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
   },
   {
     value: DOCKER_REPORT_SCOPE,
-    label: 'Container agent reporting',
-    description: 'Allow the container agent to submit host and runtime telemetry.',
+    label: `${DOCKER_PODMAN_SOURCE_LABEL} reporting`,
+    description: `Allow ${DOCKER_PODMAN_SOURCE_LABEL} agents to submit host and runtime telemetry.`,
     group: 'Agents',
   },
   {
     value: DOCKER_MANAGE_SCOPE,
-    label: 'Container lifecycle management',
-    description: 'Enable agent-triggered runtime commands and host actions.',
+    label: `${DOCKER_PODMAN_SOURCE_LABEL} lifecycle management`,
+    description: `Enable agent-triggered ${DOCKER_PODMAN_SOURCE_LABEL} commands and host actions.`,
     group: 'Agents',
   },
   {

@@ -186,6 +186,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
+      "rationale": "the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "security-privacy"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/APITokenManager.tsx",
       "rationale": "the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -359,6 +367,14 @@
       "subsystems": [
         "agent-lifecycle",
         "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/constants/apiScopes.ts",
+      "rationale": "the API token scope catalog is both a security/privacy token-management trust surface and a canonical API token payload boundary",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
       ]
     },
     {
@@ -1519,6 +1535,7 @@
         "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
+        "frontend-modern/src/constants/apiScopes.ts",
         "frontend-modern/src/types/actionAudit.ts",
         "frontend-modern/src/types/api.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts",
@@ -1651,7 +1668,8 @@
             "match_files": [
               "frontend-modern/src/components/Settings/APITokenManager.tsx",
               "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
-              "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+              "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
+              "frontend-modern/src/constants/apiScopes.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -4531,6 +4549,7 @@
       "owned_files": [
         "docs/PRIVACY.md",
         "frontend-modern/src/api/security.ts",
+        "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
         "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
@@ -4543,6 +4562,7 @@
         "frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx",
         "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
         "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
+        "frontend-modern/src/constants/apiScopes.ts",
         "frontend-modern/src/utils/apiTokenPresentation.ts",
         "frontend-modern/src/utils/auditLogPresentation.ts",
         "frontend-modern/src/utils/auditWebhookPresentation.ts",
@@ -4611,6 +4631,7 @@
             "label": "security settings surface proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
               "frontend-modern/src/components/Settings/APITokenManager.tsx",
               "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
               "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
@@ -4618,7 +4639,8 @@
               "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
               "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
-              "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+              "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
+              "frontend-modern/src/constants/apiScopes.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

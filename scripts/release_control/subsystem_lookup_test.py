@@ -3095,6 +3095,7 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(file_entry["classification"], "runtime")
             subsystems = {match["subsystem"] for match in file_entry["matches"]}
             if file_entry["path"] in {
+                "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
                 "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
                 "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
             }:
@@ -3578,8 +3579,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 131,
-                    "heading_line": 88,
+                    "line": 142,
+                    "heading_line": 89,
                 }
             ],
         )

@@ -1,5 +1,6 @@
 import { Component } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { API_TOKEN_ACCESS_PANEL_DESCRIPTION } from '@/utils/apiTokenPresentation';
 import { API_TOKEN_SCOPES_DOC_URL } from '@/utils/docsLinks';
 import APITokenManager from './APITokenManager';
 
@@ -19,11 +20,7 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
         noPadding
       >
         <div class="space-y-3 p-4 sm:p-6 pb-6">
-          <p class="text-sm text-muted">
-            Generate scoped tokens for container runtime agents, system agents, and automation
-            pipelines. Tokens are shown once—store them securely and rotate when infrastructure
-            changes.
-          </p>
+          <p class="text-sm text-muted">{API_TOKEN_ACCESS_PANEL_DESCRIPTION}</p>
           <a
             href={API_TOKEN_SCOPES_DOC_URL}
             target="_blank"

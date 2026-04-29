@@ -158,15 +158,20 @@ work extends shared components instead of creating new local variants.
 
 ## Shared Boundaries
 
-1. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
-2. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
-3. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-4. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-5. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-6. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
-7. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
-8. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
-9. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
+   The panel may own shell placement and local action layout, but
+   token-specific Docker / Podman copy must come from
+   `frontend-modern/src/utils/apiTokenPresentation.ts` rather than page-local
+   text.
+2. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
+3. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
+4. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+5. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+6. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+7. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
+8. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
 
 ## Extension Points
 

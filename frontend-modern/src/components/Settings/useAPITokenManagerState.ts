@@ -1,10 +1,4 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import type { APITokenRecord } from '@/api/security';
 import { SecurityAPI } from '@/api/security';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -15,6 +9,7 @@ import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import {
+  getAPITokenDockerPodmanUsageCountLabel,
   getAPITokenGenerateErrorMessage,
   getAPITokenRevealSettingsNote,
   getAPITokensLoadErrorMessage,
@@ -229,8 +224,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
         .join(', ');
       const extraCount = dockerUsage.items.length - 5;
       const summary = extraCount > 0 ? `${preview}, +${extraCount} more` : preview;
-      const label =
-        dockerUsage.count === 1 ? 'container runtime' : `${dockerUsage.count} container runtimes`;
+      const label = getAPITokenDockerPodmanUsageCountLabel(dockerUsage.count);
       messageChunks.push(`${label}: ${summary}`);
     }
 

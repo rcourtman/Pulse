@@ -135,10 +135,10 @@ describe('APITokenManager', () => {
       expect(listTokensMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.input(screen.getByPlaceholderText('e.g. Container pipeline'), {
+    fireEvent.input(screen.getByPlaceholderText('e.g. Docker / Podman automation'), {
       target: { value: 'Container automation' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Container manage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Docker / Podman manage' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
@@ -167,10 +167,10 @@ describe('APITokenManager', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Container automation')).toHaveLength(2);
       expect(screen.getByText(/Token generated:/)).toBeInTheDocument();
-      expect(screen.getAllByText('Container lifecycle management').length).toBeGreaterThanOrEqual(
-        2,
-      );
-      expect(screen.getAllByText('Container agent reporting').length).toBeGreaterThanOrEqual(2);
+      expect(
+        screen.getAllByText('Docker / Podman lifecycle management').length,
+      ).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText('Docker / Podman reporting').length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -196,7 +196,7 @@ describe('APITokenManager', () => {
     expect(screen.getByText('Security')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audit logs (read)' })).toBeInTheDocument();
 
-    fireEvent.input(screen.getByPlaceholderText('e.g. Container pipeline'), {
+    fireEvent.input(screen.getByPlaceholderText('e.g. Docker / Podman automation'), {
       target: { value: 'Audit export' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Audit read' }));
@@ -259,6 +259,9 @@ describe('APITokenManager', () => {
     expect(
       within(row as HTMLTableRowElement).getByText('Docker Edge • Edge Agent'),
     ).toBeInTheDocument();
+    expect(
+      within(row as HTMLTableRowElement).queryByText(/container runtime/i),
+    ).not.toBeInTheDocument();
     expect(within(row as HTMLTableRowElement).getByText('Agent reporting')).toBeInTheDocument();
 
     fireEvent.click(within(row as HTMLTableRowElement).getByRole('button', { name: 'Revoke' }));
@@ -273,6 +276,9 @@ describe('APITokenManager', () => {
     expect(markAgentsTokenRevokedMock).toHaveBeenCalledWith('token-runtime', ['agent-007']);
     expect(notificationSuccessMock).toHaveBeenCalledWith(
       expect.stringContaining('Token "Runtime token" was previously used by'),
+    );
+    expect(notificationSuccessMock).toHaveBeenCalledWith(
+      expect.stringContaining('Docker / Podman runtime: Docker Edge'),
     );
 
     await waitFor(() => {
@@ -344,7 +350,7 @@ describe('APITokenManager', () => {
       expect(listTokensMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.input(screen.getByPlaceholderText('e.g. Container pipeline'), {
+    fireEvent.input(screen.getByPlaceholderText('e.g. Docker / Podman automation'), {
       target: { value: 'Blocked token' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
@@ -375,10 +381,10 @@ describe('APITokenManager', () => {
       expect(listTokensMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.input(screen.getByPlaceholderText('e.g. Container pipeline'), {
+    fireEvent.input(screen.getByPlaceholderText('e.g. Docker / Podman automation'), {
       target: { value: 'Needs settings scope' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Container report' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Docker / Podman report' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {

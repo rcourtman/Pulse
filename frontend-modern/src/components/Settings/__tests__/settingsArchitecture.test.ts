@@ -13,6 +13,10 @@ import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
+import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
+import apiTokenManagerSource from '../APITokenManager.tsx?raw';
+import apiTokenManagerModelSource from '../apiTokenManagerModel.ts?raw';
+import apiTokenManagerStateSource from '../useAPITokenManagerState.ts?raw';
 import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
@@ -202,6 +206,27 @@ describe('settings architecture guardrails', () => {
     expect(auditLogPresentationSource).toContain(
       "AUDIT_VERIFICATION_FILTER_ALL_LABEL = getAllFilterOptionLabel('verification')",
     );
+  });
+
+  it('keeps API token Docker and Podman copy on shared presentation helpers', () => {
+    expect(apiAccessPanelSource).toContain('API_TOKEN_ACCESS_PANEL_DESCRIPTION');
+    expect(apiTokenManagerModelSource).toContain('API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION');
+    expect(apiTokenManagerModelSource).toContain('API_TOKEN_DOCKER_MANAGE_PRESET_DESCRIPTION');
+    expect(apiTokenManagerSource).toContain('getAPITokenDockerPodmanUsageSummary');
+    expect(apiTokenManagerSource).toContain('getAPITokenDockerPodmanUsageTitle');
+    expect(apiTokenManagerStateSource).toContain('getAPITokenDockerPodmanUsageCountLabel');
+
+    for (const source of [
+      apiAccessPanelSource,
+      apiTokenManagerSource,
+      apiTokenManagerModelSource,
+      apiTokenManagerStateSource,
+    ]) {
+      expect(source).not.toContain('container runtime');
+      expect(source).not.toContain('Container runtime');
+      expect(source).not.toContain('container runtimes');
+      expect(source).not.toContain('Container runtimes');
+    }
   });
 
   it('keeps settings native select controls on the shared labelled primitive', () => {

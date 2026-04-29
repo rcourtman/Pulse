@@ -29,58 +29,71 @@ visibility, and privacy controls to operators.
 3. `frontend-modern/public/docs/PRIVACY.md`
 4. `frontend-modern/src/utils/docsLinks.ts`
 5. `frontend-modern/src/api/security.ts`
-6. `frontend-modern/src/components/Settings/APITokenManager.tsx`
-7. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
-8. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
-9. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-10. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
-11. `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`
-12. `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`
-13. `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`
-14. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-15. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
-16. `frontend-modern/src/utils/apiTokenPresentation.ts`
-17. `frontend-modern/src/utils/auditLogPresentation.ts`
-18. `frontend-modern/src/utils/auditWebhookPresentation.ts`
-19. `frontend-modern/src/utils/securityAuthPresentation.ts`
-20. `frontend-modern/src/utils/securityScorePresentation.ts`
-21. `internal/api/security.go`
-22. `internal/api/security_tokens.go`
-23. `internal/api/system_settings.go`
-24. `internal/config/config.go`
-25. `internal/config/watcher.go`
-26. `internal/telemetry/telemetry.go`
-27. `internal/api/router_routes_auth_security.go`
-28. `internal/crypto/crypto.go`
-29. `internal/securityutil/secure_storage_dir.go`
-30. `internal/cloudcp/auth/magiclink.go`
-31. `internal/cloudcp/auth/magiclink_store.go`
-32. `pkg/tlsutil/fingerprint.go`
-33. `scripts/telemetry_adoption_report.py`
-34. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-35. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+6. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
+7. `frontend-modern/src/components/Settings/APITokenManager.tsx`
+8. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
+9. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+10. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+11. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
+12. `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`
+13. `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`
+14. `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`
+15. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+16. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
+17. `frontend-modern/src/constants/apiScopes.ts`
+18. `frontend-modern/src/utils/apiTokenPresentation.ts`
+19. `frontend-modern/src/utils/auditLogPresentation.ts`
+20. `frontend-modern/src/utils/auditWebhookPresentation.ts`
+21. `frontend-modern/src/utils/securityAuthPresentation.ts`
+22. `frontend-modern/src/utils/securityScorePresentation.ts`
+23. `internal/api/security.go`
+24. `internal/api/security_tokens.go`
+25. `internal/api/system_settings.go`
+26. `internal/config/config.go`
+27. `internal/config/watcher.go`
+28. `internal/telemetry/telemetry.go`
+29. `internal/api/router_routes_auth_security.go`
+30. `internal/crypto/crypto.go`
+31. `internal/securityutil/secure_storage_dir.go`
+32. `internal/cloudcp/auth/magiclink.go`
+33. `internal/cloudcp/auth/magiclink_store.go`
+34. `pkg/tlsutil/fingerprint.go`
+35. `scripts/telemetry_adoption_report.py`
+36. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+37. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/security.ts` shared with `api-contracts`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
-2. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `api-contracts`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
+2. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `frontend-primitives`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
+   Its Docker / Podman token wording must come from
+   `frontend-modern/src/utils/apiTokenPresentation.ts` rather than page-local
+   copy.
+3. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `api-contracts`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
    Token-management table rows are security-facing content, but the visual
    table frame and scroll shell belong to `frontend-primitives`
    `PulseDataGrid`; do not add token-surface-local overflow, side-border, or
    negative-margin wrappers around the inventory grid.
-3. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `api-contracts`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
-4. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `frontend-primitives`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
-5. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `frontend-primitives`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
-6. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `frontend-primitives`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-7. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `frontend-primitives`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `frontend-primitives`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-9. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `api-contracts`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
-10. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `api-contracts`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
-11. `internal/api/security.go` shared with `api-contracts`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
-12. `internal/api/security_tokens.go` shared with `api-contracts`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
-13. `internal/api/system_settings.go` shared with `api-contracts`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
-14. `internal/cloudcp/auth/magiclink.go` shared with `cloud-paid`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
-15. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
+4. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `api-contracts`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
+5. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `frontend-primitives`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
+6. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `frontend-primitives`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
+7. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `frontend-primitives`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+8. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `frontend-primitives`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+9. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `frontend-primitives`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+10. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `api-contracts`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
+11. `frontend-modern/src/constants/apiScopes.ts` shared with `api-contracts`: the API token scope catalog is both a security/privacy token-management trust surface and a canonical API token payload boundary.
+    Scope labels and descriptions are visible security controls. Docker /
+    Podman scopes must use the shared source-platform label rather than
+    generic `container` copy.
+12. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `api-contracts`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
+    It owns Docker / Podman token copy for API Access, token presets, usage
+    summaries, and revoke warnings so security-facing copy does not drift into
+    page-local `container runtime` labels.
+13. `internal/api/security.go` shared with `api-contracts`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+14. `internal/api/security_tokens.go` shared with `api-contracts`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+15. `internal/api/system_settings.go` shared with `api-contracts`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
+16. `internal/cloudcp/auth/magiclink.go` shared with `cloud-paid`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
+17. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
 
 ## Extension Points
 
@@ -93,7 +106,7 @@ visibility, and privacy controls to operators.
    receive distinct bounded replacement tokens for one session, but explicit
    session deletion, password-change invalidation, and logout must invalidate
    every retained CSRF hash for that session.
-5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
+5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
 8. Change auth-env password normalization, hosted commercial base URL

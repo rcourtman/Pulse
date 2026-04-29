@@ -15,6 +15,12 @@ import {
   getActionableDockerRuntimeIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
+import {
+  API_TOKEN_DOCKER_MANAGE_PRESET_LABEL,
+  API_TOKEN_DOCKER_MANAGE_PRESET_DESCRIPTION,
+  API_TOKEN_DOCKER_REPORT_PRESET_LABEL,
+  API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION,
+} from '@/utils/apiTokenPresentation';
 import { API_TOKEN_SCOPES_DOC_URL as SHIPPED_API_TOKEN_SCOPES_DOC_URL } from '@/utils/docsLinks';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import type { Resource } from '@/types/resource';
@@ -51,15 +57,14 @@ export const getAPITokenScopePresets = (): APITokenPreset[] => [
     description: 'Allow the Pulse agent to submit OS, CPU, and disk metrics.',
   },
   {
-    label: 'Container report',
+    label: API_TOKEN_DOCKER_REPORT_PRESET_LABEL,
     scopes: [DOCKER_REPORT_SCOPE],
-    description:
-      'Permits container agents (Docker or Podman) to stream runtime and container telemetry only.',
+    description: API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION,
   },
   {
-    label: 'Container manage',
+    label: API_TOKEN_DOCKER_MANAGE_PRESET_LABEL,
     scopes: [DOCKER_REPORT_SCOPE, DOCKER_MANAGE_SCOPE],
-    description: 'Extends container reporting with lifecycle actions (restart, stop, etc.).',
+    description: API_TOKEN_DOCKER_MANAGE_PRESET_DESCRIPTION,
   },
   {
     label: 'Settings read',
@@ -183,7 +188,9 @@ export const buildAgentTokenUsage = (resources: Resource[]): Map<string, APIToke
 };
 
 export const sortAPITokensByCreatedAt = (tokens: APITokenRecord[]): APITokenRecord[] => {
-  return [...tokens].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return [...tokens].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
 };
 
 export const countWildcardTokens = (tokens: APITokenRecord[]): number => {
@@ -203,9 +210,9 @@ export const groupAPITokenScopes = (): [ScopeGroup, ScopeOption[]][] => {
   for (const option of API_SCOPE_OPTIONS) {
     grouped[option.group].push(option);
   }
-  return API_TOKEN_SCOPE_GROUP_ORDER.map((group) => [group, grouped[group]] as [ScopeGroup, ScopeOption[]]).filter(
-    ([, options]) => options.length > 0,
-  );
+  return API_TOKEN_SCOPE_GROUP_ORDER.map(
+    (group) => [group, grouped[group]] as [ScopeGroup, ScopeOption[]],
+  ).filter(([, options]) => options.length > 0);
 };
 
 export const matchesScopePreset = (selectedScopes: string[], presetScopes: string[]): boolean => {
@@ -214,9 +221,7 @@ export const matchesScopePreset = (selectedScopes: string[], presetScopes: strin
     .sort();
   const target = [...presetScopes].sort();
   if (target.length === 0) {
-    return (
-      selectedScopes.length === 0 || selectedScopes.includes(API_TOKEN_WILDCARD_SCOPE)
-    );
+    return selectedScopes.length === 0 || selectedScopes.includes(API_TOKEN_WILDCARD_SCOPE);
   }
   if (selection.length !== target.length) return false;
   return target.every((scope) => selection.includes(scope));
