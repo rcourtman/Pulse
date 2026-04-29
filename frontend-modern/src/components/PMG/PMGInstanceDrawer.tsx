@@ -319,44 +319,40 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                   <div class="text-xs font-semibold text-base-content">
                     {drawerPresentation.nodesSectionTitle}
                   </div>
-                  <div class="mt-2 overflow-x-auto">
-                    <Table class="min-w-full text-xs">
-                      <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
-                        <TableRow>
-                          <TableHead class="text-left py-2 pr-3">
-                            {drawerPresentation.nodeColumnLabel}
-                          </TableHead>
-                          <TableHead class="text-left py-2 pr-3">
-                            {drawerPresentation.roleColumnLabel}
-                          </TableHead>
-                          <TableHead class="text-left py-2 pr-3">
-                            {drawerPresentation.statusColumnLabel}
-                          </TableHead>
-                          <TableHead class="text-right py-2 pl-3">
-                            {drawerPresentation.queueColumnLabel}
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody class="divide-y divide-border-subtle">
-                        <For each={pmgData().nodes || []}>
-                          {(node) => (
-                            <TableRow>
-                              <TableCell class="py-2 pr-3 font-medium text-base-content">
-                                {node.name}
-                              </TableCell>
-                              <TableCell class="py-2 pr-3 text-muted">{node.role || '—'}</TableCell>
-                              <TableCell class="py-2 pr-3 text-muted">
-                                {node.status || '—'}
-                              </TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">
-                                {formatCompact(node.queueStatus?.total ?? 0)}
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </For>
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <Table wrapperClass="mt-2" class="min-w-full text-xs">
+                    <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
+                      <TableRow>
+                        <TableHead class="text-left py-2 pr-3">
+                          {drawerPresentation.nodeColumnLabel}
+                        </TableHead>
+                        <TableHead class="text-left py-2 pr-3">
+                          {drawerPresentation.roleColumnLabel}
+                        </TableHead>
+                        <TableHead class="text-left py-2 pr-3">
+                          {drawerPresentation.statusColumnLabel}
+                        </TableHead>
+                        <TableHead class="text-right py-2 pl-3">
+                          {drawerPresentation.queueColumnLabel}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody class="divide-y divide-border-subtle">
+                      <For each={pmgData().nodes || []}>
+                        {(node) => (
+                          <TableRow>
+                            <TableCell class="py-2 pr-3 font-medium text-base-content">
+                              {node.name}
+                            </TableCell>
+                            <TableCell class="py-2 pr-3 text-muted">{node.role || '—'}</TableCell>
+                            <TableCell class="py-2 pr-3 text-muted">{node.status || '—'}</TableCell>
+                            <TableCell class="py-2 pl-3 text-right text-muted">
+                              {formatCompact(node.queueStatus?.total ?? 0)}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </For>
+                    </TableBody>
+                  </Table>
                 </Card>
               </Show>
 
@@ -374,34 +370,30 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                       inputClass="py-1 text-xs"
                     />
                   </div>
-                  <div class="mt-2 overflow-x-auto">
-                    <Table class="min-w-full text-xs">
-                      <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
-                        <TableRow>
-                          <TableHead class="text-left py-2 pr-3">
-                            {drawerPresentation.domainColumnLabel}
-                          </TableHead>
-                          <TableHead class="text-left py-2 pr-3">
-                            {drawerPresentation.commentColumnLabel}
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody class="divide-y divide-border-subtle">
-                        <For each={relayDomains()}>
-                          {(row) => (
-                            <TableRow>
-                              <TableCell class="py-2 pr-3 font-medium text-base-content">
-                                {row.domain}
-                              </TableCell>
-                              <TableCell class="py-2 pr-3 text-muted">
-                                {row.comment || '—'}
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </For>
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <Table wrapperClass="mt-2" class="min-w-full text-xs">
+                    <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
+                      <TableRow>
+                        <TableHead class="text-left py-2 pr-3">
+                          {drawerPresentation.domainColumnLabel}
+                        </TableHead>
+                        <TableHead class="text-left py-2 pr-3">
+                          {drawerPresentation.commentColumnLabel}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody class="divide-y divide-border-subtle">
+                      <For each={relayDomains()}>
+                        {(row) => (
+                          <TableRow>
+                            <TableCell class="py-2 pr-3 font-medium text-base-content">
+                              {row.domain}
+                            </TableCell>
+                            <TableCell class="py-2 pr-3 text-muted">{row.comment || '—'}</TableCell>
+                          </TableRow>
+                        )}
+                      </For>
+                    </TableBody>
+                  </Table>
                 </Card>
               </Show>
 
@@ -426,52 +418,50 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                       inputClass="py-1 text-xs"
                     />
                   </div>
-                  <div class="mt-2 overflow-x-auto">
-                    <Table class="min-w-full text-xs">
-                      <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
-                        <TableRow>
-                          <TableHead class="text-left py-2 pr-3">
-                            {drawerPresentation.domainColumnLabel}
-                          </TableHead>
-                          <TableHead class="text-right py-2 pl-3">
-                            {drawerPresentation.mailColumnLabel}
-                          </TableHead>
-                          <TableHead class="text-right py-2 pl-3">
-                            {drawerPresentation.spamColumnLabel}
-                          </TableHead>
-                          <TableHead class="text-right py-2 pl-3">
-                            {drawerPresentation.virusColumnLabel}
-                          </TableHead>
-                          <TableHead class="text-right py-2 pl-3">
-                            {drawerPresentation.bytesColumnLabel}
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody class="divide-y divide-border-subtle">
-                        <For each={domainStats()}>
-                          {(row) => (
-                            <TableRow>
-                              <TableCell class="py-2 pr-3 font-medium text-base-content">
-                                {row.domain}
-                              </TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">
-                                {formatCompact(row.mailCount)}
-                              </TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">
-                                {formatCompact(row.spamCount)}
-                              </TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">
-                                {formatCompact(row.virusCount)}
-                              </TableCell>
-                              <TableCell class="py-2 pl-3 text-right text-muted">
-                                {row.bytes ? formatBytes(row.bytes) : '—'}
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </For>
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <Table wrapperClass="mt-2" class="min-w-full text-xs">
+                    <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
+                      <TableRow>
+                        <TableHead class="text-left py-2 pr-3">
+                          {drawerPresentation.domainColumnLabel}
+                        </TableHead>
+                        <TableHead class="text-right py-2 pl-3">
+                          {drawerPresentation.mailColumnLabel}
+                        </TableHead>
+                        <TableHead class="text-right py-2 pl-3">
+                          {drawerPresentation.spamColumnLabel}
+                        </TableHead>
+                        <TableHead class="text-right py-2 pl-3">
+                          {drawerPresentation.virusColumnLabel}
+                        </TableHead>
+                        <TableHead class="text-right py-2 pl-3">
+                          {drawerPresentation.bytesColumnLabel}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody class="divide-y divide-border-subtle">
+                      <For each={domainStats()}>
+                        {(row) => (
+                          <TableRow>
+                            <TableCell class="py-2 pr-3 font-medium text-base-content">
+                              {row.domain}
+                            </TableCell>
+                            <TableCell class="py-2 pl-3 text-right text-muted">
+                              {formatCompact(row.mailCount)}
+                            </TableCell>
+                            <TableCell class="py-2 pl-3 text-right text-muted">
+                              {formatCompact(row.spamCount)}
+                            </TableCell>
+                            <TableCell class="py-2 pl-3 text-right text-muted">
+                              {formatCompact(row.virusCount)}
+                            </TableCell>
+                            <TableCell class="py-2 pl-3 text-right text-muted">
+                              {row.bytes ? formatBytes(row.bytes) : '—'}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </For>
+                    </TableBody>
+                  </Table>
                 </Card>
               </Show>
 

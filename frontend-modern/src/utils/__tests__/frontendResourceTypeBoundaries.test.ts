@@ -3343,6 +3343,8 @@ describe('frontend resource type boundaries', () => {
     expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_LOADING_STATE_TITLE');
     expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_LOADING_STATE_DESCRIPTION');
     expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_FAILURE_STATE_TITLE');
+    expect(pmgInstanceDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(pmgInstanceDrawerSource).not.toContain('<div class="mt-2 overflow-x-auto">');
     expect(pmgInstanceDrawerSource).not.toContain('Search domains...');
     expect(pmgInstanceDrawerSource).not.toContain('Unknown host');
     expect(pmgInstanceDrawerSource).not.toContain('Spam Distribution');

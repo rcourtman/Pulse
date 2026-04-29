@@ -188,9 +188,9 @@ work extends shared components instead of creating new local variants.
    nesting another card or scroll wrapper. If a framed table needs bounded
    vertical height, that constraint belongs on `Table.wrapperClass` so the
    shared table shell still owns overflow behavior. Resource-detail drawer
-   tables that consume `Table`, including Docker Swarm services and Kubernetes
-   namespaces/deployments, inherit the same scroll-shell owner instead of
-   carrying drawer-local `overflow-x-auto` wrappers.
+   tables that consume `Table`, including Docker Swarm services, Kubernetes
+   namespaces/deployments, and PMG detail tables, inherit the same scroll-shell
+   owner instead of carrying drawer-local `overflow-x-auto` wrappers.
    Product-table subgroup/header rows must likewise consume the shared
    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
    helper and `.grouped-table-row` CSS token contract instead of local
