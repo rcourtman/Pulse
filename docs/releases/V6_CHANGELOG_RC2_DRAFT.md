@@ -28,22 +28,23 @@ The current self-hosted paid model is:
   and advanced admin features
 
 Legacy `Pro+` remains continuity-only for existing holders. It is not a public
-self-hosted checkout tier for the no-cap model.
+self-hosted checkout tier for the current core-monitoring-included model.
 
 ### 2. Paid-customer continuity is stricter and less surprising
 
 `rc.2` carries the fixes that make the actual continuity policy match the
 intended policy:
 
-- lifetime remains uncapped
-- active legacy recurring v5 Pulse Pro continuity remains uncapped while the
+- lifetime licenses are not metered by self-hosted monitoring volume
+- active legacy recurring v5 Pulse Pro continuity is not metered by
+  self-hosted monitoring volume while the
   subscription stays active
 - other supported legacy paid migrations can still exchange into v6 without
   losing self-hosted monitoring access
 - stale self-hosted capped entitlements are normalized back to the current
   core-monitoring-included contract on refresh
 
-### 3. Billing, plan, and account surfaces now match the no-cap model
+### 3. Billing, plan, and account surfaces now match the core-monitoring-included model
 
 The product and Pulse Account no longer frame self-hosted upgrades as buying
 more monitored-system capacity.
@@ -55,7 +56,7 @@ Instead, the self-hosted paid story is now consistently:
 - Pro:
   Relay plus AI operations, automation, governance, and longer history
 
-The no-cap model now flows through the local billing plan surface, Pulse
+The core-monitoring-included model now flows through the local billing plan surface, Pulse
 Account handoff, and the shared plan-definition owners rather than being only a
 docs promise.
 
@@ -68,8 +69,8 @@ continues, and any finite admission freeze applies only to those explicit
 policy contexts. It is not a public self-hosted capacity upsell.
 
 For the normal current self-hosted Community / Relay / Pro path, the plan
-surface now simply treats core monitoring as unlimited instead of carrying stale
-cap-era UI chrome.
+surface now presents core monitoring as included by default instead of carrying
+stale cap-era UI chrome.
 
 ### 5. Two early `rc.1` regressions are fixed
 

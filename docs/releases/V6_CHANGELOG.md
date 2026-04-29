@@ -46,8 +46,8 @@ volume.
   licenses into v6 entitlements.
 
 - **Self-hosted core monitoring is no longer commercially capped on current
-  public plans.** Community, Relay, and Pro now keep self-hosted core
-  monitoring unlimited. Relay sells remote/mobile convenience plus 14-day
+  public plans.** Community, Relay, and Pro include self-hosted core
+  monitoring by default. Relay sells remote/mobile convenience plus 14-day
   history, while Pro adds AI operations, automation, advanced admin surfaces,
   and 90-day history.
 
@@ -67,7 +67,7 @@ volume.
 
 5. **License activation and paid continuity after upgrade.** If the v5 system
    has a paid license, verify the v6 entitlement state, lifetime or recurring
-   continuity cohort, and self-hosted no-cap commercial posture immediately
+   continuity cohort, and core-monitoring-included commercial posture immediately
    after first boot.
 
 6. **Upgrade against a real v5 data copy.** Use a copy of an actual v5 data directory and verify sessions, alert configuration, AI settings, metrics history, audit history, and filesystem assumptions after the v6 startup migration.
@@ -101,7 +101,7 @@ volume.
   states are recorded and surfaced instead of being silently ignored.
 
 - **Monitored-system counting is still deliberate where continuity needs it.**
-  Current public self-hosted plans are no-cap, but canonical monitored-system
+  Current public self-hosted plans include core monitoring by default, but canonical monitored-system
   identity still matters for migration truth, inventory language, and the
   remaining continuity cohorts that are preserved inside the v6 model.
 

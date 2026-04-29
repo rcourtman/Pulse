@@ -64,10 +64,12 @@ Use this cohort breakdown:
 
 - Legacy recurring monthly or annual subscribers from v5 or earlier who were
   already active before the public v6 pricing cutover:
-  keep the current recurring price plus uncapped self-hosted monitoring and
-  child-resource volume while the subscription remains continuously active.
+  keep the current recurring price, with self-hosted monitoring and
+  child-resource volume not metered while the subscription remains continuously
+  active under the current v6 policy.
 - Existing lifetime customers:
-  remain permanently valid and uncapped.
+  remain permanently valid, with self-hosted monitoring and child-resource
+  volume not metered under the current v6 policy.
 - Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered
   path:
   can still exchange into the v6 activation model without repurchasing.
@@ -77,15 +79,15 @@ Use this cohort breakdown:
   any later return uses current public v6 pricing rather than
   resuming the old grandfathered terms.
 - New self-hosted v6 purchasers:
-  take the current Community / Relay / Pro model with unlimited core
-  monitoring.
+  take the current Community / Relay / Pro model with core monitoring included
+  by default.
 
 If a self-hosted v6 install shows a bounded monitored-system cap after
 activation or migration, treat that as a product bug, not as intended policy.
 
 Canonical short reply:
 
-`Lifetime customers remain uncapped. Legacy recurring Pulse Pro subscribers who were already active before the public v6 pricing cutover remain uncapped while that subscription stays active. Other migrated legacy paid installs can still exchange into the v6 activation model without repurchasing, but self-hosted monitoring volume is no longer the paid gate. Former recurring subscribers who return later re-enter on current v6 pricing, and current self-hosted v6 purchases keep core monitoring unlimited.`
+`Lifetime customers remain valid, and self-hosted monitoring volume is no longer the paid gate. Legacy recurring Pulse Pro subscribers who were already active before the public v6 pricing cutover keep their existing recurring price while that subscription stays active. Other migrated legacy paid installs can still exchange into the v6 activation model without repurchasing. Former recurring subscribers who return later re-enter on current v6 pricing, and current self-hosted v6 purchases include core monitoring by default.`
 
 ### Will old bookmarks and familiar v5 pages still work?
 

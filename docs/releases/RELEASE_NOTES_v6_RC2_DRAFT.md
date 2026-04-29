@@ -10,7 +10,7 @@ The purpose of this RC is not to expand the product again. It is to correct the
 main sources of friction that `rc.1` exposed in real user feedback:
 
 - self-hosted monitored-system caps should not be the v6 monetization boundary
-- existing paid customer continuity must be unambiguous and uncapped where
+- existing paid customer continuity must be unambiguous where previously
   promised
 - the product and account surfaces should explain the current commercial model
   clearly instead of carrying stale cap-era copy
@@ -40,20 +40,21 @@ Current self-hosted v6 packaging is:
 | Pro | Included | 90 days | Relay plus AI operations, automation, and advanced admin features |
 
 Legacy `Pro+` remains continuity-only for existing holders. It is not a public
-no-cap self-hosted checkout tier.
+self-hosted checkout tier in the current core-monitoring-included model.
 
 ### Existing Paid Customer Continuity Is Explicit
 
-- Existing lifetime licenses remain valid and uncapped.
+- Existing lifetime licenses remain valid, with self-hosted monitoring volume
+  not metered under the current v6 policy.
 - Legacy recurring Pulse Pro subscribers who were already active before the
-  public v6 pricing cutover remain uncapped while that subscription stays
-  active.
+  public v6 pricing cutover keep their existing recurring price while that
+  subscription stays active.
 - Supported legacy paid migrations can still exchange into the v6 activation
   model without losing self-hosted monitoring access.
 - If a self-hosted v6 install still shows a bounded monitored-system cap after
   activation or migration, treat that as a bug rather than intended policy.
 
-### Billing and Upgrade Surfaces Match the No-Cap Model
+### Billing and Upgrade Surfaces Match the Core-Monitoring-Included Model
 
 The local billing plan surface, Pulse Account upgrade handoff, and related
 pricing copy now describe self-hosted upgrades as plan selection plus paid

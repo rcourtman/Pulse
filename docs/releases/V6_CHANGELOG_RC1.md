@@ -2,10 +2,11 @@
 
 _This changelog is based on the shipped `v6.0.0-rc.1` tag compared with `v5.1.27`. It does not describe later branch-only work on `pulse/v6-release`._
 
-_Pricing/limit note: this rc.1 note predates the later no-cap public self-hosted
-model. Current v6 Community, Relay, and Pro self-hosted plans keep core
-monitoring unlimited; paid self-hosted value is in Relay/mobile, history,
-AI operations, and admin features rather than monitored-system capacity._
+_Pricing/limit note: this rc.1 note predates the later current public
+self-hosted model. Current v6 Community, Relay, and Pro self-hosted plans
+include core monitoring by default; paid self-hosted value is in Relay/mobile,
+history, AI operations, and admin features rather than monitored-system
+capacity._
 
 ## What v6 changes at a high level
 
@@ -23,7 +24,7 @@ For existing Pulse v5 operators, this is not just a visual refresh. The default 
 
 - **Adding infrastructure is more structured.** The shipped RC includes cluster agent deployment workflows with candidate discovery, preflights, jobs, event streams, cancel, and retry paths. That is a real workflow change from v5's more manual install-command model.
 
-- **Licensing and activation behave differently.** V6 tracks entitlement state, commercial posture, and paid-license continuity more explicitly. Later v6 branch work removed the early self-hosted monitored-system capacity ladder and retired ordinary self-hosted trial acquisition; current Community, Relay, and Pro self-hosted plans keep core monitoring unlimited.
+- **Licensing and activation behave differently.** V6 tracks entitlement state, commercial posture, and paid-license continuity more explicitly. Later v6 branch work removed the early self-hosted monitored-system capacity ladder and retired ordinary self-hosted trial acquisition; current Community, Relay, and Pro self-hosted plans include core monitoring by default.
 
 - **Hosted, org, and relay/mobile capabilities are also part of the shipped RC.** They are present in `v6.0.0-rc.1`, but most existing self-hosted v5 operators can treat them as second-wave testing rather than the first things to validate.
 

@@ -55,10 +55,11 @@ self-hosted checkout tier.
 
 ### Existing paid customer continuity is explicit
 
-- Existing lifetime customers remain valid and uncapped.
+- Existing lifetime customers remain valid, with self-hosted monitoring volume
+  not metered under the current v6 policy.
 - Legacy recurring Pulse Pro subscribers who were already active before the
-  public v6 pricing cutover remain uncapped while that subscription stays
-  active.
+  public v6 pricing cutover keep their existing recurring price while that
+  subscription stays active.
 - Supported legacy paid migrations can still exchange into the v6 activation
   model without repurchasing.
 - If a self-hosted v6 install still shows a bounded monitored-system cap after

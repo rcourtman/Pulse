@@ -29,8 +29,8 @@ No. Server upgrade and Unified Agent upgrade remain separate operations.
 
 ### Does self-hosted v6 still cap monitored systems?
 
-No for the current public self-hosted plans. Community, Relay, and Pro now keep
-core self-hosted monitoring unlimited.
+No for the current public self-hosted plans. Community, Relay, and Pro include
+core self-hosted monitoring by default.
 
 Monitored systems still matter for product understanding, migration truth, and
 inventory language, but they are no longer the self-hosted paid gate.
@@ -54,10 +54,12 @@ Use this cohort breakdown:
 
 - Legacy recurring monthly or annual subscribers from v5 or earlier who were
   already active before the public v6 pricing cutover:
-  keep the current recurring price plus uncapped self-hosted monitoring and
-  child-resource volume while the subscription remains continuously active.
+  keep the current recurring price, with self-hosted monitoring and
+  child-resource volume not metered while the subscription remains continuously
+  active under the current v6 policy.
 - Existing lifetime customers:
-  remain permanently valid and uncapped.
+  remain permanently valid, with self-hosted monitoring and child-resource
+  volume not metered under the current v6 policy.
 - Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered
   path:
   can still exchange into the v6 activation model without repurchasing.
@@ -69,7 +71,7 @@ Use this cohort breakdown:
 
 Canonical short reply:
 
-`Current self-hosted v6 plans no longer charge by monitored-system count. Lifetime customers remain uncapped. Legacy recurring Pulse Pro subscribers who were already active before the public v6 pricing cutover remain uncapped while that subscription stays active. Other supported legacy paid installs can still exchange into the v6 activation model without repurchasing, but self-hosted monitoring volume is no longer the paid gate.`
+`Current self-hosted v6 plans no longer charge by monitored-system count. Lifetime customers remain valid, and self-hosted monitoring volume is no longer the paid gate. Legacy recurring Pulse Pro subscribers who were already active before the public v6 pricing cutover keep their existing recurring price while that subscription stays active. Other supported legacy paid installs can still exchange into the v6 activation model without repurchasing.`
 
 ### What if a self-hosted v6 install still shows a monitored-system cap?
 

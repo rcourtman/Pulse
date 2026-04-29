@@ -142,19 +142,21 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             with self.subTest(rel=rel):
                 support_pack = read(rel)
                 self.assertIn(
-                    "current recurring price plus uncapped self-hosted monitoring and",
+                    "keep the current recurring price, with self-hosted monitoring and",
                     support_pack,
                 )
-                self.assertIn("child-resource volume while the subscription remains continuously active", support_pack)
+                self.assertIn("child-resource volume not metered", support_pack)
+                self.assertIn("core monitoring included", support_pack)
                 self.assertNotIn("uncapped monitored-system plus guest", support_pack)
                 self.assertNotIn("uncapped monitored-system and guest capacity", support_pack)
                 self.assertNotIn("guest-capacity continuity", support_pack)
+                self.assertNotIn("core monitoring unlimited", normalize_ws(support_pack))
 
     def test_rc1_changelog_keeps_current_free_first_licensing_posture(self) -> None:
         changelog = read("docs/releases/V6_CHANGELOG_RC1.md")
         normalized = normalize_ws(changelog)
         self.assertIn("Pricing/limit note", changelog)
-        self.assertIn("core monitoring unlimited", normalized)
+        self.assertIn("include core monitoring by default", normalized)
         self.assertIn("not a monitoring-volume paywall", normalized)
         self.assertNotIn(
             "monitored-system limits, commercial posture, and trial eligibility",
@@ -193,7 +195,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("### License, Trial, and Entitlements", upgrade_guide)
         self.assertIn("does not expose a general in-app trial, trial-return callback, or hosted AI quickstart", normalize_ws(upgrade_guide))
         self.assertIn(
-            "Self-hosted monitoring and child-resource volume remain uncapped under the current v6 policy",
+            "Self-hosted monitoring and child-resource volume are not metered under the current v6 policy",
             upgrade_guide,
         )
         self.assertIn("monitored-system, guest, or child-resource volume cap", upgrade_guide)
