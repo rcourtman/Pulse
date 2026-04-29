@@ -102,6 +102,10 @@ class PaidFeatureClaimsProofTest(unittest.TestCase):
             proof.default_pulse_pro_relay_server_dir(),
             proof.default_pulse_dir().parent / "pulse-pro" / "relay-server",
         )
+        self.assertEqual(
+            proof.default_pulse_enterprise_dir(),
+            proof.default_pulse_dir().parent / "pulse-enterprise",
+        )
 
     def test_build_command_specs_cover_paid_claim_layers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -113,6 +117,8 @@ class PaidFeatureClaimsProofTest(unittest.TestCase):
             pulse_pro_license_server_dir.mkdir(parents=True)
             pulse_pro_relay_server_dir = Path(tmp) / "pulse-pro" / "relay-server"
             pulse_pro_relay_server_dir.mkdir(parents=True)
+            pulse_enterprise_dir = Path(tmp) / "pulse-enterprise"
+            pulse_enterprise_dir.mkdir()
 
             args = proof.parse_args(
                 [
@@ -122,21 +128,27 @@ class PaidFeatureClaimsProofTest(unittest.TestCase):
                     str(pulse_pro_license_server_dir),
                     "--pulse-pro-relay-server-dir",
                     str(pulse_pro_relay_server_dir),
+                    "--pulse-enterprise-dir",
+                    str(pulse_enterprise_dir),
                 ]
             )
             specs = proof.build_command_specs(args)
 
-            self.assertEqual(len(specs), 5)
+            self.assertEqual(len(specs), 8)
             self.assertEqual(specs[0].cwd, str(pulse_dir.resolve()))
-            self.assertEqual(specs[2].cwd, str(frontend_dir.resolve()))
-            self.assertEqual(specs[3].cwd, str(pulse_pro_license_server_dir.resolve()))
-            self.assertEqual(specs[4].cwd, str(pulse_pro_relay_server_dir.resolve()))
+            self.assertEqual(specs[4].cwd, str(frontend_dir.resolve()))
+            self.assertEqual(specs[5].cwd, str(pulse_pro_license_server_dir.resolve()))
+            self.assertEqual(specs[6].cwd, str(pulse_pro_relay_server_dir.resolve()))
+            self.assertEqual(specs[7].cwd, str(pulse_enterprise_dir.resolve()))
             names = {spec.name for spec in specs}
             self.assertIn("pulse-licensing-paid-feature-contract", names)
             self.assertIn("pulse-api-history-entitlement-enforcement", names)
+            self.assertIn("pulse-pro-admin-extras-api-contract", names)
+            self.assertIn("pulse-pro-admin-extras-core-packages", names)
             self.assertIn("pulse-frontend-paid-claim-contract", names)
             self.assertIn("pulse-pro-public-pricing-and-checkout-contract", names)
             self.assertIn("pulse-pro-relay-entitlement-runtime", names)
+            self.assertIn("pulse-enterprise-pro-admin-extras-runtime", names)
 
     def test_public_copy_audit_passes_for_current_claim_floor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -129,6 +129,10 @@ def default_pulse_pro_relay_server_dir() -> Path:
     return default_pulse_dir().parent / "pulse-pro" / "relay-server"
 
 
+def default_pulse_enterprise_dir() -> Path:
+    return default_pulse_dir().parent / "pulse-enterprise"
+
+
 def default_pulse_pro_dir(args: argparse.Namespace) -> Path:
     return Path(args.pulse_pro_license_server_dir).resolve().parent
 
@@ -146,6 +150,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--pulse-pro-relay-server-dir",
         default=str(default_pulse_pro_relay_server_dir()),
+    )
+    parser.add_argument(
+        "--pulse-enterprise-dir",
+        default=str(default_pulse_enterprise_dir()),
     )
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of human-readable output")
     parser.add_argument("--report-out", help="Optional path to write a markdown report")
@@ -168,6 +176,7 @@ def build_command_specs(args: argparse.Namespace) -> list[CommandSpec]:
     frontend_dir = frontend_dir_from_args(args)
     pulse_pro_license_server_dir = Path(args.pulse_pro_license_server_dir).resolve()
     pulse_pro_relay_server_dir = Path(args.pulse_pro_relay_server_dir).resolve()
+    pulse_enterprise_dir = Path(args.pulse_enterprise_dir).resolve()
     return [
         CommandSpec(
             name="pulse-licensing-paid-feature-contract",
@@ -190,6 +199,30 @@ def build_command_specs(args: argparse.Namespace) -> list[CommandSpec]:
                 "./internal/api",
                 "-run",
                 "^TestHandleMetricsHistory_TierAwareHistoryRanges$",
+                "-count=1",
+            ],
+        ),
+        CommandSpec(
+            name="pulse-pro-admin-extras-api-contract",
+            cwd=str(pulse_dir),
+            command=[
+                "go",
+                "test",
+                "./internal/api",
+                "-run",
+                "^(Test.*RBAC|Test.*Audit|Test.*Reporting|Test.*Report|Test.*SAML|Test.*SSO|Test.*AgentProfiles|Test.*ProfileSuggestions|Test.*ConfigProfiles|Test.*RequireLicenseFeature|TestRouter.*Reporting|TestRouter.*SSO|TestHandle.*Reporting|TestHandle.*Audit|TestHandle.*RBAC|TestHandle.*Profile|TestBind.*)$",
+                "-count=1",
+            ],
+        ),
+        CommandSpec(
+            name="pulse-pro-admin-extras-core-packages",
+            cwd=str(pulse_dir),
+            command=[
+                "go",
+                "test",
+                "./pkg/audit",
+                "./pkg/auth",
+                "./pkg/reporting",
                 "-count=1",
             ],
         ),
@@ -230,6 +263,21 @@ def build_command_specs(args: argparse.Namespace) -> list[CommandSpec]:
                 ".",
                 "-run",
                 "^(TestValidateLicense_AllProTiers|TestValidateLicense_FreeTierRejected|TestHostedEntitlementValidator_RejectsMissingRelayCapability|TestBridge_V6GrantRegister|TestBridge_V6GrantRejected_CancelledState|TestBridge_V6Grant_FullDataRouting|TestBridge_PushNotificationHandled)$",
+                "-count=1",
+            ],
+        ),
+        CommandSpec(
+            name="pulse-enterprise-pro-admin-extras-runtime",
+            cwd=str(pulse_enterprise_dir),
+            command=[
+                "go",
+                "test",
+                "./internal/audit",
+                "./internal/auditadmin",
+                "./internal/rbac",
+                "./internal/rbacadmin",
+                "./internal/reportingadmin",
+                "./internal/ssoadmin",
                 "-count=1",
             ],
         ),
@@ -338,7 +386,7 @@ def render_markdown_report(title: str, results: list[CommandResult]) -> str:
         "",
         "## Scope",
         "",
-        "This proof checks that self-hosted paid claims map to concrete public copy, entitlement, API, UI, license-server, and relay-server behavior.",
+        "This proof checks that self-hosted paid claims map to concrete public copy, entitlement, API, UI, Pro admin-extra, license-server, and relay-server behavior.",
         "",
         "## Results",
         "",

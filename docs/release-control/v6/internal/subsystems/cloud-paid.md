@@ -197,9 +197,9 @@ cross-repo proof bundle in `scripts/release_control/paid_feature_claims_proof.py
 When Community, Relay, or Pro claims change, that proof must continue to verify
 the public customer-facing copy, canonical licensing matrix, runtime history
 entitlement enforcement, frontend plan presentation, public
-pricing/checkout/download behavior, and Relay entitlement acceptance together
-rather than treating copy, checkout, and runtime gating as separate unlinked
-claims.
+pricing/checkout/download behavior, Pro admin-extra runtime behavior, and
+Relay entitlement acceptance together rather than treating copy, checkout, and
+runtime gating as separate unlinked claims.
 
 ## Extension Points
 
