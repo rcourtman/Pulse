@@ -28,6 +28,8 @@ Own canonical runtime payload shapes between backend and frontend.
 3. `internal/api/alerts.go`
 4. `internal/api/activity_audit_handlers.go`
 5. `frontend-modern/src/types/api.ts`
+6. `frontend-modern/src/types/actionAudit.ts`
+7. `frontend-modern/src/api/actionAudit.ts`
 6. `frontend-modern/src/api/responseUtils.ts`
 7. `frontend-modern/src/components/Settings/APITokenManager.tsx`
 8. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
@@ -1602,6 +1604,11 @@ Unified action audit payloads must also expose the normalized action plan
 preflight through `plan.preflight`: API consumers should see whether a dry-run
 was available, what safety checks were recorded, and what verification steps
 remain, instead of inferring action safety from free-form result text.
+The frontend action-audit client in `frontend-modern/src/api/actionAudit.ts`
+and its typed payload mirror in `frontend-modern/src/types/actionAudit.ts` are
+the canonical browser-side reader for `GET /api/audit/actions`; resource
+workflow surfaces must consume that client instead of rebuilding audit query
+URLs or silently ignoring the endpoint's gated-unavailable state.
 Those relationship and timeline payloads now also carry `lastSeenAt` freshness
 and optional metadata through the same owned contract, so the drawer can
 preserve provenance without inventing a separate relationship-detail schema.

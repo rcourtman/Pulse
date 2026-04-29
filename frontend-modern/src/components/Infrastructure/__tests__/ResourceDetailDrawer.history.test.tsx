@@ -6,6 +6,7 @@ import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
+import resourceActionHistorySource from '@/components/Infrastructure/ResourceActionHistory.tsx?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import createNonSuspendingQuerySource from '@/hooks/createNonSuspendingQuery.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
@@ -16,6 +17,8 @@ import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/
 import resourceDetailDrawerVmwareModelSource from '@/components/Infrastructure/resourceDetailDrawerVmwareModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
+import actionAuditApiSource from '@/api/actionAudit.ts?raw';
+import actionAuditPresentationSource from '@/utils/actionAuditPresentation.ts?raw';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
@@ -56,6 +59,14 @@ const aiIntelligenceMock = vi.hoisted(() => ({
   }),
 }));
 
+const actionAuditMock = vi.hoisted(() => ({
+  listActionAudits: vi.fn().mockResolvedValue({
+    audits: [],
+    count: 0,
+    available: false,
+  }),
+}));
+
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     state: { pmg: [] as any[] },
@@ -80,6 +91,12 @@ vi.mock('@/api/resources', () => ({
 vi.mock('@/api/ai', () => ({
   AIAPI: {
     getResourceIntelligence: aiIntelligenceMock.getResourceIntelligence,
+  },
+}));
+
+vi.mock('@/api/actionAudit', () => ({
+  ActionAuditAPI: {
+    listActionAudits: actionAuditMock.listActionAudits,
   },
 }));
 
@@ -129,21 +146,25 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );
-    expect(resourceDetailDrawerShellSource).toContain(
-      "from './ResourceDetailDrawerOverviewTab'",
-    );
+    expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerOverviewTab'");
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
     expect(resourceDetailDrawerShellSource).toContain('data-testid="resource-header-badges"');
     expect(resourceDetailDrawerShellSource).toContain('drawer.headerBadges()');
     expect(resourceDetailDrawerShellSource).not.toContain('drawer.headerIdentity()');
     expect(resourceDetailDrawerShellSource).not.toContain('drawer.unifiedSourceBadges()');
     expect(resourceDetailDrawerShellSource).not.toContain('Change history');
-    expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerHistoryState'");
-    expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerDerivedState'");
+    expect(resourceDetailDrawerStateSource).toContain(
+      "from './useResourceDetailDrawerHistoryState'",
+    );
+    expect(resourceDetailDrawerStateSource).toContain(
+      "from './useResourceDetailDrawerDerivedState'",
+    );
     expect(resourceDetailDrawerStateSource).toContain(
       "from './useResourceDetailDrawerDockerActionsState'",
     );
-    expect(resourceDetailDrawerStateSource).toContain('const [showHistoryFilters, setShowHistoryFilters]');
+    expect(resourceDetailDrawerStateSource).toContain(
+      'const [showHistoryFilters, setShowHistoryFilters]',
+    );
     expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerHistoryStateSource).toContain(
@@ -153,6 +174,13 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerHistoryStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerHistoryStateSource).toContain('ResourceAPI.getFacetBundle');
     expect(resourceDetailDrawerHistoryStateSource).toContain('AIAPI.getResourceIntelligence');
+    expect(resourceDetailDrawerHistoryStateSource).toContain('ActionAuditAPI.listActionAudits');
+    expect(resourceDetailDrawerOverviewSource).toContain("from './ResourceActionHistory'");
+    expect(resourceActionHistorySource).toContain('getActionAuditStatePresentation');
+    expect(resourceActionHistorySource).toContain('formatActionApprovalPolicyLabel');
+    expect(actionAuditApiSource).toContain('/api/audit/actions');
+    expect(actionAuditApiSource).toContain('ACTION_AUDIT_UNAVAILABLE_STATUSES');
+    expect(actionAuditPresentationSource).toContain('pending_approval');
     expect(resourceDetailDrawerDerivedStateSource).toContain('toDiscoveryConfig');
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from '@/components/Infrastructure/resourceDetailDiscoveryModel'",
@@ -197,9 +225,13 @@ describe('ResourceDetailDrawer change history section', () => {
       'export const buildKubernetesCapabilityBadges',
     );
     expect(resourceDetailDrawerOperationalModelSource).toContain('export const buildSourceSummary');
-    expect(resourceDetailDrawerOperationalModelSource).toContain('export const buildHostDetailCards');
+    expect(resourceDetailDrawerOperationalModelSource).toContain(
+      'export const buildHostDetailCards',
+    );
     expect(resourceDetailDrawerOperationalModelSource).toContain('export const buildRelatedLinks');
-    expect(resourceDetailDrawerServiceModelSource).toContain('export const getServiceDetailsSummary');
+    expect(resourceDetailDrawerServiceModelSource).toContain(
+      'export const getServiceDetailsSummary',
+    );
     expect(resourceDetailDrawerServiceModelSource).toContain(
       'export const buildPbsVisibleJobBreakdown',
     );
@@ -209,7 +241,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerServiceModelSource).toContain(
       'export const buildPmgVisibleMailBreakdown',
     );
-    expect(resourceDetailDrawerServiceModelSource).toContain("formatCount(pmg.queueTotal || 0, 'queued message')");
+    expect(resourceDetailDrawerServiceModelSource).toContain(
+      "formatCount(pmg.queueTotal || 0, 'queued message')",
+    );
     expect(resourceDetailDrawerServiceModelSource).toContain("'delayed message'");
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
@@ -218,14 +252,18 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain(
       'const modeLabel = formatSourceType(resource.sourceType);',
     );
-    expect(resourceDetailDrawerOverviewSource).not.toContain('<span class="text-muted">Mode</span>');
+    expect(resourceDetailDrawerOverviewSource).not.toContain(
+      '<span class="text-muted">Mode</span>',
+    );
     expect(createNonSuspendingQuerySource).toContain('const retainedQueryCache = new Map<');
     expect(createNonSuspendingQuerySource).toContain(
       'export function resetCreateNonSuspendingQueryCacheForTest()',
     );
     expect(createNonSuspendingQuerySource).toContain('setResolvedOnce(true);');
     expect(createNonSuspendingQuerySource).toContain('setResolvedOnce(false);');
-    expect(resourceDetailDrawerDockerActionsStateSource).toContain('MonitoringAPI.checkDockerUpdates');
+    expect(resourceDetailDrawerDockerActionsStateSource).toContain(
+      'MonitoringAPI.checkDockerUpdates',
+    );
     expect(resourceDetailDrawerDockerActionsStateSource).toContain(
       'MonitoringAPI.updateAllDockerContainers',
     );
@@ -431,10 +469,7 @@ describe('ResourceDetailDrawer change history section', () => {
       Array.from(screen.getByTestId('resource-support-sections').children).map((node) =>
         node.getAttribute('data-testid'),
       ),
-    ).toEqual([
-      'resource-access-section',
-      'resource-investigation-context',
-    ]);
+    ).toEqual(['resource-access-section', 'resource-investigation-context']);
     expect(screen.getAllByText('Restart 2')).toHaveLength(1);
     expect(screen.getAllByText('Anomaly 1')).toHaveLength(1);
     expect(screen.getAllByText('Platform event 1')).toHaveLength(1);
@@ -546,8 +581,12 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(within(screen.getByTestId('resource-identity-section')).getByText('Aliases')).toBeInTheDocument();
-    expect(within(screen.getByTestId('resource-current-state-section')).queryByText('Aliases')).toBeNull();
+    expect(
+      within(screen.getByTestId('resource-identity-section')).getByText('Aliases'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('resource-current-state-section')).queryByText('Aliases'),
+    ).toBeNull();
   });
 
   it('renders timeline history without surfacing unsupported capability or relationship facets', async () => {
@@ -661,6 +700,89 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.queryByText('Runs on')).toBeNull();
   });
 
+  it('surfaces resource-scoped action history from the canonical action audit API', async () => {
+    actionAuditMock.listActionAudits.mockResolvedValueOnce({
+      available: true,
+      count: 1,
+      resourceId: 'vm:action-42',
+      audits: [
+        {
+          id: 'action-1',
+          createdAt: '2026-04-29T12:00:00Z',
+          updatedAt: '2026-04-29T12:05:00Z',
+          state: 'completed',
+          request: {
+            requestId: 'req-1',
+            resourceId: 'vm:action-42',
+            capabilityName: 'restart_service',
+            reason: 'Restart nginx after patching',
+            requestedBy: 'agent:oncall-helper',
+          },
+          plan: {
+            actionId: 'action-1',
+            requestId: 'req-1',
+            allowed: true,
+            requiresApproval: true,
+            approvalPolicy: 'admin',
+            rollbackAvailable: true,
+            preflight: {
+              target: 'agent:node-1',
+              currentState: 'nginx active',
+              intendedChange: 'Restart nginx',
+              dryRunAvailable: false,
+              dryRunSummary: 'No provider-supported dry run is available for this action.',
+              safetyChecks: ['Approval scoped to this resource.'],
+              verificationSteps: ['Read back service state after execution.'],
+              generatedAt: '2026-04-29T12:01:00Z',
+            },
+          },
+          result: {
+            success: true,
+            output: 'nginx restarted',
+          },
+        },
+      ],
+    });
+
+    facetBundleMock.getFacetBundle.mockResolvedValueOnce({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+      counts: { recentChanges: 0 },
+    });
+
+    render(() => (
+      <ResourceDetailDrawer
+        resource={baseResource({
+          id: 'vm:action-42',
+          type: 'vm',
+          name: 'action-vm',
+          displayName: 'Action VM',
+          platformType: 'proxmox-pve',
+        })}
+      />
+    ));
+
+    const actionHistory = within(await screen.findByTestId('resource-action-history-section'));
+
+    expect(actionAuditMock.listActionAudits).toHaveBeenCalledWith({
+      resourceId: 'vm:action-42',
+      limit: 5,
+    });
+    expect(actionHistory.getByText('Action history')).toBeInTheDocument();
+    expect(actionHistory.getByText('Actions 1')).toBeInTheDocument();
+    expect(actionHistory.getByText('Actions loaded')).toBeInTheDocument();
+    expect(actionHistory.getByText('Restart Service')).toBeInTheDocument();
+    expect(actionHistory.getByText('Completed')).toBeInTheDocument();
+    expect(actionHistory.getByText('agent:oncall-helper')).toBeInTheDocument();
+    expect(actionHistory.getByText('Restart nginx after patching')).toBeInTheDocument();
+    expect(actionHistory.getByText('Admin approval')).toBeInTheDocument();
+    expect(actionHistory.getByText('Not available')).toBeInTheDocument();
+    expect(actionHistory.getByText('Restart nginx')).toBeInTheDocument();
+    expect(actionHistory.getByText('Approval scoped to this resource.')).toBeInTheDocument();
+    expect(actionHistory.getByText('nginx restarted')).toBeInTheDocument();
+  });
+
   it('keeps service details summary-first until the service-local reveal is opened', () => {
     facetBundleMock.getFacetBundle.mockResolvedValueOnce({
       capabilities: [],
@@ -693,10 +815,7 @@ describe('ResourceDetailDrawer change history section', () => {
       Array.from(screen.getByTestId('resource-support-sections').children).map((node) =>
         node.getAttribute('data-testid'),
       ),
-    ).toEqual([
-      'resource-access-section',
-      'resource-service-details-section',
-    ]);
+    ).toEqual(['resource-access-section', 'resource-service-details-section']);
     fireEvent.click(screen.getByRole('button', { name: 'Show service' }));
     const serviceDetails = within(screen.getByTestId('resource-service-details-section'));
     expect(

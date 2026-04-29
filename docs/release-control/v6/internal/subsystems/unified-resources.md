@@ -9,7 +9,9 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/unified-resources.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": []
+  "dependency_subsystem_ids": [
+    "api-contracts"
+  ]
 }
 ```
 
@@ -50,6 +52,7 @@ cross-source deduplication.
 28. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
 29. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`
 30. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx`
+31. `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`
 31. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
 32. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 33. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
@@ -84,6 +87,7 @@ cross-source deduplication.
 62. `frontend-modern/src/utils/canonicalResourceTypes.ts`
 63. `frontend-modern/src/utils/resourceBadgePresentation.ts`
 64. `frontend-modern/src/utils/resourceChangePresentation.ts`
+65. `frontend-modern/src/utils/actionAuditPresentation.ts`
 65. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
 66. `frontend-modern/src/utils/resourcePlatformData.ts`
 67. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
@@ -215,7 +219,7 @@ AI-only summary payloads, or page-local heuristics.
    generic disk-count aggregate, so resource drawers and incidents do not hide
    the actual protection boundary behind a broader count phrase.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
-7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
+7. Add or change resource drawer timeline/facet/action-history presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline plus `internal/api/activity_audit_handlers.go` action-audit contracts together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership
 9. Keep dashboard and infrastructure freshness on the canonical unified-resource
    ownership path. `frontend-modern/src/stores/websocket.ts`,
@@ -439,6 +443,12 @@ verification steps through `preflight`, and `RecordActionAudit` plus
 `RecordActionLifecycleEvent` must normalize action id, request id, resource,
 capability, approval policy, timestamps, lifecycle state, and requester before
 records reach durable audit history.
+`ResourceActionHistory.tsx` now surfaces that same normalized action audit
+trail inside the resource-detail workflow through the canonical
+`frontend-modern/src/api/actionAudit.ts` client and shared
+`frontend-modern/src/utils/actionAuditPresentation.ts` labels. The resource
+drawer must treat gated action-audit reads as unavailable rather than turning
+ordinary infrastructure inspection into an upgrade-prompt path.
 
 `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
 `degraded` and `alerting` resource counts alongside the existing `online` and

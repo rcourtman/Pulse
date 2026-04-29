@@ -3665,7 +3665,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance now has a first-class governed floor: tool capability declarations, approval-backed action plans, plan-level preflight and dry-run posture, fail-closed action-audit normalization, bounded lifecycle events, and API-visible action audit preflight are owned by the shared AI, API, security, Patrol, and unified-resource contracts. Broader enterprise policy execution, richer dry-run providers, multi-actor approvals, and surfaced action-history workflows remain a named post-RC hardening track.",
+        "summary": "Action governance now has a first-class governed floor: tool capability declarations, approval-backed action plans, plan-level preflight and dry-run posture, fail-closed action-audit normalization, bounded lifecycle events, API-visible action audit preflight, and a resource-scoped action-history surface are owned by the shared AI, API, security, Patrol, and unified-resource contracts. Broader enterprise policy execution, richer dry-run providers, multi-actor approvals, and deeper safe-execution contracts remain a named post-RC hardening track.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -3676,6 +3676,11 @@
       "blockers": [],
       "subsystems": [],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/action-audit-resource-history-surface-2026-04-29.md",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
@@ -3704,6 +3709,46 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/V6_BRIDGE_RELEASE_FOUNDATION_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/__tests__/actionAudit.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/actionAudit.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/types/actionAudit.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/actionAuditPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/actionAuditPresentation.ts",
           "kind": "file"
         },
         {
@@ -4750,7 +4795,7 @@
     },
     {
       "id": "action-governance-auditability-post-rc-hardening",
-      "summary": "Track broader action-governance hardening beyond the current canonical action-audit floor, including richer provider dry-runs, enterprise policy execution, multi-actor or MFA approval chains, surfaced action-history workflows, and deeper safe-execution contracts for future controlled operations.",
+      "summary": "Track broader action-governance hardening beyond the current canonical action-audit and resource-scoped action-history floor, including richer provider dry-runs, enterprise policy execution, multi-actor or MFA approval chains, and deeper safe-execution contracts for future controlled operations.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",

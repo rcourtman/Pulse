@@ -1488,6 +1488,7 @@
         "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
+        "frontend-modern/src/types/actionAudit.ts",
         "frontend-modern/src/types/api.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/apiTokenPresentation.ts",
@@ -1720,6 +1721,19 @@
             ],
             "exact_files": [
               "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "frontend-action-audit-types",
+            "label": "frontend action audit type proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/types/actionAudit.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/actionAudit.test.ts"
             ]
           },
           {
@@ -4887,6 +4901,7 @@
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
         "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
+        "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
         "frontend-modern/src/components/Infrastructure/resourceBadges.ts",
         "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
@@ -4925,6 +4940,7 @@
         "frontend-modern/src/pages/Infrastructure.tsx",
         "frontend-modern/src/routing/resourceLinks.ts",
         "frontend-modern/src/types/resource.ts",
+        "frontend-modern/src/utils/actionAuditPresentation.ts",
         "frontend-modern/src/utils/agentResources.ts",
         "frontend-modern/src/utils/canonicalResourceTypes.ts",
         "frontend-modern/src/utils/platformSupportManifest.generated.ts",
@@ -5006,6 +5022,7 @@
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
               "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
+              "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
               "frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts",
@@ -5071,6 +5088,19 @@
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/types/__tests__/resource.test.ts",
               "internal/unifiedresources/code_standards_test.go"
+            ]
+          },
+          {
+            "id": "resource-action-audit-presentation-helper",
+            "label": "resource action audit presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/actionAuditPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/actionAuditPresentation.test.ts"
             ]
           },
           {
