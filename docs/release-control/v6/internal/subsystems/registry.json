@@ -4175,6 +4175,7 @@
         "frontend-modern/src/pages/Workloads.tsx",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
         "frontend-modern/src/utils/throughputPresentation.ts",
+        "frontend-modern/src/utils/workloadsSummaryCache.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
         "internal/api/slo_bench_test.go"
@@ -4205,6 +4206,7 @@
           "frontend-modern/src/components/Workloads/MetricBar.test.tsx",
           "frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx",
           "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
+          "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
           "internal/api/router_bench_test.go",
           "internal/api/slo_bench_test.go",
           "pkg/metrics/store_bench_test.go",
@@ -4302,7 +4304,8 @@
               "frontend-modern/src/components/Workloads/workloadTopology.ts",
               "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
               "frontend-modern/src/pages/Workloads.tsx",
-              "frontend-modern/src/utils/thresholdSliderPresentation.ts"
+              "frontend-modern/src/utils/thresholdSliderPresentation.ts",
+              "frontend-modern/src/utils/workloadsSummaryCache.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -4338,7 +4341,8 @@
               "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
               "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
               "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
-              "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts"
+              "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/workloadsSummaryCache.test.ts"
             ]
           },
           {

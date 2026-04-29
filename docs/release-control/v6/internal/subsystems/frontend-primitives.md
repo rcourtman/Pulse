@@ -783,6 +783,15 @@ work extends shared components instead of creating new local variants.
     the `Add infrastructure` source picker, instead of preserving a separate
     root-only compatibility shell or an agent-only install jump that drifts from
     the rest of the onboarding contract.
+    The authenticated app shell's boot-time route preloads must be owned by
+    `frontend-modern/src/routing/routePreload.ts` so top-level cold-tab
+    readiness cannot drift from the route-module preloader. Workloads,
+    Recovery, Patrol, Alerts, Storage, and Settings are part of that shared
+    preload contract.
+    Route-module preloads and idle chart-cache prewarming are separate shell
+    responsibilities: the shared route preload inventory must stay module-only,
+    while chart payload warming must route through the owning summary-cache
+    utilities instead of mounting hidden pages or adding page-local boot logic.
     The same entry-shell contract must also canonicalize authenticated
     `/login`: once auth succeeds, the shared shell must resolve that route back
     onto the governed Infrastructure landing path instead of rendering a page-local

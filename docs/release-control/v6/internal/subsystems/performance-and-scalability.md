@@ -119,6 +119,7 @@ regression protection.
 97. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
 98. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 99. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+100. `frontend-modern/src/utils/workloadsSummaryCache.ts`
 103. `frontend-modern/src/components/Storage/StorageSummary.tsx`
 104. `frontend-modern/src/utils/storageSummaryCache.ts`
 105. `frontend-modern/src/pages/Workloads.tsx`
@@ -208,6 +209,13 @@ regression protection.
     presentation helper via the workload filter config model instead of the
     hot-path shell hard-coding local `All ...` strings.
 26. Keep long-range workload chart capping time-proportional across `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`, `frontend-modern/src/api/charts.ts`, and `internal/api/router.go`: when the workload hot path caps mixed-cadence history for top cards, it must bucket by time window rather than raw point index so 7-day and 30-day workload cards stay visually even without relaxing the protected payload budget.
+    Workload summary chart caching and app-shell prewarming belong to
+    `frontend-modern/src/utils/workloadsSummaryCache.ts`, not to page-local
+    component state. `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`
+    may hydrate from that shared in-memory/local cache and refresh it, while
+    `frontend-modern/src/useAppRuntimeState.ts` may warm the same cache after
+    authenticated bootstrap without mounting the Workloads route or starting a
+    second polling loop.
 27. Keep summary hover/focus and sticky-card behavior on shared hot paths: infrastructure, workloads, and storage summary shells must reuse one page/group/entity scope model plus `frontend-modern/src/components/shared/StickySummarySection.tsx` inside the app scroll shell instead of per-page scroll listeners or per-card hover derivations, so row scrubbing highlights all cards, workload group headers, infrastructure cluster headers, and storage pool-group headers scope the summary coherently, pinned group focus remains route-backed and reversible, and the hot path does not multiply render or scroll work. That hot path stays row-first rather than adding fallback chrome: the on-screen row or group header is the scoped state, and any explicit reset belongs to one compact shared table-header action plus the shared `Escape` path, not to page-level scope strips, search-row widgets, or filter-bar badges. Background whitespace clearing may exist as a convenience, but the hot path must not depend on brittle dead-space hit testing as the only reversible control. The same hot path must therefore keep one page-level reset owner for filters plus pinned summary selections, and it must keep chart-backed summary-card geometry explicit and stable so hover rerenders, synchronized readouts, or idle header metadata cannot feed layout loops that grow or shrink the top cards over time. Recovery’s summary rail is not part of this interactive hot path; it may share summary-card framing, but it must remain non-interactive until a separately governed model says otherwise.
     The input path for that hot summary contract must stay shared too:
     `frontend-modern/src/components/shared/summaryInteractionA11y.ts` owns

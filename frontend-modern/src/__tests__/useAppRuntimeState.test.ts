@@ -1,4 +1,5 @@
 import { createRoot } from 'solid-js';
+import { waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type UseAppRuntimeStateModule = typeof import('@/useAppRuntimeState');
@@ -22,6 +23,10 @@ describe('useAppRuntimeState', () => {
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
   let aiChatSetEnabledMock: ReturnType<typeof vi.fn>;
+  let fetchInfrastructureSummaryAndCacheMock: ReturnType<typeof vi.fn>;
+  let hasFreshInfrastructureSummaryCacheMock: ReturnType<typeof vi.fn>;
+  let fetchWorkloadsSummaryAndCacheMock: ReturnType<typeof vi.fn>;
+  let hasFreshWorkloadsSummaryCacheMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -75,6 +80,10 @@ describe('useAppRuntimeState', () => {
     setOrgIDMock = vi.fn();
     showToastMock = vi.fn();
     aiChatSetEnabledMock = vi.fn();
+    fetchInfrastructureSummaryAndCacheMock = vi.fn().mockResolvedValue(undefined);
+    hasFreshInfrastructureSummaryCacheMock = vi.fn().mockReturnValue(false);
+    fetchWorkloadsSummaryAndCacheMock = vi.fn().mockResolvedValue(undefined);
+    hasFreshWorkloadsSummaryCacheMock = vi.fn().mockReturnValue(false);
 
     vi.doMock('@/stores/websocket-global', () => ({
       getGlobalWebSocketStore: () => ({
@@ -172,12 +181,19 @@ describe('useAppRuntimeState', () => {
     }));
 
     vi.doMock('@/utils/infrastructureSummaryCache', () => ({
-      fetchInfrastructureSummaryAndCache: vi.fn().mockResolvedValue(undefined),
-      hasFreshInfrastructureSummaryCache: vi.fn().mockReturnValue(false),
+      fetchInfrastructureSummaryAndCache: fetchInfrastructureSummaryAndCacheMock,
+      hasFreshInfrastructureSummaryCache: hasFreshInfrastructureSummaryCacheMock,
+    }));
+
+    vi.doMock('@/utils/workloadsSummaryCache', () => ({
+      WORKLOAD_CHART_DEFAULT_POINT_LIMIT: 180,
+      fetchWorkloadsSummaryAndCache: fetchWorkloadsSummaryAndCacheMock,
+      hasFreshWorkloadsSummaryCache: hasFreshWorkloadsSummaryCacheMock,
     }));
 
     vi.doMock('@/routing/resourceLinks', () => ({
       buildInfrastructurePath: () => '/infrastructure',
+      buildWorkloadsPath: () => '/workloads',
     }));
 
     vi.doMock('@/stores/alertsActivation', () => ({
@@ -394,6 +410,23 @@ describe('useAppRuntimeState', () => {
     await flushAsync();
 
     expect(loadCommercialPostureMock).toHaveBeenCalledOnce();
+
+    dispose();
+  });
+
+  it('prewarms authenticated app-shell chart caches without mounting target routes', async () => {
+    window.history.replaceState({}, '', '/settings');
+    const { dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(fetchInfrastructureSummaryAndCacheMock).toHaveBeenCalledWith('1h', {
+        caller: 'App prewarm',
+      });
+      expect(fetchWorkloadsSummaryAndCacheMock).toHaveBeenCalledWith('1h', {
+        caller: 'App workloads prewarm',
+        maxPoints: 180,
+      });
+    });
 
     dispose();
   });

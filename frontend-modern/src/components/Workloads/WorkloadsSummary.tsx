@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import {
   InteractiveSparkline,
   type InteractiveSparklineSeries,
@@ -16,7 +16,6 @@ import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInt
 import { buildDensityMapSynchronizedReadout } from '@/components/shared/densityMapModel';
 import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 import {
-  ChartsAPI,
   type ChartData,
   type MetricPoint,
   type TimeRange,
@@ -26,6 +25,18 @@ import { getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import { formatThroughputRate } from '@/utils/throughputPresentation';
+import {
+  WORKLOAD_CHART_DEFAULT_POINT_LIMIT,
+  fetchWorkloadsSummaryAndCache,
+  readInMemoryWorkloadsSummaryCache,
+  readWorkloadsSummaryCache,
+  workloadsSummaryCacheScopeKey,
+  __resetWorkloadsSummaryCacheForTests,
+} from '@/utils/workloadsSummaryCache';
+
+export {
+  __resetWorkloadsSummaryCacheForTests as __resetInMemoryWorkloadCacheForTests,
+} from '@/utils/workloadsSummaryCache';
 
 interface WorkloadsSummaryProps {
   timeRange?: TimeRange;
@@ -108,159 +119,8 @@ const WORKLOAD_COLORS = [
   '#6366f1',
 ];
 
-const WORKLOADS_SUMMARY_CACHE_PREFIX = 'pulse.workloadsSummaryCharts.';
-const WORKLOADS_SUMMARY_CACHE_VERSION = 6;
-const WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
-const WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
-const WORKLOADS_SUMMARY_CACHE_MAX_CHARS = 900_000;
-const WORKLOAD_CHART_DEFAULT_POINT_LIMIT = 180;
 const WORKLOADS_IDLE_THRESHOLD_MS = 2 * 60_000;
 const WORKLOADS_DEEP_IDLE_THRESHOLD_MS = 10 * 60_000;
-
-// In-memory full-resolution cache keyed by scope key (org::range::node).
-// Survives component unmount/remount (page navigation) without the
-// downsampling artifacts that localStorage cache introduces.
-// Capped at MAX_IN_MEMORY_ENTRIES to prevent unbounded growth.
-const MAX_IN_MEMORY_WORKLOAD_ENTRIES = 20;
-const inMemoryWorkloadCache = new Map<string, WorkloadChartsResponse>();
-
-/** @internal Test-only reset for in-memory workload cache. */
-export function __resetInMemoryWorkloadCacheForTests(): void {
-  inMemoryWorkloadCache.clear();
-}
-
-// Clear in-memory cache on org switch to prevent cross-org data leakage.
-const unsubscribeWorkloadOrgSwitch = eventBus.on('org_switched', () => {
-  inMemoryWorkloadCache.clear();
-});
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    unsubscribeWorkloadOrgSwitch();
-  });
-}
-
-type CachedChartData = Pick<
-  ChartData,
-  'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout'
->;
-
-interface CachedWorkloadsSummary {
-  version: number;
-  range: TimeRange;
-  nodeScope: string;
-  cachedAt: number;
-  data: Record<string, CachedChartData>;
-  dockerData: Record<string, CachedChartData>;
-}
-
-const cacheKeyFor = (range: TimeRange, nodeScope: string, orgScope: string) =>
-  `${WORKLOADS_SUMMARY_CACHE_PREFIX}${encodeURIComponent(orgScope)}::${range}::${encodeURIComponent(nodeScope || '__all__')}`;
-
-const trimPoints = <T,>(points: T[] | undefined, max: number): T[] => {
-  if (!points || points.length === 0) return [];
-  if (points.length <= max) return points;
-  if (max <= 1) return points.slice(points.length - 1);
-
-  const start = Math.max(0, points.length - max * 2);
-  const sliced = points.slice(start);
-  if (sliced.length <= max) return sliced;
-
-  const step = Math.ceil(sliced.length / max);
-  const result: T[] = [];
-  for (let i = 0; i < sliced.length; i += step) {
-    result.push(sliced[i]);
-  }
-  if (result[result.length - 1] !== sliced[sliced.length - 1]) {
-    result.push(sliced[sliced.length - 1]);
-  }
-  return result.length > max ? result.slice(result.length - max) : result;
-};
-
-const toCachedChartData = (data: ChartData): CachedChartData => ({
-  cpu: trimPoints(data.cpu, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
-  memory: trimPoints(data.memory, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
-  disk: trimPoints(data.disk, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
-  diskread: trimPoints(data.diskread, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
-  diskwrite: trimPoints(data.diskwrite, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
-  netin: trimPoints(data.netin, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
-  netout: trimPoints(data.netout, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
-});
-
-const persistWorkloadsSummaryCache = (
-  range: TimeRange,
-  nodeScope: string,
-  orgScope: string,
-  response: WorkloadChartsResponse,
-): void => {
-  if (typeof window === 'undefined') return;
-  try {
-    const data: Record<string, CachedChartData> = {};
-    const dockerData: Record<string, CachedChartData> = {};
-    for (const [id, chartData] of Object.entries(response.data || {})) {
-      data[id] = toCachedChartData(chartData);
-    }
-    for (const [id, chartData] of Object.entries(response.dockerData || {})) {
-      dockerData[id] = toCachedChartData(chartData);
-    }
-
-    const payload: CachedWorkloadsSummary = {
-      version: WORKLOADS_SUMMARY_CACHE_VERSION,
-      range,
-      nodeScope,
-      cachedAt: Date.now(),
-      data,
-      dockerData,
-    };
-    const serialized = JSON.stringify(payload);
-    if (serialized.length > WORKLOADS_SUMMARY_CACHE_MAX_CHARS) {
-      window.localStorage.removeItem(cacheKeyFor(range, nodeScope, orgScope));
-      return;
-    }
-    window.localStorage.setItem(cacheKeyFor(range, nodeScope, orgScope), serialized);
-  } catch {
-    // Ignore cache write failures.
-  }
-};
-
-const readWorkloadsSummaryCache = (
-  range: TimeRange,
-  nodeScope: string,
-  orgScope: string,
-): WorkloadChartsResponse | null => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(cacheKeyFor(range, nodeScope, orgScope));
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw) as CachedWorkloadsSummary;
-    if (
-      parsed?.version !== WORKLOADS_SUMMARY_CACHE_VERSION ||
-      parsed.range !== range ||
-      parsed.nodeScope !== nodeScope ||
-      typeof parsed.cachedAt !== 'number'
-    ) {
-      window.localStorage.removeItem(cacheKeyFor(range, nodeScope, orgScope));
-      return null;
-    }
-    if (Date.now() - parsed.cachedAt > WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS) {
-      window.localStorage.removeItem(cacheKeyFor(range, nodeScope, orgScope));
-      return null;
-    }
-
-    return {
-      data: parsed.data || {},
-      dockerData: parsed.dockerData || {},
-      guestTypes: {},
-      timestamp: parsed.cachedAt,
-      stats: {
-        oldestDataTimestamp: 0,
-      },
-    };
-  } catch {
-    return null;
-  }
-};
 
 const refreshIntervalForRange = (range: TimeRange): number => {
   switch (range) {
@@ -434,8 +294,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const selectedNodeScope = createMemo(() => props.selectedNodeId?.trim() || '');
   const activeScopeKey = createMemo(
-    () =>
-      `${WORKLOADS_SUMMARY_CACHE_VERSION}::${orgScope()}::${selectedRange()}::${selectedNodeScope()}`,
+    () => workloadsSummaryCacheScopeKey(selectedRange(), selectedNodeScope(), orgScope()),
   );
   const hasCurrentRangeData = createMemo(() => loadedScopeKey() === activeScopeKey());
 
@@ -475,20 +334,14 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     activeFetchController = controller;
 
     try {
-      const response = await ChartsAPI.getWorkloadCharts(range, controller.signal, {
+      const response = await fetchWorkloadsSummaryAndCache(range, {
+        caller: 'WorkloadsSummary',
+        maxPoints: untrack(workloadPointLimit),
         nodeId,
-        maxPoints: workloadPointLimit(),
+        orgScope: currentOrgScope,
+        signal: controller.signal,
       });
       if (activeFetchController !== controller) return;
-      persistWorkloadsSummaryCache(range, selectedNodeScope(), currentOrgScope, response);
-      if (
-        !inMemoryWorkloadCache.has(scopeKey) &&
-        inMemoryWorkloadCache.size >= MAX_IN_MEMORY_WORKLOAD_ENTRIES
-      ) {
-        const oldest = inMemoryWorkloadCache.keys().next().value;
-        if (oldest !== undefined) inMemoryWorkloadCache.delete(oldest);
-      }
-      inMemoryWorkloadCache.set(scopeKey, response);
       setCharts(response);
       setLoadedScopeKey(scopeKey);
       setFetchFailed(false);
@@ -520,18 +373,20 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
 
     clearRefreshTimer();
 
-    // Hydrate from in-memory cache (full-resolution, no curve shift).
-    // Only falls back to skeleton if this scope was never fetched in this session.
-    const memCached = inMemoryWorkloadCache.get(scopeKey);
-    if (memCached) {
-      setCharts(memCached);
+    // Prefer in-memory cache for full-resolution session continuity, then
+    // localStorage for cold remounts while the live request refreshes.
+    const cached =
+      readInMemoryWorkloadsSummaryCache(selectedRange(), selectedNodeScope(), orgScope()) ??
+      readWorkloadsSummaryCache(selectedRange(), selectedNodeScope(), orgScope());
+    if (cached) {
+      setCharts(cached);
       setLoadedScopeKey(scopeKey);
     } else {
       setCharts(null);
       setLoadedScopeKey(null);
     }
     setFetchFailed(false);
-    void fetchCharts({ prioritize: true }).finally(() => scheduleNextFetch(token));
+    void untrack(() => fetchCharts({ prioritize: true })).finally(() => scheduleNextFetch(token));
   });
 
   const unsubscribeOrgSwitch = eventBus.on('org_switched', (nextOrgID) => {

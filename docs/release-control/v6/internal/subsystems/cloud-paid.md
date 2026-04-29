@@ -1385,6 +1385,11 @@ That same landing contract also owns authenticated `/login`: once the browser
 has a valid session, `frontend-modern/src/App.tsx` must route `/login`
 through that same runtime-home landing boundary instead of leaving the
 authenticated app shell on a not-found compatibility path.
+Authenticated app-shell route and chart prewarming may run from
+`frontend-modern/src/App.tsx` and `frontend-modern/src/useAppRuntimeState.ts`
+only as auth-neutral performance work: it must not change hosted organization
+bootstrap, presentation-policy loading, commercial posture loading, or upgrade
+prompt visibility.
 The Pro license settings surface now follows the same rule as well. Changes to
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
 contract and the dedicated Pro-license proof file instead of remaining an

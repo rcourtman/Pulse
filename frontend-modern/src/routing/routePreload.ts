@@ -20,6 +20,15 @@ const ALERTS_PATH = '/alerts';
 const SETTINGS_PATH = '/settings';
 const routePreloadCache = new Map<string, Promise<void>>();
 
+export const APP_SHELL_ROUTE_PRELOAD_PATHS = [
+  ROOT_WORKLOADS_PATH,
+  RECOVERY_ROUTE_PATH,
+  PATROL_PATH,
+  ALERTS_PATH,
+  STORAGE_PATH,
+  SETTINGS_PATH,
+] as const;
+
 function normalizeRoute(route: string): string {
   const [pathname] = route.split(/[?#]/, 1);
   if (!pathname) return '';

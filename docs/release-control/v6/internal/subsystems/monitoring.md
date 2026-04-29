@@ -327,6 +327,11 @@ the dashboard overview retirement. When live mock ticks advance, monitoring
 must repopulate the canonical 24-hour aggregate `/api/charts/storage-summary`
 cache inside the sampler path instead of leaving the first operator request
 after each tick to rebuild per-pool mock storage charts on demand.
+The same mock sampler path must also prewarm the default Workloads guest-chart
+cache through `GetGuestMetricsForChartBatch`, using canonical `ReadState`
+workload identities for VMs, system containers, Kubernetes pods, and app
+containers so `/api/charts/workloads` and `/api/charts/workloads-summary` do
+not rebuild every guest sparkline on the first post-tick request.
 That same metrics-hot-path ownership also includes metric-type selection for
 compact summary reads. When infrastructure or storage summary routes request
 only a subset of canonical chart series,

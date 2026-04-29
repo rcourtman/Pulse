@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -44,6 +45,8 @@ const (
 	mockChartPointTargetLong       = 48
 	mockChartPointTargetExtended   = 64
 )
+
+const mockDashboardWorkloadPrewarmDuration = time.Hour
 
 var storageChartMetricTypes = []string{"usage", "used", "avail", "total"}
 var storageSummaryChartMetricTypes = []string{"used", "avail"}
@@ -1122,12 +1125,153 @@ func (m *Monitor) invalidateMockChartCaches() {
 	}
 }
 
+type mockWorkloadChartPrewarmRequests struct {
+	vms              []GuestChartRequest
+	containers       []GuestChartRequest
+	pods             []GuestChartRequest
+	dockerContainers []GuestChartRequest
+}
+
+func appendMockGuestChartRequest(
+	requests []GuestChartRequest,
+	seen map[string]struct{},
+	inMemoryKey string,
+	sqlResourceID string,
+) []GuestChartRequest {
+	inMemoryKey = strings.TrimSpace(inMemoryKey)
+	sqlResourceID = strings.TrimSpace(sqlResourceID)
+	if inMemoryKey == "" || sqlResourceID == "" {
+		return requests
+	}
+
+	identity := inMemoryKey + "\x00" + sqlResourceID
+	if _, ok := seen[identity]; ok {
+		return requests
+	}
+	seen[identity] = struct{}{}
+
+	return append(requests, GuestChartRequest{
+		InMemoryKey:   inMemoryKey,
+		SQLResourceID: sqlResourceID,
+	})
+}
+
+func mockMetricIDFromTargetOrSource(target *unifiedresources.MetricsTarget, sourceID string) string {
+	if target != nil {
+		if metricID := strings.TrimSpace(target.ResourceID); metricID != "" {
+			return metricID
+		}
+	}
+	return strings.TrimSpace(sourceID)
+}
+
+func mockKubernetesPodChartMetricID(pod *unifiedresources.PodView) string {
+	if pod == nil {
+		return ""
+	}
+
+	clusterKey := strings.TrimSpace(pod.ClusterID())
+	if clusterKey == "" {
+		clusterKey = strings.TrimSpace(pod.ClusterName())
+	}
+	podKey := strings.TrimSpace(pod.PodUID())
+	if podKey == "" {
+		namespace := strings.TrimSpace(pod.Namespace())
+		name := strings.TrimSpace(pod.Name())
+		if namespace != "" || name != "" {
+			podKey = namespace + "/" + name
+		}
+	}
+	if clusterKey == "" || podKey == "" {
+		return ""
+	}
+	return "k8s:" + clusterKey + ":pod:" + podKey
+}
+
+func mockWorkloadChartRequestsForReadState(
+	readState unifiedresources.ReadState,
+) mockWorkloadChartPrewarmRequests {
+	if readState == nil {
+		return mockWorkloadChartPrewarmRequests{}
+	}
+
+	requests := mockWorkloadChartPrewarmRequests{
+		vms:              make([]GuestChartRequest, 0, len(readState.VMs())),
+		containers:       make([]GuestChartRequest, 0, len(readState.Containers())),
+		pods:             make([]GuestChartRequest, 0, len(readState.Pods())),
+		dockerContainers: make([]GuestChartRequest, 0, len(readState.DockerContainers())),
+	}
+	seenVMs := make(map[string]struct{}, len(readState.VMs()))
+	seenContainers := make(map[string]struct{}, len(readState.Containers()))
+	seenPods := make(map[string]struct{}, len(readState.Pods()))
+	seenDockerContainers := make(map[string]struct{}, len(readState.DockerContainers()))
+
+	for _, vm := range readState.VMs() {
+		if vm == nil {
+			continue
+		}
+		metricID := mockMetricIDFromTargetOrSource(vm.MetricsTarget(), vm.SourceID())
+		requests.vms = appendMockGuestChartRequest(requests.vms, seenVMs, metricID, metricID)
+	}
+	for _, container := range readState.Containers() {
+		if container == nil {
+			continue
+		}
+		metricID := mockMetricIDFromTargetOrSource(container.MetricsTarget(), container.SourceID())
+		requests.containers = appendMockGuestChartRequest(
+			requests.containers,
+			seenContainers,
+			metricID,
+			metricID,
+		)
+	}
+	for _, pod := range readState.Pods() {
+		metricID := mockKubernetesPodChartMetricID(pod)
+		requests.pods = appendMockGuestChartRequest(requests.pods, seenPods, metricID, metricID)
+	}
+	for _, container := range readState.DockerContainers() {
+		if container == nil {
+			continue
+		}
+		metricID := mockMetricIDFromTargetOrSource(container.MetricsTarget(), container.ContainerID())
+		requests.dockerContainers = appendMockGuestChartRequest(
+			requests.dockerContainers,
+			seenDockerContainers,
+			"docker:"+metricID,
+			metricID,
+		)
+	}
+
+	return requests
+}
+
+func (m *Monitor) prewarmMockWorkloadChartCaches(duration time.Duration) {
+	if m == nil || duration <= 0 {
+		return
+	}
+
+	requests := mockWorkloadChartRequestsForReadState(m.GetUnifiedReadStateOrSnapshot())
+	if len(requests.vms) > 0 {
+		_ = m.GetGuestMetricsForChartBatch("vm", requests.vms, duration)
+	}
+	if len(requests.containers) > 0 {
+		_ = m.GetGuestMetricsForChartBatch("container", requests.containers, duration)
+	}
+	if len(requests.pods) > 0 {
+		_ = m.GetGuestMetricsForChartBatch("k8s", requests.pods, duration)
+	}
+	if len(requests.dockerContainers) > 0 {
+		_ = m.GetGuestMetricsForChartBatch("dockerContainer", requests.dockerContainers, duration)
+	}
+}
+
 func (m *Monitor) prewarmMockDashboardChartCaches() {
 	if m == nil || !mock.IsMockEnabled() {
 		return
 	}
 
 	_, _ = m.mockStorageSummaryCapacityTrendCached(24 * time.Hour)
+	m.prewarmMockWorkloadChartCaches(mockDashboardWorkloadPrewarmDuration)
 }
 
 func (m *Monitor) mockGuestMetricsForChart(

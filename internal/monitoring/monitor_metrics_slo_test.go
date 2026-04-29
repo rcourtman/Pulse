@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -49,6 +50,73 @@ func skipMonitoringSLOUnderRace(t *testing.T) {
 
 func suppressMonitoringTestLogs(t *testing.T) {
 	t.Helper()
+}
+
+func TestStartMockMetricsSampler_PrewarmsDefaultWorkloadChartCaches(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mock.SetEnabled(false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mock.SetEnabled(true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
+
+	cfg := compactMockFixtureConfig()
+	cfg.VMsPerNode = 1
+	cfg.LXCsPerNode = 1
+	cfg.DockerHostCount = 1
+	cfg.DockerContainersPerHost = 1
+	cfg.K8sClusterCount = 1
+	cfg.K8sNodesPerCluster = 1
+	cfg.K8sPodsPerCluster = 1
+
+	mock.SetEnabled(false)
+	mock.SetMockConfig(cfg)
+	mock.SetEnabled(true)
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(128, 24*time.Hour),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	monitor.startMockMetricsSampler(ctx)
+	defer monitor.stopMockMetricsSampler()
+
+	requests := mockWorkloadChartRequestsForReadState(monitor.GetUnifiedReadStateOrSnapshot())
+	assertPrewarmed := func(resourceType string, requests []GuestChartRequest) {
+		t.Helper()
+		if len(requests) == 0 {
+			t.Fatalf("expected %s workload chart prewarm requests", resourceType)
+		}
+
+		request := requests[0]
+		key := mockChartMetricMapCacheKey{
+			kind:         "guest",
+			resourceType: resourceType,
+			resourceID:   request.SQLResourceID,
+			aux:          request.InMemoryKey,
+			duration:     mockDashboardWorkloadPrewarmDuration,
+		}
+		cached, ok := monitor.readMockChartMetricMapCache(key)
+		if !ok {
+			t.Fatalf("expected prewarmed %s cache entry for %+v", resourceType, key)
+		}
+		if len(cached["cpu"]) == 0 {
+			t.Fatalf("expected prewarmed %s cache entry to include cpu points", resourceType)
+		}
+	}
+
+	assertPrewarmed("vm", requests.vms)
+	assertPrewarmed("container", requests.containers)
+	assertPrewarmed("k8s", requests.pods)
+	assertPrewarmed("dockerContainer", requests.dockerContainers)
 }
 
 func newChartBatchSLOMonitor(t *testing.T) *Monitor {

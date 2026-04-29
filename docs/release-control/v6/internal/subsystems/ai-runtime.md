@@ -287,6 +287,9 @@ once login succeeds, `frontend-modern/src/App.tsx` must resolve `/login`
 through the canonical post-auth landing route instead of leaving the
 assistant-capable authenticated shell stranded on a route that only exists for
 logged-out presentation.
+App-shell route preloading may include the Patrol route module, but it must
+remain module-only. It must not prefetch AI settings, model state, findings,
+chat sessions, or assistant context while the drawer is closed.
 `docs/release-control/v6/internal/subsystems/registry.json` must therefore keep
 `frontend-modern/src/stores/aiRuntimeState.ts` and
 `frontend-modern/src/components/AI/Chat/` on the explicit AI runtime proof

@@ -381,6 +381,10 @@ querying, and the operator-facing storage health presentation layer.
     dialogs: background assistant affordances may hide while a modal owns the
     viewport, but storage/recovery routes must not grow their own parallel
     modal-stack bookkeeping just because they share `App.tsx`.
+    App-shell route preloading may include Storage and Recovery modules so
+    top-level tabs are warm after authentication, but it must not fetch storage
+    summary charts, recovery history, provider state, or preview data from
+    `frontend-modern/src/App.tsx` itself.
 36. Keep public self-hosted purchase handoff and activation routes on the
     adjacent commercial/auth boundary. When `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,

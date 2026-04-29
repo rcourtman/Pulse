@@ -29,7 +29,7 @@ import {
   buildStoragePath,
   buildWorkloadsPath,
 } from './routing/resourceLinks';
-import { preloadRouteModule } from '@/routing/routePreload';
+import { APP_SHELL_ROUTE_PRELOAD_PATHS, preloadRouteModule } from '@/routing/routePreload';
 import { AppLayout } from '@/AppLayout';
 import RuntimeHomePage from '@/pages/RuntimeHome';
 import { useAppRuntimeState } from '@/useAppRuntimeState';
@@ -70,13 +70,6 @@ const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
 const ROOT_PATROL_PATH = PATROL_PATH;
-const APP_SHELL_ROUTE_PRELOAD_PATHS = [
-  RECOVERY_ROUTE_PATH,
-  ROOT_PATROL_PATH,
-  '/alerts',
-  STORAGE_PATH,
-  '/settings',
-] as const;
 
 async function preloadAppShellRoutes() {
   await Promise.all(

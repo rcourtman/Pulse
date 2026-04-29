@@ -30,7 +30,12 @@ import {
   fetchInfrastructureSummaryAndCache,
   hasFreshInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
-import { buildInfrastructurePath } from '@/routing/resourceLinks';
+import {
+  WORKLOAD_CHART_DEFAULT_POINT_LIMIT,
+  fetchWorkloadsSummaryAndCache,
+  hasFreshWorkloadsSummaryCache,
+} from '@/utils/workloadsSummaryCache';
+import { buildInfrastructurePath, buildWorkloadsPath } from '@/routing/resourceLinks';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
   applyThemeClass,
@@ -80,6 +85,7 @@ export type AppConnectionStatus = {
 };
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
+const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 
 const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>
   pathname === '/' || pathname === '/login';
@@ -100,8 +106,9 @@ export const useAppRuntimeState = () => {
   let hasPreloadedRoutes = false;
   let hasFetchedVersionInfo = false;
   let hasPrewarmedInfrastructureCharts = false;
+  let hasPrewarmedWorkloadsCharts = false;
 
-  const getInfrastructureTrendRangeForPrewarm = (): TimeRange => '1h';
+  const getAppShellChartRangeForPrewarm = (): TimeRange => '1h';
 
   const hasLocalAuthBootstrapHint = (): boolean => {
     if (hasStoredAuthSession()) {
@@ -119,7 +126,7 @@ export const useAppRuntimeState = () => {
     }
   };
 
-  const shouldPrewarmInfrastructure = (): boolean => {
+  const shouldPrewarmBackgroundCharts = (activeRoutePath: string): boolean => {
     if (typeof window === 'undefined') return false;
 
     const connection = (
@@ -136,16 +143,21 @@ export const useAppRuntimeState = () => {
 
     const pathname = window.location.pathname;
     if (!pathname) return true;
-    if (pathname === ROOT_INFRASTRUCTURE_PATH) return false;
+    if (pathname === activeRoutePath) return false;
     return true;
   };
+
+  const shouldPrewarmInfrastructure = (): boolean =>
+    shouldPrewarmBackgroundCharts(ROOT_INFRASTRUCTURE_PATH);
+
+  const shouldPrewarmWorkloads = (): boolean => shouldPrewarmBackgroundCharts(ROOT_WORKLOADS_PATH);
 
   const prewarmInfrastructureCharts = () => {
     if (hasPrewarmedInfrastructureCharts || !shouldPrewarmInfrastructure()) {
       return;
     }
 
-    const range = getInfrastructureTrendRangeForPrewarm();
+    const range = getAppShellChartRangeForPrewarm();
     if (hasFreshInfrastructureSummaryCache(range)) {
       hasPrewarmedInfrastructureCharts = true;
       return;
@@ -155,6 +167,31 @@ export const useAppRuntimeState = () => {
     void fetchInfrastructureSummaryAndCache(range, { caller: 'App prewarm' }).catch(() => {
       // Non-blocking prewarm; ignore failures.
     });
+  };
+
+  const prewarmWorkloadsCharts = () => {
+    if (hasPrewarmedWorkloadsCharts || !shouldPrewarmWorkloads()) {
+      return;
+    }
+
+    const range = getAppShellChartRangeForPrewarm();
+    if (hasFreshWorkloadsSummaryCache(range)) {
+      hasPrewarmedWorkloadsCharts = true;
+      return;
+    }
+
+    hasPrewarmedWorkloadsCharts = true;
+    void fetchWorkloadsSummaryAndCache(range, {
+      caller: 'App workloads prewarm',
+      maxPoints: WORKLOAD_CHART_DEFAULT_POINT_LIMIT,
+    }).catch(() => {
+      // Non-blocking prewarm; ignore failures.
+    });
+  };
+
+  const prewarmAppShellCharts = () => {
+    prewarmInfrastructureCharts();
+    prewarmWorkloadsCharts();
   };
 
   const preloadLazyRoutes = () => {
@@ -471,7 +508,11 @@ export const useAppRuntimeState = () => {
   });
 
   createEffect(() => {
-    if (isLoading() || needsAuth() || hasPrewarmedInfrastructureCharts) {
+    if (
+      isLoading() ||
+      needsAuth() ||
+      (hasPrewarmedInfrastructureCharts && hasPrewarmedWorkloadsCharts)
+    ) {
       return;
     }
     if (typeof window === 'undefined') {
@@ -480,7 +521,7 @@ export const useAppRuntimeState = () => {
 
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(() => {
-        prewarmInfrastructureCharts();
+        prewarmAppShellCharts();
       }, { timeout: 2_000 });
       onCleanup(() => {
         window.cancelIdleCallback(id);
@@ -489,7 +530,7 @@ export const useAppRuntimeState = () => {
     }
 
     const timeout = window.setTimeout(() => {
-      prewarmInfrastructureCharts();
+      prewarmAppShellCharts();
     }, 500);
     onCleanup(() => {
       window.clearTimeout(timeout);

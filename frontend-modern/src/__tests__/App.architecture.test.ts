@@ -29,10 +29,13 @@ describe('App architecture', () => {
     expect(appSource).toContain('clearPendingAppShellRestoreTop');
     expect(appSource).toContain('const INFRASTRUCTURE_ROUTE_PATH = buildInfrastructurePath();');
     expect(appSource).toContain('const ROOT_PATROL_PATH = PATROL_PATH;');
-    expect(appSource).toContain("import { preloadRouteModule } from '@/routing/routePreload';");
-    expect(appSource).toContain('const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
-    expect(appSource).toContain('RECOVERY_ROUTE_PATH,');
-    expect(appSource).toContain('ROOT_PATROL_PATH,');
+    expect(appSource).toContain(
+      "import { APP_SHELL_ROUTE_PRELOAD_PATHS, preloadRouteModule } from '@/routing/routePreload';",
+    );
+    expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
+    expect(routePreloadSource).toContain('ROOT_WORKLOADS_PATH,');
+    expect(routePreloadSource).toContain('RECOVERY_ROUTE_PATH,');
+    expect(routePreloadSource).toContain('PATROL_PATH,');
     expect(appSource).toContain('await preloadRouteModule(route);');
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
@@ -256,6 +259,7 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('startMetricsCollector();');
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');
     expect(routePreloadSource).toContain('const ROUTE_PRELOADERS: readonly RoutePreloader[] = [');
+    expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
     expect(routePreloadSource).toContain("id: 'recovery',");
     expect(routePreloadSource).toContain("id: 'patrol',");
     expect(routePreloadSource).toContain(
