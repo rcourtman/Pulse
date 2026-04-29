@@ -1271,6 +1271,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
             ],
         )
         security_match = next(
@@ -1629,6 +1630,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                 "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts",
             ],
         )
@@ -1661,6 +1663,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                 "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts",
             ],
         )
@@ -3146,6 +3149,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/OrganizationOverviewPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
@@ -3346,6 +3350,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/OrganizationOverviewPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
@@ -3384,6 +3389,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/OrganizationOverviewPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
@@ -3535,7 +3541,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Extension Points",
                     "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 74,
+                    "line": 79,
                     "heading_line": 70,
                 },
             ],
@@ -3572,7 +3578,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 127,
+                    "line": 131,
                     "heading_line": 88,
                 }
             ],
@@ -3611,7 +3617,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 76,
+                    "line": 81,
                     "heading_line": 70,
                 },
             ],

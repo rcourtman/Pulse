@@ -114,7 +114,9 @@ into first-class product surfaces:
 ## Paid Feature Proof Map
 
 Use this map before adding or changing public Pulse Pro/Relay copy. A feature is safe to sell only
-when the claim has a runtime gate, presentation copy, and at least one regression proof.
+when the claim has a runtime gate, presentation copy, and at least one regression proof. The
+automated proof bundle also checks that ordinary self-hosted sessions stay free-first and do not
+surface upgrade prompts unless the user deliberately enters a commercial path.
 
 | Claim | Runtime source | Regression proof |
 |---|---|---|

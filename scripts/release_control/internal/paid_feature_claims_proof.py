@@ -279,6 +279,23 @@ def build_command_specs(args: argparse.Namespace) -> list[CommandSpec]:
             ],
         ),
         CommandSpec(
+            name="pulse-frontend-free-first-commercial-boundary",
+            cwd=str(frontend_dir),
+            command=[
+                "npm",
+                "test",
+                "--",
+                "src/stores/__tests__/sessionPresentationPolicy.test.ts",
+                "src/__tests__/useAppRuntimeState.test.ts",
+                "src/features/patrol/__tests__/patrolCommercialBoundary.test.ts",
+                "src/pages/__tests__/AIIntelligence.test.tsx",
+                "src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
+                "src/components/shared/__tests__/MonitoredSystemLimitWarningBanner.test.tsx",
+                "src/components/SetupWizard/__tests__/SetupCompletionPanel.guardrails.test.ts",
+                "src/pages/__tests__/PricingHandoff.test.tsx",
+            ],
+        ),
+        CommandSpec(
             name="pulse-pro-public-pricing-and-checkout-contract",
             cwd=str(pulse_pro_license_server_dir),
             command=[
@@ -422,7 +439,7 @@ def render_markdown_report(title: str, results: list[CommandResult]) -> str:
         "",
         "## Scope",
         "",
-        "This proof checks that self-hosted paid claims map to concrete public copy, entitlement, API, UI, Pro admin-extra, license-server, and relay-server behavior.",
+        "This proof checks that self-hosted paid claims map to concrete public copy, entitlement, API, UI, Pro admin-extra, license-server, and relay-server behavior, while ordinary self-hosted sessions stay free-first and non-promotional.",
         "",
         "## Results",
         "",

@@ -976,6 +976,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
+                        "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                         "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts",
                     ],
                 }
@@ -1904,6 +1905,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
+                        "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                         "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts",
                     ],
                 }
@@ -1939,6 +1941,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
+                        "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                         "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts",
                     ],
                 }
@@ -2510,6 +2513,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                         "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
                     ],
                 }
@@ -2537,6 +2541,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
                     ],
                 }
             ],
