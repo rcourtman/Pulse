@@ -281,7 +281,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 		Key:                 FeatureMultiTenant,
 		DisplayName:         "Multi-Tenant Mode",
 		ComparisonName:      "Multi-Tenant Mode",
-		DisplayableInPlanUI: true,
+		DisplayableInPlanUI: false,
 		SelfHostedRoles: SelfHostedFeatureRoles{
 			Community: SelfHostedFeatureRoleHidden,
 			Relay:     SelfHostedFeatureRoleHidden,

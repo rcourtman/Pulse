@@ -2,7 +2,6 @@ import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { notificationStore } from '@/stores/notifications';
 import { loadCommercialPosture } from '@/stores/licenseCommercial';
-import { isMultiTenantEnabled } from '@/stores/license';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import {
   licenseEntitlements,
@@ -328,7 +327,6 @@ export function useProLicensePanelState() {
     if (!current?.capabilities?.length) return [];
     return current.capabilities
       .filter((feature) => isDisplayableLicenseFeature(feature))
-      .filter((feature) => feature !== 'multi_tenant' || isMultiTenantEnabled())
       .map((feature) => getLicenseFeatureLabel(feature));
   });
 

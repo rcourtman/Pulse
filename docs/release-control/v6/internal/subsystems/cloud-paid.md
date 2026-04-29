@@ -1527,9 +1527,12 @@ That same `frontend-modern/src/utils/licensePresentation.ts` owner must treat
 compatibility-only capability keys such as `kubernetes_ai` as non-marketed
 technical facts: API/docs surfaces may still name the compatibility route, but
 customer-facing self-hosted current-plan summaries and unlocked-capability
-lists must not surface those keys as marquee Pro value. The same rule applies
-to legacy claims such as `incident memory`: current v6 upgrade notices and
-commercial copy must use the canonical 90-day history framing until a distinct
+lists must not surface those keys as marquee Pro value. MSP-only contract keys
+such as `multi_tenant` follow the same rule inside the self-hosted Pro plan
+surface: they may remain entitlement inputs for hosted/MSP/account surfaces,
+but they are not self-hosted Pro value copy. The same rule applies to legacy
+claims such as `incident memory`: current v6 upgrade notices and commercial
+copy must use the canonical 90-day history framing until a distinct
 incident-memory product exists.
 That same plan-section boundary must also defer notice resolution to component
 runtime. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
@@ -1813,8 +1816,8 @@ The same distinction applies to customer-facing self-hosted billing
 presentation. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 and `frontend-modern/src/utils/licensePresentation.ts` may label operable
 capabilities, but they must not render placeholder or plan-marker entries like
-`white_label`, `multi_user`, or `unlimited` in the Pro plan feature list just
-because those keys exist in tier metadata.
+`white_label`, `multi_user`, `multi_tenant`, or `unlimited` in the Pro plan
+feature list just because those keys exist in tier metadata.
 Cloud/MSP live price IDs are no longer an open fill-in task either. The audit
 record `docs/release-control/v6/records/cloud-msp-price-audit-2026-03-13.md`
 verified that the 13 canonical Cloud/MSP v6 `price_*` IDs are present in the

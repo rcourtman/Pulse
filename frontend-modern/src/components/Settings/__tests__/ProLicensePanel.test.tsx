@@ -746,7 +746,7 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Basic SSO (OIDC)')).toBeInTheDocument();
     });
 
-    // Verify every capability renders with its expected label
+    // Verify self-hosted displayable capabilities render with their expected labels.
     expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
     expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
     expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
@@ -760,7 +760,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
-    expect(screen.getByText('Multi-Tenant Mode')).toBeInTheDocument();
+    expect(screen.queryByText('Multi-Tenant Mode')).not.toBeInTheDocument();
     expect(screen.queryByText('Kubernetes AI Analysis (Compatibility)')).not.toBeInTheDocument();
     expect(screen.queryByText('Multi-User Mode')).not.toBeInTheDocument();
     expect(screen.queryByText('White-Label Branding')).not.toBeInTheDocument();

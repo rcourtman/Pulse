@@ -321,7 +321,7 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
     "displayName": "Multi-Tenant Mode",
     "comparisonName": "Multi-Tenant Mode",
     "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": true,
+    "displayableInSelfHostedPlan": false,
     "roles": {
       "community": "hidden",
       "relay": "hidden",

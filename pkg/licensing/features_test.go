@@ -291,8 +291,11 @@ func TestSelfHostedFeatureMetadataKeepsCanonicalPlanLabelsAndVisibility(t *testi
 	if !ok {
 		t.Fatalf("expected metadata for %q", FeatureMultiTenant)
 	}
-	if !multiTenant.DisplayableInPlanUI {
-		t.Fatalf("expected %q to remain customer-displayable for MSP/Enterprise surfaces", FeatureMultiTenant)
+	if multiTenant.DisplayableInPlanUI {
+		t.Fatalf("did not expect MSP-only %q to be displayable in self-hosted plan UI", FeatureMultiTenant)
+	}
+	if GetSelfHostedFeatureRole(FeatureMultiTenant, TierPro) != SelfHostedFeatureRoleHidden {
+		t.Fatalf("expected %q to stay hidden from the self-hosted Pro plan role", FeatureMultiTenant)
 	}
 
 	kubernetes, ok := GetFeatureMetadata(FeatureKubernetesAI)

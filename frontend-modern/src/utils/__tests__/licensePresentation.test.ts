@@ -108,7 +108,7 @@ describe('licensePresentation', () => {
 
   it('hides non-operable capability labels from customer-facing plan surfaces', () => {
     expect(isDisplayableLicenseFeature('ai_patrol')).toBe(true);
-    expect(isDisplayableLicenseFeature('multi_tenant')).toBe(true);
+    expect(isDisplayableLicenseFeature('multi_tenant')).toBe(false);
     expect(isDisplayableLicenseFeature('kubernetes_ai')).toBe(false);
     expect(isDisplayableLicenseFeature('multi_user')).toBe(false);
     expect(isDisplayableLicenseFeature('white_label')).toBe(false);
