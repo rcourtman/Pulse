@@ -138,7 +138,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             </button>
 
             <Show when={state.showAdvancedSettings()}>
-              <div class="fixed right-4 top-32 z-[9999] isolate w-[calc(100vw-2rem)] p-5 bg-surface rounded-md shadow-sm border border-border animate-slide-up transform origin-top-right sm:right-8 sm:top-[17.5rem] sm:w-[340px]">
+              <div class="fixed right-4 top-32 z-[9999] isolate max-h-[calc(100vh-10rem)] w-[calc(100vw-2rem)] overflow-y-auto rounded-md border border-border bg-surface p-5 shadow-sm animate-slide-up transform origin-top-right sm:right-8 sm:top-[13rem] sm:max-h-[36rem] sm:w-[340px]">
                 <div class="flex items-center justify-between mb-5 pb-3 border-b border-border-subtle">
                   <h4 class="text-base font-semibold tracking-tight text-base-content">
                     Patrol Configuration

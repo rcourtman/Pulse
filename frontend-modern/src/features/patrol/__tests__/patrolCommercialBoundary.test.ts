@@ -28,4 +28,14 @@ describe('patrol commercial boundary', () => {
     expect(patrolIntelligenceHeaderSource).toContain('label="Run Every"');
     expect(patrolIntelligenceHeaderSource).not.toContain('<select');
   });
+
+  it('keeps the patrol configuration panel above lower page actions', () => {
+    expect(patrolIntelligenceHeaderSource).toContain('fixed right-4 top-32 z-[9999] isolate');
+    expect(patrolIntelligenceHeaderSource).toContain('max-h-[calc(100vh-10rem)]');
+    expect(patrolIntelligenceHeaderSource).toContain('sm:max-h-[36rem]');
+    expect(patrolIntelligenceHeaderSource).toContain('overflow-y-auto');
+    expect(patrolIntelligenceHeaderSource).toContain('sm:top-[13rem]');
+    expect(patrolIntelligenceHeaderSource).not.toContain('sm:top-[17.5rem]');
+    expect(patrolIntelligenceHeaderSource).not.toContain('disabled:opacity-70');
+  });
 });
