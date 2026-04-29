@@ -67,20 +67,20 @@ describe('PricingHandoff', () => {
     expect(pricingHandoffSource).not.toContain('<h1');
   });
 
-  it('keeps monitored-system pricing handoffs inside usage review', async () => {
+  it('keeps retired monitored-system pricing handoffs on the neutral Plans surface', async () => {
     window.history.replaceState({}, '', '/pricing?feature=max_monitored_systems');
 
     render(() => (
       <Router>
         <Route path="/pricing" component={PricingHandoff} />
         <Route
-          path="/settings/system/billing/usage"
-          component={() => <div>Billing destination</div>}
+          path="/settings/system/billing/plan"
+          component={() => <div>Plans destination</div>}
         />
       </Router>
     ));
 
-    expect(await screen.findByText('Billing destination')).toBeInTheDocument();
+    expect(await screen.findByText('Plans destination')).toBeInTheDocument();
     expect(handoffToExternalPricingMock).not.toHaveBeenCalled();
   });
 

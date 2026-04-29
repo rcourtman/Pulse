@@ -426,21 +426,21 @@ describe('license stores', () => {
       expect(getUpgradeActionUrlOrFallback('relay')).toBe(getUpgradeFallbackDestination('relay'));
     });
 
-    it('routes monitored-system limit fallbacks to usage instead of plan purchase', async () => {
+    it('routes monitored-system limit fallbacks to the neutral plan surface', async () => {
       vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
         ...mockCommercialPosture,
         upgrade_reasons: [{ key: 'reason1', reason: 'Reason 1', action_url: '/upgrade/reason1' }],
       });
       await loadCommercialPosture(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
-        '/settings/system/billing/usage?details=counting-rules',
+        '/settings/system/billing/plan',
       );
     });
 
-    it('routes cloud fallbacks to the in-product cloud plans page', async () => {
+    it('routes cloud fallbacks to Pulse Account', async () => {
       vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockFreeCommercialPosture);
       await loadCommercialPosture(true);
-      expect(getUpgradeActionUrlOrFallback('cloud')).toBe('/cloud');
+      expect(getUpgradeActionUrlOrFallback('cloud')).toBe(getUpgradeFallbackDestination('cloud'));
     });
 
     it('routes generic upgrade fallbacks to Pulse Account', async () => {
@@ -466,7 +466,7 @@ describe('license stores', () => {
       expect(getUpgradeActionUrlOrFallback('trial_expired')).toBe('');
     });
 
-    it('keeps specific monitored-system upgrade actions on usage review', async () => {
+    it('keeps specific monitored-system upgrade actions from reviving paid capacity review', async () => {
       vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
         ...mockCommercialPosture,
         upgrade_reasons: [

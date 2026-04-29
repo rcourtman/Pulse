@@ -25,7 +25,6 @@ export const SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM = 'purchase';
 export const SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL = 'counting-rules';
 export const SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL = 'recovery';
 export const SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT = 'self_hosted_plan';
-const LEGACY_MONITORED_SYSTEM_BILLING_INTENT = 'max_monitored_systems';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED = 'activated';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED = 'cancelled';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED = 'expired';
@@ -52,7 +51,7 @@ export const SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF = `${SELF_HOSTED_PRO_BI
 
 const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
-  max_monitored_systems: SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
+  max_monitored_systems: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   // Paid self-hosted feature keys: route to the owned billing plan page instead
   // of the Pulse Account purchase-start handoff, which fails for local instances
   // without PublicURL.
@@ -95,19 +94,13 @@ function billingSearch(search: string): URLSearchParams {
   return new URLSearchParams(normalizeSearch(search));
 }
 
-function hasLegacyMonitoredSystemBillingIntent(search: string): boolean {
-  return (
-    billingSearch(search).get(SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM)?.trim() ===
-    LEGACY_MONITORED_SYSTEM_BILLING_INTENT
-  );
-}
-
 function isSelfHostedBillingPath(pathname: string): boolean {
   const normalized = normalizeSettingsLikePath(pathname);
   return (
     normalized === SELF_HOSTED_PRO_BILLING_ROUTE ||
     normalized === SELF_HOSTED_PRO_BILLING_PLAN_ROUTE ||
-    normalized === SELF_HOSTED_PRO_BILLING_USAGE_ROUTE
+    normalized === SELF_HOSTED_PRO_BILLING_USAGE_ROUTE ||
+    normalized.startsWith(`${SELF_HOSTED_PRO_BILLING_ROUTE}/`)
   );
 }
 
@@ -270,9 +263,6 @@ export function resolveSelfHostedBillingSection(
 ): SelfHostedBillingSection {
   const normalizedPath = normalizeSettingsLikePath(pathname);
 
-  if (hasLegacyMonitoredSystemBillingIntent(search)) {
-    return 'usage';
-  }
   if (normalizedPath === SELF_HOSTED_PRO_BILLING_USAGE_ROUTE) {
     return 'usage';
   }
@@ -314,11 +304,9 @@ export function resolveCanonicalSelfHostedBillingHref(
 
   const section = resolveSelfHostedBillingSection(normalizedPath, search, hash);
   const normalizedHash = normalizeHash(hash);
-  const legacyMonitoredSystemIntent = hasLegacyMonitoredSystemBillingIntent(search);
   const usageDetail =
     section === 'usage' &&
-    (getSelfHostedBillingUsageDetail(search) === SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL ||
-      legacyMonitoredSystemIntent)
+    getSelfHostedBillingUsageDetail(search) === SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL
       ? SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL
       : null;
   const planIntent = section === 'plan' ? getSelfHostedBillingPlanIntent(search) : null;

@@ -300,26 +300,28 @@ Community limit enforcement.
     metric deck ahead of the real workspace list.
 23. Keep self-hosted monitored-system capacity review informational and
     non-commercial. Recognized self-hosted v6 tiers must treat legacy
-    monitored-system limit, continuity, or `max_monitored_systems` handoff data
-    as support/audit metadata rather than as the customer-facing plan model:
+    monitored-system limit, continuity, or `max_monitored_systems` metadata
+    as support/audit context rather than as the customer-facing plan model:
     Community, Relay, Pro, Pro+, lifetime, and eligible grandfathered recurring
     plan labels render through the normal plan surface as unlimited core
     monitoring plus tier-specific extras, with no standing Usage subtab, finite
     policy banner, monitored-system limit row, or pause-new-admissions copy from
-    stale volume metadata. Any genuinely bounded monitored-system support
-    context outside those recognized plan labels must remain informational and
-    land on the usage-focused billing state
-    (`/settings/system/billing/usage?details=counting-rules`) so the operator
-    can inspect counting rules and any support/audit policy context without
-    being pushed toward a purchase. Monitored-system warnings must not surface
+    stale volume metadata. Retired `max_monitored_systems` pricing handoffs
+    must land on the neutral Plans & Activation surface, not the usage ledger.
+    Any genuinely bounded monitored-system support context outside those
+    recognized plan labels may still land on the explicit usage-focused billing
+    state (`/settings/system/billing/usage?details=counting-rules`) so the
+    operator can inspect counting rules and any support/audit policy context
+    without being pushed toward a purchase. Monitored-system warnings must not surface
     `Upgrade to add more`, `Compare self-hosted plans`, or the
     `intent=self_hosted_plan` plan-selection arrival. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`,
     `frontend-modern/src/components/Settings/useProLicensePanelState.ts`, and
     `frontend-modern/src/utils/pricingHandoff.ts` therefore own a two-state
-    billing focus model where monitored-system aliases only resolve to `usage`
-    when a displayable bounded support context remains after recognized
-    self-hosted plans have been normalized, and plan selection is reserved for
-    explicit self-hosted Pro/commercial-extra arrivals. That same self-hosted
+    billing focus model where stale monitored-system pricing aliases resolve
+    to `plan`, explicit usage routes remain available only for displayable
+    bounded support context after recognized self-hosted plans have been
+    normalized, and plan selection is reserved for explicit self-hosted
+    Pro/commercial-extra arrivals. That same self-hosted
     commercial boundary also owns legacy
     migration continuity semantics: `legacy_migration_fallback` may preserve
     `plan_limit` and `grandfathered_floor` for support/audit context, but
@@ -987,13 +989,13 @@ For self-hosted upgrades, that browser-facing feature metadata is now
 canonically `self_hosted_plan`. Pulse Account may continue normalizing the
 legacy `max_monitored_systems` alias only for already-created checkout records,
 but in-product browser links and fallback helpers must route that alias to the
-monitored-system usage/counting-rules surface instead of plan selection. The
-portal proxy contract, checked-in embedded bundle, and rendered upgrade copy
-must treat self-hosted commerce as plan selection and paid extras rather than
-monitored-system-cap expansion. Shared helpers and route-owned browser symbols
-should name that commercial state as plan selection as well; the
-monitored-system alias belongs only to backward-compatible handoff
-normalization and non-commercial usage review.
+neutral Plans & Activation surface instead of the monitored-system
+usage/counting-rules surface. The portal proxy contract, checked-in embedded
+bundle, and rendered upgrade copy must treat self-hosted commerce as plan
+selection and paid extras rather than monitored-system-cap expansion. Shared
+helpers and route-owned browser symbols should name that commercial state as
+plan selection as well; the monitored-system alias belongs only to
+backward-compatible handoff normalization and non-commercial usage review.
 If Pulse cannot create or resolve that portal handoff locally, the Pulse-owned
 start route must still return the operator to the owned billing plan surface
 with an explicit `purchase=unavailable` arrival instead of leaving the browser

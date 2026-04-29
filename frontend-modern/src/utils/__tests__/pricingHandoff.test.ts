@@ -34,9 +34,9 @@ import {
 } from '@/utils/pricingHandoff';
 
 describe('pricingHandoff', () => {
-  it('routes legacy monitored-system pricing links to usage, not plan purchase', () => {
+  it('retires legacy monitored-system pricing links onto the neutral plan surface', () => {
     expect(getUpgradeFallbackDestination('max_monitored_systems')).toBe(
-      SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
+      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
   });
 
@@ -119,9 +119,9 @@ describe('pricingHandoff', () => {
     );
   });
 
-  it('keeps internal route exceptions when handing off the legacy pricing route', () => {
+  it('keeps retired monitored-system pricing handoffs on the neutral Plans surface', () => {
     expect(getPricingRouteDestination('?feature=max_monitored_systems')).toBe(
-      SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
+      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
   });
 
@@ -166,7 +166,10 @@ describe('pricingHandoff', () => {
         SELF_HOSTED_PRO_BILLING_PLAN_HREF,
         '?intent=max_monitored_systems',
       ),
-    ).toBe(SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF);
+    ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(
+      resolveCanonicalSelfHostedBillingHref(`${SELF_HOSTED_PRO_BILLING_ROUTE}/history`),
+    ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
   });
 
   it('derives billing focus and arrival intent from canonical routes', () => {
@@ -183,7 +186,7 @@ describe('pricingHandoff', () => {
         SELF_HOSTED_PRO_BILLING_PLAN_HREF,
         '?intent=max_monitored_systems',
       ),
-    ).toBe('usage');
+    ).toBe('plan');
     expect(getSelfHostedBillingPlanIntent('?intent=max_monitored_systems')).toBeNull();
     expect(
       getSelfHostedBillingPlanDetail('?details=' + SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL),
