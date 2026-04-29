@@ -78,7 +78,7 @@ Migration policy:
 | New self-hosted v6 purchase | The purchase uses the current Community / Relay / Pro self-hosted plans. | Core monitoring is included by default; paid value comes from convenience, AI, history, and advanced admin features. |
 
 Support rule:
-- If any self-hosted v6 install shows a bounded monitored-system, guest, or child-resource volume cap after activation or migration, treat it as a bug rather than as intended policy.
+- If any self-hosted v6 install shows a finite monitored-system, guest, or child-resource volume limit after activation or migration, treat it as a bug rather than as intended policy.
 
 ## V6 Product Classification
 
@@ -118,7 +118,7 @@ when the claim has a runtime gate, presentation copy, and at least one regressio
 
 | Claim | Runtime source | Regression proof |
 |---|---|---|
-| Self-hosted monitoring is not sold by monitored-system or child-resource volume. | `pkg/licensing/features.go` and `pkg/licensing/entitlement_payload.go` normalize self-hosted limits to the current no-volume-gate policy. | `pkg/licensing/grant_claims_contract_test.go`, `pkg/licensing/activation_types_test.go`, and `internal/api/licensing_handlers_auto_migrate_test.go` prove self-hosted paid/legacy continuity does not surface monitored-system caps. |
+| Self-hosted monitoring is not sold by monitored-system or child-resource volume. | `pkg/licensing/features.go` and `pkg/licensing/entitlement_payload.go` normalize self-hosted limits to the current no-volume-gate policy. | `pkg/licensing/grant_claims_contract_test.go`, `pkg/licensing/activation_types_test.go`, and `internal/api/licensing_handlers_auto_migrate_test.go` prove self-hosted paid/legacy continuity does not surface finite monitored-system allowances. |
 | Relay includes secure remote web access, Pulse Mobile pairing, push notifications, and 14-day history. | `pkg/licensing/features.go` grants `relay`, `mobile_app`, `push_notifications`, and `long_term_metrics` to Relay with `TierHistoryDays[relay] == 14`; relay onboarding/settings routes are gated behind Relay. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, `internal/api/relay_sso_license_gating_test.go`, and `frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx`. |
 | Pro includes alert-triggered root-cause analysis and safe remediation workflows. | `internal/api/ai_handlers.go` gates alert-triggered analysis behind `ai_alerts` and remediation/autonomy behind `ai_autofix`; `internal/ai/service.go` enforces the same capabilities in service-level paths. | `pkg/licensing/features_test.go`, `internal/api/router_routes_ai_execute_stream_test.go`, `internal/api/ai_intelligence_handlers_remediation_more_test.go`, and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx`. |
 | Pro includes 90-day history. | `pkg/licensing/features.go` sets `TierHistoryDays[pro] == 90`; `pkg/licensing/entitlement_payload.go` emits `max_history_days`; `frontend-modern/src/stores/license.ts` and `frontend-modern/src/components/shared/useHistoryChartState.ts` lock ranges above the entitlement. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, and `frontend-modern/src/stores/__tests__/license.test.ts`. |
