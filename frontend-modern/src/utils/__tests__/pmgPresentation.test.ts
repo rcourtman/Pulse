@@ -43,7 +43,10 @@ describe('pmgPresentation', () => {
 
   it('exports canonical PMG empty-state copy', () => {
     expect(PMG_EMPTY_STATE_TITLE).toBe('No Mail Gateways configured');
-    expect(PMG_EMPTY_STATE_DESCRIPTION).toContain('Add a Proxmox Mail Gateway');
+    expect(PMG_EMPTY_STATE_DESCRIPTION).toBe(
+      'Add a Proxmox Mail Gateway via Settings → Infrastructure to start collecting mail analytics and security metrics.',
+    );
+    expect(PMG_EMPTY_STATE_DESCRIPTION).not.toContain('Settings → Infrastructure → Proxmox');
     expect(PMG_LOADING_STATE_TITLE).toBe('Loading mail gateway data...');
     expect(PMG_LOADING_STATE_DESCRIPTION).toBe('Connecting to the monitoring service.');
     expect(PMG_DISCONNECTED_STATE_TITLE).toBe('Connection lost');

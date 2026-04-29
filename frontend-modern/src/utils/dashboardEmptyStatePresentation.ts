@@ -1,8 +1,9 @@
+import { getInfrastructureSourceStrategyDescription } from '@/utils/infrastructureSettingsPresentation';
+
 export function getDashboardInfrastructureEmptyState() {
   return {
     title: 'No infrastructure sources connected',
-    description:
-      'Start in Settings → Infrastructure by choosing a source strategy. Connect a platform API for inventory and health, install Pulse Agent for host telemetry, or use both when you want full coverage.',
+    description: getInfrastructureSourceStrategyDescription(),
     actionLabel: 'Add infrastructure source',
   } as const;
 }

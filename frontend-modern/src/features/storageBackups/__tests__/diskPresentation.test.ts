@@ -180,7 +180,12 @@ describe('diskPresentation', () => {
       nodeMessage: 'for node tower',
       filterMessages: [],
       showRequirements: true,
+      fallbackMessage:
+        'No Proxmox nodes configured. Add Proxmox VE in Settings → Infrastructure to monitor physical disks.',
       requirementsTitle: 'Physical disk monitoring requirements:',
+      requirementsItems: expect.arrayContaining([
+        'Enable "Monitor physical disk health (SMART)" in Settings → Infrastructure for the Proxmox node',
+      ]),
     });
 
     expect(

@@ -131,6 +131,38 @@ describe('DiskList', () => {
     expect(screen.getByTestId('disk-detail')).toHaveTextContent('sdb');
   });
 
+  it('renders canonical Settings Infrastructure guidance for empty physical disks', () => {
+    renderDiskList({
+      disks: [],
+      nodes: [buildNode('node-tower', 'tower')],
+      selectedNode: null,
+      searchTerm: '',
+    });
+
+    expect(screen.getByText('Physical disk monitoring requirements:')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Enable "Monitor physical disk health (SMART)" in Settings → Infrastructure for the Proxmox node',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Settings → Infrastructure → Proxmox/)).not.toBeInTheDocument();
+
+    cleanup();
+    renderDiskList({
+      disks: [],
+      nodes: [],
+      selectedNode: null,
+      searchTerm: '',
+    });
+
+    expect(
+      screen.getByText(
+        'No Proxmox nodes configured. Add Proxmox VE in Settings → Infrastructure to monitor physical disks.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Add a Proxmox VE cluster in Settings/)).not.toBeInTheDocument();
+  });
+
   it('keeps api-backed TrueNAS disks on the canonical physical-disk surface even without hardware ids', () => {
     renderDiskList({
       disks: [

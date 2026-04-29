@@ -1,7 +1,9 @@
+import { getInfrastructureSettingsLocationLabel } from '@/utils/infrastructureSettingsPresentation';
+
 export const PMG_EMPTY_STATE_TITLE = 'No Mail Gateways configured';
 
 export const PMG_EMPTY_STATE_DESCRIPTION =
-  'Add a Proxmox Mail Gateway via Settings → Infrastructure → Proxmox to start collecting mail analytics and security metrics.';
+  `Add a Proxmox Mail Gateway via ${getInfrastructureSettingsLocationLabel()} to start collecting mail analytics and security metrics.`;
 
 export const PMG_LOADING_STATE_TITLE = 'Loading mail gateway data...';
 

@@ -1,3 +1,5 @@
+import { getInfrastructureSettingsLocationLabel } from '@/utils/infrastructureSettingsPresentation';
+
 export const PBS_THRESHOLDS_EMPTY_STATE = 'No PBS servers configured.';
 export const GUEST_THRESHOLDS_EMPTY_STATE = 'No VMs or containers found.';
 export const NODE_THRESHOLDS_FILTER_EMPTY_STATE = 'No virtualization hosts match the current filters.';
@@ -9,7 +11,7 @@ export const SNAPSHOT_THRESHOLDS_EMPTY_STATE = 'Configure snapshot age threshold
 export const STORAGE_THRESHOLDS_EMPTY_STATE = 'No storage devices found.';
 export const STORAGE_THRESHOLDS_FILTER_EMPTY_STATE = 'No storage devices match the current filters.';
 export const PMG_THRESHOLDS_EMPTY_STATE =
-  'No mail gateways configured yet. Add a PMG instance in Settings to manage thresholds.';
+  `No mail gateways configured yet. Add a Proxmox Mail Gateway connection in ${getInfrastructureSettingsLocationLabel()} to manage thresholds.`;
 export const PMG_THRESHOLDS_FILTER_EMPTY_STATE = 'No mail gateways match the current filters.';
 export const AGENT_THRESHOLDS_FILTER_EMPTY_STATE = 'No systems match the current filters.';
 export const AGENT_DISKS_EMPTY_STATE =

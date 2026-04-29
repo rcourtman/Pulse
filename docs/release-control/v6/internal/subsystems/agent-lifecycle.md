@@ -675,6 +675,11 @@ route. `buildInfrastructureWorkspacePath()` always returns the base path;
 `deriveAddStepFromLegacyPath()` maps legacy sub-paths to in-page panel state.
 `SetupCompletionPanel.tsx` uses one `INFRASTRUCTURE_PATH` constant for all
 install and platform CTAs.
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts` owns the
+customer-facing Settings Infrastructure target label and onboarding source
+strategy copy. Lifecycle and setup guidance must point operators to
+`Settings → Infrastructure` and must not revive removed subpaths such as
+`Settings → Infrastructure → Proxmox`.
 The shared monitored-system admission preview now formats save-impact
 summaries through `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 so infrastructure setup screens describe count impact and active-policy

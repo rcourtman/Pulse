@@ -224,6 +224,10 @@ status labels. Overview stat-card labels must also route through the alert
 overview presentation helper, and user-facing configuration or thresholds copy
 must use workload, VM, and container vocabulary instead of exposing internal
 guest override/filter names unless the UI is naming a backend field directly.
+Thresholds empty states that hand operators to Infrastructure settings must use
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
+canonical `Settings → Infrastructure` label instead of hard-coding generic
+`Settings` copy or removed nested settings paths.
 Future alert configuration or history presentation work should
 extend those helpers instead of rebuilding alert-specific semantics in pages,
 dashboard surfaces, feature hooks, or thresholds shells.

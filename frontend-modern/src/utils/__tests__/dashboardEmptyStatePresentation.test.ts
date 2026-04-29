@@ -11,12 +11,15 @@ import {
 
 describe('dashboardEmptyStatePresentation', () => {
   it('returns the infrastructure onboarding empty state', () => {
-    expect(getDashboardInfrastructureEmptyState()).toEqual({
+    const state = getDashboardInfrastructureEmptyState();
+
+    expect(state).toEqual({
       title: 'No infrastructure sources connected',
       description:
         'Start in Settings → Infrastructure by choosing a source strategy. Connect a platform API for inventory and health, install Pulse Agent for host telemetry, or use both when you want full coverage.',
       actionLabel: 'Add infrastructure source',
     });
+    expect(state.description).not.toContain('Settings → Infrastructure → Proxmox');
   });
 
   it('returns the guest filter empty state for empty search', () => {

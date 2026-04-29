@@ -69,7 +69,9 @@ describe('alertThresholdsPresentation', () => {
     expect(SNAPSHOT_THRESHOLDS_EMPTY_STATE).toBe('Configure snapshot age thresholds.');
     expect(STORAGE_THRESHOLDS_EMPTY_STATE).toBe('No storage devices found.');
     expect(STORAGE_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No storage devices match the current filters.');
-    expect(PMG_THRESHOLDS_EMPTY_STATE).toContain('No mail gateways configured yet.');
+    expect(PMG_THRESHOLDS_EMPTY_STATE).toBe(
+      'No mail gateways configured yet. Add a Proxmox Mail Gateway connection in Settings → Infrastructure to manage thresholds.',
+    );
     expect(PMG_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No mail gateways match the current filters.');
     expect(AGENT_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No systems match the current filters.');
     expect(AGENT_DISKS_EMPTY_STATE).toContain('Systems with mounted filesystems will appear here.');

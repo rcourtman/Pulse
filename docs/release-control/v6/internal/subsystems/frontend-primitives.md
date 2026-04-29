@@ -882,6 +882,11 @@ command guidance targets. Discovery surfaces that need to tell operators where
 to enable command execution or verify `agent:exec` scope must use that helper's
 canonical `Settings → Infrastructure` and `Settings → API Access` handoffs
 instead of hard-coding legacy settings labels or old route paths.
+Shared frontend empty states, thresholds empty states, and discovery guidance
+that mention the Infrastructure settings destination now consume
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
+canonical `Settings → Infrastructure` label and source-strategy copy. Shared
+primitives must not fork that string or revive removed nested route labels.
 
 `SettingsTab` no longer includes `infrastructure-connections` or
 `infrastructure-install`. The single `infrastructure-systems` entry in

@@ -720,6 +720,12 @@ workspace capacity rather than license slots or plan-upgrade pressure.
 polling on a settings tab name; polling is mount-scoped. The tab guard was
 removed when the infrastructure nav collapsed to one `infrastructure-systems`
 entry.
+That same settings boundary now also keeps the customer-facing Settings
+Infrastructure target label in
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts`. API-backed
+setup, discovery, and guidance surfaces must point operators to
+`Settings → Infrastructure` rather than hard-coding retired nested settings
+paths such as `Settings → Infrastructure → Proxmox`.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.

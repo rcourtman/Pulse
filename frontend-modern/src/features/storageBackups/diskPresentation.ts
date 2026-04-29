@@ -5,6 +5,7 @@ import {
   resolvePlatformTypeFromSources,
 } from '@/utils/sourcePlatforms';
 import { getPhysicalDiskNodeIdentity } from '@/components/Storage/diskResourceUtils';
+import { getInfrastructureSettingsLocationLabel } from '@/utils/infrastructureSettingsPresentation';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
 import type { NormalizedHealth, StorageHealthFilter } from './models';
 import { matchesStorageNodeTerms, parseStorageSearchQuery } from './storageSearchQuery';
@@ -583,10 +584,10 @@ export function getPhysicalDiskEmptyStatePresentation(options: {
     filterMessages,
     showRequirements: !hasScopedFilter && options.diskCount === 0 && options.hasPVENodes,
     fallbackMessage:
-      'No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.',
+      `No Proxmox nodes configured. Add Proxmox VE in ${getInfrastructureSettingsLocationLabel()} to monitor physical disks.`,
     requirementsTitle: 'Physical disk monitoring requirements:',
     requirementsItems: [
-      'Enable "Monitor physical disk health (SMART)" in Settings → Infrastructure (Proxmox node advanced settings)',
+      `Enable "Monitor physical disk health (SMART)" in ${getInfrastructureSettingsLocationLabel()} for the Proxmox node`,
       'Enable SMART monitoring in Proxmox VE at Datacenter → Node → System → Advanced → "Monitor physical disk health"',
       'Wait 5 minutes for Proxmox to collect SMART data',
     ],

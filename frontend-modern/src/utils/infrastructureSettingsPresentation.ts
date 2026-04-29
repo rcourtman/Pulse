@@ -1,3 +1,21 @@
+export const INFRASTRUCTURE_SETTINGS_PATH = '/settings/infrastructure';
+export const INFRASTRUCTURE_SETTINGS_LABEL = 'Settings → Infrastructure';
+
+export function getInfrastructureSettingsTarget() {
+  return {
+    href: INFRASTRUCTURE_SETTINGS_PATH,
+    label: INFRASTRUCTURE_SETTINGS_LABEL,
+  } as const;
+}
+
+export function getInfrastructureSettingsLocationLabel(): string {
+  return INFRASTRUCTURE_SETTINGS_LABEL;
+}
+
+export function getInfrastructureSourceStrategyDescription(): string {
+  return `Start in ${INFRASTRUCTURE_SETTINGS_LABEL} by choosing a source strategy. Connect a platform API for inventory and health, install Pulse Agent for host telemetry, or use both when you want full coverage.`;
+}
+
 export function getDiscoverySubnetRequiredMessage(): string {
   return 'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)';
 }

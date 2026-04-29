@@ -707,6 +707,11 @@ That same owned summary path now also runs through
 range and one shared storage-summary history fetch, and both the sticky
 summary cards and per-pool growth column reuse that payload instead of
 forking separate row-local history reads or duplicate polling loops.
+Storage physical-disk requirements copy now consumes the shared
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts` Settings
+Infrastructure target label. Disk-health guidance may refer to Proxmox node
+requirements, but it must not revive removed nested Pulse settings paths such
+as `Settings → Infrastructure → Proxmox`.
 
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence

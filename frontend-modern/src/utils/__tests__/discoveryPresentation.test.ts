@@ -66,10 +66,14 @@ describe('discoveryPresentation', () => {
   });
 
   it('returns canonical discovery command guidance targets and errors', () => {
-    expect(getDiscoveryCommandSettingsTarget()).toEqual({
+    const commandSettingsTarget = getDiscoveryCommandSettingsTarget();
+    const disconnectedMessage = getDiscoveryNoConnectedAgentMessage();
+
+    expect(commandSettingsTarget).toEqual({
       href: '/settings/infrastructure',
       label: 'Settings → Infrastructure',
     });
+    expect(commandSettingsTarget.label).not.toContain('Settings → Infrastructure → Proxmox');
     expect(getDiscoveryApiAccessSettingsTarget()).toEqual({
       href: '/settings/security/api',
       label: 'Settings → API Access',
@@ -80,9 +84,10 @@ describe('discoveryPresentation', () => {
     expect(getDiscoveryNoConnectedAgentMessage(true)).toBe(
       'Agent not connected for command execution. The API token may be missing the "agent:exec" scope. Check Settings → API Access.',
     );
-    expect(getDiscoveryNoConnectedAgentMessage()).toBe(
+    expect(disconnectedMessage).toBe(
       'No agent available for command execution. Enable Pulse commands from Settings → Infrastructure and make sure the API token has "agent:exec" scope in Settings → API Access.',
     );
+    expect(disconnectedMessage).not.toContain('Settings → Infrastructure → Proxmox');
   });
 
   it('returns canonical network discovery settings copy', () => {

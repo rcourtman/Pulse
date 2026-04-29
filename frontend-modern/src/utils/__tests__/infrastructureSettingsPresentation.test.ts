@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getInfrastructureSettingsLocationLabel,
+  getInfrastructureSettingsTarget,
+  getInfrastructureSourceStrategyDescription,
   getDiscoveryScanStartErrorMessage,
   getDiscoverySettingUpdateErrorMessage,
   getDiscoverySubnetInvalidFormatMessage,
@@ -13,6 +16,17 @@ import {
 } from '@/utils/infrastructureSettingsPresentation';
 
 describe('infrastructureSettingsPresentation', () => {
+  it('returns canonical Settings Infrastructure target copy', () => {
+    expect(getInfrastructureSettingsTarget()).toEqual({
+      href: '/settings/infrastructure',
+      label: 'Settings → Infrastructure',
+    });
+    expect(getInfrastructureSettingsLocationLabel()).toBe('Settings → Infrastructure');
+    expect(getInfrastructureSourceStrategyDescription()).toBe(
+      'Start in Settings → Infrastructure by choosing a source strategy. Connect a platform API for inventory and health, install Pulse Agent for host telemetry, or use both when you want full coverage.',
+    );
+  });
+
   it('returns canonical discovery validation and error copy', () => {
     expect(getDiscoverySubnetRequiredMessage()).toBe(
       'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)',
