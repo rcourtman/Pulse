@@ -216,8 +216,8 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.getByText('1 remaining. 5 monitored, 6 included.')).toBeInTheDocument();
-    expect(screen.getByText('Review policy')).toHaveAttribute(
+    expect(screen.getByText('5 monitored systems.')).toBeInTheDocument();
+    expect(screen.getByText('Review continuity')).toHaveAttribute(
       'href',
       '/settings/system/billing/usage',
     );
@@ -270,9 +270,9 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.getByText('1 remaining. 5 monitored, 6 included.')).toBeInTheDocument();
+    expect(screen.getByText('5 monitored systems.')).toBeInTheDocument();
     expect(screen.getByText('Install v6 collectors')).toHaveAttribute('href', '/settings');
-    expect(screen.getByText('Review policy')).toHaveAttribute(
+    expect(screen.getByText('Review continuity')).toHaveAttribute(
       'href',
       '/settings/system/billing/usage',
     );
@@ -297,7 +297,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(
-      screen.queryByText('1 remaining. 5 monitored, 6 included.'),
+      screen.queryByText('5 monitored systems.'),
     ).not.toBeInTheDocument();
     expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
@@ -320,12 +320,12 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(
-      screen.queryByText('1 remaining. 5 monitored, 6 included.'),
+      screen.queryByText('5 monitored systems.'),
     ).not.toBeInTheDocument();
     expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 
-  it('stays hidden for self-hosted installs even when a stale finite policy is urgent', async () => {
+  it('stays hidden for self-hosted installs even when stale continuity metadata is urgent', async () => {
     mockGetLimit.mockReturnValue({
       key: 'max_monitored_systems',
       limit: 6,
@@ -341,7 +341,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(
-      screen.queryByText('1 remaining. 5 monitored, 6 included.'),
+      screen.queryByText('5 monitored systems.'),
     ).not.toBeInTheDocument();
     expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });

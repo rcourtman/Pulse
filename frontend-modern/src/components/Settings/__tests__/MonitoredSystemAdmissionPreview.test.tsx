@@ -57,7 +57,7 @@ describe('MonitoredSystemAdmissionPreview', () => {
     ).toBeInTheDocument();
   });
 
-  it('describes active-policy failures without slash quota copy', () => {
+  it('describes continuity review failures without slash quota copy', () => {
     render(() => (
       <MonitoredSystemAdmissionPreview
         preview={buildPreview({
@@ -71,11 +71,11 @@ describe('MonitoredSystemAdmissionPreview', () => {
     ));
 
     expect(
-      screen.getByText('This change exceeds the active monitored-system policy'),
+      screen.getByText('This change needs continuity review before saving'),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse currently counts 9 monitored systems. Saving this change would bring the count to 11 monitored systems (+2), above the active policy of 10 monitored systems.',
+        'Pulse currently counts 9 monitored systems. Saving this change would bring the count to 11 monitored systems (+2), above the current verified baseline of 10 monitored systems.',
       ),
     ).toBeInTheDocument();
   });

@@ -1450,12 +1450,12 @@ That Pro-license presentation rule is explicit UX, not only hidden metadata:
 when a migrated recurring v5 plan is active or in grace, the settings surface
 must render plan terms and a continuity notice that makes it clear the
 existing recurring price remains in force until cancellation, while
-self-hosted monitoring and child-resource volume are not metered under the
-current v6 policy. The same plan summary must not render a separate
+self-hosted monitoring and child-resource volume are not metered in current v6
+self-hosted packaging. The same plan summary must not render a separate
 `Guest Capacity`, child-resource allowance, or equivalent volume-cap row for
 uncapped/grandfathered self-hosted plans; the customer-facing continuity story
 is existing-price protection plus unmetered self-hosted monitoring and
-child-resource volume under the current v6 policy, not a new paid
+child-resource volume in current v6 self-hosted packaging, not a new paid
 guest-capacity benefit.
 The self-hosted commercial presentation on that same surface is now locked to
 the no-cap monitored-system model as well. `ProLicensePanel.tsx`,
@@ -1467,7 +1467,8 @@ remote access/mobile/push convenience and 14-day history, Pro adds Relay plus
 AI operations, automation, root-cause analysis, safe remediation, advanced
 administration, and 90-day history, while Pro+ remains legacy continuity only.
 Cloud/MSP pricing semantics stay separate, and grandfathered v5 continuity copy
-remains an explicit boundary policy.
+must describe legacy continuity and recorded baselines rather than current
+self-hosted monitored-system caps, capacity, or policy boundaries.
 That same settings-owned presentation must distinguish between active
 grandfathered recurring v5 continuity and stale bounded legacy fallback
 metadata. Active grandfathered recurring v5 plans must render the existing
@@ -1582,38 +1583,36 @@ default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure
 such as `View counting rules` on the usage-owned monitored-system surfaces
 instead of sitting as persistent plan-tab chrome.
-The same boundary also owns where monitored-system capacity truth lives. A
-dedicated self-hosted Pro plan-surface capacity section is only canonical
-when Pulse is reconciling or enforcing a finite monitored-system limit, such
-as bounded migration continuity, grandfathered floors, or other explicit
-carry-forward limits. Unmetered self-hosted plans should not keep a
-`Monitoring capacity` section alive just to restate that monitoring is
-included without a monitored-system volume gate; those plan surfaces should
-reserve counted-unit explanation plus current usage inspection for the bounded
-legacy usage ledger/disclosure path. When a finite
-plan is full, the section must explain that existing monitoring continues
-while new monitored systems are blocked; when an installation is already above
-the current plan, it must explain that Pulse is in an over-plan frozen state
-rather than implying a hard runtime blackout.
+The same boundary also owns where monitored-system continuity truth lives. A
+dedicated self-hosted Pro plan-surface continuity section is only canonical when
+Pulse is reconciling bounded legacy migration continuity or other explicit
+carry-forward support context. Normal self-hosted plans should not keep a
+`Monitoring capacity` section alive just to restate that monitoring is included
+without a monitored-system volume gate; those plan surfaces should reserve
+counted-unit explanation plus current usage inspection for the legacy
+ledger/disclosure path. When a carried-forward baseline needs review, the
+section must explain that existing monitoring remains visible while new
+top-level additions wait for continuity review or verification, not that the
+customer has hit a current self-hosted plan quota.
 The app-shell monitored-system warning entry point must also use that same
-shape: urgent finite-policy states review the usage-owned policy ledger, not
-the plan-selection surface, and the CTA must not revive "View capacity" copy as
-an upsell-shaped monitored-system prompt.
-Community overflow/setup-slot messaging must still explain the included
-monitored systems plus the temporary setup slot in customer terms rather than
-compressing the contract into slash-style quota strings that imply Pulse is
-counting every child device.
-That same billing-facing boundary also owns why an installation can be above
-plan at all. When the monitored-system posture is `over_limit_frozen`, customer
-copy must explain whether the installation was already above the current plan
-before new admissions were blocked or whether migrated v5 continuity capture is
-still pending. Billing surfaces must not render an unexplained `15 monitored,
-plan includes 5` state that looks like Pulse is ignoring its own cap model.
+shape: urgent legacy-continuity states review the usage-owned ledger, not the
+plan-selection surface, and the CTA must not revive "View capacity" copy as an
+upsell-shaped monitored-system prompt.
+Community overflow/setup-slot messaging must still explain the current
+top-level monitored systems plus any temporary setup slot in customer terms
+rather than compressing the contract into slash-style quota strings that imply
+Pulse is counting every child device.
+That same billing-facing boundary also owns why an installation can require
+legacy review at all. When the monitored-system posture is `over_limit_frozen`,
+customer copy must explain whether a carried-forward baseline needs review or
+whether migrated v5 continuity capture is still pending. Billing surfaces must
+not render an unexplained `15 monitored, plan includes 5` state that looks like
+Pulse is enforcing a current self-hosted cap model.
 Those same billing-facing surfaces must also describe the commercial contract in
-customer terms: monitored systems, plan limits, subscription status, and
-license status. They must not revive legacy `installed-agent` wording or vague
-internal nouns like `allocation` once the monitored-system billing model is the
-canonical product truth.
+customer terms: monitored systems, legacy continuity baselines, subscription
+status, and license status. They must not revive legacy `installed-agent`
+wording or vague internal nouns like `allocation` once the monitored-system
+billing model is the canonical product truth.
 Loading, empty, and temporary-unavailable states on monitored-system usage
 surfaces follow that same rule: they should use calm customer-facing status
 language such as usage loading or usage unavailable with a clear retry action,

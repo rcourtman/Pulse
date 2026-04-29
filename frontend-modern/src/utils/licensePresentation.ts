@@ -251,7 +251,7 @@ export const getGrandfatheredPriceContinuityNotice = (
   return {
     tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
     title: 'Grandfathered v5 pricing',
-    body: 'This migrated v5 Pro subscription keeps its existing recurring price until you cancel. Self-hosted monitoring and child-resource volume are not metered under the current v6 policy. If you cancel and return later, current v6 pricing applies for paid features.',
+    body: 'This migrated v5 Pro subscription keeps its existing recurring price until you cancel. Self-hosted monitoring and child-resource volume are not metered in current v6 self-hosted packaging. If you cancel and return later, current v6 pricing applies for paid features.',
   };
 };
 
@@ -280,8 +280,8 @@ export const getMonitoredSystemContinuityNotice = (
     if (!resolvedCapacity?.current_available) {
       return {
         tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-        title: 'Migration continuity verification pending',
-        body: `Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. ${formatMonitoredSystemUsageUnavailableMessage(
+        title: 'Legacy continuity verification pending',
+        body: `Pulse is still verifying legacy v5 monitoring continuity for this installation. ${formatMonitoredSystemUsageUnavailableMessage(
           getMonitoredSystemLimitUnavailableReason(limit, capacity),
         )}`,
       };
@@ -290,15 +290,15 @@ export const getMonitoredSystemContinuityNotice = (
     if (resolvedCapacity.mode === 'over_limit_frozen') {
       return {
         tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-        title: 'Migration continuity verification pending',
-        body: `Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. The finite policy includes ${displayContinuity.plan_limit}, while this installation is already monitoring ${resolvedCapacity.current}. Existing monitoring continues while additional monitored-system admissions pause until continuity capture finishes.`,
+        title: 'Legacy continuity verification pending',
+        body: `Pulse is still verifying legacy v5 monitoring continuity for this installation. Pulse has already identified ${resolvedCapacity.current} monitored systems for continuity reporting, and existing monitoring remains visible while new top-level additions wait for verification to finish.`,
       };
     }
 
     return {
       tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-      title: 'Migration continuity verification pending',
-      body: 'Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. Existing monitoring continues while Pulse finalizes the effective monitored-system limit.',
+      title: 'Legacy continuity verification pending',
+      body: 'Pulse is still verifying legacy v5 monitoring continuity for this installation. Existing monitoring remains visible while Pulse finalizes the continuity baseline.',
     };
   }
 
@@ -319,8 +319,8 @@ export const getMonitoredSystemContinuityNotice = (
   ) {
     return {
       tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
-      title: 'Grandfathered monitored-system floor',
-      body: `This migrated v5 installation keeps an effective monitored-system limit of ${displayContinuity.effective_limit}. The current plan includes ${displayContinuity.plan_limit}, and the observed legacy estate was grandfathered at ${displayContinuity.grandfathered_floor}.`,
+      title: 'Legacy monitoring continuity',
+      body: `This migrated v5 installation keeps its observed legacy estate available for continuity reporting on this instance. Pulse recorded ${displayContinuity.grandfathered_floor} monitored systems during migration.`,
     };
   }
 
@@ -506,12 +506,12 @@ export const getSelfHostedCurrentPlanPresentation = ({
   ) {
     supplementalBadges.push('Grandfathered price');
     supplementalDetails.push(
-      'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume are not metered under the current v6 policy.',
+      'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume are not metered in current v6 self-hosted packaging.',
     );
   } else if (hasUncappedContinuity && current.is_lifetime) {
     supplementalBadges.push('Grandfathered lifetime');
     supplementalDetails.push(
-      'This migrated lifetime install remains valid permanently, and self-hosted monitoring plus child-resource volume are not metered under the current v6 policy.',
+      'This migrated lifetime install remains valid permanently, and self-hosted monitoring plus child-resource volume are not metered in current v6 self-hosted packaging.',
     );
   }
 
@@ -526,7 +526,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
   if (continuity?.capture_pending) {
     supplementalBadges.push('Continuity pending');
     supplementalDetails.push(
-      'Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation.',
+      'Pulse is still verifying legacy v5 monitoring continuity for this migrated installation.',
     );
   } else if (
     continuity &&
@@ -534,9 +534,9 @@ export const getSelfHostedCurrentPlanPresentation = ({
     continuity.grandfathered_floor > 0 &&
     continuity.effective_limit > continuity.plan_limit
   ) {
-    supplementalBadges.push('Grandfathered floor');
+    supplementalBadges.push('Legacy continuity');
     supplementalDetails.push(
-      `This installation keeps an effective monitored-system limit of ${continuity.effective_limit} from the observed legacy estate.`,
+      'This migrated installation keeps the observed legacy estate available for continuity reporting on this instance.',
     );
   }
 

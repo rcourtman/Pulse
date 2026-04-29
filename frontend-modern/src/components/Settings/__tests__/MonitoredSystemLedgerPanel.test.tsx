@@ -269,11 +269,11 @@ describe('MonitoredSystemLedgerPanel', () => {
       expect(screen.getByText('7 monitored systems')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Plan continuity')).toBeInTheDocument();
-    expect(screen.getByText('Plan limit')).toBeInTheDocument();
-    expect(screen.getByText('Effective limit')).toBeInTheDocument();
-    expect(screen.getByText('Grandfathered floor')).toBeInTheDocument();
-    expect(screen.getByText('Continuity capture')).toBeInTheDocument();
+    expect(screen.getByText('Legacy continuity')).toBeInTheDocument();
+    expect(screen.getByText('Plan baseline')).toBeInTheDocument();
+    expect(screen.getByText('Current baseline')).toBeInTheDocument();
+    expect(screen.getByText('Observed legacy estate')).toBeInTheDocument();
+    expect(screen.getByText('Verification')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getAllByText('12')).toHaveLength(2);
     expect(screen.getByText('Pending')).toBeInTheDocument();
@@ -372,7 +372,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(screen.getAllByText('server-b (PBS Server via PBS)').length).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        'Review the top-level monitored systems Pulse has identified for reporting and any applicable policy.',
+        'Review the top-level monitored systems Pulse has identified for reporting, migration continuity, and support context.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
@@ -391,9 +391,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('server-b')).toBeInTheDocument();
     expect(screen.getByText('2 monitored systems')).toBeInTheDocument();
-    expect(
-      screen.getByText('8 remaining before additional monitored-system admissions pause.'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Continuity review')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'View counting details' })).toHaveLength(2);
     fireEvent.click(screen.getAllByRole('button', { name: 'View counting details' })[1]!);
     expect(

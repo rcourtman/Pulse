@@ -377,7 +377,7 @@ describe('ProLicensePanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
-    expect(screen.queryByText('Grandfathered monitored-system floor')).not.toBeInTheDocument();
+    expect(screen.queryByText('Legacy monitoring continuity')).not.toBeInTheDocument();
     expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
@@ -465,7 +465,7 @@ describe('ProLicensePanel', () => {
       ).not.toBeInTheDocument();
       expect(
         screen.getAllByText(
-          /self-hosted monitoring and child-resource volume are not metered under the current v6 policy/i,
+          /self-hosted monitoring and child-resource volume are not metered in current v6 self-hosted packaging/i,
         ).length,
       ).toBeGreaterThan(0);
       expect(
@@ -610,7 +610,7 @@ describe('ProLicensePanel', () => {
         'Included',
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Migration continuity verification pending')).not.toBeInTheDocument();
+    expect(screen.queryByText('Legacy continuity verification pending')).not.toBeInTheDocument();
     expect(screen.queryByText('Continuity pending')).not.toBeInTheDocument();
     expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
     expect(screen.queryByText('Effective Monitored System Limit')).not.toBeInTheDocument();
@@ -669,13 +669,13 @@ describe('ProLicensePanel', () => {
         'Included',
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/already monitoring 23/i)).not.toBeInTheDocument();
-    expect(screen.queryByText('Migration continuity verification pending')).not.toBeInTheDocument();
+    expect(screen.queryByText(/identified 23 monitored systems/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Legacy continuity verification pending')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
     expect(screen.queryByText('Why is continuity still pending?')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
-      screen.queryByText('Monitoring continues above the current policy boundary'),
+      screen.queryByText('New top-level additions are paused until this legacy continuity state is reviewed.'),
     ).not.toBeInTheDocument();
   });
 
@@ -730,11 +730,11 @@ describe('ProLicensePanel', () => {
         'Included',
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Grandfathered monitored-system floor')).not.toBeInTheDocument();
+    expect(screen.queryByText('Legacy monitoring continuity')).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/keeps an effective monitored-system limit of 23/i),
+      screen.queryByText(/observed legacy estate available/i),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText('Grandfathered floor')).not.toBeInTheDocument();
+    expect(screen.queryByText('Legacy continuity')).not.toBeInTheDocument();
     expect(screen.queryByText('23 monitored systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
     expect(

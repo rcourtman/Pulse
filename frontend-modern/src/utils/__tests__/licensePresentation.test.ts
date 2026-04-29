@@ -374,7 +374,7 @@ describe('licensePresentation', () => {
       ],
       supplementalBadges: ['Grandfathered price'],
       supplementalSummary:
-        'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume are not metered under the current v6 policy.',
+        'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume are not metered in current v6 self-hosted packaging.',
     });
   });
 
@@ -579,8 +579,8 @@ describe('licensePresentation', () => {
         },
       ),
     ).toMatchObject({
-      title: 'Migration continuity verification pending',
-      body: expect.stringContaining('grandfathered monitored-system floor'),
+      title: 'Legacy continuity verification pending',
+      body: expect.stringContaining('legacy v5 monitoring continuity'),
       tone: expect.stringContaining('amber'),
     });
     expect(
@@ -610,8 +610,8 @@ describe('licensePresentation', () => {
         },
       ),
     ).toMatchObject({
-      title: 'Migration continuity verification pending',
-      body: expect.stringContaining('already monitoring 23'),
+      title: 'Legacy continuity verification pending',
+      body: expect.stringContaining('identified 23 monitored systems'),
       tone: expect.stringContaining('amber'),
     });
     expect(
@@ -671,7 +671,7 @@ describe('licensePresentation', () => {
         },
       ),
     ).toMatchObject({
-      title: 'Grandfathered monitored-system floor',
+      title: 'Legacy monitoring continuity',
       tone: expect.stringContaining('green'),
     });
   });

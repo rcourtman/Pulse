@@ -18,18 +18,18 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   disclosureDefinition:
     'A monitored system is a top-level monitored root such as a Docker host, Kubernetes cluster, Proxmox node, standalone host, or TrueNAS system. Each root counts once no matter how Pulse collects it. Child resources like VMs, containers, pods, disks, backups, and services underneath that root are included.',
   ledgerDescription:
-    'Review the top-level monitored systems Pulse has identified for reporting and any applicable policy.',
+    'Review the top-level monitored systems Pulse has identified for reporting, migration continuity, and support context.',
   tableNameLabel: 'Name',
   tableStatusLabel: 'Status',
   tableLatestIncludedSignalLabel: 'Latest Included Signal',
   countedSystemBadgeLabel: 'Counts as 1 monitored system',
   groupedSourcesHeading: 'Grouped sources',
   countingExplanationHeading: 'Why this counts',
-  continuityHeading: 'Plan continuity',
-  continuityPlanLimitLabel: 'Plan limit',
-  continuityEffectiveLimitLabel: 'Effective limit',
-  continuityGrandfatheredFloorLabel: 'Grandfathered floor',
-  continuityCaptureLabel: 'Continuity capture',
+  continuityHeading: 'Legacy continuity',
+  continuityPlanLimitLabel: 'Plan baseline',
+  continuityEffectiveLimitLabel: 'Current baseline',
+  continuityGrandfatheredFloorLabel: 'Observed legacy estate',
+  continuityCaptureLabel: 'Verification',
   continuityCapturePendingLabel: 'Pending',
   continuityCaptureCapturedLabel: 'Captured',
   usageVerifyingLabel: 'Verifying…',
@@ -55,7 +55,7 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   policyLoadingState: {
     title: 'Checking monitored-system visibility',
     message:
-      'Pulse waits for the session presentation policy before loading monitored-system usage details.',
+      'Pulse waits for the session visibility state before loading monitored-system usage details.',
   },
   hiddenState: {
     title: 'Monitored-system usage is hidden in demo mode',
@@ -80,7 +80,7 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
     unknown: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
   },
   limitBanner: {
-    reviewPolicyLabel: 'Review policy',
+    reviewPolicyLabel: 'Review continuity',
     installCollectorsLabel: 'Install v6 collectors',
     overflowSummaryPrefix: 'A temporary setup slot is active',
     legacyConnectionSuffix:
@@ -89,20 +89,20 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   admissionPreview: {
     requiredTitle: 'Preview monitored-system impact before saving',
     requiredMessage:
-      'Pulse must verify the monitored-system policy for this platform connection before it can be saved.',
+      'Pulse must preview the monitored-system impact for this platform connection before it can be saved.',
     fallbackTitle: 'Monitored-system impact',
-    exceedsPolicyTitle: 'This change exceeds the active monitored-system policy',
+    exceedsPolicyTitle: 'This change needs continuity review before saving',
     addsSystemsTitle: 'This change adds monitored systems',
     removesSystemsTitle: 'This change removes monitored systems',
     unchangedTitle: 'This change keeps monitored-system count unchanged',
     unavailableTitle: 'Monitored-system verification is temporarily unavailable',
     unavailableFallbackMessage:
-      'Pulse cannot verify monitored-system policy right now, so this connection cannot be saved yet. Retry preview in a moment.',
+      'Pulse cannot verify monitored-system impact right now, so this connection cannot be saved yet. Retry preview in a moment.',
     unavailableUnsettledMessage:
       'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
     unavailableRebuildPendingMessage:
       'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
-    saveBlockedLimitMessage: 'This change would exceed the active monitored-system policy',
+    saveBlockedLimitMessage: 'This change needs monitored-system review before saving',
     saveBlockedLoadingMessage: 'Wait for the monitored-system impact preview to finish',
   },
 } as const;
@@ -447,11 +447,11 @@ export function getMonitoredSystemLimitCapacityStatusSummary(
     case 'unlimited':
       return MONITORED_SYSTEM_LEDGER_PRESENTATION.unlimitedLimitLabel;
     case 'over_limit_frozen':
-      return `Over policy by ${resolved.overage}`;
+      return 'Continuity review';
     case 'at_limit_blocking_new':
-      return 'At policy boundary';
+      return 'Continuity review';
     default:
-      return `${resolved.available_slots} remaining`;
+      return 'Healthy';
   }
 }
 
@@ -469,16 +469,16 @@ export function getMonitoredSystemLimitContextSummary(
 
   switch (resolved.mode) {
     case 'unlimited':
-      return 'This policy does not cap monitored systems.';
+      return 'Self-hosted monitoring is included for this instance.';
     case 'over_limit_frozen':
       if (resolved.reason === 'legacy_migration_capture_pending') {
-        return `This finite policy includes ${resolved.limit}. Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while additional monitored-system admissions pause until continuity capture finishes.`;
+        return 'Pulse is verifying legacy v5 continuity for this installation. Existing monitoring remains visible while new top-level additions wait for verification to finish.';
       }
-      return `This finite policy includes ${resolved.limit}. This installation is already over policy by ${resolved.overage} because it was monitoring above that boundary before additional admissions paused. Existing monitoring continues; additional monitored systems stay paused until usage is reduced or the policy changes.`;
+      return 'Existing monitoring remains visible. New top-level additions are paused until this legacy continuity state is reviewed.';
     case 'at_limit_blocking_new':
-      return `This finite policy includes ${resolved.limit}. Existing monitoring continues; additional monitored systems stay paused until capacity is available or the policy changes.`;
+      return 'Existing monitoring remains visible. New top-level additions are paused until this legacy continuity state is reviewed.';
     default:
-      return `${resolved.available_slots} remaining before additional monitored-system admissions pause.`;
+      return '';
   }
 }
 
@@ -493,6 +493,13 @@ export function buildMonitoredSystemCapacitySectionModel(
   if (resolved.limit <= 0) {
     return null;
   }
+  if (
+    resolved.current_available &&
+    resolved.mode !== 'over_limit_frozen' &&
+    resolved.mode !== 'at_limit_blocking_new'
+  ) {
+    return null;
+  }
 
   const includedValue =
     resolved.limit > 0
@@ -505,7 +512,7 @@ export function buildMonitoredSystemCapacitySectionModel(
       value: getMonitoredSystemLimitUsageSummary(limit, capacity),
     },
     {
-      label: 'Included',
+      label: 'Baseline',
       value: includedValue,
     },
     {
@@ -528,43 +535,42 @@ export function buildMonitoredSystemCapacitySectionModel(
     case 'unlimited':
       return {
         stats,
-        statusMessage: 'This policy does not cap monitored systems.',
+        statusMessage: 'Self-hosted monitoring is included for this instance.',
       };
     case 'at_limit_blocking_new':
       return {
         stats,
-        statusMessage: 'Existing monitoring continues. Additional monitored systems are paused.',
+        statusMessage: 'Existing monitoring remains visible. New top-level additions need review.',
         detailMessage:
-          'Reduce usage or resolve the applicable policy before adding another monitored system.',
+          'Review the legacy continuity state before adding another top-level monitored system.',
       };
     case 'over_limit_frozen':
       if (resolved.reason === 'legacy_migration_capture_pending') {
         return {
           stats,
           statusMessage:
-            'Existing monitoring continues. Additional monitored systems are temporarily paused.',
-          detailMessage: 'Pulse is still verifying migrated v5 continuity for this installation.',
+            'Existing monitoring remains visible. New top-level additions wait for verification.',
+          detailMessage: 'Pulse is still verifying legacy v5 continuity for this installation.',
           explanation: {
             label: 'Why is continuity still pending?',
-            body: `Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. The finite policy includes ${resolved.limit}, while this installation is already monitoring ${resolved.current}. Existing monitoring continues while additional monitored-system admissions pause until continuity capture finishes.`,
+            body: `Pulse is still verifying legacy v5 continuity for this installation. It has already identified ${resolved.current} monitored systems for continuity reporting, and existing monitoring remains visible while new top-level additions wait for verification to finish.`,
           },
         };
       }
       return {
         stats,
-        statusMessage: 'Existing monitoring continues. Additional monitored systems are paused.',
+        statusMessage: 'Existing monitoring remains visible. New top-level additions need review.',
         detailMessage:
-          'Reduce usage or resolve the applicable policy before adding another monitored system.',
+          'Review the legacy continuity state before adding another top-level monitored system.',
         explanation: {
-          label: 'Why is this over policy?',
-          body: `This installation was already monitoring ${resolved.current} monitored systems before Pulse paused net-new monitored-system admissions at the active finite policy boundary. Pulse keeps those existing systems visible, but additional monitored systems stay paused until usage is reduced or the policy changes.`,
+          label: 'Why does this need review?',
+          body: `Pulse has already identified ${resolved.current} monitored systems for this installation. Existing monitoring remains visible, but new top-level additions are paused until this legacy continuity state is reviewed.`,
         },
       };
     default:
       return {
         stats,
-        statusMessage: 'New monitored systems can still be added.',
-        detailMessage: `${resolved.available_slots} remaining before additional monitored-system admissions pause.`,
+        statusMessage: 'Current monitored-system accounting is healthy.',
       };
   }
 }
@@ -648,7 +654,7 @@ export function formatMonitoredSystemAdmissionPreviewSummary(
   const delta = projected - current;
   const policySuffix =
     preview.would_exceed_limit && limit > 0
-      ? `, above the active policy of ${formatAdmissionPreviewCount(limit)}`
+      ? `, above the current verified baseline of ${formatAdmissionPreviewCount(limit)}`
       : '';
   const currentSummary = `Pulse currently counts ${formatAdmissionPreviewCount(current)}.`;
 
@@ -745,15 +751,17 @@ export function formatMonitoredSystemLimitSummary(
   switch (resolved.mode) {
     case 'over_limit_frozen':
       if (resolved.reason === 'legacy_migration_capture_pending') {
-        return `Continuity verification pending. ${resolved.current} monitored, ${resolved.limit} included.`;
+        return `Continuity verification pending. ${formatMonitoredSystemCount(
+          resolved.current,
+        )}.`;
       }
-      return `Over policy by ${resolved.overage}. ${resolved.current} monitored, ${resolved.limit} included.`;
+      return `Continuity review needed. ${formatMonitoredSystemCount(resolved.current)}.`;
     case 'at_limit_blocking_new':
-      return `At policy boundary. ${resolved.current} monitored, ${resolved.limit} included.`;
+      return `Continuity review needed. ${formatMonitoredSystemCount(resolved.current)}.`;
     case 'unlimited':
-      return `${resolved.current} monitored.`;
+      return `${formatMonitoredSystemCount(resolved.current)}.`;
     default:
-      return `${resolved.available_slots} remaining. ${resolved.current} monitored, ${resolved.limit} included.`;
+      return `${formatMonitoredSystemCount(resolved.current)}.`;
   }
 }
 

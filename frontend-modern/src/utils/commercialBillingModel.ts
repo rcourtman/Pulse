@@ -139,7 +139,7 @@ export const buildSelfHostedCommercialPlanModel = (
               value: input.monitoredSystemsSummary,
             },
             {
-              label: 'Capacity Status',
+              label: 'Continuity Status',
               value: input.capacityStatusSummary,
             },
             {
@@ -152,14 +152,14 @@ export const buildSelfHostedCommercialPlanModel = (
       ...(input.monitoredSystemContinuity
         ? [
             {
-              label: 'Plan Monitored System Limit',
+              label: 'Plan Baseline',
               value:
                 input.monitoredSystemContinuity.plan_limit > 0
                   ? input.monitoredSystemContinuity.plan_limit
                   : SELF_HOSTED_NOT_METERED_LABEL,
             },
             {
-              label: 'Effective Monitored System Limit',
+              label: 'Current Baseline',
               value:
                 input.monitoredSystemContinuity.effective_limit > 0
                   ? input.monitoredSystemContinuity.effective_limit
@@ -169,13 +169,13 @@ export const buildSelfHostedCommercialPlanModel = (
             input.monitoredSystemContinuity.grandfathered_floor > 0
               ? [
                   {
-                    label: 'Grandfathered Floor',
+                    label: 'Observed Legacy Estate',
                     value: input.monitoredSystemContinuity.grandfathered_floor,
                   },
                 ]
               : []),
             {
-              label: 'Continuity Capture',
+              label: 'Continuity Verification',
               value: input.monitoredSystemContinuity.capture_pending
                 ? 'Pending'
                 : input.continuityCapturedAt || 'Captured',
@@ -184,7 +184,7 @@ export const buildSelfHostedCommercialPlanModel = (
         : hasFiniteSelfHostedLimit(input.maxMonitoredSystems)
           ? [
               {
-                label: 'Included Monitored Systems',
+                label: 'Recorded Monitoring Baseline',
                 value: input.maxMonitoredSystems,
               },
             ]

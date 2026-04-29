@@ -244,7 +244,7 @@ describe('useTrueNASSettingsPanelState', () => {
 
     expect(TrueNASAPI.createConnection).not.toHaveBeenCalled();
     expect(notificationStore.error).toHaveBeenCalledWith(
-      'Pulse must verify the monitored-system policy for this platform connection before it can be saved.',
+      'Pulse must preview the monitored-system impact for this platform connection before it can be saved.',
     );
   });
 

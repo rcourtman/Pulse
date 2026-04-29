@@ -55,21 +55,55 @@ describe('commercialBillingModel', () => {
     expect(JSON.stringify(model)).not.toContain('Unlimited');
   });
 
-  it('keeps bounded monitored-system details on legacy fallback paths', () => {
+  it('keeps bounded monitored-system details as legacy support context', () => {
     const model = buildSelfHostedCommercialPlanModel({
       ...createBaseInput(),
       monitoredSystemsSummary: '7 monitored systems',
-      capacityStatusSummary: '3 remaining',
+      capacityStatusSummary: 'Continuity review',
       maxMonitoredSystems: 10,
       retailPlanDefinition: null,
     });
 
     expect(model.summary).toEqual([
       { label: 'Monitored Systems', value: '7 monitored systems' },
-      { label: 'Capacity Status', value: '3 remaining' },
+      { label: 'Continuity Status', value: 'Continuity review' },
       { label: 'Plan Status', value: 'Active' },
     ]);
-    expect(model.details.map((item) => item.label)).toContain('Included Monitored Systems');
+    expect(model.details.map((item) => item.label)).toContain('Recorded Monitoring Baseline');
     expect(model.details.map((item) => item.label)).not.toContain('Guest Capacity');
+  });
+
+  it('labels captured legacy continuity as baselines instead of current limits', () => {
+    const model = buildSelfHostedCommercialPlanModel({
+      ...createBaseInput(),
+      monitoredSystemsSummary: '23 monitored systems',
+      capacityStatusSummary: 'Continuity review',
+      maxMonitoredSystems: SELF_HOSTED_NOT_METERED_LABEL,
+      retailPlanDefinition: null,
+      monitoredSystemContinuity: {
+        plan_limit: 10,
+        grandfathered_floor: 23,
+        effective_limit: 23,
+        capture_pending: false,
+      },
+    });
+
+    expect(model.summary).toEqual([
+      { label: 'Monitored Systems', value: '23 monitored systems' },
+      { label: 'Continuity Status', value: 'Continuity review' },
+      { label: 'Plan Status', value: 'Active' },
+    ]);
+    expect(model.details.map((item) => item.label)).toEqual([
+      'Tier',
+      'Licensed Email',
+      'Plan Terms',
+      'Expires',
+      'Days Remaining',
+      'Plan Baseline',
+      'Current Baseline',
+      'Observed Legacy Estate',
+      'Continuity Verification',
+    ]);
+    expect(JSON.stringify(model)).not.toContain('Monitored System Limit');
   });
 });
