@@ -50,7 +50,7 @@ FORBIDDEN_PUBLIC_COPY_PATTERNS: tuple[tuple[str, str], ...] = (
     ("bundled Patrol run allowance", r"\b25\s+runs,\s+no\s+api\s+key\b"),
     (
         "customer-specific Relay URL promise",
-        r"\byourlab\.pulserelay\.pro\b|\ba\s+custom\s+url\b|custom\s+url\s*\([^)]*pulserelay",
+        r"\byourlab\.pulserelay\.pro\b|\ba\s+custom\s+url\b|\bcustom\s+url\s*\+|\+\s*custom\s+url\b|custom\s+url\s+should\b|custom\s+url\s*\([^)]*pulserelay",
     ),
 )
 

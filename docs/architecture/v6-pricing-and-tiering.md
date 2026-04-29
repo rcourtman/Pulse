@@ -294,8 +294,9 @@ replace the self-managed AI runtime path.
 ### 4. Relay as optional convenience ($39/yr)
 Gives remote-access and mobile users a small paid convenience option without turning core
 self-hosted monitoring into a capacity tier.
-Remote access + mobile + push notifications + custom URL + 14-day history should make it
-an easy purchase for users who want Pulse available outside their LAN.
+Remote access through the standard outbound Relay service + mobile + push notifications +
+14-day history should make it an easy purchase for users who want Pulse available outside
+their LAN.
 
 ### 5. Opt-in commercial discovery
 Default self-hosted v6 sessions must not present ordinary users with trial, paywall, or

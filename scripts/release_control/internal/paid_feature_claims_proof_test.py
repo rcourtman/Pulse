@@ -27,9 +27,11 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     pulse_dir = root / "pulse"
     pulse_pro_dir = root / "pulse-pro"
     (pulse_dir / "docs").mkdir(parents=True)
+    (pulse_dir / "docs" / "architecture").mkdir(parents=True)
     (pulse_dir / "frontend-modern" / "src" / "utils").mkdir(parents=True)
     (pulse_pro_dir / "landing-page").mkdir(parents=True)
     (pulse_pro_dir / "license-server").mkdir(parents=True)
+    (pulse_pro_dir / "license-server" / "scripts").mkdir(parents=True)
     (pulse_pro_dir / "relay-server").mkdir(parents=True)
 
     (pulse_dir / "docs" / "PULSE_PRO.md").write_text(
@@ -59,6 +61,16 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
         """,
         encoding="utf-8",
     )
+    (pulse_dir / "docs" / "architecture" / "v6-pricing-and-tiering.md").write_text(
+        """
+        monitored systems are not the paid gate.
+        Customer-specific Relay URL is not part of the standard outbound relay service.
+        Self-hosted trial acquisition: No.
+        Metrics history: 14 days for Relay.
+        Metrics history: 90 days for Pro.
+        """,
+        encoding="utf-8",
+    )
     (pulse_dir / "frontend-modern" / "src" / "utils" / "selfHostedPlans.ts").write_text(
         """
         Self-hosted Pulse includes core monitoring for free.
@@ -66,6 +78,15 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
         14-day metric history.
         Root-cause analysis, safe remediation workflows, 90-day history.
         admin/reporting extras.
+        """,
+        encoding="utf-8",
+    )
+    (pulse_pro_dir / "MONETIZATION.md").write_text(
+        """
+        Relay Tier includes 14-day history.
+        Pulse Relay provides secure remote access.
+        No inbound firewall ports.
+        Self-hosted Pro should be sold on root-cause analysis.
         """,
         encoding="utf-8",
     )
@@ -85,6 +106,15 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
         mobile app pairing, push notifications, and 14-day history.
         root-cause analysis, safe remediation workflows, team controls, and 90-day history.
         not as the self-hosted paid gate.
+        """,
+        encoding="utf-8",
+    )
+    (pulse_pro_dir / "license-server" / "scripts" / "create-v6-stripe-prices.sh").write_text(
+        """
+        Pulse Relay
+        Pulse Mobile pairing
+        no inbound firewall ports
+        14-day history
         """,
         encoding="utf-8",
     )
@@ -167,7 +197,7 @@ class PaidFeatureClaimsProofTest(unittest.TestCase):
             result = proof.run_public_paid_claim_copy_audit(args)
 
             self.assertTrue(result.ok)
-            self.assertEqual(result.detail, "checked 6 public paid-claim files")
+            self.assertEqual(result.detail, "checked 9 public paid-claim files")
 
     def test_public_copy_audit_rejects_stale_limit_and_trial_claims(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -195,6 +225,32 @@ class PaidFeatureClaimsProofTest(unittest.TestCase):
             self.assertEqual(result.exit_code, 1)
             self.assertIn("higher monitoring limits", result.detail)
             self.assertIn("start trial CTA", result.detail)
+
+    def test_public_copy_audit_rejects_customer_specific_relay_url_promises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse_dir, pulse_pro_dir = write_public_copy_fixture(Path(tmp))
+            pricing = pulse_dir / "docs" / "architecture" / "v6-pricing-and-tiering.md"
+            pricing.write_text(
+                pricing.read_text(encoding="utf-8")
+                + "\nRemote access + mobile + push notifications + custom URL + 14-day history.\n",
+                encoding="utf-8",
+            )
+            args = proof.parse_args(
+                [
+                    "--pulse-dir",
+                    str(pulse_dir),
+                    "--pulse-pro-license-server-dir",
+                    str(pulse_pro_dir / "license-server"),
+                    "--pulse-pro-relay-server-dir",
+                    str(pulse_pro_dir / "relay-server"),
+                ]
+            )
+
+            result = proof.run_public_paid_claim_copy_audit(args)
+
+            self.assertFalse(result.ok)
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("customer-specific Relay URL promise", result.detail)
 
     def test_run_proof_includes_public_copy_audit_before_command_specs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
