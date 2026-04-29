@@ -381,6 +381,8 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
+    expect(screen.getByText('Permanent')).toBeInTheDocument();
+    expect(screen.queryByText('Unlimited')).not.toBeInTheDocument();
     expect(screen.getAllByText('Included').length).toBeGreaterThan(0);
     expect(screen.queryByText('5 / 12')).not.toBeInTheDocument();
   });

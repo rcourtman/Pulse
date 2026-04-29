@@ -44,6 +44,8 @@ const usageRatio = (current: number, limit?: number) => {
   return Math.min(100, Math.round((current / limit) * 100));
 };
 
+const NOT_METERED_USAGE_LABEL = 'Not metered';
+
 export const CommercialSection: Component<CommercialSectionProps> = (props) => (
   <section id={props.id} class="scroll-mt-24 space-y-2 border-t border-border pt-4">
     <h3 class="text-sm font-semibold text-base-content">{props.title}</h3>
@@ -81,7 +83,7 @@ export const CommercialUsageMeters: Component<CommercialUsageMetersProps> = (pro
             <span>{item.label}</span>
             <span>
               {item.current}
-              {typeof item.limit === 'number' ? ` / ${item.limit}` : ' / Unlimited'}
+              {typeof item.limit === 'number' ? ` / ${item.limit}` : ` / ${NOT_METERED_USAGE_LABEL}`}
             </span>
           </div>
           <Show when={typeof item.limit === 'number'}>

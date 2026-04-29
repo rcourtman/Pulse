@@ -52,7 +52,11 @@ import {
   type SelfHostedBillingPlanIntent,
   type SelfHostedBillingSection,
 } from '@/utils/pricingHandoff';
-import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
+import {
+  buildSelfHostedCommercialPlanModel,
+  LIFETIME_DAYS_REMAINING_LABEL,
+  SELF_HOSTED_NOT_METERED_LABEL,
+} from '@/utils/commercialBillingModel';
 import { getSelfHostedPlanDefinitionForBillingTier } from '@/utils/selfHostedPlans';
 import {
   buildMonitoredSystemCapacitySectionModel,
@@ -342,7 +346,7 @@ export function useProLicensePanelState() {
 
   const displayedDaysRemaining = createMemo(() => {
     const current = entitlements();
-    if (current?.is_lifetime) return 'Unlimited';
+    if (current?.is_lifetime) return LIFETIME_DAYS_REMAINING_LABEL;
     if (subscriptionState() === 'trial' && typeof trialDaysRemaining() === 'number') {
       return trialDaysRemaining();
     }
@@ -365,7 +369,7 @@ export function useProLicensePanelState() {
     const limit = monitoredSystemLimitStatus();
     const capacity = monitoredSystemCapacity();
     if (!limit && !capacity && usesCanonicalSelfHostedPlan()) {
-      return 'Unlimited';
+      return SELF_HOSTED_NOT_METERED_LABEL;
     }
     return getMonitoredSystemLimitUsageSummary(limit, capacity);
   });
@@ -373,7 +377,7 @@ export function useProLicensePanelState() {
     const limit = monitoredSystemLimitStatus();
     const capacity = monitoredSystemCapacity();
     if (!limit && !capacity && usesCanonicalSelfHostedPlan()) {
-      return 'Unlimited';
+      return SELF_HOSTED_NOT_METERED_LABEL;
     }
     return getMonitoredSystemLimitCapacityStatusSummary(limit, capacity);
   });
@@ -508,7 +512,7 @@ export function useProLicensePanelState() {
         typeof monitoredSystemLimitStatus()?.limit === 'number' &&
         monitoredSystemLimitStatus()!.limit > 0
           ? monitoredSystemLimitStatus()!.limit
-          : 'Unlimited',
+          : SELF_HOSTED_NOT_METERED_LABEL,
       retailPlanDefinition: currentRetailPlanDefinition(),
       monitoredSystemContinuity: displayableMonitoredSystemContinuity() ?? null,
       continuityCapturedAt: continuityCapturedAt(),

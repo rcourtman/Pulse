@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSelfHostedCommercialPlanModel } from '../commercialBillingModel';
+import {
+  buildSelfHostedCommercialPlanModel,
+  SELF_HOSTED_NOT_METERED_LABEL,
+} from '../commercialBillingModel';
 import { SELF_HOSTED_PLAN_BY_TIER } from '../selfHostedPlans';
 
 const createBaseInput = () => ({
@@ -10,9 +13,9 @@ const createBaseInput = () => ({
   planTerms: 'Pro Monthly',
   expires: '12/31/2026',
   daysRemaining: 123,
-  monitoredSystemsSummary: 'Unlimited',
-  capacityStatusSummary: 'Unlimited',
-  maxMonitoredSystems: 'Unlimited' as const,
+  monitoredSystemsSummary: SELF_HOSTED_NOT_METERED_LABEL,
+  capacityStatusSummary: SELF_HOSTED_NOT_METERED_LABEL,
+  maxMonitoredSystems: SELF_HOSTED_NOT_METERED_LABEL,
 });
 
 describe('commercialBillingModel', () => {
@@ -49,6 +52,7 @@ describe('commercialBillingModel', () => {
     ]);
     expect(model.details.map((item) => item.label)).not.toContain('Included Monitored Systems');
     expect(model.summary.map((item) => item.label)).not.toContain('Guest Capacity');
+    expect(JSON.stringify(model)).not.toContain('Unlimited');
   });
 
   it('keeps bounded monitored-system details on legacy fallback paths', () => {

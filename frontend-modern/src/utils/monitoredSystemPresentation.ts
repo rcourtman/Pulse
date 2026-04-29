@@ -34,7 +34,7 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   continuityCaptureCapturedLabel: 'Captured',
   usageVerifyingLabel: 'Verifying…',
   remainingCapacityUnavailableLabel: 'Unavailable',
-  unlimitedLimitLabel: 'Unlimited',
+  unlimitedLimitLabel: 'Not metered',
   loadingState: {
     text: 'Loading monitored system usage…',
   },

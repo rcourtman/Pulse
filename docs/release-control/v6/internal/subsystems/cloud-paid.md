@@ -1482,6 +1482,10 @@ pause-new-admissions copy, while `licensePresentation.ts` must keep current
 plan summaries focused on core monitoring plus the actual tier
 extras. Bounded fallback continuity may only be displayed for a support context
 that is not already normalized to a recognized self-hosted v6 package.
+When billing or support presentation still needs a capacity-free self-hosted
+summary value, the customer-facing label is `Not metered`, not `Unlimited`;
+lifetime commercial continuity duration may use `Permanent`, but no normal
+self-hosted plan surface should imply monitored-system volume is a paid tier.
 That same pricing boundary now also owns the shared frontend plan-definition
 models. `frontend-modern/src/utils/cloudPlans.ts` and
 `frontend-modern/src/utils/selfHostedPlans.ts` are the canonical frontend

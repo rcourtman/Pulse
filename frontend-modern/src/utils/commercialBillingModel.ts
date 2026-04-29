@@ -55,11 +55,18 @@ export interface HostedCommercialModelInput {
   renewsOrExpires: string;
 }
 
+export const SELF_HOSTED_NOT_METERED_LABEL = 'Not metered';
+export const LIFETIME_DAYS_REMAINING_LABEL = 'Permanent';
+
 const asUnlimitedLimit = (value?: number) =>
   typeof value === 'number' && value > 0 ? value : undefined;
 
 const hasFiniteSelfHostedLimit = (value: string | number) =>
-  typeof value === 'number' ? value > 0 : value.trim().toLowerCase() !== 'unlimited';
+  typeof value === 'number'
+    ? value > 0
+    : !['unlimited', SELF_HOSTED_NOT_METERED_LABEL.toLowerCase()].includes(
+        value.trim().toLowerCase(),
+      );
 
 const buildSelfHostedBaseDetails = (
   input: SelfHostedCommercialModelInput,
@@ -149,14 +156,14 @@ export const buildSelfHostedCommercialPlanModel = (
               value:
                 input.monitoredSystemContinuity.plan_limit > 0
                   ? input.monitoredSystemContinuity.plan_limit
-                  : 'Unlimited',
+                  : SELF_HOSTED_NOT_METERED_LABEL,
             },
             {
               label: 'Effective Monitored System Limit',
               value:
                 input.monitoredSystemContinuity.effective_limit > 0
                   ? input.monitoredSystemContinuity.effective_limit
-                  : 'Unlimited',
+                  : SELF_HOSTED_NOT_METERED_LABEL,
             },
             ...(typeof input.monitoredSystemContinuity.grandfathered_floor === 'number' &&
             input.monitoredSystemContinuity.grandfathered_floor > 0

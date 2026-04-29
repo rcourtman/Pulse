@@ -78,7 +78,7 @@ describe('monitoredSystemPresentation', () => {
       continuityCaptureCapturedLabel: 'Captured',
       usageVerifyingLabel: 'Verifying…',
       remainingCapacityUnavailableLabel: 'Unavailable',
-      unlimitedLimitLabel: 'Unlimited',
+      unlimitedLimitLabel: 'Not metered',
       loadingState: {
         text: 'Loading monitored system usage…',
       },
@@ -365,7 +365,7 @@ describe('monitoredSystemPresentation', () => {
         limit: 0,
         current_available: true,
       }),
-    ).toBe('Unlimited');
+    ).toBe('Not metered');
     expect(
       getMonitoredSystemLimitContextSummary({
         current: 10,
