@@ -488,7 +488,7 @@ explain monitored-system identity:
 - [x] Create new self-hosted Stripe prices for Relay / Pro at the locked public bands
 - [x] Update plan mappings, checkout flows, and renewal-safe migration logic without disturbing grandfathered v5 continuity
 - [x] Keep Pro+ out of the public checkout ladder unless a separate continuity requirement explicitly needs it
-- [ ] Cut the landing page, checkout copy, and purchase surfaces over to unlimited self-hosted monitoring language and the new price bands
+- [x] Cut the landing page, checkout copy, and purchase surfaces over to core-monitoring-included language and the new price bands
 
 ### Cloud / MSP
 
@@ -519,7 +519,8 @@ explain monitored-system identity:
 
 | Date | Change | Author |
 |---|---|---|
-| 2026-04-23 | Removed stale self-hosted monitored-system cap and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as unlimited self-hosted monitoring tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
+| 2026-04-29 | Replaced stale unlimited-monitoring phrasing with core-monitoring-included language across active v6 docs and upgrade-return copy so Community does not read like a former capacity upsell. | Codex |
+| 2026-04-23 | Removed stale self-hosted monitored-system cap and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as current public self-hosted tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
 | 2026-03-17 | Re-locked the self-hosted commercial model around monitored systems rather than installed agents. New self-hosted public pricing: Relay $4.99/$39, Pro $8.99/$79, Pro+ $14.99/$129. Added free-tier grace policy and marked the monitored-system counting migration as still required in code. | Codex + Richard |
 | 2026-02-25 | Initial v6 pricing structure finalized | Richard + Claude + Codex |
 | 2026-02-25 | Changed counting to agents-only model. Only installed Pulse Unified Agents count toward limits. PVE/PBS/PMG/Docker/K8s connections and discovered resources don't count. This makes limits much more generous in practice (5 agents can monitor an entire multi-node cluster). | Richard + Claude |

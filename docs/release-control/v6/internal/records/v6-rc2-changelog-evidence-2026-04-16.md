@@ -52,7 +52,7 @@ on 2026-04-16._
 ## 4. Finite carry-forward cases now describe an admission freeze rather than a hard blackout
 
 - **Claim:** Where Pulse still needs to describe bounded legacy fallback or continuity states, the runtime now treats those states as “existing monitoring continues, new monitored systems are blocked” rather than implying a hard cap blackout.
-- **Why it is true:** Grandfathered recurring payloads no longer emit bounded limits at all, and the remaining billing-state normalization plus UI model work only leaves bounded limits for explicit fallback or continuity-verification cases. The shared self-hosted plan model meanwhile treats the standard current retail path as unlimited core monitoring instead of surfacing stale cap-era affordances.
+- **Why it is true:** Grandfathered recurring payloads no longer emit bounded limits at all, and the remaining billing-state normalization plus UI model work only leaves bounded limits for explicit fallback or continuity-verification cases. The shared self-hosted plan model meanwhile treats the standard current retail path as core monitoring included without monitored-system cap language instead of surfacing stale cap-era affordances.
 - **Key files:**
   - `pulse@pulse/v6-release pkg/licensing/database_source.go:245-249`
   - `pulse@pulse/v6-release frontend-modern/src/utils/selfHostedPlans.ts:40-90`

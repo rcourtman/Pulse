@@ -421,7 +421,7 @@ async function openMonitoredSystemUpgradeArrival(page: Page) {
   );
   await expect(
     page.getByText(
-      "Community includes unlimited self-hosted monitoring. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.",
+      "Community includes core monitoring at no cost. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Hide counting rules" })).toHaveCount(0);

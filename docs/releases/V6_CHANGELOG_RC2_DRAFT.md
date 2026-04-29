@@ -14,16 +14,17 @@ early testers.
 
 ### 1. Self-hosted core monitoring is no longer paywalled by monitored-system count
 
-Community, Relay, and Pro now keep self-hosted core monitoring unlimited.
+Community, Relay, and Pro now keep self-hosted core monitoring outside
+monitored-system paid gating.
 
 The current self-hosted paid model is:
 
 - Community:
-  free, unlimited self-hosted monitoring, 7-day history
+  free core self-hosted monitoring, 7-day history
 - Relay:
-  unlimited self-hosted monitoring, 14-day history, remote access/mobile/push
+  core self-hosted monitoring, 14-day history, remote access/mobile/push
 - Pro:
-  unlimited self-hosted monitoring, 90-day history, AI operations, automation,
+  core self-hosted monitoring, 90-day history, AI operations, automation,
   and advanced admin features
 
 Legacy `Pro+` remains continuity-only for existing holders. It is not a public
@@ -39,8 +40,8 @@ intended policy:
   subscription stays active
 - other supported legacy paid migrations can still exchange into v6 without
   losing self-hosted monitoring access
-- stale self-hosted capped entitlements are normalized back to the unlimited
-  contract on refresh
+- stale self-hosted capped entitlements are normalized back to the current
+  core-monitoring-included contract on refresh
 
 ### 3. Billing, plan, and account surfaces now match the no-cap model
 
