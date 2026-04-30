@@ -72,6 +72,11 @@ type Config struct {
 
 	// Optional: provides access to persisted recovery points (backups/snapshots).
 	RecoveryPointsProvider tools.RecoveryPointsProvider
+
+	// Optional: resolves the effective control level for current entitlements.
+	// Stored config may say autonomous, but runtime execution must use the
+	// entitlement-clamped level.
+	ControlLevelResolver func(*config.AIConfig) string
 }
 
 // Service provides direct AI chat without external sidecar
@@ -96,6 +101,7 @@ type Service struct {
 	contextPrefetcher       *ContextPrefetcher
 	budgetChecker           func() error // Optional mid-run budget enforcement
 	orgID                   string
+	controlLevelResolver    func(*config.AIConfig) string
 
 	activeMu           sync.RWMutex
 	activeExecutions   map[string]map[*AgenticLoop]struct{}
@@ -134,7 +140,7 @@ func NewService(cfg Config) *Service {
 	}
 
 	if cfg.AIConfig != nil {
-		execCfg.ControlLevel = tools.ControlLevel(cfg.AIConfig.GetControlLevel())
+		execCfg.ControlLevel = resolveEffectiveControlLevel(cfg.ControlLevelResolver, cfg.AIConfig)
 		execCfg.ProtectedGuests = cfg.AIConfig.GetProtectedGuests()
 	}
 
@@ -144,16 +150,36 @@ func NewService(cfg Config) *Service {
 	executor.SetTelemetryCallback(NewAIMetricsTelemetryCallback())
 
 	return &Service{
-		cfg:                cfg.AIConfig,
-		dataDir:            cfg.DataDir,
-		stateProvider:      cfg.StateProvider,
-		readState:          cfg.ReadState,
-		agentServer:        cfg.AgentServer,
-		executor:           executor,
-		orgID:              strings.TrimSpace(cfg.OrgID),
-		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
-		questionExecutions: make(map[string]*AgenticLoop),
+		cfg:                  cfg.AIConfig,
+		dataDir:              cfg.DataDir,
+		stateProvider:        cfg.StateProvider,
+		readState:            cfg.ReadState,
+		agentServer:          cfg.AgentServer,
+		executor:             executor,
+		orgID:                strings.TrimSpace(cfg.OrgID),
+		controlLevelResolver: cfg.ControlLevelResolver,
+		activeExecutions:     make(map[string]map[*AgenticLoop]struct{}),
+		questionExecutions:   make(map[string]*AgenticLoop),
 	}
+}
+
+func resolveEffectiveControlLevel(
+	resolver func(*config.AIConfig) string,
+	cfg *config.AIConfig,
+) tools.ControlLevel {
+	if resolver != nil {
+		if resolved := strings.TrimSpace(resolver(cfg)); config.IsValidControlLevel(resolved) {
+			return tools.ControlLevel(resolved)
+		}
+	}
+	if cfg == nil {
+		return tools.ControlLevelReadOnly
+	}
+	return tools.ControlLevel(cfg.GetControlLevel())
+}
+
+func (s *Service) effectiveControlLevelLocked() tools.ControlLevel {
+	return resolveEffectiveControlLevel(s.controlLevelResolver, s.cfg)
 }
 
 func (s *Service) registerActiveLoop(sessionID string, loop *AgenticLoop) {
@@ -360,7 +386,7 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 
 	// Update executor settings
 	if s.executor != nil && s.cfg != nil {
-		s.executor.SetControlLevel(tools.ControlLevel(s.cfg.GetControlLevel()))
+		s.executor.SetControlLevel(s.effectiveControlLevelLocked())
 		s.executor.SetProtectedGuests(s.cfg.GetProtectedGuests())
 	}
 
@@ -451,16 +477,19 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	overrideModel := strings.TrimSpace(req.Model)
 	var executor *tools.PulseToolExecutor
 	autonomousMode := false
+	effectiveControlLevel := tools.ControlLevelReadOnly
 	s.mu.RLock()
 	baseExecutor := s.executor
 	unifiedResourceProvider := s.unifiedResourceProvider
 	autonomousMode = s.autonomousMode
+	effectiveControlLevel = s.effectiveControlLevelLocked()
 	if s.cfg != nil {
 		configuredModel = strings.TrimSpace(s.cfg.GetChatModel())
 	}
 	s.mu.RUnlock()
 	if baseExecutor != nil {
 		executor = baseExecutor.Clone()
+		executor.SetControlLevel(effectiveControlLevel)
 	}
 
 	// Per-request autonomous mode override (used by investigation to avoid
@@ -769,10 +798,12 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	baseExecutor := s.executor
 	unifiedResourceProvider := s.unifiedResourceProvider
 	cfg := s.cfg
+	effectiveControlLevel := s.effectiveControlLevelLocked()
 	s.mu.RUnlock()
 	executor := baseExecutor
 	if baseExecutor != nil {
 		executor = baseExecutor.Clone()
+		executor.SetControlLevel(effectiveControlLevel)
 	}
 
 	// Determine model: use patrol model or fall back to chat model
@@ -1314,8 +1345,9 @@ func (s *Service) UpdateControlSettings(cfg *config.AIConfig) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.cfg = cfg
 	if s.executor != nil {
-		s.executor.SetControlLevel(tools.ControlLevel(cfg.GetControlLevel()))
+		s.executor.SetControlLevel(s.effectiveControlLevelLocked())
 		s.executor.SetProtectedGuests(cfg.GetProtectedGuests())
 	}
 }

@@ -743,6 +743,12 @@ work extends shared components instead of creating new local variants.
    `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
    shells must flow through
    `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+8. Keep shared settings-shell AI control copy capability-scoped rather than
+   upsell-scoped. `AIRuntimeControlsSection.tsx` may describe read-only,
+   approval-required, and autonomous action posture, but option labels and
+   helper text must avoid tier labels or broad "executes everything" wording;
+   paid capability availability belongs to entitlement-backed visibility and
+   lock state, not local select copy.
    instead of importing generic commercial presentation helpers directly into
    hosted settings route shells.
    Contextual settings feature gates must use capability-owned presentation

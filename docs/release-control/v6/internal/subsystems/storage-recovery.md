@@ -630,6 +630,12 @@ state.
     load or save AI settings through shared helpers, any historical hosted
     quickstart model IDs must be cleared before adjacent surfaces read or
     re-emit that state.
+17a. Keep adjacent AI paid-control state entitlement-effective on that shared
+    `internal/api/` boundary. Storage- and recovery-adjacent flows may preserve
+    stored Assistant or Patrol preferences in config, but they must not treat
+    stored autonomous, auto-remediation, or alert-triggered analysis settings
+    as active restore, recovery, or support capability unless the shared AI
+    runtime entitlement clamp exposes them as currently effective.
     When operators hover or focus pools versus physical disks, the storage
     summary must reuse one resolved active-series ID across card state and
     chart highlighting so pool-only cards demote cleanly during disk focus and

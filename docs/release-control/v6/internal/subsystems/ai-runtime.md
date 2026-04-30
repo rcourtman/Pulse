@@ -148,6 +148,13 @@ runtime cost control, and shared AI transport surfaces.
     `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
     may describe approval posture, but must not add Pro-badge suffixes or
     local commercial tracking around those runtime controls.
+13. Keep Assistant control and Patrol paid runtime settings entitlement-effective
+    at every runtime boundary. Stored config may preserve autonomous, Patrol
+    auto-remediation, and alert-triggered analysis preferences so they come
+    back if entitlement returns, but API responses, chat executor startup,
+    restart, settings-update, request-clone paths, and Patrol execution must
+    clamp those values through runtime entitlements before exposing or enforcing
+    them.
 
 ## Current State
 

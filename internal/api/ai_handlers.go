@@ -1657,6 +1657,19 @@ func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 	h.onControlSettingsChange = callback
 }
 
+// EffectiveControlLevel returns the Assistant control level that should be
+// exposed or enforced for the current entitlement state. The stored setting can
+// remain autonomous so it comes back if the entitlement returns, but runtime
+// execution without ai_autofix must stay in approval mode.
+func (h *AISettingsHandler) EffectiveControlLevel(ctx context.Context, settings *config.AIConfig) string {
+	if settings == nil {
+		return config.ControlLevelReadOnly
+	}
+	return settings.GetEffectiveControlLevel(
+		h.GetAIService(ctx).HasLicenseFeature(ai.FeatureAIAutoFix),
+	)
+}
+
 // SetChatHandler sets the chat handler for investigation orchestration
 // This enables the patrol service to spawn chat sessions to investigate findings
 func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
@@ -2326,6 +2339,9 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 	// Determine if running in demo mode
 	isDemo := mockmode.IsEnabled()
 	triggerSettings := settings.GetPatrolEventTriggerSettings()
+	aiService := h.GetAIService(ctx)
+	hasAutoFixFeature := aiService.HasLicenseFeature(ai.FeatureAIAutoFix)
+	hasAlertAnalysisFeature := aiService.HasLicenseFeature(ai.FeatureAIAlerts)
 
 	response := AISettingsResponse{
 		Enabled:        settings.Enabled || isDemo,
@@ -2340,8 +2356,8 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		// Patrol settings
 		PatrolIntervalMinutes:        settings.PatrolIntervalMinutes,
 		PatrolEnabled:                settings.PatrolEnabled,
-		PatrolAutoFix:                settings.PatrolAutoFix,
-		AlertTriggeredAnalysis:       settings.AlertTriggeredAnalysis,
+		PatrolAutoFix:                settings.PatrolAutoFix && hasAutoFixFeature,
+		AlertTriggeredAnalysis:       settings.AlertTriggeredAnalysis && hasAlertAnalysisFeature,
 		PatrolEventTriggersEnabled:   triggerSettings.AlertTriggersEnabled || triggerSettings.AnomalyTriggersEnabled,
 		PatrolAlertTriggersEnabled:   triggerSettings.AlertTriggersEnabled,
 		PatrolAnomalyTriggersEnabled: triggerSettings.AnomalyTriggersEnabled,
@@ -2361,7 +2377,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
 		CostBudgetUSD30d:       settings.CostBudgetUSD30d,
 		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
-		ControlLevel:           settings.GetControlLevel(),
+		ControlLevel:           settings.GetEffectiveControlLevel(hasAutoFixFeature),
 		ProtectedGuests:        settings.GetProtectedGuests(),
 		DiscoveryEnabled:       settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
@@ -2710,6 +2726,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		authMethod = string(config.AuthMethodAPIKey)
 	}
 	triggerSettings := settings.GetPatrolEventTriggerSettings()
+	aiService := h.GetAIService(r.Context())
+	hasAutoFixFeature := aiService.HasLicenseFeature(ai.FeatureAIAutoFix)
+	hasAlertAnalysisFeature := aiService.HasLicenseFeature(ai.FeatureAIAlerts)
 
 	// Return updated settings
 	response := AISettingsResponse{
@@ -2724,8 +2743,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OAuthConnected:               settings.OAuthAccessToken != "",
 		PatrolIntervalMinutes:        settings.PatrolIntervalMinutes,
 		PatrolEnabled:                settings.PatrolEnabled,
-		PatrolAutoFix:                settings.PatrolAutoFix,
-		AlertTriggeredAnalysis:       settings.AlertTriggeredAnalysis,
+		PatrolAutoFix:                settings.PatrolAutoFix && hasAutoFixFeature,
+		AlertTriggeredAnalysis:       settings.AlertTriggeredAnalysis && hasAlertAnalysisFeature,
 		PatrolEventTriggersEnabled:   triggerSettings.AlertTriggersEnabled || triggerSettings.AnomalyTriggersEnabled,
 		PatrolAlertTriggersEnabled:   triggerSettings.AlertTriggersEnabled,
 		PatrolAnomalyTriggersEnabled: triggerSettings.AnomalyTriggersEnabled,
@@ -2744,7 +2763,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
 		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
-		ControlLevel:           settings.GetControlLevel(),
+		ControlLevel:           settings.GetEffectiveControlLevel(hasAutoFixFeature),
 		ProtectedGuests:        settings.GetProtectedGuests(),
 		DiscoveryEnabled:       settings.DiscoveryEnabled,
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,

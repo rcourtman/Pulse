@@ -248,13 +248,13 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
           labelClass="text-xs font-medium text-muted w-28 flex-shrink-0"
           selectBaseClass="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
         >
-          <option value="read_only">Read Only - Pulse Assistant can only observe</option>
+          <option value="read_only">Read-only - Pulse Assistant can observe only</option>
           <option value="controlled">
-            Controlled - Pulse Assistant executes with your approval
+            Controlled - Pulse Assistant asks before actions
           </option>
           <Show when={showAutonomousControlOption()}>
             <option value="autonomous">
-              Autonomous - Pulse Assistant executes without approval
+              Autonomous - Pulse Assistant can run eligible actions
             </option>
           </Show>
         </FormSelect>

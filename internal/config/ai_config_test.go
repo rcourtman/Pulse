@@ -6,6 +6,48 @@ import (
 	"time"
 )
 
+func TestEffectiveControlLevelForEntitlement(t *testing.T) {
+	tests := []struct {
+		name              string
+		level             string
+		autonomousAllowed bool
+		want              string
+	}{
+		{
+			name:              "autonomous allowed stays autonomous",
+			level:             ControlLevelAutonomous,
+			autonomousAllowed: true,
+			want:              ControlLevelAutonomous,
+		},
+		{
+			name:              "autonomous without entitlement becomes controlled",
+			level:             ControlLevelAutonomous,
+			autonomousAllowed: false,
+			want:              ControlLevelControlled,
+		},
+		{
+			name:              "controlled stays controlled without entitlement",
+			level:             ControlLevelControlled,
+			autonomousAllowed: false,
+			want:              ControlLevelControlled,
+		},
+		{
+			name:              "invalid stays fail closed",
+			level:             "bad",
+			autonomousAllowed: true,
+			want:              ControlLevelReadOnly,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EffectiveControlLevelForEntitlement(tt.level, tt.autonomousAllowed); got != tt.want {
+				t.Fatalf("EffectiveControlLevelForEntitlement(%q, %v) = %q, want %q", tt.level, tt.autonomousAllowed, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAIConfig_IsConfigured(t *testing.T) {
 	tests := []struct {
 		name     string

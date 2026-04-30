@@ -465,6 +465,11 @@ shell clickable behind another overlay.
    model verification plus desktop Playwright proof that full-width shells
    distribute surplus width across peer columns instead of stretching only the
    `Resource` column.
+6. Keep entitlement and runtime capability lookups on shared router/settings
+   hot paths bounded and request-local. AI control-level clamping in
+   `internal/api/router.go` may consult the already-wired runtime entitlement
+   service, but it must not add broad persistence scans, metrics fan-out, or
+   external network calls to protected settings or chat request paths.
 
 ## Current State
 

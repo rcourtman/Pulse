@@ -165,6 +165,37 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestAISettingsHandler_GetSettingsClampsPaidControlsToEntitlements(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+	aiCfg.ControlLevel = config.ControlLevelAutonomous
+	aiCfg.PatrolAutoFix = true
+	aiCfg.AlertTriggeredAnalysis = true
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+
+	req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, config.ControlLevelControlled, resp.ControlLevel)
+	require.False(t, resp.PatrolAutoFix)
+	require.False(t, resp.AlertTriggeredAnalysis)
+}
+
 func TestAISettingsHandler_GetAIService_TenantPatrolUsesCanonicalProviders(t *testing.T) {
 	tmp := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tmp)

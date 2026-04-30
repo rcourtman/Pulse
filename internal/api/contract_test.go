@@ -73,6 +73,49 @@ func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T)
 	}
 }
 
+func TestContractAISettingsClampsPaidRuntimeControlsToEntitlements(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+	aiCfg.ControlLevel = config.ControlLevelAutonomous
+	aiCfg.PatrolAutoFix = true
+	aiCfg.AlertTriggeredAnalysis = true
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("save ai config: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+
+	req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/settings/ai status = %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	var resp AISettingsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.ControlLevel != config.ControlLevelControlled {
+		t.Fatalf("control level = %q, want %q", resp.ControlLevel, config.ControlLevelControlled)
+	}
+	if resp.PatrolAutoFix {
+		t.Fatal("patrol auto-remediation must be entitlement-clamped")
+	}
+	if resp.AlertTriggeredAnalysis {
+		t.Fatal("alert-triggered analysis must be entitlement-clamped")
+	}
+}
+
 func sortedVMChartKeys(values map[string]VMChartData) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {

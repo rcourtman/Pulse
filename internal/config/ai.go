@@ -617,6 +617,28 @@ func (c *AIConfig) GetControlLevel() string {
 	}
 }
 
+// EffectiveControlLevelForEntitlement returns the control level that may be
+// enforced for the current entitlement state. Stored autonomous preferences are
+// preserved in config, but without the autonomous entitlement they run as
+// controlled approval mode.
+func EffectiveControlLevelForEntitlement(level string, autonomousAllowed bool) string {
+	cfg := AIConfig{ControlLevel: level}
+	normalized := cfg.GetControlLevel()
+	if normalized == ControlLevelAutonomous && !autonomousAllowed {
+		return ControlLevelControlled
+	}
+	return normalized
+}
+
+// GetEffectiveControlLevel returns the AI control level that should be exposed
+// or enforced for the current entitlement state.
+func (c *AIConfig) GetEffectiveControlLevel(autonomousAllowed bool) string {
+	if c == nil {
+		return ControlLevelReadOnly
+	}
+	return EffectiveControlLevelForEntitlement(c.GetControlLevel(), autonomousAllowed)
+}
+
 // IsControlEnabled returns true if AI has any control capability beyond read-only
 func (c *AIConfig) IsControlEnabled() bool {
 	level := c.GetControlLevel()

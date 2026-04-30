@@ -623,7 +623,9 @@ func (r *Router) setupRoutes() {
 				cfg := r.aiHandler.GetAIConfig(ctx)
 				if cfg != nil {
 					svc.UpdateControlSettings(cfg)
-					log.Info().Str("control_level", cfg.GetControlLevel()).Msg("Updated AI control settings")
+					log.Info().
+						Str("control_level", r.aiSettingsHandler.EffectiveControlLevel(ctx, cfg)).
+						Msg("Updated AI control settings")
 				}
 			}
 		}

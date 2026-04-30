@@ -203,7 +203,16 @@ describe('settings architecture guardrails', () => {
     expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
     expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
     expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
+    expect(aiRuntimeControlsSectionSource).toContain(
+      'Controlled - Pulse Assistant asks before actions',
+    );
+    expect(aiRuntimeControlsSectionSource).toContain(
+      'Autonomous - Pulse Assistant can run eligible actions',
+    );
     expect(aiRuntimeControlsSectionSource).not.toContain('without approval (Pro)');
+    expect(aiRuntimeControlsSectionSource).not.toContain(
+      'Pulse Assistant executes without approval',
+    );
   });
 
   it('keeps contextual settings feature gates free of retired commercial telemetry wrappers', () => {

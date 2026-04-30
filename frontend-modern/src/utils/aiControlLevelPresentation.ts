@@ -38,9 +38,9 @@ export function getAIControlLevelBadgeClass(level: AIControlLevel): string {
 export function getAIControlLevelDescription(level: AIControlLevel): string {
   switch (level) {
     case 'controlled':
-      return 'Controlled mode: Pulse Assistant can execute commands and control VMs/containers with approval.';
+      return 'Controlled mode: Pulse Assistant can run interactive actions only after you approve each one.';
     case 'autonomous':
-      return 'Autonomous mode: Pulse Assistant executes commands and control actions without confirmation.';
+      return 'Autonomous mode: Pulse Assistant can run eligible actions without per-command approval.';
     default:
       return 'Read-only mode: Pulse Assistant can query and observe only.';
   }

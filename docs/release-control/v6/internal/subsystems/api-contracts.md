@@ -628,6 +628,12 @@ the canonical monitored-system blocked payload.
    provider-catalog policy, and return that resolved model on the same shared
    `/api/settings/ai` payload instead of depending on frontend-supplied model
    defaults.
+10. Keep AI settings paid-control fields entitlement-effective at the API
+    payload boundary. `/api/settings/ai` and `/api/settings/ai/update` may
+    preserve stored autonomous, Patrol auto-remediation, and alert-triggered
+    analysis preferences in config, but response payloads must expose only the
+    control level and paid Patrol settings currently allowed by runtime
+    entitlements.
 10. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
 11. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
 12. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card

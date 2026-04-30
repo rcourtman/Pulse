@@ -75,28 +75,29 @@ type AIService interface {
 
 // AIHandler handles all AI endpoints using direct AI integration
 type AIHandler struct {
-	stateMu            sync.RWMutex
-	approvalStoreMu    sync.Mutex
-	mtPersistence      *config.MultiTenantPersistence
-	mtMonitor          *monitoring.MultiTenantMonitor
-	defaultConfig      *config.Config
-	defaultPersistence AIPersistence
-	hostedMode         bool
-	defaultService     AIService
-	agentServer        *agentexec.Server
-	services           map[string]AIService
-	servicesMu         sync.RWMutex
-	serviceInitMu      sync.RWMutex
-	serviceInit        func(ctx context.Context, svc AIService)
-	defaultMonitor     *monitoring.Monitor
-	unifiedStoreMu     sync.RWMutex
-	unifiedStore       *unified.UnifiedStore
-	unifiedStores      map[string]*unified.UnifiedStore
-	readState          unifiedresources.ReadState
-	recoveryManager    *recoverymanager.Manager
-	approvalStore      *approval.Store
-	approvalStoreDir   string
-	approvalStoreStop  context.CancelFunc
+	stateMu              sync.RWMutex
+	approvalStoreMu      sync.Mutex
+	mtPersistence        *config.MultiTenantPersistence
+	mtMonitor            *monitoring.MultiTenantMonitor
+	defaultConfig        *config.Config
+	defaultPersistence   AIPersistence
+	hostedMode           bool
+	defaultService       AIService
+	agentServer          *agentexec.Server
+	services             map[string]AIService
+	servicesMu           sync.RWMutex
+	serviceInitMu        sync.RWMutex
+	serviceInit          func(ctx context.Context, svc AIService)
+	defaultMonitor       *monitoring.Monitor
+	unifiedStoreMu       sync.RWMutex
+	unifiedStore         *unified.UnifiedStore
+	unifiedStores        map[string]*unified.UnifiedStore
+	readState            unifiedresources.ReadState
+	recoveryManager      *recoverymanager.Manager
+	approvalStore        *approval.Store
+	approvalStoreDir     string
+	approvalStoreStop    context.CancelFunc
+	controlLevelResolver func(context.Context, *config.AIConfig) string
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -280,6 +281,42 @@ func (h *AIHandler) SetServiceInitializer(initializer func(ctx context.Context, 
 	}
 }
 
+// SetControlLevelResolver configures the entitlement-aware control-level
+// resolver used by chat services when applying Assistant tool permissions.
+func (h *AIHandler) SetControlLevelResolver(
+	resolver func(context.Context, *config.AIConfig) string,
+) {
+	if h == nil {
+		return
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.controlLevelResolver = resolver
+}
+
+func (h *AIHandler) resolveControlLevel(ctx context.Context, cfg *config.AIConfig) string {
+	if h == nil {
+		if cfg == nil {
+			return config.ControlLevelReadOnly
+		}
+		return cfg.GetControlLevel()
+	}
+
+	h.stateMu.RLock()
+	resolver := h.controlLevelResolver
+	h.stateMu.RUnlock()
+
+	if resolver != nil {
+		if level := strings.TrimSpace(resolver(ctx, cfg)); config.IsValidControlLevel(level) {
+			return level
+		}
+	}
+	if cfg == nil {
+		return config.ControlLevelReadOnly
+	}
+	return cfg.GetControlLevel()
+}
+
 // GetService returns the AI service for the current context
 func (h *AIHandler) GetService(ctx context.Context) AIService {
 	orgID := GetOrgID(ctx)
@@ -386,6 +423,9 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		AgentServer: h.agentServer,
 		ReadState:   h.readStateForOrg(orgID),
 		OrgID:       orgID,
+		ControlLevelResolver: func(next *config.AIConfig) string {
+			return h.resolveControlLevel(tenantCtx, next)
+		},
 	}
 	if recoveryManager != nil {
 		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(recoveryManager, orgID)
@@ -589,6 +629,7 @@ func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) erro
 	if orgID == "" {
 		orgID = "default"
 	}
+	serviceCtx := context.WithValue(backgroundContext(ctx), OrgIDContextKey, orgID)
 
 	// Cache the monitor for use by Restart().
 	h.stateMu.Lock()
@@ -603,6 +644,9 @@ func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) erro
 		AgentServer:   h.agentServer,
 		ReadState:     h.readStateForOrg(orgID),
 		OrgID:         orgID,
+		ControlLevelResolver: func(next *config.AIConfig) string {
+			return h.resolveControlLevel(serviceCtx, next)
+		},
 	}
 	_, _, _, _, _, recoveryManager := h.stateRefs()
 	if recoveryManager != nil {
@@ -616,7 +660,7 @@ func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) erro
 	h.servicesMu.Lock()
 	h.defaultService = svc
 	h.servicesMu.Unlock()
-	h.applyServiceInitializer(context.WithValue(context.Background(), OrgIDContextKey, orgID), svc)
+	h.applyServiceInitializer(serviceCtx, svc)
 
 	// Initialize approval store for command approval workflow.
 	h.ensureApprovalStore(dataDir)

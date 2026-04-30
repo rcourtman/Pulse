@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestServiceSettersAndAutonomousMode(t *testing.T) {
@@ -33,6 +34,47 @@ func TestServiceExecuteCommand_NoExecutor(t *testing.T) {
 	_, _, err := service.ExecuteCommand(context.Background(), "ls", "")
 	if err == nil {
 		t.Fatalf("expected error when executor is unavailable")
+	}
+}
+
+func TestServiceEffectiveControlLevelUsesResolver(t *testing.T) {
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelAutonomous},
+		ControlLevelResolver: func(*config.AIConfig) string {
+			return config.ControlLevelReadOnly
+		},
+	})
+
+	service.mu.RLock()
+	got := service.effectiveControlLevelLocked()
+	service.mu.RUnlock()
+
+	if got != tools.ControlLevelReadOnly {
+		t.Fatalf("expected resolver-clamped control level %q, got %q", tools.ControlLevelReadOnly, got)
+	}
+}
+
+func TestServiceUpdateControlSettingsRefreshesEffectiveConfig(t *testing.T) {
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly},
+		ControlLevelResolver: func(cfg *config.AIConfig) string {
+			return config.EffectiveControlLevelForEntitlement(cfg.GetControlLevel(), false)
+		},
+	})
+
+	next := &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}
+	service.UpdateControlSettings(next)
+
+	service.mu.RLock()
+	gotCfg := service.cfg
+	gotLevel := service.effectiveControlLevelLocked()
+	service.mu.RUnlock()
+
+	if gotCfg != next {
+		t.Fatal("expected UpdateControlSettings to refresh the service config")
+	}
+	if gotLevel != tools.ControlLevelControlled {
+		t.Fatalf("expected autonomous setting to be clamped to %q, got %q", tools.ControlLevelControlled, gotLevel)
 	}
 }
 

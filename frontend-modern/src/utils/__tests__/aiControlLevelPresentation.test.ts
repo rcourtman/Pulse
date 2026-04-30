@@ -23,8 +23,8 @@ describe('aiControlLevelPresentation', () => {
     expect(getAIControlLevelBadgeClass('controlled')).toContain('bg-amber-100');
     expect(getAIControlLevelBadgeClass('autonomous')).toContain('bg-red-100');
     expect(getAIControlLevelDescription('read_only')).toContain('query and observe only');
-    expect(getAIControlLevelDescription('controlled')).toContain('with approval');
-    expect(getAIControlLevelDescription('autonomous')).toContain('without confirmation');
+    expect(getAIControlLevelDescription('controlled')).toContain('after you approve');
+    expect(getAIControlLevelDescription('autonomous')).toContain('without per-command approval');
   });
 
   it('returns canonical chat control-level presentation', () => {

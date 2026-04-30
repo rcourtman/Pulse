@@ -572,6 +572,12 @@ profile and assignment columns, but embedded table framing must route through
    may accept a preview-provided connected-resource override, but the live
    first-session runtime path must keep `/api/state` polling as the sole
    source of connected-system truth when no override is supplied.
+7a. Keep lifecycle-neutral shared `internal/api/` changes from altering agent
+   setup, registration, install, or profile payloads by accident. AI runtime
+   or entitlement work that touches shared router or handler wiring must keep
+   lifecycle public routes, setup-token validation, and agent profile payloads
+   unchanged unless the lifecycle contract and its proofs are updated in the
+   same slice.
 8. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    oriented around the first monitored host. Install-token generation,
    governed command copy, and install instructions belong to the canonical
