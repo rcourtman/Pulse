@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { StorageControls } from '@/components/Storage/StorageControls';
 import type { StorageSourceOption } from '@/utils/storageSources';
 
@@ -11,8 +11,7 @@ describe('StorageControls', () => {
     const [groupBy, setGroupBy] = createSignal<'none' | 'node'>('node');
     const [sortKey, setSortKey] = createSignal<'priority' | 'name' | 'usage' | 'type'>('name');
     const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
-    const [statusFilter, setStatusFilter] =
-      createSignal<'all' | 'warning' | 'critical'>('all');
+    const [statusFilter, setStatusFilter] = createSignal<'all' | 'warning' | 'critical'>('all');
     const [sourceFilter, setSourceFilter] = createSignal('all');
     const [sourceOptions] = createSignal<StorageSourceOption[]>([
       { key: 'all', label: 'All sources', tone: 'slate' as const },
@@ -61,8 +60,7 @@ describe('StorageControls', () => {
     const [groupBy, setGroupBy] = createSignal<'none' | 'node'>('node');
     const [sortKey, setSortKey] = createSignal<'priority' | 'name' | 'usage' | 'type'>('name');
     const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
-    const [statusFilter, setStatusFilter] =
-      createSignal<'all' | 'warning' | 'critical'>('all');
+    const [statusFilter, setStatusFilter] = createSignal<'all' | 'warning' | 'critical'>('all');
     const [sourceFilter, setSourceFilter] = createSignal('truenas');
     const [sourceOptions, setSourceOptions] = createSignal<StorageSourceOption[]>([
       { key: 'all', label: 'All sources', tone: 'slate' as const },
@@ -111,5 +109,53 @@ describe('StorageControls', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Source')).toHaveValue('truenas');
     });
+  });
+
+  it('routes the charts toggle through the shared toolbar action rail', () => {
+    const [view, setView] = createSignal<'pools' | 'disks'>('pools');
+    const [search, setSearch] = createSignal('');
+    const [groupBy, setGroupBy] = createSignal<'none' | 'node'>('node');
+    const [sortKey, setSortKey] = createSignal<'priority' | 'name' | 'usage' | 'type'>('name');
+    const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+    const [statusFilter, setStatusFilter] = createSignal<'all' | 'warning' | 'critical'>('all');
+    const [sourceFilter, setSourceFilter] = createSignal('all');
+    const [sourceOptions] = createSignal<StorageSourceOption[]>([
+      { key: 'all', label: 'All sources', tone: 'slate' as const },
+    ]);
+    const [selectedNodeId, setSelectedNodeId] = createSignal('all');
+    const [chartsCollapsed] = createSignal(false);
+    const onChartsToggle = vi.fn();
+
+    render(() => (
+      <StorageControls
+        view={view()}
+        onViewChange={setView}
+        search={search}
+        setSearch={setSearch}
+        groupBy={groupBy}
+        setGroupBy={setGroupBy}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        sortDirection={sortDirection}
+        setSortDirection={setSortDirection}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        sourceFilter={sourceFilter}
+        setSourceFilter={setSourceFilter}
+        sourceOptions={sourceOptions}
+        nodeFilterOptions={[{ value: 'all', label: 'All nodes' }]}
+        selectedNodeId={selectedNodeId}
+        setSelectedNodeId={setSelectedNodeId}
+        chartsCollapsed={chartsCollapsed}
+        onChartsToggle={onChartsToggle}
+      />
+    ));
+
+    const chartsButton = screen.getByRole('button', { name: /charts/i });
+    expect(chartsButton.closest('.page-controls-toolbar-actions')).not.toBeNull();
+
+    fireEvent.click(chartsButton);
+
+    expect(onChartsToggle).toHaveBeenCalledTimes(1);
   });
 });

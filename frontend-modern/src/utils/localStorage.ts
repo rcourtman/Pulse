@@ -171,6 +171,8 @@ export const STORAGE_KEYS = {
   STORAGE_SHOW_FILTERS: 'storageShowFilters',
   STORAGE_VIEW_MODE: 'storageViewMode',
   STORAGE_SOURCE_FILTER: 'storageSourceFilter',
+  STORAGE_SUMMARY_RANGE: 'storageSummaryRange',
+  STORAGE_SUMMARY_COLLAPSED: 'storageSummaryCollapsed',
 
   // Recovery settings
   RECOVERY_SHOW_FILTERS: 'backupsShowFilters',

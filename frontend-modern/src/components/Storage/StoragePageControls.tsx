@@ -35,6 +35,8 @@ type StoragePageControlsProps = {
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
   storageFilterGroupBy: () => StorageGroupByFilter;
+  chartsCollapsed?: () => boolean;
+  onChartsToggle?: () => void;
   mobileTrailing?: JSX.Element;
   utilityActions?: JSX.Element;
 };
@@ -77,6 +79,8 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         nodeFilterOptions={props.nodeFilterOptions}
         selectedNodeId={props.selectedNodeId}
         setSelectedNodeId={props.setSelectedNodeId}
+        chartsCollapsed={props.chartsCollapsed}
+        onChartsToggle={props.onChartsToggle}
         mobileTrailing={props.mobileTrailing}
         utilityActions={props.utilityActions}
       />

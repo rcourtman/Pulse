@@ -63,6 +63,8 @@ interface StorageFilterProps {
   diskGroupOptions?: () => PhysicalDiskFilterOption[];
   selectedNodeId?: () => string;
   setSelectedNodeId?: (value: string) => void;
+  chartsCollapsed?: () => boolean;
+  onChartsToggle?: () => void;
   // Slot for page-specific filters (e.g., view toggle, node selector).
   leadingFilters?: JSX.Element;
   // Column visibility (optional)
@@ -111,6 +113,35 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
     sortOptions: props.sortOptions ?? DEFAULT_STORAGE_SORT_OPTIONS,
     sourceOptions: props.sourceOptions,
   });
+  const chartsToolbarAction = () =>
+    props.onChartsToggle ? (
+      <FilterSegmentedControl
+        class="hidden lg:inline-flex"
+        value={props.chartsCollapsed?.() ? 'hidden' : 'shown'}
+        onChange={() => props.onChartsToggle?.()}
+        aria-label="Charts"
+        options={[
+          {
+            value: 'shown',
+            title: props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts',
+            label: (
+              <>
+                <svg
+                  class="w-3 h-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
+                Charts
+              </>
+            ),
+          },
+        ]}
+      />
+    ) : undefined;
 
   return (
     <Card class="storage-filter mb-3" padding="sm">
@@ -171,6 +202,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
         }}
         showFilters={!isMobile() || filtersOpen()}
         toolbarClass="gap-x-1.5 gap-y-2 sm:gap-x-2"
+        toolbarTrailing={chartsToolbarAction()}
         utilityActions={props.utilityActions}
       >
         {props.leadingFilters}

@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'soli
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   SUMMARY_TIME_RANGE_LABEL,
+  isSummaryTimeRange,
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
 import { buildStorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
@@ -10,12 +11,14 @@ import {
   resolveStorageRecordMetricResourceId,
 } from '@/features/storageBackups/storageMetricsIdentity';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import {
   isSummarySeriesInGroupScope,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
 import { parseStorageLinkSearch, STORAGE_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { useStorageExpansionState } from './useStorageExpansionState';
@@ -49,7 +52,18 @@ export const useStoragePageModel = () => {
   const [selectedStorageGroupId, setSelectedStorageGroupIdRaw] = createSignal<string | null>(null);
   const [handledSummaryGroupId, setHandledSummaryGroupId] = createSignal<string | null>(null);
   const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
-  const [summaryTimeRange, setSummaryTimeRange] = createSignal<SummaryTimeRange>('24h');
+  const [summaryTimeRange, setSummaryTimeRange] = usePersistentSignal<SummaryTimeRange>(
+    STORAGE_KEYS.STORAGE_SUMMARY_RANGE,
+    '24h',
+    {
+      deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '24h'),
+    },
+  );
+  const [storageSummaryCollapsed, setStorageSummaryCollapsed] = usePersistentSignal<boolean>(
+    STORAGE_KEYS.STORAGE_SUMMARY_COLLAPSED,
+    false,
+    { deserialize: (raw) => raw === 'true' },
+  );
   const {
     state,
     activeAlerts,
@@ -441,6 +455,8 @@ export const useStoragePageModel = () => {
     reconnect: reconnectSurface,
     summaryTimeRange,
     setSummaryTimeRange,
+    storageSummaryCollapsed,
+    setStorageSummaryCollapsed,
     storageGrowthBySeriesId,
     storageGrowthColumnLabel,
     storageSummaryData: storageSummaryCharts.data,

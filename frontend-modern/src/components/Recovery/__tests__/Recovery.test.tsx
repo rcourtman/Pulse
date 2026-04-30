@@ -240,8 +240,12 @@ describe('Recovery', () => {
     expect(useRecoveryPointsSource).toContain("from '@/hooks/createNonSuspendingQuery'");
     expect(useRecoveryPointsFacetsSource).toContain("from '@/hooks/createNonSuspendingQuery'");
     expect(useRecoveryPointsSeriesSource).toContain("from '@/hooks/createNonSuspendingQuery'");
-    expect(useRecoveryRollupsSource).not.toContain("from '@/features/recovery/createNonSuspendingQuery'");
-    expect(useRecoveryPointsSource).not.toContain("from '@/features/recovery/createNonSuspendingQuery'");
+    expect(useRecoveryRollupsSource).not.toContain(
+      "from '@/features/recovery/createNonSuspendingQuery'",
+    );
+    expect(useRecoveryPointsSource).not.toContain(
+      "from '@/features/recovery/createNonSuspendingQuery'",
+    );
     expect(useRecoveryPointsFacetsSource).not.toContain(
       "from '@/features/recovery/createNonSuspendingQuery'",
     );
@@ -679,7 +683,9 @@ describe('Recovery', () => {
       expect(await screen.findByText('Healthy Production')).toBeInTheDocument();
       const inventoryTable = (await screen.findAllByRole('table'))[0];
       expect(within(inventoryTable).getAllByText('K8s Cluster').length).toBeGreaterThan(0);
-      expect(within(inventoryTable).queryByText('Cluster', { exact: true })).not.toBeInTheDocument();
+      expect(
+        within(inventoryTable).queryByText('Cluster', { exact: true }),
+      ).not.toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'K8s Cluster' })).toBeInTheDocument();
       expect(screen.queryByRole('option', { name: 'Cluster' })).not.toBeInTheDocument();
     } finally {
@@ -1060,6 +1066,21 @@ describe('Recovery', () => {
     });
   });
 
+  it('keeps recovery event utility controls grouped on the shared toolbar rail', async () => {
+    mockLocationSearch = '?view=events';
+
+    render(() => <Recovery />);
+
+    const controls = await screen.findByRole('group', { name: /recovery events controls/i });
+    const filterButton = within(controls).getByRole('button', { name: 'Filter' });
+    const columnsButton = within(controls).getByRole('button', { name: /columns/i });
+    const actionRail = filterButton.closest('.page-controls-toolbar-actions');
+
+    expect(actionRail).not.toBeNull();
+    expect(actionRail).toContainElement(filterButton);
+    expect(actionRail).toContainElement(columnsButton);
+  });
+
   it('lets operators create and clear the item filter from the recovery events controls', async () => {
     render(() => <Recovery />);
 
@@ -1271,7 +1292,10 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?state=stale', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?state=stale',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
 
     expect(screen.getByLabelText('Protection state')).toHaveValue('stale');
@@ -1293,7 +1317,10 @@ describe('Recovery', () => {
     fireEvent.click(within(controls).getByRole('button', { name: 'Reset all' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=events',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
   });
 

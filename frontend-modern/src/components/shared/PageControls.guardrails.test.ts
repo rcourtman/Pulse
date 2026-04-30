@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import pageControlsSource from '@/components/shared/PageControls.tsx?raw';
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
+import storageFilterSource from '@/components/Storage/StorageFilter.tsx?raw';
 import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
@@ -23,15 +24,29 @@ describe('page controls guardrails', () => {
     expect(pageControlsSource).toContain('<FilterHeader');
     expect(pageControlsSource).toContain('{...divProps}');
     expect(pageControlsSource).toContain('searchTrailing?: JSX.Element;');
-    expect(pageControlsSource).toContain('const mobileControlsEnabled = () => local.mobileFilters?.enabled === true;');
-    expect(pageControlsSource).toContain('const activeMobileTrailing = () => (mobileControlsEnabled() ? local.mobileTrailing : undefined);');
-    expect(pageControlsSource).toContain('const activeUtilityActions = () => (mobileControlsEnabled() ? undefined : local.utilityActions);');
-    expect(pageControlsSource).toContain('const activeSearchTrailing = () => (mobileControlsEnabled() ? undefined : local.searchTrailing);');
-    expect(pageControlsSource).toContain('searchAccessory={activeSearchTrailing() ?? mobileSearchAccessory()}');
+    expect(pageControlsSource).toContain(
+      'const mobileControlsEnabled = () => local.mobileFilters?.enabled === true;',
+    );
+    expect(pageControlsSource).toContain(
+      'const activeMobileTrailing = () => (mobileControlsEnabled() ? local.mobileTrailing : undefined);',
+    );
+    expect(pageControlsSource).toContain(
+      'const activeUtilityActions = () => (mobileControlsEnabled() ? undefined : local.utilityActions);',
+    );
+    expect(pageControlsSource).toContain(
+      'const activeSearchTrailing = () => (mobileControlsEnabled() ? undefined : local.searchTrailing);',
+    );
+    expect(pageControlsSource).toContain(
+      'searchAccessory={activeSearchTrailing() ?? mobileSearchAccessory()}',
+    );
 
     expect(workloadsFilterSource).toContain('PageControls');
     expect(workloadsFilterSource).not.toContain('<FilterHeader');
     expect(workloadsFilterSource).not.toContain('<ColumnPicker');
+
+    expect(storageFilterSource).toContain('PageControls');
+    expect(storageFilterSource).not.toContain('<FilterHeader');
+    expect(storageFilterSource).not.toContain('<ColumnPicker');
 
     expect(recoveryProtectedInventorySectionSource).toContain('PageControls');
     expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');
@@ -79,25 +94,15 @@ describe('page controls guardrails', () => {
       .map(([path]) => path)
       .sort();
 
-    expect(filterHeaderUsers).toEqual([
-      './PageControls.tsx',
-    ]);
+    expect(filterHeaderUsers).toEqual(['./PageControls.tsx']);
 
-    expect(sharedToolbarImportUsers).toEqual([
-      './PageControls.tsx',
-    ]);
+    expect(sharedToolbarImportUsers).toEqual(['./PageControls.tsx']);
 
-    expect(columnPickerUsers).toEqual([
-      './PageControls.tsx',
-    ]);
+    expect(columnPickerUsers).toEqual(['./PageControls.tsx']);
 
-    expect(columnPickerImportUsers).toEqual([
-      './PageControls.tsx',
-    ]);
+    expect(columnPickerImportUsers).toEqual(['./PageControls.tsx']);
 
-    expect(mobileToggleUsers).toEqual([
-      './PageControls.tsx',
-    ]);
+    expect(mobileToggleUsers).toEqual(['./PageControls.tsx']);
   });
 
   it('keeps search-row leading content routed through PageControls rather than local FilterHeader forks', () => {
@@ -110,6 +115,13 @@ describe('page controls guardrails', () => {
     expect(recoveryHistorySectionSource).not.toContain('searchRowClass=');
     expect(recoveryProtectedInventorySectionSource).not.toContain('!w-auto');
     expect(recoveryHistorySectionSource).not.toContain('!w-auto');
+  });
+
+  it('keeps display controls and utility actions on the shared toolbar rail', () => {
+    expect(workloadsFilterSource).toContain('toolbarTrailing={');
+    expect(storageFilterSource).toContain('toolbarTrailing={');
+    expect(recoveryHistorySectionSource).not.toContain('toolbarClass="lg:flex-nowrap"');
+    expect(recoveryHistorySectionSource).not.toContain('ml-auto flex items-center gap-2');
   });
 
   it('keeps embedded workspace tabs on the canonical shared subtabs class pattern', () => {

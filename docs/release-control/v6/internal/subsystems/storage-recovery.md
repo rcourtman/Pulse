@@ -77,6 +77,11 @@ querying, and the operator-facing storage health presentation layer.
    `overflow-x-auto` div around the shared table. Storage pools and physical
    disks inherit the surrounding `StorageContentCard` frame and must not add
    a nested `Card` or second scroll wrapper.
+   Recovery event filters must also keep page-level search, advanced filter,
+   column visibility, and reset controls on the shared `PageControls` toolbar
+   rail. Recovery must not reintroduce local no-wrap toolbar overrides or
+   right-aligned utility wrappers that prevent the frontend-primitives action
+   rail from owning responsive collapse behavior.
    Recovery inventory protection posture and recovery-event outcome filtering
    must stay separate in that owner: protected inventory uses the route-backed
    `state` query for health, stale, failed, warning, running, unknown, and
@@ -91,6 +96,11 @@ querying, and the operator-facing storage health presentation layer.
    protected-item, and recovery-outcome readiness claims belong on the Storage
    and Recovery surfaces or their shared summary components, not in a restored
    dashboard panel cluster or Assistant brief.
+   Storage summary chart visibility is a page-level display preference owned
+   by the Storage page model and exposed through the shared `PageControls`
+   trailing action rail. Storage must keep the charts toggle, column picker,
+   and reset affordance on that shared rail so the Workloads and Storage
+   filter sections collapse through the same primitive contract.
    Ceph table shells on the storage route share the same frontend-primitives
    table contract: `frontend-modern/src/pages/Ceph.tsx` may own Ceph-specific
    columns and rows, but horizontal overflow and scrollbar hiding must route

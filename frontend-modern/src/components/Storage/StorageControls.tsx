@@ -43,6 +43,8 @@ type StorageControlsProps = {
   nodeFilterOptions: Array<{ value: string; label: string }>;
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
+  chartsCollapsed?: () => boolean;
+  onChartsToggle?: () => void;
   mobileTrailing?: JSX.Element;
   utilityActions?: JSX.Element;
 };
@@ -105,6 +107,8 @@ export const StorageControls: Component<StorageControlsProps> = (props) => {
         selectedNodeId={props.selectedNodeId}
         setSelectedNodeId={props.setSelectedNodeId}
         leadingFilters={leadingFilters()}
+        chartsCollapsed={props.chartsCollapsed}
+        onChartsToggle={props.onChartsToggle}
         mobileTrailing={props.mobileTrailing}
         utilityActions={props.utilityActions}
       />

@@ -199,188 +199,184 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 count: historyActiveFilterCount(),
               }}
               utilityActions={
-                <div class="ml-auto flex items-center gap-2">
-                  <div class="relative">
-                    <FilterActionButton
-                      ref={advancedFiltersButtonRef}
-                      aria-label="Filter"
-                      aria-expanded={moreFiltersOpen()}
-                      aria-controls="recovery-filter-panel"
-                      aria-haspopup="dialog"
-                      onClick={() => setMoreFiltersOpen((open) => !open)}
-                      active={moreFiltersOpen() || props.activeAdvancedFilterCount() > 0}
-                    >
-                      <span>Filter</span>
-                      <Show when={props.activeAdvancedFilterCount() > 0}>
-                        <span class={filterUtilityBadgeClass}>
-                          {props.activeAdvancedFilterCount()}
-                        </span>
-                      </Show>
-                    </FilterActionButton>
-
-                    <Show when={moreFiltersOpen()}>
-                      <FilterToolbarPanel ref={advancedFiltersPanelRef} id="recovery-filter-panel">
-                        <div class="mb-3 flex items-center justify-between gap-3">
-                          <div>
-                            <div class={filterPanelTitleClass}>Filter results</div>
-                            <div class={filterPanelDescriptionClass}>
-                              Narrow by scope, method, verification, or placement.
-                            </div>
-                          </div>
-                          <Show when={props.activeAdvancedFilterCount() > 0}>
-                            <button
-                              type="button"
-                              onClick={props.resetAdvancedArtifactFilters}
-                              class={getRecoveryFilterPanelClearClass()}
-                            >
-                              Clear filters
-                            </button>
-                          </Show>
-                        </div>
-
-                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                          <label class="flex min-w-0 flex-col gap-1">
-                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Scope</span>
-                            <select
-                              value={props.scopeFilter()}
-                              onChange={(event) => {
-                                props.setScopeFilter(
-                                  event.currentTarget.value === 'workload' ? 'workload' : 'all',
-                                );
-                                props.setCurrentPage(1);
-                              }}
-                              class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                            >
-                              <option value="all">{getRecoveryAllHistoryLabel()}</option>
-                              <option value="workload">Workloads only</option>
-                            </select>
-                          </label>
-
-                          <label class="flex min-w-0 flex-col gap-1">
-                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Method</span>
-                            <select
-                              value={props.modeFilter()}
-                              onChange={(event) => {
-                                props.setModeFilter(
-                                  normalizeRecoveryModeQueryValue(event.currentTarget.value),
-                                );
-                                props.setCurrentPage(1);
-                              }}
-                              class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                            >
-                              <option value="all">Any method</option>
-                              <option value="snapshot">
-                                {getRecoveryArtifactModePresentation('snapshot').label}
-                              </option>
-                              <option value="local">
-                                {getRecoveryArtifactModePresentation('local').label}
-                              </option>
-                              <option value="remote">
-                                {getRecoveryArtifactModePresentation('remote').label}
-                              </option>
-                            </select>
-                          </label>
-
-                          <Show when={props.showVerificationFilter()}>
-                            <label class="flex min-w-0 flex-col gap-1">
-                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Verification</span>
-                              <select
-                                value={props.verificationFilter()}
-                                onChange={(event) => {
-                                  props.setVerificationFilter(
-                                    event.currentTarget.value as VerificationFilter,
-                                  );
-                                  if (event.currentTarget.value !== 'all') {
-                                    props.setHistoryOutcomeFilter('all');
-                                  }
-                                  props.setCurrentPage(1);
-                                }}
-                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                              >
-                                <option value="all">Any verification</option>
-                                <option value="verified">Verified</option>
-                                <option value="unverified">Unverified</option>
-                                <option value="unknown">Unknown</option>
-                              </select>
-                            </label>
-                          </Show>
-
-                          <Show when={props.showClusterFilter()}>
-                            <label class="flex min-w-0 flex-col gap-1">
-                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
-                                {getRecoveryLocationFacetLabel('cluster')}
-                              </span>
-                              <select
-                                value={props.clusterFilter()}
-                                onChange={(event) => {
-                                  props.setClusterFilter(event.currentTarget.value);
-                                  props.setCurrentPage(1);
-                                }}
-                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                              >
-                                <option value="all">
-                                  {getRecoveryLocationFacetAllLabel('cluster')}
-                                </option>
-                                <For
-                                  each={props.clusterOptions().filter((value) => value !== 'all')}
-                                >
-                                  {(cluster) => <option value={cluster}>{cluster}</option>}
-                                </For>
-                              </select>
-                            </label>
-                          </Show>
-
-                          <Show when={props.showNodeFilter()}>
-                            <label class="flex min-w-0 flex-col gap-1">
-                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
-                                {getRecoveryLocationFacetLabel('node')}
-                              </span>
-                              <select
-                                value={props.nodeFilter()}
-                                onChange={(event) => {
-                                  props.setNodeFilter(event.currentTarget.value);
-                                  props.setCurrentPage(1);
-                                }}
-                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                              >
-                                <option value="all">
-                                  {getRecoveryLocationFacetAllLabel('node')}
-                                </option>
-                                <For each={props.nodeOptions().filter((value) => value !== 'all')}>
-                                  {(node) => <option value={node}>{node}</option>}
-                                </For>
-                              </select>
-                            </label>
-                          </Show>
-
-                          <Show when={props.showNamespaceFilter()}>
-                            <label class="flex min-w-0 flex-col gap-1">
-                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
-                                {getRecoveryLocationFacetLabel('namespace')}
-                              </span>
-                              <select
-                                value={props.namespaceFilter()}
-                                onChange={(event) => {
-                                  props.setNamespaceFilter(event.currentTarget.value);
-                                  props.setCurrentPage(1);
-                                }}
-                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                              >
-                                <option value="all">
-                                  {getRecoveryLocationFacetAllLabel('namespace')}
-                                </option>
-                                <For
-                                  each={props.namespaceOptions().filter((value) => value !== 'all')}
-                                >
-                                  {(namespace) => <option value={namespace}>{namespace}</option>}
-                                </For>
-                              </select>
-                            </label>
-                          </Show>
-                        </div>
-                      </FilterToolbarPanel>
+                <div class="relative">
+                  <FilterActionButton
+                    ref={advancedFiltersButtonRef}
+                    aria-label="Filter"
+                    aria-expanded={moreFiltersOpen()}
+                    aria-controls="recovery-filter-panel"
+                    aria-haspopup="dialog"
+                    onClick={() => setMoreFiltersOpen((open) => !open)}
+                    active={moreFiltersOpen() || props.activeAdvancedFilterCount() > 0}
+                  >
+                    <span>Filter</span>
+                    <Show when={props.activeAdvancedFilterCount() > 0}>
+                      <span class={filterUtilityBadgeClass}>
+                        {props.activeAdvancedFilterCount()}
+                      </span>
                     </Show>
-                  </div>
+                  </FilterActionButton>
+
+                  <Show when={moreFiltersOpen()}>
+                    <FilterToolbarPanel ref={advancedFiltersPanelRef} id="recovery-filter-panel">
+                      <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <div class={filterPanelTitleClass}>Filter results</div>
+                          <div class={filterPanelDescriptionClass}>
+                            Narrow by scope, method, verification, or placement.
+                          </div>
+                        </div>
+                        <Show when={props.activeAdvancedFilterCount() > 0}>
+                          <button
+                            type="button"
+                            onClick={props.resetAdvancedArtifactFilters}
+                            class={getRecoveryFilterPanelClearClass()}
+                          >
+                            Clear filters
+                          </button>
+                        </Show>
+                      </div>
+
+                      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <label class="flex min-w-0 flex-col gap-1">
+                          <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Scope</span>
+                          <select
+                            value={props.scopeFilter()}
+                            onChange={(event) => {
+                              props.setScopeFilter(
+                                event.currentTarget.value === 'workload' ? 'workload' : 'all',
+                              );
+                              props.setCurrentPage(1);
+                            }}
+                            class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                          >
+                            <option value="all">{getRecoveryAllHistoryLabel()}</option>
+                            <option value="workload">Workloads only</option>
+                          </select>
+                        </label>
+
+                        <label class="flex min-w-0 flex-col gap-1">
+                          <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Method</span>
+                          <select
+                            value={props.modeFilter()}
+                            onChange={(event) => {
+                              props.setModeFilter(
+                                normalizeRecoveryModeQueryValue(event.currentTarget.value),
+                              );
+                              props.setCurrentPage(1);
+                            }}
+                            class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                          >
+                            <option value="all">Any method</option>
+                            <option value="snapshot">
+                              {getRecoveryArtifactModePresentation('snapshot').label}
+                            </option>
+                            <option value="local">
+                              {getRecoveryArtifactModePresentation('local').label}
+                            </option>
+                            <option value="remote">
+                              {getRecoveryArtifactModePresentation('remote').label}
+                            </option>
+                          </select>
+                        </label>
+
+                        <Show when={props.showVerificationFilter()}>
+                          <label class="flex min-w-0 flex-col gap-1">
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Verification</span>
+                            <select
+                              value={props.verificationFilter()}
+                              onChange={(event) => {
+                                props.setVerificationFilter(
+                                  event.currentTarget.value as VerificationFilter,
+                                );
+                                if (event.currentTarget.value !== 'all') {
+                                  props.setHistoryOutcomeFilter('all');
+                                }
+                                props.setCurrentPage(1);
+                              }}
+                              class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                            >
+                              <option value="all">Any verification</option>
+                              <option value="verified">Verified</option>
+                              <option value="unverified">Unverified</option>
+                              <option value="unknown">Unknown</option>
+                            </select>
+                          </label>
+                        </Show>
+
+                        <Show when={props.showClusterFilter()}>
+                          <label class="flex min-w-0 flex-col gap-1">
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
+                              {getRecoveryLocationFacetLabel('cluster')}
+                            </span>
+                            <select
+                              value={props.clusterFilter()}
+                              onChange={(event) => {
+                                props.setClusterFilter(event.currentTarget.value);
+                                props.setCurrentPage(1);
+                              }}
+                              class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                            >
+                              <option value="all">
+                                {getRecoveryLocationFacetAllLabel('cluster')}
+                              </option>
+                              <For each={props.clusterOptions().filter((value) => value !== 'all')}>
+                                {(cluster) => <option value={cluster}>{cluster}</option>}
+                              </For>
+                            </select>
+                          </label>
+                        </Show>
+
+                        <Show when={props.showNodeFilter()}>
+                          <label class="flex min-w-0 flex-col gap-1">
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
+                              {getRecoveryLocationFacetLabel('node')}
+                            </span>
+                            <select
+                              value={props.nodeFilter()}
+                              onChange={(event) => {
+                                props.setNodeFilter(event.currentTarget.value);
+                                props.setCurrentPage(1);
+                              }}
+                              class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                            >
+                              <option value="all">
+                                {getRecoveryLocationFacetAllLabel('node')}
+                              </option>
+                              <For each={props.nodeOptions().filter((value) => value !== 'all')}>
+                                {(node) => <option value={node}>{node}</option>}
+                              </For>
+                            </select>
+                          </label>
+                        </Show>
+
+                        <Show when={props.showNamespaceFilter()}>
+                          <label class="flex min-w-0 flex-col gap-1">
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
+                              {getRecoveryLocationFacetLabel('namespace')}
+                            </span>
+                            <select
+                              value={props.namespaceFilter()}
+                              onChange={(event) => {
+                                props.setNamespaceFilter(event.currentTarget.value);
+                                props.setCurrentPage(1);
+                              }}
+                              class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                            >
+                              <option value="all">
+                                {getRecoveryLocationFacetAllLabel('namespace')}
+                              </option>
+                              <For
+                                each={props.namespaceOptions().filter((value) => value !== 'all')}
+                              >
+                                {(namespace) => <option value={namespace}>{namespace}</option>}
+                              </For>
+                            </select>
+                          </label>
+                        </Show>
+                      </div>
+                    </FilterToolbarPanel>
+                  </Show>
                 </div>
               }
               columnVisibility={props.artifactColumnVisibility}
@@ -390,7 +386,6 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 label: 'Reset all',
               }}
               showFilters={!props.isMobile || historyFiltersOpen()}
-              toolbarClass="lg:flex-nowrap"
             >
               <RecoveryHistoryItemFilter
                 options={props.historyItemOptions}

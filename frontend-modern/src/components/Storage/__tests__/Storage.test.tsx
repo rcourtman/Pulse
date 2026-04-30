@@ -8,6 +8,7 @@ import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const buildVisibleRect = (): DOMRect =>
   ({
@@ -364,6 +365,8 @@ describe('Storage', () => {
     hookResources = [];
     hookLoading = false;
     hookError = undefined;
+    window.localStorage.removeItem(STORAGE_KEYS.STORAGE_SUMMARY_COLLAPSED);
+    window.localStorage.removeItem(STORAGE_KEYS.STORAGE_SUMMARY_RANGE);
   });
 
   afterEach(() => {
@@ -1785,6 +1788,28 @@ describe('Storage', () => {
       'aria-selected',
       'false',
     );
+  });
+
+  it('collapses and restores storage charts from the shared toolbar toggle', async () => {
+    hookResources = [buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1')];
+
+    render(() => <Storage />);
+
+    expect(await screen.findByTestId('storage-summary')).toBeInTheDocument();
+
+    const chartsButton = screen.getByRole('button', { name: /charts/i });
+    expect(chartsButton.closest('.page-controls-toolbar-actions')).not.toBeNull();
+
+    fireEvent.click(chartsButton);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
+    });
+    expect(window.localStorage.getItem(STORAGE_KEYS.STORAGE_SUMMARY_COLLAPSED)).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: /charts/i }));
+
+    expect(await screen.findByTestId('storage-summary')).toBeInTheDocument();
   });
 
   it('shows loading placeholder when pool resources are loading', () => {
