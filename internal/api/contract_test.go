@@ -2676,6 +2676,33 @@ func TestContract_ReportingCatalogRouteAccessibleWithoutReportingFeature(t *test
 	}
 }
 
+func TestContract_LocalCommercialReportingRoutesRequireSettingsReadScope(t *testing.T) {
+	rawToken := "commercial-reporting-contract-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},
+		{method: http.MethodGet, path: "/api/upgrade-metrics/health"},
+		{method: http.MethodGet, path: "/api/upgrade-metrics/config"},
+		{method: http.MethodGet, path: "/api/admin/upgrade-metrics-funnel"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("X-API-Token", rawToken)
+			rec := httptest.NewRecorder()
+
+			router.Handler().ServeHTTP(rec, req)
+
+			assertMissingScope(t, rec, config.ScopeSettingsRead, tc.method+" "+tc.path)
+		})
+	}
+}
+
 func TestContract_PerformanceReportTransportUsesCatalogDefaultRange(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()

@@ -20,7 +20,9 @@
 
 ## Purpose
 
-Own canonical runtime payload shapes between backend and frontend.
+Own canonical runtime payload shapes between backend and frontend, including
+the privileged boundary between customer-safe support diagnostics and
+admin-only local commercial reporting routes.
 
 ## Canonical Files
 1. `internal/api/contract_test.go`
@@ -1807,6 +1809,13 @@ now checks `internal/api/diagnostics.go` alongside the Settings diagnostics
 frontend boundary through the canonical frontend audit runner, so this
 admin-analytics payload class cannot return as a customer-visible diagnostics
 contract.
+That same admin-analytics boundary applies to the local commercial metrics
+reporting routes themselves: `/api/upgrade-metrics/stats`,
+`/api/upgrade-metrics/health`, `/api/upgrade-metrics/config`, and
+`/api/admin/upgrade-metrics-funnel` must require admin/settings-scope access
+rather than becoming general authenticated product reads. Authenticated event
+ingestion at `/api/upgrade-metrics/events` may remain fire-and-forget UX
+plumbing, but reporting and control stay on the privileged settings boundary.
 That same public-demo API boundary must also hide runtime-admin operations
 surfaces instead of treating them as harmless reads. Demo sessions must receive
 `404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the

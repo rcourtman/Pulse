@@ -540,6 +540,10 @@ runtime gating as separate unlinked claims.
     `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`, and
     `frontend-modern/src/components/Settings/diagnosticsModel.ts` must not
     expose them in the customer support diagnostics payload or panel.
+    The local reporting/control endpoints themselves must stay privileged:
+    stats, health, config, and funnel reads must require admin plus
+    settings-scope access; only event ingestion may remain an authenticated
+    fire-and-forget path for user interactions.
 16. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
     may keep checkout, activation, recovery, and support-only trial plumbing
     available for explicit handoffs and entitled installs, but default
@@ -1908,7 +1912,10 @@ self-hosted commercial reporting, but not for user support diagnostics:
 admin-owned reporting surfaces may read structured local funnel reports from
 `pkg/licensing/conversion_store.go`, while `/api/diagnostics` and the Settings
 support diagnostics panel must not expose pricing, checkout, conversion, or
-infrastructure-onboarding analytics.
+infrastructure-onboarding analytics. The API route boundary must preserve that
+same split: local commercial metric stats, health, config, and funnel reads are
+admin/settings-scope surfaces, while `/api/upgrade-metrics/events` remains only
+the authenticated local ingestion path for explicit product interactions.
 Stripe checkout and subscription webhook persistence now also follows the
 canonical Cloud/MSP limit rule: when paid state is granted, billing-state
 writes must persist authoritative `limits.max_monitored_systems` derived from canonical

@@ -1663,7 +1663,10 @@ That same shared diagnostics dependency now also assumes local commercial and
 onboarding analytics stay out of user diagnostics entirely: lifecycle-adjacent
 admin surfaces may consume operational diagnostics, but they must not restore
 self-hosted upgrade-metric summaries or infrastructure-onboarding analytics to
-`internal/api/diagnostics.go` or the settings diagnostics panel.
+`internal/api/diagnostics.go` or the settings diagnostics panel. The local
+commercial metrics reporting routes remain API/cloud-paid admin settings
+surfaces and must not become lifecycle setup, install, or fleet-progress
+signals.
 Lifecycle-adjacent Docker and Podman agent diagnostics are part of that same
 shared backend dependency. When `internal/api/diagnostics.go` emits agent
 health notes for Docker and Podman, the copy must keep Infrastructure as the

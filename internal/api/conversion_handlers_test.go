@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -637,7 +638,7 @@ func TestConversionHandleConversionFunnelRejectsCrossTenantOrgOverride(t *testin
 	}
 }
 
-func TestConversionConversionFunnelRouteRequiresAdminProxyRole(t *testing.T) {
+func TestConversionReportingRoutesRequireAdminProxyRole(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.ProxyAuthSecret = "proxy-secret"
 	cfg.ProxyAuthUserHeader = "X-Proxy-User"
@@ -646,15 +647,29 @@ func TestConversionConversionFunnelRouteRequiresAdminProxyRole(t *testing.T) {
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/upgrade-metrics-funnel", nil)
-	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
-	req.Header.Set(cfg.ProxyAuthUserHeader, "alice")
-	req.Header.Set(cfg.ProxyAuthRoleHeader, "viewer|user")
-	rec := httptest.NewRecorder()
+	for _, tc := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},
+		{method: http.MethodGet, path: "/api/upgrade-metrics/health"},
+		{method: http.MethodGet, path: "/api/upgrade-metrics/config"},
+		{method: http.MethodPut, path: "/api/upgrade-metrics/config", body: `{"enabled":false}`},
+		{method: http.MethodGet, path: "/api/admin/upgrade-metrics-funnel"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+			req.Header.Set(cfg.ProxyAuthUserHeader, "alice")
+			req.Header.Set(cfg.ProxyAuthRoleHeader, "viewer|user")
+			rec := httptest.NewRecorder()
 
-	router.Handler().ServeHTTP(rec, req)
+			router.Handler().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d (%s)", http.StatusForbidden, rec.Code, rec.Body.String())
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("expected status %d, got %d (%s)", http.StatusForbidden, rec.Code, rec.Body.String())
+			}
+		})
 	}
 }

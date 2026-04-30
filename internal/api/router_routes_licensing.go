@@ -47,21 +47,11 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	// Local-only commercial handoff events (legacy route names retain "upgrade-metrics" for compatibility).
 	// These are local-only signals used to debug explicit paid-plan handoffs; no external export.
 	r.mux.HandleFunc("POST /api/upgrade-metrics/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
-	r.mux.HandleFunc("GET /api/upgrade-metrics/stats", RequireAuth(r.config, conversionHandlers.HandleGetStats))
-	r.mux.HandleFunc("GET /api/upgrade-metrics/health", RequireAuth(r.config, conversionHandlers.HandleGetHealth))
-	r.mux.HandleFunc("GET /api/upgrade-metrics/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureSettingsReadScope(r.config, w, req) {
-			return
-		}
-		conversionHandlers.HandleGetConfig(w, req)
-	})))
-	r.mux.HandleFunc("PUT /api/upgrade-metrics/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureSettingsWriteScope(r.config, w, req) {
-			return
-		}
-		conversionHandlers.HandleUpdateConfig(w, req)
-	})))
-	r.mux.HandleFunc("GET /api/admin/upgrade-metrics-funnel", RequireAdmin(r.config, conversionHandlers.HandleConversionFunnel))
+	r.mux.HandleFunc("GET /api/upgrade-metrics/stats", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetStats)))
+	r.mux.HandleFunc("GET /api/upgrade-metrics/health", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetHealth)))
+	r.mux.HandleFunc("GET /api/upgrade-metrics/config", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetConfig)))
+	r.mux.HandleFunc("PUT /api/upgrade-metrics/config", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, conversionHandlers.HandleUpdateConfig)))
+	r.mux.HandleFunc("GET /api/admin/upgrade-metrics-funnel", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleConversionFunnel)))
 
 	// Organization routes (multi-tenant foundation)
 	r.mux.HandleFunc("GET /api/orgs", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleListOrgs)))

@@ -21,7 +21,9 @@
 ## Purpose
 
 Own the storage and recovery product surfaces, recovery-point persistence and
-querying, and the operator-facing storage health presentation layer.
+querying, and the operator-facing storage health presentation layer while
+keeping adjacent commercial reporting APIs out of storage/recovery product
+state.
 
 ## Canonical Files
 
@@ -1932,6 +1934,10 @@ return `404` for that path without mutating entitlements. The retired
 storage/recovery-local retry or backoff behavior. Retired
 `trial_eligible`/`trial_eligibility_reason` payload fields are compatibility
 only and must not become storage/recovery prompt, identity, or restore state.
+Local commercial metrics reporting routes are part of the same adjacent
+API/cloud-paid admin settings boundary: storage and recovery surfaces must not
+read stats, health, config, or funnel reports as customer-visible recovery,
+storage-health, or setup state.
 That same shared `internal/api/` dependency now also assumes adjacent
 commercial helper surfaces speak in monitored-system terms: recovery- or
 storage-adjacent API wiring may consume the canonical monitored-system ledger
