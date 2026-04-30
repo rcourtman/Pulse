@@ -3346,6 +3346,7 @@ func hostRAIDFromReadStateView(raid []unifiedresources.HostRAIDMeta) []models.Ho
 			Devices:        devices,
 			RebuildPercent: entry.RebuildPercent,
 			RebuildSpeed:   entry.RebuildSpeed,
+			Operation:      entry.Operation,
 		})
 	}
 	return out

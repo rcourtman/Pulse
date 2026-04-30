@@ -3665,6 +3665,9 @@ func (m *Manager) CheckHost(host models.Host) {
 			if array.RebuildPercent > 0 {
 				raidMetadata["raidRebuildPercent"] = array.RebuildPercent
 			}
+			if array.Operation != "" {
+				raidMetadata["raidOperation"] = array.Operation
+			}
 
 			alertID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
 			assessment := storagehealth.AssessHostRAIDArray(array)

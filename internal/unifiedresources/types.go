@@ -478,6 +478,7 @@ type HostRAIDMeta struct {
 	Devices        []HostRAIDDeviceMeta `json:"devices,omitempty"`
 	RebuildPercent float64              `json:"rebuildPercent,omitempty"`
 	RebuildSpeed   string               `json:"rebuildSpeed,omitempty"`
+	Operation      string               `json:"operation,omitempty"`
 	Risk           *StorageRisk         `json:"risk,omitempty"`
 }
 

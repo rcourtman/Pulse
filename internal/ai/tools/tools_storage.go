@@ -1338,6 +1338,7 @@ func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map
 				UUID:           raid.UUID,
 				RebuildPercent: raid.RebuildPercent,
 				RebuildSpeed:   raid.RebuildSpeed,
+				Operation:      raid.Operation,
 				Devices:        devices,
 			})
 		}

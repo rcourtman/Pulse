@@ -27,12 +27,76 @@ func TestAssessHostRAIDArrayRebuilding(t *testing.T) {
 	assessment := AssessHostRAIDArray(models.HostRAIDArray{
 		Device:         "/dev/md3",
 		State:          "recovering",
+		Operation:      "recovery",
 		RebuildPercent: 42,
 	})
 
 	if assessment.Level != RiskWarning {
 		t.Fatalf("Level = %q, want %q", assessment.Level, RiskWarning)
 	}
+}
+
+func TestAssessHostRAIDArrayRecoveryOperationAlerts(t *testing.T) {
+	assessment := AssessHostRAIDArray(models.HostRAIDArray{
+		Device:         "/dev/md2",
+		State:          "active, recovering",
+		Operation:      "recovery",
+		RebuildPercent: 12.6,
+		TotalDevices:   2,
+		ActiveDevices:  2,
+	})
+
+	if assessment.Level != RiskWarning {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskWarning)
+	}
+	if !hasReasonCode(assessment, "raid_rebuilding") {
+		t.Fatalf("expected raid_rebuilding reason, got %+v", assessment.Reasons)
+	}
+}
+
+func TestAssessHostRAIDArrayCheckOperationIsSilent(t *testing.T) {
+	assessment := AssessHostRAIDArray(models.HostRAIDArray{
+		Device:         "/dev/md2",
+		State:          "active",
+		Operation:      "check",
+		RebuildPercent: 12.6,
+		TotalDevices:   3,
+		ActiveDevices:  3,
+	})
+
+	if assessment.Level != RiskHealthy {
+		t.Fatalf("Level = %q, want %q; reasons=%+v", assessment.Level, RiskHealthy, assessment.Reasons)
+	}
+	if hasReasonCode(assessment, "raid_rebuilding") {
+		t.Fatalf("did not expect raid_rebuilding for scrub operation, got %+v", assessment.Reasons)
+	}
+}
+
+func TestAssessHostRAIDArrayResyncOperationIsSilent(t *testing.T) {
+	assessment := AssessHostRAIDArray(models.HostRAIDArray{
+		Device:         "/dev/md2",
+		State:          "active, resyncing",
+		Operation:      "resync",
+		RebuildPercent: 12.6,
+		TotalDevices:   2,
+		ActiveDevices:  2,
+	})
+
+	if assessment.Level != RiskHealthy {
+		t.Fatalf("Level = %q, want %q; reasons=%+v", assessment.Level, RiskHealthy, assessment.Reasons)
+	}
+	if hasReasonCode(assessment, "raid_rebuilding") {
+		t.Fatalf("did not expect raid_rebuilding for resync operation, got %+v", assessment.Reasons)
+	}
+}
+
+func hasReasonCode(assessment Assessment, code string) bool {
+	for _, reason := range assessment.Reasons {
+		if reason.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 func TestFilterVendorManagedSystemRAIDArrays(t *testing.T) {

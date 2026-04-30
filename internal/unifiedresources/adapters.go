@@ -223,6 +223,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 				Devices:        devices,
 				RebuildPercent: r.RebuildPercent,
 				RebuildSpeed:   r.RebuildSpeed,
+				Operation:      r.Operation,
 				Risk:           storageRiskFromAssessment(assessment),
 			}
 			if !isInternalHostRAIDDevice(r.Device) {

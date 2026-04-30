@@ -830,53 +830,118 @@ func TestCollectArraysPartialSuccessIgnoresDetailErrors(t *testing.T) {
 	}
 }
 
-func TestGetRebuildSpeed(t *testing.T) {
-	mdstat := `md0 : active raid1 sda1[0] sdb1[1]
+func TestGetMdstatProgress(t *testing.T) {
+	tests := []struct {
+		name      string
+		device    string
+		mdstat    string
+		wantOp    string
+		wantSpeed string
+	}{
+		{
+			name:   "recovery rebuild",
+			device: "/dev/md0",
+			mdstat: `md0 : active raid1 sda1[0] sdb1[1]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=33440K/sec
-`
-	withReadProcMDStat(t, func() ([]byte, error) {
-		return []byte(mdstat), nil
-	})
+`,
+			wantOp:    "recovery",
+			wantSpeed: "33440K/sec",
+		},
+		{
+			name:   "check data scrub",
+			device: "/dev/md2",
+			mdstat: `md2 : active raid5 sdb1[0] sdc1[1] sdd1[2]
+      14649176064 blocks super 1.2 level 5, 512k chunk
+      [==>..................]  check = 12.6% (37043392/293039104) finish=127.5min speed=12000K/sec
+`,
+			wantOp:    "check",
+			wantSpeed: "12000K/sec",
+		},
+		{
+			name:   "resync maintenance",
+			device: "/dev/md1",
+			mdstat: `md1 : active raid1 sda2[0] sdb2[1]
+      [=>...................]  resync = 5.0% (1048576/20971520) finish=2.5min speed=140000K/sec
+`,
+			wantOp:    "resync",
+			wantSpeed: "140000K/sec",
+		},
+		{
+			name:   "reshape",
+			device: "/dev/md3",
+			mdstat: `md3 : active raid5 sdb1[0] sdc1[1] sdd1[2] sde1[3]
+      [====>................]  reshape = 25.0% (...) finish=10min speed=50000K/sec
+`,
+			wantOp:    "reshape",
+			wantSpeed: "50000K/sec",
+		},
+		{
+			name:   "idle array",
+			device: "/dev/md0",
+			mdstat: `md0 : active raid1 sda1[0] sdb1[1]
+      102400000 blocks super 1.2 [2/2] [UU]
+`,
+		},
+		{
+			name:   "device not present",
+			device: "/dev/md9",
+			mdstat: `md0 : active raid1 sda1[0] sdb1[1]
+      [>....................]  recovery = 12.6% (...) finish=127.5min speed=33440K/sec
+`,
+		},
+	}
 
-	speed := getRebuildSpeed("/dev/md0")
-	if speed != "33440K/sec" {
-		t.Fatalf("unexpected speed: %s", speed)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withReadProcMDStat(t, func() ([]byte, error) {
+				return []byte(tt.mdstat), nil
+			})
+
+			gotOp, gotSpeed := getMdstatProgress(tt.device)
+			if gotOp != tt.wantOp {
+				t.Errorf("operation = %q, want %q", gotOp, tt.wantOp)
+			}
+			if gotSpeed != tt.wantSpeed {
+				t.Errorf("speed = %q, want %q", gotSpeed, tt.wantSpeed)
+			}
+		})
 	}
 }
 
-func TestGetRebuildSpeedNoMatch(t *testing.T) {
+func TestGetMdstatProgressNoMatch(t *testing.T) {
 	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
-	speed := getRebuildSpeed("/dev/md0")
-	if speed != "" {
-		t.Fatalf("expected empty speed, got %s", speed)
+	op, speed := getMdstatProgress("/dev/md0")
+	if op != "" || speed != "" {
+		t.Fatalf("expected empty op/speed, got op=%q speed=%q", op, speed)
 	}
 }
 
-func TestGetRebuildSpeedError(t *testing.T) {
+func TestGetMdstatProgressError(t *testing.T) {
 	withReadProcMDStat(t, func() ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
-	speed := getRebuildSpeed("/dev/md0")
-	if speed != "" {
-		t.Fatalf("expected empty speed, got %s", speed)
+	op, speed := getMdstatProgress("/dev/md0")
+	if op != "" || speed != "" {
+		t.Fatalf("expected empty op/speed, got op=%q speed=%q", op, speed)
 	}
 }
 
-func TestGetRebuildSpeedWithCommandError(t *testing.T) {
+func TestGetMdstatProgressWithCommandError(t *testing.T) {
 	withReadProcMDStat(t, func() ([]byte, error) {
 		return nil, context.Canceled
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "" {
-		t.Fatalf("expected empty speed, got %s", speed)
+	op, speed := getMdstatProgress("/dev/md0")
+	if op != "" || speed != "" {
+		t.Fatalf("expected empty op/speed, got op=%q speed=%q", op, speed)
 	}
 }
 
-func TestParseDetailSetsRebuildSpeed(t *testing.T) {
+func TestParseDetailSetsRebuildSpeedAndOperation(t *testing.T) {
 	output := `/dev/md0:
         Raid Level : raid1
              State : clean
@@ -899,18 +964,51 @@ func TestParseDetailSetsRebuildSpeed(t *testing.T) {
 	if array.RebuildSpeed != "1234K/sec" {
 		t.Fatalf("expected rebuild speed, got %s", array.RebuildSpeed)
 	}
+	if array.Operation != "recovery" {
+		t.Fatalf("expected operation=recovery, got %q", array.Operation)
+	}
 }
 
-func TestGetRebuildSpeedSectionExit(t *testing.T) {
+func TestParseDetailScrubOperation(t *testing.T) {
+	output := `/dev/md2:
+        Raid Level : raid5
+             State : clean
+    Active Devices : 3
+   Working Devices : 3
+    Failed Devices : 0
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sdb1`
+
+	mdstat := `md2 : active raid5 sdb1[0] sdc1[1] sdd1[2]
+      [==>..................]  check = 12.6% (37043392/293039104) finish=127.5min speed=12000K/sec
+`
+	withReadProcMDStat(t, func() ([]byte, error) {
+		return []byte(mdstat), nil
+	})
+
+	array, err := parseMdadmDetail("/dev/md2", output)
+	if err != nil {
+		t.Fatalf("parseMdadmDetail error: %v", err)
+	}
+	if array.Operation != "check" {
+		t.Fatalf("expected operation=check, got %q", array.Operation)
+	}
+}
+
+func TestGetMdstatProgressSectionExit(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min
 md1 : active raid1 sdb1[0]
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
-	speed := getRebuildSpeed("/dev/md0")
+	op, speed := getMdstatProgress("/dev/md0")
+	if op != "recovery" {
+		t.Fatalf("expected op=recovery, got %q", op)
+	}
 	if speed != "" {
 		t.Fatalf("expected empty speed, got %s", speed)
 	}

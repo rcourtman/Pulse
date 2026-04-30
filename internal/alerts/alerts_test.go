@@ -14833,8 +14833,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		}
 	})
 
-	t.Run("RAID resync triggers rebuilding alert", func(t *testing.T) {
-		// t.Parallel()
+	t.Run("RAID recovery operation triggers rebuilding alert", func(t *testing.T) {
 		m := newTestManager(t)
 
 		host := models.Host{
@@ -14842,12 +14841,14 @@ func TestCheckHostComprehensive(t *testing.T) {
 			Hostname: "testhost",
 			RAID: []models.HostRAIDArray{
 				{
-					Device:        "/dev/md2", // Note: md0/md1 are skipped for Synology compatibility
-					Level:         "raid1",
-					State:         "resync",
-					TotalDevices:  2,
-					ActiveDevices: 2,
-					FailedDevices: 0,
+					Device:         "/dev/md2",
+					Level:          "raid1",
+					State:          "active, recovering",
+					Operation:      "recovery",
+					TotalDevices:   2,
+					ActiveDevices:  2,
+					FailedDevices:  0,
+					RebuildPercent: 12.6,
 				},
 			},
 		}
@@ -14860,10 +14861,74 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.mu.RUnlock()
 
 		if alert == nil {
-			t.Fatal("expected RAID rebuilding alert for resync")
+			t.Fatal("expected RAID rebuilding alert for recovery")
 		}
 		if alert.Level != AlertLevelWarning {
-			t.Errorf("expected warning level for resync, got %s", alert.Level)
+			t.Errorf("expected warning level for recovery, got %s", alert.Level)
+		}
+	})
+
+	t.Run("RAID check operation does not trigger rebuilding alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:         "/dev/md2",
+					Level:          "raid5",
+					State:          "active",
+					Operation:      "check",
+					TotalDevices:   3,
+					ActiveDevices:  3,
+					FailedDevices:  0,
+					RebuildPercent: 12.6,
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alertID := buildCanonicalStateID("agent:host1/raid:md2", "agent:host1/raid:md2-health")
+		_, exists := testLookupActiveAlert(t, m, alertID)
+		m.mu.RUnlock()
+
+		if exists {
+			t.Fatal("expected no RAID rebuilding alert for scrub check operation")
+		}
+	})
+
+	t.Run("RAID resync operation does not trigger rebuilding alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:         "/dev/md2",
+					Level:          "raid1",
+					State:          "active, resyncing",
+					Operation:      "resync",
+					TotalDevices:   2,
+					ActiveDevices:  2,
+					FailedDevices:  0,
+					RebuildPercent: 12.6,
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alertID := buildCanonicalStateID("agent:host1/raid:md2", "agent:host1/raid:md2-health")
+		_, exists := testLookupActiveAlert(t, m, alertID)
+		m.mu.RUnlock()
+
+		if exists {
+			t.Fatal("expected no RAID rebuilding alert for maintenance resync operation")
 		}
 	})
 
@@ -14923,6 +14988,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 					Device:         "/dev/md2",
 					Level:          "raid1",
 					State:          "recovering",
+					Operation:      "recovery",
 					TotalDevices:   2,
 					ActiveDevices:  2,
 					FailedDevices:  0,
@@ -14946,6 +15012,9 @@ func TestCheckHostComprehensive(t *testing.T) {
 		}
 		if got := alert.Metadata["canonicalSpecID"]; got != "agent:host1/raid:md2-health" {
 			t.Fatalf("canonicalSpecID = %v, want agent:host1/raid:md2-health", got)
+		}
+		if got := alert.Metadata["raidOperation"]; got != "recovery" {
+			t.Fatalf("raidOperation = %v, want recovery", got)
 		}
 	})
 

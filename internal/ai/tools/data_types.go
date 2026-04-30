@@ -2087,6 +2087,7 @@ type HostRAIDArraySummary struct {
 	UUID           string                  `json:"uuid,omitempty"`
 	RebuildPercent float64                 `json:"rebuild_percent,omitempty"`
 	RebuildSpeed   string                  `json:"rebuild_speed,omitempty"`
+	Operation      string                  `json:"operation,omitempty"`
 	Devices        []HostRAIDDeviceSummary `json:"devices"`
 }
 

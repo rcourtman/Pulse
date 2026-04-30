@@ -22,10 +22,12 @@ func AssessHostRAIDArray(array models.HostRAIDArray) Assessment {
 	}
 
 	stateLower := strings.ToLower(strings.TrimSpace(array.State))
-	isChecking := strings.Contains(stateLower, "check")
-	isRebuilding := !isChecking && (strings.Contains(stateLower, "recover") ||
-		strings.Contains(stateLower, "resync") ||
-		(array.RebuildPercent > 0 && !strings.Contains(stateLower, "clean")))
+	operation := strings.ToLower(strings.TrimSpace(array.Operation))
+	isMaintenance := operation == "check" || operation == "resync"
+	isRebuilding := !isMaintenance && (operation == "recovery" ||
+		operation == "reshape" ||
+		(operation == "" && (strings.Contains(stateLower, "recover") ||
+			(array.RebuildPercent > 0 && !strings.Contains(stateLower, "clean") && !strings.Contains(stateLower, "check")))))
 
 	if strings.Contains(stateLower, "degraded") || array.FailedDevices > 0 || (array.TotalDevices > 0 && array.ActiveDevices > 0 && array.ActiveDevices < array.TotalDevices) {
 		summary := fmt.Sprintf("RAID array %s is degraded", array.Device)

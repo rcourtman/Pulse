@@ -401,6 +401,9 @@ type HostRAIDArray struct {
 	Devices        []HostRAIDDevice `json:"devices"`
 	RebuildPercent float64          `json:"rebuildPercent"`
 	RebuildSpeed   string           `json:"rebuildSpeed,omitempty"`
+	// Operation is the in-progress sync action from /proc/mdstat
+	// ("recovery", "resync", "check", or "reshape"); empty when idle.
+	Operation string `json:"operation,omitempty"`
 }
 
 func (a HostRAIDArray) NormalizeCollections() HostRAIDArray {
