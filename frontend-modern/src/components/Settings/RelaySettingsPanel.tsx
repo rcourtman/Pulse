@@ -30,7 +30,7 @@ import {
 export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) => {
   const state = useRelaySettingsPanelState(props);
 
-  // Pro feature gate
+  // Relay feature gate
   if (!state.relayEnabled()) {
     return (
       <SettingsPanel title="Remote Access" description={RELAY_SETTINGS_DESCRIPTION}>

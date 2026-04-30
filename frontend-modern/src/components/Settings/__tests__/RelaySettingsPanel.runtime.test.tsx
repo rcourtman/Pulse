@@ -171,7 +171,7 @@ describe('RelaySettingsPanel runtime', () => {
 
     expect(
       screen.getByText(
-        'Remote access is available with Relay or Pro. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.',
+        'Remote access is available with Relay and higher plans. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
@@ -257,7 +257,7 @@ describe('RelaySettingsPanel runtime', () => {
 
     expect(
       screen.getByText(
-        'Remote Access is enabled, but this instance does not have an active Relay token. Activate Relay or turn Remote Access off before pairing mobile clients.',
+        'Remote Access is enabled, but this instance does not have an active Relay token. Activate a Relay-capable plan or turn Remote Access off before pairing mobile clients.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('register: no license token available')).not.toBeInTheDocument();

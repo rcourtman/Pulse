@@ -106,12 +106,14 @@ describe('relayPresentation', () => {
   it('centralizes relay availability copy', () => {
     expect(RELAY_SETTINGS_DESCRIPTION).toContain('Pulse Mobile pairing');
     expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('supported Pulse Mobile clients');
-    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('available with Relay or Pro');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('available with Relay and higher plans');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).not.toContain('Relay or Pro');
     expect(RELAY_PAIRING_AVAILABILITY_TITLE).toBe('Pair Pulse Mobile through Relay');
     expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('QR code or deep link');
     expect(RELAY_ENABLE_HELP_TEXT).toContain('Pulse Mobile pairing');
     expect(RELAY_ACTIVATION_REQUIRED_LABEL).toBe('Activation required');
     expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).toContain('active Relay token');
+    expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).toContain('Relay-capable plan');
   });
 
   it('does not retain retired Relay price or trial-era onboarding copy', () => {
@@ -121,5 +123,6 @@ describe('relayPresentation', () => {
     expect(relayPresentationSource).not.toContain('$49');
     expect(relayPresentationSource).not.toContain('$99');
     expect(relayPresentationSource).not.toContain('Start free trial');
+    expect(relayPresentationSource).not.toContain('Pro feature gate');
   });
 });

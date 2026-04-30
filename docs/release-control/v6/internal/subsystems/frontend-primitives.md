@@ -855,7 +855,9 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
     `RelaySettingsPanel.tsx` must reuse the same description and availability
-    copy instead of drifting into separate rollout or pairing wording.
+    copy instead of drifting into separate rollout or pairing wording. Relay
+    availability copy must describe the Relay tier boundary as Relay and higher
+    plans rather than collapsing Remote Access back into a Pro-only feature.
 25. Keep shared settings-shell legal and docs referrals on
     `frontend-modern/src/utils/docsLinks.ts`. Shared settings surfaces such as
     `AIRuntimeControlsSection.tsx` must not hardcode GitHub `main` doc URLs for
@@ -2640,7 +2642,8 @@ The same shell boundary now also owns shared relay route framing copy:
 the top-level relay settings description and availability copy used by both
 `settingsHeaderMeta.ts` and `RelaySettingsPanel.tsx`, so the route shell and
 its first `SettingsPanel` cannot drift into separate rollout or pairing
-descriptions.
+descriptions or describe Relay as a Pro-only feature after Relay became its
+own self-hosted paid tier.
 
 Single-surface settings pages that only render one canonical `SettingsPanel`
 must stay rooted directly at that panel instead of wrapping it in an extra

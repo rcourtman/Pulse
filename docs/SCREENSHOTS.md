@@ -32,4 +32,4 @@
 
 ## Mobile Responsive Design
 ![Mobile View](images/08-mobile.png)
-*Fully responsive mobile interface with a dedicated bottom tab bar for touch navigation. Supports mobile remote access via the relay protocol (Pro feature) for secure monitoring on the go. Touch-optimized controls, adaptive layouts, and the command palette ensure full functionality on smartphones and tablets.*
+*Fully responsive mobile interface with a dedicated bottom tab bar for touch navigation. Supports mobile remote access through Pulse Relay for secure monitoring on the go. Touch-optimized controls, adaptive layouts, and the command palette ensure full functionality on smartphones and tablets.*

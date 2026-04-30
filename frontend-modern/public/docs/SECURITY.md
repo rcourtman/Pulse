@@ -554,14 +554,14 @@ curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
 
 Use the API endpoint above or export diagnostics from **Settings → Diagnostics** when troubleshooting.
 
-### Relay Security (Pro)
+### Relay Security (Relay and Above)
 
 The relay protocol provides mobile remote access with end-to-end encryption:
 
 - **ECDH key exchange**: Per-channel encryption keys are derived via Elliptic Curve Diffie-Hellman, meaning the relay server never sees plaintext data.
 - **Per-channel authentication**: Each mobile session authenticates independently.
 - **Back-pressure**: Data limiters prevent channel flooding.
-- **License-gated**: Relay functionality requires a Pro or Cloud license.
+- **License-gated**: Relay functionality requires a Relay, Pro, legacy Pro+, or Cloud license.
 - **Configurable**: Enable/disable via **Settings → Relay** (admin only).
 
 ### Agent Command Security

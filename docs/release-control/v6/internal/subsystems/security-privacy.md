@@ -292,7 +292,9 @@ silently inheriting whatever older protocol floor the host runtime would allow.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
 not bounce the operator back to GitHub `main` for section references that the
-running build already owns locally.
+running build already owns locally. Their Relay security section must also use
+the current Relay-and-higher entitlement boundary instead of stale Pro-only
+license wording.
 That same governed settings trust boundary now also includes
 `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`,
 `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`,

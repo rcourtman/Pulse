@@ -276,6 +276,9 @@ runtime gating as separate unlinked claims.
     into an operator-actionable activation-required state. Customer-facing
     Relay settings must not render raw `register:` or license-token-provider
     diagnostics from the relay client as the primary status message.
+    Relay settings and public commercial docs must also keep Remote Access
+    positioned as a Relay-and-higher capability, not a Pro-only feature, so the
+    Relay tier remains a tangible standalone paid product.
 19. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
     That same presentation boundary also owns truthful customer-entry copy for
     hosted Cloud pricing and signup. Cloud CTA labels, setup steps, and
@@ -1697,6 +1700,9 @@ The paid relay settings surface is part of that same ownership model. Changes
 to `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` must carry
 this contract and the dedicated relay frontend proof files instead of
 remaining unowned consumers of relay licensing state.
+Its paywall and activation copy must say Relay and higher plans rather than
+Pro-only wording; Pro may include Relay, but Relay is still its own public
+self-hosted tier.
 That relay settings owner is intentionally split by role:
 `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` is the
 settings shell, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`

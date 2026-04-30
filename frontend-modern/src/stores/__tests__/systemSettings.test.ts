@@ -88,6 +88,21 @@ describe('systemSettings store', () => {
     expect(configurationDoc).toContain('PULSE_TELEMETRY');
   });
 
+  it('keeps Relay security guidance aligned with the Relay tier boundary', () => {
+    const securityDoc = readFileSync(path.join(repoRoot, 'SECURITY.md'), 'utf8');
+    const publicSecurityDoc = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'SECURITY.md'),
+      'utf8',
+    );
+
+    for (const copy of [securityDoc, publicSecurityDoc]) {
+      expect(copy).toContain('Relay Security (Relay and Above)');
+      expect(copy).toContain('Relay functionality requires a Relay, Pro, legacy Pro+, or Cloud license');
+      expect(copy).not.toContain('Relay Security (Pro)');
+      expect(copy).not.toContain('Relay functionality requires a Pro or Cloud license');
+    }
+  });
+
   it('documents self-hosted AI provider transport and resource-policy redaction in the privacy doc', () => {
     const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
 
