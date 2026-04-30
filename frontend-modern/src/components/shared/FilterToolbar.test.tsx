@@ -7,6 +7,8 @@ import {
   FilterToolbarPanel,
   FilterSegmentedControl,
   LabeledFilterSelect,
+  LabeledFilterToggleGroup,
+  isCompactFilterToggleGroupEligible,
   filterPanelDefaultWidthClass,
   filterPanelClass,
   resolveFilterSelectDomValue,
@@ -48,6 +50,64 @@ describe('FilterHeader', () => {
     expect(screen.getByTestId('segmented-control')).toBeInTheDocument();
     screen.getByRole('button', { name: 'Warnings' }).click();
     expect(onChange).toHaveBeenCalledWith('warnings');
+  });
+
+  it('uses labeled toggle groups for compact stable filter choices', () => {
+    const onChange = vi.fn();
+    render(() => (
+      <LabeledFilterToggleGroup
+        id="status-filter"
+        label="Status"
+        value="all"
+        onChange={onChange}
+        options={[
+          { value: 'all', label: 'All' },
+          { value: 'running', label: 'Running' },
+          { value: 'stopped', label: 'Stopped' },
+        ]}
+      />
+    ));
+
+    const statusGroup = screen.getByRole('group', { name: 'Status' });
+    expect(statusGroup).toBeInTheDocument();
+    expect(statusGroup).toHaveClass('hidden');
+    expect(statusGroup).toHaveClass('xl:inline-flex');
+    const fallbackSelect = screen.getByLabelText('Status', { selector: 'select' });
+    expect(fallbackSelect).toBeInTheDocument();
+    expect(fallbackSelect.parentElement).toHaveClass('xl:hidden');
+    const runningButton = screen.getByRole('button', { name: 'Running' });
+    expect(runningButton).toHaveAttribute('aria-pressed', 'false');
+
+    runningButton.click();
+
+    expect(onChange).toHaveBeenCalledWith('running');
+    expect(
+      isCompactFilterToggleGroupEligible([
+        { value: 'all', label: 'All' },
+        { value: 'running', label: 'Running' },
+        { value: 'degraded', label: 'Degraded' },
+        { value: 'stopped', label: 'Stopped' },
+      ]),
+    ).toBe(true);
+    expect(
+      isCompactFilterToggleGroupEligible([
+        { value: 'all', label: 'All' },
+        { value: 'one', label: 'One' },
+        { value: 'two', label: 'Two' },
+        { value: 'three', label: 'Three' },
+        { value: 'four', label: 'Four' },
+      ]),
+    ).toBe(true);
+    expect(
+      isCompactFilterToggleGroupEligible([
+        { value: 'all', label: 'All' },
+        { value: 'one', label: 'One' },
+        { value: 'two', label: 'Two' },
+        { value: 'three', label: 'Three' },
+        { value: 'four', label: 'Four' },
+        { value: 'five', label: 'Five' },
+      ]),
+    ).toBe(false);
   });
 
   it('keeps chart visibility as an explicit display toggle action', () => {

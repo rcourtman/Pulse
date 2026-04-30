@@ -47,6 +47,9 @@ interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
   columnVisibility?: PageControlsColumnVisibility;
   resetAction?: PageControlsResetAction;
   mobileFilters?: PageControlsMobileFilters;
+  actionsLayout?: 'inline' | 'stacked';
+  filterControlsClass?: string;
+  toolbarActionsClass?: string;
 }
 
 export const PageControls: Component<PageControlsProps> = (props) => {
@@ -67,6 +70,9 @@ export const PageControls: Component<PageControlsProps> = (props) => {
     'columnVisibility',
     'resetAction',
     'mobileFilters',
+    'actionsLayout',
+    'filterControlsClass',
+    'toolbarActionsClass',
     'class',
   ]);
   const mobileSearchAccessory = () => (
@@ -91,6 +97,17 @@ export const PageControls: Component<PageControlsProps> = (props) => {
       showColumnVisibility() ||
       showResetAction(),
     );
+  const actionsLayout = () => local.actionsLayout ?? 'inline';
+  const filterControlsClass = () =>
+    local.filterControlsClass ??
+    (actionsLayout() === 'stacked'
+      ? 'page-controls-filter-controls flex w-full min-w-0 flex-none basis-full flex-wrap items-center gap-2'
+      : 'page-controls-filter-controls flex min-w-0 flex-1 basis-0 flex-wrap items-center gap-2');
+  const toolbarActionsClass = () =>
+    local.toolbarActionsClass ??
+    (actionsLayout() === 'stacked'
+      ? 'page-controls-toolbar-actions inline-flex w-full flex-wrap items-center gap-2 border-t border-border-subtle pt-2'
+      : 'page-controls-toolbar-actions ml-auto inline-flex shrink-0 flex-wrap items-center justify-end gap-2 self-start');
 
   return (
     <FilterHeader
@@ -108,11 +125,9 @@ export const PageControls: Component<PageControlsProps> = (props) => {
       class={local.class}
     >
       <Show when={hasTrailingActions()}>
-        <div class="page-controls-filter-controls flex min-w-0 flex-1 basis-0 flex-wrap items-center gap-2">
-          {local.children}
-        </div>
+        <div class={filterControlsClass()}>{local.children}</div>
 
-        <div class="page-controls-toolbar-actions ml-auto inline-flex shrink-0 flex-wrap items-center justify-end gap-2 self-start">
+        <div class={toolbarActionsClass()}>
           <Show when={local.toolbarTrailing}>{local.toolbarTrailing}</Show>
 
           <Show when={activeUtilityActions()}>

@@ -531,16 +531,18 @@ describe('Workloads performance contract', () => {
   });
 
   describe('Filter mode contract', () => {
-    it('applies all/vm/system-container/docker type filters deterministically for Profile S', async () => {
+    it('applies all/vm/container/system-container/docker type filters deterministically for Profile S', async () => {
       const profileGuests = makeGuests(PROFILES.S);
       const expectedByMode = {
         all: PROFILES.S,
         vm: profileGuests.filter((guest) => guest.type === 'vm').length,
+        container: profileGuests.filter((guest) => guest.type === 'lxc' || guest.type === 'docker')
+          .length,
         'system-container': profileGuests.filter((guest) => guest.type === 'lxc').length,
         docker: profileGuests.filter((guest) => guest.type === 'docker').length,
       };
 
-      for (const mode of ['all', 'vm', 'system-container', 'docker'] as const) {
+      for (const mode of ['all', 'vm', 'container', 'system-container', 'docker'] as const) {
         mockLocationSearch = `?type=${mode}`;
         mockWorkloads = profileGuests;
 
@@ -560,6 +562,7 @@ describe('Workloads performance contract', () => {
   describe('Workload derivation contracts', () => {
     it('normalizes workloads view mode aliases through the shared workload helper', () => {
       expect(normalizeWorkloadViewModeParam('all')).toBe('all');
+      expect(normalizeWorkloadViewModeParam('container')).toBe('container');
       expect(normalizeWorkloadViewModeParam('docker')).toBe('app-container');
       expect(normalizeWorkloadViewModeParam('Kubernetes')).toBe('pod');
       expect(normalizeWorkloadViewModeParam('host')).toBeNull();
@@ -645,17 +648,13 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadRouteStateSource).not.toContain(
         'const containerRuntimeFilterConfig = createMemo',
       );
-      expect(workloadsWorkloadRouteStateSource).toContain(
-        "from './workloadRouteStateModel'",
-      );
+      expect(workloadsWorkloadRouteStateSource).toContain("from './workloadRouteStateModel'");
       expect(workloadsWorkloadRouteStateSource).toContain(
         'resolveWorkloadsWorkloadNodeSelection({',
       );
       expect(workloadsWorkloadRouteStateSource).toContain('WORKLOADS_WORKLOAD_ROUTE_RESET_STATE');
       expect(workloadsWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
-      expect(workloadsWorkloadFilterOptionsSource).toContain(
-        "from './workloadFilterConfigModel'",
-      );
+      expect(workloadsWorkloadFilterOptionsSource).toContain("from './workloadFilterConfigModel'");
       expect(workloadsWorkloadFilterOptionsSource).toContain(
         'buildWorkloadNodeOptions(options.allGuests())',
       );
@@ -678,27 +677,17 @@ describe('Workloads performance contract', () => {
       expect(workloadFilterConfigModelSource).toContain(
         "WORKLOADS_KUBERNETES_CONTEXT_FILTER_LABEL = 'K8s cluster'",
       );
-      expect(workloadFilterConfigModelSource).toContain(
-        "getAllFilterOptionLabel('K8s clusters')",
-      );
-      expect(workloadFilterConfigModelSource).toContain(
-        'WORKLOAD_TYPE_OPTIONS',
-      );
+      expect(workloadFilterConfigModelSource).toContain("getAllFilterOptionLabel('K8s clusters')");
+      expect(workloadFilterConfigModelSource).toContain('WORKLOAD_TYPE_OPTIONS');
       expect(workloadFilterConfigModelSource).toContain(
         'export const buildWorkloadsNamespaceFilterConfig',
       );
-      expect(workloadRouteModelSource).toContain(
-        'export const deserializeWorkloadViewMode',
-      );
-      expect(workloadRouteModelSource).toContain(
-        "normalizeWorkloadViewModeParam(raw) ?? 'all'",
-      );
+      expect(workloadRouteModelSource).toContain('export const deserializeWorkloadViewMode');
+      expect(workloadRouteModelSource).toContain("normalizeWorkloadViewModeParam(raw) ?? 'all'");
       expect(workloadRouteModelSource).not.toContain(
         'export const buildWorkloadsContainerRuntimeFilterConfig',
       );
-      expect(workloadRouteModelSource).not.toContain(
-        'export const buildWorkloadsHostFilterConfig',
-      );
+      expect(workloadRouteModelSource).not.toContain('export const buildWorkloadsHostFilterConfig');
       expect(workloadRouteModelSource).not.toContain(
         'export const buildWorkloadsNamespaceFilterConfig',
       );
@@ -735,9 +724,7 @@ describe('Workloads performance contract', () => {
         'resolveWorkloadsManagedWorkloadsNavigateTarget',
       );
       expect(workloadUrlSyncModelSource).toContain('resolveWorkloadsWorkloadRuntimeParam');
-      expect(workloadUrlSyncModelSource).toContain(
-        'normalizeWorkloadViewModeParam(params.type)',
-      );
+      expect(workloadUrlSyncModelSource).toContain('normalizeWorkloadViewModeParam(params.type)');
       expect(workloadsControlsStateSource).toContain('useBreakpoint');
       expect(workloadsControlsStateSource).toContain('useColumnVisibility');
       expect(workloadsControlsStateSource).toContain('usePersistentSignal');

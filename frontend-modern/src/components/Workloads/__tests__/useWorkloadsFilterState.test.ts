@@ -13,7 +13,7 @@ describe('useWorkloadsFilterState', () => {
   it('centralizes workloads filter state and reset behavior', () => {
     const [search, setSearch] = createSignal('query');
     const [viewMode, setViewMode] = createSignal<
-      'all' | 'vm' | 'system-container' | 'app-container' | 'pod'
+      'all' | 'vm' | 'container' | 'system-container' | 'app-container' | 'pod'
     >('vm');
     const [statusMode, setStatusMode] = createSignal<'all' | 'running' | 'degraded' | 'stopped'>(
       'running',

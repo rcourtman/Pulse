@@ -7,7 +7,8 @@ export const filterToolbarShellClass = '';
 export const filterToolbarRowClass = 'flex flex-wrap items-center gap-2 text-xs text-muted';
 export const filterToolbarContentClass = 'flex flex-col gap-2';
 export const filterToolbarSearchRowClass = 'flex w-full items-center gap-2';
-export const filterGroupClass = 'inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5';
+export const filterGroupClass =
+  'inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5 ring-1 ring-border-subtle';
 export const filterLabelClass =
   'px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted';
 export const filterActionButtonClass =
@@ -181,13 +182,20 @@ export const FilterGroup: Component<FilterGroupProps> = (props) => {
   );
 };
 
-interface FilterSegmentOption {
+export interface FilterSegmentOption {
   value: string;
   label: JSX.Element;
   title?: string;
   ariaLabel?: string;
   disabled?: boolean;
 }
+
+export const COMPACT_FILTER_TOGGLE_MAX_OPTIONS = 5;
+
+export const isCompactFilterToggleGroupEligible = (
+  options: readonly FilterSegmentOption[],
+  maxOptions = COMPACT_FILTER_TOGGLE_MAX_OPTIONS,
+): boolean => options.length > 1 && options.length <= maxOptions;
 
 interface FilterSegmentedControlProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChange'> {
   value: string;
@@ -216,6 +224,64 @@ export const FilterSegmentedControl: Component<FilterSegmentedControlProps> = (p
         )}
       </For>
     </FilterGroup>
+  );
+};
+
+interface LabeledFilterToggleGroupProps extends Omit<
+  FilterSegmentedControlProps,
+  'label' | 'options' | 'id' | 'class'
+> {
+  id?: string;
+  label: string;
+  options: FilterSegmentOption[];
+  selectClass?: string;
+  selectFallback?: boolean;
+  selectGroupClass?: string;
+  toggleClass?: string;
+}
+
+export const LabeledFilterToggleGroup: Component<LabeledFilterToggleGroupProps> = (props) => {
+  const [local, divProps] = splitProps(props, [
+    'id',
+    'label',
+    'value',
+    'onChange',
+    'options',
+    'selectClass',
+    'selectFallback',
+    'selectGroupClass',
+    'toggleClass',
+  ]);
+  const selectId = () => local.id;
+  return (
+    <>
+      <FilterSegmentedControl
+        {...divProps}
+        id={selectId() ? `${selectId()}-toggle` : undefined}
+        role="group"
+        aria-label={local.label}
+        class={local.toggleClass ?? 'hidden xl:inline-flex'}
+        value={local.value}
+        onChange={local.onChange}
+        label={local.label}
+        options={local.options}
+      />
+
+      <Show when={local.selectFallback !== false}>
+        <LabeledFilterSelect
+          id={selectId()}
+          label={local.label}
+          value={local.value}
+          onChange={(event) => local.onChange(event.currentTarget.value)}
+          groupClass={local.selectGroupClass ?? 'xl:hidden'}
+          selectClass={local.selectClass}
+        >
+          <For each={local.options}>
+            {(option) => <option value={option.value}>{option.label}</option>}
+          </For>
+        </LabeledFilterSelect>
+      </Show>
+    </>
   );
 };
 

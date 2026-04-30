@@ -6,7 +6,7 @@ import {
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
-import { normalizeWorkloadViewModeParam } from '@/utils/workloads';
+import { isContainerWorkloadViewMode, normalizeWorkloadViewModeParam } from '@/utils/workloads';
 
 export interface WorkloadsWorkloadUrlParams {
   type: string;
@@ -56,7 +56,7 @@ export const resolveWorkloadsWorkloadRuntimeParam = (
   const nextMode = resolveWorkloadsWorkloadTypeParam(params);
   const runtimeRelevant =
     !hasWorkloadsWorkloadKubernetesScope(params) &&
-    (nextMode === 'app-container' || !params.type.trim());
+    ((nextMode ? isContainerWorkloadViewMode(nextMode) : false) || !params.type.trim());
 
   if (!runtimeRelevant) {
     return {
@@ -75,7 +75,7 @@ export const resolveWorkloadsWorkloadRuntimeParam = (
   }
 
   return {
-    forceViewMode: 'app-container',
+    forceViewMode: 'container',
     runtime: params.runtime,
     shouldApply: true,
   };
@@ -95,7 +95,7 @@ export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
   const nextParams = new URLSearchParams(currentSearch);
   const nextType = viewMode === 'all' ? '' : viewMode;
   const nextPlatform = selectedPlatform ?? '';
-  const nextRuntime = viewMode === 'app-container' ? containerRuntime.trim() : '';
+  const nextRuntime = isContainerWorkloadViewMode(viewMode) ? containerRuntime.trim() : '';
   const nextContext = viewMode === 'pod' ? (selectedKubernetesContext ?? '') : '';
   const nextNamespace = viewMode === 'pod' ? (selectedKubernetesNamespace ?? '') : '';
   const nextAgent = viewMode === 'pod' ? '' : (selectedNode ?? selectedHostHint ?? '');

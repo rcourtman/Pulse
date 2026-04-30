@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import type { Accessor, Component } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
@@ -6,6 +6,7 @@ import {
   FilterActionButton,
   FilterToolbarPanel,
   LabeledFilterSelect,
+  LabeledFilterToggleGroup,
   filterPanelDescriptionClass,
   filterPanelTitleClass,
   filterUtilityBadgeClass,
@@ -149,6 +150,12 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
     scopeFilter: props.scopeFilter,
     verificationFilter: props.verificationFilter,
   });
+  const historyOutcomeOptions = createMemo(() =>
+    props.availableOutcomes.map((outcome) => ({
+      value: outcome,
+      label: outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome),
+    })),
+  );
 
   return (
     <div class="flex flex-col gap-2">
@@ -447,26 +454,19 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 </For>
               </LabeledFilterSelect>
 
-              <LabeledFilterSelect
+              <LabeledFilterToggleGroup
                 id="recovery-status-filter"
                 label="Status"
                 value={props.historyOutcomeFilter()}
-                onChange={(event) => {
-                  const value = event.currentTarget.value as 'all' | RecoveryOutcome;
+                onChange={(nextValue) => {
+                  const value = nextValue as 'all' | RecoveryOutcome;
                   props.setHistoryOutcomeFilter(value);
                   if (value !== 'all') props.setVerificationFilter('all');
                   props.setCurrentPage(1);
                 }}
                 selectClass="py-1 text-xs"
-              >
-                <For each={props.availableOutcomes}>
-                  {(outcome) => (
-                    <option value={outcome}>
-                      {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
-                    </option>
-                  )}
-                </For>
-              </LabeledFilterSelect>
+                options={historyOutcomeOptions()}
+              />
             </PageControls>
           </div>
         </Card>

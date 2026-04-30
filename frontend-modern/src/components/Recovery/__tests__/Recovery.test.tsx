@@ -428,7 +428,14 @@ describe('Recovery', () => {
     expect(within(historyControls).queryByText(/day group/i)).not.toBeInTheDocument();
     expect(within(historyControls).getByLabelText('Item Type').className).not.toContain('min-w-[');
     expect(within(historyControls).getByLabelText('Platform').className).not.toContain('min-w-[');
-    expect(within(historyControls).getByLabelText('Status').className).not.toContain('min-w-[');
+    const historyStatusGroup = within(historyControls).getByRole('group', { name: 'Status' });
+    expect(historyStatusGroup).toHaveClass('xl:inline-flex');
+    expect(
+      within(historyStatusGroup).getByRole('button', { name: 'Any status' }),
+    ).toBeInTheDocument();
+    expect(
+      within(historyControls).getByLabelText('Status', { selector: 'select' }).className,
+    ).not.toContain('min-w-[');
     const recoverySummaryPanel = screen.getByTestId('recovery-summary');
     expect(within(recoverySummaryPanel).getByRole('button', { name: '7d' })).toBeInTheDocument();
     expect(within(recoverySummaryPanel).getByRole('button', { name: '30d' })).toBeInTheDocument();

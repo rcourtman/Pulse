@@ -11,6 +11,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import type { ViewMode } from '@/types/workloads';
 import { WORKLOADS_PATH } from '@/routing/resourceLinks';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
+import { isContainerWorkloadViewMode } from '@/utils/workloads';
 import type { WorkloadNodeOption } from './workloadRouteModel';
 import {
   parseWorkloadsWorkloadUrlParams,
@@ -94,7 +95,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
-    if (options.viewMode() !== 'app-container') return;
+    if (!isContainerWorkloadViewMode(options.viewMode())) return;
     const selected = options.containerRuntime().trim();
     if (!selected) return;
     const normalized = selected.toLowerCase();
@@ -127,7 +128,10 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
-    if (options.viewMode() !== 'app-container' && options.containerRuntime().trim() !== '') {
+    if (
+      !isContainerWorkloadViewMode(options.viewMode()) &&
+      options.containerRuntime().trim() !== ''
+    ) {
       options.setContainerRuntime('');
     }
   });

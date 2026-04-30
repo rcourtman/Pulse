@@ -2,7 +2,8 @@ import type { VM, Container, DockerContainerUpdateStatus } from './api';
 import type { ResourceDiscoveryTarget } from './resource';
 
 export type WorkloadType = 'vm' | 'system-container' | 'app-container' | 'pod';
-export type ViewMode = 'all' | WorkloadType;
+export type WorkloadContainerViewMode = 'container' | 'system-container' | 'app-container';
+export type ViewMode = 'all' | 'vm' | WorkloadContainerViewMode | 'pod';
 
 export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;

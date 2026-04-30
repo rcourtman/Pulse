@@ -40,6 +40,7 @@ const makeGuest = (overrides?: Partial<WorkloadGuest>): WorkloadGuest =>
 describe('workloadRouteModel', () => {
   it('deserializes persisted workload view-mode aliases through the canonical helper', () => {
     expect(deserializeWorkloadViewMode('all')).toBe('all');
+    expect(deserializeWorkloadViewMode('container')).toBe('container');
     expect(deserializeWorkloadViewMode('docker')).toBe('app-container');
     expect(deserializeWorkloadViewMode('Kubernetes')).toBe('pod');
     expect(deserializeWorkloadViewMode('invalid')).toBe('all');

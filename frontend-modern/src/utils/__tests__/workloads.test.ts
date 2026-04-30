@@ -220,9 +220,15 @@ describe('buildCanonicalNodeScopedWorkloadId', () => {
   });
 
   it('returns null when any canonical part is missing', () => {
-    expect(buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: '', vmid: 112 })).toBeNull();
-    expect(buildCanonicalNodeScopedWorkloadId({ instance: '', node: 'pve2', vmid: 112 })).toBeNull();
-    expect(buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: 'pve2', vmid: 0 })).toBeNull();
+    expect(
+      buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: '', vmid: 112 }),
+    ).toBeNull();
+    expect(
+      buildCanonicalNodeScopedWorkloadId({ instance: '', node: 'pve2', vmid: 112 }),
+    ).toBeNull();
+    expect(
+      buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: 'pve2', vmid: 0 }),
+    ).toBeNull();
   });
 });
 
@@ -355,6 +361,7 @@ describe('normalizeWorkloadViewModeParam', () => {
   it('normalizes supported dashboard view mode aliases', () => {
     expect(normalizeWorkloadViewModeParam('all')).toBe('all');
     expect(normalizeWorkloadViewModeParam('VM')).toBe('vm');
+    expect(normalizeWorkloadViewModeParam('container')).toBe('container');
     expect(normalizeWorkloadViewModeParam('system-container')).toBe('system-container');
     expect(normalizeWorkloadViewModeParam('docker')).toBe('app-container');
     expect(normalizeWorkloadViewModeParam('app-container')).toBe('app-container');
@@ -365,7 +372,6 @@ describe('normalizeWorkloadViewModeParam', () => {
 
   it('rejects unsupported dashboard view mode aliases', () => {
     expect(normalizeWorkloadViewModeParam('host')).toBeNull();
-    expect(normalizeWorkloadViewModeParam('container')).toBeNull();
     expect(normalizeWorkloadViewModeParam('')).toBeNull();
   });
 });

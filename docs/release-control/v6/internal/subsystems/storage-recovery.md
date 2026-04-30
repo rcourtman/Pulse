@@ -84,6 +84,10 @@ state.
    rail. Recovery must not reintroduce local no-wrap toolbar overrides or
    right-aligned utility wrappers that prevent the frontend-primitives action
    rail from owning responsive collapse behavior.
+   Compact stable recovery-event filters, such as event outcome/status, may use
+   the frontend-primitives responsive toggle/select control, but Recovery must
+   keep route-backed event filter state and query semantics in its recovery
+   owner rather than introducing a page-local presentation state path.
    Recovery inventory protection posture and recovery-event outcome filtering
    must stay separate in that owner: protected inventory uses the route-backed
    `state` query for health, stale, failed, warning, running, unknown, and
@@ -810,6 +814,11 @@ posture. Storage/recovery surfaces may keep demo-safe capability and retention
 truth from `/api/license/runtime-capabilities`, but they must not expect
 `monitored_system_capacity`, admission-freeze copy, or observed plan overage
 to survive the public-demo API boundary.
+Storage detail surfaces with page-local history selectors must also treat that
+runtime retention truth as the selector contract: pool and disk detail ranges
+must filter and clamp through the storage-owned range access helper so ordinary
+self-hosted users see only usable history windows, while Relay/Pro longer
+history remains available only when the runtime capability advertises it.
 That same adjacent commercial boundary also owns one-time checkout-return
 lookup. Storage and recovery may coexist with the shared purchase return routes
 in the app shell, but they must not cache, derive, or replay the

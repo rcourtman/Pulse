@@ -1,24 +1,30 @@
 import type { ViewMode } from '@/types/workloads';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
-import type { WorkloadsToolbarFilterConfig } from './workloadsFilterModel';
+import { isContainerWorkloadViewMode } from '@/utils/workloads';
+import type { WorkloadsStatusMode, WorkloadsToolbarFilterConfig } from './workloadsFilterModel';
 import type { WorkloadNodeOption } from './workloadRouteModel';
 
 export const WORKLOADS_KUBERNETES_CONTEXT_FILTER_LABEL = 'K8s cluster';
 export const WORKLOADS_KUBERNETES_CONTEXT_ALL_OPTION_LABEL =
   getAllFilterOptionLabel('K8s clusters');
-export const WORKLOADS_CONTAINER_RUNTIME_ALL_OPTION_LABEL =
-  getAllFilterOptionLabel('runtimes');
+export const WORKLOADS_CONTAINER_RUNTIME_ALL_OPTION_LABEL = getAllFilterOptionLabel('runtimes');
 export const WORKLOADS_PLATFORM_ALL_OPTION_LABEL = getAllFilterOptionLabel('platforms');
 export const WORKLOADS_NODE_ALL_OPTION_LABEL = getAllFilterOptionLabel('nodes');
 export const WORKLOADS_NAMESPACE_ALL_OPTION_LABEL = getAllFilterOptionLabel('namespaces');
 export const WORKLOAD_TYPE_OPTIONS: Array<{ value: ViewMode; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'vm', label: 'VMs' },
-  { value: 'system-container', label: 'System containers' },
-  { value: 'app-container', label: 'App containers' },
+  { value: 'container', label: 'Containers' },
   { value: 'pod', label: 'Pods' },
 ];
+export const WORKLOAD_STATUS_FILTER_OPTIONS: Array<{ value: WorkloadsStatusMode; label: string }> =
+  [
+    { value: 'all', label: 'All' },
+    { value: 'running', label: 'Running' },
+    { value: 'degraded', label: 'Degraded' },
+    { value: 'stopped', label: 'Stopped' },
+  ];
 
 interface WorkloadsContainerRuntimeFilterConfigOptions {
   isWorkloadsRoute: boolean;
@@ -36,7 +42,7 @@ export const buildWorkloadsContainerRuntimeFilterConfig = ({
   onChange,
 }: WorkloadsContainerRuntimeFilterConfigOptions): WorkloadsToolbarFilterConfig | undefined => {
   if (!isWorkloadsRoute) return undefined;
-  if (viewMode !== 'app-container') return undefined;
+  if (!isContainerWorkloadViewMode(viewMode)) return undefined;
   if (runtimeOptions.length === 0) return undefined;
 
   return {

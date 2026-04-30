@@ -16,13 +16,13 @@ import {
 } from '../workloadFilterConfigModel';
 
 describe('workloadFilterConfigModel', () => {
-  it('builds container runtime config only for app-container workload routes', () => {
+  it('builds container runtime config only for container workload routes', () => {
     const onChange = vi.fn();
 
     expect(
       buildWorkloadsContainerRuntimeFilterConfig({
         isWorkloadsRoute: true,
-        viewMode: 'app-container',
+        viewMode: 'container',
         containerRuntime: 'docker',
         runtimeOptions: ['containerd', 'docker'],
         onChange,
@@ -37,6 +37,16 @@ describe('workloadFilterConfigModel', () => {
         { value: 'docker', label: 'docker' },
       ],
     });
+
+    expect(
+      buildWorkloadsContainerRuntimeFilterConfig({
+        isWorkloadsRoute: true,
+        viewMode: 'app-container',
+        containerRuntime: 'docker',
+        runtimeOptions: ['docker'],
+        onChange,
+      }),
+    ).toBeDefined();
 
     expect(
       buildWorkloadsContainerRuntimeFilterConfig({
@@ -173,8 +183,7 @@ describe('workloadFilterConfigModel', () => {
     expect(WORKLOAD_TYPE_OPTIONS).toEqual([
       { value: 'all', label: 'All' },
       { value: 'vm', label: 'VMs' },
-      { value: 'system-container', label: 'System containers' },
-      { value: 'app-container', label: 'App containers' },
+      { value: 'container', label: 'Containers' },
       { value: 'pod', label: 'Pods' },
     ]);
   });

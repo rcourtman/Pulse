@@ -7,7 +7,12 @@ import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
-import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import {
+  isContainerWorkloadViewMode,
+  getCanonicalWorkloadId,
+  resolveWorkloadType,
+  workloadMatchesViewMode,
+} from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 import {
   buildNodeByInstance,
@@ -89,7 +94,7 @@ export const filterWorkloads = ({
   }
 
   if (viewMode !== 'all') {
-    guests = guests.filter((g) => resolveWorkloadType(g) === viewMode);
+    guests = guests.filter((g) => workloadMatchesViewMode(resolveWorkloadType(g), viewMode));
   }
 
   const normalizedPlatform = normalizeSourcePlatformQueryValue(selectedPlatform);
@@ -100,7 +105,7 @@ export const filterWorkloads = ({
   }
 
   const normalizedRuntime = (containerRuntime || '').trim().toLowerCase();
-  if (normalizedRuntime && viewMode === 'app-container') {
+  if (normalizedRuntime && isContainerWorkloadViewMode(viewMode)) {
     guests = guests.filter((g) => {
       if (resolveWorkloadType(g) !== 'app-container') return false;
       const runtime = (g.containerRuntime || '').trim().toLowerCase();

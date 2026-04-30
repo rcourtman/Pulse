@@ -1,4 +1,9 @@
-import type { WorkloadGuest, WorkloadType, ViewMode } from '@/types/workloads';
+import type {
+  WorkloadContainerViewMode,
+  WorkloadGuest,
+  WorkloadType,
+  ViewMode,
+} from '@/types/workloads';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import type { Resource, ResourceDiscoveryTarget } from '@/types/resource';
 import type { MetricResourceKind } from '@/utils/metricsKeys';
@@ -44,10 +49,28 @@ export const normalizeWorkloadViewModeParam = (value: string): ViewMode | null =
   const normalized = value.trim().toLowerCase();
   if (normalized === 'all') return 'all';
   if (normalized === 'vm') return 'vm';
+  if (normalized === 'container') return 'container';
   if (normalized === 'system-container') return 'system-container';
   if (normalized === 'docker' || normalized === 'app-container') return 'app-container';
   if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'pod';
   return null;
+};
+
+export const isContainerWorkloadType = (
+  value: WorkloadType,
+): value is 'system-container' | 'app-container' =>
+  value === 'system-container' || value === 'app-container';
+
+export const isContainerWorkloadViewMode = (value: ViewMode): value is WorkloadContainerViewMode =>
+  value === 'container' || value === 'system-container' || value === 'app-container';
+
+export const workloadMatchesViewMode = (
+  workloadType: WorkloadType,
+  viewMode: ViewMode,
+): boolean => {
+  if (viewMode === 'all') return true;
+  if (viewMode === 'container') return isContainerWorkloadType(workloadType);
+  return workloadType === viewMode;
 };
 
 export const resolveWorkloadType = (
@@ -114,8 +137,7 @@ type NodeScopedWorkloadIdentity = {
   vmid?: number | null;
 };
 
-const normalizeNodeScopedWorkloadKeyPart = (value?: string | null): string =>
-  (value || '').trim();
+const normalizeNodeScopedWorkloadKeyPart = (value?: string | null): string => (value || '').trim();
 
 export const buildCanonicalNodeScopedWorkloadId = ({
   instance,
@@ -183,9 +205,7 @@ export const resolveDiscoveryTargetForWorkload = (
     if (!isDockerManagedAppContainer(guest)) return null;
     const agentId = (guest.dockerHostId || '').trim();
     const resourceId = (guest.id || '').trim();
-    return agentId && resourceId
-      ? { resourceType: 'app-container', agentId, resourceId }
-      : null;
+    return agentId && resourceId ? { resourceType: 'app-container', agentId, resourceId } : null;
   }
   if (type === 'pod') {
     const agentId = (guest.kubernetesAgentId || guest.instance || guest.node || '').trim();
@@ -194,7 +214,11 @@ export const resolveDiscoveryTargetForWorkload = (
     const resourceId = (match?.[1] || rawId).trim();
     return agentId && resourceId ? { resourceType: 'pod', agentId, resourceId } : null;
   }
-  if ((type === 'vm' || type === 'system-container') && Number.isFinite(guest.vmid) && guest.vmid > 0) {
+  if (
+    (type === 'vm' || type === 'system-container') &&
+    Number.isFinite(guest.vmid) &&
+    guest.vmid > 0
+  ) {
     const agentId = (guest.node || '').trim();
     const resourceId = String(guest.vmid);
     return agentId ? { resourceType: type, agentId, resourceId } : null;

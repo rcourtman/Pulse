@@ -50,7 +50,7 @@ describe('workloadUrlSyncModel', () => {
     ).toBeNull();
   });
 
-  it('only applies runtime params when the url semantics still resolve to app-container scope', () => {
+  it('only applies runtime params when the url semantics still resolve to container scope', () => {
     expect(
       resolveWorkloadsWorkloadRuntimeParam({
         type: 'docker',
@@ -62,7 +62,7 @@ describe('workloadUrlSyncModel', () => {
         resource: '',
       }),
     ).toEqual({
-      forceViewMode: 'app-container',
+      forceViewMode: 'container',
       runtime: 'containerd',
       shouldApply: true,
     });
@@ -96,7 +96,9 @@ describe('workloadUrlSyncModel', () => {
         selectedNode: 'cluster-a-node-a',
         selectedHostHint: null,
       }),
-    ).toBe('/workloads?resource=guest-1&type=pod&platform=kubernetes&context=prod&namespace=default');
+    ).toBe(
+      '/workloads?resource=guest-1&type=pod&platform=kubernetes&context=prod&namespace=default',
+    );
 
     expect(
       resolveWorkloadsManagedWorkloadsNavigateTarget({

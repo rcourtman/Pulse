@@ -351,7 +351,25 @@ work extends shared components instead of creating new local variants.
    summary-bearing pages must use `ChartVisibilityToggleButton` so the
    affordance exposes one `Show charts` / `Hide charts` pressed-state contract
    instead of rebuilding a one-option segmented control or an in-summary
-   collapse chevron page by page. Narrow consumers such as
+   collapse chevron page by page. Compact, stable, mutually-exclusive filters
+   with two to five options should use `LabeledFilterToggleGroup` as a
+   responsive control: toggle buttons at wide desktop widths and the native
+   select fallback below that. Dynamic, user/environment-sized, or six-plus
+   option filters remain `LabeledFilterSelect` surfaces so estate-sized lists
+   such as nodes never become button groups. Filters that change which other
+   filters exist, such as Workloads Type, must stay in a stable primary filter
+   band ahead of the dependent estate/data filters so changing the parent
+   filter does not move its own click target or the adjacent primary filters;
+   when multiple filters are expanded into button groups at wide desktop widths,
+   each expanded group must have its own row rather than sitting immediately
+   after another expanded group. User-facing filter options must use operator
+   mental models rather than implementation categories: Workloads Type exposes a
+   single `Containers` bucket while the `system-container` / `app-container`
+   distinction remains an internal data/deep-link compatibility detail. Dense
+   filter surfaces may opt into the `PageControls` stacked action layout so
+   display, chart, column, and reset actions occupy their own compact grouped
+   row instead of splitting the filter row into left/right zones or creating a
+   full-width form-like divider. Narrow consumers such as
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.
 4. Add guardrail tests when a new shared pattern is introduced.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@solidjs/testing-library';
+import { render, screen, cleanup, fireEvent, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { WorkloadsFilter } from '../WorkloadsFilter';
 import { DEFAULT_WORKLOADS_SORT_KEY, type WorkloadsFilterProps } from '../workloadsFilterModel';
@@ -74,30 +74,59 @@ describe('WorkloadsFilter', () => {
       expect(screen.getByTestId('search-input')).toBeInTheDocument();
     });
 
-    it('renders the Type filter select with all options', () => {
+    it('renders the Type filter as a responsive compact toggle group with select fallback', () => {
       const props = makeProps();
       render(() => <WorkloadsFilter {...props} />);
-      const typeSelect = screen.getByLabelText('Type');
+      const typeGroup = screen.getByRole('group', { name: 'Type' });
+      expect(typeGroup).toBeInTheDocument();
+      expect(typeGroup).toHaveClass('hidden');
+      expect(typeGroup).toHaveClass('xl:inline-flex');
+      expect(within(typeGroup).getByRole('button', { name: 'All' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(within(typeGroup).getByRole('button', { name: 'VMs' })).toBeInTheDocument();
+      expect(within(typeGroup).getByRole('button', { name: 'Containers' })).toBeInTheDocument();
+      expect(within(typeGroup).getByRole('button', { name: 'Pods' })).toBeInTheDocument();
+
+      const typeSelect = screen.getByLabelText('Type', { selector: 'select' });
       expect(typeSelect).toBeInTheDocument();
       expect(typeSelect).toHaveValue('all');
+      expect(typeSelect.parentElement).toHaveClass('xl:hidden');
+      const primaryControls = typeGroup.closest('.workloads-filter-primary-controls');
+      expect(primaryControls).not.toBeNull();
+      expect(primaryControls).toHaveClass('xl:flex-col');
+      expect(primaryControls).toHaveClass('xl:items-start');
+      expect(primaryControls).toContainElement(typeSelect.parentElement!);
 
       const options = typeSelect.querySelectorAll('option');
       const values = Array.from(options).map((o) => o.value);
       const labels = Array.from(options).map((o) => o.textContent);
-      expect(values).toEqual(['all', 'vm', 'system-container', 'app-container', 'pod']);
-      expect(labels).toEqual(['All', 'VMs', 'System containers', 'App containers', 'Pods']);
+      expect(values).toEqual(['all', 'vm', 'container', 'pod']);
+      expect(labels).toEqual(['All', 'VMs', 'Containers', 'Pods']);
     });
 
-    it('renders the Status filter select with all options', () => {
+    it('renders the Status filter as a compact toggle group', () => {
       const props = makeProps();
       render(() => <WorkloadsFilter {...props} />);
-      const statusSelect = screen.getByLabelText('Status');
+      const statusGroup = screen.getByRole('group', { name: 'Status' });
+      expect(statusGroup).toBeInTheDocument();
+      expect(statusGroup).toHaveClass('hidden');
+      expect(statusGroup).toHaveClass('xl:inline-flex');
+      const statusSelect = screen.getByLabelText('Status', { selector: 'select' });
       expect(statusSelect).toBeInTheDocument();
-      expect(statusSelect).toHaveValue('all');
+      expect(statusSelect.parentElement).toHaveClass('xl:hidden');
+      const primaryControls = statusGroup.closest('.workloads-filter-primary-controls');
+      expect(primaryControls).not.toBeNull();
+      expect(primaryControls).toContainElement(statusSelect.parentElement!);
 
-      const options = statusSelect.querySelectorAll('option');
-      const values = Array.from(options).map((o) => o.value);
-      expect(values).toEqual(['all', 'running', 'degraded', 'stopped']);
+      expect(within(statusGroup).getByRole('button', { name: 'All' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(within(statusGroup).getByRole('button', { name: 'Running' })).toBeInTheDocument();
+      expect(within(statusGroup).getByRole('button', { name: 'Degraded' })).toBeInTheDocument();
+      expect(within(statusGroup).getByRole('button', { name: 'Stopped' })).toBeInTheDocument();
     });
 
     it('renders Grouped and List buttons', () => {
@@ -140,8 +169,30 @@ describe('WorkloadsFilter', () => {
       const { container } = render(() => <WorkloadsFilter {...props} />);
 
       expect(screen.getByTestId('column-picker')).toBeInTheDocument();
+      const primaryControls = container.querySelector('.workloads-filter-primary-controls');
+      const secondaryControls = container.querySelector('.workloads-filter-secondary-controls');
+      expect(primaryControls).not.toBeNull();
+      expect(secondaryControls).not.toBeNull();
+      expect(primaryControls!).toContainElement(screen.getByRole('group', { name: 'Type' }));
+      expect(primaryControls!).toContainElement(screen.getByRole('group', { name: 'Status' }));
+      expect(secondaryControls!).toContainElement(
+        screen.getByLabelText('Node', { selector: 'select' }),
+      );
+      expect(secondaryControls!).toContainElement(
+        screen.getByLabelText('Platform', { selector: 'select' }),
+      );
+      expect(secondaryControls!).toContainElement(
+        screen.getByLabelText('Runtime', { selector: 'select' }),
+      );
+      expect(secondaryControls!.compareDocumentPosition(primaryControls!)).toBe(
+        Node.DOCUMENT_POSITION_PRECEDING,
+      );
       const toolbarActions = container.querySelector('.page-controls-toolbar-actions');
       expect(toolbarActions).not.toBeNull();
+      expect(toolbarActions!).toHaveClass('rounded-md');
+      expect(toolbarActions!).toHaveClass('bg-surface-hover');
+      expect(toolbarActions!).not.toHaveClass('ml-auto');
+      expect(toolbarActions!).not.toHaveClass('border-t');
       expect(toolbarActions!).toContainElement(screen.getByText('Grouped'));
       expect(toolbarActions!).toContainElement(screen.getByText('List'));
       expect(toolbarActions!).toContainElement(screen.getByTestId('column-picker'));
@@ -150,6 +201,17 @@ describe('WorkloadsFilter', () => {
           (element.getAttribute('class') ?? '').includes('lg:flex-nowrap'),
         ),
       ).toBe(false);
+    });
+
+    it('maps legacy exact container modes to the user-facing Containers type control', () => {
+      const props = makeProps({ viewMode: vi.fn(() => 'app-container' as const) });
+      render(() => <WorkloadsFilter {...props} />);
+      const typeGroup = screen.getByRole('group', { name: 'Type' });
+      expect(within(typeGroup).getByRole('button', { name: 'Containers' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(screen.getByLabelText('Type', { selector: 'select' })).toHaveValue('container');
     });
 
     it('does not show the Reset button when all filters are at defaults', () => {
@@ -165,9 +227,9 @@ describe('WorkloadsFilter', () => {
     it('calls setViewMode when a different type is selected', () => {
       const props = makeProps();
       render(() => <WorkloadsFilter {...props} />);
-      const typeSelect = screen.getByLabelText('Type');
-      fireEvent.change(typeSelect, { target: { value: 'vm' } });
-      expect(props.setViewMode).toHaveBeenCalledWith('vm');
+      const typeGroup = screen.getByRole('group', { name: 'Type' });
+      fireEvent.click(within(typeGroup).getByRole('button', { name: 'Containers' }));
+      expect(props.setViewMode).toHaveBeenCalledWith('container');
     });
   });
 
@@ -177,8 +239,8 @@ describe('WorkloadsFilter', () => {
     it('calls setStatusMode when a different status is selected', () => {
       const props = makeProps();
       render(() => <WorkloadsFilter {...props} />);
-      const statusSelect = screen.getByLabelText('Status');
-      fireEvent.change(statusSelect, { target: { value: 'running' } });
+      const statusGroup = screen.getByRole('group', { name: 'Status' });
+      fireEvent.click(within(statusGroup).getByRole('button', { name: 'Running' }));
       expect(props.setStatusMode).toHaveBeenCalledWith('running');
     });
   });
@@ -631,7 +693,7 @@ describe('WorkloadsFilter', () => {
       const props = makeProps();
       render(() => <WorkloadsFilter {...props} />);
       // The Type filter should not be visible until Filters is toggled
-      expect(screen.queryByLabelText('Type')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Type', { selector: 'select' })).not.toBeInTheDocument();
     });
 
     it('shows filter controls when Filters toggle is clicked on mobile', () => {
@@ -639,8 +701,8 @@ describe('WorkloadsFilter', () => {
       const props = makeProps();
       render(() => <WorkloadsFilter {...props} />);
       fireEvent.click(screen.getByText('Filters'));
-      expect(screen.getByLabelText('Type')).toBeInTheDocument();
-      expect(screen.getByLabelText('Status')).toBeInTheDocument();
+      expect(screen.getByLabelText('Type', { selector: 'select' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Status', { selector: 'select' })).toBeInTheDocument();
     });
 
     it('hides filter controls when Filters toggle is clicked again', () => {
@@ -649,9 +711,9 @@ describe('WorkloadsFilter', () => {
       render(() => <WorkloadsFilter {...props} />);
       const toggle = screen.getByText('Filters');
       fireEvent.click(toggle);
-      expect(screen.getByLabelText('Type')).toBeInTheDocument();
+      expect(screen.getByLabelText('Type', { selector: 'select' })).toBeInTheDocument();
       fireEvent.click(toggle);
-      expect(screen.queryByLabelText('Type')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Type', { selector: 'select' })).not.toBeInTheDocument();
     });
 
     it('shows active filter count badge on mobile when filters are active', () => {

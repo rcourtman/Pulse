@@ -1,5 +1,9 @@
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
-import { normalizeWorkloadViewModeParam, resolveWorkloadType } from '@/utils/workloads';
+import {
+  normalizeWorkloadViewModeParam,
+  resolveWorkloadType,
+  workloadMatchesViewMode,
+} from '@/utils/workloads';
 import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
 import type { WorkloadsFilterSelectOption } from './workloadsFilterModel';
 import {
@@ -15,9 +19,7 @@ export const deserializeWorkloadViewMode = (raw: unknown): ViewMode => {
   return normalizeWorkloadViewModeParam(raw) ?? 'all';
 };
 
-export const buildWorkloadNodeOptions = (
-  guests: WorkloadGuest[],
-): WorkloadNodeOption[] => {
+export const buildWorkloadNodeOptions = (guests: WorkloadGuest[]): WorkloadNodeOption[] => {
   const labelsByScope = new Map<string, string>();
   const scopesByLabel = new Map<string, Set<string>>();
 
@@ -109,7 +111,7 @@ export const buildWorkloadsPlatformOptions = (
 ): WorkloadsFilterSelectOption[] =>
   buildSourcePlatformOptions(
     guests
-      .filter((guest) => viewMode === 'all' || resolveWorkloadType(guest) === viewMode)
+      .filter((guest) => workloadMatchesViewMode(resolveWorkloadType(guest), viewMode))
       .map((guest) => guest.platformType || ''),
   ).map((option) => ({
     value: option.key,

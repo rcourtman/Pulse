@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import pageControlsSource from '@/components/shared/PageControls.tsx?raw';
+import filterToolbarSource from '@/components/shared/FilterToolbar.tsx?raw';
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
 import storageFilterSource from '@/components/Storage/StorageFilter.tsx?raw';
 import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
@@ -128,12 +129,45 @@ describe('page controls guardrails', () => {
     expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Charts"');
     expect(pageControlsSource).toContain('page-controls-filter-controls');
     expect(pageControlsSource).toContain('page-controls-toolbar-actions ml-auto');
+    expect(pageControlsSource).toContain('actionsLayout?:');
+    expect(pageControlsSource).toContain("actionsLayout() === 'stacked'");
     expect(pageControlsSource).toContain(
       'shrink-0 flex-wrap items-center justify-end gap-2 self-start',
     );
     expect(pageControlsSource).not.toContain('2xl:ml-auto');
     expect(recoveryHistorySectionSource).not.toContain('toolbarClass="lg:flex-nowrap"');
     expect(recoveryHistorySectionSource).not.toContain('ml-auto flex items-center gap-2');
+  });
+
+  it('keeps compact stable filters on the shared labeled toggle primitive', () => {
+    expect(filterToolbarSource).toContain('export const LabeledFilterToggleGroup');
+    expect(filterToolbarSource).toContain('COMPACT_FILTER_TOGGLE_MAX_OPTIONS = 5');
+    expect(filterToolbarSource).toContain("class={local.toggleClass ?? 'hidden xl:inline-flex'}");
+    expect(filterToolbarSource).toContain("groupClass={local.selectGroupClass ?? 'xl:hidden'}");
+    expect(workloadsFilterSource).toContain('LabeledFilterToggleGroup');
+    expect(workloadsFilterSource).toContain('WORKLOAD_TYPE_OPTIONS');
+    expect(workloadsFilterSource).toContain('WORKLOAD_STATUS_FILTER_OPTIONS');
+    expect(workloadsFilterSource).toContain('workloads-filter-primary-controls');
+    expect(workloadsFilterSource).toContain('workloads-filter-secondary-controls');
+    expect(workloadsFilterSource).toContain('actionsLayout="stacked"');
+    expect(workloadsFilterSource).toContain('page-controls-toolbar-actions inline-flex');
+    expect(workloadsFilterSource).toContain('xl:flex-col xl:items-start');
+    expect(workloadsFilterSource).not.toContain(
+      '<LabeledFilterSelect\n          id="workloads-type-filter"',
+    );
+    expect(workloadsFilterSource).not.toContain(
+      '<LabeledFilterSelect\n          id="workloads-status-filter"',
+    );
+    expect(recoveryHistorySectionSource).toContain('LabeledFilterToggleGroup');
+    expect(recoveryHistorySectionSource).not.toContain(
+      '<LabeledFilterSelect\n                id="recovery-status-filter"',
+    );
+    expect(storageFilterSource).toContain(
+      '<LabeledFilterSelect\n          id="storage-status-filter"',
+    );
+    expect(infrastructurePageSurfaceSource).toContain(
+      '<LabeledFilterSelect\n                          id="infra-status-filter"',
+    );
   });
 
   it('keeps embedded workspace tabs on the canonical shared subtabs class pattern', () => {
