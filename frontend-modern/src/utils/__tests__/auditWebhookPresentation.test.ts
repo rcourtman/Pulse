@@ -11,9 +11,10 @@ import {
 describe('auditWebhookPresentation', () => {
   it('returns canonical feature gate copy', () => {
     expect(getAuditWebhookFeatureGateCopy()).toMatchObject({
-      title: 'Audit Webhooks (Pro)',
-      body: expect.stringContaining('require Pro'),
+      title: 'Audit Webhooks',
+      body: expect.stringContaining('paid self-hosted and hosted plans'),
     });
+    expect(getAuditWebhookFeatureGateCopy().body).not.toContain('Pro');
   });
 
   it('returns neutral feature gate copy when commercial prompts are hidden', () => {

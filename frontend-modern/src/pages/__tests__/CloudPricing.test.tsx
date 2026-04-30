@@ -1,12 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { Router, Route } from '@solidjs/router';
 
 import CloudPricing from '@/pages/CloudPricing';
-
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: vi.fn(),
-}));
 
 describe('CloudPricing', () => {
   afterEach(() => {

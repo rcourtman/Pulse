@@ -14,8 +14,8 @@ func TestDescribeReportingCatalog_DefinesCanonicalSurfaces(t *testing.T) {
 	if catalog.PerformanceReport.ID != "performance_reports" {
 		t.Fatalf("performance report ID = %q, want performance_reports", catalog.PerformanceReport.ID)
 	}
-	if catalog.LockedState.Title != "Advanced Reporting (Pro)" {
-		t.Fatalf("locked state title = %q, want Advanced Reporting (Pro)", catalog.LockedState.Title)
+	if catalog.LockedState.Title != "Advanced Reporting" {
+		t.Fatalf("locked state title = %q, want Advanced Reporting", catalog.LockedState.Title)
 	}
 	if catalog.Guidance.Title != "Advanced Insights" {
 		t.Fatalf("guidance title = %q, want Advanced Insights", catalog.Guidance.Title)

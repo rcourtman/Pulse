@@ -11,7 +11,6 @@ import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 export interface AuditEvent {
   id: string;
@@ -511,18 +510,6 @@ export const useAuditLogPanelState = () => {
   const goToNextPage = () => goToOffset(pageOffset() + pageSize());
   const goToLastPage = () => goToOffset((totalPages() - 1) * pageSize());
 
-  const handleUpgradeClick = () => {
-    trackUpgradeClicked('settings_audit_log_panel', 'audit_logging');
-  };
-
-  createEffect((wasPaywallVisible) => {
-    const isPaywallVisible = showUpgradePaywall();
-    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('audit_logging', 'settings_audit_log_panel');
-    }
-    return isPaywallVisible;
-  }, false);
-
   onMount(() => {
     setIsMounted(true);
     void loadRuntimeCapabilities();
@@ -586,7 +573,6 @@ export const useAuditLogPanelState = () => {
     goToLastPage,
     goToNextPage,
     goToPreviousPage,
-    handleUpgradeClick,
     hasNextPage,
     hasResumeEvents,
     hasSignedEvents,

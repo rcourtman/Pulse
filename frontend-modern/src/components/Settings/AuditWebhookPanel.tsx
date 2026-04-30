@@ -18,7 +18,6 @@ import {
   getAuditWebhookFeatureGateCopy,
   getAuditWebhookLoadingState,
 } from '@/utils/auditWebhookPresentation';
-import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
@@ -65,9 +64,6 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                   <UpgradeLink
                     destination={upgradeDestination()}
                     class={getUpgradeActionButtonClass()}
-                    onClick={() =>
-                      trackUpgradeClicked('settings_audit_webhook_panel', 'audit_logging')
-                    }
                   >
                     {UPGRADE_ACTION_LABEL}
                   </UpgradeLink>

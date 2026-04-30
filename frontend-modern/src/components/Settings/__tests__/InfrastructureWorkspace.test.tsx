@@ -31,29 +31,6 @@ const emptyFleetMember = vi.hoisted(
 );
 const navigateSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
-const onboardingMetricsTrackers = vi.hoisted(
-  () =>
-    [] as Array<{
-      recordOpened: ReturnType<typeof vi.fn>;
-      recordPathSelected: ReturnType<typeof vi.fn>;
-      recordProbeResult: ReturnType<typeof vi.fn>;
-      recordCatalogSelected: ReturnType<typeof vi.fn>;
-      recordCredentialsOpened: ReturnType<typeof vi.fn>;
-    }>,
-);
-const createInfrastructureOnboardingMetricsTrackerMock = vi.hoisted(() =>
-  vi.fn(() => {
-    const tracker = {
-      recordOpened: vi.fn(),
-      recordPathSelected: vi.fn(),
-      recordProbeResult: vi.fn(),
-      recordCatalogSelected: vi.fn(),
-      recordCredentialsOpened: vi.fn(),
-    };
-    onboardingMetricsTrackers.push(tracker);
-    return tracker;
-  }),
-);
 
 const originalResizeObserver = globalThis.ResizeObserver;
 let latestResizeObserverCallback: ResizeObserverCallback | null = null;
@@ -179,12 +156,6 @@ vi.mock('../AgentProfilesPanel', () => ({
   AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
 
-vi.mock('@/utils/infrastructureOnboardingMetrics', () => ({
-  createInfrastructureOnboardingMetricsTracker: createInfrastructureOnboardingMetricsTrackerMock,
-  getSharedInfrastructureOnboardingMetricsTracker: createInfrastructureOnboardingMetricsTrackerMock,
-  clearSharedInfrastructureOnboardingMetricsTracker: vi.fn(),
-}));
-
 const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
   id: 'pve:zeus',
   type: 'pve',
@@ -280,8 +251,6 @@ describe('InfrastructureWorkspace', () => {
     navigateSpy.mockReset();
     presentationPolicyIsReadOnlyMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
-    createInfrastructureOnboardingMetricsTrackerMock.mockClear();
-    onboardingMetricsTrackers.length = 0;
     routeState.pathname = '/settings/infrastructure';
     routeState.search = '';
     connectionState.connections = [connectionFixture()];
@@ -624,8 +593,6 @@ describe('InfrastructureWorkspace', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pve', {
       scroll: false,
     });
-    expect(createInfrastructureOnboardingMetricsTrackerMock).toHaveBeenCalledTimes(1);
-    expect(onboardingMetricsTrackers[0]?.recordOpened).toHaveBeenCalledTimes(1);
   });
 
   it('opens the platform picker from the Add infrastructure action', () => {
@@ -715,14 +682,12 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
   });
 
-  it('creates one onboarding tracker for a direct type route before the add dialog mounts', async () => {
+  it('renders a direct type route before the add dialog mounts', async () => {
     routeState.search = '?add=truenas';
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(createInfrastructureOnboardingMetricsTrackerMock).toHaveBeenCalledTimes(1);
-    expect(onboardingMetricsTrackers).toHaveLength(1);
-    expect(onboardingMetricsTrackers[0]?.recordOpened).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('truenas-section')).toBeInTheDocument();
   });
 
   it('opens the manage dialog directly from an existing source card', async () => {

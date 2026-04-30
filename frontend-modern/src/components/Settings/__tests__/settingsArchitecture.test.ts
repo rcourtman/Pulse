@@ -22,6 +22,7 @@ import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
+import rbacFeatureGateSectionSource from '../RBACFeatureGateSection.tsx?raw';
 import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
 import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
@@ -54,10 +55,18 @@ import organizationSharingCreateSectionSource from '../OrganizationSharingCreate
 import rolesEditorDialogSource from '../RolesEditorDialog.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
+import agentProfilesStateSource from '../useAgentProfilesPanelState.ts?raw';
+import auditLogStateSource from '../useAuditLogPanelState.ts?raw';
+import auditWebhookStateSource from '../useAuditWebhookPanelState.ts?raw';
+import rbacFeatureGateStateSource from '../useRBACFeatureGateState.ts?raw';
+import reportingStateSource from '../useReportingPanelState.ts?raw';
+import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
+import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
 import auditLogPresentationSource from '../../../utils/auditLogPresentation.ts?raw';
+import monitoredSystemLimitWarningBannerSource from '../../shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 
 const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEditor/**/*.tsx'], {
   query: '?raw',
@@ -195,6 +204,42 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
     expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
     expect(aiRuntimeControlsSectionSource).not.toContain('without approval (Pro)');
+  });
+
+  it('keeps contextual settings feature gates free of retired commercial telemetry wrappers', () => {
+    for (const source of [
+      agentProfilesPanelSource,
+      agentProfilesStateSource,
+      aiRuntimeControlsSectionSource,
+      auditLogPanelSource,
+      auditLogStateSource,
+      auditWebhookPanelSource,
+      auditWebhookStateSource,
+      monitoredSystemLimitWarningBannerSource,
+      rbacFeatureGateSectionSource,
+      rbacFeatureGateStateSource,
+      reportingPanelSource,
+      reportingStateSource,
+      ssoProvidersPanelSource,
+      ssoProvidersStateSource,
+    ]) {
+      expect(source).not.toContain('upgradeMetrics');
+      expect(source).not.toContain('conversionEvents');
+      expect(source).not.toContain('infrastructureOnboardingMetrics');
+      expect(source).not.toContain('trackPaywallViewed');
+      expect(source).not.toContain('trackUpgradeClicked');
+      expect(source).not.toContain('/api/upgrade-metrics/events');
+    }
+
+    expect(agentProfilesPanelSource).not.toContain('Pro feature');
+    expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
+    expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
+    expect(rbacFeatureGateSectionSource).not.toContain('Custom Roles (Pro)');
+    expect(rbacFeatureGateSectionSource).not.toContain('Centralized Access Control (Pro)');
+    expect(ssoProvidersPanelSource).not.toContain('Add SAML (Pro)');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain(
+      'Unlimited self-hosted monitoring',
+    );
   });
 
   it('keeps Docker and Podman update-action copy on the system settings presentation owner', () => {
@@ -366,12 +411,13 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('<ConnectionsTable rows={rows} />');
     expect(infrastructureWorkspaceSource).toContain('flex h-full min-h-0 flex-col');
     expect(infrastructureWorkspaceSource).toContain('showSlotHeader={false}');
-    expect(infrastructureWorkspaceSource).toContain('trackInitialCatalogSelection={');
     expect(infrastructureWorkspaceSource).toContain(
       "onDetectFromAddress={() => openAddFlow('detect')}",
     );
     expect(infrastructureWorkspaceSource).toContain("onBackToCatalog={() => openAddFlow('pick')}");
-    expect(infrastructureWorkspaceSource).toContain('recordCatalogSelection(type);');
+    expect(infrastructureWorkspaceSource).not.toContain('trackInitialCatalogSelection');
+    expect(infrastructureWorkspaceSource).not.toContain('recordCatalogSelection');
+    expect(infrastructureWorkspaceSource).not.toContain('onboardingMetricsTracker');
     expect(infrastructureWorkspaceSource).toContain('renderAgentConnectionDetails');
     expect(infrastructureWorkspaceSource).not.toContain('InfrastructureOperationsController');
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');

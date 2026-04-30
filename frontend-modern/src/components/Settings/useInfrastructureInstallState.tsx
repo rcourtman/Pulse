@@ -27,10 +27,6 @@ import {
 } from '@/utils/agentInstallCommand';
 import { getUnifiedAgentClipboardCopyErrorMessage } from '@/utils/unifiedAgentInventoryPresentation';
 import {
-  trackAgentInstallProfileSelected,
-  trackAgentInstallTokenGenerated,
-} from '@/utils/upgradeMetrics';
-import {
   buildCommandsByPlatform,
   buildDefaultTokenName,
   getPowerShellInstallProfileEnvFromFlags,
@@ -39,7 +35,6 @@ import {
   type AgentPlatform,
   type InstallProfile,
   type SetupHandoffState,
-  UNIFIED_AGENT_TELEMETRY_SURFACE,
 } from './infrastructureOperationsModel';
 
 export interface InfrastructureInstallStateOptions {
@@ -256,7 +251,6 @@ Pulse prepares the first-host install token from setup so you can move straight 
       setTokenName('');
       setConfirmedNoToken(false);
       setSetupHandoffAutoTokenFailed(false);
-      trackAgentInstallTokenGenerated(UNIFIED_AGENT_TELEMETRY_SURFACE, source);
       if (options.notifySuccess) {
         notificationStore.success(
           'Token generated with Agent config + reporting, Docker, and Kubernetes permissions.',
@@ -435,7 +429,6 @@ Pulse prepares the first-host install token from setup so you can move straight 
 
   const handleInstallProfileChange = (profile: InstallProfile) => {
     setInstallProfile(profile);
-    trackAgentInstallProfileSelected(UNIFIED_AGENT_TELEMETRY_SURFACE, profile);
   };
 
   const commandSections = createMemo(() => {

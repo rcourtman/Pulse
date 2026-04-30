@@ -6,7 +6,6 @@ import { getPulseBaseUrl } from '@/utils/url';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
-import { trackAgentFirstConnected } from '@/utils/upgradeMetrics';
 import type { WizardState } from '../SetupWizard';
 import {
   buildSetupCompletionConnectedSystems,
@@ -36,7 +35,6 @@ const SOURCE_STRATEGY_OPTIONS = [
 
 const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');
 const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');
-const SETUP_WIZARD_TELEMETRY_SURFACE = 'setup_wizard_complete';
 
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const [copied, setCopied] = createSignal<'password' | 'admin-token' | null>(null);
@@ -44,7 +42,6 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const [connectedSystems, setConnectedSystems] = createSignal<
     ReturnType<typeof buildSetupCompletionConnectedSystems>
   >([]);
-  let firstAgentConnectionTracked = false;
 
   createEffect(() => {
     if (props.connectedResourcesOverride !== undefined) {
@@ -80,14 +77,6 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
               previousSystem.connectionPath !== system.connectionPath
             );
           });
-
-        if (
-          !firstAgentConnectionTracked &&
-          nextConnectedSystems.some((system) => system.connectionPath === 'agent')
-        ) {
-          trackAgentFirstConnected(SETUP_WIZARD_TELEMETRY_SURFACE, 'first_agent');
-          firstAgentConnectionTracked = true;
-        }
 
         if (hasConnectionChanges) {
           setConnectedSystems(nextConnectedSystems);

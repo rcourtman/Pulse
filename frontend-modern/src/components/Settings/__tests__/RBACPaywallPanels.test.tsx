@@ -11,8 +11,6 @@ const startProTrialMock = vi.fn();
 const commercialPostureMock = vi.fn();
 const entitlementsMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
-const trackPaywallViewedMock = vi.fn();
-const trackUpgradeClickedMock = vi.fn();
 const getRolesMock = vi.fn();
 const getUsersMock = vi.fn();
 const getUserPermissionsMock = vi.fn();
@@ -43,11 +41,6 @@ vi.mock('@/stores/licenseCommercial', () => ({
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
-}));
-
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
-  trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
 }));
 
 vi.mock('@/api/rbac', () => ({
@@ -85,8 +78,6 @@ describe('RBAC paywall settings panels', () => {
     commercialPostureMock.mockReset();
     entitlementsMock.mockReset();
     presentationPolicyHidesUpgradePromptsMock.mockReset();
-    trackPaywallViewedMock.mockReset();
-    trackUpgradeClickedMock.mockReset();
     getRolesMock.mockReset();
     getUsersMock.mockReset();
     getUserPermissionsMock.mockReset();
@@ -131,7 +122,7 @@ describe('RBAC paywall settings panels', () => {
     render(() => <RolesPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText('Custom Roles (Pro)')).toBeInTheDocument();
+      expect(screen.getByText('Custom Roles')).toBeInTheDocument();
     });
 
     expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
@@ -140,7 +131,6 @@ describe('RBAC paywall settings panels', () => {
     );
     expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
     expect(getRolesMock).not.toHaveBeenCalled();
-    expect(trackPaywallViewedMock).toHaveBeenCalledWith('rbac', 'settings_roles_panel');
   });
 
   it('keeps RBAC upgrade actions quiet when self-hosted upgrade prompts are hidden', async () => {
@@ -156,7 +146,6 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.queryByText('Custom Roles (Pro)')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start trial' })).not.toBeInTheDocument();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
     expect(getRolesMock).not.toHaveBeenCalled();
   });
 
@@ -169,7 +158,6 @@ describe('RBAC paywall settings panels', () => {
 
     expect(screen.queryByText('Custom Roles (Pro)')).not.toBeInTheDocument();
     expect(getRolesMock).toHaveBeenCalled();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
   });
 
@@ -179,7 +167,7 @@ describe('RBAC paywall settings panels', () => {
     render(() => <UserAssignmentsPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText('Centralized Access Control (Pro)')).toBeInTheDocument();
+      expect(screen.getByText('Centralized Access Control')).toBeInTheDocument();
     });
 
     expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
@@ -189,7 +177,6 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByPlaceholderText('Search users...')).toBeDisabled();
     expect(getUsersMock).not.toHaveBeenCalled();
     expect(getRolesMock).not.toHaveBeenCalled();
-    expect(trackPaywallViewedMock).toHaveBeenCalledWith('rbac', 'settings_user_assignments_panel');
   });
 
   it('loads user assignments when the RBAC entitlement is granted', async () => {
@@ -202,7 +189,6 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.queryByText('Centralized Access Control (Pro)')).not.toBeInTheDocument();
     expect(getUsersMock).toHaveBeenCalled();
     expect(getRolesMock).toHaveBeenCalled();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Search users...')).not.toBeDisabled();
   });
 
@@ -219,7 +205,6 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.queryByText('Centralized Access Control (Pro)')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start trial' })).not.toBeInTheDocument();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
     expect(getUsersMock).not.toHaveBeenCalled();
     expect(getRolesMock).not.toHaveBeenCalled();
   });
@@ -262,7 +247,7 @@ describe('RBAC paywall settings panels', () => {
     render(() => <RolesPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText('Custom Roles (Pro)')).toBeInTheDocument();
+      expect(screen.getByText('Custom Roles')).toBeInTheDocument();
     });
 
     expect(screen.getByRole('link', { name: 'View plans' })).toBeInTheDocument();

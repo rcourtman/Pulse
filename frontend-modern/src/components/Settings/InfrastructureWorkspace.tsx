@@ -42,11 +42,6 @@ import {
   useInfrastructureOperationsContext,
 } from './useInfrastructureOperationsState';
 import {
-  clearSharedInfrastructureOnboardingMetricsTracker,
-  getSharedInfrastructureOnboardingMetricsTracker,
-  type InfrastructureOnboardingMetricsTracker,
-} from '@/utils/infrastructureOnboardingMetrics';
-import {
   getInfrastructureOnboardingProductPresentation,
   getInfrastructureSourceStrategyPresentation,
   type InfrastructureOnboardingConnectionType,
@@ -73,12 +68,6 @@ const closeButtonClass =
   'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
 const buttonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
-
-const createOpenedOnboardingTracker = (): InfrastructureOnboardingMetricsTracker => {
-  const tracker = getSharedInfrastructureOnboardingMetricsTracker();
-  tracker.recordOpened();
-  return tracker;
-};
 
 const describeManagedSourceType = (type: ConnectionType | null): string => {
   if (!type) return 'Infrastructure';
@@ -119,11 +108,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (readOnly()) return null;
     return deriveAddStepFromLocation(location.pathname, location.search ?? '');
   });
-  const [addFlowTracker, setAddFlowTracker] =
-    createSignal<InfrastructureOnboardingMetricsTracker | null>(
-      routeStep() ? createOpenedOnboardingTracker() : null,
-    );
-  let previousRouteStep: InfrastructurePanelStep | null | undefined = routeStep();
   const activeAddType = createMemo<ConnectionType | null>(() => {
     const step = routeStep();
     if (!step || step === 'pick' || step === 'detect') return null;
@@ -198,27 +182,18 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const openAddFlow = (step: InfrastructurePanelStep) => {
     setSelectedDiscoveredSource(null);
     setSelectedProbeCandidate(null);
-    if (!addFlowTracker()) {
-      setAddFlowTracker(createOpenedOnboardingTracker());
-    }
     navigate(buildInfrastructureOnboardingPath(step), { scroll: false });
   };
 
   const openAddFlowFromProbe = (candidate: ProbeCandidate) => {
     setSelectedDiscoveredSource(null);
     setSelectedProbeCandidate(candidate);
-    if (!addFlowTracker()) {
-      setAddFlowTracker(createOpenedOnboardingTracker());
-    }
     navigate(buildInfrastructureOnboardingPath(candidate.type as ManagedAddTypeStep), {
       scroll: false,
     });
   };
 
   const reviewDiscoveredSource = (server: DiscoveredServer) => {
-    if (!addFlowTracker()) {
-      setAddFlowTracker(createOpenedOnboardingTracker());
-    }
     setSelectedDiscoveredSource(server);
     navigate(buildInfrastructureOnboardingPath(server.type), { scroll: false });
   };
@@ -227,8 +202,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     resetInlineEditorState();
     setSelectedDiscoveredSource(null);
     setSelectedProbeCandidate(null);
-    setAddFlowTracker(null);
-    clearSharedInfrastructureOnboardingMetricsTracker();
     navigateToWorkspace(Boolean(routeStep()));
   };
 
@@ -255,31 +228,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     closeEditFlow();
   };
 
-  const recordCatalogSelection = (type: InfrastructureOnboardingConnectionType) => {
-    const tracker = addFlowTracker();
-    if (!tracker) return;
-    tracker.recordPathSelected(type === 'agent' ? 'agent' : 'api');
-    if (type !== 'agent') {
-      tracker.recordCatalogSelected(type);
-    }
-  };
-
   createEffect(() => {
     if (activeAddType() !== 'agent') {
       setShowAgentProfiles(false);
     }
-  });
-
-  createEffect(() => {
-    const step = routeStep();
-    const tracker = addFlowTracker();
-    if (step && !tracker) {
-      setAddFlowTracker(createOpenedOnboardingTracker());
-    } else if (!step && tracker && previousRouteStep) {
-      setAddFlowTracker(null);
-      clearSharedInfrastructureOnboardingMetricsTracker();
-    }
-    previousRouteStep = step;
   });
 
   createEffect(() => {
@@ -950,7 +902,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <Match when={routeStep() === 'pick'}>
                   <InfrastructureSourcePicker
                     onSelectType={(type) => {
-                      recordCatalogSelection(type);
                       openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep));
                     }}
                     onDetectFromAddress={() => openAddFlow('detect')}
@@ -960,7 +911,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <Match when={routeStep() === 'detect'}>
                   <ConnectionEditor
                     mode="add"
-                    onboardingMetricsTracker={addFlowTracker()}
                     onBackToCatalog={() => openAddFlow('pick')}
                     onSelectAgentRoute={() => openAddFlow('agent')}
                     onSelectCandidate={openAddFlowFromProbe}
@@ -978,12 +928,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     initialType={activeAddType() ?? undefined}
                     initialCandidate={selectedProbeCandidate()}
                     showSlotHeader={false}
-                    trackInitialCatalogSelection={
-                      activeAddType() !== 'agent' &&
-                      !selectedDiscoveredSource() &&
-                      !selectedProbeCandidate()
-                    }
-                    onboardingMetricsTracker={addFlowTracker()}
                     onBackToCatalog={() => openAddFlow('pick')}
                     onClose={closeAddFlow}
                     onSaved={handleAddSaved}

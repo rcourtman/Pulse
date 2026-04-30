@@ -14,10 +14,12 @@ import {
 describe('rbacPresentation', () => {
   it('returns canonical feature gate copy', () => {
     expect(getRBACFeatureGateCopy('roles')).toMatchObject({
-      title: 'Custom Roles (Pro)',
+      title: 'Custom Roles',
+      body: expect.stringContaining('paid self-hosted and hosted plans'),
     });
     expect(getRBACFeatureGateCopy('user-assignments')).toMatchObject({
-      title: 'Centralized Access Control (Pro)',
+      title: 'Centralized Access Control',
+      body: expect.stringContaining('paid self-hosted and hosted plans'),
     });
   });
 

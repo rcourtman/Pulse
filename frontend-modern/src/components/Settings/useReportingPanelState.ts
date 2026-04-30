@@ -6,7 +6,6 @@ import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getReportingCatalogErrorMessage,
   getReportingGenerateErrorMessage,
@@ -57,14 +56,6 @@ export const useReportingPanelState = () => {
   onMount(() => {
     loadRuntimeCapabilities();
   });
-
-  createEffect((wasVisible: boolean) => {
-    const visible = isLocked();
-    if (showUpgradePrompts() && visible && !wasVisible) {
-      trackPaywallViewed(reportingFeatureId(), 'settings_reporting_panel');
-    }
-    return visible;
-  }, false);
 
   const loadReportingCatalog = async () => {
     if (reportingCatalogLoading()) {

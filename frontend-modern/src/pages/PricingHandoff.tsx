@@ -1,7 +1,6 @@
 import { Navigate, useLocation } from '@solidjs/router';
 import { Show, createMemo, onMount } from 'solid-js';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getPricingRouteDestination,
   handoffToExternalPricing,
@@ -25,7 +24,6 @@ export default function PricingHandoff() {
   );
 
   onMount(() => {
-    trackPaywallViewed('pricing', 'pricing_handoff');
     if (externalDestination() || selfHostedPurchaseStartDestination()) {
       handoffToExternalPricing(destination());
     }

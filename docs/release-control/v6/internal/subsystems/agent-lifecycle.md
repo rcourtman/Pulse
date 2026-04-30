@@ -558,6 +558,11 @@ profile and assignment columns, but embedded table framing must route through
    first-session states must keep `Add infrastructure` visible for both
    API-backed and agent-managed next systems instead of reviving separate
    `Platform connections` and `Infrastructure Install` branches. The
+   completion panel, infrastructure installer, install state, and agent-profile
+   settings surfaces must also stay free of local browser commercial or
+   onboarding metrics wrappers. Lifecycle surfaces may navigate to canonical
+   destinations, but Pulse Account and server-owned reporting routes own
+   commercial event capture.
    API-backed versus agent-managed classification must come from the governed
    onboarding paths in
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json` through

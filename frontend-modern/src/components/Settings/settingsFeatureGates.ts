@@ -1,5 +1,4 @@
 import type { SettingsTab } from './settingsNavigationModel';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { getFeatureMinTierLabel } from '@/utils/licensePresentation';
 
 export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
@@ -41,9 +40,6 @@ export function getTabLockReason(
   if (!runtimeCapabilitiesLoaded()) return null;
   if (requiredFeatures.every((feature) => hasFeature(feature))) return null;
   const primaryRequiredFeature = requiredFeatures[0];
-  if (primaryRequiredFeature) {
-    trackPaywallViewed(primaryRequiredFeature, 'settings_tab');
-  }
   const tierLabel = getFeatureMinTierLabel(primaryRequiredFeature);
   return `This settings section requires ${tierLabel}.`;
 }

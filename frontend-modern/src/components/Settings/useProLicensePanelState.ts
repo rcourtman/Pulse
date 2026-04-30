@@ -49,7 +49,6 @@ import {
   SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,
-  isSelfHostedPurchaseStartDestination,
   type SelfHostedBillingPlanIntent,
   type SelfHostedBillingSection,
 } from '@/utils/pricingHandoff';
@@ -65,7 +64,6 @@ import {
   getMonitoredSystemLimitUsageSummary,
   resolveMonitoredSystemCapacityStatus,
 } from '@/utils/monitoredSystemPresentation';
-import { trackCheckoutClicked, trackPricingViewed } from '@/utils/upgradeMetrics';
 import { resolveUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 
@@ -228,27 +226,6 @@ export function useProLicensePanelState() {
     navigate(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, { replace: true, scroll: false });
   });
 
-  let trackedPlanPricingView = false;
-  createEffect(() => {
-    const planVisible =
-      panelDataSettled() &&
-      activeSection() === 'plan' &&
-      getSelfHostedBillingPlanIntent(location.search) ===
-        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT;
-    if (!planVisible) {
-      trackedPlanPricingView = false;
-      return;
-    }
-    if (trackedPlanPricingView) {
-      return;
-    }
-    trackPricingViewed(
-      'settings_self_hosted_billing_plan',
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-    );
-    trackedPlanPricingView = true;
-  });
-
   const setActiveSection = (section: string) => {
     if (section !== 'plan' && section !== 'usage') {
       return;
@@ -295,13 +272,6 @@ export function useProLicensePanelState() {
       ),
     };
   });
-
-  const handlePlanSelectionPromptClick = () => {
-    trackCheckoutClicked(
-      'settings_self_hosted_billing_compare_prompt',
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-    );
-  };
 
   const statusPresentation = createMemo(() =>
     getLicenseSubscriptionStatusPresentation(subscriptionState()),
@@ -477,17 +447,6 @@ export function useProLicensePanelState() {
     }
   });
 
-  const handlePurchaseActivationActionClick = () => {
-    const action = purchaseActivationAction();
-    if (!action || !isSelfHostedPurchaseStartDestination(action.destination.href)) {
-      return;
-    }
-    trackCheckoutClicked(
-      'settings_self_hosted_billing_purchase_return',
-      purchaseActivationIntent() ?? SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-    );
-  };
-
   const commercialMigrationNotice = createMemo(() =>
     getCommercialMigrationNotice(entitlements()?.commercial_migration),
   );
@@ -630,10 +589,8 @@ export function useProLicensePanelState() {
     loading,
     looksLikeLegacyLicenseKey,
     planSelectionPrompt,
-    handlePlanSelectionPromptClick,
     purchaseActivationNotice,
     purchaseActivationAction,
-    handlePurchaseActivationActionClick,
     setActiveSection,
     setLicenseKey,
     showUsageSection,

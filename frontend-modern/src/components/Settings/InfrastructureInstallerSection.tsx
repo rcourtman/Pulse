@@ -10,12 +10,9 @@ import {
   getUnifiedAgentClipboardCopyErrorMessage,
   getUnifiedAgentClipboardCopySuccessMessage,
 } from '@/utils/unifiedAgentInventoryPresentation';
-import { trackAgentInstallCommandCopied } from '@/utils/upgradeMetrics';
 import {
   INSTALL_PROFILE_OPTIONS,
-  normalizeTelemetryPart,
   type InstallProfile,
-  UNIFIED_AGENT_TELEMETRY_SURFACE,
 } from './infrastructureOperationsModel';
 import { useInfrastructureOperationsContext } from './useInfrastructureOperationsState';
 
@@ -481,10 +478,6 @@ export const InfrastructureInstallerSection: Component = () => {
                       <For each={section.snippets}>
                         {(snippet) => {
                           const copyCommand = () => snippet.command;
-                          const commandTelemetryCapability = () => {
-                            const label = normalizeTelemetryPart(snippet.label) || 'install';
-                            return `${section.platform}:${state.installProfile()}:${label}`;
-                          };
 
                           return (
                             <div class="space-y-2">
@@ -497,10 +490,6 @@ export const InfrastructureInstallerSection: Component = () => {
                                   onClick={async () => {
                                     const success = await copyToClipboard(copyCommand());
                                     if (success) {
-                                      trackAgentInstallCommandCopied(
-                                        UNIFIED_AGENT_TELEMETRY_SURFACE,
-                                        commandTelemetryCapability(),
-                                      );
                                       notificationStore.success(
                                         getUnifiedAgentClipboardCopySuccessMessage(),
                                       );

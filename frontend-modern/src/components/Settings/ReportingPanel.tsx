@@ -11,7 +11,6 @@ import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { useReportingPanelState } from '@/components/Settings/useReportingPanelState';
 import type { ReportingFormat } from '@/components/Settings/reportingCatalogModel';
 import { type ReportingRangeValue } from '@/components/Settings/reportingPanelModel';
-import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
@@ -153,9 +152,6 @@ export function ReportingPanel() {
                   <UpgradeLink
                     destination={upgradeDestination()}
                     class={getUpgradeActionButtonClass()}
-                    onClick={() =>
-                      trackUpgradeClicked('settings_reporting_panel', reportingCatalog()!.id)
-                    }
                   >
                     {UPGRADE_ACTION_LABEL}
                   </UpgradeLink>

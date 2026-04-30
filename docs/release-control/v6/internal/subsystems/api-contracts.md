@@ -116,6 +116,13 @@ admin-only local commercial reporting routes.
     `frontend-modern/src/utils/sourcePlatforms.ts` rather than page-local
     wording, because those install choices set API-token and install-command
     expectations for the operator.
+    That same browser/API boundary must not retain customer-side commercial or
+    onboarding telemetry wrappers around infrastructure operations. Pulse
+    Account and the server-owned commercial reporting routes own commercial
+    event ingestion; the infrastructure operations model and install state may
+    navigate to canonical destinations, but must not import or call local
+    `upgradeMetrics`, `conversionEvents`, or infrastructure onboarding metrics
+    wrappers.
 13. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 16. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 17. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
@@ -1818,7 +1825,9 @@ rather than becoming general authenticated product reads. Authenticated event
 ingestion at `/api/upgrade-metrics/events` may remain only as compatibility or
 admin-owned ingestion plumbing; customer frontend surfaces must not call it for
 pricing, checkout, paywall, commercial funnel, or infrastructure-onboarding
-signals. Reporting and control stay on the privileged settings boundary.
+signals, and must not keep customer-side commercial/onboarding metrics wrapper
+modules as a compatibility layer. Reporting and control stay on the privileged
+settings boundary.
 That same public-demo API boundary must also hide runtime-admin operations
 surfaces instead of treating them as harmless reads. Demo sessions must receive
 `404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the

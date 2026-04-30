@@ -111,9 +111,7 @@ const ProLicensePanelContent: Component = () => {
                   onReload={() => void state.loadPanelData()}
                   planSelectionPrompt={state.planSelectionPrompt()}
                   planComparisonSummary={state.planComparisonSummary()}
-                  onPlanSelectionPromptClick={state.handlePlanSelectionPromptClick}
                   purchaseActivationAction={state.purchaseActivationAction()}
-                  onPurchaseActivationActionClick={state.handlePurchaseActivationActionClick}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
                 />
 

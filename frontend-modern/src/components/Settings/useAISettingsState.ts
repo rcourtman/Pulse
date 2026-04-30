@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { createMemo, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
@@ -36,7 +36,6 @@ import {
   getAISettingsToggleErrorMessage,
 } from '@/utils/aiSettingsPresentation';
 import { logger } from '@/utils/logger';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 
 export const useAISettingsState = () => {
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
@@ -151,14 +150,6 @@ export const useAISettingsState = () => {
     setModelsError('');
     clearAIRuntimeModels();
   };
-
-  createEffect((wasPaywallVisible) => {
-    const isPaywallVisible = form.controlLevel === 'autonomous' && autoFixLocked();
-    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('ai_autofix', 'settings_ai_patrol_autofix');
-    }
-    return isPaywallVisible;
-  }, false);
 
   const resetForm = (data: AISettingsType | null) => {
     if (!data) {

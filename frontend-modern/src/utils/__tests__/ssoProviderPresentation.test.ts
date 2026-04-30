@@ -24,6 +24,7 @@ import {
   getSSOProviderToggleSuccessMessage,
   getSSOProviderTypeBadgeClass,
   getSSOProviderTypeLabel,
+  getSSOSamlFeatureGateCopy,
   getSSOTestResultPresentation,
 } from '../ssoProviderPresentation';
 
@@ -32,7 +33,7 @@ describe('ssoProviderPresentation', () => {
     expect(getSSOProviderTypeLabel('oidc')).toBe('OIDC');
     expect(getSSOProviderTypeLabel('saml')).toBe('SAML');
     expect(getSSOProviderAddButtonLabel('oidc')).toBe('Add OIDC');
-    expect(getSSOProviderAddButtonLabel('saml', true)).toBe('Add SAML (Pro)');
+    expect(getSSOProviderAddButtonLabel('saml')).toBe('Add SAML');
     expect(getSSOProviderModalTitle(false, 'saml')).toBe('Add SAML Provider');
     expect(getSSOProviderEmptyStateTitle()).toBe('No SSO providers configured');
     expect(getSSOProviderEmptyStateDescription()).toBe(
@@ -53,6 +54,15 @@ describe('ssoProviderPresentation', () => {
         samlMetadataUrl: 'https://idp.example.com/metadata',
       }),
     ).toBe('https://idp.example.com/entity');
+  });
+
+  it('returns capability-focused SAML feature gate copy', () => {
+    expect(getSSOSamlFeatureGateCopy()).toMatchObject({
+      title: 'Advanced SSO',
+      subtitle: 'Advanced SSO',
+      body: expect.stringContaining('paid self-hosted and hosted plans'),
+    });
+    expect(getSSOSamlFeatureGateCopy().body).not.toContain('Pro');
   });
 
   it('formats provider card and test result tones canonically', () => {

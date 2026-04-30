@@ -897,7 +897,7 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'export function useMonitoredSystemLimitWarningBannerState',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
@@ -910,7 +910,7 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesUpgradePrompts',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'scopeSelfHostedBillingDestination',

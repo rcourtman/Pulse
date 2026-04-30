@@ -57,6 +57,11 @@ operator-facing alert routing behavior for live runtime alerts.
 2. Add typed collector/builders in `internal/alerts/alerts.go`
 3. Add identity/persistence updates through canonical alert helpers only
 4. Add or change alert history persistence through `internal/alerts/history.go` using normalized owned storage roots and fixed storage leaves only
+5. Add or change locked alert-investigation commercial handoff behavior through
+   `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` while
+   preserving the shared upgrade-navigation contract; the alert surface may
+   route to the canonical destination, but must not emit browser-local upgrade
+   metrics or present Pro-required copy when prompt suppression applies.
 
 ## Forbidden Paths
 

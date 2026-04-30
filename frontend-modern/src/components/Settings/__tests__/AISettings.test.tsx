@@ -25,8 +25,6 @@ const loadLicenseStatusMock = vi.fn();
 const loadCommercialPostureMock = vi.fn();
 const commercialPostureMock = vi.fn();
 const entitlementsMock = vi.fn();
-const trackPaywallViewedMock = vi.fn();
-const trackUpgradeClickedMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 
 vi.mock('@/api/ai', () => ({
@@ -81,11 +79,6 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
-  trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
-}));
-
 const baseSettings = (): AISettingsType => ({
   enabled: false,
   model: '',
@@ -130,8 +123,6 @@ const resetAllMocks = () => {
   loadCommercialPostureMock.mockReset();
   commercialPostureMock.mockReset();
   entitlementsMock.mockReset();
-  trackPaywallViewedMock.mockReset();
-  trackUpgradeClickedMock.mockReset();
   presentationPolicyHidesUpgradePromptsMock.mockReset();
 };
 
@@ -341,7 +332,6 @@ describe('AISettings model loading error states', () => {
     });
 
     expect(screen.queryByRole('option', { name: /Autonomous/i })).not.toBeInTheDocument();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
   });
 
   it('keeps an existing autonomous setting visible even when upgrade prompts are hidden', async () => {

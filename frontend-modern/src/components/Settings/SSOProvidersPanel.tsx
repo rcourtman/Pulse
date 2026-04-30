@@ -26,6 +26,7 @@ import {
   getSSOProviderSummary,
   getSSOProviderTypeBadgeClass,
   getSSOProviderTypeLabel,
+  getSSOSamlFeatureGateCopy,
 } from '@/utils/ssoProviderPresentation';
 import {
   getUpgradeActionButtonClass,
@@ -40,6 +41,7 @@ interface SSOProvidersPanelProps {
 }
 
 export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
+  const samlFeatureGateCopy = getSSOSamlFeatureGateCopy();
   const {
     providers,
     loading,
@@ -78,7 +80,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     getUpgradeActionDestination,
     runtimeCapabilitiesLoaded,
     showUpgradePrompts,
-    trackUpgradeClicked,
   } = useSSOProvidersState(props);
 
   return (
@@ -95,7 +96,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             <div class="flex items-center justify-between px-6 py-4 border-b border-border">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Add SAML Provider</h3>
-                <p class="text-xs text-muted mt-0.5">Pro feature</p>
+                <p class="text-xs text-muted mt-0.5">{samlFeatureGateCopy.subtitle}</p>
               </div>
               <button
                 type="button"
@@ -107,7 +108,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               </button>
             </div>
             <div class="px-6 py-5 space-y-4">
-              <p class="text-sm text-muted">SAML 2.0 and multi-provider SSO requires Pro.</p>
+              <p class="text-sm text-muted">{samlFeatureGateCopy.body}</p>
               <div class="flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -119,9 +120,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 <UpgradeLink
                   destination={getUpgradeActionDestination('advanced_sso')}
                   class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
-                  onClick={() =>
-                    trackUpgradeClicked('settings_sso_providers_add_saml_gate', 'advanced_sso')
-                  }
                 >
                   {UPGRADE_ACTION_LABEL}
                   <ExternalLink class="w-4 h-4" />
@@ -141,17 +139,15 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         <div class="p-4 bg-surface-alt border border-border rounded-md">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
-              <h4 class="text-base font-semibold text-base-content">Advanced SSO</h4>
-              <p class="text-sm text-muted mt-1">
-                SAML 2.0 and multi-provider SSO requires Pro. Basic OIDC is available in the free
-                tier.
-              </p>
+              <h4 class="text-base font-semibold text-base-content">
+                {samlFeatureGateCopy.title}
+              </h4>
+              <p class="text-sm text-muted mt-1">{samlFeatureGateCopy.body}</p>
             </div>
             <div class="flex flex-col sm:flex-row items-center gap-2">
               <UpgradeLink
                 destination={getUpgradeActionDestination('advanced_sso')}
                 class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
-                onClick={() => trackUpgradeClicked('settings_sso_providers_banner', 'advanced_sso')}
               >
                 {UPGRADE_ACTION_LABEL}
                 <ExternalLink class="w-4 h-4" />
@@ -195,7 +191,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
               >
                 <Plus class="w-4 h-4" />
-                {getSSOProviderAddButtonLabel('saml', true)}
+                {getSSOProviderAddButtonLabel('saml')}
               </button>
             </Show>
           </div>

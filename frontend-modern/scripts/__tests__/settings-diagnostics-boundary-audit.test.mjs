@@ -16,8 +16,6 @@ function writeFixture(root, repoRoot, files) {
       'export function DiagnosticsResultsPanel() { return null; }\n',
     [path.join(root, 'src', 'components', 'Settings', 'diagnosticsModel.ts')]:
       'export interface DiagnosticsInfo { version: string; }\n',
-    [path.join(root, 'src', 'utils', 'upgradeMetrics.ts')]:
-      'export function trackUpgradeMetricEvent() {}\n',
     ...files,
   };
 
@@ -85,25 +83,25 @@ export function stripInternalAnalyticsDiagnosticsFields(payload) {
     expect(collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot })).toEqual([]);
   });
 
-  it('reports product-side upgrade-metrics ingestion plumbing', () => {
+  it('reports production frontend commercial analytics shims', () => {
     const { root, repoRoot } = makeFixture(({ root }) => ({
-      [path.join(root, 'src', 'utils', 'upgradeMetrics.ts')]: `
-import { apiFetch } from '@/utils/apiClient';
+      [path.join(root, 'src', 'components', 'Settings', 'CommercialProbe.tsx')]: `
+import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 
-export function trackUpgradeMetricEvent() {
-  void apiFetch('/api/upgrade-metrics/events');
+export function CommercialProbe() {
+  const onboardingMetricsTracker = { recordOpened() {} };
+  trackPaywallViewed('rbac', 'settings_roles_panel');
+  onboardingMetricsTracker.recordOpened();
+  return null;
 }
 `,
     }));
 
     const findings = collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot });
 
-    expect(findings.map((finding) => finding.rule)).toEqual([
-      'canonical-settings/no-product-upgrade-metrics-ingestion',
-      'canonical-settings/no-product-upgrade-metrics-ingestion',
-      'canonical-settings/no-product-upgrade-metrics-ingestion',
-      'canonical-settings/no-product-upgrade-metrics-endpoint',
-    ]);
+    expect(findings.map((finding) => finding.rule)).toEqual(
+      Array(5).fill('canonical-settings/no-product-commercial-analytics-source'),
+    );
   });
 
   it('reports direct production frontend calls to upgrade-metrics ingestion', () => {

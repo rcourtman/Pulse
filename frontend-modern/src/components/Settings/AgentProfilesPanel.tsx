@@ -7,6 +7,7 @@ import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import {
+  getAgentProfilesFeatureGateCopy,
   getAgentProfileAssignmentsEmptyState,
   getAgentProfilesEmptyState,
 } from '@/utils/agentProfilesPresentation';
@@ -21,6 +22,7 @@ import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useAgentProfilesPanelState } from './useAgentProfilesPanelState';
 
 export const AgentProfilesPanel: Component = () => {
+  const featureGateCopy = getAgentProfilesFeatureGateCopy();
   const {
     aiAvailable,
     checkingLicense,
@@ -56,7 +58,6 @@ export const AgentProfilesPanel: Component = () => {
     showUpgradePrompts,
     showModal,
     showSuggestModal,
-    trackUpgradeClicked,
     unknownKeys,
     updateSetting,
     formatRelativeTime,
@@ -87,21 +88,17 @@ export const AgentProfilesPanel: Component = () => {
                   <Crown class="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                  <h3 class="text-base font-semibold text-base-content">Agent Profiles</h3>
-                  <p class="text-sm text-muted">Pro feature</p>
+                  <h3 class="text-base font-semibold text-base-content">
+                    {featureGateCopy.title}
+                  </h3>
+                  <p class="text-sm text-muted">{featureGateCopy.subtitle}</p>
                 </div>
               </div>
-              <p class="text-sm text-muted">
-                Create reusable configuration profiles for your agents. Manage settings like Docker
-                monitoring, logging levels, and reporting intervals from a central location.
-              </p>
+              <p class="text-sm text-muted">{featureGateCopy.body}</p>
               <div class="flex flex-wrap items-center gap-3">
                 <UpgradeLink
                   destination={getUpgradeActionDestination('agent_profiles')}
                   class={getUpgradeActionButtonClass({ tone: 'warning', mobileFullWidth: false })}
-                  onClick={() =>
-                    trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')
-                  }
                 >
                   <Crown class="w-4 h-4" />
                   {UPGRADE_ACTION_LABEL}

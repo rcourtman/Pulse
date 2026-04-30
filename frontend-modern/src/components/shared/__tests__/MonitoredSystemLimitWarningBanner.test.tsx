@@ -32,8 +32,6 @@ const mockLegacyConnections = vi.hoisted(() =>
     kubernetes_clusters: 0,
   })),
 );
-const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
-const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
 const mockLoadRuntimeLicenseStatus = vi.hoisted(() => vi.fn());
 const mockPresentationPolicyHidesCommercialSurfaces = vi.hoisted(() => vi.fn(() => false));
 const mockPresentationPolicyHidesUpgradePrompts = vi.hoisted(() => vi.fn(() => false));
@@ -58,14 +56,6 @@ vi.mock('@/stores/licenseCommercial', () => ({
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesCommercialSurfaces: () => mockPresentationPolicyHidesCommercialSurfaces(),
   presentationPolicyHidesUpgradePrompts: () => mockPresentationPolicyHidesUpgradePrompts(),
-}));
-
-vi.mock('@/utils/upgradeMetrics', () => ({
-  UPGRADE_METRIC_EVENTS: {
-    LIMIT_WARNING_SHOWN: 'limit_warning_shown',
-  },
-  trackUpgradeMetricEvent: mockTrackUpgradeMetricEvent,
-  trackUpgradeClicked: mockTrackUpgradeClicked,
 }));
 
 describe('MonitoredSystemLimitWarningBanner', () => {
@@ -126,7 +116,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'export function useMonitoredSystemLimitWarningBannerState',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('loadCommercialPosture');
@@ -137,7 +127,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesUpgradePrompts',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'scopeSelfHostedBillingDestination',
@@ -244,7 +234,6 @@ describe('MonitoredSystemLimitWarningBanner', () => {
 
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Review options')).not.toBeInTheDocument();
-    expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 
   it('keeps urgent limit warnings visible with migration context', async () => {
@@ -299,7 +288,6 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(
       screen.queryByText('5 monitored systems.'),
     ).not.toBeInTheDocument();
-    expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 
   it('stays hidden when self-hosted upgrade prompts are suppressed', async () => {
@@ -322,7 +310,6 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(
       screen.queryByText('5 monitored systems.'),
     ).not.toBeInTheDocument();
-    expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 
   it('stays hidden for self-hosted installs even when stale continuity metadata is urgent', async () => {
@@ -343,6 +330,5 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(
       screen.queryByText('5 monitored systems.'),
     ).not.toBeInTheDocument();
-    expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 });

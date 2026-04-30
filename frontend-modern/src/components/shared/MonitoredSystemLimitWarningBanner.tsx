@@ -28,7 +28,6 @@ export const MonitoredSystemLimitWarningBanner: Component = () => {
             <UpgradeLink
               class="text-xs font-medium underline underline-offset-2 hover:opacity-90"
               destination={state.installCollectorsDestination()}
-              onClick={state.handleInstallCollectorsClick}
             >
               {MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL}
             </UpgradeLink>

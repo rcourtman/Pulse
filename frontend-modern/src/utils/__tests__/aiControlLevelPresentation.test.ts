@@ -40,7 +40,7 @@ describe('aiControlLevelPresentation', () => {
     });
     expect(getAIChatControlLevelPresentation('autonomous')).toMatchObject({
       label: 'Autonomous',
-      description: 'Executes without approval (Pro)',
+      description: 'Executes without approval',
       dotClassName: 'bg-red-500',
     });
   });

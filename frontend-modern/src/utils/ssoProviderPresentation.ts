@@ -1,5 +1,11 @@
 export type SSOProviderType = 'oidc' | 'saml';
 
+export interface SSOProviderFeatureGateCopy {
+  title: string;
+  subtitle: string;
+  body: string;
+}
+
 export interface SSOProviderSummaryLike {
   type: SSOProviderType;
   oidcIssuerUrl?: string;
@@ -11,10 +17,16 @@ export function getSSOProviderTypeLabel(type: SSOProviderType): string {
   return type === 'oidc' ? 'OIDC' : 'SAML';
 }
 
-export function getSSOProviderAddButtonLabel(type: SSOProviderType, gated = false): string {
-  return gated
-    ? `Add ${getSSOProviderTypeLabel(type)} (Pro)`
-    : `Add ${getSSOProviderTypeLabel(type)}`;
+export function getSSOProviderAddButtonLabel(type: SSOProviderType): string {
+  return `Add ${getSSOProviderTypeLabel(type)}`;
+}
+
+export function getSSOSamlFeatureGateCopy(): SSOProviderFeatureGateCopy {
+  return {
+    title: 'Advanced SSO',
+    subtitle: 'Advanced SSO',
+    body: 'SAML 2.0 and multi-provider SSO are available on paid self-hosted and hosted plans. Basic OIDC remains available without a paid plan.',
+  };
 }
 
 export function getSSOProviderModalTitle(editing: boolean, type: SSOProviderType): string {

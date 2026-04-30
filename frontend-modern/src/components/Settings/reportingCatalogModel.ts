@@ -70,8 +70,9 @@ export function buildLegacyReportingCatalogFallback(): ReportingCatalog {
     title: 'Detailed Reporting',
     description: 'Generate performance reports across infrastructure and workloads.',
     lockedState: {
-      title: 'Advanced Reporting (Pro)',
-      description: 'Generate PDF and CSV performance reports across infrastructure and workload resources.',
+      title: 'Advanced Reporting',
+      description:
+        'Generate PDF and CSV performance reports across infrastructure and workload resources on paid self-hosted and hosted plans.',
     },
     guidance: {
       title: 'Advanced Insights',

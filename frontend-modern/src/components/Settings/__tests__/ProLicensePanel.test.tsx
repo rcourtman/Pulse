@@ -28,8 +28,6 @@ import {
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
-const trackPricingViewedMock = vi.fn();
-const trackCheckoutClickedMock = vi.fn();
 const loadRuntimeLicenseStatusMock = vi.fn();
 const loadCommercialPostureMock = vi.fn();
 const loadLicenseEntitlementsMock = vi.fn();
@@ -98,11 +96,6 @@ vi.mock('@/stores/notifications', () => ({
   },
 }));
 
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPricingViewed: (...args: unknown[]) => trackPricingViewedMock(...args),
-  trackCheckoutClicked: (...args: unknown[]) => trackCheckoutClickedMock(...args),
-}));
-
 describe('ProLicensePanel', () => {
   const renderPanel = () =>
     render(() => (
@@ -124,8 +117,6 @@ describe('ProLicensePanel', () => {
     loadRuntimeLicenseStatusMock.mockReset();
     loadCommercialPostureMock.mockReset();
     loadLicenseEntitlementsMock.mockReset();
-    trackPricingViewedMock.mockReset();
-    trackCheckoutClickedMock.mockReset();
     licenseEntitlementsLoadErrorMock.mockReset();
     startProTrialMock.mockReset();
     activateLicenseMock.mockReset();
@@ -228,10 +219,9 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
     expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Compare plans' })).not.toBeInTheDocument();
-    expect(trackPricingViewedMock).not.toHaveBeenCalled();
   });
 
-  it('tracks compare-plan checkout intent from the explicit self-hosted billing handoff', async () => {
+  it('opens compare-plan checkout from the explicit self-hosted billing handoff', async () => {
     useLocationMock.mockReturnValue({
       search: `?intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,
       pathname: '/settings/system/billing/plan',
@@ -245,11 +235,6 @@ describe('ProLicensePanel', () => {
     });
 
     await fireEvent.click(screen.getAllByRole('link', { name: 'Compare plans' })[0]);
-
-    expect(trackCheckoutClickedMock).toHaveBeenCalledWith(
-      'settings_self_hosted_billing_compare_prompt',
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-    );
   });
 
   it('keeps explicit self-hosted plan comparison focused on optional paid extras', async () => {

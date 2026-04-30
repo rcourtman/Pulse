@@ -143,6 +143,11 @@ runtime cost control, and shared AI transport surfaces.
     but frontend comments, API denial messages, runtime logs, status labels,
     CLI help, and commercial prompts that describe the capability must use safe
     remediation or remediation wording.
+12. Keep AI control-level presentation runtime-owned rather than tier-owned.
+    `frontend-modern/src/utils/aiControlLevelPresentation.ts` and
+    `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
+    may describe approval posture, but must not add Pro-badge suffixes or
+    local commercial tracking around those runtime controls.
 
 ## Current State
 

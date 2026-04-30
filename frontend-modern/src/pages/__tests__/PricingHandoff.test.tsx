@@ -5,12 +5,7 @@ import PricingHandoff from '@/pages/PricingHandoff';
 import pricingHandoffSource from '@/pages/PricingHandoff.tsx?raw';
 import { getSelfHostedPurchaseStartUrl } from '@/utils/pricingHandoff';
 
-const trackPaywallViewedMock = vi.fn();
 const handoffToExternalPricingMock = vi.fn();
-
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
-}));
 
 vi.mock('@/utils/pricingHandoff', async () => {
   const actual =
@@ -23,7 +18,6 @@ vi.mock('@/utils/pricingHandoff', async () => {
 
 describe('PricingHandoff', () => {
   beforeEach(() => {
-    trackPaywallViewedMock.mockReset();
     handoffToExternalPricingMock.mockReset();
     window.scrollTo = vi.fn();
   });

@@ -92,6 +92,10 @@ create, review, and approve cross-organization shares.
 2. Keep organization settings copy and validation inside the canonical organization presentation helpers
 3. Keep the shared organization and RBAC transport proof routes explicit in `registry.json`; default fallback proof routing is not allowed for this subsystem
 4. Update this contract whenever a new organization settings, role-management, or organization-domain helper entry point becomes canonical runtime surface area
+5. Keep RBAC feature-gate copy on the organization presentation owner. RBAC
+   may describe capability availability on paid self-hosted and hosted plans,
+   but must not use Pro-badge titles or local browser upgrade telemetry in
+   `RBACFeatureGateSection.tsx` or `useRBACFeatureGateState.ts`.
 
 ## Current State
 

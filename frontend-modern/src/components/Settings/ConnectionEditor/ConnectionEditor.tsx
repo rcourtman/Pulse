@@ -1,4 +1,4 @@
-import { Component, For, type JSX, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { Component, For, type JSX, Show, createMemo, createSignal } from 'solid-js';
 import type { ConnectionType, ProbeCandidate } from '@/api/connections';
 import { AddressProbeStep } from './AddressProbeStep';
 import {
@@ -7,10 +7,6 @@ import {
   type ConnectionEditorState,
 } from './useConnectionEditor';
 import { getInfrastructureAutoDetectLabels } from '@/utils/infrastructureOnboardingPresentation';
-import {
-  createInfrastructureOnboardingMetricsTracker,
-  type InfrastructureOnboardingMetricsTracker,
-} from '@/utils/infrastructureOnboardingMetrics';
 
 export type ConnectionEditorMode = 'add' | 'edit';
 
@@ -30,8 +26,6 @@ export interface ConnectionEditorProps {
   initialAddress?: string;
   initialCandidate?: ProbeCandidate | null;
   showSlotHeader?: boolean;
-  trackInitialCatalogSelection?: boolean;
-  onboardingMetricsTracker?: InfrastructureOnboardingMetricsTracker | null;
   onBackToCatalog?: () => void;
   onSelectAgentRoute?: () => void;
   onSelectCandidate?: (candidate: ProbeCandidate) => void;
@@ -52,42 +46,11 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   const [selectedCandidate, setSelectedCandidate] = createSignal<ProbeCandidate | null>(
     props.initialCandidate ?? null,
   );
-  const ownsOnboardingMetricsTracker =
-    (props.mode ?? 'add') === 'add' && !props.onboardingMetricsTracker;
-  const onboardingMetrics =
-    (props.mode ?? 'add') === 'add'
-      ? props.onboardingMetricsTracker ?? createInfrastructureOnboardingMetricsTracker()
-      : null;
-
   const activeType = () => selectedType();
   const showCredentialSlot = () => activeType() !== null;
   const autoDetectLabels = createMemo(() => getInfrastructureAutoDetectLabels());
 
-  const recordPathSelectedForType = (type: ConnectionType) => {
-    onboardingMetrics?.recordPathSelected(type === 'agent' ? 'agent' : 'api');
-  };
-
-  onMount(() => {
-    if (!onboardingMetrics) return;
-    if (ownsOnboardingMetricsTracker) {
-      onboardingMetrics.recordOpened();
-    }
-    if (props.initialType) {
-      recordPathSelectedForType(props.initialType);
-      if (props.trackInitialCatalogSelection && props.initialType !== 'agent') {
-        onboardingMetrics.recordCatalogSelected(props.initialType);
-      }
-    }
-  });
-
-  createEffect(() => {
-    const type = selectedType();
-    if (!onboardingMetrics || !type) return;
-    onboardingMetrics.recordCredentialsOpened(type);
-  });
-
   const chooseCandidate = (candidate: ProbeCandidate) => {
-    onboardingMetrics?.recordPathSelected('api');
     if (props.onSelectCandidate) {
       props.onSelectCandidate(candidate);
       return;
@@ -97,14 +60,12 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   };
 
   const chooseManualType = (type: ConnectionType) => {
-    recordPathSelectedForType(type);
     setSelectedCandidate(null);
     setSelectedType(type);
   };
 
   const installAgent = () => {
     if (props.onSelectAgentRoute) {
-      onboardingMetrics?.recordPathSelected('agent');
       props.onSelectAgentRoute();
       return;
     }
@@ -175,8 +136,6 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                 onSelectCandidate={chooseCandidate}
                 onInstallAgent={installAgent}
                 onChooseSourceTypeInstead={props.onBackToCatalog}
-                onProbeSubmitted={() => onboardingMetrics?.recordPathSelected('api')}
-                onProbeResolved={(outcome) => onboardingMetrics?.recordProbeResult(outcome)}
               />
             </section>
           </div>

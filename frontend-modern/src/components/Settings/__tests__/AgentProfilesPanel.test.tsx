@@ -90,11 +90,6 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: vi.fn(),
-  trackUpgradeClicked: vi.fn(),
-}));
-
 const makeAgentResource = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'hash-agent-resource-id',
   type: 'agent',

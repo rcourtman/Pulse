@@ -85,10 +85,6 @@ vi.mock('@/utils/logger', () => ({
   logger: { error: vi.fn() },
 }));
 
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: vi.fn(),
-}));
-
 vi.mock('@/features/alerts/OverviewTab', () => ({
   OverviewTab: overviewTabSpy,
 }));

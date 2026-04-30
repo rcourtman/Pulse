@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { createMemo, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -6,7 +6,6 @@ import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getSSOCopySuccessMessage,
   getSSOConnectionTestErrorMessage,
@@ -65,23 +64,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
   const canManage = () => props.canManage !== false;
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
-
-  createEffect((wasBannerVisible) => {
-    const isBannerVisible =
-      showUpgradePrompts() && runtimeCapabilitiesLoaded() && !hasAdvancedSSO() && !loading();
-    if (isBannerVisible && !wasBannerVisible) {
-      trackPaywallViewed('advanced_sso', 'settings_sso_providers_banner');
-    }
-    return isBannerVisible;
-  }, false);
-
-  createEffect((wasUpsellVisible) => {
-    const isUpsellVisible = showUpgradePrompts() && showSamlUpsell();
-    if (isUpsellVisible && !wasUpsellVisible) {
-      trackPaywallViewed('advanced_sso', 'settings_sso_providers_add_saml_gate');
-    }
-    return isUpsellVisible;
-  }, false);
 
   const loadProviders = async () => {
     setLoading(true);
@@ -347,6 +329,5 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     fetchMetadataPreview,
     getUpgradeActionDestination,
     runtimeCapabilitiesLoaded,
-    trackUpgradeClicked,
   };
 };

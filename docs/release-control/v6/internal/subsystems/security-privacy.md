@@ -212,7 +212,9 @@ concern in `frontend-modern/src/stores/systemSettings.ts`, not settings
 navigation metadata or other frontend-primitives owners.
 Retired local-upgrade-metrics compatibility must not become customer-side
 commercial analytics emission; browser product surfaces must not POST pricing,
-checkout, paywall, funnel, or onboarding signals to `/api/upgrade-metrics/events`.
+checkout, paywall, funnel, or onboarding signals to `/api/upgrade-metrics/events`,
+and customer frontend source must not keep `upgradeMetrics`, `conversionEvents`,
+or infrastructure onboarding metrics wrappers as compatibility imports.
 
 The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API

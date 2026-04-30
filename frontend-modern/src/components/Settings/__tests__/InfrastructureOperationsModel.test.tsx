@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
+import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
+import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import {
   INSTALL_PROFILE_OPTIONS,
   getCapabilityManagementPath,
@@ -228,6 +230,24 @@ describe('infrastructure operations model', () => {
     expect(installStateSource).toContain('navigate(buildInfrastructureWorkspacePath())');
     expect(installStateSource).not.toContain('openDashboard');
     expect(installStateSource).not.toContain("navigate('/dashboard')");
+  });
+
+  it('keeps infrastructure install and operations surfaces free of retired commercial telemetry wrappers', () => {
+    for (const source of [
+      infrastructureOperationsModelSource,
+      infrastructureInstallerSectionSource,
+      useInfrastructureInstallStateSource,
+    ]) {
+      expect(source).not.toContain('upgradeMetrics');
+      expect(source).not.toContain('conversionEvents');
+      expect(source).not.toContain('infrastructureOnboardingMetrics');
+      expect(source).not.toContain('UNIFIED_AGENT_TELEMETRY_SURFACE');
+      expect(source).not.toContain('normalizeTelemetryPart');
+      expect(source).not.toContain('trackAgentInstallTokenCreated');
+      expect(source).not.toContain('trackAgentInstallCommandsCopied');
+      expect(source).not.toContain('trackAgentFirstConnected');
+      expect(source).not.toContain('/api/upgrade-metrics/events');
+    }
   });
 
   it('does not reintroduce the retired reporting state hook on the operations state', async () => {

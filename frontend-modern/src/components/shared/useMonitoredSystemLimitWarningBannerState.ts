@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onMount } from 'solid-js';
+import { createMemo, onMount } from 'solid-js';
 import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesUpgradePrompts,
@@ -11,11 +11,6 @@ import {
 } from '@/stores/license';
 import { hasMigrationGap } from '@/stores/licenseCommercial';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
-import {
-  trackUpgradeClicked,
-  trackUpgradeMetricEvent,
-  UPGRADE_METRIC_EVENTS,
-} from '@/utils/upgradeMetrics';
 import {
   getMonitoredSystemBannerToneClass,
   getMonitoredSystemSummary,
@@ -54,32 +49,8 @@ export function useMonitoredSystemLimitWarningBannerState() {
   const installCollectorsDestination = createMemo(() =>
     resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF),
   );
-  let wasUrgent = false;
-  createEffect(() => {
-    const urgent = isUrgent();
-    const visible = showBanner();
-    const limit = monitoredSystemLimit();
-    if (visible && urgent && !wasUrgent && limit) {
-      trackUpgradeMetricEvent({
-        type: UPGRADE_METRIC_EVENTS.LIMIT_WARNING_SHOWN,
-        surface: 'monitored_system_limit_banner',
-        limit_key: MONITORED_SYSTEM_LIMIT_KEY,
-        current_value: limit.current,
-        limit_value: limit.limit,
-      });
-    }
-    wasUrgent = visible && urgent;
-  });
-
-  const handleInstallCollectorsClick = () => {
-    trackUpgradeClicked(
-      'monitored_system_limit_banner_install_v6_collectors',
-      MONITORED_SYSTEM_LIMIT_KEY,
-    );
-  };
 
   return {
-    handleInstallCollectorsClick,
     installCollectorsDestination,
     isUrgent,
     reviewPolicyDestination,

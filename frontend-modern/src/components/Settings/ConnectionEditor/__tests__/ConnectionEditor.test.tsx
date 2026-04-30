@@ -9,23 +9,9 @@ const connectionsApiMock = vi.hoisted(() => ({
   setEnabled: vi.fn(),
   remove: vi.fn(),
 }));
-const onboardingMetricsTrackerMock = vi.hoisted(() => ({
-  recordOpened: vi.fn(),
-  recordPathSelected: vi.fn(),
-  recordProbeResult: vi.fn(),
-  recordCatalogSelected: vi.fn(),
-  recordCredentialsOpened: vi.fn(),
-}));
-const createInfrastructureOnboardingMetricsTrackerMock = vi.hoisted(() =>
-  vi.fn(() => onboardingMetricsTrackerMock),
-);
 
 vi.mock('@/api/connections', () => ({
   ConnectionsAPI: connectionsApiMock,
-}));
-
-vi.mock('@/utils/infrastructureOnboardingMetrics', () => ({
-  createInfrastructureOnboardingMetricsTracker: createInfrastructureOnboardingMetricsTrackerMock,
 }));
 
 const mockedProbe = vi.mocked(ConnectionsAPI.probe);
@@ -47,8 +33,6 @@ describe('ConnectionEditor', () => {
     const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
-    expect(createInfrastructureOnboardingMetricsTrackerMock).toHaveBeenCalledTimes(1);
-    expect(onboardingMetricsTrackerMock.recordOpened).toHaveBeenCalledTimes(1);
 
     const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'pve.lab' } });
@@ -56,15 +40,10 @@ describe('ConnectionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
 
     await waitFor(() => expect(mockedProbe).toHaveBeenCalledWith('pve.lab'));
-    await waitFor(() =>
-      expect(onboardingMetricsTrackerMock.recordProbeResult).toHaveBeenCalledWith('detected'),
-    );
-    expect(onboardingMetricsTrackerMock.recordPathSelected).toHaveBeenCalledWith('api');
 
     fireEvent.click((await screen.findByText('https://pve.lab:8006')).closest('button')!);
 
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:pve'));
-    expect(onboardingMetricsTrackerMock.recordCredentialsOpened).toHaveBeenCalledWith('pve');
     const lastCall = renderSlot.mock.calls.at(-1)![0];
     expect(lastCall.type).toBe('pve');
     expect(lastCall.candidate?.host).toBe('https://pve.lab:8006');
@@ -107,7 +86,9 @@ describe('ConnectionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
 
     await waitFor(() =>
-      expect(onboardingMetricsTrackerMock.recordProbeResult).toHaveBeenCalledWith('no-match'),
+      expect(
+        screen.getByText(/No supported API-backed platform detected/i),
+      ).toBeInTheDocument(),
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Choose a source type instead/i }));
@@ -132,8 +113,6 @@ describe('ConnectionEditor', () => {
     fireEvent.click(agentButton);
 
     expect(screen.getByTestId('slot').textContent).toBe('slot:agent');
-    expect(onboardingMetricsTrackerMock.recordPathSelected).toHaveBeenCalledWith('agent');
-    expect(onboardingMetricsTrackerMock.recordCredentialsOpened).toHaveBeenCalledWith('agent');
     const call = renderSlot.mock.calls.at(-1)![0];
     expect(call.type).toBe('agent');
     expect(call.candidate).toBeNull();
@@ -166,32 +145,19 @@ describe('ConnectionEditor', () => {
     expect(screen.getByText('Address probe')).toBeInTheDocument();
   });
 
-  it('uses an injected tracker for direct type routes without creating another one', async () => {
-    const externalTracker = {
-      recordOpened: vi.fn(),
-      recordPathSelected: vi.fn(),
-      recordProbeResult: vi.fn(),
-      recordCatalogSelected: vi.fn(),
-      recordCredentialsOpened: vi.fn(),
-    };
+  it('opens direct type routes without the detect setup', async () => {
     const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => (
       <ConnectionEditor
         initialType="truenas"
-        trackInitialCatalogSelection={true}
-        onboardingMetricsTracker={externalTracker}
         renderCredentialSlot={renderSlot}
         onClose={() => {}}
       />
     ));
 
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
-    expect(createInfrastructureOnboardingMetricsTrackerMock).not.toHaveBeenCalled();
-    expect(externalTracker.recordOpened).not.toHaveBeenCalled();
-    expect(externalTracker.recordPathSelected).toHaveBeenCalledWith('api');
-    expect(externalTracker.recordCatalogSelected).toHaveBeenCalledWith('truenas');
-    expect(externalTracker.recordCredentialsOpened).toHaveBeenCalledWith('truenas');
+    expect(screen.queryByRole('button', { name: /probe address/i })).not.toBeInTheDocument();
   });
 
   it('skips probe setup when an initialType is supplied in edit mode', () => {
@@ -206,7 +172,6 @@ describe('ConnectionEditor', () => {
       />
     ));
 
-    expect(createInfrastructureOnboardingMetricsTrackerMock).not.toHaveBeenCalled();
     expect(screen.getByTestId('slot').textContent).toBe('slot:vmware');
     const call = renderSlot.mock.calls.at(0)![0];
     expect(call.mode).toBe('edit');

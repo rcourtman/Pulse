@@ -16,8 +16,6 @@ const showErrorMock = vi.fn();
 const showWarningMock = vi.fn();
 const loggerErrorMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
-const trackPaywallViewedMock = vi.fn();
-const trackUpgradeClickedMock = vi.fn();
 
 vi.mock('../QuickSecuritySetup', () => ({
   QuickSecuritySetup: () => <div data-testid="quick-security-setup">Quick Security Setup</div>,
@@ -69,11 +67,6 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
-  trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
-}));
-
 describe('settings read-only panel states', () => {
   beforeEach(() => {
     hasFeatureMock.mockReset();
@@ -86,8 +79,6 @@ describe('settings read-only panel states', () => {
     showWarningMock.mockReset();
     loggerErrorMock.mockReset();
     presentationPolicyHidesUpgradePromptsMock.mockReset();
-    trackPaywallViewedMock.mockReset();
-    trackUpgradeClickedMock.mockReset();
 
     hasFeatureMock.mockReturnValue(true);
     presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
@@ -180,7 +171,6 @@ describe('settings read-only panel states', () => {
     expect(screen.queryByText('Audit Webhooks (Pro)')).not.toBeInTheDocument();
     expect(screen.queryByText(/require Pro/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
     expect(apiFetchJSONMock).not.toHaveBeenCalled();
   });
 });

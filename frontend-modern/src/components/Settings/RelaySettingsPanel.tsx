@@ -6,7 +6,6 @@ import { Toggle } from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
-import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import {
   RELAY_ENABLE_HELP_TEXT,
@@ -49,7 +48,6 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                   <UpgradeLink
                     destination={state.upgradeDestination()}
                     class={RELAY_PRIMARY_LINK_CLASS}
-                    onClick={() => trackUpgradeClicked('settings_relay_panel', 'relay')}
                   >
                     View plans
                   </UpgradeLink>

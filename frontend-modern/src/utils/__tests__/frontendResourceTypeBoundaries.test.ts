@@ -1650,8 +1650,13 @@ describe('frontend resource type boundaries', () => {
     expect(userAssignmentsPanelSource).not.toContain('Users sync on first login');
     expect(rbacFeatureGateStateSource).toContain('getRBACFeatureGateCopy');
     expect(rbacPresentationSource).toContain('export function getRBACFeatureGateCopy');
+    expect(rbacPresentationSource).not.toContain('(Pro)');
     expect(rbacPresentationSource).toContain('export function getRolesEmptyState');
     expect(rbacPresentationSource).toContain('export function getUserAssignmentsEmptyStateCopy');
+    expect(agentProfilesPanelSource).not.toContain('Pro feature');
+    expect(agentProfilesPresentationSource).toContain(
+      'export function getAgentProfilesFeatureGateCopy',
+    );
     expect(agentProfilesPresentationSource).toContain('export function getAgentProfilesEmptyState');
     expect(agentProfilesPresentationSource).toContain(
       'export function getAgentProfileAssignmentsEmptyState',
@@ -2933,10 +2938,10 @@ describe('frontend resource type boundaries', () => {
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('legacyConnections()');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('reviewPolicyDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
@@ -4130,6 +4135,8 @@ describe('frontend resource type boundaries', () => {
     expect(ssoProvidersPanelSource).not.toContain('const loadProviders = async () =>');
     expect(ssoProvidersPanelSource).not.toContain('const handleSave = async (');
     expect(ssoProvidersPanelSource).not.toContain('const testConnection = async () =>');
+    expect(ssoProvidersPanelSource).not.toContain('Pro feature');
+    expect(ssoProvidersPanelSource).not.toContain('requires Pro');
     expect(ssoProvidersPanelSource).not.toContain('provider.type.toUpperCase()');
     expect(ssoProvidersPanelSource).not.toContain("provider.type === 'oidc' ? (");
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderTypeLabel');
@@ -4143,6 +4150,8 @@ describe('frontend resource type boundaries', () => {
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOProviderEmptyStateDescription',
     );
+    expect(ssoProviderPresentationSource).toContain('export function getSSOSamlFeatureGateCopy');
+    expect(ssoProviderPresentationSource).not.toContain('(Pro)');
     expect(ssoProviderPresentationSource).toContain('export function getSSOProvidersLoadingState');
     expect(ssoProviderPresentationSource).toContain('export function getSSOTestResultPresentation');
     expect(ssoProviderPresentationSource).toContain(
@@ -4194,6 +4203,8 @@ describe('frontend resource type boundaries', () => {
     expect(auditWebhookPresentationSource).toContain(
       'export function getAuditWebhookFeatureGateCopy',
     );
+    expect(auditWebhookPresentationSource).not.toContain('Audit Webhooks (Pro)');
+    expect(auditWebhookPresentationSource).not.toContain('require Pro');
     expect(auditWebhookPresentationSource).toContain(
       'export function getAuditWebhookEmptyStateCopy',
     );
@@ -4214,7 +4225,7 @@ describe('frontend resource type boundaries', () => {
     expect(auditWebhookPresentationSource).toContain('AUDIT_WEBHOOK_SECURITY_NOTE_BODY');
     expect(auditWebhookStateSource).toContain('export const useAuditWebhookPanelState =');
     expect(auditWebhookStateSource).toContain('loadRuntimeCapabilities();');
-    expect(auditWebhookStateSource).toContain('trackPaywallViewed');
+    expect(auditWebhookStateSource).not.toContain('trackPaywallViewed');
     expect(auditWebhookStateSource).toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookStateSource).toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditLogPanelSource).toContain('getAuditLogLoadingState');
@@ -4231,7 +4242,7 @@ describe('frontend resource type boundaries', () => {
     expect(auditLogStateSource).toContain('createLocalStorageStringSignal');
     expect(auditLogStateSource).toContain('const fetchAuditEvents = async (');
     expect(auditLogStateSource).toContain('const verifyAllEvents = async (');
-    expect(auditLogStateSource).toContain('trackPaywallViewed');
+    expect(auditLogStateSource).not.toContain('trackPaywallViewed');
     expect(auditLogPanelSource).toContain('getAuditEventTypeBadgeClass');
     expect(auditLogPanelSource).toContain('getAuditVerificationBadgePresentation');
     expect(auditLogPanelSource).toContain('getAuditEventStatusPresentation');

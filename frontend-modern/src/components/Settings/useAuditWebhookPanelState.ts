@@ -2,11 +2,10 @@ import { createEffect, createSignal, onMount } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
-import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getAuditWebhookDuplicateUrlMessage,
   getAuditWebhookInvalidUrlMessage,
@@ -82,14 +81,6 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
   onMount(() => {
     loadRuntimeCapabilities();
   });
-
-  createEffect((wasPaywallVisible: boolean) => {
-    const isPaywallVisible = runtimeCapabilitiesLoaded() && !hasFeature('audit_logging');
-    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('audit_logging', 'settings_audit_webhook_panel');
-    }
-    return isPaywallVisible;
-  }, false);
 
   createEffect(() => {
     if (hasFeature('audit_logging')) {

@@ -38,8 +38,8 @@ export function getAuditWebhookFeatureGateCopy(
   }
 
   return {
-    title: 'Audit Webhooks (Pro)',
-    body: 'Audit webhooks are part of the audit logging feature set and require Pro.',
+    title: 'Audit Webhooks',
+    body: 'Audit webhook delivery is available on paid self-hosted and hosted plans.',
   };
 }
 

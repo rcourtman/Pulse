@@ -53,7 +53,7 @@ export function getAIChatControlLevelPresentation(
     case 'autonomous':
       return {
         label: 'Autonomous',
-        description: 'Executes without approval (Pro)',
+        description: 'Executes without approval',
         pillClassName:
           'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900',
         dotClassName: 'bg-red-500',

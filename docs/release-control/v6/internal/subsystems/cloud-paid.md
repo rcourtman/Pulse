@@ -528,11 +528,12 @@ runtime gating as separate unlinked claims.
 14. Keep self-hosted commercial funnel stage ownership out of the customer
     frontend. `pkg/licensing/conversion_events.go` and
     `pkg/licensing/conversion_store.go` may retain server/admin compatibility
-    handling for local commercial reporting, while
-    `frontend-modern/src/utils/upgradeMetrics.ts` is a compatibility no-op and
-    must not POST in-app `Plans & Billing`, pricing, checkout, paywall, or
-    onboarding events from browser product surfaces. `pulse-pro:license-server/v6_checkout.go`
-    owns the Pulse Account handoff equivalents bound to `portal_handoff_id`.
+    handling for local commercial reporting, while the customer frontend must
+    not contain `upgradeMetrics`, `conversionEvents`, or infrastructure
+    onboarding metrics wrappers or call sites at all. In-app `Plans & Billing`,
+    pricing, checkout, paywall, or onboarding surfaces must not emit browser
+    product events. `pulse-pro:license-server/v6_checkout.go` owns the Pulse
+    Account handoff equivalents bound to `portal_handoff_id`.
     Pulse must not infer those portal stages from referrer state, and the
     commercial service must keep those self-hosted handoffs on release track
     `v6` even while the public site remains on `v5` before GA.
@@ -1906,16 +1907,17 @@ routes rather than a package-wide `pkg/licensing/` fallback.
 That same conversion-telemetry boundary now keeps self-hosted commercial
 progression out of customer-side browser analytics.
 `pkg/licensing/conversion_events.go` and `pkg/licensing/conversion_store.go`
-may own local server/admin reporting compatibility, while
-`frontend-modern/src/utils/upgradeMetrics.ts` remains a compatibility no-op
-and must not emit local `pricing_viewed`, `checkout_clicked`, paywall,
-commercial funnel, or onboarding events from the in-app `Plans & Billing` plan
-surface. `pulse-pro:license-server/v6_checkout.go` owns the Pulse Account
-handoff equivalents bound to `portal_handoff_id` and the canonical checkout
-intent. The browser app must not try to recreate those Pulse Account stages
-from referrer state, and the commercial service must not collapse self-hosted
-v6 handoffs back onto the public-site release track when production public GA
-is still on v5.
+may own local server/admin reporting compatibility, while customer frontend
+source must not retain `upgradeMetrics`, `conversionEvents`, infrastructure
+onboarding metrics wrappers, or their call sites. The browser app must not emit
+local `pricing_viewed`, `checkout_clicked`, paywall, commercial funnel, or
+onboarding events from the in-app `Plans & Billing` plan surface.
+`pulse-pro:license-server/v6_checkout.go` owns the Pulse Account handoff
+equivalents bound to `portal_handoff_id` and the canonical checkout intent.
+The browser app must not try to recreate those Pulse Account stages from
+referrer state, and the commercial service must not collapse self-hosted v6
+handoffs back onto the public-site release track when production public GA is
+still on v5.
 That same local conversion store remains the canonical read model for
 self-hosted commercial reporting, but not for user support diagnostics:
 admin-owned reporting surfaces may read structured local funnel reports from

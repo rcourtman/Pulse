@@ -727,6 +727,11 @@ work extends shared components instead of creating new local variants.
    `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
    instead of importing generic commercial presentation helpers directly into
    hosted settings route shells.
+   Contextual settings feature gates must use capability-owned presentation
+   helpers and neutral paid-plan copy. They must not reintroduce `Pro feature`
+   badge titles, Pro-suffixed option labels, monitored-system limit claims, or
+   browser-local commercial/onboarding metrics wrappers in SSO, audit,
+   reporting, AI controls, agent profiles, or shared warning banners.
 8. Keep first-session dashboard empty-state copy on
    `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`, and make
    infrastructure setup guidance name the canonical destination explicitly
@@ -1018,7 +1023,9 @@ telemetry`; maintainer commercial-event controls, upgrade-metrics labels, and
 sales/onboarding reporting language must not appear in customer-facing Settings
 or support diagnostics, and public configuration docs must not list their
 internal compatibility switches as ordinary operator settings. Customer
-frontend code must also not POST those events to `/api/upgrade-metrics/events`.
+frontend code must also not import, define, or call `upgradeMetrics`,
+`conversionEvents`, infrastructure onboarding metrics wrappers, or POST those
+events to `/api/upgrade-metrics/events`.
 The telemetry copy must describe normalized release identity rather than
 falling back to ambiguous `telemetry`, `upgrade metrics`, or raw-version
 wording.
@@ -1784,7 +1791,10 @@ belong in admin-owned metrics surfaces instead of Settings support UI.
 `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`, called by
 the canonical frontend audit runner, enforces that boundary by failing if the
 diagnostics API, diagnostics results panel, or diagnostics payload model
-reintroduce those analytics fields outside the defensive strip helper.
+reintroduce those analytics fields outside the defensive strip helper, and by
+failing if production customer frontend source reintroduces the retired
+commercial/onboarding analytics wrappers or `/api/upgrade-metrics/events`
+calls.
 Diagnostics cards that summarize Docker and Podman agent coverage must use the
 shared `docker` source-platform label from
 `frontend-modern/src/utils/sourcePlatforms.ts` for their heading and body copy,

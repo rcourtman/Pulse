@@ -10,7 +10,7 @@ const baseCatalogPayload = {
   title: 'Detailed Reporting',
   description: 'Canonical reporting surfaces',
   lockedState: {
-    title: 'Advanced Reporting (Pro)',
+    title: 'Advanced Reporting',
     description: 'Canonical locked reporting teaser',
   },
   guidance: {
@@ -81,7 +81,7 @@ describe('reporting catalog model', () => {
   it('parses the canonical reporting catalog payload', () => {
     const catalog = parseReportingCatalog(baseCatalogPayload);
 
-    expect(catalog.lockedState.title).toBe('Advanced Reporting (Pro)');
+    expect(catalog.lockedState.title).toBe('Advanced Reporting');
     expect(catalog.guidance.title).toBe('Advanced Insights');
     expect(catalog.performanceReport.defaultFormat).toBe('pdf');
     expect(catalog.performanceReport.ranges[0].windowHours).toBe(24);
@@ -153,7 +153,7 @@ describe('reporting catalog model', () => {
       parseReportingCatalog({
         ...baseCatalogPayload,
         lockedState: {
-          title: 'Advanced Reporting (Pro)',
+          title: 'Advanced Reporting',
         },
       }),
     ).toThrow('Invalid reporting catalog payload');

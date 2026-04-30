@@ -48,20 +48,15 @@ const INTERNAL_ANALYTICS_RULES = [
     ],
   },
   {
-    getFilePath: ({ root }) => path.join(root, 'src', 'utils', 'upgradeMetrics.ts'),
-    rules: [
-      {
-        rule: 'canonical-settings/no-product-upgrade-metrics-ingestion',
-        regex:
-          /\/api\/upgrade-metrics\/events|@\/utils\/apiClient|\bapiFetch\s*\(|\bfetch\s*\(|\bsendBeacon\b/g,
-        message:
-          'Do not emit maintainer/admin commercial analytics from the customer frontend. Keep upgrade-metrics ingestion out of product surfaces.',
-      },
-    ],
-  },
-  {
     getFilePaths: ({ root }) => listProductionSourceFiles(path.join(root, 'src')),
     rules: [
+      {
+        rule: 'canonical-settings/no-product-commercial-analytics-source',
+        regex:
+          /@\/utils\/(?:conversionEvents|infrastructureOnboardingMetrics|upgradeMetrics)|['"]\.\.?\/(?:conversionEvents|infrastructureOnboardingMetrics|upgradeMetrics)['"]|\b(?:InfrastructureOnboardingMetrics|InfrastructureOnboardingMetricsTracker|UPGRADE_METRIC_EVENTS|UNIFIED_AGENT_TELEMETRY_SURFACE|clearSharedInfrastructureOnboardingMetricsTracker|createInfrastructureOnboardingMetricsTracker|getSharedInfrastructureOnboardingMetricsTracker|normalizeTelemetryPart|onboardingMetricsTracker|trackAgentFirstConnected|trackAgentInstallCommandCopied|trackAgentInstallProfileSelected|trackAgentInstallTokenGenerated|trackCheckoutClicked|trackPaywallViewed|trackPricingViewed|trackUpgradeClicked|trackUpgradeMetricEvent)\b/g,
+        message:
+          'Do not keep maintainer/admin commercial or onboarding analytics shims in production customer frontend source.',
+      },
       {
         rule: 'canonical-settings/no-product-upgrade-metrics-endpoint',
         regex: /\/api\/upgrade-metrics\/events/g,

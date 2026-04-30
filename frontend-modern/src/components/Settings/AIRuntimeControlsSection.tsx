@@ -16,7 +16,6 @@ import {
   getAISettingsWorkloadDiscoveryHelpContent,
   getAISettingsWorkloadDiscoverySummary,
 } from '@/utils/aiSettingsPresentation';
-import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { UPGRADE_ACTION_LABEL } from '@/utils/upgradePresentation';
 
 interface AIRuntimeControlsSectionProps {
@@ -256,7 +255,6 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
           <Show when={showAutonomousControlOption()}>
             <option value="autonomous">
               Autonomous - Pulse Assistant executes without approval
-              {state.autoFixLocked() && state.showUpgradePrompts() ? ' (Pro)' : ''}
             </option>
           </Show>
         </FormSelect>
@@ -289,7 +287,6 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             <UpgradeLink
               class="text-blue-600 dark:text-blue-400 font-medium hover:underline"
               destination={state.upgradeAutofixDestination()}
-              onClick={() => trackUpgradeClicked('settings_ai_patrol_autofix', 'ai_autofix')}
             >
               {UPGRADE_ACTION_LABEL}
             </UpgradeLink>{' '}

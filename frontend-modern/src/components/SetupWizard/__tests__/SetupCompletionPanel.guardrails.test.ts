@@ -31,6 +31,8 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain('Monitor from Anywhere');
     expect(setupCompletionPanelSource).not.toContain("trackPaywallViewed('relay'");
     expect(setupCompletionPanelSource).not.toContain("trackUpgradeClicked('setup_wizard'");
+    expect(setupCompletionPanelSource).not.toContain('infrastructureOnboardingMetrics');
+    expect(setupCompletionPanelSource).not.toContain('trackAgentFirstConnected');
     expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
   });
 

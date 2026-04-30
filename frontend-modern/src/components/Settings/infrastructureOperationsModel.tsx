@@ -6,7 +6,6 @@ import { type PlatformConnectionsView } from './platformConnectionsModel';
 import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 
 export const TOKEN_PLACEHOLDER = '<api-token>';
-export const UNIFIED_AGENT_TELEMETRY_SURFACE = 'settings_unified_agents';
 
 export type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
 export type UnifiedAgentStatus = 'active' | 'removed';
@@ -110,12 +109,6 @@ export const buildDefaultTokenName = () => {
   const stamp = iso.replace('T', ' ').replace(/:/g, '-');
   return `Agent ${stamp}`;
 };
-
-export const normalizeTelemetryPart = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
 
 export const shellQuoteArg = (value: string) => `'${value.replace(/'/g, `'\"'\"'`)}'`;
 

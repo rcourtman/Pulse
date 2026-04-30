@@ -446,7 +446,7 @@ describe('AIChat', () => {
       expect(screen.getByText('Default control mode')).toBeInTheDocument();
       expect(screen.getByText('No commands or control actions')).toBeInTheDocument();
       expect(screen.getByText('Ask before running commands')).toBeInTheDocument();
-      expect(screen.getByText('Executes without approval (Pro)')).toBeInTheDocument();
+      expect(screen.getByText('Executes without approval')).toBeInTheDocument();
     });
   });
 

@@ -2,7 +2,6 @@ import { Component, Show } from 'solid-js';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import type { RBACFeatureGateCopy } from '@/utils/rbacPresentation';
-import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
@@ -27,7 +26,6 @@ export const RBACFeatureGateSection: Component<RBACFeatureGateSectionProps> = (p
           <UpgradeLink
             destination={getUpgradeActionDestination('rbac')}
             class={getUpgradeActionButtonClass()}
-            onClick={() => trackUpgradeClicked(props.paywallLocation, 'rbac')}
           >
             {UPGRADE_ACTION_LABEL}
           </UpgradeLink>

@@ -2,8 +2,6 @@ import { For, Show } from 'solid-js';
 import { A } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import { onMount } from 'solid-js';
 import {
   CLOUD_COMMERCIAL_PRESENTATION,
   CLOUD_PLAN_DEFINITIONS,
@@ -81,10 +79,6 @@ function CloudTierCard(props: { tier: CloudPlanDefinition }) {
 // ---------------------------------------------------------------------------
 
 export default function CloudPricing() {
-  onMount(() => {
-    trackPaywallViewed('cloud_pricing', 'cloud_pricing_page');
-  });
-
   return (
     <div class="space-y-8">
       <PageHeader

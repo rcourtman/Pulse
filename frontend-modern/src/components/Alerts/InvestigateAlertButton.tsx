@@ -7,7 +7,6 @@ import { formatAlertValue } from '@/utils/alertFormatters';
 import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 interface InvestigateAlertButtonProps {
   alert: Alert;
@@ -47,7 +46,6 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       if (!canShowUpgradePrompt()) {
         return;
       }
-      trackUpgradeClicked('investigate_alert_button', 'ai_alerts');
       openUpgradeDestination(getUpgradeActionDestination('ai_alerts'));
       return;
     }

@@ -16,7 +16,7 @@ const catalogPayload = {
   title: 'Detailed Reporting',
   description: 'Canonical reporting surfaces',
   lockedState: {
-    title: 'Advanced Reporting (Pro)',
+    title: 'Advanced Reporting',
     description: 'Canonical locked reporting teaser',
   },
   guidance: {
@@ -105,10 +105,6 @@ describe('useReportingPanelState', () => {
       showWarning: vi.fn(),
     }));
 
-    vi.doMock('@/utils/upgradeMetrics', () => ({
-      trackPaywallViewed: vi.fn(),
-    }));
-
     vi.doMock('@/stores/license', () => ({
       hasFeature: vi.fn(
         (feature: string) => feature === 'advanced_reporting' && hasReportingFeature,
@@ -178,7 +174,7 @@ describe('useReportingPanelState', () => {
 
     expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
-    expect(hookState.reportingCatalog()?.lockedState.title).toBe('Advanced Reporting (Pro)');
+    expect(hookState.reportingCatalog()?.lockedState.title).toBe('Advanced Reporting');
     expect(hookState.isLocked()).toBe(true);
 
     dispose();
@@ -205,10 +201,6 @@ describe('useReportingPanelState', () => {
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
       showWarning: vi.fn(),
-    }));
-
-    vi.doMock('@/utils/upgradeMetrics', () => ({
-      trackPaywallViewed: vi.fn(),
     }));
 
     vi.doMock('@/stores/license', () => ({
@@ -265,10 +257,6 @@ describe('useReportingPanelState', () => {
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
       showWarning: vi.fn(),
-    }));
-
-    vi.doMock('@/utils/upgradeMetrics', () => ({
-      trackPaywallViewed: vi.fn(),
     }));
 
     vi.doMock('@/stores/license', () => ({
@@ -333,10 +321,6 @@ describe('useReportingPanelState', () => {
       showWarning: vi.fn(),
     }));
 
-    vi.doMock('@/utils/upgradeMetrics', () => ({
-      trackPaywallViewed: vi.fn(),
-    }));
-
     vi.doMock('@/stores/license', () => ({
       hasFeature: vi.fn(
         (feature: string) => feature === 'advanced_reporting' && hasReportingFeature,
@@ -386,10 +370,6 @@ describe('useReportingPanelState', () => {
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
       showWarning: vi.fn(),
-    }));
-
-    vi.doMock('@/utils/upgradeMetrics', () => ({
-      trackPaywallViewed: vi.fn(),
     }));
 
     vi.doMock('@/stores/license', () => ({

@@ -107,8 +107,6 @@ const loadLicenseStatusMock = vi.fn();
 const loadCommercialPostureMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.fn();
 const getUpgradeActionUrlOrFallbackMock = vi.fn();
-const trackPaywallViewedMock = vi.fn();
-const trackUpgradeClickedMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
@@ -146,11 +144,6 @@ vi.mock('@/stores/licenseCommercial', () => ({
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
-}));
-
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
-  trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
@@ -343,8 +336,6 @@ describe('AIIntelligence entitlement gating', () => {
     loadCommercialPostureMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
-    trackPaywallViewedMock.mockReset();
-    trackUpgradeClickedMock.mockReset();
     presentationPolicyHidesUpgradePromptsMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
@@ -583,7 +574,6 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
   });
 
   it('locks paid patrol controls without upgrade prompts in default self-hosted mode', async () => {
@@ -610,7 +600,6 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
   });
 
   it('unlocks paid patrol controls when the entitlement grants the features', async () => {
@@ -633,7 +622,6 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByRole('button', { name: 'Remediate' })).not.toBeDisabled();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
-    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
   });
 
   it('renders the canonical intelligence summary card with recent changes', async () => {

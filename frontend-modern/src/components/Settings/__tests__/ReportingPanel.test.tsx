@@ -18,16 +18,12 @@ vi.mock('../ResourcePicker', () => ({
   }): JSX.Element => <div>Mock Resource Picker</div>,
 }));
 
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackUpgradeClicked: vi.fn(),
-}));
-
 const baseCatalog = {
   id: 'advanced_reporting',
   title: 'Detailed Reporting',
   description: 'Canonical reporting surfaces',
   lockedState: {
-    title: 'Advanced Reporting (Pro)',
+    title: 'Advanced Reporting',
     description: 'Canonical locked reporting teaser',
   },
   guidance: {

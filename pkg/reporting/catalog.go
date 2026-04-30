@@ -180,8 +180,8 @@ func DescribeReportingCatalog() ReportingCatalog {
 		Title:       "Detailed Reporting",
 		Description: "Generate performance reports and current-state exports across infrastructure and workloads.",
 		LockedState: ReportingLockedStateDefinition{
-			Title:       "Advanced Reporting (Pro)",
-			Description: "Generate PDF and CSV performance reports plus current-state VM inventory exports across infrastructure and workload resources.",
+			Title:       "Advanced Reporting",
+			Description: "Generate PDF and CSV performance reports plus current-state VM inventory exports across infrastructure and workload resources on paid self-hosted and hosted plans.",
 		},
 		Guidance: ReportingGuidanceDefinition{
 			Title:       "Advanced Insights",

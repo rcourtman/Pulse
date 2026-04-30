@@ -50,7 +50,6 @@ export default function AuditLogPanel() {
     goToLastPage,
     goToNextPage,
     goToPreviousPage,
-    handleUpgradeClick,
     hasNextPage,
     hasResumeEvents,
     hasSignedEvents,
@@ -170,7 +169,6 @@ export default function AuditLogPanel() {
                 <UpgradeLink
                   destination={upgradeDestination()}
                   class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
-                  onClick={handleUpgradeClick}
                 >
                   {UPGRADE_ACTION_LABEL}
                 </UpgradeLink>

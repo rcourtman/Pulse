@@ -21,19 +21,17 @@ export function getRBACFeatureGateCopy(
   const showCommercialCopy = options.showCommercialCopy !== false;
   if (kind === 'roles') {
     return {
-      title: showCommercialCopy ? 'Custom Roles (Pro)' : 'Custom Roles',
+      title: 'Custom Roles',
       body: showCommercialCopy
-        ? 'Define granular permissions and custom access tiers for your team.'
+        ? 'Define granular permissions and custom access tiers on paid self-hosted and hosted plans.'
         : 'Define granular permissions and custom access tiers when RBAC is enabled for this instance.',
     };
   }
 
   return {
-    title: showCommercialCopy
-      ? 'Centralized Access Control (Pro)'
-      : 'Centralized Access Control',
+    title: 'Centralized Access Control',
     body: showCommercialCopy
-      ? 'Assign multi-tier roles to users and manage infrastructure-wide security policies.'
+      ? 'Assign multi-tier roles to users and manage infrastructure-wide security policies on paid self-hosted and hosted plans.'
       : 'Assign roles to users and review access policy when RBAC is enabled for this instance.',
   };
 }

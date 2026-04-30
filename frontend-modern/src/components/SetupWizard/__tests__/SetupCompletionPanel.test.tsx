@@ -7,7 +7,6 @@ const copyToClipboardMock = vi.fn();
 const apiFetchJSONMock = vi.fn();
 const createObjectURLMock = vi.fn(() => 'blob:mock-url');
 const revokeObjectURLMock = vi.fn();
-const trackAgentFirstConnectedMock = vi.fn();
 
 class MockBlob {
   readonly parts: string[];
@@ -48,10 +47,6 @@ vi.mock('@/utils/logger', () => ({
     info: vi.fn(),
     debug: vi.fn(),
   },
-}));
-
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackAgentFirstConnected: (...args: unknown[]) => trackAgentFirstConnectedMock(...args),
 }));
 
 const baseState: WizardState = {
@@ -213,10 +208,6 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getAllByRole('button', { name: 'Open Infrastructure' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Add infrastructure' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
-    expect(trackAgentFirstConnectedMock).toHaveBeenCalledWith(
-      'setup_wizard_complete',
-      'first_agent',
-    );
 
     const nextStepHeading = screen.getByRole('heading', { name: 'Open Infrastructure' });
     const nextStepCard = nextStepHeading.closest('[aria-label="Setup next step"]');
@@ -271,7 +262,6 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByRole('button', { name: 'Open Infrastructure' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
-    expect(trackAgentFirstConnectedMock).not.toHaveBeenCalled();
 
     const nextStepHeading = screen.getByRole('heading', { name: 'Open Infrastructure' });
     const nextStepCard = nextStepHeading.closest('[aria-label="Setup next step"]');
@@ -375,10 +365,6 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
-    expect(trackAgentFirstConnectedMock).toHaveBeenCalledWith(
-      'setup_wizard_complete',
-      'first_agent',
-    );
   });
 
   it('keeps connected governed infrastructure on local operator identity', async () => {

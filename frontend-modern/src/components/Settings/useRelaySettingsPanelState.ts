@@ -1,9 +1,8 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
-import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { showError, showSuccess } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
 import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
@@ -40,14 +39,6 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   );
   const statusErrorMessage = createMemo(() => getRelayStatusErrorMessage(status()));
   const canShowPairing = createMemo(() => Boolean(config()?.enabled && status()?.connected));
-
-  createEffect((wasPaywallVisible: boolean) => {
-    const isPaywallVisible = runtimeCapabilitiesLoaded() && !relayEnabled();
-    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('relay', 'settings_relay_panel');
-    }
-    return isPaywallVisible;
-  }, false);
 
   let statusInterval: ReturnType<typeof setInterval> | undefined;
 

@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { createMemo, createSignal, onMount } from 'solid-js';
 import { useWebSocket } from '@/contexts/appRuntime';
 import {
   AgentProfilesAPI,
@@ -26,7 +26,6 @@ import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
 } from '@/utils/upgradePresentation';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { KNOWN_SETTINGS } from './agentProfileSettings';
 import {
   getActionableAgentIdFromResource,
@@ -205,14 +204,6 @@ export const useAgentProfilesPanelState = () => {
     }
   };
 
-  createEffect((wasPaywallVisible) => {
-    const isPaywallVisible = !checkingLicense() && !hasAgentProfiles();
-    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('agent_profiles', 'settings_agent_profiles_panel');
-    }
-    return isPaywallVisible;
-  }, false);
-
   onMount(async () => {
     await loadRuntimeCapabilities();
 
@@ -372,7 +363,6 @@ export const useAgentProfilesPanelState = () => {
     showUpgradePrompts,
     showModal,
     showSuggestModal,
-    trackUpgradeClicked,
     unknownKeys,
     updateSetting,
     editingProfile,

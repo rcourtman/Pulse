@@ -10,7 +10,6 @@ import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 const {
   openWithPromptMock,
   openUpgradeDestinationMock,
-  trackUpgradeClickedMock,
   formatAlertValueMock,
   mockAiChatStore,
   getUpgradeActionDestinationMock,
@@ -20,7 +19,6 @@ const {
   vi.hoisted(() => {
     const openWithPromptMock = vi.fn();
     const openUpgradeDestinationMock = vi.fn();
-    const trackUpgradeClickedMock = vi.fn();
     const formatAlertValueMock = vi.fn((value?: number, _type?: string) =>
       value !== undefined ? `${value.toFixed(1)}%` : 'N/A',
     );
@@ -34,7 +32,6 @@ const {
     return {
       openWithPromptMock,
       openUpgradeDestinationMock,
-      trackUpgradeClickedMock,
       formatAlertValueMock,
       mockAiChatStore,
       getUpgradeActionDestinationMock,
@@ -58,10 +55,6 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 
 vi.mock('@/components/shared/useUpgradeNavigation', () => ({
   useUpgradeNavigation: () => openUpgradeDestinationMock,
-}));
-
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
 }));
 
 vi.mock('@/utils/alertFormatters', () => ({
@@ -105,7 +98,6 @@ afterEach(() => {
 
 beforeEach(() => {
   openWithPromptMock.mockReset();
-  trackUpgradeClickedMock.mockReset();
   formatAlertValueMock.mockClear();
   openUpgradeDestinationMock.mockReset();
   getUpgradeActionDestinationMock.mockReset();
@@ -231,12 +223,11 @@ describe('InvestigateAlertButton', () => {
       expect(button.className).toContain('opacity-60');
     });
 
-    it('opens upgrade URL and tracks click when locked and clicked', async () => {
+    it('opens upgrade URL when locked and clicked', async () => {
       render(() => <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />);
       const button = screen.getByRole('button');
       await fireEvent.click(button);
 
-      expect(trackUpgradeClickedMock).toHaveBeenCalledWith('investigate_alert_button', 'ai_alerts');
       expect(openUpgradeDestinationMock).toHaveBeenCalledWith({
         href: getPublicPricingUrl('ai_alerts'),
         external: true,
@@ -257,7 +248,6 @@ describe('InvestigateAlertButton', () => {
 
       await fireEvent.click(button);
 
-      expect(trackUpgradeClickedMock).not.toHaveBeenCalled();
       expect(openUpgradeDestinationMock).not.toHaveBeenCalled();
       expect(openWithPromptMock).not.toHaveBeenCalled();
     });
@@ -314,10 +304,9 @@ describe('InvestigateAlertButton', () => {
       });
     });
 
-    it('does not call trackUpgradeClicked when unlocked', async () => {
+    it('does not open the upgrade destination when unlocked', async () => {
       render(() => <InvestigateAlertButton alert={makeAlert()} />);
       await fireEvent.click(screen.getByRole('button'));
-      expect(trackUpgradeClickedMock).not.toHaveBeenCalled();
       expect(openUpgradeDestinationMock).not.toHaveBeenCalled();
     });
 
