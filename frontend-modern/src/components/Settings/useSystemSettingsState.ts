@@ -7,7 +7,6 @@ import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
 import { copyToClipboard } from '@/utils/clipboard';
 import {
-  updateDisableLocalUpgradeMetricsSetting,
   updateDockerUpdateActionsSetting,
   updateReduceProUpsellNoiseSetting,
 } from '@/stores/systemSettings';
@@ -18,7 +17,6 @@ import {
   getBackupIntervalSummary,
   getDockerUpdateActionsUpdateErrorMessage,
   getHideLocalLoginUpdateErrorMessage,
-  getLocalUpgradeMetricsUpdateErrorMessage,
   getReduceUpsellNoiseUpdateErrorMessage,
   getStartUpdateErrorMessage,
   getSystemSettingsSaveErrorMessage,
@@ -66,8 +64,6 @@ export function useSystemSettingsState({
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
   const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
   const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
-  const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
-  const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
   const [savingTelemetry, setSavingTelemetry] = createSignal(false);
   const [telemetryPreview, setTelemetryPreview] = createSignal<TelemetryPreviewResponse | null>(
@@ -101,11 +97,6 @@ export function useSystemSettingsState({
     Boolean(
       envOverrides().disableDockerUpdateActions ||
       envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS'],
-    );
-  const disableLocalUpgradeMetricsLocked = () =>
-    Boolean(
-      envOverrides().disableLocalUpgradeMetrics ||
-      envOverrides()['PULSE_DISABLE_LOCAL_UPGRADE_METRICS'],
     );
   const telemetryEnabledLocked = () =>
     Boolean(envOverrides().telemetryEnabled || envOverrides()['PULSE_TELEMETRY']);
@@ -159,7 +150,6 @@ export function useSystemSettingsState({
       setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
       setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
       setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
-      setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
       setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
 
       if (typeof systemSettings.backupPollingEnabled === 'boolean') {
@@ -351,35 +341,6 @@ export function useSystemSettingsState({
       setReduceProUpsellNoise(previous);
     } finally {
       setSavingReduceUpsells(false);
-    }
-  };
-
-  const handleDisableLocalUpgradeMetricsChange = async (disabled: boolean): Promise<void> => {
-    if (disableLocalUpgradeMetricsLocked() || savingUpgradeMetrics()) {
-      return;
-    }
-
-    const previous = disableLocalUpgradeMetrics();
-    setDisableLocalUpgradeMetrics(disabled);
-    setSavingUpgradeMetrics(true);
-
-    try {
-      await SettingsAPI.updateSystemSettings({ disableLocalUpgradeMetrics: disabled });
-      updateDisableLocalUpgradeMetricsSetting(disabled);
-      notificationStore.success(
-        disabled ? 'Local-only commercial events disabled' : 'Local-only commercial events enabled',
-        2000,
-      );
-    } catch (error) {
-      logger.error('Failed to update local-only commercial events setting', error);
-      notificationStore.error(
-        getLocalUpgradeMetricsUpdateErrorMessage(
-          error instanceof Error ? error.message : undefined,
-        ),
-      );
-      setDisableLocalUpgradeMetrics(previous);
-    } finally {
-      setSavingUpgradeMetrics(false);
     }
   };
 
@@ -589,10 +550,6 @@ export function useSystemSettingsState({
     reduceProUpsellNoise,
     savingReduceUpsells,
     handleReduceProUpsellNoiseChange,
-    disableLocalUpgradeMetrics,
-    disableLocalUpgradeMetricsLocked,
-    savingUpgradeMetrics,
-    handleDisableLocalUpgradeMetricsChange,
     telemetryEnabled,
     telemetryEnabledLocked,
     savingTelemetry,

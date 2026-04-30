@@ -866,13 +866,18 @@ work extends shared components instead of creating new local variants.
     “IPs are never seen,” the summary copy in
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
-28. Keep shared storage-route feature presentation on neutral capability truth.
+28. Keep maintainer commercial-event controls out of customer settings.
+    The shared general settings privacy panel may expose anonymous outbound
+    telemetry controls, preview, and reset affordances, but it must not render
+    local commercial handoff event toggles, `PULSE_DISABLE_LOCAL_UPGRADE_METRICS`,
+    or other commercial-debug controls as normal customer-facing preferences.
+29. Keep shared storage-route feature presentation on neutral capability truth.
     Reusable mappers and presenters in `frontend-modern/src/features/storageBackups/`
     must distinguish inventory datastores from backup repositories so VMware
     rows on the shared storage route stay canonical to the admitted phase-1 floor instead of
     reviving backup-target, protected-target, or recovery-local semantics on a
     shared page.
-29. Keep infrastructure settings-shell API alternatives on the shared shell
+30. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`, and
     `frontend-modern/src/components/Settings/settingsNavigationModel.ts` must
@@ -884,7 +889,7 @@ work extends shared components instead of creating new local variants.
     and no per-type `ProxmoxSettingsPanel` / `TrueNASSettingsPanel` /
     `VMwareSettingsPanel` to route through; the provider is a field inside
     one `ConnectionEditor`, not a destination.
-30. Keep the infrastructure settings connection inventory on one shared
+31. Keep the infrastructure settings connection inventory on one shared
     source. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
     composes rows exclusively from
     `frontend-modern/src/components/Settings/useConnectionsLedger.ts`,
@@ -894,14 +899,14 @@ work extends shared components instead of creating new local variants.
     `PlatformConnectionsWorkspace` / `TrueNASSettingsPanel` /
     `VMwareSettingsPanel` panels must not be reintroduced as a second
     fetch path.
-31. Keep alert-history feature composition on the current owned state contract.
+32. Keep alert-history feature composition on the current owned state contract.
     `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` must react to the
     shared `alertData()` history state instead of reviving deleted aliases, and
     it must pass unified-resource resolution through to
     `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` so
     the panel can render shared route chips without creating another page-local
     resource lookup or provider-specific handoff layer.
-32. Keep the alert-thresholds containers surface on the canonical shared owner.
+33. Keep the alert-thresholds containers surface on the canonical shared owner.
     `alertOverridesModel.ts`, `useAlertOverridesState.ts`, and
     `useAlertsConfigurationState.ts` must surface API-backed `app-container`
     parents such as TrueNAS as first-class `Container Runtimes`, while
@@ -910,21 +915,21 @@ work extends shared components instead of creating new local variants.
     props that can collapse functions on the live Solid surface. Docker-only
     controls in `ThresholdsTableDockerTab.tsx` must remain gated to real
     `docker-host` resources instead of leaking onto platform-managed runtimes.
-33. Keep shared commercial upgrade navigation typed and destination-aware.
+34. Keep shared commercial upgrade navigation typed and destination-aware.
     Shared paywall shells and upgrade actions must route internal billing or
     cloud destinations through `frontend-modern/src/utils/upgradeNavigation.ts`,
     `frontend-modern/src/components/shared/UpgradeLink.tsx`, and
     `frontend-modern/src/components/shared/useUpgradeNavigation.ts` instead of
     guessing from labels, hardcoding `target="_blank"`, or calling
     `window.open(...)` from each feature surface.
-34. Keep same-shell infrastructure route transitions on retained shared state.
+35. Keep same-shell infrastructure route transitions on retained shared state.
     `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
     may show its full-page loading shell only before the first compatible
     resource snapshot exists; once a fresh canonical snapshot is already
     present in the shared app shell, top-level tab switches must reuse that
     state boundary instead of flashing a transient infrastructure page
     takeover between tabs.
-35. Keep self-hosted paid-service prompts opt-in at the shared shell layer.
+36. Keep self-hosted paid-service prompts opt-in at the shared shell layer.
     `settingsNavCatalog.ts`, `settingsNavVisibility.ts`, shared upgrade link
     primitives, trial banners, monitored-system warning banners, history-lock
     overlays, and Patrol lock helpers must honor `presentationPolicy.hideUpgrade`
@@ -1000,10 +1005,12 @@ vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 `frontend-modern/src/components/shared/whatsNewModalModel.ts`,
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts`, and
 `frontend-modern/src/utils/systemSettingsPresentation.ts` must present one
-explicit `Usage data and privacy` model with the separate labels
-`Anonymous outbound telemetry` and `Disable local-only commercial events`, and
-must describe telemetry with normalized release identity rather than falling
-back to ambiguous `telemetry`, `upgrade metrics`, or raw-version wording.
+explicit `Usage data and privacy` model centered on `Anonymous outbound
+telemetry`; maintainer commercial-event controls, upgrade-metrics labels, and
+sales/onboarding reporting language must not appear in customer-facing Settings
+or support diagnostics. The telemetry copy must describe normalized release
+identity rather than falling back to ambiguous `telemetry`, `upgrade metrics`,
+or raw-version wording.
 Shared table, disclosure, and form primitives must also stay explicitly typed
 at the browser edge. Summary rows may memoize repeated pending-update reads,
 shared buttons must preserve discriminated disclosure props, toggle and a11y

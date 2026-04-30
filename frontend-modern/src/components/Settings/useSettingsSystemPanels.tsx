@@ -40,11 +40,6 @@ export function useSettingsSystemPanels(
     setPVEPollingCustomSeconds: params.systemSettings.setPVEPollingCustomSeconds,
     pvePollingEnvLocked: params.systemSettings.pvePollingEnvLocked,
     setHasUnsavedChanges: params.systemSettings.setHasUnsavedChanges,
-    disableLocalUpgradeMetrics: params.systemSettings.disableLocalUpgradeMetrics,
-    disableLocalUpgradeMetricsLocked: params.systemSettings.disableLocalUpgradeMetricsLocked,
-    savingUpgradeMetrics: params.systemSettings.savingUpgradeMetrics,
-    handleDisableLocalUpgradeMetricsChange:
-      params.systemSettings.handleDisableLocalUpgradeMetricsChange,
     telemetryEnabled: params.systemSettings.telemetryEnabled,
     telemetryEnabledLocked: params.systemSettings.telemetryEnabledLocked,
     savingTelemetry: params.systemSettings.savingTelemetry,

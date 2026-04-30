@@ -13,10 +13,15 @@ describe('GeneralSettingsPanel guardrails', () => {
 
   it('keeps telemetry preview and reset controls in the general settings panel', () => {
     expect(generalSettingsPanelSource).toContain('Usage data and privacy');
-    expect(generalSettingsPanelSource).toContain('Disable local-only commercial events');
     expect(generalSettingsPanelSource).toContain('Preview payload');
     expect(generalSettingsPanelSource).toContain('Reset ID');
     expect(generalSettingsPanelSource).toContain('Telemetry payload preview');
+  });
+
+  it('keeps maintainer commercial event controls out of customer settings', () => {
+    expect(generalSettingsPanelSource).not.toContain('Disable local-only commercial events');
+    expect(generalSettingsPanelSource).not.toContain('commercial handoff events');
+    expect(generalSettingsPanelSource).not.toContain('PULSE_DISABLE_LOCAL_UPGRADE_METRICS');
   });
 
   it('summarizes telemetry retention and non-storage guarantees in-product', () => {

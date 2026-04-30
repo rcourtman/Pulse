@@ -171,9 +171,11 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsStateSource).not.toContain('hasQuickstartAvailable');
     expect(aiSettingsDialogsSource).not.toContain('Start Trial');
     expect(aiSettingsDialogsSource).not.toContain('RELAY_ONBOARDING_TRIAL_STARTING_LABEL');
-    expect(generalSettingsPanelSource).toContain('Disable local-only commercial events');
+    expect(generalSettingsPanelSource).not.toContain('Disable local-only commercial events');
+    expect(generalSettingsPanelSource).not.toContain('commercial handoff events');
+    expect(generalSettingsPanelSource).not.toContain('PULSE_DISABLE_LOCAL_UPGRADE_METRICS');
     expect(generalSettingsPanelSource).not.toContain('Disable local-only upgrade events');
-    expect(systemSettingsPresentationSource).toContain(
+    expect(systemSettingsPresentationSource).not.toContain(
       'Unable to update local-only commercial events.',
     );
     expect(systemSettingsPresentationSource).toContain(

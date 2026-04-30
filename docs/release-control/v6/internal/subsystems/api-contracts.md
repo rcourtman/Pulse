@@ -790,9 +790,10 @@ for logs and response headers.
 That same shared settings/licensing contract now also owns the split usage-data
 payload model. `frontend-modern/src/api/settings.ts`,
 `internal/api/router_routes_licensing.go`, and adjacent settings callers must
-keep anonymous outbound telemetry and local-only commercial handoff events as separate
-browser-visible scopes, and the telemetry preview payload must ship normalized
-version identity fields (`version`, `version_raw`, `version_channel`,
+keep anonymous outbound telemetry as the only browser-visible usage-data scope;
+local commercial reporting controls stay internal/admin-owned and must not
+surface as ordinary Settings controls. The telemetry preview payload must ship
+normalized version identity fields (`version`, `version_raw`, `version_channel`,
 `version_build`, `version_is_development`, and
 `version_is_published_release`) instead of leaving browser callers to infer
 published-release truth from raw build strings.

@@ -17,10 +17,11 @@
 
 ## Purpose
 
-Own Pulse's canonical privacy disclosures, usage-data boundary (anonymous
-outbound telemetry plus local-only commercial handoff events), and the security-facing
-settings surfaces that expose authentication posture, token-management
-visibility, and privacy controls to operators.
+Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
+and the security-facing settings surfaces that expose authentication posture,
+token-management visibility, and privacy controls to operators. Customer-facing
+privacy and Settings surfaces must not present maintainer commercial-event
+controls as normal product settings.
 
 ## Canonical Files
 
@@ -151,9 +152,10 @@ visibility, and privacy controls to operators.
 This subsystem now gives `L14` an explicit governed home for privacy guidance
 and telemetry disclosures instead of leaving those trust surfaces as lane-level
 evidence with no subsystem ownership.
-That same governed home now also owns the single "usage data" vocabulary for
-anonymous outbound telemetry and local-only commercial handoff events, so Pulse stops
-describing those two privacy scopes as unrelated systems.
+That same governed home now also owns the single customer-facing "usage data"
+vocabulary for anonymous outbound telemetry. Local commercial activation and
+license-recovery runtime records must stay out of ordinary Settings, support
+diagnostics, and outbound telemetry disclosure copy.
 That same operator-reporting boundary now also owns reusable latest-install
 adoption baselines. `scripts/telemetry_adoption_report.py` must emit
 windowed 24h, 72h, and 7d latest-install snapshots that split published
@@ -189,10 +191,12 @@ runtime, so privacy governance must not describe a live public hosted-model
 proxy for normal self-hosted v6 installs.
 That shared settings boundary now also has an explicit split of responsibilities:
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts` remains the
-canonical owner for telemetry, local-upgrade-metrics, and auth/privacy runtime
-state, while `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
-stays a presentation boundary and `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
-may only assemble props for the shared settings shell. Privacy or telemetry
+canonical owner for telemetry, local-upgrade-metrics compatibility, and
+auth/privacy runtime state, while
+`frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` stays a
+customer-facing presentation boundary for outbound telemetry controls and
+`frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx` may only
+assemble customer-visible props for the shared settings shell. Privacy or telemetry
 behavior must not drift into `frontend-modern/src/components/Settings/Settings.tsx`
 or the registry hook just because the shell wiring changed.
 That shell split now also applies to tab-save coordination: the dedicated

@@ -90,10 +90,6 @@ export function getReduceUpsellNoiseUpdateErrorMessage(message?: string): string
   return message || 'Unable to update commercial prompt preferences.';
 }
 
-export function getLocalUpgradeMetricsUpdateErrorMessage(message?: string): string {
-  return message || 'Unable to update local-only commercial events.';
-}
-
 export function getTelemetryUpdateErrorMessage(message?: string): string {
   return message || 'Unable to update anonymous telemetry.';
 }

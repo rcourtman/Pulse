@@ -54,11 +54,6 @@ export interface GeneralSettingsPanelProps {
   pvePollingEnvLocked: () => boolean;
   setHasUnsavedChanges: Setter<boolean>;
 
-  disableLocalUpgradeMetrics: Accessor<boolean>;
-  disableLocalUpgradeMetricsLocked: () => boolean;
-  savingUpgradeMetrics: Accessor<boolean>;
-  handleDisableLocalUpgradeMetricsChange: (disabled: boolean) => Promise<void>;
-
   telemetryEnabled: Accessor<boolean>;
   telemetryEnabledLocked: () => boolean;
   savingTelemetry: Accessor<boolean>;
@@ -202,36 +197,10 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
       {/* Usage Data + Privacy Card */}
       <SettingsPanel
         title="Usage data and privacy"
-        description="Control local-only usage events and anonymous outbound telemetry."
+        description="Control anonymous outbound telemetry from this Pulse instance."
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex-1 min-w-0 space-y-1">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-base-content truncate">
-                Disable local-only commercial events
-              </span>
-              <Show when={props.disableLocalUpgradeMetricsLocked()}>
-                <EnvironmentLockBadge envVar="PULSE_DISABLE_LOCAL_UPGRADE_METRICS" />
-              </Show>
-            </div>
-            <p class="text-xs text-muted line-clamp-2">
-              Records local-only commercial handoff events, such as plan-link views or activation
-              handoff attempts, to debug voluntary paid flows. These events stay on this Pulse
-              instance and are not exported to third parties.
-            </p>
-          </div>
-          <Toggle
-            checked={props.disableLocalUpgradeMetrics()}
-            class="shrink-0"
-            disabled={props.disableLocalUpgradeMetricsLocked() || props.savingUpgradeMetrics()}
-            onChange={() =>
-              props.handleDisableLocalUpgradeMetricsChange(!props.disableLocalUpgradeMetrics())
-            }
-          />
-        </div>
-
         <div class="p-4 sm:p-6 space-y-4">
           <div class="flex items-center justify-between gap-4">
             <div class="flex-1 min-w-0 space-y-1">

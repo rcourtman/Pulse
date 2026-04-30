@@ -49,7 +49,7 @@ describe('systemSettings store', () => {
     expect(shouldDisableLocalUpgradeMetrics()).toBe(false);
   });
 
-  it('keeps privacy and upgrade metrics defaults safe when flags are omitted', () => {
+  it('keeps privacy and local paid-flow defaults safe when flags are omitted', () => {
     updateSystemSettingsFromResponse({
       autoUpdateEnabled: false,
     });
@@ -68,8 +68,10 @@ describe('systemSettings store', () => {
     const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
 
     expect(privacyDoc).toContain('## Usage Data');
-    expect(privacyDoc).toContain('Local-only commercial handoff events');
-    expect(privacyDoc).not.toContain('Local-only upgrade events');
+    expect(privacyDoc).toContain('Pulse has one outbound usage-data scope');
+    expect(privacyDoc).toContain('Commercial activation and license-recovery runtime records');
+    expect(privacyDoc).not.toContain('Local-only commercial handoff events');
+    expect(privacyDoc).not.toContain('Disable local-only commercial events');
     expect(privacyDoc).toContain('Every field is listed below with the reason it exists');
     expect(privacyDoc).toContain('rows older than **90 days** are purged automatically');
     expect(privacyDoc).toContain('uses client IP addresses transiently for abuse/rate limiting');

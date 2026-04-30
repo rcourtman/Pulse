@@ -13,7 +13,6 @@ import {
   getCheckForUpdatesErrorMessage,
   getDockerUpdateActionsUpdateErrorMessage,
   getHideLocalLoginUpdateErrorMessage,
-  getLocalUpgradeMetricsUpdateErrorMessage,
   getReduceUpsellNoiseUpdateErrorMessage,
   getStartUpdateErrorMessage,
   getSystemSettingsSaveErrorMessage,
@@ -101,9 +100,6 @@ describe('systemSettingsPresentation', () => {
     );
     expect(getReduceUpsellNoiseUpdateErrorMessage()).toBe(
       'Unable to update commercial prompt preferences.',
-    );
-    expect(getLocalUpgradeMetricsUpdateErrorMessage()).toBe(
-      'Unable to update local-only commercial events.',
     );
     expect(getTelemetryUpdateErrorMessage()).toBe('Unable to update anonymous telemetry.');
     expect(getTemperatureMonitoringUpdateErrorMessage()).toBe(

@@ -4,12 +4,13 @@ Pulse is designed to run locally. By default, your monitoring data stays on your
 
 ## Usage Data
 
-Pulse currently has two usage-data scopes:
+Pulse has one outbound usage-data scope: **anonymous outbound telemetry** to
+help me understand active installations, release uptake, and feature use in
+aggregate.
 
-1. **Anonymous outbound telemetry** to help me understand active installations, release uptake, and feature use in aggregate.
-2. **Local-only commercial handoff events** to help debug explicit paid-plan and activation handoffs on the instance where they were recorded.
-
-These are separate scopes on purpose. The outbound telemetry path stays coarse and anonymous. The local-only commercial-event path stays on the Pulse instance and is not exported to third parties.
+Commercial activation and license-recovery runtime records stay on the Pulse
+instance where they were created. They are not exported to Pulse infrastructure,
+third-party analytics, support diagnostics, or ordinary Settings surfaces.
 
 ### Anonymous outbound telemetry
 
@@ -99,12 +100,6 @@ Pulse can make outbound connections when you enable specific features:
 - **Relay / Remote Access**: when relay is enabled, Pulse connects to the configured relay endpoint to enable secure remote web access, mobile app pairing, and push notifications. See Settings → Remote Access.
 - **Update checks**: Pulse can check for new releases/updates (for example via GitHub release metadata) depending on your deployment and configuration.
 
-### Local-only commercial handoff events
-
-Pulse can record local-only usage events such as plan-link views or activation handoff attempts to improve and debug voluntary paid flows.
-
-- These events are stored locally and are not exported to third parties.
-- Disable via **Settings → System → General → Disable local-only commercial events** or set:
-  - `PULSE_DISABLE_LOCAL_UPGRADE_METRICS=true`
-
-The legacy `reduceProUpsellNoise` preference remains for older proactive prompt behavior, but default self-hosted v6 sessions already hide paid prompts unless the user enters an explicit commercial handoff or has an existing entitlement.
+The legacy `reduceProUpsellNoise` preference remains for older proactive prompt
+behavior, but default self-hosted v6 sessions already hide paid prompts unless
+the user enters an explicit commercial handoff or has an existing entitlement.
