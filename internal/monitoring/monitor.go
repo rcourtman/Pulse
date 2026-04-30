@@ -2712,6 +2712,10 @@ func (m *Monitor) GetState() models.StateSnapshot {
 	// counts or recently resolved incidents from cached state.
 	state.ActiveAlerts = m.activeAlertsSnapshot()
 	state.RecentlyResolved = m.recentlyResolvedAlertsSnapshot()
+	// Surface filesystems reported by a unified pulse-agent inside a guest
+	// (for example ZFS mounts that qemu-guest-agent's get-fsinfo cannot see
+	// on PBS, #1438) in the guest overview disk listing.
+	state.MergeLinkedHostDisksIntoGuests()
 	return state
 }
 
