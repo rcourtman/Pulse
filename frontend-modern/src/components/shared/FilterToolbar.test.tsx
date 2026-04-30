@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { For, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ChartVisibilityToggleButton,
   FilterHeader,
   FilterToolbarPanel,
   FilterSegmentedControl,
@@ -47,6 +48,34 @@ describe('FilterHeader', () => {
     expect(screen.getByTestId('segmented-control')).toBeInTheDocument();
     screen.getByRole('button', { name: 'Warnings' }).click();
     expect(onChange).toHaveBeenCalledWith('warnings');
+  });
+
+  it('keeps chart visibility as an explicit display toggle action', () => {
+    const [collapsed, setCollapsed] = createSignal(false);
+    const onToggle = vi.fn(() => setCollapsed((current) => !current));
+
+    render(() => (
+      <ChartVisibilityToggleButton
+        collapsed={collapsed()}
+        onToggle={onToggle}
+        data-testid="charts-toggle"
+      />
+    ));
+
+    const hideButton = screen.getByRole('button', { name: 'Hide charts' });
+    expect(hideButton).toHaveTextContent('Charts');
+    expect(hideButton).toHaveAttribute('aria-pressed', 'true');
+    expect(hideButton).toHaveAttribute('title', 'Hide charts');
+    expect(hideButton).toHaveClass('hidden');
+    expect(hideButton).toHaveClass('lg:inline-flex');
+
+    hideButton.click();
+
+    const showButton = screen.getByRole('button', { name: 'Show charts' });
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(showButton).toHaveTextContent('Charts');
+    expect(showButton).toHaveAttribute('aria-pressed', 'false');
+    expect(showButton).toHaveAttribute('title', 'Show charts');
   });
 
   it('keeps shared toggle behavior on shell, runtime, and model owners', () => {

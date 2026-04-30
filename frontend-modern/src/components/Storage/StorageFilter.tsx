@@ -1,6 +1,7 @@
 import { Component, For, Show, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
+  ChartVisibilityToggleButton,
   FilterDivider,
   FilterSegmentedControl,
   LabeledFilterSelect,
@@ -115,31 +116,9 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
   });
   const chartsToolbarAction = () =>
     props.onChartsToggle ? (
-      <FilterSegmentedControl
-        class="hidden lg:inline-flex"
-        value={props.chartsCollapsed?.() ? 'hidden' : 'shown'}
-        onChange={() => props.onChartsToggle?.()}
-        aria-label="Charts"
-        options={[
-          {
-            value: 'shown',
-            title: props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts',
-            label: (
-              <>
-                <svg
-                  class="w-3 h-3"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-                Charts
-              </>
-            ),
-          },
-        ]}
+      <ChartVisibilityToggleButton
+        collapsed={props.chartsCollapsed?.() ?? false}
+        onToggle={() => props.onChartsToggle?.()}
       />
     ) : undefined;
 

@@ -151,8 +151,11 @@ describe('StorageControls', () => {
       />
     ));
 
-    const chartsButton = screen.getByRole('button', { name: /charts/i });
+    const chartsButton = screen.getByRole('button', { name: 'Hide charts' });
     expect(chartsButton.closest('.page-controls-toolbar-actions')).not.toBeNull();
+    expect(chartsButton).toHaveTextContent('Charts');
+    expect(chartsButton).toHaveAttribute('aria-pressed', 'true');
+    expect(chartsButton).toHaveAttribute('title', 'Hide charts');
 
     fireEvent.click(chartsButton);
 

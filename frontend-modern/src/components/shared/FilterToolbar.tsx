@@ -1,4 +1,5 @@
 import { Component, For, JSX, Show, createEffect, onCleanup, splitProps } from 'solid-js';
+import BarChartIcon from 'lucide-solid/icons/bar-chart';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 
@@ -327,6 +328,33 @@ export const FilterActionButton: Component<FilterActionButtonProps> = (props) =>
     >
       {local.children}
     </button>
+  );
+};
+
+interface ChartVisibilityToggleButtonProps extends Omit<
+  JSX.ButtonHTMLAttributes<HTMLButtonElement>,
+  'aria-label' | 'aria-pressed' | 'children' | 'onClick' | 'title'
+> {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export const ChartVisibilityToggleButton: Component<ChartVisibilityToggleButtonProps> = (props) => {
+  const [local, buttonProps] = splitProps(props, ['collapsed', 'onToggle', 'class']);
+  const label = () => (local.collapsed ? 'Show charts' : 'Hide charts');
+  return (
+    <FilterActionButton
+      {...buttonProps}
+      class={`hidden lg:inline-flex ${local.class ?? ''}`.trim()}
+      active={!local.collapsed}
+      aria-label={label()}
+      aria-pressed={!local.collapsed}
+      title={label()}
+      onClick={() => local.onToggle()}
+    >
+      <BarChartIcon class="h-3 w-3" />
+      Charts
+    </FilterActionButton>
   );
 };
 

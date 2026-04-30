@@ -82,6 +82,9 @@ describe('InfrastructurePageSurface guardrails', () => {
     );
     expect(infrastructurePageSurfaceSource).toContain('data-summary-clear-ignore');
     expect(infrastructurePageSurfaceSource).toContain('GroupedTableModeSegmentedControl');
+    expect(infrastructurePageSurfaceSource).toContain('ChartVisibilityToggleButton');
+    expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Charts"');
+    expect(infrastructurePageSurfaceSource).not.toContain('FilterSegmentedControl');
     expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Group by"');
     expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Group By"');
     expect(infrastructurePageSurfaceSource).not.toContain("title: 'Grouped table view'");

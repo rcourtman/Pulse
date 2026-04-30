@@ -341,7 +341,12 @@ work extends shared components instead of creating new local variants.
    of staying as loose filter-row children, and those controls must stay
    grouped when dense toolbars wrap so popovers remain viewport-safe instead of
    drifting off-screen from page-local flex behavior. Shared `FilterToolbarPanel` owns
-   default filter-popover geometry, while narrow consumers such as
+   default filter-popover geometry, and `FilterToolbar` owns the shared chart
+   visibility display action: Workloads, Storage, Infrastructure, and future
+   summary-bearing pages must use `ChartVisibilityToggleButton` so the
+   affordance exposes one `Show charts` / `Hide charts` pressed-state contract
+   instead of rebuilding a one-option segmented control or an in-summary
+   collapse chevron page by page. Narrow consumers such as
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.
 4. Add guardrail tests when a new shared pattern is introduced.

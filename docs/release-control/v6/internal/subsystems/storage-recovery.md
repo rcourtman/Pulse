@@ -102,7 +102,10 @@ state.
    by the Storage page model and exposed through the shared `PageControls`
    trailing action rail. Storage must keep the charts toggle, column picker,
    and reset affordance on that shared rail so the Workloads and Storage
-   filter sections collapse through the same primitive contract.
+   filter sections collapse through the same primitive contract. The charts
+   toggle must read as an explicit `Show charts` / `Hide charts` pressed
+   display action, and the off state must remove the summary section fully
+   instead of leaving a collapsed summary shell in the interface.
    Ceph table shells on the storage route share the same frontend-primitives
    table contract: `frontend-modern/src/pages/Ceph.tsx` may own Ceph-specific
    columns and rows, but horizontal overflow and scrollbar hiding must route

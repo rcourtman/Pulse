@@ -1,6 +1,9 @@
 import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
+import {
+  ChartVisibilityToggleButton,
+  LabeledFilterSelect,
+} from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
@@ -72,31 +75,9 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             />
 
             <Show when={props.onChartsToggle}>
-              <FilterSegmentedControl
-                class="hidden lg:inline-flex"
-                value={props.chartsCollapsed?.() ? 'hidden' : 'shown'}
-                onChange={() => props.onChartsToggle?.()}
-                aria-label="Charts"
-                options={[
-                  {
-                    value: 'shown',
-                    title: props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts',
-                    label: (
-                      <>
-                        <svg
-                          class="w-3 h-3"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                        </svg>
-                        Charts
-                      </>
-                    ),
-                  },
-                ]}
+              <ChartVisibilityToggleButton
+                collapsed={props.chartsCollapsed?.() ?? false}
+                onToggle={() => props.onChartsToggle?.()}
               />
             </Show>
           </>

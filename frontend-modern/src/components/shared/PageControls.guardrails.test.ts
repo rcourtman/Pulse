@@ -120,6 +120,12 @@ describe('page controls guardrails', () => {
   it('keeps display controls and utility actions on the shared toolbar rail', () => {
     expect(workloadsFilterSource).toContain('toolbarTrailing={');
     expect(storageFilterSource).toContain('toolbarTrailing={');
+    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
+    expect(storageFilterSource).toContain('ChartVisibilityToggleButton');
+    expect(infrastructurePageSurfaceSource).toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).not.toContain('aria-label="Charts"');
+    expect(storageFilterSource).not.toContain('aria-label="Charts"');
+    expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Charts"');
     expect(recoveryHistorySectionSource).not.toContain('toolbarClass="lg:flex-nowrap"');
     expect(recoveryHistorySectionSource).not.toContain('ml-auto flex items-center gap-2');
   });

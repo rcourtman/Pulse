@@ -557,7 +557,23 @@ describe('WorkloadsFilter', () => {
         onChartsToggle: vi.fn(),
       });
       render(() => <WorkloadsFilter {...props} />);
-      expect(screen.getByText('Charts')).toBeInTheDocument();
+      const chartsButton = screen.getByRole('button', { name: 'Hide charts' });
+      expect(chartsButton).toBeInTheDocument();
+      expect(chartsButton).toHaveTextContent('Charts');
+      expect(chartsButton).toHaveAttribute('aria-pressed', 'true');
+      expect(chartsButton).toHaveAttribute('title', 'Hide charts');
+    });
+
+    it('labels the Charts button as a show action when charts are collapsed', () => {
+      const props = makeProps({
+        chartsCollapsed: vi.fn(() => true),
+        onChartsToggle: vi.fn(),
+      });
+      render(() => <WorkloadsFilter {...props} />);
+      const chartsButton = screen.getByRole('button', { name: 'Show charts' });
+      expect(chartsButton).toHaveTextContent('Charts');
+      expect(chartsButton).toHaveAttribute('aria-pressed', 'false');
+      expect(chartsButton).toHaveAttribute('title', 'Show charts');
     });
 
     it('does not render Charts button when onChartsToggle is not provided', () => {
@@ -573,7 +589,7 @@ describe('WorkloadsFilter', () => {
         onChartsToggle,
       });
       render(() => <WorkloadsFilter {...props} />);
-      fireEvent.click(screen.getByText('Charts'));
+      fireEvent.click(screen.getByRole('button', { name: 'Hide charts' }));
       expect(onChartsToggle).toHaveBeenCalled();
     });
   });

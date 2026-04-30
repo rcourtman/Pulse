@@ -3,7 +3,10 @@ import { useNavigate } from '@solidjs/router';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
-import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
+import {
+  ChartVisibilityToggleButton,
+  LabeledFilterSelect,
+} from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { PageControls } from '@/components/shared/PageControls';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -235,31 +238,9 @@ export function InfrastructurePageSurface() {
                           onChange={(value) => setGroupingMode(value as GroupingMode)}
                         />
 
-                        <FilterSegmentedControl
-                          class="hidden lg:inline-flex"
-                          value={summaryCollapsed() ? 'hidden' : 'shown'}
-                          onChange={() => setSummaryCollapsed((c) => !c)}
-                          aria-label="Charts"
-                          options={[
-                            {
-                              value: 'shown',
-                              title: summaryCollapsed() ? 'Show charts' : 'Hide charts',
-                              label: (
-                                <>
-                                  <svg
-                                    class="w-3 h-3"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                  >
-                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                                  </svg>
-                                  Charts
-                                </>
-                              ),
-                            },
-                          ]}
+                        <ChartVisibilityToggleButton
+                          collapsed={summaryCollapsed()}
+                          onToggle={() => setSummaryCollapsed((collapsed) => !collapsed)}
                         />
                       </PageControls>
                     </Card>

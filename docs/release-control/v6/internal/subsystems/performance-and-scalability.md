@@ -829,7 +829,10 @@ that clips trailing actions. The workload shell must route table display
 actions such as grouped/list mode and chart visibility through
 `PageControls.toolbarTrailing`, leaving route/filter selects as primary toolbar
 children so the display-action cluster wraps together with Columns/Reset across
-narrow desktop widths.
+narrow desktop widths. Workload chart visibility is a display preference, not
+an in-summary collapse affordance: the toolbar action must expose explicit
+`Show charts` / `Hide charts` pressed state, and hiding charts must remove the
+summary section rather than leaving an empty collapsed summary band on screen.
 The Workloads-owned filter-config assembly now lives in
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts`, so future
 filter runtime changes must extend through those owners instead of

@@ -365,6 +365,11 @@ AI-only summary payloads, or page-local heuristics.
     the row may highlight in place through the shared active-resource id; if it
     is off-screen, the page must offer an explicit `Jump to row` affordance
     rather than auto-scrolling or collapsing the table on hover.
+12a. Keep infrastructure summary visibility as a page-display preference, not a
+    unified-resource filter. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+    may hide or restore the summary section through the shared
+    `ChartVisibilityToggleButton`, but that control must not mutate resource
+    identity, table membership, route-backed focus, or summary-hover scope.
 13. Keep infrastructure cluster headers as canonical summary scope. Grouped
     headers in `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
     must publish cluster scope from the same `ResourceGroup` / unified-resource
