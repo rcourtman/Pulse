@@ -5,9 +5,11 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -1878,4 +1880,79 @@ func TestRemoteDurationSettingPreservesFractionalSeconds(t *testing.T) {
 	if got != 250*time.Millisecond {
 		t.Fatalf("remoteDurationSetting() = %s, want 250ms", got)
 	}
+}
+
+func TestAgentIDFilePersistence(t *testing.T) {
+	t.Run("read returns empty when path is empty", func(t *testing.T) {
+		id, err := readAgentIDFile("")
+		if err != nil {
+			t.Fatalf("expected no error for empty path, got %v", err)
+		}
+		if id != "" {
+			t.Errorf("expected empty id, got %q", id)
+		}
+	})
+
+	t.Run("read returns fs.ErrNotExist for missing file", func(t *testing.T) {
+		dir := t.TempDir()
+		_, err := readAgentIDFile(filepath.Join(dir, "missing"))
+		if !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("expected fs.ErrNotExist, got %v", err)
+		}
+	})
+
+	t.Run("write then read round-trips the ID", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "subdir", "agent-id")
+		const id = "1234abcd-5678-90ef-1234-567890abcdef"
+
+		if err := writeAgentIDFile(path, id); err != nil {
+			t.Fatalf("write failed: %v", err)
+		}
+
+		got, err := readAgentIDFile(path)
+		if err != nil {
+			t.Fatalf("read failed: %v", err)
+		}
+		if got != id {
+			t.Errorf("round-trip mismatch: got %q, want %q", got, id)
+		}
+
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat: %v", err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("file permissions = %v, want 0600", mode)
+		}
+	})
+
+	t.Run("read trims whitespace", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "agent-id")
+		if err := os.WriteFile(path, []byte("  abc-123  \n\n"), 0o600); err != nil {
+			t.Fatalf("seed file: %v", err)
+		}
+		got, err := readAgentIDFile(path)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if got != "abc-123" {
+			t.Errorf("expected trimmed value, got %q", got)
+		}
+	})
+
+	t.Run("write is a no-op when path is empty or id is empty", func(t *testing.T) {
+		if err := writeAgentIDFile("", "some-id"); err != nil {
+			t.Errorf("expected no-op for empty path, got %v", err)
+		}
+		dir := t.TempDir()
+		path := filepath.Join(dir, "agent-id")
+		if err := writeAgentIDFile(path, ""); err != nil {
+			t.Errorf("expected no-op for empty id, got %v", err)
+		}
+		if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("expected file not to be created, got err=%v", err)
+		}
+	})
 }

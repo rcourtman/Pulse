@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"math"
 	"net/http"
 	"os"
@@ -142,6 +144,20 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 2b. Compute Agent ID if missing (needed for remote config)
 	// We replicate the logic from hostagent.New to ensure we get the same ID
 	lookupHostname := strings.TrimSpace(cfg.HostnameOverride)
+	if cfg.AgentID == "" && cfg.AgentIDFile != "" {
+		if persisted, err := readAgentIDFile(cfg.AgentIDFile); err == nil && persisted != "" {
+			cfg.AgentID = persisted
+			logger.Info().
+				Str("path", cfg.AgentIDFile).
+				Str("agentID", cfg.AgentID).
+				Msg("Loaded persisted agent ID")
+		} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			logger.Warn().
+				Err(err).
+				Str("path", cfg.AgentIDFile).
+				Msg("Failed to read agent-id-file; will fall back to machine-id and rewrite the file")
+		}
+	}
 	if cfg.AgentID == "" {
 		// Use a short timeout for host info
 		hCtx, hCancel := context.WithTimeout(ctx, 5*time.Second)
@@ -164,6 +180,14 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				Str("component", "startup").
 				Str("action", "agent_id_host_info_failed").
 				Msg("Failed to fetch host info for Agent ID generation")
+		}
+	}
+	if cfg.AgentID != "" && cfg.AgentIDFile != "" {
+		if err := writeAgentIDFile(cfg.AgentIDFile, cfg.AgentID); err != nil {
+			logger.Warn().
+				Err(err).
+				Str("path", cfg.AgentIDFile).
+				Msg("Failed to persist agent ID; ID will be re-derived on next start")
 		}
 	}
 	if lookupHostname == "" {
@@ -459,6 +483,59 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	return nil
 }
 
+// readAgentIDFile reads a persisted agent identifier from the given path.
+func readAgentIDFile(path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// writeAgentIDFile persists the agent identifier atomically for future starts.
+func writeAgentIDFile(path, id string) error {
+	if path == "" || id == "" {
+		return nil
+	}
+
+	dir := filepath.Dir(path)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("create agent-id-file directory: %w", err)
+		}
+	}
+
+	tmp, err := os.CreateTemp(dir, ".agent-id-*")
+	if err != nil {
+		return fmt.Errorf("create agent-id-file temp: %w", err)
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpPath) }
+
+	if _, err := tmp.WriteString(id + "\n"); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return fmt.Errorf("write agent-id-file: %w", err)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return fmt.Errorf("chmod agent-id-file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return fmt.Errorf("close agent-id-file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		cleanup()
+		return fmt.Errorf("rename agent-id-file: %w", err)
+	}
+	return nil
+}
+
 func runRemoteConfigLoop(ctx context.Context, client *remoteconfig.Client, appliers []RemoteConfigApplier, logger *zerolog.Logger) {
 	if client == nil || len(appliers) == 0 {
 		return
@@ -580,6 +657,7 @@ type Config struct {
 	Interval           time.Duration
 	HostnameOverride   string
 	AgentID            string
+	AgentIDFile        string
 	Tags               []string
 	InsecureSkipVerify bool
 	CACertPath         string
@@ -638,6 +716,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envInterval := strings.TrimSpace(getenv("PULSE_INTERVAL"))
 	envHostname := strings.TrimSpace(getenv("PULSE_HOSTNAME"))
 	envAgentID := strings.TrimSpace(getenv("PULSE_AGENT_ID"))
+	envAgentIDFile := strings.TrimSpace(getenv("PULSE_AGENT_ID_FILE"))
 	envInsecure := strings.TrimSpace(getenv("PULSE_INSECURE_SKIP_VERIFY"))
 	envCACertPath := strings.TrimSpace(getenv("PULSE_CACERT"))
 	envServerFingerprint := strings.TrimSpace(getenv("PULSE_SERVER_FINGERPRINT"))
@@ -712,6 +791,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	intervalFlag := fs.Duration("interval", defaultInterval, "Reporting interval")
 	hostnameFlag := fs.String("hostname", envHostname, "Override hostname")
 	agentIDFlag := fs.String("agent-id", envAgentID, "Override agent identifier")
+	agentIDFileFlag := fs.String("agent-id-file", envAgentIDFile, "Path to a file storing the agent identifier (read on start, written on first start). Mount this file as a volume to keep the agent identity stable across container recreation.")
 	insecureFlag := fs.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS verification")
 	caCertFlag := fs.String("cacert", envCACertPath, "Path to custom CA bundle for agent HTTPS transport")
 	serverFingerprintFlag := fs.String("server-fingerprint", envServerFingerprint, "Expected Pulse server TLS certificate fingerprint (SHA256)")
@@ -831,6 +911,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		Interval:                  interval,
 		HostnameOverride:          strings.TrimSpace(*hostnameFlag),
 		AgentID:                   strings.TrimSpace(*agentIDFlag),
+		AgentIDFile:               strings.TrimSpace(*agentIDFileFlag),
 		Tags:                      tags,
 		InsecureSkipVerify:        *insecureFlag,
 		CACertPath:                strings.TrimSpace(*caCertFlag),
