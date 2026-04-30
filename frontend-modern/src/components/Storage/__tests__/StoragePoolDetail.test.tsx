@@ -70,7 +70,7 @@ describe('StoragePoolDetail', () => {
     );
   });
 
-  it('keeps the Relay 14-day range available in pool detail charts', () => {
+  it('keeps pool detail range choices inside the current history entitlement', () => {
     historyChartSpy.mockClear();
 
     render(() => (
@@ -93,19 +93,16 @@ describe('StoragePoolDetail', () => {
     expect(Array.from(rangeSelector.options).map((option) => option.value)).toEqual([
       '24h',
       '7d',
-      '14d',
-      '30d',
-      '90d',
     ]);
 
-    fireEvent.change(rangeSelector, { target: { value: '14d' } });
+    fireEvent.change(rangeSelector, { target: { value: '7d' } });
 
     expect(historyChartSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({
         resourceType: 'storage',
         resourceId: 'pool:tank',
         metric: 'usage',
-        range: '14d',
+        range: '7d',
       }),
     );
   });

@@ -1,8 +1,13 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import type { HistoryTimeRange } from '@/api/charts';
+import { maxHistoryDays } from '@/stores/license';
+import {
+  getUnlockedHistoryRangeOptions,
+  resolveHistoryRangeWithinLimit,
+} from '@/components/Storage/historyRangeAccess';
 import {
   DISK_DETAIL_HISTORY_RANGE_OPTIONS,
   DISK_DETAIL_LIVE_CHARTS,
@@ -53,6 +58,20 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   } = useDiskDetailModel({
     disk: () => props.disk,
   });
+  const rangeOptions = createMemo(() =>
+    getUnlockedHistoryRangeOptions(DISK_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
+  );
+
+  createEffect(() => {
+    const nextRange = resolveHistoryRangeWithinLimit(
+      chartRange(),
+      DISK_DETAIL_HISTORY_RANGE_OPTIONS,
+      maxHistoryDays(),
+    );
+    if (nextRange !== chartRange()) {
+      setChartRange(nextRange);
+    }
+  });
 
   return (
     <div class={STORAGE_DISK_DETAIL_ROOT_CLASS}>
@@ -81,7 +100,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
               selectBaseClass={STORAGE_DETAIL_HEADER_SELECT_CLASS}
               style={STORAGE_DETAIL_HEADER_SELECT_STYLE}
             >
-              <For each={DISK_DETAIL_HISTORY_RANGE_OPTIONS}>
+              <For each={rangeOptions()}>
                 {(option) => <option value={option.value}>{option.label}</option>}
               </For>
             </FormSelect>

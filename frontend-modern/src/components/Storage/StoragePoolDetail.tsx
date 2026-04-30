@@ -1,7 +1,12 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo } from 'solid-js';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import type { HistoryTimeRange } from '@/api/charts';
+import { maxHistoryDays } from '@/stores/license';
+import {
+  getUnlockedHistoryRangeOptions,
+  resolveHistoryRangeWithinLimit,
+} from '@/components/Storage/historyRangeAccess';
 import {
   getLinkedDiskHealthDotClass,
   getLinkedDiskTemperatureTextClass,
@@ -48,6 +53,20 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
       record: () => props.record,
       physicalDisks: () => props.physicalDisks,
     });
+  const rangeOptions = createMemo(() =>
+    getUnlockedHistoryRangeOptions(STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
+  );
+
+  createEffect(() => {
+    const nextRange = resolveHistoryRangeWithinLimit(
+      chartRange(),
+      STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS,
+      maxHistoryDays(),
+    );
+    if (nextRange !== chartRange()) {
+      setChartRange(nextRange);
+    }
+  });
 
   return (
     <tr class={STORAGE_DETAIL_ROW_CLASS} data-inline-detail-for={props.summarySeriesId}>
@@ -66,7 +85,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                 selectBaseClass={STORAGE_DETAIL_SELECT_CLASS}
                 style={STORAGE_DETAIL_SELECT_STYLE}
               >
-                <For each={STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS}>
+                <For each={rangeOptions()}>
                   {(option) => <option value={option.value}>{option.label}</option>}
                 </For>
               </FormSelect>
