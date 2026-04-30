@@ -39,6 +39,7 @@ interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
   contentClass?: string;
   searchRowClass?: string;
   toolbarClass?: string;
+  toolbarTrailing?: JSX.Element;
   mobileRowClass?: string;
   mobileLeading?: JSX.Element;
   mobileTrailing?: JSX.Element;
@@ -58,6 +59,7 @@ export const PageControls: Component<PageControlsProps> = (props) => {
     'contentClass',
     'searchRowClass',
     'toolbarClass',
+    'toolbarTrailing',
     'mobileRowClass',
     'mobileLeading',
     'mobileTrailing',
@@ -83,7 +85,12 @@ export const PageControls: Component<PageControlsProps> = (props) => {
     Boolean(local.columnVisibility && local.columnVisibility.availableToggles().length > 0);
   const showResetAction = () => local.resetAction?.show === true;
   const hasTrailingActions = () =>
-    Boolean(activeUtilityActions() || showColumnVisibility() || showResetAction());
+    Boolean(
+      local.toolbarTrailing ||
+      activeUtilityActions() ||
+      showColumnVisibility() ||
+      showResetAction(),
+    );
 
   return (
     <FilterHeader
@@ -103,7 +110,9 @@ export const PageControls: Component<PageControlsProps> = (props) => {
       {local.children}
 
       <Show when={hasTrailingActions()}>
-        <div class="ml-auto inline-flex flex-wrap items-center gap-2">
+        <div class="page-controls-toolbar-actions inline-flex flex-wrap items-center gap-2 2xl:ml-auto">
+          <Show when={local.toolbarTrailing}>{local.toolbarTrailing}</Show>
+
           <Show when={activeUtilityActions()}>
             <FilterDivider />
             {activeUtilityActions()}

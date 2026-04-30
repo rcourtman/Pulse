@@ -46,7 +46,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           show: showReset(),
           onClick: resetFilters,
           title: 'Reset all filters',
-          class: 'ml-auto text-base-content',
+          class: 'text-base-content',
           icon: (
             <svg
               width="12"
@@ -64,6 +64,43 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           ),
         }}
         showFilters={showToolbarFilters()}
+        toolbarTrailing={
+          <>
+            <GroupedTableModeSegmentedControl
+              value={props.groupingMode()}
+              onChange={props.setGroupingMode}
+            />
+
+            <Show when={props.onChartsToggle}>
+              <FilterSegmentedControl
+                class="hidden lg:inline-flex"
+                value={props.chartsCollapsed?.() ? 'hidden' : 'shown'}
+                onChange={() => props.onChartsToggle?.()}
+                aria-label="Charts"
+                options={[
+                  {
+                    value: 'shown',
+                    title: props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts',
+                    label: (
+                      <>
+                        <svg
+                          class="w-3 h-3"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                        </svg>
+                        Charts
+                      </>
+                    ),
+                  },
+                ]}
+              />
+            </Show>
+          </>
+        }
       >
         <Show when={props.hostFilter}>
           {(hostFilter) => (
@@ -168,41 +205,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           <option value="degraded">Degraded</option>
           <option value="stopped">Stopped</option>
         </LabeledFilterSelect>
-
-        <GroupedTableModeSegmentedControl
-          value={props.groupingMode()}
-          onChange={props.setGroupingMode}
-        />
-
-        <Show when={props.onChartsToggle}>
-          <FilterSegmentedControl
-            class="hidden lg:inline-flex"
-            value={props.chartsCollapsed?.() ? 'hidden' : 'shown'}
-            onChange={() => props.onChartsToggle?.()}
-            aria-label="Charts"
-            options={[
-              {
-                value: 'shown',
-                title: props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts',
-                label: (
-                  <>
-                    <svg
-                      class="w-3 h-3"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                    </svg>
-                    Charts
-                  </>
-                ),
-              },
-            ]}
-          />
-        </Show>
-
       </PageControls>
     </Card>
   );

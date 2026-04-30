@@ -825,7 +825,11 @@ grouped/list selector instead of reintroducing local `Group By` casing or
 platform-specific cluster wording. Dense workload toolbar variants must keep
 that same row wrap-capable so optional runtime, chart, column, and reset
 controls remain reachable on desktop instead of forcing a single no-wrap row
-that clips trailing actions.
+that clips trailing actions. The workload shell must route table display
+actions such as grouped/list mode and chart visibility through
+`PageControls.toolbarTrailing`, leaving route/filter selects as primary toolbar
+children so the display-action cluster wraps together with Columns/Reset across
+narrow desktop widths.
 The Workloads-owned filter-config assembly now lives in
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts`, so future
 filter runtime changes must extend through those owners instead of

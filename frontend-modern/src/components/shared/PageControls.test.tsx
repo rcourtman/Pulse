@@ -35,7 +35,7 @@ describe('PageControls', () => {
     const resetButton = screen.getByRole('button', { name: /reset all/i });
     expect(columnsButton).toBeInTheDocument();
     expect(resetButton).toBeInTheDocument();
-    const trailingActions = columnsButton.closest('.ml-auto');
+    const trailingActions = columnsButton.closest('.page-controls-toolbar-actions');
     expect(trailingActions).not.toBeNull();
     expect(trailingActions!).toContainElement(resetButton);
 
@@ -82,5 +82,34 @@ describe('PageControls', () => {
 
     expect(screen.getAllByTestId('scope-slot')).toHaveLength(1);
     expect(screen.getByTestId('scope-slot')).toHaveTextContent('mobile scope');
+  });
+
+  it('keeps toolbar trailing actions grouped with columns in collapsed filter layouts', () => {
+    render(() => (
+      <PageControls
+        search={<div data-testid="search">Search</div>}
+        showFilters={true}
+        mobileFilters={{ enabled: true, count: 1, onToggle: vi.fn() }}
+        toolbarTrailing={<div data-testid="toolbar-trailing">Grouped List</div>}
+        columnVisibility={{
+          availableToggles: () => [{ id: 'subject', label: 'Subject' }],
+          isHiddenByUser: () => false,
+          toggle: vi.fn(),
+          resetToDefaults: vi.fn(),
+        }}
+        utilityActions={<div data-testid="desktop-utility">Desktop utility</div>}
+      >
+        <div>Filters</div>
+      </PageControls>
+    ));
+
+    const trailing = screen.getByTestId('toolbar-trailing');
+    const columnsButton = screen.getByRole('button', { name: /columns/i });
+    const trailingActions = columnsButton.closest('.page-controls-toolbar-actions');
+
+    expect(trailingActions).not.toBeNull();
+    expect(trailingActions!).toContainElement(trailing);
+    expect(trailingActions!).toContainElement(columnsButton);
+    expect(screen.queryByTestId('desktop-utility')).not.toBeInTheDocument();
   });
 });

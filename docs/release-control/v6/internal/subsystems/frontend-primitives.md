@@ -334,10 +334,12 @@ work extends shared components instead of creating new local variants.
    `List` visible labels, tooltip titles, and icons instead of each resource
    surface rebuilding that language with subtly different resource-specific
    concepts. Shared
-   `PageControls` owns trailing filter-row actions such as utility buttons,
-   Columns, and Reset; those controls must stay grouped at the row end when
-   dense toolbars wrap so popovers remain viewport-safe instead of drifting
-   off-screen from page-local flex behavior. Shared `FilterToolbarPanel` owns
+   `PageControls` owns trailing filter-row actions such as toolbar display
+   controls, utility buttons, Columns, and Reset. Controls that should wrap
+   with the column/reset cluster must enter through `toolbarTrailing` instead
+   of staying as loose filter-row children, and those controls must stay
+   grouped when dense toolbars wrap so popovers remain viewport-safe instead of
+   drifting off-screen from page-local flex behavior. Shared `FilterToolbarPanel` owns
    default filter-popover geometry, while narrow consumers such as
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.

@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { WorkloadsFilter } from '../WorkloadsFilter';
-import {
-  DEFAULT_WORKLOADS_SORT_KEY,
-  type WorkloadsFilterProps,
-} from '../workloadsFilterModel';
+import { DEFAULT_WORKLOADS_SORT_KEY, type WorkloadsFilterProps } from '../workloadsFilterModel';
 
 // Mock useBreakpoint — hoist so tests can control isMobile
 const { isMobileMock } = vi.hoisted(() => {
@@ -143,6 +140,11 @@ describe('WorkloadsFilter', () => {
       const { container } = render(() => <WorkloadsFilter {...props} />);
 
       expect(screen.getByTestId('column-picker')).toBeInTheDocument();
+      const toolbarActions = container.querySelector('.page-controls-toolbar-actions');
+      expect(toolbarActions).not.toBeNull();
+      expect(toolbarActions!).toContainElement(screen.getByText('Grouped'));
+      expect(toolbarActions!).toContainElement(screen.getByText('List'));
+      expect(toolbarActions!).toContainElement(screen.getByTestId('column-picker'));
       expect(
         Array.from(container.querySelectorAll('.workloads-filter *')).some((element) =>
           (element.getAttribute('class') ?? '').includes('lg:flex-nowrap'),
