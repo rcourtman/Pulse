@@ -598,6 +598,16 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		containers = append(containers, containerFromReadStateView(ct))
 	}
 
+	previousSnapshots := make([]models.GuestSnapshot, 0)
+	if m.state != nil {
+		snapshot := m.state.GetSnapshot()
+		for _, snap := range snapshot.PVEBackups.GuestSnapshots {
+			if snap.Instance == instanceName {
+				previousSnapshots = append(previousSnapshots, snap)
+			}
+		}
+	}
+
 	guestKey := func(instance, node string, vmid int) string {
 		if instance == node {
 			return fmt.Sprintf("%s-%d", node, vmid)
@@ -666,6 +676,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 	var allSnapshots []models.GuestSnapshot
 	deadlineExceeded := false
+	polledGuestKeys := make(map[string]struct{})
 
 	// Poll VM snapshots
 	for _, vm := range vms {
@@ -696,6 +707,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			continue
 		}
 
+		polledGuestKeys[guestKey(instanceName, vm.Node, vm.VMID)] = struct{}{}
 		for _, snap := range snapshots {
 			snapshot := models.GuestSnapshot{
 				ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, vm.Node, vm.VMID, snap.Name),
@@ -714,18 +726,15 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		}
 	}
 
-	if deadlineExceeded {
-		log.Warn().
-			Str("instance", instanceName).
-			Msg("Guest snapshot polling timed out before completing VM collection; retaining previous snapshots")
-		return
-	}
-
 	// Poll container snapshots
 	for _, ct := range containers {
 		// Skip templates
 		if ct.Template {
 			continue
+		}
+		if snapshotCtx.Err() != nil {
+			deadlineExceeded = true
+			break
 		}
 
 		snapshots, err := client.GetContainerSnapshots(snapshotCtx, ct.Node, ct.VMID)
@@ -743,7 +752,9 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			// API error 596 means snapshots not supported/available - this is expected for many containers
 			errStr := err.Error()
 			if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
-				// Silently skip containers without snapshot support
+				// Silently skip containers without snapshot support; treat
+				// them as polled so stale unsupported snapshots are not kept.
+				polledGuestKeys[guestKey(instanceName, ct.Node, ct.VMID)] = struct{}{}
 				continue
 			}
 			// Log other errors at debug level
@@ -756,6 +767,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			continue
 		}
 
+		polledGuestKeys[guestKey(instanceName, ct.Node, ct.VMID)] = struct{}{}
 		for _, snap := range snapshots {
 			snapshot := models.GuestSnapshot{
 				ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, ct.Node, ct.VMID, snap.Name),
@@ -774,14 +786,29 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		}
 	}
 
-	if deadlineExceeded || snapshotCtx.Err() != nil {
-		log.Warn().
-			Str("instance", instanceName).
-			Msg("Guest snapshot polling timed out before completion; retaining previous snapshots")
-		return
+	carriedForward := 0
+	for _, prev := range previousSnapshots {
+		if _, polled := polledGuestKeys[guestKey(instanceName, prev.Node, prev.VMID)]; polled {
+			continue
+		}
+		allSnapshots = append(allSnapshots, prev)
+		carriedForward++
 	}
 
-	if len(allSnapshots) > 0 {
+	if deadlineExceeded {
+		log.Warn().
+			Str("instance", instanceName).
+			Int("freshlyPolled", len(polledGuestKeys)).
+			Int("carriedForward", carriedForward).
+			Msg("Guest snapshot polling timed out before completion; merged fresh results with previously-known snapshots for unpolled guests")
+	} else if carriedForward > 0 {
+		log.Debug().
+			Str("instance", instanceName).
+			Int("carriedForward", carriedForward).
+			Msg("Guest snapshot polling completed; carried forward previous snapshots for guests with per-call errors")
+	}
+
+	if len(allSnapshots) > 0 && !deadlineExceeded {
 		sizeMap := m.collectSnapshotSizes(snapshotCtx, instanceName, client, allSnapshots)
 		if len(sizeMap) > 0 {
 			for i := range allSnapshots {
