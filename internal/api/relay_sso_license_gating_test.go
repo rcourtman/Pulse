@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // TestRelayEndpointsRequireLicenseFeature verifies that relay settings endpoints
@@ -86,6 +87,34 @@ func TestRelayOnboardingEndpointsRequireLicenseFeature(t *testing.T) {
 		if rec.Code != http.StatusPaymentRequired {
 			t.Errorf("%s %s: expected 402 for missing relay license, got %d", tc.method, tc.path, rec.Code)
 		}
+	}
+}
+
+func TestRelayMobileTokenEndpointRequiresLicenseFeature(t *testing.T) {
+	rawToken := "relay-mobile-token-license-test.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite, config.ScopeRelayMobileAccess}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	handler := router.Handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/relay-mobile", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 for missing relay license, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "", pkglicensing.TierRelay)
+
+	req = httptest.NewRequest(http.MethodPost, "/api/security/tokens/relay-mobile", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected relay-licensed token minting to succeed, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

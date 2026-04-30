@@ -213,6 +213,12 @@ profile and assignment columns, but embedded table framing must route through
    `policyPosture` aggregation as read-only data-governance context, but they
    must not reinterpret sensitivity, routing, or redaction counts as install
    capacity, registration eligibility, or agent assignment state.
+   Relay mobile credential issuance is not an agent bootstrap or lifecycle
+   repair path just because it lives under shared `internal/api/` routing.
+   `POST /api/security/tokens/relay-mobile` must remain API/security owned,
+   must require the paid `relay` entitlement before token minting, and must not
+   be reused by installer, auto-registration, assignment, or repair flows as an
+   alternate setup credential.
    When lifecycle surfaces also hydrate from `/api/state`, that first-session
    snapshot must carry the same canonical resource types and display names as
    `/api/resources` instead of briefly showing legacy host aliases before the

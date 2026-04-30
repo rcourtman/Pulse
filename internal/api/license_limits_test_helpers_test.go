@@ -45,3 +45,28 @@ func setMaxMonitoredSystemsLicenseForTests(t *testing.T, maxMonitoredSystems int
 		testLicenseProviderMu.Unlock()
 	})
 }
+
+func setLicenseTierForHandlersForTests(t *testing.T, handlers *LicenseHandlers, orgID string, tier pkglicensing.Tier) {
+	t.Helper()
+	if handlers == nil {
+		t.Fatal("license handlers are required")
+	}
+	ctx := context.Background()
+	if orgID != "" {
+		ctx = context.WithValue(ctx, OrgIDContextKey, orgID)
+	}
+	svc := handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("license service is required")
+	}
+	svc.SetCurrentForTesting(&pkglicensing.License{
+		Claims: pkglicensing.Claims{
+			LicenseID: "api-route-license-tier-test",
+			Email:     "route-license@example.test",
+			Tier:      tier,
+			IssuedAt:  time.Now().Add(-time.Hour).Unix(),
+			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
+		},
+		ValidatedAt: time.Now(),
+	})
+}

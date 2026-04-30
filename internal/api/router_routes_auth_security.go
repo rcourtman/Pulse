@@ -127,7 +127,11 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		if !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
-		r.handleCreateRelayMobileAccessToken(w, req)
+		if req.Method != http.MethodPost {
+			r.handleCreateRelayMobileAccessToken(w, req)
+			return
+		}
+		RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleCreateRelayMobileAccessToken)(w, req)
 	}))
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {

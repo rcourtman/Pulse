@@ -4144,6 +4144,7 @@ func TestContract_HostedOrgManagerSessionCanMintRelayMobileToken(t *testing.T) {
 	}
 
 	router := newMultiTenantRouter(t, cfg)
+	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "org-a", pkglicensing.TierRelay)
 
 	sessionToken := "relay-owner-session-" + strings.ReplaceAll(time.Now().UTC().Format(time.RFC3339Nano), ":", "-")
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "legacy-owner")

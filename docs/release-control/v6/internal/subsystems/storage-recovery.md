@@ -159,6 +159,11 @@ state.
    second generic auth body, and `/api/config/export` or `/api/config/import`
    bypass entries must still leave public-network and credential decisions to
    their route-local handlers.
+   That same adjacent token boundary does not make Relay mobile credentials
+   available to storage/recovery flows. `POST /api/security/tokens/relay-mobile`
+   must stay API/security and Relay-entitlement owned, require the paid `relay`
+   feature before minting, and must not be reused as a recovery session,
+   export/import bypass, or storage-local credential transport.
    That same adjacent API boundary also owns monitored-system admission preview
    transport for provider-backed setup context. `/api/truenas/connections/preview`,
    `/api/truenas/connections/{id}/preview`, `/api/vmware/connections/preview`,

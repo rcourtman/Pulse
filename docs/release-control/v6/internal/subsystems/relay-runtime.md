@@ -116,3 +116,8 @@ surface too. The dedicated `relay:mobile:access` credential may only reach the
 explicit runtime route inventory in `internal/api/relay_mobile_capability.go`,
 and expanding that inventory is governed L7 work rather than a router-local
 compatibility tweak.
+The route that mints that dedicated credential is also part of the paid Relay
+boundary. `POST /api/security/tokens/relay-mobile` lives in the shared
+auth/security router, but it must require the paid `relay` entitlement before
+creating a `relay:mobile:access` token so Community installs cannot bypass
+Relay/mobile gating through direct API calls.

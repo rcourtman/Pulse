@@ -218,6 +218,13 @@ product API routes free of maintainer commercial analytics.
     session revocation must still delete the full session token set rather than
     leaving any retained replacement token valid.
 48. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+    The dedicated Pulse Mobile relay token route is part of that same API
+    contract even though its runtime capability is Relay-owned:
+    `POST /api/security/tokens/relay-mobile` must pass normal admin and
+    `settings:write` authorization, then require the paid `relay` feature
+    before minting a `relay:mobile:access` credential. Community installs may
+    receive the standard license-required response, but direct API calls must
+    not bypass Relay entitlement by creating mobile runtime tokens.
 49. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 50. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 51. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.

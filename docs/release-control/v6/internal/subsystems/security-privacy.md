@@ -92,6 +92,11 @@ controls as normal product settings.
     page-local `container runtime` labels.
 13. `internal/api/security.go` shared with `api-contracts`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
 14. `internal/api/security_tokens.go` shared with `api-contracts`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+    Pulse Mobile relay token creation is a security token-management surface,
+    but it is not a free API-token convenience. After admin and
+    `settings:write` authorization, `POST /api/security/tokens/relay-mobile`
+    must fail closed with the standard license-required response unless the
+    active entitlement includes the paid `relay` feature.
 15. `internal/api/system_settings.go` shared with `api-contracts`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 16. `internal/cloudcp/auth/magiclink.go` shared with `cloud-paid`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
 17. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
