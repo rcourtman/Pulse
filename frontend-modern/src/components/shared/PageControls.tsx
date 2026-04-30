@@ -110,7 +110,7 @@ export const PageControls: Component<PageControlsProps> = (props) => {
       {local.children}
 
       <Show when={hasTrailingActions()}>
-        <div class="page-controls-toolbar-actions inline-flex flex-wrap items-center gap-2 2xl:ml-auto">
+        <div class="page-controls-toolbar-actions ml-auto inline-flex flex-wrap items-center justify-end gap-2">
           <Show when={local.toolbarTrailing}>{local.toolbarTrailing}</Show>
 
           <Show when={activeUtilityActions()}>

@@ -38,6 +38,9 @@ describe('PageControls', () => {
     const trailingActions = columnsButton.closest('.page-controls-toolbar-actions');
     expect(trailingActions).not.toBeNull();
     expect(trailingActions!).toContainElement(resetButton);
+    expect(trailingActions!).toHaveClass('ml-auto');
+    expect(trailingActions!).toHaveClass('justify-end');
+    expect(trailingActions!).not.toHaveClass('2xl:ml-auto');
 
     fireEvent.click(screen.getByRole('button', { name: /filters/i }));
     expect(onToggleFilters).toHaveBeenCalledTimes(1);
@@ -110,6 +113,8 @@ describe('PageControls', () => {
     expect(trailingActions).not.toBeNull();
     expect(trailingActions!).toContainElement(trailing);
     expect(trailingActions!).toContainElement(columnsButton);
+    expect(trailingActions!).toHaveClass('ml-auto');
+    expect(trailingActions!).toHaveClass('justify-end');
     expect(screen.queryByTestId('desktop-utility')).not.toBeInTheDocument();
   });
 });
