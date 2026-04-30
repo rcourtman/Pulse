@@ -47,7 +47,56 @@ const INTERNAL_ANALYTICS_RULES = [
       },
     ],
   },
+  {
+    getFilePath: ({ root }) => path.join(root, 'src', 'utils', 'upgradeMetrics.ts'),
+    rules: [
+      {
+        rule: 'canonical-settings/no-product-upgrade-metrics-ingestion',
+        regex:
+          /\/api\/upgrade-metrics\/events|@\/utils\/apiClient|\bapiFetch\s*\(|\bfetch\s*\(|\bsendBeacon\b/g,
+        message:
+          'Do not emit maintainer/admin commercial analytics from the customer frontend. Keep upgrade-metrics ingestion out of product surfaces.',
+      },
+    ],
+  },
+  {
+    getFilePaths: ({ root }) => listProductionSourceFiles(path.join(root, 'src')),
+    rules: [
+      {
+        rule: 'canonical-settings/no-product-upgrade-metrics-endpoint',
+        regex: /\/api\/upgrade-metrics\/events/g,
+        message:
+          'Do not call local commercial analytics ingestion from production customer frontend source.',
+      },
+    ],
+  },
 ];
+
+function isProductionSourceFile(filePath) {
+  if (!/\.(?:ts|tsx)$/.test(filePath)) return false;
+  if (filePath.includes(`${path.sep}__tests__${path.sep}`)) return false;
+  if (/\.(?:test|spec)\.(?:ts|tsx)$/.test(filePath)) return false;
+  return true;
+}
+
+function listProductionSourceFiles(dir) {
+  const files = [];
+  if (!fs.existsSync(dir)) return files;
+
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listProductionSourceFiles(entryPath));
+      continue;
+    }
+
+    if (entry.isFile() && isProductionSourceFile(entryPath)) {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
+}
 
 function lineForIndex(content, index) {
   let line = 1;
@@ -67,19 +116,22 @@ export function collectUserDiagnosticsInternalAnalyticsFindings({
 } = {}) {
   const findings = [];
 
-  for (const { getFilePath, rules } of INTERNAL_ANALYTICS_RULES) {
-    const filePath = getFilePath({ root, repoRoot });
-    const content = fs.readFileSync(filePath, 'utf8');
-    const relativePath = relativeToRoot(root, filePath);
+  for (const { getFilePath, getFilePaths, rules } of INTERNAL_ANALYTICS_RULES) {
+    const filePaths = getFilePaths?.({ root, repoRoot }) ?? [getFilePath({ root, repoRoot })];
 
-    for (const { rule, regex, message } of rules) {
-      for (const match of content.matchAll(regex)) {
-        findings.push({
-          file: relativePath,
-          line: lineForIndex(content, match.index ?? 0),
-          rule,
-          message,
-        });
+    for (const filePath of filePaths) {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const relativePath = relativeToRoot(root, filePath);
+
+      for (const { rule, regex, message } of rules) {
+        for (const match of content.matchAll(regex)) {
+          findings.push({
+            file: relativePath,
+            line: lineForIndex(content, match.index ?? 0),
+            rule,
+            message,
+          });
+        }
       }
     }
   }

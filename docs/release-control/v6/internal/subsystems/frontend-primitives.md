@@ -690,7 +690,8 @@ work extends shared components instead of creating new local variants.
 5. User-facing diagnostics or settings panels rendering maintainer/admin
    analytics such as commercial funnel, sales funnel, pricing/checkout
    conversion, or infrastructure onboarding telemetry. Those signals belong in
-   admin-owned metrics surfaces, not the product diagnostics UI.
+   admin-owned metrics surfaces, not the product diagnostics UI or customer
+   frontend event emission.
 
 ## Completion Obligations
 
@@ -1014,9 +1015,11 @@ explicit `Usage data and privacy` model centered on `Anonymous outbound
 telemetry`; maintainer commercial-event controls, upgrade-metrics labels, and
 sales/onboarding reporting language must not appear in customer-facing Settings
 or support diagnostics, and public configuration docs must not list their
-internal compatibility switches as ordinary operator settings. The telemetry
-copy must describe normalized release identity rather than falling back to
-ambiguous `telemetry`, `upgrade metrics`, or raw-version wording.
+internal compatibility switches as ordinary operator settings. Customer
+frontend code must also not POST those events to `/api/upgrade-metrics/events`.
+The telemetry copy must describe normalized release identity rather than
+falling back to ambiguous `telemetry`, `upgrade metrics`, or raw-version
+wording.
 Shared table, disclosure, and form primitives must also stay explicitly typed
 at the browser edge. Summary rows may memoize repeated pending-update reads,
 shared buttons must preserve discriminated disclosure props, toggle and a11y

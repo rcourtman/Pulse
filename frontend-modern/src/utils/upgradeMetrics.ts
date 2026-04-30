@@ -1,7 +1,3 @@
-import { apiFetch } from '@/utils/apiClient';
-import { logger } from '@/utils/logger';
-import { shouldDisableLocalUpgradeMetrics } from '@/stores/systemSettings';
-
 export interface UpgradeMetricEvent {
   type: string;
   capability?: string;
@@ -45,132 +41,41 @@ export const UPGRADE_METRIC_EVENTS = {
   INFRASTRUCTURE_ONBOARDING_CREDENTIALS_OPENED: 'infrastructure_onboarding_credentials_opened',
 } as const;
 
-const ONE_MINUTE_MS = 60_000;
-const recentlySentKeys = new Set<string>();
-const sentAtByKey = new Map<string, number>();
-
-function pruneExpiredKeys(now: number): void {
-  for (const [key, sentAt] of sentAtByKey.entries()) {
-    if (now - sentAt <= ONE_MINUTE_MS) continue;
-    sentAtByKey.delete(key);
-    recentlySentKeys.delete(key);
-  }
-}
-
 export function trackUpgradeMetricEvent(
-  event: TrackUpgradeMetricEventInput,
+  _event: TrackUpgradeMetricEventInput,
 ): void {
-  if (shouldDisableLocalUpgradeMetrics()) {
-    return;
-  }
-
-  const now = Date.now();
-  const idempotencyKey =
-    event.idempotencyKey ??
-    `${event.type}:${event.surface}:${event.capability || ''}:${Math.floor(now / ONE_MINUTE_MS)}`;
-
-  pruneExpiredKeys(now);
-  if (recentlySentKeys.has(idempotencyKey)) {
-    return;
-  }
-
-  recentlySentKeys.add(idempotencyKey);
-  sentAtByKey.set(idempotencyKey, now);
-
-  const payload: UpgradeMetricEvent = {
-    type: event.type,
-    capability: event.capability,
-    surface: event.surface,
-    tenant_mode: event.tenant_mode,
-    limit_key: event.limit_key,
-    current_value: event.current_value,
-    limit_value: event.limit_value,
-    timestamp: now,
-    idempotency_key: idempotencyKey,
-  };
-
-  try {
-    void apiFetch('/api/upgrade-metrics/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch((error) => {
-      // Local upgrade metrics should never break user interactions.
-      logger.debug('[upgradeMetrics] Failed to send upgrade metric event', {
-        type: event.type,
-        surface: event.surface,
-        error,
-      });
-    });
-  } catch (error) {
-    logger.debug('[upgradeMetrics] Failed to queue upgrade metric event request', {
-      type: event.type,
-      surface: event.surface,
-      error,
-    });
-  }
+  // Compatibility no-op: customer frontend surfaces must not emit maintainer
+  // commercial, funnel, or onboarding analytics.
 }
 
-export function trackPaywallViewed(capability: string, surface: string): void {
-  trackUpgradeMetricEvent({
-    type: UPGRADE_METRIC_EVENTS.PAYWALL_VIEWED,
-    capability,
-    surface,
-  });
+export function trackPaywallViewed(_capability: string, _surface: string): void {
+  // Compatibility no-op.
 }
 
-export function trackPricingViewed(surface: string, capability?: string): void {
-  trackUpgradeMetricEvent({
-    type: UPGRADE_METRIC_EVENTS.PRICING_VIEWED,
-    surface,
-    capability,
-  });
+export function trackPricingViewed(_surface: string, _capability?: string): void {
+  // Compatibility no-op.
 }
 
-export function trackUpgradeClicked(surface: string, capability?: string): void {
-  trackUpgradeMetricEvent({
-    type: UPGRADE_METRIC_EVENTS.UPGRADE_CLICKED,
-    surface,
-    capability,
-  });
+export function trackUpgradeClicked(_surface: string, _capability?: string): void {
+  // Compatibility no-op.
 }
 
-export function trackCheckoutClicked(surface: string, capability?: string): void {
-  trackUpgradeMetricEvent({
-    type: UPGRADE_METRIC_EVENTS.CHECKOUT_CLICKED,
-    surface,
-    capability,
-  });
+export function trackCheckoutClicked(_surface: string, _capability?: string): void {
+  // Compatibility no-op.
 }
 
-export function trackAgentInstallTokenGenerated(surface: string, capability?: string): void {
-  trackUpgradeMetricEvent({
-    type: UPGRADE_METRIC_EVENTS.AGENT_INSTALL_TOKEN_GENERATED,
-    surface,
-    capability,
-  });
+export function trackAgentInstallTokenGenerated(_surface: string, _capability?: string): void {
+  // Compatibility no-op.
 }
 
-export function trackAgentInstallCommandCopied(surface: string, capability?: string): void {
-  trackUpgradeMetricEvent({
-    type: UPGRADE_METRIC_EVENTS.AGENT_INSTALL_COMMAND_COPIED,
-    surface,
-    capability,
-  });
+export function trackAgentInstallCommandCopied(_surface: string, _capability?: string): void {
+  // Compatibility no-op.
 }
 
-export function trackAgentInstallProfileSelected(surface: string, profile: string): void {
-  trackUpgradeMetricEvent({
-    type: UPGRADE_METRIC_EVENTS.AGENT_INSTALL_PROFILE_SELECTED,
-    surface,
-    capability: profile,
-  });
+export function trackAgentInstallProfileSelected(_surface: string, _profile: string): void {
+  // Compatibility no-op.
 }
 
-export function trackAgentFirstConnected(surface: string, capability?: string): void {
-  trackUpgradeMetricEvent({
-    type: UPGRADE_METRIC_EVENTS.AGENT_FIRST_CONNECTED,
-    surface,
-    capability,
-  });
+export function trackAgentFirstConnected(_surface: string, _capability?: string): void {
+  // Compatibility no-op.
 }

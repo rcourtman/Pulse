@@ -1,5 +1,5 @@
-// Compatibility wrapper: migrate callers to "@/utils/upgradeMetrics".
-// Keep these exports stable for older modules/tests.
+// Compatibility wrapper for retired customer-side commercial analytics exports.
+// Keep these stable while older modules/tests migrate away from the names.
 
 export type { UpgradeMetricEvent as ConversionEvent } from './upgradeMetrics';
 export {

@@ -16,6 +16,8 @@ function writeFixture(root, repoRoot, files) {
       'export function DiagnosticsResultsPanel() { return null; }\n',
     [path.join(root, 'src', 'components', 'Settings', 'diagnosticsModel.ts')]:
       'export interface DiagnosticsInfo { version: string; }\n',
+    [path.join(root, 'src', 'utils', 'upgradeMetrics.ts')]:
+      'export function trackUpgradeMetricEvent() {}\n',
     ...files,
   };
 
@@ -81,5 +83,45 @@ export function stripInternalAnalyticsDiagnosticsFields(payload) {
     }));
 
     expect(collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot })).toEqual([]);
+  });
+
+  it('reports product-side upgrade-metrics ingestion plumbing', () => {
+    const { root, repoRoot } = makeFixture(({ root }) => ({
+      [path.join(root, 'src', 'utils', 'upgradeMetrics.ts')]: `
+import { apiFetch } from '@/utils/apiClient';
+
+export function trackUpgradeMetricEvent() {
+  void apiFetch('/api/upgrade-metrics/events');
+}
+`,
+    }));
+
+    const findings = collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot });
+
+    expect(findings.map((finding) => finding.rule)).toEqual([
+      'canonical-settings/no-product-upgrade-metrics-ingestion',
+      'canonical-settings/no-product-upgrade-metrics-ingestion',
+      'canonical-settings/no-product-upgrade-metrics-ingestion',
+      'canonical-settings/no-product-upgrade-metrics-endpoint',
+    ]);
+  });
+
+  it('reports direct production frontend calls to upgrade-metrics ingestion', () => {
+    const { root, repoRoot } = makeFixture(({ root }) => ({
+      [path.join(root, 'src', 'components', 'Settings', 'CommercialProbe.tsx')]: `
+export function CommercialProbe() {
+  void fetch('/api/upgrade-metrics/events');
+  return null;
+}
+`,
+      [path.join(root, 'src', 'components', 'Settings', '__tests__', 'CommercialProbe.test.tsx')]:
+        "expect(source).toContain('/api/upgrade-metrics/events');\n",
+    }));
+
+    const findings = collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot });
+
+    expect(findings.map((finding) => finding.rule)).toEqual([
+      'canonical-settings/no-product-upgrade-metrics-endpoint',
+    ]);
   });
 });

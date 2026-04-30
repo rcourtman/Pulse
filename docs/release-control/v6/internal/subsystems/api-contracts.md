@@ -1815,8 +1815,10 @@ reporting routes themselves: `/api/upgrade-metrics/stats`,
 `/api/upgrade-metrics/health`, `/api/upgrade-metrics/config`, and
 `/api/admin/upgrade-metrics-funnel` must require admin/settings-scope access
 rather than becoming general authenticated product reads. Authenticated event
-ingestion at `/api/upgrade-metrics/events` may remain fire-and-forget UX
-plumbing, but reporting and control stay on the privileged settings boundary.
+ingestion at `/api/upgrade-metrics/events` may remain only as compatibility or
+admin-owned ingestion plumbing; customer frontend surfaces must not call it for
+pricing, checkout, paywall, commercial funnel, or infrastructure-onboarding
+signals. Reporting and control stay on the privileged settings boundary.
 That same public-demo API boundary must also hide runtime-admin operations
 surfaces instead of treating them as harmless reads. Demo sessions must receive
 `404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the

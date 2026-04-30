@@ -210,6 +210,9 @@ canonically owned by `frontend-modern/src/components/Settings/useSystemSettingsS
 while local commercial compatibility state remains an internal store/backend
 concern in `frontend-modern/src/stores/systemSettings.ts`, not settings
 navigation metadata or other frontend-primitives owners.
+Retired local-upgrade-metrics compatibility must not become customer-side
+commercial analytics emission; browser product surfaces must not POST pricing,
+checkout, paywall, funnel, or onboarding signals to `/api/upgrade-metrics/events`.
 
 The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API

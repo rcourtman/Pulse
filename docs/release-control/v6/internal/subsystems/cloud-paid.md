@@ -522,16 +522,17 @@ runtime gating as separate unlinked claims.
    storage, API response, or grant signing so Lifetime, Pro, Pro+, and
    grandfathered recurring customers cannot be downgraded to the partial
    feature list carried by an old JWT or legacy plan row.
-14. Keep self-hosted commercial funnel stage ownership explicit:
-    `pkg/licensing/conversion_events.go`,
-    `pkg/licensing/conversion_store.go`, and
-    `frontend-modern/src/utils/upgradeMetrics.ts` own in-app `Plans & Billing`
-    stage events such as `pricing_viewed` and `checkout_clicked`, while
-    `pulse-pro:license-server/v6_checkout.go` owns the Pulse Account handoff
-    equivalents bound to `portal_handoff_id`. Pulse must not infer those
-    portal stages from referrer state, and the commercial service must keep
-    those self-hosted handoffs on release track `v6` even while the public
-    site remains on `v5` before GA.
+14. Keep self-hosted commercial funnel stage ownership out of the customer
+    frontend. `pkg/licensing/conversion_events.go` and
+    `pkg/licensing/conversion_store.go` may retain server/admin compatibility
+    handling for local commercial reporting, while
+    `frontend-modern/src/utils/upgradeMetrics.ts` is a compatibility no-op and
+    must not POST in-app `Plans & Billing`, pricing, checkout, paywall, or
+    onboarding events from browser product surfaces. `pulse-pro:license-server/v6_checkout.go`
+    owns the Pulse Account handoff equivalents bound to `portal_handoff_id`.
+    Pulse must not infer those portal stages from referrer state, and the
+    commercial service must keep those self-hosted handoffs on release track
+    `v6` even while the public site remains on `v5` before GA.
 15. Keep local commercial funnel reporting inside the self-hosted privacy
     boundary, not user diagnostics: local upgrade-metric summaries, daily
     buckets, surface/capability breakdowns, and infrastructure-onboarding
@@ -542,8 +543,9 @@ runtime gating as separate unlinked claims.
     expose them in the customer support diagnostics payload or panel.
     The local reporting/control endpoints themselves must stay privileged:
     stats, health, config, and funnel reads must require admin plus
-    settings-scope access; only event ingestion may remain an authenticated
-    fire-and-forget path for user interactions.
+    settings-scope access; event ingestion may remain only for compatibility
+    or admin-owned producers and must not be called by customer frontend
+    interactions.
 16. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
     may keep checkout, activation, recovery, and support-only trial plumbing
     available for explicit handoffs and entitled installs, but default
@@ -1895,18 +1897,19 @@ feature/limit primitives, billing and entitlement type shapes, commercial
 migration and trial flow, conversion telemetry, host lifecycle tracking, and
 public-key/build-mode boundaries should all resolve through explicit proof
 routes rather than a package-wide `pkg/licensing/` fallback.
-That same conversion-telemetry boundary now treats self-hosted commercial
-progression as explicit stage events instead of inferring everything from
-backend completion. `pkg/licensing/conversion_events.go`,
-`pkg/licensing/conversion_store.go`, and
-`frontend-modern/src/utils/upgradeMetrics.ts` own local `pricing_viewed` and
-`checkout_clicked` events for the in-app `Plans & Billing` plan surface, while
-`pulse-pro:license-server/v6_checkout.go` owns the Pulse Account handoff
-equivalents bound to `portal_handoff_id` and the canonical checkout intent.
-The browser app must not try to recreate those Pulse Account stages from
-referrer state, and the commercial service must not collapse self-hosted v6
-handoffs back onto the public-site release track when production public GA is
-still on v5.
+That same conversion-telemetry boundary now keeps self-hosted commercial
+progression out of customer-side browser analytics.
+`pkg/licensing/conversion_events.go` and `pkg/licensing/conversion_store.go`
+may own local server/admin reporting compatibility, while
+`frontend-modern/src/utils/upgradeMetrics.ts` remains a compatibility no-op
+and must not emit local `pricing_viewed`, `checkout_clicked`, paywall,
+commercial funnel, or onboarding events from the in-app `Plans & Billing` plan
+surface. `pulse-pro:license-server/v6_checkout.go` owns the Pulse Account
+handoff equivalents bound to `portal_handoff_id` and the canonical checkout
+intent. The browser app must not try to recreate those Pulse Account stages
+from referrer state, and the commercial service must not collapse self-hosted
+v6 handoffs back onto the public-site release track when production public GA
+is still on v5.
 That same local conversion store remains the canonical read model for
 self-hosted commercial reporting, but not for user support diagnostics:
 admin-owned reporting surfaces may read structured local funnel reports from
@@ -1915,7 +1918,8 @@ support diagnostics panel must not expose pricing, checkout, conversion, or
 infrastructure-onboarding analytics. The API route boundary must preserve that
 same split: local commercial metric stats, health, config, and funnel reads are
 admin/settings-scope surfaces, while `/api/upgrade-metrics/events` remains only
-the authenticated local ingestion path for explicit product interactions.
+compatibility/admin-owned ingestion and must not be called by customer browser
+product interactions.
 Stripe checkout and subscription webhook persistence now also follows the
 canonical Cloud/MSP limit rule: when paid state is granted, billing-state
 writes must persist authoritative `limits.max_monitored_systems` derived from canonical
