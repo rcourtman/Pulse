@@ -86,10 +86,6 @@ export function getDockerUpdateActionsUpdateErrorMessage(message?: string): stri
   return message || `Unable to update ${DOCKER_PODMAN_SOURCE_LABEL} update actions.`;
 }
 
-export function getReduceUpsellNoiseUpdateErrorMessage(message?: string): string {
-  return message || 'Unable to update commercial prompt preferences.';
-}
-
 export function getTelemetryUpdateErrorMessage(message?: string): string {
   return message || 'Unable to update anonymous telemetry.';
 }

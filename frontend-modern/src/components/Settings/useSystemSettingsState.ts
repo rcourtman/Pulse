@@ -6,10 +6,7 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
 import { copyToClipboard } from '@/utils/clipboard';
-import {
-  updateDockerUpdateActionsSetting,
-  updateReduceProUpsellNoiseSetting,
-} from '@/stores/systemSettings';
+import { updateDockerUpdateActionsSetting } from '@/stores/systemSettings';
 import {
   BACKUP_INTERVAL_OPTIONS,
   getCheckForUpdatesErrorMessage,
@@ -17,7 +14,6 @@ import {
   getBackupIntervalSummary,
   getDockerUpdateActionsUpdateErrorMessage,
   getHideLocalLoginUpdateErrorMessage,
-  getReduceUpsellNoiseUpdateErrorMessage,
   getStartUpdateErrorMessage,
   getSystemSettingsSaveErrorMessage,
   getTelemetryUpdateErrorMessage,
@@ -62,8 +58,6 @@ export function useSystemSettingsState({
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
   const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
-  const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
-  const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
   const [savingTelemetry, setSavingTelemetry] = createSignal(false);
   const [telemetryPreview, setTelemetryPreview] = createSignal<TelemetryPreviewResponse | null>(
@@ -149,7 +143,6 @@ export function useSystemSettingsState({
       );
       setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
       setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
-      setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
       setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
 
       if (typeof systemSettings.backupPollingEnabled === 'boolean') {
@@ -314,33 +307,6 @@ export function useSystemSettingsState({
       setDisableDockerUpdateActions(previous);
     } finally {
       setSavingDockerUpdateActions(false);
-    }
-  };
-
-  const handleReduceProUpsellNoiseChange = async (enabled: boolean): Promise<void> => {
-    if (savingReduceUpsells()) {
-      return;
-    }
-
-    const previous = reduceProUpsellNoise();
-    setReduceProUpsellNoise(enabled);
-    setSavingReduceUpsells(true);
-
-    try {
-      await SettingsAPI.updateSystemSettings({ reduceProUpsellNoise: enabled });
-      updateReduceProUpsellNoiseSetting(enabled);
-      notificationStore.success(
-        enabled ? 'Commercial prompts reduced' : 'Commercial prompt preference restored',
-        2000,
-      );
-    } catch (error) {
-      logger.error('Failed to update commercial prompt preference', error);
-      notificationStore.error(
-        getReduceUpsellNoiseUpdateErrorMessage(error instanceof Error ? error.message : undefined),
-      );
-      setReduceProUpsellNoise(previous);
-    } finally {
-      setSavingReduceUpsells(false);
     }
   };
 
@@ -547,9 +513,6 @@ export function useSystemSettingsState({
     disableDockerUpdateActionsLocked,
     savingDockerUpdateActions,
     handleDisableDockerUpdateActionsChange,
-    reduceProUpsellNoise,
-    savingReduceUpsells,
-    handleReduceProUpsellNoiseChange,
     telemetryEnabled,
     telemetryEnabledLocked,
     savingTelemetry,

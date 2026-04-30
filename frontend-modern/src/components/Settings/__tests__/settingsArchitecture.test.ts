@@ -178,7 +178,7 @@ describe('settings architecture guardrails', () => {
     expect(systemSettingsPresentationSource).not.toContain(
       'Unable to update local-only commercial events.',
     );
-    expect(systemSettingsPresentationSource).toContain(
+    expect(systemSettingsPresentationSource).not.toContain(
       'Unable to update commercial prompt preferences.',
     );
     expect(dataHandlingPanelSource).not.toContain('Start Trial');

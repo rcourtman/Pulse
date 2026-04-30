@@ -182,8 +182,6 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `metricsRetentionHourlyDays` | Hourly metrics retention (days) |
 | `metricsRetentionDailyDays` | Daily metrics retention (days) |
 | `disableDockerUpdateActions` | Hide Docker update actions in UI |
-| `reduceProUpsellNoise` | Legacy compatibility preference for proactive commercial prompts. Default self-hosted v6 sessions already hide paid prompts unless the user enters an explicit commercial handoff or has an existing entitlement. |
-| `disableLocalUpgradeMetrics` | Disable local-only commercial handoff event collection |
 | `backendPort` | Legacy (unused) |
 | `frontendPort` | Legacy (ignored; use `FRONTEND_PORT`) |
 
@@ -275,7 +273,6 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `DNS_CACHE_TIMEOUT` | Cache TTL for DNS lookups | `5m` |
 | `MAX_POLL_TIMEOUT` | Maximum time per polling cycle | `3m` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
-| `PULSE_DISABLE_LOCAL_UPGRADE_METRICS` | Disable local-only upgrade event collection | `false` |
 | `PULSE_TELEMETRY` | Anonymous outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 
 ### Logging Overrides

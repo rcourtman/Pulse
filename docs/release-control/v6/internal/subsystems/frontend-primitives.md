@@ -1012,9 +1012,10 @@ vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 explicit `Usage data and privacy` model centered on `Anonymous outbound
 telemetry`; maintainer commercial-event controls, upgrade-metrics labels, and
 sales/onboarding reporting language must not appear in customer-facing Settings
-or support diagnostics. The telemetry copy must describe normalized release
-identity rather than falling back to ambiguous `telemetry`, `upgrade metrics`,
-or raw-version wording.
+or support diagnostics, and public configuration docs must not list their
+internal compatibility switches as ordinary operator settings. The telemetry
+copy must describe normalized release identity rather than falling back to
+ambiguous `telemetry`, `upgrade metrics`, or raw-version wording.
 Shared table, disclosure, and form primitives must also stay explicitly typed
 at the browser edge. Summary rows may memoize repeated pending-update reads,
 shared buttons must preserve discriminated disclosure props, toggle and a11y

@@ -155,7 +155,8 @@ evidence with no subsystem ownership.
 That same governed home now also owns the single customer-facing "usage data"
 vocabulary for anonymous outbound telemetry. Local commercial activation and
 license-recovery runtime records must stay out of ordinary Settings, support
-diagnostics, and outbound telemetry disclosure copy.
+diagnostics, outbound telemetry disclosure copy, and public configuration
+reference tables.
 That same operator-reporting boundary now also owns reusable latest-install
 adoption baselines. `scripts/telemetry_adoption_report.py` must emit
 windowed 24h, 72h, and 7d latest-install snapshots that split published
@@ -191,8 +192,10 @@ runtime, so privacy governance must not describe a live public hosted-model
 proxy for normal self-hosted v6 installs.
 That shared settings boundary now also has an explicit split of responsibilities:
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts` remains the
-canonical owner for telemetry, local-upgrade-metrics compatibility, and
-auth/privacy runtime state, while
+canonical owner for customer-visible telemetry and auth/privacy runtime state,
+while internal commercial prompt and local-upgrade-metrics compatibility stay
+below the customer settings panel in the backend/settings-store compatibility
+path,
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` stays a
 customer-facing presentation boundary for outbound telemetry controls and
 `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx` may only
@@ -202,11 +205,11 @@ or the registry hook just because the shell wiring changed.
 That shell split now also applies to tab-save coordination: the dedicated
 `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts` owner may
 decide which settings tabs participate in shell-level save prompts, but it must
-remain pure shell metadata. Telemetry, local-upgrade-metrics, and auth/privacy
-state transitions stay canonically owned by
-`frontend-modern/src/components/Settings/useSystemSettingsState.ts` and the
-backing `frontend-modern/src/stores/systemSettings.ts` trust surface, not by
-settings navigation metadata or other frontend-primitives owners.
+remain pure shell metadata. Telemetry and auth/privacy state transitions stay
+canonically owned by `frontend-modern/src/components/Settings/useSystemSettingsState.ts`,
+while local commercial compatibility state remains an internal store/backend
+concern in `frontend-modern/src/stores/systemSettings.ts`, not settings
+navigation metadata or other frontend-primitives owners.
 
 The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API

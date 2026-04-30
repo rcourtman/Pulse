@@ -72,10 +72,20 @@ describe('systemSettings store', () => {
     expect(privacyDoc).toContain('Commercial activation and license-recovery runtime records');
     expect(privacyDoc).not.toContain('Local-only commercial handoff events');
     expect(privacyDoc).not.toContain('Disable local-only commercial events');
+    expect(privacyDoc).not.toContain('reduceProUpsellNoise');
     expect(privacyDoc).toContain('Every field is listed below with the reason it exists');
     expect(privacyDoc).toContain('rows older than **90 days** are purged automatically');
     expect(privacyDoc).toContain('uses client IP addresses transiently for abuse/rate limiting');
     expect(privacyDoc).toContain('Reset ID');
+  });
+
+  it('keeps internal commercial compatibility switches out of public configuration docs', () => {
+    const configurationDoc = readFileSync(path.join(repoRoot, 'docs', 'CONFIGURATION.md'), 'utf8');
+
+    expect(configurationDoc).not.toContain('reduceProUpsellNoise');
+    expect(configurationDoc).not.toContain('disableLocalUpgradeMetrics');
+    expect(configurationDoc).not.toContain('PULSE_DISABLE_LOCAL_UPGRADE_METRICS');
+    expect(configurationDoc).toContain('PULSE_TELEMETRY');
   });
 
   it('documents self-hosted AI provider transport and resource-policy redaction in the privacy doc', () => {

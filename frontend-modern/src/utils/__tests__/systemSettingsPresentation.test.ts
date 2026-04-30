@@ -13,7 +13,6 @@ import {
   getCheckForUpdatesErrorMessage,
   getDockerUpdateActionsUpdateErrorMessage,
   getHideLocalLoginUpdateErrorMessage,
-  getReduceUpsellNoiseUpdateErrorMessage,
   getStartUpdateErrorMessage,
   getSystemSettingsSaveErrorMessage,
   getTelemetryUpdateErrorMessage,
@@ -97,9 +96,6 @@ describe('systemSettingsPresentation', () => {
     );
     expect(getDockerUpdateActionsUpdateErrorMessage()).toBe(
       'Unable to update Docker / Podman update actions.',
-    );
-    expect(getReduceUpsellNoiseUpdateErrorMessage()).toBe(
-      'Unable to update commercial prompt preferences.',
     );
     expect(getTelemetryUpdateErrorMessage()).toBe('Unable to update anonymous telemetry.');
     expect(getTemperatureMonitoringUpdateErrorMessage()).toBe(
