@@ -36,6 +36,10 @@ func TestOllamaClient_ChatStream_Success(t *testing.T) {
 		assert.True(t, req.Stream)
 		assert.Equal(t, "llama3", req.Model)
 		assert.NotEmpty(t, req.Messages)
+		// #1425: Pulse must pass keep_alive so the model unloads shortly
+		// after the request burst ends instead of refreshing Ollama's
+		// 5-minute default TTL on every call.
+		assert.Equal(t, ollamaKeepAlive, req.KeepAlive)
 
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		w.WriteHeader(http.StatusOK)
@@ -180,6 +184,8 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.False(t, req.Stream)
 		assert.Equal(t, "llama3", req.Model)
+		// #1425: keep_alive must be set on non-streaming Chat too.
+		assert.Equal(t, ollamaKeepAlive, req.KeepAlive)
 		require.Len(t, req.Tools, 1)
 		assert.Equal(t, "function", req.Tools[0].Type)
 		assert.Equal(t, "get_time", req.Tools[0].Function.Name)

@@ -105,7 +105,23 @@ type ollamaRequest struct {
 	Stream   bool            `json:"stream"`
 	Options  *ollamaOptions  `json:"options,omitempty"`
 	Tools    []ollamaTool    `json:"tools,omitempty"` // Tool definitions for function calling
+	// KeepAlive controls how long Ollama keeps the model loaded after the
+	// request completes. Ollama's default is 5 minutes; without this field
+	// every Pulse Chat call refreshes that 5-minute window, so a single
+	// call from Patrol or alert analysis can keep the model warm in RAM
+	// indefinitely if any other Ollama traffic happens within 5 minutes
+	// (#1425). Pulse passes a short value so the model unloads shortly
+	// after a Patrol burst or one-shot analysis ends. Accepts duration
+	// strings like "30s", "5m", or "0" for immediate unload.
+	KeepAlive string `json:"keep_alive,omitempty"`
 }
+
+// ollamaKeepAlive is the duration Pulse asks Ollama to keep the model loaded
+// after a request completes. 30s is short enough that the model unloads
+// soon after a Patrol/alert-analysis burst ends, while still long enough
+// to span the small gaps between sequential calls in a single analysis
+// session so the model isn't reloaded mid-burst.
+const ollamaKeepAlive = "30s"
 
 type ollamaMessage struct {
 	Role      string           `json:"role"`
@@ -212,9 +228,10 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	ollamaReq := ollamaRequest{
-		Model:    model,
-		Messages: messages,
-		Stream:   false, // Non-streaming for now
+		Model:     model,
+		Messages:  messages,
+		Stream:    false, // Non-streaming for now
+		KeepAlive: ollamaKeepAlive,
 	}
 
 	// Convert tools to Ollama format
@@ -381,9 +398,10 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	ollamaReq := ollamaRequest{
-		Model:    model,
-		Messages: messages,
-		Stream:   true, // Enable streaming
+		Model:     model,
+		Messages:  messages,
+		Stream:    true, // Enable streaming
+		KeepAlive: ollamaKeepAlive,
 	}
 
 	// Handle tools with tool_choice support (same as non-streaming)
