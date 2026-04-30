@@ -197,9 +197,15 @@ describe('WorkloadsFilter', () => {
       expect(toolbarActions).not.toBeNull();
       expect(controlDeck!).toHaveClass('grid');
       expect(controlDeck!).toHaveClass('w-full');
-      expect(controlDeck!).toHaveClass('bg-surface-alt/60');
+      expect(controlDeck!).toHaveClass('bg-surface-alt');
       expect(controlDeck!).toContainElement(toolbarActions!);
       expect(controlDeck!).toContainElement(primaryControls!);
+      expect(primaryControls!).toHaveClass('border');
+      expect(primaryControls!).toHaveClass('bg-surface');
+      expect(secondaryControls!).toHaveClass('border');
+      expect(secondaryControls!).toHaveClass('bg-surface');
+      expect(toolbarActions!).toHaveClass('border');
+      expect(toolbarActions!).toHaveClass('bg-surface');
       expect(toolbarActions!).toHaveClass('xl:justify-self-end');
       expect(toolbarActions!).not.toHaveClass('ml-auto');
       expect(toolbarActions!).not.toHaveClass('border-t');

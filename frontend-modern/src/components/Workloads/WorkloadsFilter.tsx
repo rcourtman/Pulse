@@ -77,9 +77,9 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         }}
         showFilters={showToolbarFilters()}
         actionsLayout="stacked"
-        controlDeckClass="workloads-filter-control-deck grid w-full min-w-0 items-start gap-2 rounded-md border border-border-subtle bg-surface-alt/60 p-1.5 xl:grid-cols-[minmax(0,1fr)_auto]"
+        controlDeckClass="workloads-filter-control-deck grid w-full min-w-0 items-start gap-2 rounded-md border border-border bg-surface-alt p-1.5 shadow-sm xl:grid-cols-[minmax(0,1fr)_auto]"
         filterControlsClass="page-controls-filter-controls w-full min-w-0"
-        toolbarActionsClass="page-controls-toolbar-actions inline-flex max-w-full flex-wrap items-center gap-2 xl:justify-self-end"
+        toolbarActionsClass="page-controls-toolbar-actions inline-flex max-w-full flex-wrap items-center gap-2 rounded-md border border-border-subtle bg-surface px-1.5 py-1 shadow-sm xl:justify-self-end"
         toolbarTrailing={
           <>
             <GroupedTableModeSegmentedControl
@@ -96,8 +96,8 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           </>
         }
       >
-        <div class="workloads-filter-control-stack grid w-full min-w-0 gap-1 xl:grid-cols-[max-content_minmax(16rem,1fr)] xl:items-start xl:gap-2">
-          <div class="workloads-filter-primary-controls flex min-w-0 flex-wrap items-center gap-1 xl:flex-col xl:items-start">
+        <div class="workloads-filter-control-stack grid w-full min-w-0 gap-2 xl:grid-cols-[max-content_minmax(16rem,1fr)] xl:items-start">
+          <div class="workloads-filter-primary-controls flex min-w-0 flex-wrap items-center gap-1 rounded-md border border-border-subtle bg-surface px-1.5 py-1 shadow-sm xl:flex-col xl:items-start">
             <LabeledFilterToggleGroup
               id="workloads-type-filter"
               label="Type"
@@ -119,7 +119,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           </div>
 
           <Show when={hasSecondaryFilters()}>
-            <div class="workloads-filter-secondary-controls flex max-w-full min-w-0 flex-wrap items-center gap-1">
+            <div class="workloads-filter-secondary-controls flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-md border border-border-subtle bg-surface px-1.5 py-1 shadow-sm">
               <Show when={props.hostFilter}>
                 {(hostFilter) => (
                   <LabeledFilterSelect

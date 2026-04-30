@@ -374,7 +374,9 @@ work extends shared components instead of creating new local variants.
    filter rows and trailing actions through `PageControls` `controlDeckClass`
    so the controls read as one structured command deck instead of unrelated
    left-aligned fragments or a compact island inside a mostly empty full-width
-   panel. Narrow consumers such as
+   panel. Those structured decks must give each semantic section a visible
+   boundary so adjacent radio groups, scope filters, and display actions do not
+   collapse into one hard-to-scan strip. Narrow consumers such as
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.
 4. Add guardrail tests when a new shared pattern is introduced.

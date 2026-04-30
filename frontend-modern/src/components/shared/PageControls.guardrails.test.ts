@@ -153,6 +153,8 @@ describe('page controls guardrails', () => {
     expect(workloadsFilterSource).toContain('workloads-filter-secondary-controls');
     expect(workloadsFilterSource).toContain('workloads-filter-control-deck');
     expect(workloadsFilterSource).toContain('controlDeckClass=');
+    expect(workloadsFilterSource).toContain('border border-border bg-surface-alt');
+    expect(workloadsFilterSource).toContain('border border-border-subtle bg-surface');
     expect(workloadsFilterSource).toContain('xl:grid-cols-[minmax(0,1fr)_auto]');
     expect(workloadsFilterSource).toContain(
       'xl:grid-cols-[max-content_minmax(16rem,1fr)]',
