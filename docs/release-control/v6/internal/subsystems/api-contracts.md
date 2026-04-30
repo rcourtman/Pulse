@@ -559,6 +559,11 @@ the canonical monitored-system blocked payload.
 21. Telemetry preview or reset endpoints drifting from the exact server-owned telemetry runtime contract instead of reusing the same source-of-truth snapshot and install-ID state the background sender uses
 22. Shared SSO test or metadata-preview handlers open-coding outbound metadata/discovery URLs, allowing userinfo-bearing HTTP(S) inputs, or rebuilding `/.well-known/openid-configuration` with origin-root string concatenation instead of the shared validated URL helpers before any outbound request
 23. AI settings handlers echoing raw provider secrets or testing the wrong provider model: `/api/settings/ai` may expose masked provider-auth presence such as `ollama_password_set`, but backend payloads must never echo stored secrets back to clients, and provider-specific test routes must stay bound to the selected provider's own configured model instead of whichever other provider currently owns the default `model` field
+24. `/api/diagnostics` exposing maintainer/admin analytics such as commercial
+    funnel, sales funnel, pricing/checkout conversion, or infrastructure
+    onboarding telemetry. Customer diagnostics may expose runtime health,
+    supportability, and sanitized troubleshooting state; admin analytics must
+    stay behind admin-owned metrics routes.
 
 ## Completion Obligations
 
@@ -1792,14 +1797,12 @@ That same diagnostics boundary must also backfill canonical fallback reasons
 when a raw snapshot reaches the API layer without one, so
 `buildMemorySourceDiagnostics` stays self-consistent even if a caller bypasses
 `GetDiagnosticSnapshots()` and hands diagnostics a legacy alias directly.
-That same diagnostics boundary now also owns org-scoped local commercial funnel
-serialization when the self-hosted privacy contract allows it: if
-`internal/api/diagnostics.go` exposes local upgrade-metric summaries, daily
-buckets, or surface/capability breakdowns, it must read them from the local
-conversion store through the licensing bridge, keep diagnostics caching scoped
-to the authenticated org context, and preserve the canonical camelCase
-diagnostics payload shape instead of leaking pkg/licensing types or inferring
-hosted checkout stages from the local API layer.
+That same diagnostics boundary now explicitly excludes maintainer analytics.
+`internal/api/diagnostics.go` must not serialize commercial funnel, sales
+funnel, pricing/checkout conversion, or infrastructure onboarding telemetry in
+`/api/diagnostics`; local upgrade/onboarding metrics remain owned by the
+licensing/admin metrics routes and their admin gates rather than the customer
+support diagnostics contract.
 That same public-demo API boundary must also hide runtime-admin operations
 surfaces instead of treating them as harmless reads. Demo sessions must receive
 `404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the

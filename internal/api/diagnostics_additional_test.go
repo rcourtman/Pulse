@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -209,12 +207,6 @@ func TestComputeDiagnostics_Basic(t *testing.T) {
 	if diag.MetricsStore == nil {
 		t.Fatalf("expected metrics store diagnostics")
 	}
-	if diag.CommercialFunnel == nil {
-		t.Fatalf("expected commercial funnel diagnostics")
-	}
-	if diag.InfrastructureOnboarding == nil {
-		t.Fatalf("expected infrastructure onboarding diagnostics")
-	}
 	if diag.APITokens == nil {
 		t.Fatalf("expected api token diagnostics")
 	}
@@ -224,157 +216,21 @@ func TestComputeDiagnostics_Basic(t *testing.T) {
 	if diag.AIChat == nil {
 		t.Fatalf("expected ai chat diagnostics")
 	}
-}
 
-func TestComputeDiagnostics_CommercialFunnelUsesOrgScopedConversionReport(t *testing.T) {
-	cfg := &config.Config{DataPath: t.TempDir()}
-	monitor := newMonitorForDiagnostics(t, cfg)
-	store, err := pkglicensing.NewConversionStore(filepath.Join(t.TempDir(), "conversion.db"))
+	payload, err := json.Marshal(diag.NormalizeCollections())
 	if err != nil {
-		t.Fatalf("NewConversionStore() error = %v", err)
+		t.Fatalf("marshal diagnostics: %v", err)
 	}
-	defer store.Close()
-
-	base := time.Now().UTC().Truncate(time.Hour).Add(-6 * time.Hour)
-	for _, event := range []pkglicensing.StoredConversionEvent{
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventPricingViewed,
-			Surface:        "settings_self_hosted_billing_plan",
-			Capability:     "self_hosted_plan",
-			IdempotencyKey: "org-a:pricing",
-			CreatedAt:      base,
-		},
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventCheckoutClicked,
-			Surface:        "settings_self_hosted_billing_compare_prompt",
-			Capability:     "self_hosted_plan",
-			IdempotencyKey: "org-a:click",
-			CreatedAt:      base.Add(time.Hour),
-		},
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventLicenseActivated,
-			Surface:        "license_api",
-			Capability:     "self_hosted_plan",
-			IdempotencyKey: "org-a:activated",
-			CreatedAt:      base.Add(2 * time.Hour),
-		},
-		{
-			OrgID:          "org-b",
-			EventType:      pkglicensing.EventPricingViewed,
-			Surface:        "paywall_modal",
-			Capability:     "relay",
-			IdempotencyKey: "org-b:pricing",
-			CreatedAt:      base,
-		},
+	for _, forbidden := range []string{
+		"commercialFunnel",
+		"infrastructureOnboarding",
+		"pricing_viewed",
+		"checkout_clicked",
+		"credentials_opened",
 	} {
-		if err := store.Record(event); err != nil {
-			t.Fatalf("Record(%s) error = %v", event.IdempotencyKey, err)
+		if strings.Contains(string(payload), forbidden) {
+			t.Fatalf("customer diagnostics leaked internal analytics field %q: %s", forbidden, payload)
 		}
-	}
-
-	router := &Router{config: cfg, monitor: monitor, conversionStore: store}
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "org-a")
-	diag := router.computeDiagnostics(ctx)
-
-	if diag.CommercialFunnel == nil {
-		t.Fatalf("expected commercial funnel diagnostics")
-	}
-	if diag.CommercialFunnel.Summary.PricingViewed != 1 {
-		t.Fatalf("PricingViewed = %d, want 1", diag.CommercialFunnel.Summary.PricingViewed)
-	}
-	if diag.CommercialFunnel.Summary.CheckoutClicked != 1 {
-		t.Fatalf("CheckoutClicked = %d, want 1", diag.CommercialFunnel.Summary.CheckoutClicked)
-	}
-	if diag.CommercialFunnel.Summary.LicenseActivated != 1 {
-		t.Fatalf("LicenseActivated = %d, want 1", diag.CommercialFunnel.Summary.LicenseActivated)
-	}
-	if len(diag.CommercialFunnel.Surfaces) == 0 || diag.CommercialFunnel.Surfaces[0].Key != "settings_self_hosted_billing_compare_prompt" {
-		t.Fatalf("unexpected surfaces breakdown: %+v", diag.CommercialFunnel.Surfaces)
-	}
-}
-
-func TestComputeDiagnostics_InfrastructureOnboardingUsesOrgScopedReport(t *testing.T) {
-	cfg := &config.Config{DataPath: t.TempDir()}
-	monitor := newMonitorForDiagnostics(t, cfg)
-	store, err := pkglicensing.NewConversionStore(filepath.Join(t.TempDir(), "conversion.db"))
-	if err != nil {
-		t.Fatalf("NewConversionStore() error = %v", err)
-	}
-	defer store.Close()
-
-	base := time.Now().UTC().Truncate(time.Hour).Add(-6 * time.Hour)
-	for _, event := range []pkglicensing.StoredConversionEvent{
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventInfrastructureOnboardingOpened,
-			Surface:        "settings_infrastructure_add",
-			IdempotencyKey: "org-a:opened",
-			CreatedAt:      base,
-		},
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventInfrastructureOnboardingPathSelected,
-			Surface:        "settings_infrastructure_add",
-			Capability:     "api",
-			IdempotencyKey: "org-a:path",
-			CreatedAt:      base.Add(time.Hour),
-		},
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventInfrastructureOnboardingProbeResult,
-			Surface:        "settings_infrastructure_add",
-			Capability:     "no-match",
-			IdempotencyKey: "org-a:probe",
-			CreatedAt:      base.Add(2 * time.Hour),
-		},
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventInfrastructureOnboardingCredentialsOpened,
-			Surface:        "settings_infrastructure_add",
-			Capability:     "agent",
-			IdempotencyKey: "org-a:credentials",
-			CreatedAt:      base.Add(3 * time.Hour),
-		},
-		{
-			OrgID:          "org-b",
-			EventType:      pkglicensing.EventInfrastructureOnboardingOpened,
-			Surface:        "settings_infrastructure_add",
-			IdempotencyKey: "org-b:opened",
-			CreatedAt:      base,
-		},
-	} {
-		if err := store.Record(event); err != nil {
-			t.Fatalf("Record(%s) error = %v", event.IdempotencyKey, err)
-		}
-	}
-
-	router := &Router{config: cfg, monitor: monitor, conversionStore: store}
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "org-a")
-	diag := router.computeDiagnostics(ctx)
-
-	if diag.InfrastructureOnboarding == nil {
-		t.Fatalf("expected infrastructure onboarding diagnostics")
-	}
-	if diag.InfrastructureOnboarding.Summary.Opened != 1 {
-		t.Fatalf("Opened = %d, want 1", diag.InfrastructureOnboarding.Summary.Opened)
-	}
-	if diag.InfrastructureOnboarding.Summary.APIPathSelected != 1 {
-		t.Fatalf("APIPathSelected = %d, want 1", diag.InfrastructureOnboarding.Summary.APIPathSelected)
-	}
-	if diag.InfrastructureOnboarding.Summary.ProbeNoMatch != 1 {
-		t.Fatalf("ProbeNoMatch = %d, want 1", diag.InfrastructureOnboarding.Summary.ProbeNoMatch)
-	}
-	if diag.InfrastructureOnboarding.Summary.CredentialsOpened != 1 {
-		t.Fatalf("CredentialsOpened = %d, want 1", diag.InfrastructureOnboarding.Summary.CredentialsOpened)
-	}
-	if len(diag.InfrastructureOnboarding.Paths) == 0 || diag.InfrastructureOnboarding.Paths[0].Key != "api" {
-		t.Fatalf("unexpected path breakdown: %+v", diag.InfrastructureOnboarding.Paths)
-	}
-	if diag.InfrastructureOnboarding.Status != "warning" {
-		t.Fatalf("Status = %q, want warning", diag.InfrastructureOnboarding.Status)
 	}
 }
 

@@ -1659,12 +1659,11 @@ for lifecycle-adjacent diagnostics surfaces, legacy aliases and empty
 fallback-reason fields must still normalize onto the governed canonical reason
 contract instead of depending on monitor-owned snapshot accessors to have run
 first.
-That same shared diagnostics dependency now also assumes any local commercial
-funnel diagnostics stay org-scoped at the cache boundary: when
-`internal/api/diagnostics.go` adds self-hosted upgrade-metric summaries beside
-lifecycle diagnostics, the shared diagnostics cache must key by authenticated
-org context so lifecycle-adjacent admin surfaces do not cross-tenant leak local
-commerce telemetry.
+That same shared diagnostics dependency now also assumes local commercial and
+onboarding analytics stay out of user diagnostics entirely: lifecycle-adjacent
+admin surfaces may consume operational diagnostics, but they must not restore
+self-hosted upgrade-metric summaries or infrastructure-onboarding analytics to
+`internal/api/diagnostics.go` or the settings diagnostics panel.
 Lifecycle-adjacent Docker and Podman agent diagnostics are part of that same
 shared backend dependency. When `internal/api/diagnostics.go` emits agent
 health notes for Docker and Podman, the copy must keep Infrastructure as the

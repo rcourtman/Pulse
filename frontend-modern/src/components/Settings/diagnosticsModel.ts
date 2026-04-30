@@ -101,90 +101,6 @@ export interface MetricsStoreDiagnostic {
   error?: string;
 }
 
-export interface CommercialFunnelStageCounts {
-  pricing_viewed: number;
-  paywall_viewed: number;
-  trial_started: number;
-  upgrade_clicked: number;
-  checkout_clicked: number;
-  checkout_started: number;
-  checkout_completed: number;
-  license_activated: number;
-  license_activation_failed: number;
-}
-
-export interface CommercialFunnelSummary extends CommercialFunnelStageCounts {
-  period: {
-    from: string;
-    to: string;
-  };
-}
-
-export interface CommercialFunnelDayBreakdown extends CommercialFunnelStageCounts {
-  day: string;
-}
-
-export interface CommercialFunnelDimensionBreakdown extends CommercialFunnelStageCounts {
-  key: string;
-}
-
-export interface CommercialFunnelDiagnostic {
-  enabled: boolean;
-  status: 'active' | 'idle' | 'warning' | 'error' | 'unavailable';
-  windowDays: number;
-  summary: CommercialFunnelSummary;
-  daily: CommercialFunnelDayBreakdown[];
-  surfaces: CommercialFunnelDimensionBreakdown[];
-  capabilities: CommercialFunnelDimensionBreakdown[];
-  notes?: string[];
-  error?: string;
-}
-
-export interface InfrastructureOnboardingStageCounts {
-  opened: number;
-  api_path_selected: number;
-  agent_path_selected: number;
-  probe_detected: number;
-  probe_no_match: number;
-  probe_error: number;
-  catalog_selected: number;
-  credentials_opened: number;
-}
-
-export interface InfrastructureOnboardingSummary extends InfrastructureOnboardingStageCounts {
-  period: {
-    from: string;
-    to: string;
-  };
-}
-
-export interface InfrastructureOnboardingDayBreakdown extends InfrastructureOnboardingStageCounts {
-  day: string;
-}
-
-export interface InfrastructureOnboardingPathBreakdown {
-  key: string;
-  count: number;
-}
-
-export interface InfrastructureOnboardingPlatformBreakdown {
-  key: string;
-  catalog_selected: number;
-  credentials_opened: number;
-}
-
-export interface InfrastructureOnboardingDiagnostic {
-  enabled: boolean;
-  status: 'active' | 'idle' | 'warning' | 'error' | 'unavailable';
-  windowDays: number;
-  summary: InfrastructureOnboardingSummary;
-  daily: InfrastructureOnboardingDayBreakdown[];
-  paths: InfrastructureOnboardingPathBreakdown[];
-  platforms: InfrastructureOnboardingPlatformBreakdown[];
-  notes?: string[];
-  error?: string;
-}
-
 export interface AIChatDiagnostic {
   enabled: boolean;
   running: boolean;
@@ -205,14 +121,25 @@ export interface DiagnosticsData {
   pbs: DiagnosticsPBS[];
   system: SystemDiagnostic;
   metricsStore?: MetricsStoreDiagnostic | null;
-  commercialFunnel?: CommercialFunnelDiagnostic | null;
-  infrastructureOnboarding?: InfrastructureOnboardingDiagnostic | null;
   apiTokens?: APITokenDiagnostic | null;
   dockerAgents?: DockerAgentDiagnostic | null;
   alerts?: AlertsDiagnostic | null;
   aiChat?: AIChatDiagnostic | null;
   discovery?: DiscoveryDiagnostic | null;
   errors: string[];
+}
+
+const INTERNAL_ANALYTICS_DIAGNOSTICS_FIELDS = [
+  'commercialFunnel',
+  'infrastructureOnboarding',
+] as const;
+
+export function stripInternalAnalyticsDiagnosticsFields(raw: DiagnosticsData): DiagnosticsData {
+  const data = JSON.parse(JSON.stringify(raw)) as DiagnosticsData & Record<string, unknown>;
+  for (const field of INTERNAL_ANALYTICS_DIAGNOSTICS_FIELDS) {
+    delete data[field];
+  }
+  return data;
 }
 
 export function formatUptime(seconds: number): string {
@@ -226,7 +153,7 @@ export function formatUptime(seconds: number): string {
 }
 
 export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
-  const data: DiagnosticsData = JSON.parse(JSON.stringify(raw));
+  const data = stripInternalAnalyticsDiagnosticsFields(raw);
   const ipv4Re = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(\/\d{1,2})?\b/g;
   const redactString = (value: string): string => value.replace(ipv4Re, '[REDACTED_IP]');
 

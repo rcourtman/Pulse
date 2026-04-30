@@ -7372,21 +7372,6 @@ func TestContract_HostedRelayConfigResponseJSONSnapshot(t *testing.T) {
 
 func TestContract_DiagnosticsInfoJSONSnapshot(t *testing.T) {
 	payload := EmptyDiagnosticsInfo()
-	commercialFunnel := (&CommercialFunnelDiagnostic{
-		Enabled:    true,
-		Status:     "idle",
-		WindowDays: 30,
-		Summary: conversionFunnelSummary{
-			Period: struct {
-				From time.Time `json:"from"`
-				To   time.Time `json:"to"`
-			}{
-				From: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
-			},
-		},
-	}).NormalizeCollections()
-	payload.CommercialFunnel = &commercialFunnel
 
 	got, err := json.Marshal(payload.NormalizeCollections())
 	if err != nil {
@@ -7400,27 +7385,6 @@ func TestContract_DiagnosticsInfoJSONSnapshot(t *testing.T) {
 		"nodes":[],
 		"pbs":[],
 		"system":{"os":"","arch":"","goVersion":"","numCPU":0,"numGoroutine":0,"memoryMB":0},
-		"commercialFunnel":{
-			"enabled":true,
-			"status":"idle",
-			"windowDays":30,
-			"summary":{
-				"pricing_viewed":0,
-				"paywall_viewed":0,
-				"trial_started":0,
-				"upgrade_clicked":0,
-				"checkout_clicked":0,
-				"checkout_started":0,
-				"checkout_completed":0,
-				"license_activated":0,
-				"license_activation_failed":0,
-				"period":{"from":"2026-04-01T00:00:00Z","to":"2026-05-01T00:00:00Z"}
-			},
-			"daily":[],
-			"surfaces":[],
-			"capabilities":[],
-			"notes":[]
-		},
 		"errors":[],
 		"nodeSnapshots":[],
 		"guestSnapshots":[],

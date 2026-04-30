@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -12,7 +11,6 @@ import (
 	discoverysvc "github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestClassifyMemorySourceTrust(t *testing.T) {
@@ -343,81 +341,6 @@ func TestComputeDiagnostics_DiscoveryUsesStructuredErrorOwnership(t *testing.T) 
 	}
 	if diag.Discovery.LastResultErrors != 1 {
 		t.Fatalf("LastResultErrors = %d, want 1", diag.Discovery.LastResultErrors)
-	}
-}
-
-func TestBuildCommercialFunnelDiagnostic_UsesScopedLocalReport(t *testing.T) {
-	store, err := pkglicensing.NewConversionStore(filepath.Join(t.TempDir(), "conversion.db"))
-	if err != nil {
-		t.Fatalf("NewConversionStore() error = %v", err)
-	}
-	defer store.Close()
-
-	now := time.Now().UTC().Truncate(time.Hour)
-	windowEnd := now.Truncate(24 * time.Hour).Add(24 * time.Hour)
-	windowStart := windowEnd.AddDate(0, 0, -2)
-
-	for _, event := range []pkglicensing.StoredConversionEvent{
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventPricingViewed,
-			Surface:        "settings_self_hosted_billing_plan",
-			Capability:     "self_hosted_plan",
-			IdempotencyKey: "diag:pricing",
-			CreatedAt:      windowStart.Add(2 * time.Hour),
-		},
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventCheckoutClicked,
-			Surface:        "settings_self_hosted_billing_compare_prompt",
-			Capability:     "self_hosted_plan",
-			IdempotencyKey: "diag:checkout",
-			CreatedAt:      windowStart.Add(3 * time.Hour),
-		},
-		{
-			OrgID:          "org-a",
-			EventType:      pkglicensing.EventLicenseActivated,
-			Surface:        "license_api",
-			Capability:     "self_hosted_plan",
-			IdempotencyKey: "diag:activated",
-			CreatedAt:      windowStart.Add(4 * time.Hour),
-		},
-		{
-			OrgID:          "org-b",
-			EventType:      pkglicensing.EventPricingViewed,
-			Surface:        "paywall_modal",
-			Capability:     "relay",
-			IdempotencyKey: "diag:other-org",
-			CreatedAt:      windowStart.Add(2 * time.Hour),
-		},
-	} {
-		if err := store.Record(event); err != nil {
-			t.Fatalf("Record(%s) error = %v", event.IdempotencyKey, err)
-		}
-	}
-
-	diag := buildCommercialFunnelDiagnostic(
-		context.WithValue(context.Background(), OrgIDContextKey, "org-a"),
-		store,
-		now,
-	)
-	if diag == nil {
-		t.Fatal("expected commercial funnel diagnostics")
-	}
-	if diag.Status != "active" {
-		t.Fatalf("Status = %q, want active", diag.Status)
-	}
-	if diag.Summary.PricingViewed != 1 || diag.Summary.CheckoutClicked != 1 || diag.Summary.LicenseActivated != 1 {
-		t.Fatalf("unexpected summary: %+v", diag.Summary)
-	}
-	if len(diag.Daily) < 2 {
-		t.Fatalf("len(Daily) = %d, want >= 2", len(diag.Daily))
-	}
-	if len(diag.Surfaces) == 0 || diag.Surfaces[0].Key != "settings_self_hosted_billing_compare_prompt" {
-		t.Fatalf("unexpected surfaces breakdown: %+v", diag.Surfaces)
-	}
-	if len(diag.Capabilities) == 0 || diag.Capabilities[0].Key != "self_hosted_plan" {
-		t.Fatalf("unexpected capabilities breakdown: %+v", diag.Capabilities)
 	}
 }
 

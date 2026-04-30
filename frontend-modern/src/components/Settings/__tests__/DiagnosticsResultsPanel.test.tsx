@@ -8,8 +8,8 @@ describe('DiagnosticsResultsPanel', () => {
     cleanup();
   });
 
-  it('renders the commercial funnel card with readable breakdown labels', () => {
-    const diagnosticsData: DiagnosticsData = {
+  it('does not render internal analytics fields from diagnostics payloads', () => {
+    const diagnosticsData = {
       version: '6.0.0',
       runtime: 'go',
       uptime: 3600,
@@ -162,7 +162,7 @@ describe('DiagnosticsResultsPanel', () => {
         agentsNeedingAttention: 1,
       },
       errors: [],
-    };
+    } as DiagnosticsData;
 
     render(() => (
       <DiagnosticsResultsPanel
@@ -172,16 +172,16 @@ describe('DiagnosticsResultsPanel', () => {
       />
     ));
 
-    expect(screen.getByText('Commercial Funnel')).toBeInTheDocument();
-    expect(screen.getByText('Pricing Views')).toBeInTheDocument();
-    expect(screen.getByText('Checkout Clicks')).toBeInTheDocument();
-    expect(screen.getByText('Self Hosted Plan')).toBeInTheDocument();
-    expect(screen.getByText('Settings Self Hosted Billing Compare Prompt')).toBeInTheDocument();
-    expect(screen.getByText(/Pricing 3/i)).toBeInTheDocument();
-    expect(screen.getByText('Infrastructure Onboarding')).toBeInTheDocument();
-    expect(screen.getByText('Credentials Opened')).toBeInTheDocument();
-    expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
-    expect(screen.getByText('API')).toBeInTheDocument();
+    expect(screen.queryByText('Commercial Funnel')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pricing Views')).not.toBeInTheDocument();
+    expect(screen.queryByText('Checkout Clicks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Self Hosted Plan')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Settings Self Hosted Billing Compare Prompt'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Infrastructure Onboarding')).not.toBeInTheDocument();
+    expect(screen.queryByText('Credentials Opened')).not.toBeInTheDocument();
+    expect(screen.queryByText('TrueNAS SCALE')).not.toBeInTheDocument();
     expect(screen.getByText('Docker / Podman agents')).toBeInTheDocument();
     expect(screen.getByText('Agent-backed Docker / Podman monitoring')).toBeInTheDocument();
     expect(screen.queryByText('Container Runtime Agents')).not.toBeInTheDocument();

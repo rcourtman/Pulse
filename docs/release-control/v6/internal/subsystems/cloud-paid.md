@@ -533,13 +533,13 @@ runtime gating as separate unlinked claims.
     those self-hosted handoffs on release track `v6` even while the public
     site remains on `v5` before GA.
 15. Keep local commercial funnel reporting inside the self-hosted privacy
-    boundary: `internal/api/diagnostics.go` and
-    `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
-    may expose org-scoped local upgrade-metric summaries, daily buckets, and
-    surface/capability breakdowns to authenticated admins, but they must read
-    from the local conversion store instead of exporting those event rows to
-    the commercial service or reconstructing them from hosted checkout
-    telemetry.
+    boundary, not user diagnostics: local upgrade-metric summaries, daily
+    buckets, surface/capability breakdowns, and infrastructure-onboarding
+    analytics may remain in the dedicated local reporting/privacy path, but
+    `internal/api/diagnostics.go`,
+    `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`, and
+    `frontend-modern/src/components/Settings/diagnosticsModel.ts` must not
+    expose them in the customer support diagnostics payload or panel.
 16. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
     may keep checkout, activation, recovery, and support-only trial plumbing
     available for explicit handoffs and entitled installs, but default
@@ -1903,11 +1903,12 @@ The browser app must not try to recreate those Pulse Account stages from
 referrer state, and the commercial service must not collapse self-hosted v6
 handoffs back onto the public-site release track when production public GA is
 still on v5.
-That same local conversion store is now the canonical read model for
-self-hosted commercial diagnostics too: the admin-only diagnostics surface
-reads a structured 30-day local funnel report with daily, surface, and
-capability breakdowns directly from `pkg/licensing/conversion_store.go`
-without exporting those per-event rows outside the Pulse instance.
+That same local conversion store remains the canonical read model for
+self-hosted commercial reporting, but not for user support diagnostics:
+admin-owned reporting surfaces may read structured local funnel reports from
+`pkg/licensing/conversion_store.go`, while `/api/diagnostics` and the Settings
+support diagnostics panel must not expose pricing, checkout, conversion, or
+infrastructure-onboarding analytics.
 Stripe checkout and subscription webhook persistence now also follows the
 canonical Cloud/MSP limit rule: when paid state is granted, billing-state
 writes must persist authoritative `limits.max_monitored_systems` derived from canonical

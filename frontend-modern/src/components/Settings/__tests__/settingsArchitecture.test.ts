@@ -504,15 +504,21 @@ describe('settings architecture guardrails', () => {
     );
   });
 
-  it('keeps diagnostics funnel rendering on the shared results/model boundary', () => {
-    expect(diagnosticsResultsPanelSource).toContain('Commercial Funnel');
-    expect(diagnosticsResultsPanelSource).toContain('Infrastructure Onboarding');
-    expect(diagnosticsResultsPanelSource).toContain('titleCaseDelimitedLabel');
+  it('keeps internal analytics off the user diagnostics boundary', () => {
+    expect(diagnosticsResultsPanelSource).not.toContain('Commercial Funnel');
+    expect(diagnosticsResultsPanelSource).not.toContain('Infrastructure Onboarding');
+    expect(diagnosticsResultsPanelSource).not.toContain('commercialFunnel');
+    expect(diagnosticsResultsPanelSource).not.toContain('infrastructureOnboarding');
     expect(diagnosticsResultsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
 
-    expect(diagnosticsModelSource).toContain('export interface CommercialFunnelDiagnostic');
-    expect(diagnosticsModelSource).toContain('export interface CommercialFunnelSummary');
-    expect(diagnosticsModelSource).toContain('export interface InfrastructureOnboardingDiagnostic');
-    expect(diagnosticsModelSource).toContain('export interface InfrastructureOnboardingSummary');
+    expect(diagnosticsModelSource).toContain('stripInternalAnalyticsDiagnosticsFields');
+    expect(diagnosticsModelSource).not.toContain('export interface CommercialFunnelDiagnostic');
+    expect(diagnosticsModelSource).not.toContain('export interface CommercialFunnelSummary');
+    expect(diagnosticsModelSource).not.toContain(
+      'export interface InfrastructureOnboardingDiagnostic',
+    );
+    expect(diagnosticsModelSource).not.toContain(
+      'export interface InfrastructureOnboardingSummary',
+    );
   });
 });

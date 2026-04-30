@@ -595,11 +595,11 @@ querying, and the operator-facing storage health presentation layer.
     pulling the full storage-page `/api/storage-charts` payload, or by
     inventing a dashboard-only storage history transport.
 15a. Keep shared diagnostics cache scope honest when storage/recovery-adjacent
-    surfaces reuse `internal/api/diagnostics.go`. If the shared diagnostics
-    payload includes local commercial funnel summaries, those values must stay
-    scoped to the authenticated org and sourced from the local conversion
-    store, so recovery-adjacent diagnostics do not inherit cross-tenant
-    leakage or hosted/local telemetry drift through the shared backend route.
+    surfaces reuse `internal/api/diagnostics.go`. The shared diagnostics
+    payload must not include local commercial funnel summaries or
+    infrastructure-onboarding analytics, so recovery-adjacent diagnostics do
+    not inherit commerce telemetry, cross-tenant leakage, or hosted/local
+    semantic drift through the shared backend route.
 16. Keep storage summary interaction scoped through the same canonical IDs.
 17. Keep adjacent AI settings persistence vendor-neutral on the shared
     `internal/api/` boundary. When storage- or recovery-adjacent hosted flows
@@ -1902,11 +1902,10 @@ source breakdowns backfill canonical fallback reasons even when a raw legacy
 snapshot reaches `internal/api/diagnostics.go` without one, so
 recovery-adjacent consumers do not observe alias-normalized sources paired
 with empty or drifted fallback-reason payloads.
-That same shared `internal/api/` dependency now also assumes any local
-commercial funnel diagnostics remain cache-scoped to the authenticated org and
-read from the local conversion store instead of a hosted telemetry surrogate,
-so recovery-adjacent diagnostics surfaces can safely share the backend
-diagnostics route without inheriting cross-tenant leakage or hosted/local
+That same shared `internal/api/` dependency now also assumes local commercial
+and onboarding analytics remain outside the shared diagnostics payload, so
+recovery-adjacent diagnostics surfaces can safely share the backend route
+without inheriting commerce telemetry, cross-tenant leakage, or hosted/local
 semantic drift.
 That same shared `internal/api/` dependency now also assumes auth persistence
 compatibility stays on an explicit migration/import boundary: legacy

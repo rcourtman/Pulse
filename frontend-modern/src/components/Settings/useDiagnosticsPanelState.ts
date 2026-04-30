@@ -4,6 +4,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import {
   buildDiagnosticsExportFilename,
   sanitizeDiagnosticsData,
+  stripInternalAnalyticsDiagnosticsFields,
   type DiagnosticsData,
 } from '@/components/Settings/diagnosticsModel';
 
@@ -16,7 +17,7 @@ export const useDiagnosticsPanelState = () => {
     setLoading(true);
     try {
       const data = (await apiFetchJSON('/api/diagnostics')) as DiagnosticsData;
-      setDiagnosticsData(data);
+      setDiagnosticsData(stripInternalAnalyticsDiagnosticsFields(data));
       showSuccess('Diagnostics completed');
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Failed to run diagnostics');
@@ -34,7 +35,9 @@ export const useDiagnosticsPanelState = () => {
         return;
       }
 
-      const exportData = sanitize ? sanitizeDiagnosticsData(data) : data;
+      const exportData = sanitize
+        ? sanitizeDiagnosticsData(data)
+        : stripInternalAnalyticsDiagnosticsFields(data);
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');

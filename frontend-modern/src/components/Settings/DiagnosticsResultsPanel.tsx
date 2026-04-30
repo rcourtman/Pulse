@@ -5,7 +5,6 @@ import { Card } from '@/components/shared/Card';
 import Activity from 'lucide-solid/icons/activity';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import CheckCircle from 'lucide-solid/icons/check-circle';
-import CreditCard from 'lucide-solid/icons/credit-card';
 import Cpu from 'lucide-solid/icons/cpu';
 import Database from 'lucide-solid/icons/database';
 import HardDrive from 'lucide-solid/icons/hard-drive';
@@ -18,21 +17,13 @@ import XCircle from 'lucide-solid/icons/x-circle';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
-import { getInfrastructureOnboardingProductPresentation } from '@/utils/infrastructureOnboardingPresentation';
 import {
   DIAGNOSTICS_EMPTY_PBS_MESSAGE,
   DIAGNOSTICS_EMPTY_STATE_COPY,
   DIAGNOSTICS_PANEL_COPY,
 } from '@/utils/diagnosticsPresentation';
 import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
-import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
-import type {
-  CommercialFunnelDimensionBreakdown,
-  CommercialFunnelStageCounts,
-  DiagnosticsData,
-  InfrastructureOnboardingPlatformBreakdown,
-  InfrastructureOnboardingStageCounts,
-} from '@/components/Settings/diagnosticsModel';
+import type { DiagnosticsData } from '@/components/Settings/diagnosticsModel';
 
 const DOCKER_PODMAN_SOURCE_LABEL = getSourcePlatformLabel('docker');
 
@@ -91,122 +82,6 @@ const MetricRow: Component<{
   </div>
 );
 
-const formatCommercialBreakdownLabel = (value?: string): string =>
-  titleCaseDelimitedLabel(value, { fallback: 'Unknown' });
-
-const formatCommercialDayLabel = (day?: string): string => {
-  if (!day) return 'Unknown';
-  const parsed = new Date(`${day}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return day;
-  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-};
-
-const getDiagnosticsActivityBadge = (
-  status?: string,
-): {
-  badgeStatus: 'online' | 'offline' | 'warning' | 'unknown';
-  label: string;
-} => {
-  switch (status) {
-    case 'active':
-      return { badgeStatus: 'online', label: 'Active' };
-    case 'warning':
-      return { badgeStatus: 'warning', label: 'Needs Review' };
-    case 'error':
-      return { badgeStatus: 'offline', label: 'Error' };
-    case 'unavailable':
-      return { badgeStatus: 'offline', label: 'Unavailable' };
-    default:
-      return { badgeStatus: 'unknown', label: 'Idle' };
-  }
-};
-
-const formatCommercialBreakdownSummary = (entry: CommercialFunnelDimensionBreakdown): string => {
-  const segments: string[] = [];
-  if (entry.pricing_viewed > 0) {
-    segments.push(`Pricing ${entry.pricing_viewed}`);
-  }
-  if (entry.checkout_clicked > 0) {
-    segments.push(`Checkout ${entry.checkout_clicked}`);
-  }
-  if (entry.trial_started > 0) {
-    segments.push(`Trials ${entry.trial_started}`);
-  }
-  if (entry.license_activated > 0) {
-    segments.push(`Activated ${entry.license_activated}`);
-  }
-  return segments.join(' • ') || 'No recorded activity';
-};
-
-const totalCommercialSignals = (summary?: CommercialFunnelStageCounts | null): number => {
-  if (!summary) return 0;
-  return (
-    summary.pricing_viewed +
-    summary.paywall_viewed +
-    summary.trial_started +
-    summary.upgrade_clicked +
-    summary.checkout_clicked +
-    summary.checkout_started +
-    summary.checkout_completed +
-    summary.license_activated +
-    summary.license_activation_failed
-  );
-};
-
-const formatInfrastructureOnboardingPathLabel = (value?: string): string => {
-  switch (value) {
-    case 'api':
-      return 'API';
-    case 'agent':
-      return 'Agent';
-    default:
-      return titleCaseDelimitedLabel(value, { fallback: 'Unknown' });
-  }
-};
-
-const formatInfrastructureOnboardingPlatformLabel = (value?: string): string => {
-  switch (value) {
-    case 'vmware':
-    case 'truenas':
-    case 'pve':
-    case 'pbs':
-    case 'pmg':
-    case 'agent':
-      return getInfrastructureOnboardingProductPresentation(value).label;
-    default:
-      return titleCaseDelimitedLabel(value, { fallback: 'Unknown' });
-  }
-};
-
-const formatInfrastructureOnboardingPlatformSummary = (
-  entry: InfrastructureOnboardingPlatformBreakdown,
-): string => {
-  const segments: string[] = [];
-  if (entry.catalog_selected > 0) {
-    segments.push(`Catalog ${entry.catalog_selected}`);
-  }
-  if (entry.credentials_opened > 0) {
-    segments.push(`Credentials ${entry.credentials_opened}`);
-  }
-  return segments.join(' • ') || 'No recorded activity';
-};
-
-const totalInfrastructureOnboardingSignals = (
-  summary?: InfrastructureOnboardingStageCounts | null,
-): number => {
-  if (!summary) return 0;
-  return (
-    summary.opened +
-    summary.api_path_selected +
-    summary.agent_path_selected +
-    summary.probe_detected +
-    summary.probe_no_match +
-    summary.probe_error +
-    summary.catalog_selected +
-    summary.credentials_opened
-  );
-};
-
 interface DiagnosticsResultsPanelProps {
   diagnosticsData: DiagnosticsData | null;
   loading: boolean;
@@ -224,9 +99,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
             <h3 class="mb-2 text-lg font-medium text-base-content">
               {DIAGNOSTICS_EMPTY_STATE_COPY.title}
             </h3>
-            <p class="mb-6 text-sm text-muted">
-              {DIAGNOSTICS_EMPTY_STATE_COPY.description}
-            </p>
+            <p class="mb-6 text-sm text-muted">{DIAGNOSTICS_EMPTY_STATE_COPY.description}</p>
             <button
               type="button"
               onClick={props.onRunDiagnostics}
@@ -250,13 +123,18 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
             <MetricRow label="Go Runtime" value={props.diagnosticsData?.system?.goVersion} mono />
             <MetricRow label="CPU Cores" value={props.diagnosticsData?.system?.numCPU} />
             <MetricRow label="Goroutines" value={props.diagnosticsData?.system?.numGoroutine} />
-            <MetricRow label="Memory" value={`${props.diagnosticsData?.system?.memoryMB || 0} MB`} />
+            <MetricRow
+              label="Memory"
+              value={`${props.diagnosticsData?.system?.memoryMB || 0} MB`}
+            />
           </DiagnosticCard>
 
           <DiagnosticCard
             title="PVE Nodes"
             icon={Server}
-            status={props.diagnosticsData?.nodes?.every((node) => node.connected) ? 'success' : 'warning'}
+            status={
+              props.diagnosticsData?.nodes?.every((node) => node.connected) ? 'success' : 'warning'
+            }
           >
             <div class="mb-2 flex items-center justify-between">
               <span>Total Nodes</span>
@@ -291,7 +169,9 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
           >
             <Show
               when={(props.diagnosticsData?.pbs?.length || 0) > 0}
-              fallback={<div class="py-4 text-center text-muted">{DIAGNOSTICS_EMPTY_PBS_MESSAGE}</div>}
+              fallback={
+                <div class="py-4 text-center text-muted">{DIAGNOSTICS_EMPTY_PBS_MESSAGE}</div>
+              }
             >
               <div class="mb-2 flex items-center justify-between">
                 <span>Total Instances</span>
@@ -426,326 +306,6 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
             </Card>
           </Show>
 
-          <Show when={props.diagnosticsData?.commercialFunnel}>
-            <Card padding="md" class="lg:col-span-2">
-              <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
-                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900">
-                  <CreditCard class="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h4 class="text-sm font-semibold text-base-content">Commercial Funnel</h4>
-                  <p class="text-xs text-muted">
-                    Local pricing, checkout, and activation activity over the last{' '}
-                    {props.diagnosticsData?.commercialFunnel?.windowDays ?? 0} days.
-                  </p>
-                </div>
-                <div class="ml-auto">
-                  <StatusBadge
-                    status={getDiagnosticsActivityBadge(props.diagnosticsData?.commercialFunnel?.status).badgeStatus}
-                    label={getDiagnosticsActivityBadge(props.diagnosticsData?.commercialFunnel?.status).label}
-                  />
-                </div>
-              </div>
-
-              <div class="grid gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div class="space-y-2 text-xs">
-                  <MetricRow
-                    label="Signals"
-                    value={totalCommercialSignals(props.diagnosticsData?.commercialFunnel?.summary)}
-                  />
-                  <MetricRow
-                    label="Pricing Views"
-                    value={props.diagnosticsData?.commercialFunnel?.summary?.pricing_viewed ?? 0}
-                  />
-                  <MetricRow
-                    label="Checkout Clicks"
-                    value={props.diagnosticsData?.commercialFunnel?.summary?.checkout_clicked ?? 0}
-                  />
-                  <MetricRow
-                    label="Checkout Starts"
-                    value={props.diagnosticsData?.commercialFunnel?.summary?.checkout_started ?? 0}
-                  />
-                  <MetricRow
-                    label="Activations"
-                    value={props.diagnosticsData?.commercialFunnel?.summary?.license_activated ?? 0}
-                  />
-                  <MetricRow
-                    label="Activation Failures"
-                    value={
-                      props.diagnosticsData?.commercialFunnel?.summary?.license_activation_failed ?? 0
-                    }
-                  />
-                </div>
-
-                <div>
-                  <div class="mb-2 flex items-center justify-between">
-                    <h5 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Recent Daily Trend
-                    </h5>
-                    <span class="text-[11px] text-muted">UTC day buckets</span>
-                  </div>
-                  <div class="space-y-2">
-                    <Show
-                      when={(props.diagnosticsData?.commercialFunnel?.daily?.length || 0) > 0}
-                      fallback={<p class="text-xs text-muted">No daily activity recorded.</p>}
-                    >
-                      <For each={props.diagnosticsData?.commercialFunnel?.daily?.slice(-7) || []}>
-                        {(bucket) => (
-                          <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
-                            <div class="flex items-center justify-between gap-3">
-                              <span class="font-medium text-base-content">
-                                {formatCommercialDayLabel(bucket.day)}
-                              </span>
-                              <span class="text-muted">
-                                Pricing {bucket.pricing_viewed} • Checkout {bucket.checkout_clicked} •
-                                Activated {bucket.license_activated}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </For>
-                    </Show>
-                  </div>
-                </div>
-
-                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-                  <div>
-                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                      Top Surfaces
-                    </div>
-                    <div class="space-y-2">
-                      <Show
-                        when={(props.diagnosticsData?.commercialFunnel?.surfaces?.length || 0) > 0}
-                        fallback={<p class="text-xs text-muted">No surface attribution recorded.</p>}
-                      >
-                        <For each={props.diagnosticsData?.commercialFunnel?.surfaces?.slice(0, 4) || []}>
-                          {(entry) => (
-                            <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
-                              <div class="font-medium text-base-content">
-                                {formatCommercialBreakdownLabel(entry.key)}
-                              </div>
-                              <div class="mt-1 text-muted">
-                                {formatCommercialBreakdownSummary(entry)}
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </Show>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                      Top Capabilities
-                    </div>
-                    <div class="space-y-2">
-                      <Show
-                        when={(props.diagnosticsData?.commercialFunnel?.capabilities?.length || 0) > 0}
-                        fallback={<p class="text-xs text-muted">No capability attribution recorded.</p>}
-                      >
-                        <For each={props.diagnosticsData?.commercialFunnel?.capabilities?.slice(0, 4) || []}>
-                          {(entry) => (
-                            <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
-                              <div class="font-medium text-base-content">
-                                {formatCommercialBreakdownLabel(entry.key)}
-                              </div>
-                              <div class="mt-1 text-muted">
-                                {formatCommercialBreakdownSummary(entry)}
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </Show>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Show when={(props.diagnosticsData?.commercialFunnel?.notes?.length || 0) > 0}>
-                <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-900">
-                  <div class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
-                    <AlertTriangle class="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <div class="space-y-1">
-                      <For each={props.diagnosticsData?.commercialFunnel?.notes || []}>
-                        {(note) => <div>{note}</div>}
-                      </For>
-                    </div>
-                  </div>
-                </div>
-              </Show>
-
-              <Show when={props.diagnosticsData?.commercialFunnel?.error}>
-                <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300">
-                  {props.diagnosticsData?.commercialFunnel?.error}
-                </div>
-              </Show>
-            </Card>
-          </Show>
-
-          <Show when={props.diagnosticsData?.infrastructureOnboarding}>
-            <Card padding="md" class="lg:col-span-2">
-              <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
-                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900">
-                  <Server class="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h4 class="text-sm font-semibold text-base-content">Infrastructure Onboarding</h4>
-                  <p class="text-xs text-muted">
-                    Local add-infrastructure activity over the last{' '}
-                    {props.diagnosticsData?.infrastructureOnboarding?.windowDays ?? 0} days.
-                  </p>
-                </div>
-                <div class="ml-auto">
-                  <StatusBadge
-                    status={
-                      getDiagnosticsActivityBadge(props.diagnosticsData?.infrastructureOnboarding?.status)
-                        .badgeStatus
-                    }
-                    label={
-                      getDiagnosticsActivityBadge(props.diagnosticsData?.infrastructureOnboarding?.status)
-                        .label
-                    }
-                  />
-                </div>
-              </div>
-
-              <div class="grid gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div class="space-y-2 text-xs">
-                  <MetricRow
-                    label="Signals"
-                    value={totalInfrastructureOnboardingSignals(
-                      props.diagnosticsData?.infrastructureOnboarding?.summary,
-                    )}
-                  />
-                  <MetricRow
-                    label="Opens"
-                    value={props.diagnosticsData?.infrastructureOnboarding?.summary?.opened ?? 0}
-                  />
-                  <MetricRow
-                    label="API Paths"
-                    value={props.diagnosticsData?.infrastructureOnboarding?.summary?.api_path_selected ?? 0}
-                  />
-                  <MetricRow
-                    label="Agent Paths"
-                    value={props.diagnosticsData?.infrastructureOnboarding?.summary?.agent_path_selected ?? 0}
-                  />
-                  <MetricRow
-                    label="Detected Probes"
-                    value={props.diagnosticsData?.infrastructureOnboarding?.summary?.probe_detected ?? 0}
-                  />
-                  <MetricRow
-                    label="No-Match Probes"
-                    value={props.diagnosticsData?.infrastructureOnboarding?.summary?.probe_no_match ?? 0}
-                  />
-                  <MetricRow
-                    label="Credentials Opened"
-                    value={props.diagnosticsData?.infrastructureOnboarding?.summary?.credentials_opened ?? 0}
-                  />
-                </div>
-
-                <div>
-                  <div class="mb-2 flex items-center justify-between">
-                    <h5 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Recent Daily Trend
-                    </h5>
-                    <span class="text-[11px] text-muted">UTC day buckets</span>
-                  </div>
-                  <div class="space-y-2">
-                    <Show
-                      when={(props.diagnosticsData?.infrastructureOnboarding?.daily?.length || 0) > 0}
-                      fallback={<p class="text-xs text-muted">No daily onboarding activity recorded.</p>}
-                    >
-                      <For each={props.diagnosticsData?.infrastructureOnboarding?.daily?.slice(-7) || []}>
-                        {(bucket) => (
-                          <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
-                            <div class="flex items-center justify-between gap-3">
-                              <span class="font-medium text-base-content">
-                                {formatCommercialDayLabel(bucket.day)}
-                              </span>
-                              <span class="text-muted">
-                                Opens {bucket.opened} • Credentials {bucket.credentials_opened} • No Match{' '}
-                                {bucket.probe_no_match}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </For>
-                    </Show>
-                  </div>
-                </div>
-
-                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-                  <div>
-                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                      Path Choices
-                    </div>
-                    <div class="space-y-2">
-                      <Show
-                        when={(props.diagnosticsData?.infrastructureOnboarding?.paths?.length || 0) > 0}
-                        fallback={<p class="text-xs text-muted">No path selection recorded.</p>}
-                      >
-                        <For each={props.diagnosticsData?.infrastructureOnboarding?.paths?.slice(0, 4) || []}>
-                          {(entry) => (
-                            <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
-                              <div class="font-medium text-base-content">
-                                {formatInfrastructureOnboardingPathLabel(entry.key)}
-                              </div>
-                              <div class="mt-1 text-muted">{entry.count} selections</div>
-                            </div>
-                          )}
-                        </For>
-                      </Show>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                      Top Platforms
-                    </div>
-                    <div class="space-y-2">
-                      <Show
-                        when={(props.diagnosticsData?.infrastructureOnboarding?.platforms?.length || 0) > 0}
-                        fallback={<p class="text-xs text-muted">No platform selection recorded.</p>}
-                      >
-                        <For each={props.diagnosticsData?.infrastructureOnboarding?.platforms?.slice(0, 4) || []}>
-                          {(entry) => (
-                            <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
-                              <div class="font-medium text-base-content">
-                                {formatInfrastructureOnboardingPlatformLabel(entry.key)}
-                              </div>
-                              <div class="mt-1 text-muted">
-                                {formatInfrastructureOnboardingPlatformSummary(entry)}
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </Show>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Show when={(props.diagnosticsData?.infrastructureOnboarding?.notes?.length || 0) > 0}>
-                <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-900">
-                  <div class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
-                    <AlertTriangle class="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <div class="space-y-1">
-                      <For each={props.diagnosticsData?.infrastructureOnboarding?.notes || []}>
-                        {(note) => <div>{note}</div>}
-                      </For>
-                    </div>
-                  </div>
-                </div>
-              </Show>
-
-              <Show when={props.diagnosticsData?.infrastructureOnboarding?.error}>
-                <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300">
-                  {props.diagnosticsData?.infrastructureOnboarding?.error}
-                </div>
-              </Show>
-            </Card>
-          </Show>
-
           <Show when={props.diagnosticsData?.apiTokens}>
             <Card padding="md">
               <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
@@ -834,21 +394,17 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
               </div>
               <div class="flex flex-wrap gap-2">
                 <span
-                  class={`rounded px-2 py-1 text-xs font-medium ${
-                    getStatusIndicatorBadgeToneClasses(
-                      props.diagnosticsData?.alerts?.missingCooldown ? 'warning' : 'success',
-                    )
-                  }`}
+                  class={`rounded px-2 py-1 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(
+                    props.diagnosticsData?.alerts?.missingCooldown ? 'warning' : 'success',
+                  )}`}
                 >
                   Cooldown:{' '}
                   {props.diagnosticsData?.alerts?.missingCooldown ? 'Missing' : 'Configured'}
                 </span>
                 <span
-                  class={`rounded px-2 py-1 text-xs font-medium ${
-                    getStatusIndicatorBadgeToneClasses(
-                      props.diagnosticsData?.alerts?.missingGroupingWindow ? 'warning' : 'success',
-                    )
-                  }`}
+                  class={`rounded px-2 py-1 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(
+                    props.diagnosticsData?.alerts?.missingGroupingWindow ? 'warning' : 'success',
+                  )}`}
                 >
                   Grouping:{' '}
                   {props.diagnosticsData?.alerts?.missingGroupingWindow ? 'Disabled' : 'Enabled'}

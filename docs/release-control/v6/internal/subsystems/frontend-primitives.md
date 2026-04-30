@@ -676,6 +676,10 @@ work extends shared components instead of creating new local variants.
 4. Top-level settings panels introducing bespoke page-level headers or outer
    framing instead of the canonical settings shell and `SettingsPanel`
    contract
+5. User-facing diagnostics or settings panels rendering maintainer/admin
+   analytics such as commercial funnel, sales funnel, pricing/checkout
+   conversion, or infrastructure onboarding telemetry. Those signals belong in
+   admin-owned metrics surfaces, not the product diagnostics UI.
 
 ## Completion Obligations
 
@@ -1747,12 +1751,12 @@ run/export lifecycle, results rendering, sanitization/model helpers, and
 customer-facing diagnostics copy. The shell must not re-accumulate inline API
 calls, export-download plumbing, diagnostics-card composition, or diagnostics
 surface copy.
-That same diagnostics owner split now also covers local commercial funnel
-rendering: if diagnostics surfaces expose self-hosted pricing, checkout, or
-activation summaries, `DiagnosticsResultsPanel.tsx` and `diagnosticsModel.ts`
-must own the card composition, label humanization, and typed payload shape,
-while the shell remains a layout/composition owner and does not reintroduce
-inline diagnostics fetches or commerce-specific rendering logic.
+That same diagnostics owner split also keeps maintainer analytics out of the
+customer diagnostics surface. `DiagnosticsResultsPanel.tsx`,
+`diagnosticsModel.ts`, and the diagnostics export path must not render or
+preserve commercial funnel, sales funnel, pricing/checkout conversion, or
+infrastructure onboarding telemetry from `/api/diagnostics`; those signals
+belong in admin-owned metrics surfaces instead of Settings support UI.
 Diagnostics cards that summarize Docker and Podman agent coverage must use the
 shared `docker` source-platform label from
 `frontend-modern/src/utils/sourcePlatforms.ts` for their heading and body copy,
