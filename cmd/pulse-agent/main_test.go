@@ -36,6 +36,33 @@ func TestEnableCommandsHelpUsesPatrolRemediationCopy(t *testing.T) {
 	}
 }
 
+func TestDockerRuntimeHelpUsesDockerPodmanCopy(t *testing.T) {
+	source, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read pulse-agent main.go: %v", err)
+	}
+	text := string(source)
+
+	for _, want := range []string{
+		"Enable Docker / Podman Agent module",
+		"Docker / Podman runtime: auto, docker, or podman (default: auto)",
+		"Force Docker / Podman runtime: docker, podman, or auto",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected pulse-agent CLI copy %q", want)
+		}
+	}
+	for _, stale := range []string{
+		"Enable Docker Agent module",
+		"Container runtime: auto, docker, or podman (default: auto)",
+		"Force container runtime: docker, podman, or auto",
+	} {
+		if strings.Contains(text, stale) {
+			t.Fatalf("pulse-agent CLI copy must not expose stale generic runtime label %q", stale)
+		}
+	}
+}
+
 func TestGatherTags(t *testing.T) {
 	tests := []struct {
 		name     string

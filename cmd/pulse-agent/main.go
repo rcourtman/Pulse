@@ -599,7 +599,7 @@ type Config struct {
 	// Auto-update
 	DisableAutoUpdate         bool
 	DisableDockerUpdateChecks bool   // Disable Docker image update detection
-	DockerRuntime             string // Force container runtime: docker, podman, or auto
+	DockerRuntime             string // Force Docker / Podman runtime: docker, podman, or auto
 
 	// Security
 	EnableCommands bool // Enable command execution for Patrol remediation (disabled by default)
@@ -719,13 +719,13 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 
 	enableHostFlag := fs.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
-	enableDockerFlag := fs.Bool("enable-docker", defaultEnableDocker, "Enable Docker Agent module")
+	enableDockerFlag := fs.Bool("enable-docker", defaultEnableDocker, "Enable Docker / Podman Agent module")
 	enableKubernetesFlag := fs.Bool("enable-kubernetes", defaultEnableKubernetes, "Enable Kubernetes Agent module")
 	enableProxmoxFlag := fs.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
 	proxmoxTypeFlag := fs.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
 	disableAutoUpdateFlag := fs.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
 	disableDockerUpdateChecksFlag := fs.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
-	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Container runtime: auto, docker, or podman (default: auto)")
+	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Docker / Podman runtime: auto, docker, or podman (default: auto)")
 	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for Patrol remediation (disabled by default)")
 	disableCommandsFlag := fs.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
 	enrollFlag := fs.Bool("enroll", false, "Exchange bootstrap token for runtime token (used by deploy wizard)")

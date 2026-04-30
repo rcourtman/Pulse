@@ -280,6 +280,12 @@ profile and assignment columns, but embedded table framing must route through
    The CLI entrypoint owns propagation of persistence context into runtime-owned helpers. When installer-selected state roots differ from the default, `cmd/pulse-agent/main.go` must pass that exact `StateDir` through both the host-agent runtime and updater startup paths instead of letting one path silently fall back to `/var/lib/pulse-agent`.
    The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Non-loopback control-plane URLs remain HTTPS/WSS by default, but explicitly insecure agent/dev-runtime flows may use plain HTTP/WS for LAN development control planes; installer-persisted dev URLs must not be accepted by one runtime path and rejected by another.
    The unified agent CLI copy follows the same Patrol remediation vocabulary as the install surface. `cmd/pulse-agent/main.go` may keep the `--enable-commands` flag name for compatibility, but the help text and inline comments must describe command execution as Patrol remediation rather than reviving AI auto-fix language.
+   The unified agent CLI copy also owns operator-facing Docker / Podman runtime
+   labels. `cmd/pulse-agent/main.go` may keep the historical
+   `--enable-docker` and `--docker-runtime` flag names for compatibility, but
+   help text and inline comments must describe the module and runtime as
+   Docker / Podman rather than exposing the generic container-runtime family
+   label.
 8. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.
    Approval-gated command execution must expose stable rejection reasons for
