@@ -48,6 +48,7 @@ interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
   resetAction?: PageControlsResetAction;
   mobileFilters?: PageControlsMobileFilters;
   actionsLayout?: 'inline' | 'stacked';
+  controlDeckClass?: string;
   filterControlsClass?: string;
   toolbarActionsClass?: string;
 }
@@ -71,6 +72,7 @@ export const PageControls: Component<PageControlsProps> = (props) => {
     'resetAction',
     'mobileFilters',
     'actionsLayout',
+    'controlDeckClass',
     'filterControlsClass',
     'toolbarActionsClass',
     'class',
@@ -108,6 +110,42 @@ export const PageControls: Component<PageControlsProps> = (props) => {
     (actionsLayout() === 'stacked'
       ? 'page-controls-toolbar-actions inline-flex w-full flex-wrap items-center gap-2 border-t border-border-subtle pt-2'
       : 'page-controls-toolbar-actions ml-auto inline-flex shrink-0 flex-wrap items-center justify-end gap-2 self-start');
+  const toolbarControls = () => (
+    <>
+      <div class={filterControlsClass()}>{local.children}</div>
+
+      <div class={toolbarActionsClass()}>
+        <Show when={local.toolbarTrailing}>{local.toolbarTrailing}</Show>
+
+        <Show when={activeUtilityActions()}>
+          <FilterDivider />
+          {activeUtilityActions()}
+        </Show>
+
+        <Show when={showColumnVisibility()}>
+          <FilterDivider />
+          <ColumnPicker
+            columns={local.columnVisibility!.availableToggles()}
+            isHidden={local.columnVisibility!.isHiddenByUser}
+            onToggle={local.columnVisibility!.toggle}
+            onReset={local.columnVisibility!.resetToDefaults}
+          />
+        </Show>
+
+        <Show when={showResetAction()}>
+          <FilterDivider />
+          <FilterActionButton
+            onClick={() => local.resetAction?.onClick()}
+            title={local.resetAction?.title}
+            class={local.resetAction?.class}
+          >
+            {local.resetAction?.icon}
+            {local.resetAction?.label ?? 'Reset'}
+          </FilterActionButton>
+        </Show>
+      </div>
+    </>
+  );
 
   return (
     <FilterHeader
@@ -125,38 +163,9 @@ export const PageControls: Component<PageControlsProps> = (props) => {
       class={local.class}
     >
       <Show when={hasTrailingActions()}>
-        <div class={filterControlsClass()}>{local.children}</div>
-
-        <div class={toolbarActionsClass()}>
-          <Show when={local.toolbarTrailing}>{local.toolbarTrailing}</Show>
-
-          <Show when={activeUtilityActions()}>
-            <FilterDivider />
-            {activeUtilityActions()}
-          </Show>
-
-          <Show when={showColumnVisibility()}>
-            <FilterDivider />
-            <ColumnPicker
-              columns={local.columnVisibility!.availableToggles()}
-              isHidden={local.columnVisibility!.isHiddenByUser}
-              onToggle={local.columnVisibility!.toggle}
-              onReset={local.columnVisibility!.resetToDefaults}
-            />
-          </Show>
-
-          <Show when={showResetAction()}>
-            <FilterDivider />
-            <FilterActionButton
-              onClick={() => local.resetAction?.onClick()}
-              title={local.resetAction?.title}
-              class={local.resetAction?.class}
-            >
-              {local.resetAction?.icon}
-              {local.resetAction?.label ?? 'Reset'}
-            </FilterActionButton>
-          </Show>
-        </div>
+        <Show when={local.controlDeckClass} fallback={toolbarControls()}>
+          {(controlDeckClass) => <div class={controlDeckClass()}>{toolbarControls()}</div>}
+        </Show>
       </Show>
 
       <Show when={!hasTrailingActions()}>{local.children}</Show>

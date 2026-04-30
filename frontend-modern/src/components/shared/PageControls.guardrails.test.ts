@@ -130,6 +130,8 @@ describe('page controls guardrails', () => {
     expect(pageControlsSource).toContain('page-controls-filter-controls');
     expect(pageControlsSource).toContain('page-controls-toolbar-actions ml-auto');
     expect(pageControlsSource).toContain('actionsLayout?:');
+    expect(pageControlsSource).toContain('controlDeckClass?:');
+    expect(pageControlsSource).toContain('const toolbarControls = () => (');
     expect(pageControlsSource).toContain("actionsLayout() === 'stacked'");
     expect(pageControlsSource).toContain(
       'shrink-0 flex-wrap items-center justify-end gap-2 self-start',
@@ -149,6 +151,8 @@ describe('page controls guardrails', () => {
     expect(workloadsFilterSource).toContain('WORKLOAD_STATUS_FILTER_OPTIONS');
     expect(workloadsFilterSource).toContain('workloads-filter-primary-controls');
     expect(workloadsFilterSource).toContain('workloads-filter-secondary-controls');
+    expect(workloadsFilterSource).toContain('workloads-filter-control-deck');
+    expect(workloadsFilterSource).toContain('controlDeckClass=');
     expect(workloadsFilterSource).toContain('actionsLayout="stacked"');
     expect(workloadsFilterSource).toContain('page-controls-toolbar-actions inline-flex');
     expect(workloadsFilterSource).toContain('xl:flex-col xl:items-start');

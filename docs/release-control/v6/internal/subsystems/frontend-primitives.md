@@ -369,7 +369,11 @@ work extends shared components instead of creating new local variants.
    filter surfaces may opt into the `PageControls` stacked action layout so
    display, chart, column, and reset actions occupy their own compact grouped
    row instead of splitting the filter row into left/right zones or creating a
-   full-width form-like divider. Narrow consumers such as
+   full-width form-like divider. When a dense surface would otherwise read as a
+   small form floating in a mostly empty full-width panel, it should route the
+   filter rows and trailing actions through `PageControls` `controlDeckClass`
+   so the controls read as one compact command deck instead of unrelated
+   left-aligned fragments. Narrow consumers such as
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.
 4. Add guardrail tests when a new shared pattern is introduced.

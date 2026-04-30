@@ -132,4 +132,39 @@ describe('PageControls', () => {
     expect(filterControls!).not.toContainElement(columnsButton);
     expect(screen.queryByTestId('desktop-utility')).not.toBeInTheDocument();
   });
+
+  it('can wrap filters and trailing actions in one compact control deck', () => {
+    render(() => (
+      <PageControls
+        search={<div data-testid="search">Search</div>}
+        showFilters={true}
+        actionsLayout="stacked"
+        controlDeckClass="page-controls-control-deck"
+        filterControlsClass="page-controls-filter-controls compact-filters"
+        toolbarActionsClass="page-controls-toolbar-actions compact-actions"
+        toolbarTrailing={<div data-testid="toolbar-trailing">Grouped List</div>}
+        columnVisibility={{
+          availableToggles: () => [{ id: 'subject', label: 'Subject' }],
+          isHiddenByUser: () => false,
+          toggle: vi.fn(),
+          resetToDefaults: vi.fn(),
+        }}
+      >
+        <div>Filters</div>
+      </PageControls>
+    ));
+
+    const deck = screen
+      .getByText('Filters', { selector: 'div' })
+      .closest('.page-controls-control-deck');
+    const trailing = screen.getByTestId('toolbar-trailing');
+    const columnsButton = screen.getByRole('button', { name: /columns/i });
+
+    expect(deck).not.toBeNull();
+    expect(deck!).toContainElement(screen.getByText('Filters', { selector: 'div' }));
+    expect(deck!).toContainElement(trailing);
+    expect(deck!).toContainElement(columnsButton);
+    expect(deck!.querySelector('.page-controls-filter-controls')).toHaveClass('compact-filters');
+    expect(deck!.querySelector('.page-controls-toolbar-actions')).toHaveClass('compact-actions');
+  });
 });

@@ -77,7 +77,9 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         }}
         showFilters={showToolbarFilters()}
         actionsLayout="stacked"
-        toolbarActionsClass="page-controls-toolbar-actions inline-flex max-w-full flex-wrap items-center gap-2 rounded-md bg-surface-hover p-0.5"
+        controlDeckClass="workloads-filter-control-deck inline-flex max-w-full flex-col items-start gap-1 rounded-md border border-border-subtle bg-surface-alt/60 p-1"
+        filterControlsClass="page-controls-filter-controls inline-flex max-w-full min-w-0"
+        toolbarActionsClass="page-controls-toolbar-actions inline-flex max-w-full flex-wrap items-center gap-2 pt-0.5"
         toolbarTrailing={
           <>
             <GroupedTableModeSegmentedControl
@@ -94,8 +96,8 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           </>
         }
       >
-        <div class="workloads-filter-control-stack flex w-full min-w-0 flex-col gap-1.5">
-          <div class="workloads-filter-primary-controls flex min-w-0 flex-wrap items-center gap-1.5 xl:flex-col xl:items-start">
+        <div class="workloads-filter-control-stack inline-flex max-w-full min-w-0 flex-col items-start gap-1">
+          <div class="workloads-filter-primary-controls flex min-w-0 flex-wrap items-center gap-1 xl:flex-col xl:items-start">
             <LabeledFilterToggleGroup
               id="workloads-type-filter"
               label="Type"
@@ -117,7 +119,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           </div>
 
           <Show when={hasSecondaryFilters()}>
-            <div class="workloads-filter-secondary-controls flex min-w-0 flex-wrap items-center gap-2 rounded-md bg-surface-alt/60 p-1">
+            <div class="workloads-filter-secondary-controls flex max-w-full min-w-0 flex-wrap items-center gap-1">
               <Show when={props.hostFilter}>
                 {(hostFilter) => (
                   <LabeledFilterSelect

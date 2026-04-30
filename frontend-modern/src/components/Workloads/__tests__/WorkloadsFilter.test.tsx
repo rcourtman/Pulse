@@ -169,10 +169,16 @@ describe('WorkloadsFilter', () => {
       const { container } = render(() => <WorkloadsFilter {...props} />);
 
       expect(screen.getByTestId('column-picker')).toBeInTheDocument();
-      const primaryControls = container.querySelector('.workloads-filter-primary-controls');
-      const secondaryControls = container.querySelector('.workloads-filter-secondary-controls');
+      const primaryControls = container.querySelector<HTMLElement>(
+        '.workloads-filter-primary-controls',
+      );
+      const secondaryControls = container.querySelector<HTMLElement>(
+        '.workloads-filter-secondary-controls',
+      );
+      const controlDeck = container.querySelector<HTMLElement>('.workloads-filter-control-deck');
       expect(primaryControls).not.toBeNull();
       expect(secondaryControls).not.toBeNull();
+      expect(controlDeck).not.toBeNull();
       expect(primaryControls!).toContainElement(screen.getByRole('group', { name: 'Type' }));
       expect(primaryControls!).toContainElement(screen.getByRole('group', { name: 'Status' }));
       expect(secondaryControls!).toContainElement(
@@ -187,10 +193,13 @@ describe('WorkloadsFilter', () => {
       expect(secondaryControls!.compareDocumentPosition(primaryControls!)).toBe(
         Node.DOCUMENT_POSITION_PRECEDING,
       );
-      const toolbarActions = container.querySelector('.page-controls-toolbar-actions');
+      const toolbarActions = container.querySelector<HTMLElement>('.page-controls-toolbar-actions');
       expect(toolbarActions).not.toBeNull();
-      expect(toolbarActions!).toHaveClass('rounded-md');
-      expect(toolbarActions!).toHaveClass('bg-surface-hover');
+      expect(controlDeck!).toHaveClass('inline-flex');
+      expect(controlDeck!).toHaveClass('bg-surface-alt/60');
+      expect(controlDeck!).toContainElement(toolbarActions!);
+      expect(controlDeck!).toContainElement(primaryControls!);
+      expect(toolbarActions!).toHaveClass('pt-0.5');
       expect(toolbarActions!).not.toHaveClass('ml-auto');
       expect(toolbarActions!).not.toHaveClass('border-t');
       expect(toolbarActions!).toContainElement(screen.getByText('Grouped'));
