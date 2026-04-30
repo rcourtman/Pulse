@@ -83,7 +83,8 @@ state.
    column visibility, and reset controls on the shared `PageControls` toolbar
    rail. Recovery must not reintroduce local no-wrap toolbar overrides or
    right-aligned utility wrappers that prevent the frontend-primitives action
-   rail from owning responsive collapse behavior.
+   rail and structured control deck from owning responsive collapse behavior
+   and visible filter/action section boundaries.
    Compact stable recovery-event filters, such as event outcome/status, may use
    the frontend-primitives responsive toggle/select control, but Recovery must
    keep route-backed event filter state and query semantics in its recovery
@@ -109,7 +110,10 @@ state.
    filter sections collapse through the same primitive contract. The charts
    toggle must read as an explicit `Show charts` / `Hide charts` pressed
    display action, and the off state must remove the summary section fully
-   instead of leaving a collapsed summary shell in the interface.
+   instead of leaving a collapsed summary shell in the interface. Storage
+   filters inherit the shared `PageControls` structured deck and must not
+   duplicate page-local control-deck, action-rail, border, or background class
+   strings.
    Ceph table shells on the storage route share the same frontend-primitives
    table contract: `frontend-modern/src/pages/Ceph.tsx` may own Ceph-specific
    columns and rows, but horizontal overflow and scrollbar hiding must route

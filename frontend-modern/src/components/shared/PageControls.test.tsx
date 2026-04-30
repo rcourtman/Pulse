@@ -36,18 +36,26 @@ describe('PageControls', () => {
     expect(columnsButton).toBeInTheDocument();
     expect(resetButton).toBeInTheDocument();
     const trailingActions = columnsButton.closest('.page-controls-toolbar-actions');
+    const deck = columnsButton.closest('.page-controls-control-deck');
     expect(trailingActions).not.toBeNull();
+    expect(deck).not.toBeNull();
+    expect(deck!).toHaveClass('bg-surface-alt');
     expect(trailingActions!).toContainElement(resetButton);
-    expect(trailingActions!).toHaveClass('ml-auto');
-    expect(trailingActions!).toHaveClass('shrink-0');
-    expect(trailingActions!).toHaveClass('justify-end');
-    expect(trailingActions!).toHaveClass('self-start');
+    expect(trailingActions!).toHaveClass('page-controls-filter-section');
+    expect(trailingActions!).toHaveClass('bg-surface');
+    expect(trailingActions!).toHaveClass('xl:justify-self-end');
+    expect(trailingActions!).not.toHaveClass('ml-auto');
     expect(trailingActions!).not.toHaveClass('2xl:ml-auto');
     const filterControls = screen
       .getByText('Filters', { selector: 'div' })
-      .closest('.page-controls-filter-controls');
+      .closest<HTMLElement>('.page-controls-filter-controls');
     expect(filterControls).not.toBeNull();
+    expect(filterControls!).toHaveClass('page-controls-filter-section');
+    expect(filterControls!).toHaveClass('justify-self-start');
+    expect(filterControls!).toHaveClass('w-fit');
+    expect(filterControls!).not.toHaveClass('w-full');
     expect(filterControls!).not.toContainElement(columnsButton);
+    expect(deck!).toContainElement(filterControls!);
 
     fireEvent.click(screen.getByRole('button', { name: /filters/i }));
     expect(onToggleFilters).toHaveBeenCalledTimes(1);
@@ -120,17 +128,48 @@ describe('PageControls', () => {
     expect(trailingActions).not.toBeNull();
     expect(trailingActions!).toContainElement(trailing);
     expect(trailingActions!).toContainElement(columnsButton);
+    expect(trailingActions!).toHaveClass('page-controls-filter-section');
+    expect(trailingActions!).toHaveClass('xl:justify-self-end');
+    expect(trailingActions!).not.toHaveClass('ml-auto');
+    const filterControls = screen
+      .getByText('Filters', { selector: 'div' })
+      .closest<HTMLElement>('.page-controls-filter-controls');
+    expect(filterControls).not.toBeNull();
+    expect(filterControls!).toHaveClass('page-controls-filter-section');
+    expect(filterControls!).toHaveClass('justify-self-start');
+    expect(filterControls!).toHaveClass('w-fit');
+    expect(filterControls!).not.toContainElement(trailing);
+    expect(filterControls!).not.toContainElement(columnsButton);
+    expect(screen.queryByTestId('desktop-utility')).not.toBeInTheDocument();
+  });
+
+  it('can opt into the inline action layout for narrow specialist controls', () => {
+    render(() => (
+      <PageControls
+        search={<div data-testid="search">Search</div>}
+        showFilters={true}
+        actionsLayout="inline"
+        toolbarTrailing={<div data-testid="toolbar-trailing">Grouped List</div>}
+        columnVisibility={{
+          availableToggles: () => [{ id: 'subject', label: 'Subject' }],
+          isHiddenByUser: () => false,
+          toggle: vi.fn(),
+          resetToDefaults: vi.fn(),
+        }}
+      >
+        <div>Filters</div>
+      </PageControls>
+    ));
+
+    const columnsButton = screen.getByRole('button', { name: /columns/i });
+    const trailingActions = columnsButton.closest('.page-controls-toolbar-actions');
+
+    expect(columnsButton.closest('.page-controls-control-deck')).toBeNull();
+    expect(trailingActions).not.toBeNull();
     expect(trailingActions!).toHaveClass('ml-auto');
     expect(trailingActions!).toHaveClass('shrink-0');
     expect(trailingActions!).toHaveClass('justify-end');
     expect(trailingActions!).toHaveClass('self-start');
-    const filterControls = screen
-      .getByText('Filters', { selector: 'div' })
-      .closest('.page-controls-filter-controls');
-    expect(filterControls).not.toBeNull();
-    expect(filterControls!).not.toContainElement(trailing);
-    expect(filterControls!).not.toContainElement(columnsButton);
-    expect(screen.queryByTestId('desktop-utility')).not.toBeInTheDocument();
   });
 
   it('can wrap filters and trailing actions in one compact control deck', () => {

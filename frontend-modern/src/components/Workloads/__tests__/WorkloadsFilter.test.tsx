@@ -175,7 +175,7 @@ describe('WorkloadsFilter', () => {
       const secondaryControls = container.querySelector<HTMLElement>(
         '.workloads-filter-secondary-controls',
       );
-      const controlDeck = container.querySelector<HTMLElement>('.workloads-filter-control-deck');
+      const controlDeck = container.querySelector<HTMLElement>('.page-controls-control-deck');
       expect(primaryControls).not.toBeNull();
       expect(secondaryControls).not.toBeNull();
       expect(controlDeck).not.toBeNull();
@@ -201,10 +201,13 @@ describe('WorkloadsFilter', () => {
       expect(controlDeck!).toContainElement(toolbarActions!);
       expect(controlDeck!).toContainElement(primaryControls!);
       expect(primaryControls!).toHaveClass('border');
+      expect(primaryControls!).toHaveClass('page-controls-filter-section');
       expect(primaryControls!).toHaveClass('bg-surface');
       expect(secondaryControls!).toHaveClass('border');
+      expect(secondaryControls!).toHaveClass('page-controls-filter-section');
       expect(secondaryControls!).toHaveClass('bg-surface');
       expect(toolbarActions!).toHaveClass('border');
+      expect(toolbarActions!).toHaveClass('page-controls-filter-section');
       expect(toolbarActions!).toHaveClass('bg-surface');
       expect(toolbarActions!).toHaveClass('xl:justify-self-end');
       expect(toolbarActions!).not.toHaveClass('ml-auto');

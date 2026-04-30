@@ -6,7 +6,7 @@ import {
   LabeledFilterToggleGroup,
 } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
-import { PageControls } from '@/components/shared/PageControls';
+import { PageControls, pageControlsFilterSectionClass } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { isContainerWorkloadViewMode } from '@/utils/workloads';
@@ -76,10 +76,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           ),
         }}
         showFilters={showToolbarFilters()}
-        actionsLayout="stacked"
-        controlDeckClass="workloads-filter-control-deck grid w-full min-w-0 items-start gap-2 rounded-md border border-border bg-surface-alt p-1.5 shadow-sm xl:grid-cols-[minmax(0,1fr)_auto]"
-        filterControlsClass="page-controls-filter-controls w-full min-w-0"
-        toolbarActionsClass="page-controls-toolbar-actions inline-flex max-w-full flex-wrap items-center gap-2 rounded-md border border-border-subtle bg-surface px-1.5 py-1 shadow-sm xl:justify-self-end"
+        filterControlsVariant="sectioned-children"
         toolbarTrailing={
           <>
             <GroupedTableModeSegmentedControl
@@ -96,96 +93,98 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           </>
         }
       >
-        <div class="workloads-filter-control-stack grid w-full min-w-0 gap-2 xl:grid-cols-[max-content_minmax(16rem,1fr)] xl:items-start">
-          <div class="workloads-filter-primary-controls flex min-w-0 flex-wrap items-center gap-1 rounded-md border border-border-subtle bg-surface px-1.5 py-1 shadow-sm xl:flex-col xl:items-start">
-            <LabeledFilterToggleGroup
-              id="workloads-type-filter"
-              label="Type"
-              value={typeFilterValue()}
-              onChange={(value) => props.setViewMode(value as ViewMode)}
-              selectClass="min-w-[7rem]"
-              options={WORKLOAD_TYPE_OPTIONS}
-            />
+        <div
+          class={`${pageControlsFilterSectionClass} workloads-filter-primary-controls flex min-w-0 flex-wrap items-center gap-1 xl:flex-col xl:items-start`}
+        >
+          <LabeledFilterToggleGroup
+            id="workloads-type-filter"
+            label="Type"
+            value={typeFilterValue()}
+            onChange={(value) => props.setViewMode(value as ViewMode)}
+            selectClass="min-w-[7rem]"
+            options={WORKLOAD_TYPE_OPTIONS}
+          />
 
-            <LabeledFilterToggleGroup
-              id="workloads-status-filter"
-              label="Status"
-              value={props.statusMode()}
-              onChange={(value) =>
-                props.setStatusMode(value as 'all' | 'running' | 'degraded' | 'stopped')
-              }
-              options={WORKLOAD_STATUS_FILTER_OPTIONS}
-            />
-          </div>
-
-          <Show when={hasSecondaryFilters()}>
-            <div class="workloads-filter-secondary-controls flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-md border border-border-subtle bg-surface px-1.5 py-1 shadow-sm">
-              <Show when={props.hostFilter}>
-                {(hostFilter) => (
-                  <LabeledFilterSelect
-                    id={hostFilter().id ?? 'workloads-host-filter'}
-                    label={hostFilter().label ?? 'Agent'}
-                    value={hostFilter().value}
-                    onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
-                    selectClass="min-w-[8rem]"
-                  >
-                    <For each={hostFilter().options}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </LabeledFilterSelect>
-                )}
-              </Show>
-
-              <Show when={props.platformFilter}>
-                {(platformFilter) => (
-                  <LabeledFilterSelect
-                    id={platformFilter().id ?? 'workloads-platform-filter'}
-                    label={platformFilter().label ?? 'Platform'}
-                    value={platformFilter().value}
-                    onChange={(e) => platformFilter().onChange(e.currentTarget.value)}
-                    selectClass="min-w-[8rem]"
-                  >
-                    <For each={platformFilter().options}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </LabeledFilterSelect>
-                )}
-              </Show>
-
-              <Show when={props.namespaceFilter}>
-                {(namespaceFilter) => (
-                  <LabeledFilterSelect
-                    id={namespaceFilter().id ?? 'workloads-namespace-filter'}
-                    label={namespaceFilter().label ?? 'Namespace'}
-                    value={namespaceFilter().value}
-                    onChange={(e) => namespaceFilter().onChange(e.currentTarget.value)}
-                    selectClass="min-w-[8rem]"
-                  >
-                    <For each={namespaceFilter().options}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </LabeledFilterSelect>
-                )}
-              </Show>
-
-              <Show when={runtimeFilter()}>
-                {(activeRuntimeFilter) => (
-                  <LabeledFilterSelect
-                    id={activeRuntimeFilter().id ?? 'workloads-runtime-filter'}
-                    label={activeRuntimeFilter().label ?? 'Runtime'}
-                    value={activeRuntimeFilter().value}
-                    onChange={(e) => activeRuntimeFilter().onChange(e.currentTarget.value)}
-                    selectClass="min-w-[7rem]"
-                  >
-                    <For each={activeRuntimeFilter().options}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </LabeledFilterSelect>
-                )}
-              </Show>
-            </div>
-          </Show>
+          <LabeledFilterToggleGroup
+            id="workloads-status-filter"
+            label="Status"
+            value={props.statusMode()}
+            onChange={(value) =>
+              props.setStatusMode(value as 'all' | 'running' | 'degraded' | 'stopped')
+            }
+            options={WORKLOAD_STATUS_FILTER_OPTIONS}
+          />
         </div>
+
+        <Show when={hasSecondaryFilters()}>
+          <div
+            class={`${pageControlsFilterSectionClass} workloads-filter-secondary-controls flex max-w-full min-w-0 flex-wrap items-center gap-1`}
+          >
+            <Show when={props.hostFilter}>
+              {(hostFilter) => (
+                <LabeledFilterSelect
+                  id={hostFilter().id ?? 'workloads-host-filter'}
+                  label={hostFilter().label ?? 'Agent'}
+                  value={hostFilter().value}
+                  onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
+                  selectClass="min-w-[8rem]"
+                >
+                  <For each={hostFilter().options}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </LabeledFilterSelect>
+              )}
+            </Show>
+
+            <Show when={props.platformFilter}>
+              {(platformFilter) => (
+                <LabeledFilterSelect
+                  id={platformFilter().id ?? 'workloads-platform-filter'}
+                  label={platformFilter().label ?? 'Platform'}
+                  value={platformFilter().value}
+                  onChange={(e) => platformFilter().onChange(e.currentTarget.value)}
+                  selectClass="min-w-[8rem]"
+                >
+                  <For each={platformFilter().options}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </LabeledFilterSelect>
+              )}
+            </Show>
+
+            <Show when={props.namespaceFilter}>
+              {(namespaceFilter) => (
+                <LabeledFilterSelect
+                  id={namespaceFilter().id ?? 'workloads-namespace-filter'}
+                  label={namespaceFilter().label ?? 'Namespace'}
+                  value={namespaceFilter().value}
+                  onChange={(e) => namespaceFilter().onChange(e.currentTarget.value)}
+                  selectClass="min-w-[8rem]"
+                >
+                  <For each={namespaceFilter().options}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </LabeledFilterSelect>
+              )}
+            </Show>
+
+            <Show when={runtimeFilter()}>
+              {(activeRuntimeFilter) => (
+                <LabeledFilterSelect
+                  id={activeRuntimeFilter().id ?? 'workloads-runtime-filter'}
+                  label={activeRuntimeFilter().label ?? 'Runtime'}
+                  value={activeRuntimeFilter().value}
+                  onChange={(e) => activeRuntimeFilter().onChange(e.currentTarget.value)}
+                  selectClass="min-w-[7rem]"
+                >
+                  <For each={activeRuntimeFilter().options}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </LabeledFilterSelect>
+              )}
+            </Show>
+          </div>
+        </Show>
       </PageControls>
     </Card>
   );

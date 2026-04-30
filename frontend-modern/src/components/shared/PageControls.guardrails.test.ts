@@ -129,10 +129,15 @@ describe('page controls guardrails', () => {
     expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Charts"');
     expect(pageControlsSource).toContain('page-controls-filter-controls');
     expect(pageControlsSource).toContain('page-controls-toolbar-actions ml-auto');
+    expect(pageControlsSource).toContain('pageControlsControlDeckClass');
+    expect(pageControlsSource).toContain('pageControlsFilterSectionClass');
+    expect(pageControlsSource).toContain('pageControlsSectionedFilterControlsClass');
+    expect(pageControlsSource).toContain('filterControlsVariant?:');
     expect(pageControlsSource).toContain('actionsLayout?:');
     expect(pageControlsSource).toContain('controlDeckClass?:');
     expect(pageControlsSource).toContain('const toolbarControls = () => (');
     expect(pageControlsSource).toContain("actionsLayout() === 'stacked'");
+    expect(pageControlsSource).toContain("local.actionsLayout ?? 'stacked'");
     expect(pageControlsSource).toContain(
       'shrink-0 flex-wrap items-center justify-end gap-2 self-start',
     );
@@ -151,16 +156,16 @@ describe('page controls guardrails', () => {
     expect(workloadsFilterSource).toContain('WORKLOAD_STATUS_FILTER_OPTIONS');
     expect(workloadsFilterSource).toContain('workloads-filter-primary-controls');
     expect(workloadsFilterSource).toContain('workloads-filter-secondary-controls');
-    expect(workloadsFilterSource).toContain('workloads-filter-control-deck');
-    expect(workloadsFilterSource).toContain('controlDeckClass=');
-    expect(workloadsFilterSource).toContain('border border-border bg-surface-alt');
-    expect(workloadsFilterSource).toContain('border border-border-subtle bg-surface');
-    expect(workloadsFilterSource).toContain('xl:grid-cols-[minmax(0,1fr)_auto]');
-    expect(workloadsFilterSource).toContain(
-      'xl:grid-cols-[max-content_minmax(16rem,1fr)]',
-    );
-    expect(workloadsFilterSource).toContain('actionsLayout="stacked"');
-    expect(workloadsFilterSource).toContain('page-controls-toolbar-actions inline-flex');
+    expect(workloadsFilterSource).toContain('pageControlsFilterSectionClass');
+    expect(workloadsFilterSource).toContain('filterControlsVariant="sectioned-children"');
+    expect(workloadsFilterSource).not.toContain('workloads-filter-control-deck');
+    expect(workloadsFilterSource).not.toContain('controlDeckClass=');
+    expect(pageControlsSource).toContain('border border-border bg-surface-alt');
+    expect(pageControlsSource).toContain('border border-border-subtle bg-surface');
+    expect(pageControlsSource).toContain('xl:grid-cols-[minmax(0,1fr)_auto]');
+    expect(workloadsFilterSource).not.toContain('xl:grid-cols-[max-content_minmax(16rem,1fr)]');
+    expect(workloadsFilterSource).not.toContain('actionsLayout="stacked"');
+    expect(workloadsFilterSource).not.toContain('page-controls-toolbar-actions inline-flex');
     expect(workloadsFilterSource).toContain('xl:flex-col xl:items-start');
     expect(workloadsFilterSource).not.toContain(
       '<LabeledFilterSelect\n          id="workloads-type-filter"',

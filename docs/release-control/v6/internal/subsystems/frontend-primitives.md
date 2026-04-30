@@ -365,18 +365,18 @@ work extends shared components instead of creating new local variants.
    after another expanded group. User-facing filter options must use operator
    mental models rather than implementation categories: Workloads Type exposes a
    single `Containers` bucket while the `system-container` / `app-container`
-   distinction remains an internal data/deep-link compatibility detail. Dense
-   filter surfaces may opt into the `PageControls` stacked action layout so
-   display, chart, column, and reset actions occupy their own compact grouped
-   row instead of splitting the filter row into left/right zones or creating a
-   full-width form-like divider. When a dense surface would otherwise read as a
-   small form floating in a mostly empty full-width panel, it should route the
-   filter rows and trailing actions through `PageControls` `controlDeckClass`
-   so the controls read as one structured command deck instead of unrelated
-   left-aligned fragments or a compact island inside a mostly empty full-width
-   panel. Those structured decks must give each semantic section a visible
-   boundary so adjacent radio groups, scope filters, and display actions do not
-   collapse into one hard-to-scan strip. Narrow consumers such as
+   distinction remains an internal data/deep-link compatibility detail.
+   `PageControls` owns the default stacked control deck for page-level filters:
+   filter controls, display/chart controls, Columns, and Reset inherit one
+   shared structured command deck with visible section boundaries instead of
+   each page passing local `controlDeckClass`, action-rail, border, or
+   background strings. Pages that have multiple semantic filter groups may set
+   the shared `filterControlsVariant="sectioned-children"` mode and wrap those
+   groups with `pageControlsFilterSectionClass`, but the deck chrome and
+   trailing action section remain frontend-primitives owned. Those structured
+   decks must give each semantic section a visible boundary so adjacent radio
+   groups, scope filters, and display actions do not collapse into one
+   hard-to-scan strip. Narrow consumers such as
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.
 4. Add guardrail tests when a new shared pattern is introduced.

@@ -30,6 +30,15 @@ interface PageControlsMobileFilters {
   onToggle: () => void;
 }
 
+export const pageControlsControlDeckClass =
+  'page-controls-control-deck grid w-full min-w-0 items-start gap-2 rounded-md border border-border bg-surface-alt p-1.5 shadow-sm xl:grid-cols-[minmax(0,1fr)_auto]';
+
+export const pageControlsFilterSectionClass =
+  'page-controls-filter-section rounded-md border border-border-subtle bg-surface px-1.5 py-1 shadow-sm';
+
+export const pageControlsSectionedFilterControlsClass =
+  'page-controls-filter-controls flex w-full min-w-0 flex-wrap items-start gap-2';
+
 interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
   searchLeading?: JSX.Element;
   searchTrailing?: JSX.Element;
@@ -50,6 +59,7 @@ interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
   actionsLayout?: 'inline' | 'stacked';
   controlDeckClass?: string;
   filterControlsClass?: string;
+  filterControlsVariant?: 'single-section' | 'sectioned-children';
   toolbarActionsClass?: string;
 }
 
@@ -74,6 +84,7 @@ export const PageControls: Component<PageControlsProps> = (props) => {
     'actionsLayout',
     'controlDeckClass',
     'filterControlsClass',
+    'filterControlsVariant',
     'toolbarActionsClass',
     'class',
   ]);
@@ -92,58 +103,76 @@ export const PageControls: Component<PageControlsProps> = (props) => {
   const showColumnVisibility = () =>
     Boolean(local.columnVisibility && local.columnVisibility.availableToggles().length > 0);
   const showResetAction = () => local.resetAction?.show === true;
+  const showToolbarTrailing = () => Boolean(local.toolbarTrailing);
+  const showUtilityActions = () => Boolean(activeUtilityActions());
   const hasTrailingActions = () =>
     Boolean(
-      local.toolbarTrailing ||
-      activeUtilityActions() ||
-      showColumnVisibility() ||
-      showResetAction(),
+      showToolbarTrailing() || showUtilityActions() || showColumnVisibility() || showResetAction(),
     );
-  const actionsLayout = () => local.actionsLayout ?? 'inline';
+  const showDividerBeforeUtilityActions = () => showToolbarTrailing() && showUtilityActions();
+  const showDividerBeforeColumnVisibility = () =>
+    (showToolbarTrailing() || showUtilityActions()) && showColumnVisibility();
+  const showDividerBeforeResetAction = () =>
+    (showToolbarTrailing() || showUtilityActions() || showColumnVisibility()) && showResetAction();
+  const actionsLayout = () => local.actionsLayout ?? 'stacked';
+  const filtersUseSectionedChildren = () => local.filterControlsVariant === 'sectioned-children';
+  const resolvedControlDeckClass = () =>
+    local.controlDeckClass ??
+    (actionsLayout() === 'stacked' ? pageControlsControlDeckClass : undefined);
   const filterControlsClass = () =>
     local.filterControlsClass ??
     (actionsLayout() === 'stacked'
-      ? 'page-controls-filter-controls flex w-full min-w-0 flex-none basis-full flex-wrap items-center gap-2'
+      ? filtersUseSectionedChildren()
+        ? pageControlsSectionedFilterControlsClass
+        : `page-controls-filter-controls ${pageControlsFilterSectionClass} inline-flex w-fit max-w-full min-w-0 flex-wrap items-center gap-2 justify-self-start`
       : 'page-controls-filter-controls flex min-w-0 flex-1 basis-0 flex-wrap items-center gap-2');
   const toolbarActionsClass = () =>
     local.toolbarActionsClass ??
     (actionsLayout() === 'stacked'
-      ? 'page-controls-toolbar-actions inline-flex w-full flex-wrap items-center gap-2 border-t border-border-subtle pt-2'
+      ? `page-controls-toolbar-actions ${pageControlsFilterSectionClass} inline-flex max-w-full flex-wrap items-center gap-2 xl:justify-self-end`
       : 'page-controls-toolbar-actions ml-auto inline-flex shrink-0 flex-wrap items-center justify-end gap-2 self-start');
   const toolbarControls = () => (
     <>
       <div class={filterControlsClass()}>{local.children}</div>
 
-      <div class={toolbarActionsClass()}>
-        <Show when={local.toolbarTrailing}>{local.toolbarTrailing}</Show>
+      <Show when={hasTrailingActions()}>
+        <div class={toolbarActionsClass()}>
+          <Show when={local.toolbarTrailing}>{local.toolbarTrailing}</Show>
 
-        <Show when={activeUtilityActions()}>
-          <FilterDivider />
-          {activeUtilityActions()}
-        </Show>
+          <Show when={activeUtilityActions()}>
+            <Show when={showDividerBeforeUtilityActions()}>
+              <FilterDivider />
+            </Show>
+            {activeUtilityActions()}
+          </Show>
 
-        <Show when={showColumnVisibility()}>
-          <FilterDivider />
-          <ColumnPicker
-            columns={local.columnVisibility!.availableToggles()}
-            isHidden={local.columnVisibility!.isHiddenByUser}
-            onToggle={local.columnVisibility!.toggle}
-            onReset={local.columnVisibility!.resetToDefaults}
-          />
-        </Show>
+          <Show when={showColumnVisibility()}>
+            <Show when={showDividerBeforeColumnVisibility()}>
+              <FilterDivider />
+            </Show>
+            <ColumnPicker
+              columns={local.columnVisibility!.availableToggles()}
+              isHidden={local.columnVisibility!.isHiddenByUser}
+              onToggle={local.columnVisibility!.toggle}
+              onReset={local.columnVisibility!.resetToDefaults}
+            />
+          </Show>
 
-        <Show when={showResetAction()}>
-          <FilterDivider />
-          <FilterActionButton
-            onClick={() => local.resetAction?.onClick()}
-            title={local.resetAction?.title}
-            class={local.resetAction?.class}
-          >
-            {local.resetAction?.icon}
-            {local.resetAction?.label ?? 'Reset'}
-          </FilterActionButton>
-        </Show>
-      </div>
+          <Show when={showResetAction()}>
+            <Show when={showDividerBeforeResetAction()}>
+              <FilterDivider />
+            </Show>
+            <FilterActionButton
+              onClick={() => local.resetAction?.onClick()}
+              title={local.resetAction?.title}
+              class={local.resetAction?.class}
+            >
+              {local.resetAction?.icon}
+              {local.resetAction?.label ?? 'Reset'}
+            </FilterActionButton>
+          </Show>
+        </div>
+      </Show>
     </>
   );
 
@@ -162,13 +191,9 @@ export const PageControls: Component<PageControlsProps> = (props) => {
       mobileTrailing={activeMobileTrailing()}
       class={local.class}
     >
-      <Show when={hasTrailingActions()}>
-        <Show when={local.controlDeckClass} fallback={toolbarControls()}>
-          {(controlDeckClass) => <div class={controlDeckClass()}>{toolbarControls()}</div>}
-        </Show>
+      <Show when={resolvedControlDeckClass()} fallback={toolbarControls()}>
+        {(controlDeckClass) => <div class={controlDeckClass()}>{toolbarControls()}</div>}
       </Show>
-
-      <Show when={!hasTrailingActions()}>{local.children}</Show>
     </FilterHeader>
   );
 };
