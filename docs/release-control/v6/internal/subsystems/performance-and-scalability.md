@@ -200,7 +200,7 @@ regression protection.
 17. Extend workload control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts` and `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` and `frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`
     Workloads filter presentation may consume frontend-primitives responsive
-    toggle controls and the shared compact control-deck wrapper, but the
+    toggle controls and the shared structured control-deck wrapper, but the
     workload-owned state model must remain the source of truth for active
     filter counting, reset behavior, and mobile collapse so changing between
     wide toggle and narrow select presentation does not add a second filter

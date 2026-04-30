@@ -153,6 +153,10 @@ describe('page controls guardrails', () => {
     expect(workloadsFilterSource).toContain('workloads-filter-secondary-controls');
     expect(workloadsFilterSource).toContain('workloads-filter-control-deck');
     expect(workloadsFilterSource).toContain('controlDeckClass=');
+    expect(workloadsFilterSource).toContain('xl:grid-cols-[minmax(0,1fr)_auto]');
+    expect(workloadsFilterSource).toContain(
+      'xl:grid-cols-[max-content_minmax(16rem,1fr)]',
+    );
     expect(workloadsFilterSource).toContain('actionsLayout="stacked"');
     expect(workloadsFilterSource).toContain('page-controls-toolbar-actions inline-flex');
     expect(workloadsFilterSource).toContain('xl:flex-col xl:items-start');

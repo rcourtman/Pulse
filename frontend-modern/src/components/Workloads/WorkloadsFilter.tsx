@@ -77,9 +77,9 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         }}
         showFilters={showToolbarFilters()}
         actionsLayout="stacked"
-        controlDeckClass="workloads-filter-control-deck inline-flex max-w-full flex-col items-start gap-1 rounded-md border border-border-subtle bg-surface-alt/60 p-1"
-        filterControlsClass="page-controls-filter-controls inline-flex max-w-full min-w-0"
-        toolbarActionsClass="page-controls-toolbar-actions inline-flex max-w-full flex-wrap items-center gap-2 pt-0.5"
+        controlDeckClass="workloads-filter-control-deck grid w-full min-w-0 items-start gap-2 rounded-md border border-border-subtle bg-surface-alt/60 p-1.5 xl:grid-cols-[minmax(0,1fr)_auto]"
+        filterControlsClass="page-controls-filter-controls w-full min-w-0"
+        toolbarActionsClass="page-controls-toolbar-actions inline-flex max-w-full flex-wrap items-center gap-2 xl:justify-self-end"
         toolbarTrailing={
           <>
             <GroupedTableModeSegmentedControl
@@ -96,7 +96,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           </>
         }
       >
-        <div class="workloads-filter-control-stack inline-flex max-w-full min-w-0 flex-col items-start gap-1">
+        <div class="workloads-filter-control-stack grid w-full min-w-0 gap-1 xl:grid-cols-[max-content_minmax(16rem,1fr)] xl:items-start xl:gap-2">
           <div class="workloads-filter-primary-controls flex min-w-0 flex-wrap items-center gap-1 xl:flex-col xl:items-start">
             <LabeledFilterToggleGroup
               id="workloads-type-filter"

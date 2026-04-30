@@ -195,11 +195,12 @@ describe('WorkloadsFilter', () => {
       );
       const toolbarActions = container.querySelector<HTMLElement>('.page-controls-toolbar-actions');
       expect(toolbarActions).not.toBeNull();
-      expect(controlDeck!).toHaveClass('inline-flex');
+      expect(controlDeck!).toHaveClass('grid');
+      expect(controlDeck!).toHaveClass('w-full');
       expect(controlDeck!).toHaveClass('bg-surface-alt/60');
       expect(controlDeck!).toContainElement(toolbarActions!);
       expect(controlDeck!).toContainElement(primaryControls!);
-      expect(toolbarActions!).toHaveClass('pt-0.5');
+      expect(toolbarActions!).toHaveClass('xl:justify-self-end');
       expect(toolbarActions!).not.toHaveClass('ml-auto');
       expect(toolbarActions!).not.toHaveClass('border-t');
       expect(toolbarActions!).toContainElement(screen.getByText('Grouped'));

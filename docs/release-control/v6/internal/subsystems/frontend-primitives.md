@@ -372,8 +372,9 @@ work extends shared components instead of creating new local variants.
    full-width form-like divider. When a dense surface would otherwise read as a
    small form floating in a mostly empty full-width panel, it should route the
    filter rows and trailing actions through `PageControls` `controlDeckClass`
-   so the controls read as one compact command deck instead of unrelated
-   left-aligned fragments. Narrow consumers such as
+   so the controls read as one structured command deck instead of unrelated
+   left-aligned fragments or a compact island inside a mostly empty full-width
+   panel. Narrow consumers such as
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.
 4. Add guardrail tests when a new shared pattern is introduced.
