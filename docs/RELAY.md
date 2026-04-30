@@ -1,4 +1,4 @@
-# Relay / Mobile Remote Access (Relay and Above)
+# Relay / Pulse Mobile Handoff (Relay and Above)
 
 Pulse Relay provides **end-to-end encrypted remote access** foundations for Pulse instances. It allows secure remote connectivity without exposing your Pulse server to the public internet.
 
@@ -8,15 +8,15 @@ Pulse Relay provides **end-to-end encrypted remote access** foundations for Puls
 
 ```text
 ┌──────────┐         ┌──────────────┐         ┌──────────┐
-│  Mobile   │◄──E2E──►│  Relay       │◄──WSS──►│  Pulse   │
-│  App      │  ECDH   │  Server      │         │  Server  │
+│  Pulse    │◄──E2E──►│  Relay       │◄──WSS──►│  Pulse   │
+│  Mobile   │  ECDH   │  Server      │         │  Server  │
 └──────────┘         └──────────────┘         └──────────┘
 ```
 
 1. Your Pulse server maintains a persistent WebSocket connection to the relay server.
 2. A mobile client connects to the relay server and authenticates.
 3. An ECDH key exchange creates a per-channel encryption key.
-4. All monitoring data is encrypted end-to-end — the relay server **never sees plaintext data**.
+4. Tunneled remote-access traffic is encrypted end-to-end — the relay server **never sees plaintext data**.
 
 ## Quick Start
 
@@ -71,18 +71,18 @@ Relay configuration is stored encrypted in `relay.enc` in the Pulse data directo
 | `POST` | `/api/onboarding/qr` | `settings:read` | Generate mobile onboarding QR code |
 | `POST` | `/api/onboarding/deep-link` | `settings:read` | Generate mobile deep link |
 
-## Mobile App Setup
+## Pulse Mobile Pairing
 
 ### iOS / Android
 
 1. Join mobile early access when available.
-2. Open the app and tap **Connect to Server**.
+2. Open Pulse Mobile and tap **Connect to Server**.
 3. Scan the QR code from **Settings → Relay** in your Pulse web UI.
-4. The app connects via the relay and begins showing live data.
+4. The app connects via the relay for push notifications and secure Open Pulse handoff.
 
 ### Multiple Servers
 
-The mobile app supports connecting to multiple Pulse instances. Each connection has its own encrypted channel.
+Pulse Mobile can pair with multiple Pulse instances. Each pairing has its own encrypted channel.
 
 ## Troubleshooting
 
@@ -100,18 +100,18 @@ The mobile app supports connecting to multiple Pulse instances. Each connection 
    docker logs pulse | grep -i relay
    ```
 
-### Mobile app can't connect
+### Pulse Mobile can't connect
 
 1. Verify relay is enabled in **Settings → Relay**.
 2. Confirm your mobile account has beta access.
 3. Re-scan the QR code — sessions can expire.
 4. Ensure your mobile device has internet access.
 
-### Data not updating on mobile
+### Open Pulse handoff not loading
 
 1. Check the relay connection status in **Settings → Relay**.
 2. Look for WebSocket reconnection messages in Pulse logs.
-3. Restart the mobile app.
+3. Restart Pulse Mobile.
 
 ## See Also
 

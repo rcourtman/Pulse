@@ -70,7 +70,7 @@ All other documents are supporting references unless explicitly required for evi
 - **[Unified Resource Model](UNIFIED_RESOURCES.md)** – How all platforms merge into one model with task-based navigation.
 - **[Unified Navigation Migration](MIGRATION_UNIFIED_NAV.md)** – Upgrading from platform-specific tabs to v6 navigation.
 - **[TrueNAS Integration](TRUENAS.md)** – First-class TrueNAS SCALE/CORE monitoring (pools, datasets, disks, snapshots, replication).
-- **[Relay / Mobile Remote Access](RELAY.md)** – End-to-end encrypted relay for supported Pulse Mobile clients (Relay and above).
+- **[Relay / Pulse Mobile Handoff](RELAY.md)** – End-to-end encrypted relay for supported Pulse Mobile clients (Relay and above).
 - **[Recovery Central](RECOVERY.md)** – Unified backup, snapshot, and replication view across all providers.
 - **[Pulse Cloud (Hosted)](CLOUD.md)** – Fully managed hosting with automatic updates and backups.
 - **[Pulse AI](AI.md)** – Chat assistant, patrol findings, alert analysis, intelligence, and forecasts.
@@ -85,7 +85,7 @@ All other documents are supporting references unless explicitly required for evi
 Pulse is available in three self-hosted tiers plus hosted Cloud:
 
 - **Community**: Free self-hosted monitoring with core monitoring included and 7-day history.
-- **Relay**: Adds secure remote access to the Pulse web UI, mobile app pairing, push notifications, and 14-day history.
+- **Relay**: Adds secure remote access to the Pulse web UI, Pulse Mobile pairing for handoff, push notifications, and 14-day history.
 - **Pro**: Adds alert-triggered root-cause analysis, safe remediation workflows, operations tooling, governance features, and 90-day history.
 - **Cloud**: Hosted Pulse with Pro-level capabilities; hosted pricing is unchanged by the self-hosted model lock.
 

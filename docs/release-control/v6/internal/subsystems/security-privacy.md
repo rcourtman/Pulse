@@ -261,6 +261,10 @@ owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`
 is the version-matched asset served by the running build. Privacy disclosures
 must not drift back to GitHub `main` links that can describe a different
 revision than the installed runtime.
+Relay privacy copy belongs to that same synchronized disclosure boundary: both
+the canonical and frontend-served privacy docs must describe Relay outbound use
+as secure remote web access, Pulse Mobile pairing for handoff, and push
+notifications rather than generic mobile-app monitoring.
 That same disclosure boundary now also fixes the telemetry payload floor:
 commercial and auth-adjacent telemetry may report only coarse posture signals
 such as whether a paid license is active or whether any API tokens exist.

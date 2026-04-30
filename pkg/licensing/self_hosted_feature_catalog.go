@@ -105,8 +105,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureMobileApp: {
 		Key:                   FeatureMobileApp,
-		DisplayName:           "Mobile App Pairing",
-		ComparisonName:        "Mobile App Pairing",
+		DisplayName:           "Pulse Mobile Pairing",
+		ComparisonName:        "Pulse Mobile Pairing",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -114,7 +114,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRolePrimaryPillar,
 			Pro:       SelfHostedFeatureRoleIncluded,
 		},
-		UpgradeReason:   "Get Relay so the mobile app can pair with this instance for secure handoff and notifications.",
+		UpgradeReason:   "Get Relay so Pulse Mobile can pair with this instance for secure handoff and notifications.",
 		UpgradePriority: 1,
 	},
 	FeaturePushNotifications: {

@@ -255,7 +255,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('What Relay adds')).toBeInTheDocument();
     expect(screen.getByText('What Pulse Pro adds')).toBeInTheDocument();
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
-    expect(screen.getByText('Mobile App Pairing')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Mobile Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
     expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
@@ -522,7 +522,7 @@ describe('ProLicensePanel', () => {
         "These checks come from this instance's entitlement payload, not from public pricing copy.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText('Remote access, mobile, and push')).toBeInTheDocument();
+    expect(screen.getByText('Remote access, pairing, and push')).toBeInTheDocument();
     expect(screen.getByText('Root-cause analysis and remediation')).toBeInTheDocument();
     expect(screen.getByText('Team and admin controls')).toBeInTheDocument();
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(4);
@@ -565,10 +565,10 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'See all plans' })).not.toBeInTheDocument();
     expect(screen.getByText('Relay value proof')).toBeInTheDocument();
-    expect(screen.getByText('Remote access, mobile, and push')).toBeInTheDocument();
+    expect(screen.getByText('Remote access, pairing, and push')).toBeInTheDocument();
     expect(screen.getAllByText('14-day metric history').length).toBeGreaterThan(0);
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
-    expect(screen.getByText('Mobile App Pairing')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Mobile Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
   });
 
@@ -807,7 +807,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('PDF/CSV Reporting')).toBeInTheDocument();
     expect(screen.getByText('Centralized Agent Profiles')).toBeInTheDocument();
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
-    expect(screen.getByText('Mobile App Pairing')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Mobile Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
     expect(screen.queryByText('Multi-Tenant Mode')).not.toBeInTheDocument();

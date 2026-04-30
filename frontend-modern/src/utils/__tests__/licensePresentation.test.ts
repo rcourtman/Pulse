@@ -102,7 +102,7 @@ describe('licensePresentation', () => {
 
   it('returns canonical feature labels', () => {
     expect(getLicenseFeatureLabel('ai_patrol')).toBe('Pulse Patrol');
-    expect(getLicenseFeatureLabel('mobile_app')).toBe('Mobile App Pairing');
+    expect(getLicenseFeatureLabel('mobile_app')).toBe('Pulse Mobile Pairing');
     expect(getLicenseFeatureLabel('update_alerts')).toBe('Update Alerts');
     expect(getLicenseFeatureLabel('relay')).toBe('Pulse Relay (Remote Access)');
     expect(getLicenseFeatureLabel('custom_feature')).toBe('Custom Feature');
@@ -292,7 +292,7 @@ describe('licensePresentation', () => {
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
-          'Mobile App Pairing',
+          'Pulse Mobile Pairing',
           'Safe Remediation Workflows',
         ],
       }),
@@ -392,7 +392,7 @@ describe('licensePresentation', () => {
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
-          'Mobile App Pairing',
+          'Pulse Mobile Pairing',
           'Push Notifications',
         ],
       }).body,
@@ -430,7 +430,7 @@ describe('licensePresentation', () => {
           body: 'Reach your Pulse web UI securely from anywhere, pair supported Pulse Mobile clients for handoff and push notifications, and keep 14 days of history.',
           highlights: [
             'Pulse Relay (Remote Access)',
-            'Mobile App Pairing',
+            'Pulse Mobile Pairing',
             'Push Notifications',
             '14-day metric history',
           ],
@@ -509,7 +509,7 @@ describe('licensePresentation', () => {
       body: "These checks come from this instance's entitlement payload, not from public pricing copy.",
       items: [
         {
-          label: 'Remote access, mobile, and push',
+          label: 'Remote access, pairing, and push',
           statusLabel: 'Active',
           state: 'active',
           detail:
@@ -548,7 +548,7 @@ describe('licensePresentation', () => {
     ).toMatchObject({
       title: 'Pulse Pro value proof',
       items: [
-        { label: 'Remote access, mobile, and push', statusLabel: 'Active' },
+        { label: 'Remote access, pairing, and push', statusLabel: 'Active' },
         { label: '90-day metric history', statusLabel: 'Active' },
         { label: 'Root-cause analysis and remediation', statusLabel: 'Active' },
         { label: 'Team and admin controls', statusLabel: 'Active' },
@@ -565,7 +565,7 @@ describe('licensePresentation', () => {
         max_history_days: 14,
       })?.items.map((item) => [item.label, item.statusLabel]),
     ).toEqual([
-      ['Remote access, mobile, and push', 'Partial'],
+      ['Remote access, pairing, and push', 'Partial'],
       ['90-day metric history', 'Partial'],
       ['Root-cause analysis and remediation', 'Partial'],
       ['Team and admin controls', 'Needs attention'],
@@ -594,7 +594,7 @@ describe('licensePresentation', () => {
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
-          'Mobile App Pairing',
+          'Pulse Mobile Pairing',
           'Push Notifications',
           'Safe Remediation Workflows',
         ],
@@ -628,7 +628,7 @@ describe('licensePresentation', () => {
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
-          'Mobile App Pairing',
+          'Pulse Mobile Pairing',
           'Push Notifications',
         ],
         source: 'manual',
@@ -640,7 +640,7 @@ describe('licensePresentation', () => {
       highlightsLabel: 'Available now on this instance',
       highlights: [
         'Pulse Relay (Remote Access)',
-        'Mobile App Pairing',
+        'Pulse Mobile Pairing',
         'Push Notifications',
         '14-day metric history',
       ],

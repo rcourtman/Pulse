@@ -8,7 +8,7 @@ Status: Superseded on 2026-04-16 by `self-hosted-core-monitoring-free`; this rec
 Current replacement: Pulse v6 GA treats self-hosted core monitoring as included
 for Community, Relay, and Pro. Relay is presented annual-first at `$39/year` with
 `$4.99/month` as the secondary option, and it sells secure remote access to the
-Pulse web UI, mobile app pairing, push notifications, and 14-day history rather
+Pulse web UI, Pulse Mobile pairing for handoff, push notifications, and 14-day history rather
 than monitored-system headroom or native mobile monitoring.
 
 ## Historical Decision

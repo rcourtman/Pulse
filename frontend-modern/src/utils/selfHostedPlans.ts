@@ -130,7 +130,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: '$39/year',
     subline: 'or $4.99/month',
     metricHistoryDays: 14,
-    billingExtrasSummary: 'Remote web access, mobile pairing, and push',
+    billingExtrasSummary: 'Remote web access, pairing, and push',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('relay'),
     entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],

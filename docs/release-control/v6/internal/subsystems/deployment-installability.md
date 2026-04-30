@@ -150,6 +150,10 @@ server-side update execution surfaces.
    historical RC context may be preserved, but current self-hosted v6 guidance
    must not present monitored-system volume, child-resource volume, guest
    capacity, or trial eligibility as the active paid model.
+   When those packets describe Relay, they must use the same paid-feature
+   wording as the pricing contract: secure remote access to the Pulse web UI,
+   Pulse Mobile pairing for handoff, push notifications, and 14-day history,
+   not generic mobile-app monitoring access.
    Current stable release notes, changelog packets, and operator support packs
    must also preserve the Infrastructure-first navigation contract: they may
    mention Dashboard only as historical context or generic custom-user tooling,

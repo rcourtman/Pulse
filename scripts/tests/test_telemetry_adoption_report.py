@@ -184,6 +184,19 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn("  - 6.0.0-rc.1: 118", rendered)
         self.assertIn("  - 6.0.0-rc.2: 32", rendered)
 
+    def test_privacy_docs_keep_relay_mobile_handoff_copy_aligned(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        canonical = (repo_root / "docs" / "PRIVACY.md").read_text(encoding="utf-8")
+        bundled = (
+            repo_root / "frontend-modern" / "public" / "docs" / "PRIVACY.md"
+        ).read_text(encoding="utf-8")
+
+        expected = "Pulse Mobile pairing for handoff"
+        self.assertIn(expected, canonical)
+        self.assertIn(expected, bundled)
+        self.assertNotIn("mobile app pairing", canonical)
+        self.assertNotIn("mobile app pairing", bundled)
+
 
 if __name__ == "__main__":
     unittest.main()

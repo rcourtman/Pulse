@@ -89,6 +89,22 @@ Old metadata section.
             self.assertIn("docker pull rcourtman/pulse:6.0.0-rc.2", body)
             self.assertIn("- Rollback target: v5.1.28", body)
 
+    def test_current_release_packets_use_pulse_mobile_handoff_copy(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        packet_paths = (
+            "docs/releases/RELEASE_NOTES_v6.md",
+            "docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md",
+            "docs/releases/V6_CHANGELOG_RC2_DRAFT.md",
+            "docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md",
+        )
+
+        for relative_path in packet_paths:
+            with self.subTest(relative_path=relative_path):
+                text = (repo_root / relative_path).read_text(encoding="utf-8")
+                self.assertIn("Pulse Mobile pairing for handoff", text)
+                self.assertNotIn("mobile app pairing", text)
+                self.assertNotIn("remote access/mobile/push", text)
+
 
 if __name__ == "__main__":
     unittest.main()

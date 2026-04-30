@@ -235,8 +235,8 @@ runtime gating as separate unlinked claims.
    Relay pricing presentation should be annual-first at the existing public
    $39/year price, with $4.99/month as the secondary option, so Relay reads as
    an optional support/convenience tier rather than a pressure upgrade. Relay
-   copy must describe secure remote access to the Pulse web UI, mobile app
-   pairing, push notifications, and 14-day history; it must not imply that the
+   copy must describe secure remote access to the Pulse web UI, Pulse Mobile
+   pairing for handoff, push notifications, and 14-day history; it must not imply that the
    native mobile app is a full monitoring dashboard until that product surface
    exists.
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
@@ -358,7 +358,7 @@ runtime gating as separate unlinked claims.
     narrative across the in-app billing shell, Pulse Account handoff, public
     pricing contract, and owned upgrade reasons. Customer-facing self-hosted
     copy must keep the ladder explicit as `Community = monitor`, `Relay = reach
-    Pulse from anywhere`, and `Pro = investigate root cause, use safe
+    Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro = investigate root cause, use safe
     remediation workflows, and retain 90-day history`. Team/admin extras such as
     RBAC, SSO, audit logging, reporting, and agent profiles may remain present,
     but they are secondary included value and must not displace that operator
@@ -387,7 +387,7 @@ runtime gating as separate unlinked claims.
     `ai_patrol`, `ai_alerts`, `ai_autofix`, and `kubernetes_ai`, but the
     customer-facing plan cards, top-summary highlights, and comparison rows
     must lead with the canonical plan story: `Community = monitor`, `Relay =
-    reach Pulse from anywhere`, and `Pro = root-cause analysis, safe
+    reach Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro = root-cause analysis, safe
     remediation workflows, and longer history`. Team/admin capabilities such as SAML
     SSO, RBAC, audit logging, reporting, and agent profiles may appear as
     secondary included extras, while platform-specific compatibility keys such
@@ -1495,7 +1495,7 @@ the no-cap monitored-system model as well. `ProLicensePanel.tsx`,
 `frontend-modern/src/utils/commercialBillingModel.ts` must present current v6
 self-hosted packages as core monitoring included in every self-hosted tier plus
 plan-specific extras: Community stays free for core monitoring, Relay adds
-remote access/mobile/push convenience and 14-day history, Pro adds Relay plus
+remote access/Pulse Mobile handoff/push convenience and 14-day history, Pro adds Relay plus
 AI operations, automation, root-cause analysis, safe remediation, advanced
 administration, and 90-day history, while Pro+ remains legacy continuity only.
 Cloud/MSP pricing semantics stay separate, and grandfathered v5 continuity copy
@@ -1508,7 +1508,7 @@ render only for active/grace/trial paid self-hosted states with a numeric
 `max_history_days` payload, must suppress itself for Community, inactive, and
 missing-payload states, and must describe partial or missing rows as
 activation/recovery attention rather than as marketing pressure. Relay proof is
-limited to remote access, Pulse Mobile pairing, push notifications, and the
+limited to remote access, Pulse Mobile pairing for handoff, push notifications, and the
 reported 14-day history entitlement. Pro proof adds the reported 90-day history
 entitlement plus root-cause/remediation and team/admin capability groups.
 Frontend presentation and component tests must cover active, partial, and
@@ -1568,11 +1568,11 @@ helpers must show Pro's operations, admin, and reporting extras together while
 still framing Community, Relay, and Pro as core monitoring included in every
 self-hosted tier rather than monitored-system capacity tiers. Relay copy in
 that shared owner must describe the current v6 GA product as standard Relay
-remote access, supported Pulse Mobile pairing, push notifications, and 14-day
+remote access, supported Pulse Mobile pairing for handoff, push notifications, and 14-day
 history, and it must not market a customer-specific Relay URL until that
 routing surface exists as a backed product capability. Cloud common-inclusion
 copy follows the same mobile-language rule: describe supported Pulse Mobile
-pairing and push notifications rather than generic mobile app access. The same factual
+pairing for handoff and push notifications rather than generic mobile app access. The same factual
 plan surface must keep inactive-state copy neutral: default Community installs
 must describe the instance as ready to use rather than as missing an activation
 key, and they must not foreground paid self-hosted activation, v5-era "No Pro

@@ -22,7 +22,7 @@ The current self-hosted paid model is:
 - Community:
   free core self-hosted monitoring, 7-day history
 - Relay:
-  core self-hosted monitoring, 14-day history, remote access/mobile/push
+  core self-hosted monitoring, 14-day history, remote access/Pulse Mobile handoff/push
 - Pro:
   core self-hosted monitoring, 90-day history, AI operations, automation,
   and advanced admin features
@@ -52,7 +52,7 @@ more monitored-system capacity.
 Instead, the self-hosted paid story is now consistently:
 
 - Relay:
-  remote web access, mobile app pairing, push, and convenience
+  remote web access, Pulse Mobile pairing for handoff, push, and convenience
 - Pro:
   Relay plus AI operations, automation, governance, and longer history
 

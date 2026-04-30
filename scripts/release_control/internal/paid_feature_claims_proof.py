@@ -102,7 +102,7 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
         relative_path="frontend-modern/src/utils/selfHostedPlans.ts",
         required_patterns=(
             r"Self-hosted Pulse includes core monitoring for free",
-            r"Remote web access, mobile pairing, and push",
+            r"Remote web access, pairing, and push",
             r"14-day metric history",
             r"Root-cause analysis, safe remediation workflows, 90-day history",
             r"admin/reporting extras",
@@ -123,7 +123,7 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
         relative_path="landing-page/index.html",
         required_patterns=(
             r"Community keeps core monitoring free",
-            r"(?:Pulse Mobile|mobile app) pairing, push notifications, and 14-day history",
+            r"(?:Pulse Mobile|mobile app) pairing(?: for handoff)?, push notifications, and 14-day history",
             r"root-cause analysis, safe remediation workflows, and 90-day history",
             r"Do Relay or Pro charge by server\?",
             r"Existing Pulse Pro and legacy Pro\+ holders keep their paid runtime access",
@@ -134,7 +134,7 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
         relative_path="license-server/public_pricing.go",
         required_patterns=(
             r"Community keeps core monitoring free",
-            r"(?:Pulse Mobile|mobile app) pairing, push notifications, and 14-day history",
+            r"(?:Pulse Mobile|mobile app) pairing(?: for handoff)?, push notifications, and 14-day history",
             r"root-cause analysis, safe remediation workflows, team controls, and 90-day history",
             r"not as the self-hosted paid gate",
         ),

@@ -74,7 +74,7 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     (pulse_dir / "frontend-modern" / "src" / "utils" / "selfHostedPlans.ts").write_text(
         """
         Self-hosted Pulse includes core monitoring for free.
-        Remote web access, mobile pairing, and push.
+        Remote web access, pairing, and push.
         14-day metric history.
         Root-cause analysis, safe remediation workflows, 90-day history.
         admin/reporting extras.
@@ -93,7 +93,7 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     (pulse_pro_dir / "landing-page" / "index.html").write_text(
         """
         Community keeps core monitoring free.
-        mobile app pairing, push notifications, and 14-day history.
+        Pulse Mobile pairing for handoff, push notifications, and 14-day history.
         root-cause analysis, safe remediation workflows, and 90-day history.
         Do Relay or Pro charge by server?
         Existing Pulse Pro and legacy Pro+ holders keep their paid runtime access.
@@ -103,7 +103,7 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     (pulse_pro_dir / "license-server" / "public_pricing.go").write_text(
         """
         Community keeps core monitoring free.
-        mobile app pairing, push notifications, and 14-day history.
+        Pulse Mobile pairing for handoff, push notifications, and 14-day history.
         root-cause analysis, safe remediation workflows, team controls, and 90-day history.
         not as the self-hosted paid gate.
         """,

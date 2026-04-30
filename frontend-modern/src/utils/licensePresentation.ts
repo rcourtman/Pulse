@@ -677,12 +677,12 @@ export const getSelfHostedActivationProofPresentation = (
   const items: SelfHostedActivationProofItem[] = [
     buildCapabilityProofItem({
       capabilities,
-      label: 'Remote access, mobile, and push',
+      label: 'Remote access, pairing, and push',
       requiredCapabilities: ['relay', 'mobile_app', 'push_notifications'],
       activeDetail:
         'Relay, Pulse Mobile pairing, and push notification capabilities are present in this entitlement payload.',
       partialDetail:
-        'Some Relay convenience capabilities are present. Refresh or recover activation if remote access, mobile pairing, or push stays unavailable.',
+        'Some Relay convenience capabilities are present. Refresh or recover activation if remote access, Pulse Mobile pairing, or push stays unavailable.',
       missingDetail:
         'Expected Relay convenience capabilities are not present. Refresh or recover activation before treating this plan as fully active.',
     }),

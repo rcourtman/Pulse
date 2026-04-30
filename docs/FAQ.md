@@ -32,7 +32,7 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 ## 🔍 Monitoring & Metrics
 
 ### What do Relay, Pro, and Cloud unlock?
-Relay adds secure remote access to the Pulse web UI, mobile app pairing, push notifications, and 14-day history. Pro and Cloud unlock **alert-triggered root-cause analysis and safe remediation workflows** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
+Relay adds secure remote access to the Pulse web UI, Pulse Mobile pairing for handoff, push notifications, and 14-day history. Pro and Cloud unlock **alert-triggered root-cause analysis and safe remediation workflows** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
 
 Example output includes trend-based capacity warnings, backup regressions, Kubernetes cluster analysis, and correlated container failures that simple threshold alerts miss.
 See [Pulse AI](AI.md), [Plans and entitlements](PULSE_PRO.md), and <https://pulserelay.pro>.

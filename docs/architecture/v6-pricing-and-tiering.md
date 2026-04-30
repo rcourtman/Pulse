@@ -134,7 +134,7 @@ remediation actions through Pulse.
 | Monitoring scope | **Core self-hosted monitoring included** |
 | Everything in Free | Yes |
 | Relay remote access | **Yes** |
-| Pulse Mobile pairing | **Yes** (handoff and push notifications) |
+| Pulse Mobile handoff pairing | **Yes** (handoff and push notifications) |
 | Push notifications | **Yes** |
 | Customer-specific Relay URL | No; Relay uses the standard outbound relay service for v6 GA |
 | Metrics history | **14 days** |
@@ -144,7 +144,7 @@ remediation actions through Pulse.
 | Reporting | No |
 
 **Positioning:** The convenience tier. It should feel cheap enough to buy on the spot when
-someone wants secure remote access, mobile pairing, push notifications, and longer history
+someone wants secure remote access, Pulse Mobile handoff pairing, push notifications, and longer history
 without changing their self-hosted monitoring scope.
 
 ### Pro — $8.99/month or $79/year
@@ -311,7 +311,7 @@ High-intent product moments should stay useful without becoming sales surfaces:
   analysis stays an optional, discoverable extra.
 - User taps a longer chart range -> explain the local retention state without implying a
   monitoring capacity limit.
-- User wants remote access or mobile pairing -> point to Relay only inside the explicit Relay
+- User wants remote access or Pulse Mobile handoff pairing -> point to Relay only inside the explicit Relay
   setup/commercial handoff, not as a global nudge.
 
 ### 6. No self-hosted monitored-system overflow gate

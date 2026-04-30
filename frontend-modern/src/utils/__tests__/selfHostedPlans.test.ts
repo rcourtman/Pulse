@@ -106,7 +106,7 @@ describe('selfHostedPlans', () => {
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.includedExtras).toEqual([]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.billingExtrasSummary).toBe(
-      'Remote web access, mobile pairing, and push',
+      'Remote web access, pairing, and push',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
       'Remote web access, Pulse Mobile pairing, push notifications, and longer history are available right now.',
@@ -116,7 +116,7 @@ describe('selfHostedPlans', () => {
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual([
       'Pulse Relay (Remote Access)',
-      'Mobile App Pairing',
+      'Pulse Mobile Pairing',
       'Push Notifications',
       '14-day metric history',
     ]);
@@ -216,7 +216,7 @@ describe('selfHostedPlans', () => {
       {
         tier: 'relay',
         historyDays: 14,
-        extras: 'Remote web access, mobile pairing, and push',
+        extras: 'Remote web access, pairing, and push',
       },
       { tier: 'pro', historyDays: 90, extras: 'Analysis, remediation, and admin controls' },
     ]);

@@ -1123,7 +1123,7 @@ End-to-end encrypted relay protocol for mobile connectivity.
 - `GET /api/settings/relay/status` (admin, `settings:read`, Relay+) — Get relay connection status.
 
 ### Mobile Onboarding
-- `GET /api/onboarding/qr` (`settings:read`) — Generate QR code for mobile app pairing.
+- `GET /api/onboarding/qr` (`settings:read`) — Generate QR code for Pulse Mobile pairing.
 - `POST /api/onboarding/validate` (`settings:read`) — Validate a mobile onboarding connection.
 - `GET /api/onboarding/deep-link` (`settings:read`) — Generate deep-link URL for mobile app.
 
