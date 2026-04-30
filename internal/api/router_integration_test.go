@@ -128,7 +128,7 @@ func newIntegrationServerWithRuntimeMode(
 	router := api.NewRouter(cfg, monitor, nil, hub, func() error {
 		monitor.SyncAlertState()
 		return nil
-	}, version, nil)
+	}, version)
 
 	srv := newIPv4HTTPServer(t, router.Handler())
 	t.Cleanup(func() {

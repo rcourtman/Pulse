@@ -441,6 +441,11 @@ state.
     bypass the shared secure callback policy that limits self-hosted commercial
     return URLs to HTTPS instance origins or direct-loopback HTTP and keeps
     hosted commercial follow-up fetches on the restricted outbound client.
+    The same adjacent commercial boundary owns the retired
+    `/api/upgrade-metrics/*` and `/api/admin/upgrade-metrics-funnel` route
+    family: storage and recovery flows must not synthesize recovery-local
+    stats, health, config, or funnel-report fallbacks when those routes are
+    absent from the normal customer product API.
     That same adjacent commercial boundary also owns the plan-owned callback
     framing for those routes: storage and recovery may coexist beside
     `/settings/system/billing/plan`, but they must treat `Plans` and
@@ -1949,7 +1954,10 @@ only and must not become storage/recovery prompt, identity, or restore state.
 Local commercial metrics reporting routes are part of the same adjacent
 API/cloud-paid admin settings boundary: storage and recovery surfaces must not
 read stats, health, config, or funnel reports as customer-visible recovery,
-storage-health, or setup state.
+storage-health, or setup state. In the normal customer product API those
+retired local commercial analytics routes must stay unregistered, so storage
+and recovery cannot use their absence as a reason to synthesize recovery-local
+commercial reporting or fallback state.
 That same shared `internal/api/` dependency now also assumes adjacent
 commercial helper surfaces speak in monitored-system terms: recovery- or
 storage-adjacent API wiring may consume the canonical monitored-system ledger

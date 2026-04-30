@@ -2325,26 +2325,6 @@
             ]
           },
           {
-            "id": "conversion-telemetry-pipeline",
-            "label": "conversion telemetry pipeline proof",
-            "match_prefixes": [
-              "pkg/licensing/conversion_",
-              "pkg/licensing/metering/"
-            ],
-            "match_files": [],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "pkg/licensing/conversion_api_helpers_test.go",
-              "pkg/licensing/conversion_config_test.go",
-              "pkg/licensing/conversion_events_test.go",
-              "pkg/licensing/conversion_metrics_test.go",
-              "pkg/licensing/conversion_quality_test.go",
-              "pkg/licensing/conversion_recorder_test.go",
-              "pkg/licensing/conversion_store_queryplan_test.go"
-            ]
-          },
-          {
             "id": "host-lifecycle-tracking",
             "label": "host lifecycle tracking proof",
             "match_prefixes": [],

@@ -1364,8 +1364,7 @@ type SystemSettings struct {
 	DisableDockerUpdateActions bool `json:"disableDockerUpdateActions"` // Hide update buttons while still detecting updates
 
 	// UX + privacy knobs (server-wide)
-	ReduceProUpsellNoise       bool `json:"reduceProUpsellNoise,omitempty"`       // Legacy compatibility preference for proactive commercial prompts
-	DisableLocalUpgradeMetrics bool `json:"disableLocalUpgradeMetrics,omitempty"` // Disable local-only commercial handoff metrics collection (no network calls)
+	ReduceProUpsellNoise bool `json:"reduceProUpsellNoise,omitempty"` // Legacy compatibility preference for proactive commercial prompts
 
 	// Telemetry (enabled by default, opt-out)
 	TelemetryEnabled *bool `json:"telemetryEnabled,omitempty"` // Send anonymous usage telemetry (install ID, version, resource counts, feature flags — no PII)

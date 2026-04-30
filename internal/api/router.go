@@ -140,7 +140,6 @@ type Router struct {
 	lifecycleCtx             context.Context
 	lifecycleCancel          context.CancelFunc
 	hostedMode               bool
-	conversionStore          *conversionStore
 	stripeWebhookHandlers    *StripeWebhookHandlers
 	patrolLifecycleMu        sync.Mutex
 	startedPatrolOrgs        map[string]bool
@@ -200,12 +199,7 @@ func isDirectLoopbackRequest(req *http.Request) bool {
 }
 
 // NewRouter creates a new router instance
-func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string, conversionStores ...*conversionStore) *Router {
-	var store *conversionStore
-	if len(conversionStores) > 0 {
-		store = conversionStores[0]
-	}
-
+func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string) *Router {
 	// Initialize persistent auth stores and capture the exact workers this router owns.
 	sessionStore := ensureSessionStore(cfg.DataPath)
 	csrfStore := ensureCSRFStore(cfg.DataPath)
@@ -249,7 +243,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		lifecycleCtx:                    lifecycleCtx,
 		lifecycleCancel:                 lifecycleCancel,
 		hostedMode:                      os.Getenv("PULSE_HOSTED_MODE") == "true",
-		conversionStore:                 store,
 		monitorResourceAdapters:         make(map[string]*unifiedresources.MonitorAdapter),
 		monitorSupplementalRecords:      make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider),
 		startedPatrolOrgs:               make(map[string]bool),
@@ -605,6 +598,9 @@ func (r *Router) setupRoutes() {
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	r.aiHandler.SetReadState(r.defaultReadState())
 	r.aiHandler.SetRecoveryManager(recoveryManager)
+	r.aiHandler.SetControlLevelResolver(func(ctx context.Context, cfg *config.AIConfig) string {
+		return r.aiSettingsHandler.EffectiveControlLevel(ctx, cfg)
+	})
 	r.aiHandler.SetServiceInitializer(func(ctx context.Context, service AIService) {
 		r.wireAIChatDependenciesForService(ctx, service)
 	})

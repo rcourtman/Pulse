@@ -165,14 +165,6 @@ func routeBelongsToPublicDemoCommercialBoundary(route string) bool {
 		return true
 	case route == "POST /api/vmware/connections/{id}/preview":
 		return true
-	case strings.HasPrefix(route, "GET /api/upgrade-metrics/"):
-		return true
-	case strings.HasPrefix(route, "POST /api/upgrade-metrics/"):
-		return true
-	case strings.HasPrefix(route, "PUT /api/upgrade-metrics/"):
-		return true
-	case route == "GET /api/admin/upgrade-metrics-funnel":
-		return true
 	case route == "GET /api/admin/orgs/{id}/billing-state":
 		return true
 	case route == "PUT /api/admin/orgs/{id}/billing-state":

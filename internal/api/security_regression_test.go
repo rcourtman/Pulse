@@ -3551,7 +3551,6 @@ func TestPrivilegedSecurityEndpointsRejectNonAdminSession(t *testing.T) {
 		{method: http.MethodGet, path: "/api/admin/rbac/integrity", body: ``},
 		{method: http.MethodPost, path: "/api/admin/rbac/reset-admin", body: `{}`},
 		{method: http.MethodGet, path: "/api/admin/webhooks/audit", body: ``},
-		{method: http.MethodPut, path: "/api/upgrade-metrics/config", body: `{"enabled":true}`},
 		{method: http.MethodGet, path: "/api/onboarding/qr", body: ``},
 		{method: http.MethodGet, path: "/api/onboarding/deep-link", body: ``},
 		{method: http.MethodPost, path: "/api/onboarding/validate", body: `{}`},

@@ -6,7 +6,6 @@ import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 import {
   areSystemSettingsLoaded,
   markSystemSettingsLoadedWithDefaults,
-  shouldDisableLocalUpgradeMetrics,
   shouldHideDockerUpdateActions,
   shouldReduceProUpsellNoise,
   updateSystemSettingsFromResponse,
@@ -27,12 +26,10 @@ describe('systemSettings store', () => {
       autoUpdateEnabled: false,
       disableDockerUpdateActions: true,
       reduceProUpsellNoise: true,
-      disableLocalUpgradeMetrics: true,
     });
 
     expect(shouldHideDockerUpdateActions()).toBe(true);
     expect(shouldReduceProUpsellNoise()).toBe(true);
-    expect(shouldDisableLocalUpgradeMetrics()).toBe(true);
   });
 
   it('resets route and docker feature flags to safe defaults', () => {
@@ -40,13 +37,11 @@ describe('systemSettings store', () => {
       autoUpdateEnabled: false,
       disableDockerUpdateActions: true,
       reduceProUpsellNoise: true,
-      disableLocalUpgradeMetrics: true,
     });
 
     markSystemSettingsLoadedWithDefaults();
     expect(shouldHideDockerUpdateActions()).toBe(false);
     expect(shouldReduceProUpsellNoise()).toBe(false);
-    expect(shouldDisableLocalUpgradeMetrics()).toBe(false);
   });
 
   it('keeps privacy and local paid-flow defaults safe when flags are omitted', () => {
@@ -57,7 +52,6 @@ describe('systemSettings store', () => {
     expect(areSystemSettingsLoaded()).toBe(true);
     expect(shouldHideDockerUpdateActions()).toBe(false);
     expect(shouldReduceProUpsellNoise()).toBe(false);
-    expect(shouldDisableLocalUpgradeMetrics()).toBe(false);
   });
 
   it('keeps the telemetry disclosure on the shipped local privacy doc', () => {

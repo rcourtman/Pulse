@@ -10,7 +10,6 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/licensing/metering"
 )
 
 // Sentinel errors for user-friendly activation error mapping.
@@ -46,24 +45,6 @@ type upgradeReasonModel = pkglicensing.UpgradeReason
 type entitlementUsageSnapshotModel = pkglicensing.EntitlementUsageSnapshot
 type legacyConnectionCountsModel = pkglicensing.LegacyConnectionCounts
 type commercialMigrationStatusModel = pkglicensing.CommercialMigrationStatus
-type conversionRecorder = pkglicensing.Recorder
-type conversionPipelineHealth = pkglicensing.PipelineHealth
-type conversionCollectionConfig = pkglicensing.CollectionConfig
-type conversionStore = pkglicensing.ConversionStore
-type conversionEvent = pkglicensing.ConversionEvent
-type conversionHealthStatus = pkglicensing.HealthStatus
-type conversionCollectionConfigSnapshot = pkglicensing.CollectionConfigSnapshot
-type conversionFunnelStageCounts = pkglicensing.FunnelStageCounts
-type conversionFunnelSummary = pkglicensing.FunnelSummary
-type conversionFunnelDayBreakdown = pkglicensing.FunnelDayBreakdown
-type conversionFunnelDimensionBreakdown = pkglicensing.FunnelDimensionBreakdown
-type conversionFunnelReport = pkglicensing.FunnelReport
-type conversionInfrastructureOnboardingStageCounts = pkglicensing.InfrastructureOnboardingStageCounts
-type conversionInfrastructureOnboardingSummary = pkglicensing.InfrastructureOnboardingSummary
-type conversionInfrastructureOnboardingDayBreakdown = pkglicensing.InfrastructureOnboardingDayBreakdown
-type conversionInfrastructureOnboardingPathBreakdown = pkglicensing.InfrastructureOnboardingPathBreakdown
-type conversionInfrastructureOnboardingPlatformBreakdown = pkglicensing.InfrastructureOnboardingPlatformBreakdown
-type conversionInfrastructureOnboardingReport = pkglicensing.InfrastructureOnboardingReport
 type purchaseReturnClaimsModel = pkglicensing.PurchaseReturnClaims
 type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
 type licenseTier = pkglicensing.Tier
@@ -88,13 +69,6 @@ const (
 	subscriptionStateCanceledValue    = pkglicensing.SubStateCanceled
 	subscriptionStateTrialValue       = pkglicensing.SubStateTrial
 	activationKeyPrefixValue          = pkglicensing.ActivationKeyPrefix
-
-	// Conversion event type constants for backend-emitted events.
-	conversionEventLicenseActivated        = pkglicensing.EventLicenseActivated
-	conversionEventLicenseActivationFailed = pkglicensing.EventLicenseActivationFailed
-	conversionEventCheckoutStarted         = pkglicensing.EventCheckoutStarted
-	conversionEventCheckoutCompleted       = pkglicensing.EventCheckoutCompleted
-	conversionEventLimitBlocked            = pkglicensing.EventLimitBlocked
 )
 
 func newLicenseService() *licenseService {
@@ -282,26 +256,6 @@ func limitStateFromLicensing(current, limit int64) string {
 	return pkglicensing.LimitState(current, limit)
 }
 
-func newCollectionConfigFromLicensing() *conversionCollectionConfig {
-	return pkglicensing.NewCollectionConfig()
-}
-
-func newConversionRecorderFromLicensing(store *conversionStore) *conversionRecorder {
-	return pkglicensing.NewRecorderFromWindowedAggregator(metering.NewWindowedAggregator(), store)
-}
-
-func newConversionPipelineHealthFromLicensing() *conversionPipelineHealth {
-	return pkglicensing.NewPipelineHealth()
-}
-
-func conversionValidationReasonFromLicensing(err error) string {
-	return pkglicensing.ConversionValidationReason(err)
-}
-
-func parseOptionalTimeParamFromLicensing(raw string, defaultValue time.Time) (time.Time, error) {
-	return pkglicensing.ParseOptionalTimeParam(raw, defaultValue)
-}
-
 func trialActivationPublicKeyFromLicensing() (ed25519.PublicKey, error) {
 	return pkglicensing.HostedEntitlementPublicKey()
 }
@@ -328,18 +282,6 @@ func writePaymentRequiredFromLicensing(w http.ResponseWriter, payload map[string
 
 func writeLicenseRequiredFromLicensing(w http.ResponseWriter, feature, message string) {
 	pkglicensing.WriteLicenseRequired(w, feature, message, pkglicensing.UpgradeURLForFeature)
-}
-
-func recordConversionInvalidMetric(reason string) {
-	pkglicensing.GetConversionMetrics().RecordInvalid(reason)
-}
-
-func recordConversionSkippedMetric(reason string) {
-	pkglicensing.GetConversionMetrics().RecordSkipped(reason)
-}
-
-func recordConversionEventMetric(eventType, surface string) {
-	pkglicensing.GetConversionMetrics().RecordEvent(eventType, surface)
 }
 
 // licenseTierFreeValue is the canonical free-tier constant for use outside the bridge.

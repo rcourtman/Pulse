@@ -2676,9 +2676,9 @@ func TestContract_ReportingCatalogRouteAccessibleWithoutReportingFeature(t *test
 	}
 }
 
-func TestContract_LocalCommercialReportingRoutesRequireSettingsReadScope(t *testing.T) {
-	rawToken := "commercial-reporting-contract-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
+func TestContract_LocalCommercialAnalyticsRoutesAreNotRegistered(t *testing.T) {
+	rawToken := "retired-commercial-analytics-contract-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -2686,9 +2686,11 @@ func TestContract_LocalCommercialReportingRoutesRequireSettingsReadScope(t *test
 		method string
 		path   string
 	}{
+		{method: http.MethodPost, path: "/api/upgrade-metrics/events"},
 		{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},
 		{method: http.MethodGet, path: "/api/upgrade-metrics/health"},
 		{method: http.MethodGet, path: "/api/upgrade-metrics/config"},
+		{method: http.MethodPut, path: "/api/upgrade-metrics/config"},
 		{method: http.MethodGet, path: "/api/admin/upgrade-metrics-funnel"},
 	} {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
@@ -2698,7 +2700,9 @@ func TestContract_LocalCommercialReportingRoutesRequireSettingsReadScope(t *test
 
 			router.Handler().ServeHTTP(rec, req)
 
-			assertMissingScope(t, rec, config.ScopeSettingsRead, tc.method+" "+tc.path)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("%s %s status=%d, want %d body=%s", tc.method, tc.path, rec.Code, http.StatusNotFound, rec.Body.String())
+			}
 		})
 	}
 }
@@ -6439,8 +6443,6 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodPost, path: "/api/vmware/connections/conn-1/preview"},
 			{method: http.MethodGet, path: "/api/admin/orgs/t-tenant/billing-state"},
 			{method: http.MethodPut, path: "/api/admin/orgs/t-tenant/billing-state"},
-			{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},
-			{method: http.MethodPost, path: "/api/upgrade-metrics/events"},
 			{method: http.MethodGet, path: "/api/diagnostics"},
 			{method: http.MethodPost, path: "/api/diagnostics/docker/prepare-token"},
 			{method: http.MethodGet, path: "/api/logs/stream"},

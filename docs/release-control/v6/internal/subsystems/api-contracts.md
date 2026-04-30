@@ -21,8 +21,8 @@
 ## Purpose
 
 Own canonical runtime payload shapes between backend and frontend, including
-the privileged boundary between customer-safe support diagnostics and
-admin-only local commercial reporting routes.
+the trust boundary that keeps customer-safe support diagnostics and normal
+product API routes free of maintainer commercial analytics.
 
 ## Canonical Files
 1. `internal/api/contract_test.go`
@@ -1810,24 +1810,21 @@ when a raw snapshot reaches the API layer without one, so
 That same diagnostics boundary now explicitly excludes maintainer analytics.
 `internal/api/diagnostics.go` must not serialize commercial funnel, sales
 funnel, pricing/checkout conversion, or infrastructure onboarding telemetry in
-`/api/diagnostics`; local upgrade/onboarding metrics remain owned by the
-licensing/admin metrics routes and their admin gates rather than the customer
-support diagnostics contract. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
+`/api/diagnostics`; local upgrade/onboarding metrics must not reappear as
+normal product API routes, system settings fields, startup DB artifacts, or
+customer frontend state. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
 now checks `internal/api/diagnostics.go` alongside the Settings diagnostics
 frontend boundary through the canonical frontend audit runner, so this
 admin-analytics payload class cannot return as a customer-visible diagnostics
 contract.
-That same admin-analytics boundary applies to the local commercial metrics
-reporting routes themselves: `/api/upgrade-metrics/stats`,
-`/api/upgrade-metrics/health`, `/api/upgrade-metrics/config`, and
-`/api/admin/upgrade-metrics-funnel` must require admin/settings-scope access
-rather than becoming general authenticated product reads. Authenticated event
-ingestion at `/api/upgrade-metrics/events` may remain only as compatibility or
-admin-owned ingestion plumbing; customer frontend surfaces must not call it for
-pricing, checkout, paywall, commercial funnel, or infrastructure-onboarding
-signals, and must not keep customer-side commercial/onboarding metrics wrapper
-modules as a compatibility layer. Reporting and control stay on the privileged
-settings boundary.
+That same admin-analytics boundary now retires the local commercial metrics
+routes from the normal customer product API: `/api/upgrade-metrics/events`,
+`/api/upgrade-metrics/stats`, `/api/upgrade-metrics/health`,
+`/api/upgrade-metrics/config`, and `/api/admin/upgrade-metrics-funnel` must
+return `404` in normal router contracts. Customer frontend surfaces must not
+call local pricing, checkout, paywall, commercial funnel, or
+infrastructure-onboarding signals, and must not keep customer-side
+commercial/onboarding metrics wrapper modules as a compatibility layer.
 That same public-demo API boundary must also hide runtime-admin operations
 surfaces instead of treating them as harmless reads. Demo sessions must receive
 `404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the

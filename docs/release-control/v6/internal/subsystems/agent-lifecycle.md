@@ -728,11 +728,12 @@ when staging a removal state, but they must not resurrect legacy
 second hostname contract.
 That same adjacent `internal/api/` router boundary now also keeps usage-data
 controls out of lifecycle truth. Agent install, reporting, and setup surfaces
-may coexist with `/api/upgrade-metrics/*` and telemetry preview routes under
-shared licensing/auth routing, but they must not reinterpret local-only
-upgrade-event state, telemetry preview payloads, or published-release
-classification fields as enrollment evidence, agent freshness, or setup
-progress truth.
+must not depend on `/api/upgrade-metrics/*`, telemetry preview routes, or
+local-only upgrade-event state under shared licensing/auth routing. The normal
+customer product router must keep those retired commercial analytics routes
+absent, and lifecycle code must not reinterpret telemetry preview payloads or
+published-release classification fields as enrollment evidence, agent
+freshness, or setup progress truth.
 That same adjacent `internal/api/` boundary now also keeps public demos from
 leaking commercial state through lifecycle-adjacent surfaces. Agent install,
 reporting, and setup flows may share backend helpers with billing or license
@@ -1276,10 +1277,11 @@ consume the settings-owned referral copy from
 `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 instead of carrying workspace-local commercial guidance or reaching back into
 generic commercial presentation helpers from the hosted infrastructure route.
-Shared licensing routes under `internal/api/` may retain legacy
-`upgrade-metrics` route names for compatibility, but lifecycle-adjacent
-settings and install flows must treat them as local commercial handoff events,
-not as a reason to reintroduce default self-hosted upgrade prompts.
+Shared licensing routes under `internal/api/` must not retain normal-product
+`upgrade-metrics` route names for compatibility. Lifecycle-adjacent settings
+and install flows must treat that route family as retired local commercial
+analytics, not as a reason to reintroduce default self-hosted upgrade prompts
+or local handoff event capture.
 That canonical /api/auto-register behavior now also includes hostname/IP continuity:
 reruns that arrive through a different canonical host form must reuse the same
 Pulse-managed node record and token instead of forking duplicate fleet entries.
@@ -1668,9 +1670,9 @@ That same shared diagnostics dependency now also assumes local commercial and
 onboarding analytics stay out of user diagnostics entirely: lifecycle-adjacent
 admin surfaces may consume operational diagnostics, but they must not restore
 self-hosted upgrade-metric summaries or infrastructure-onboarding analytics to
-`internal/api/diagnostics.go` or the settings diagnostics panel. The local
-commercial metrics reporting routes remain API/cloud-paid admin settings
-surfaces and must not become lifecycle setup, install, or fleet-progress
+`internal/api/diagnostics.go` or the settings diagnostics panel. The retired
+local commercial metrics reporting routes must stay absent from the normal
+product API and must not become lifecycle setup, install, or fleet-progress
 signals.
 Lifecycle-adjacent Docker and Podman agent diagnostics are part of that same
 shared backend dependency. When `internal/api/diagnostics.go` emits agent

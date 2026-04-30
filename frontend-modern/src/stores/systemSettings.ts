@@ -14,8 +14,6 @@ import type { SystemConfig } from '@/types/config';
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
 // Server-side compatibility setting for proactive commercial prompts
 const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
-// Server-side setting to disable local-only commercial handoff event collection
-const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
 
 // Track if settings have been loaded
 const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
@@ -27,12 +25,10 @@ const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
 export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
   setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
   setReduceProUpsellNoise(settings.reduceProUpsellNoise ?? false);
-  setDisableLocalUpgradeMetrics(settings.disableLocalUpgradeMetrics ?? false);
   setSystemSettingsLoaded(true);
   logger.debug('System settings updated from response', {
     disableDockerUpdateActions: settings.disableDockerUpdateActions,
     reduceProUpsellNoise: settings.reduceProUpsellNoise,
-    disableLocalUpgradeMetrics: settings.disableLocalUpgradeMetrics,
   });
 }
 
@@ -50,7 +46,6 @@ export async function loadSystemSettings(): Promise<void> {
     // Use safe defaults
     setDisableDockerUpdateActions(false);
     setReduceProUpsellNoise(false);
-    setDisableLocalUpgradeMetrics(false);
     setSystemSettingsLoaded(true);
   }
 }
@@ -67,10 +62,6 @@ export function shouldReduceProUpsellNoise(): boolean {
   return reduceProUpsellNoise();
 }
 
-export function shouldDisableLocalUpgradeMetrics(): boolean {
-  return disableLocalUpgradeMetrics();
-}
-
 /**
  * Check if system settings have been loaded from the server.
  */
@@ -85,7 +76,6 @@ export function areSystemSettingsLoaded(): boolean {
 export function markSystemSettingsLoadedWithDefaults(): void {
   setDisableDockerUpdateActions(false);
   setReduceProUpsellNoise(false);
-  setDisableLocalUpgradeMetrics(false);
   setSystemSettingsLoaded(true);
   logger.debug('System settings marked as loaded with defaults');
 }
@@ -99,8 +89,4 @@ export function updateDockerUpdateActionsSetting(disabled: boolean): void {
 
 export function updateReduceProUpsellNoiseSetting(enabled: boolean): void {
   setReduceProUpsellNoise(enabled);
-}
-
-export function updateDisableLocalUpgradeMetricsSetting(disabled: boolean): void {
-  setDisableLocalUpgradeMetrics(disabled);
 }

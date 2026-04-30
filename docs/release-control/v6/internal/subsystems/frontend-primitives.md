@@ -1812,7 +1812,10 @@ diagnostics API, diagnostics results panel, or diagnostics payload model
 reintroduce those analytics fields outside the defensive strip helper, and by
 failing if production customer frontend source reintroduces the retired
 commercial/onboarding analytics wrappers or `/api/upgrade-metrics/events`
-calls.
+calls. That same audit also fails if the retired conversion/funnel or metering
+packages return under the compiled product licensing path, because Settings
+support diagnostics cannot be the only customer-facing guard if the normal
+product binary still carries the maintainer analytics pipeline.
 Diagnostics cards that summarize Docker and Podman agent coverage must use the
 shared `docker` source-platform label from
 `frontend-modern/src/utils/sourcePlatforms.ts` for their heading and body copy,

@@ -10,28 +10,6 @@ import (
 )
 
 func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHandlers *RBACHandlers, auditHandlers *AuditHandlers) {
-	conversionConfig := newCollectionConfigFromLicensing()
-	sharedRecorder := newConversionRecorderFromLicensing(r.conversionStore)
-	sharedHealth := newConversionPipelineHealthFromLicensing()
-	disableAll := func() bool { return r != nil && r.config != nil && r.config.DisableLocalUpgradeMetrics }
-	conversionHandlers := NewConversionHandlers(
-		sharedRecorder,
-		sharedHealth,
-		conversionConfig,
-		r.conversionStore,
-		disableAll,
-	)
-
-	// Wire the shared recorder into LicenseHandlers, StripeWebhookHandlers,
-	// and the enforcement path so backend-emitted conversion events
-	// (trial_started, license_activated, checkout_completed, limit_blocked, etc.)
-	// flow through the same pipeline as frontend events.
-	r.licenseHandlers.SetConversionRecorder(sharedRecorder, sharedHealth)
-	if r.stripeWebhookHandlers != nil {
-		r.stripeWebhookHandlers.SetConversionRecorder(sharedRecorder, sharedHealth, disableAll)
-	}
-	SetEnforcementConversionRecorder(sharedRecorder, sharedHealth, disableAll)
-
 	// License routes (Pulse Pro)
 	r.mux.HandleFunc("/api/license/status", RequireAdmin(r.config, r.licenseHandlers.HandleLicenseStatus))
 	r.mux.HandleFunc("/api/license/features", RequireAuth(r.config, r.licenseHandlers.HandleLicenseFeatures))
@@ -43,15 +21,6 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("GET /api/license/monitored-system-ledger", RequireAuth(r.config, r.handleMonitoredSystemLedger))
 	r.mux.HandleFunc("POST /api/license/monitored-system-ledger/explain", RequireAuth(r.config, r.handleMonitoredSystemLedgerExplain))
 	r.mux.HandleFunc("POST /api/license/monitored-system-ledger/preview", RequireAuth(r.config, r.handleMonitoredSystemLedgerPreview))
-
-	// Local-only commercial handoff events (legacy route names retain "upgrade-metrics" for compatibility).
-	// These are local-only signals used to debug explicit paid-plan handoffs; no external export.
-	r.mux.HandleFunc("POST /api/upgrade-metrics/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
-	r.mux.HandleFunc("GET /api/upgrade-metrics/stats", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetStats)))
-	r.mux.HandleFunc("GET /api/upgrade-metrics/health", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetHealth)))
-	r.mux.HandleFunc("GET /api/upgrade-metrics/config", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetConfig)))
-	r.mux.HandleFunc("PUT /api/upgrade-metrics/config", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, conversionHandlers.HandleUpdateConfig)))
-	r.mux.HandleFunc("GET /api/admin/upgrade-metrics-funnel", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleConversionFunnel)))
 
 	// Organization routes (multi-tenant foundation)
 	r.mux.HandleFunc("GET /api/orgs", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, orgHandlers.HandleListOrgs)))

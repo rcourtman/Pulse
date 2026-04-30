@@ -183,43 +183,6 @@ func Run(ctx context.Context, version string) error {
 		log.Warn().Err(err).Msg("Failed to ensure default organization owner membership")
 	}
 
-	// Local-only upgrade events must be durable and tenant-aware (P0-6).
-	// Renamed from conversion.db -> upgrade_metrics.db to reduce misleading telemetry optics.
-	upgradeMetricsDB := filepath.Join(baseDataDir, "upgrade_metrics.db")
-	legacyConversionDB := filepath.Join(baseDataDir, "conversion.db")
-	if _, err := os.Stat(upgradeMetricsDB); os.IsNotExist(err) {
-		if _, err := os.Stat(legacyConversionDB); err == nil {
-			renameIfExists := func(from, to string) {
-				if _, statErr := os.Stat(from); statErr != nil {
-					return
-				}
-				if renameErr := os.Rename(from, to); renameErr != nil {
-					log.Warn().Err(renameErr).Str("from", from).Str("to", to).Msg("Failed to migrate legacy local-only upgrade events DB artifact")
-				}
-			}
-			renameIfExists(legacyConversionDB, upgradeMetricsDB)
-			renameIfExists(legacyConversionDB+"-wal", upgradeMetricsDB+"-wal")
-			renameIfExists(legacyConversionDB+"-shm", upgradeMetricsDB+"-shm")
-			log.Info().Str("from", legacyConversionDB).Str("to", upgradeMetricsDB).Msg("Migrated legacy conversion DB to local-only upgrade events DB")
-		}
-	}
-
-	conversionStore, err := pkglicensing.NewConversionStore(upgradeMetricsDB)
-	if err != nil {
-		return fmt.Errorf("failed to initialize local-only upgrade events store: %w", err)
-	}
-	conversionStoreClosed := false
-	closeConversionStore := func() {
-		if conversionStoreClosed {
-			return
-		}
-		conversionStoreClosed = true
-		if err := conversionStore.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close local-only upgrade events store")
-		}
-	}
-	defer closeConversionStore()
-
 	// Always capture audit events to SQLite (defense in depth). Read/export endpoints are license-gated.
 	// For the default org, TenantLoggerManager routes to the global logger, so initialize it as SQLite too.
 	var globalCrypto audit.CryptoEncryptor
@@ -411,7 +374,7 @@ func Run(ctx context.Context, version string) error {
 		}
 		return nil
 	}
-	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version, conversionStore)
+	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version)
 
 	// Inject resource store into monitor for WebSocket broadcasts
 	router.SetMonitor(reloadableMonitor.GetMonitor())
@@ -725,8 +688,6 @@ shutdown:
 	if err := audit.Close(); err != nil {
 		log.Error().Err(err).Msg("Failed to close audit logger")
 	}
-	closeConversionStore()
-
 	log.Info().Msg("Server stopped")
 	return nil
 }

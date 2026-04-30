@@ -400,7 +400,6 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 		"pkg/licensing/persistence.go",
 		"pkg/licensing/activation_store.go",
 		"pkg/licensing/trial_activation.go",
-		"pkg/licensing/conversion_",
 		"pkg/licensing/public_key.go",
 		"pkg/licensing/trial_start.go",
 		"internal/api/licensing_",

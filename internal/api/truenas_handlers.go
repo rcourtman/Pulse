@@ -611,7 +611,6 @@ func (h *TrueNASHandlers) enforceMonitoredSystemLimit(
 		return false
 	}
 
-	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
 	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
@@ -642,7 +641,6 @@ func (h *TrueNASHandlers) enforceMonitoredSystemLimitReplacement(
 		return false
 	}
 
-	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
 	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }

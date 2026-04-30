@@ -61,8 +61,6 @@ type LicenseHandlers struct {
 	purchaseReturnRedemptions  *purchaseReturnRedemptionStore
 	monitor                    *monitoring.Monitor
 	mtMonitor                  *monitoring.MultiTenantMonitor
-	conversionRecorder         *conversionRecorder
-	conversionHealth           *conversionPipelineHealth
 	hostedLeaseRefresh         sync.Map // map[string]*hostedEntitlementRefreshLoop
 	legacyGrandfatherReconcile sync.Map // map[string]*legacyGrandfatherReconcileLoop
 	runtimeVersion             string
@@ -110,46 +108,6 @@ func (h *LicenseHandlers) SetRuntimeVersion(version string) {
 		return
 	}
 	h.runtimeVersion = strings.TrimSpace(version)
-}
-
-// SetConversionRecorder wires the conversion event recorder for backend-emitted
-// conversion events (trial_started, license_activated, license_activation_failed).
-func (h *LicenseHandlers) SetConversionRecorder(rec *conversionRecorder, health *conversionPipelineHealth) {
-	if h == nil {
-		return
-	}
-	h.conversionRecorder = rec
-	h.conversionHealth = health
-}
-
-// emitConversionEvent is a fire-and-forget helper that records a backend-emitted
-// conversion event. Respects the DisableLocalUpgradeMetrics config flag.
-// Errors are logged but never propagated to callers.
-func (h *LicenseHandlers) emitConversionEvent(orgID string, event conversionEvent) {
-	if h == nil || h.conversionRecorder == nil {
-		return
-	}
-	if h.cfg != nil && h.cfg.DisableLocalUpgradeMetrics {
-		return
-	}
-	if orgID == "" {
-		orgID = "default"
-	}
-	event.OrgID = orgID
-	if event.Timestamp <= 0 {
-		event.Timestamp = time.Now().UnixMilli()
-	}
-	if event.IdempotencyKey == "" {
-		event.IdempotencyKey = fmt.Sprintf("backend:%s:%s:%s:%d", orgID, event.Type, event.Surface, event.Timestamp)
-	}
-	if err := h.conversionRecorder.Record(event); err != nil {
-		log.Warn().Err(err).Str("event_type", event.Type).Str("org_id", orgID).Msg("Failed to record backend conversion event")
-	} else {
-		recordConversionEventMetric(event.Type, event.Surface)
-		if h.conversionHealth != nil {
-			h.conversionHealth.RecordEvent(event.Type)
-		}
-	}
 }
 
 // StopAllBackgroundLoops stops grant refresh and revocation poll loops for all tenant services.
@@ -993,10 +951,6 @@ func (h *LicenseHandlers) activateLicenseKey(ctx context.Context, licenseKey str
 
 	lic, err := service.Activate(trimmedKey)
 	if err != nil {
-		h.emitConversionEvent(orgID, conversionEvent{
-			Type:    conversionEventLicenseActivationFailed,
-			Surface: "license_api",
-		})
 		return ActivateLicenseResponse{}, err
 	}
 
@@ -1033,11 +987,6 @@ func (h *LicenseHandlers) activateLicenseKey(ctx context.Context, licenseKey str
 	}
 
 	h.syncReleaseDemoFixtureRuntime(orgID, service)
-
-	h.emitConversionEvent(orgID, conversionEvent{
-		Type:    conversionEventLicenseActivated,
-		Surface: "license_api",
-	})
 
 	successMessage := "License activated successfully"
 	if migratedLegacyKey && service.IsActivated() {

@@ -17,7 +17,49 @@ const INTERNAL_ANALYTICS_RULES = [
         regex:
           /CommercialFunnel|commercialFunnel|Commercial Funnel|Sales Funnel|InfrastructureOnboarding|infrastructureOnboarding|Infrastructure Onboarding|pricing_viewed|checkout_clicked|credentials_opened/g,
         message:
-          'Do not expose maintainer/admin analytics from /api/diagnostics. Keep commercial and onboarding analytics on admin-owned metrics routes.',
+          'Do not expose maintainer/admin analytics from /api/diagnostics or customer product runtime.',
+      },
+    ],
+  },
+  {
+    getFilePath: ({ repoRoot }) =>
+      path.join(repoRoot, 'internal', 'api', 'router_routes_licensing.go'),
+    rules: [
+      {
+        rule: 'canonical-settings/no-product-commercial-analytics-routes',
+        regex:
+          /\/api\/upgrade-metrics|upgrade-metrics-funnel|NewConversionHandlers|SetConversionRecorder|SetEnforcementConversionRecorder/g,
+        message:
+          'Do not register maintainer/admin commercial analytics ingestion or funnel routes in the customer product API.',
+      },
+    ],
+  },
+  {
+    getFilePath: ({ repoRoot }) => path.join(repoRoot, 'pkg', 'server', 'server.go'),
+    rules: [
+      {
+        rule: 'canonical-settings/no-product-commercial-analytics-store',
+        regex: /upgrade_metrics\.db|conversion\.db|NewConversionStore/g,
+        message:
+          'Do not open or migrate local commercial analytics stores during customer product startup.',
+      },
+    ],
+  },
+  {
+    getFilePaths: ({ root, repoRoot }) => [
+      path.join(repoRoot, 'internal', 'config', 'config.go'),
+      path.join(repoRoot, 'internal', 'config', 'persistence.go'),
+      path.join(repoRoot, 'internal', 'api', 'system_settings.go'),
+      path.join(root, 'src', 'stores', 'systemSettings.ts'),
+      path.join(root, 'src', 'types', 'config.ts'),
+    ],
+    rules: [
+      {
+        rule: 'canonical-settings/no-product-commercial-analytics-setting',
+        regex:
+          /DisableLocalUpgradeMetrics|disableLocalUpgradeMetrics|PULSE_DISABLE_LOCAL_UPGRADE_METRICS/g,
+        message:
+          'Do not carry maintainer/admin commercial analytics controls through customer system settings.',
       },
     ],
   },
@@ -67,6 +109,22 @@ const INTERNAL_ANALYTICS_RULES = [
   },
 ];
 
+const INTERNAL_ANALYTICS_PATH_RULES = [
+  {
+    getFilePaths: ({ repoRoot }) => [
+      ...listExistingFiles(path.join(repoRoot, 'pkg', 'licensing')).filter((filePath) =>
+        /(?:^|\/)(?:conversion_[^/]+\.go|metering\/[^/]+\.go)$/.test(toPosixPath(filePath)),
+      ),
+      ...listExistingFiles(path.join(repoRoot, 'internal', 'license')).filter((filePath) =>
+        /(?:^|\/)(?:conversion|metering)\/[^/]+\.go$/.test(toPosixPath(filePath)),
+      ),
+    ],
+    rule: 'canonical-settings/no-product-commercial-analytics-package',
+    message:
+      'Do not keep retired maintainer/admin commercial analytics packages in compiled customer product licensing code.',
+  },
+];
+
 function isProductionSourceFile(filePath) {
   if (!/\.(?:ts|tsx)$/.test(filePath)) return false;
   if (filePath.includes(`${path.sep}__tests__${path.sep}`)) return false;
@@ -74,23 +132,31 @@ function isProductionSourceFile(filePath) {
   return true;
 }
 
-function listProductionSourceFiles(dir) {
+function toPosixPath(filePath) {
+  return filePath.replaceAll(path.sep, '/');
+}
+
+function listExistingFiles(dir) {
   const files = [];
   if (!fs.existsSync(dir)) return files;
 
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const entryPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...listProductionSourceFiles(entryPath));
+      files.push(...listExistingFiles(entryPath));
       continue;
     }
 
-    if (entry.isFile() && isProductionSourceFile(entryPath)) {
+    if (entry.isFile()) {
       files.push(entryPath);
     }
   }
 
   return files;
+}
+
+function listProductionSourceFiles(dir) {
+  return listExistingFiles(dir).filter(isProductionSourceFile);
 }
 
 function lineForIndex(content, index) {
@@ -128,6 +194,17 @@ export function collectUserDiagnosticsInternalAnalyticsFindings({
           });
         }
       }
+    }
+  }
+
+  for (const { getFilePaths, rule, message } of INTERNAL_ANALYTICS_PATH_RULES) {
+    for (const filePath of getFilePaths({ root, repoRoot })) {
+      findings.push({
+        file: relativeToRoot(root, filePath),
+        line: 1,
+        rule,
+        message,
+      });
     }
   }
 

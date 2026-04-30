@@ -50,7 +50,6 @@ export interface SystemConfig {
   publicURL?: string; // Public URL for email notifications (e.g., http://198.51.100.100:8080)
   disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
   reduceProUpsellNoise?: boolean; // Legacy compatibility preference for proactive commercial prompts
-  disableLocalUpgradeMetrics?: boolean; // Disable local-only commercial handoff event collection
   telemetryEnabled?: boolean; // Opt-in anonymous usage telemetry
 }
 

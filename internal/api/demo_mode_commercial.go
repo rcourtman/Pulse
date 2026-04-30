@@ -89,36 +89,6 @@ var publicDemoCommercialPolicies = []publicDemoCommercialRoutePolicy{
 		matches:  exactDemoCommercialConnectionActionPath(http.MethodPost, "/api/vmware/connections/", "preview"),
 	},
 	{
-		route:    "POST /api/upgrade-metrics/events",
-		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodPost, "/api/upgrade-metrics/events"),
-	},
-	{
-		route:    "GET /api/upgrade-metrics/stats",
-		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/upgrade-metrics/stats"),
-	},
-	{
-		route:    "GET /api/upgrade-metrics/health",
-		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/upgrade-metrics/health"),
-	},
-	{
-		route:    "GET /api/upgrade-metrics/config",
-		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/upgrade-metrics/config"),
-	},
-	{
-		route:    "PUT /api/upgrade-metrics/config",
-		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodPut, "/api/upgrade-metrics/config"),
-	},
-	{
-		route:    "GET /api/admin/upgrade-metrics-funnel",
-		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/admin/upgrade-metrics-funnel"),
-	},
-	{
 		route:    "GET /api/admin/orgs/{id}/billing-state",
 		exposure: publicDemoCommercialExposureHidden,
 		matches:  exactDemoCommercialOrgBillingStatePath(http.MethodGet),

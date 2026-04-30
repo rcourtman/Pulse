@@ -193,9 +193,8 @@ proxy for normal self-hosted v6 installs.
 That shared settings boundary now also has an explicit split of responsibilities:
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts` remains the
 canonical owner for customer-visible telemetry and auth/privacy runtime state,
-while internal commercial prompt and local-upgrade-metrics compatibility stay
-below the customer settings panel in the backend/settings-store compatibility
-path,
+while maintainer commercial analytics controls stay out of customer settings
+payloads and frontend settings state entirely.
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` stays a
 customer-facing presentation boundary for outbound telemetry controls and
 `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx` may only
@@ -207,14 +206,17 @@ That shell split now also applies to tab-save coordination: the dedicated
 decide which settings tabs participate in shell-level save prompts, but it must
 remain pure shell metadata. Telemetry and auth/privacy state transitions stay
 canonically owned by `frontend-modern/src/components/Settings/useSystemSettingsState.ts`,
-while local commercial compatibility state remains an internal store/backend
-concern in `frontend-modern/src/stores/systemSettings.ts`, not settings
-navigation metadata or other frontend-primitives owners.
-Retired local-upgrade-metrics compatibility must not become customer-side
-commercial analytics emission; browser product surfaces must not POST pricing,
-checkout, paywall, funnel, or onboarding signals to `/api/upgrade-metrics/events`,
-and customer frontend source must not keep `upgradeMetrics`, `conversionEvents`,
-or infrastructure onboarding metrics wrappers as compatibility imports.
+and maintainer analytics state must not be carried by
+`frontend-modern/src/stores/systemSettings.ts`, settings navigation metadata, or
+other frontend-primitives owners.
+Retired local-upgrade-metrics compatibility must not become customer-side or
+runtime commercial analytics emission: browser product surfaces must not POST
+pricing, checkout, paywall, funnel, or onboarding signals to
+`/api/upgrade-metrics/events`; the normal product API must not register
+`/api/upgrade-metrics/*` or `/api/admin/upgrade-metrics-funnel`; product startup
+must not open or migrate `upgrade_metrics.db`; and customer frontend source must
+not keep `upgradeMetrics`, `conversionEvents`, or infrastructure onboarding
+metrics wrappers as compatibility imports.
 
 The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API

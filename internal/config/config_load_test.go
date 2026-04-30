@@ -75,7 +75,6 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 	t.Setenv("HTTPS_ENABLED", "true")
 	t.Setenv("PULSE_AUTH_USER", "admin")
-	t.Setenv("PULSE_DISABLE_LOCAL_UPGRADE_METRICS", "true")
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -84,9 +83,6 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, tempDir, cfg.DataPath)
 	assert.True(t, cfg.HTTPSEnabled)
 	assert.Equal(t, "admin", cfg.AuthUser)
-	assert.True(t, cfg.DisableLocalUpgradeMetrics)
-	assert.True(t, cfg.EnvOverrides["PULSE_DISABLE_LOCAL_UPGRADE_METRICS"])
-	assert.True(t, cfg.EnvOverrides["disableLocalUpgradeMetrics"])
 }
 
 func TestLoad_DotEnv(t *testing.T) {

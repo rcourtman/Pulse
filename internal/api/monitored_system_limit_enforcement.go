@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -15,7 +14,6 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
-	"github.com/rs/zerolog/log"
 )
 
 // overflowBaseDataDir is set during router initialization to allow the
@@ -24,11 +22,6 @@ import (
 var (
 	overflowBaseDataDirMu sync.RWMutex
 	overflowBaseDataDir   string
-
-	enforcementRecorderMu sync.RWMutex
-	enforcementRecorder   *conversionRecorder
-	enforcementHealth     *conversionPipelineHealth
-	enforcementDisableAll func() bool
 
 	deployReservationCounterMu sync.RWMutex
 	deployReservationCounter   func(ctx context.Context) int
@@ -59,18 +52,6 @@ func SetOverflowBaseDataDir(dir string) {
 	overflowBaseDataDirMu.Lock()
 	defer overflowBaseDataDirMu.Unlock()
 	overflowBaseDataDir = dir
-}
-
-// SetEnforcementConversionRecorder wires the conversion event recorder for
-// limit_blocked events emitted from monitored-system limit enforcement.
-func SetEnforcementConversionRecorder(rec *conversionRecorder, health *conversionPipelineHealth, disableAll ...func() bool) {
-	enforcementRecorderMu.Lock()
-	defer enforcementRecorderMu.Unlock()
-	enforcementRecorder = rec
-	enforcementHealth = health
-	if len(disableAll) > 0 {
-		enforcementDisableAll = disableAll[0]
-	}
 }
 
 func maxMonitoredSystemsLimitForContext(ctx context.Context) int {
@@ -403,7 +384,6 @@ func enforceMonitoredSystemLimitForConfigRegistration(
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
 	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
@@ -424,7 +404,6 @@ func enforceMonitoredSystemLimitForConfigReplacement(
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
 	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
@@ -461,49 +440,8 @@ func enforceMonitoredSystemLimitForHostReport(
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
 	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
-}
-
-// emitLimitBlockedEvent fires a limit_blocked conversion event. Fire-and-forget.
-// Respects the DisableLocalUpgradeMetrics config flag.
-func emitLimitBlockedEvent(ctx context.Context, current, limit int) {
-	enforcementRecorderMu.RLock()
-	rec := enforcementRecorder
-	health := enforcementHealth
-	disableAll := enforcementDisableAll
-	enforcementRecorderMu.RUnlock()
-	if rec == nil {
-		return
-	}
-	if disableAll != nil && disableAll() {
-		return
-	}
-
-	orgID := GetOrgID(ctx)
-	if orgID == "" {
-		orgID = "default"
-	}
-	now := time.Now().UnixMilli()
-	event := conversionEvent{
-		Type:           conversionEventLimitBlocked,
-		OrgID:          orgID,
-		Surface:        "monitored_system_enforcement",
-		LimitKey:       "max_monitored_systems",
-		CurrentValue:   int64(current),
-		LimitValue:     int64(limit),
-		Timestamp:      now,
-		IdempotencyKey: fmt.Sprintf("backend:%s:%s:%s:%d", orgID, conversionEventLimitBlocked, "monitored_system_enforcement", now),
-	}
-	if err := rec.Record(event); err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to record limit_blocked conversion event")
-	} else {
-		recordConversionEventMetric(event.Type, event.Surface)
-		if health != nil {
-			health.RecordEvent(event.Type)
-		}
-	}
 }
 
 // enforceMonitoredSystemLimitForDockerReport checks whether a docker report
@@ -541,7 +479,6 @@ func enforceMonitoredSystemLimitForDockerReport(
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
 	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
@@ -581,7 +518,6 @@ func enforceMonitoredSystemLimitForKubernetesReport(
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
 	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }

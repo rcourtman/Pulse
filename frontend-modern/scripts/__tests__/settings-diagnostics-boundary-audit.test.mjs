@@ -12,10 +12,23 @@ function writeFixture(root, repoRoot, files) {
   const requiredFiles = {
     [path.join(repoRoot, 'internal', 'api', 'diagnostics.go')]:
       'package api\n\ntype DiagnosticsInfo struct {}\n',
+    [path.join(repoRoot, 'internal', 'api', 'router_routes_licensing.go')]:
+      'package api\n\nfunc (r *Router) registerOrgLicenseRoutesGroup() {}\n',
+    [path.join(repoRoot, 'internal', 'api', 'system_settings.go')]:
+      'package api\n\ntype SystemSettingsHandler struct {}\n',
+    [path.join(repoRoot, 'internal', 'config', 'config.go')]:
+      'package config\n\ntype Config struct {}\n',
+    [path.join(repoRoot, 'internal', 'config', 'persistence.go')]:
+      'package config\n\ntype SystemSettings struct {}\n',
+    [path.join(repoRoot, 'pkg', 'server', 'server.go')]: 'package server\n\nfunc Run() {}\n',
     [path.join(root, 'src', 'components', 'Settings', 'DiagnosticsResultsPanel.tsx')]:
       'export function DiagnosticsResultsPanel() { return null; }\n',
     [path.join(root, 'src', 'components', 'Settings', 'diagnosticsModel.ts')]:
       'export interface DiagnosticsInfo { version: string; }\n',
+    [path.join(root, 'src', 'stores', 'systemSettings.ts')]:
+      'export function updateSystemSettingsFromResponse() {}\n',
+    [path.join(root, 'src', 'types', 'config.ts')]:
+      'export interface SystemConfig { autoUpdateEnabled: boolean; }\n',
     ...files,
   };
 
@@ -81,6 +94,73 @@ export function stripInternalAnalyticsDiagnosticsFields(payload) {
     }));
 
     expect(collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot })).toEqual([]);
+  });
+
+  it('reports commercial analytics routes, stores, and settings in product runtime files', () => {
+    const { root, repoRoot } = makeFixture(({ root, repoRoot }) => ({
+      [path.join(repoRoot, 'internal', 'api', 'router_routes_licensing.go')]: `
+package api
+
+func (r *Router) registerOrgLicenseRoutesGroup() {
+  r.mux.HandleFunc("POST /api/upgrade-metrics/events", NewConversionHandlers().HandleRecordEvent)
+  SetEnforcementConversionRecorder(nil, nil)
+}
+`,
+      [path.join(repoRoot, 'pkg', 'server', 'server.go')]: `
+package server
+
+func Run() {
+  _ = "upgrade_metrics.db"
+  _ = NewConversionStore
+}
+`,
+      [path.join(repoRoot, 'internal', 'config', 'config.go')]: `
+package config
+
+type Config struct {
+  DisableLocalUpgradeMetrics bool
+}
+`,
+      [path.join(root, 'src', 'types', 'config.ts')]: `
+export interface SystemConfig {
+  disableLocalUpgradeMetrics?: boolean;
+}
+`,
+    }));
+
+    const findings = collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot });
+
+    expect(findings.map((finding) => finding.rule)).toEqual([
+      'canonical-settings/no-product-commercial-analytics-routes',
+      'canonical-settings/no-product-commercial-analytics-routes',
+      'canonical-settings/no-product-commercial-analytics-routes',
+      'canonical-settings/no-product-commercial-analytics-store',
+      'canonical-settings/no-product-commercial-analytics-store',
+      'canonical-settings/no-product-commercial-analytics-setting',
+      'canonical-settings/no-product-commercial-analytics-setting',
+    ]);
+  });
+
+  it('reports retired commercial analytics packages in compiled product licensing code', () => {
+    const { root, repoRoot } = makeFixture(({ repoRoot }) => ({
+      [path.join(repoRoot, 'pkg', 'licensing', 'conversion_events.go')]: 'package licensing\n',
+      [path.join(repoRoot, 'pkg', 'licensing', 'metering', 'event.go')]: 'package metering\n',
+      [path.join(repoRoot, 'internal', 'license', 'conversion', 'events.go')]:
+        'package conversion\n',
+      [path.join(repoRoot, 'internal', 'license', 'metering', 'event.go')]: 'package metering\n',
+    }));
+
+    const findings = collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot });
+
+    expect(findings.map((finding) => finding.rule)).toEqual(
+      Array(4).fill('canonical-settings/no-product-commercial-analytics-package'),
+    );
+    expect(findings.map((finding) => finding.file)).toEqual([
+      '../pkg/licensing/conversion_events.go',
+      '../pkg/licensing/metering/event.go',
+      '../internal/license/conversion/events.go',
+      '../internal/license/metering/event.go',
+    ]);
   });
 
   it('reports production frontend commercial analytics shims', () => {

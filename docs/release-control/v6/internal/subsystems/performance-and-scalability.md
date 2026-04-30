@@ -1128,8 +1128,11 @@ The same hot-path discipline now applies to public-demo commercial reads.
 Shared shells may consume the small `/api/license/runtime-capabilities`
 contract for feature truth, but commercial demo routes stay hidden and the
 browser must not keep retrying `/api/license/commercial-posture`,
-`/api/license/entitlements`, `/auth/license-purchase-start`, or other hidden
-commercial endpoints from performance-sensitive settings or route shells.
+`/api/license/entitlements`, `/auth/license-purchase-start`,
+`/api/upgrade-metrics/*`, `/api/admin/upgrade-metrics-funnel`, or other hidden
+commercial endpoints from performance-sensitive settings or route shells. The
+retired local commercial analytics routes must not become route-shell polling
+fallbacks or background bootstrap work after their normal product API removal.
 Workloads and infrastructure summary consumers now also keep null-tolerant read
 models on the shared hot path. Guest rows, stacked bars, anomaly summaries, and
 resource detail mappers may accept partial platform metadata or undefined
