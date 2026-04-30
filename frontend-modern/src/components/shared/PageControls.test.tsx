@@ -39,8 +39,15 @@ describe('PageControls', () => {
     expect(trailingActions).not.toBeNull();
     expect(trailingActions!).toContainElement(resetButton);
     expect(trailingActions!).toHaveClass('ml-auto');
+    expect(trailingActions!).toHaveClass('shrink-0');
     expect(trailingActions!).toHaveClass('justify-end');
+    expect(trailingActions!).toHaveClass('self-start');
     expect(trailingActions!).not.toHaveClass('2xl:ml-auto');
+    const filterControls = screen
+      .getByText('Filters', { selector: 'div' })
+      .closest('.page-controls-filter-controls');
+    expect(filterControls).not.toBeNull();
+    expect(filterControls!).not.toContainElement(columnsButton);
 
     fireEvent.click(screen.getByRole('button', { name: /filters/i }));
     expect(onToggleFilters).toHaveBeenCalledTimes(1);
@@ -114,7 +121,15 @@ describe('PageControls', () => {
     expect(trailingActions!).toContainElement(trailing);
     expect(trailingActions!).toContainElement(columnsButton);
     expect(trailingActions!).toHaveClass('ml-auto');
+    expect(trailingActions!).toHaveClass('shrink-0');
     expect(trailingActions!).toHaveClass('justify-end');
+    expect(trailingActions!).toHaveClass('self-start');
+    const filterControls = screen
+      .getByText('Filters', { selector: 'div' })
+      .closest('.page-controls-filter-controls');
+    expect(filterControls).not.toBeNull();
+    expect(filterControls!).not.toContainElement(trailing);
+    expect(filterControls!).not.toContainElement(columnsButton);
     expect(screen.queryByTestId('desktop-utility')).not.toBeInTheDocument();
   });
 });

@@ -1075,10 +1075,16 @@ describe('Recovery', () => {
     const filterButton = within(controls).getByRole('button', { name: 'Filter' });
     const columnsButton = within(controls).getByRole('button', { name: /columns/i });
     const actionRail = filterButton.closest('.page-controls-toolbar-actions');
+    const filterControls = within(controls)
+      .getByTestId('recovery-history-item-filter-trigger')
+      .closest('.page-controls-filter-controls');
 
     expect(actionRail).not.toBeNull();
     expect(actionRail).toContainElement(filterButton);
     expect(actionRail).toContainElement(columnsButton);
+    expect(filterControls).not.toBeNull();
+    expect(filterControls).not.toContainElement(filterButton);
+    expect(filterControls).not.toContainElement(columnsButton);
   });
 
   it('lets operators create and clear the item filter from the recovery events controls', async () => {

@@ -107,10 +107,12 @@ export const PageControls: Component<PageControlsProps> = (props) => {
       mobileTrailing={activeMobileTrailing()}
       class={local.class}
     >
-      {local.children}
-
       <Show when={hasTrailingActions()}>
-        <div class="page-controls-toolbar-actions ml-auto inline-flex flex-wrap items-center justify-end gap-2">
+        <div class="page-controls-filter-controls flex min-w-0 flex-1 basis-0 flex-wrap items-center gap-2">
+          {local.children}
+        </div>
+
+        <div class="page-controls-toolbar-actions ml-auto inline-flex shrink-0 flex-wrap items-center justify-end gap-2 self-start">
           <Show when={local.toolbarTrailing}>{local.toolbarTrailing}</Show>
 
           <Show when={activeUtilityActions()}>
@@ -141,6 +143,8 @@ export const PageControls: Component<PageControlsProps> = (props) => {
           </Show>
         </div>
       </Show>
+
+      <Show when={!hasTrailingActions()}>{local.children}</Show>
     </FilterHeader>
   );
 };

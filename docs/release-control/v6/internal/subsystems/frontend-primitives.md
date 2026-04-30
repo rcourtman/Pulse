@@ -341,10 +341,11 @@ work extends shared components instead of creating new local variants.
    of staying as loose filter-row children, and those controls must stay
    grouped when dense toolbars wrap so popovers remain viewport-safe instead of
    drifting off-screen from page-local flex behavior. The shared action rail
-   must align to the trailing edge at wrapped desktop widths instead of waiting
-   for a wide breakpoint, so Recovery events, Workloads, Storage,
-   Infrastructure, and future dense toolbars do not strand Filter/Columns/Reset
-   actions at the left edge of a second row. Shared `FilterToolbarPanel` owns
+   must align to the trailing edge at wrapped desktop widths and remain
+   separate from the filter-control wrap zone instead of waiting for a wide
+   breakpoint, so Recovery events, Workloads, Storage, Infrastructure, and
+   future dense toolbars do not strand Filter/Columns/Reset actions as an
+   isolated second-row fragment. Shared `FilterToolbarPanel` owns
    default filter-popover geometry, and `FilterToolbar` owns the shared chart
    visibility display action: Workloads, Storage, Infrastructure, and future
    summary-bearing pages must use `ChartVisibilityToggleButton` so the

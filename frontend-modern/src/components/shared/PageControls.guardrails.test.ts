@@ -126,8 +126,11 @@ describe('page controls guardrails', () => {
     expect(workloadsFilterSource).not.toContain('aria-label="Charts"');
     expect(storageFilterSource).not.toContain('aria-label="Charts"');
     expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Charts"');
+    expect(pageControlsSource).toContain('page-controls-filter-controls');
     expect(pageControlsSource).toContain('page-controls-toolbar-actions ml-auto');
-    expect(pageControlsSource).toContain('justify-end gap-2');
+    expect(pageControlsSource).toContain(
+      'shrink-0 flex-wrap items-center justify-end gap-2 self-start',
+    );
     expect(pageControlsSource).not.toContain('2xl:ml-auto');
     expect(recoveryHistorySectionSource).not.toContain('toolbarClass="lg:flex-nowrap"');
     expect(recoveryHistorySectionSource).not.toContain('ml-auto flex items-center gap-2');
