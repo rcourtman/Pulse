@@ -102,6 +102,10 @@ querying, and the operator-facing storage health presentation layer.
    those notes. Recovery-adjacent diagnostics consumers must preserve the
    source-specific Docker / Podman wording and recovery destinations governed
    by the shared diagnostics API contract.
+   Adjacent Docker / Podman management routes may also share `internal/api/`
+   transport with storage/recovery. Storage and recovery consumers must
+   preserve the API-owned Docker / Podman agent or host wording for management
+   responses and must not introduce recovery-local container-runtime labels.
    That same adjacent API/security boundary owns CSRF replacement-token
    concurrency for browser mutations. Storage and recovery forms may benefit
    from the shared retry behavior when parallel requests receive replacement

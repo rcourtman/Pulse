@@ -165,12 +165,12 @@ describe('MonitoringAPI', () => {
       );
     });
 
-    it('throws the canonical missing-runtime message on 404', async () => {
+    it('throws the canonical missing Docker / Podman message on 404', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
 
       await expect(
         MonitoringAPI.setDockerRuntimeDisplayName('agent-1', 'New Name'),
-      ).rejects.toThrow('Container runtime not found');
+      ).rejects.toThrow('Docker / Podman agent not found');
     });
   });
 

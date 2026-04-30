@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -169,6 +170,30 @@ func TestDockerMetadataHandlers_RuntimeMetadata(t *testing.T) {
 		handler.HandleDeleteRuntimeMetadata(rec, req)
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want 204", rec.Code)
+		}
+	})
+
+	t.Run("missing-runtime-id-copy", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/api/docker/runtimes/metadata/", bytes.NewReader([]byte(`{}`)))
+		rec := httptest.NewRecorder()
+
+		handler.HandleUpdateRuntimeMetadata(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", rec.Code)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman host ID required") || strings.Contains(body, "Container runtime") {
+			t.Fatalf("unexpected missing runtime ID response body: %s", body)
+		}
+
+		req = httptest.NewRequest(http.MethodDelete, "/api/docker/runtimes/metadata/", nil)
+		rec = httptest.NewRecorder()
+
+		handler.HandleDeleteRuntimeMetadata(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", rec.Code)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman host ID required") || strings.Contains(body, "Container runtime") {
+			t.Fatalf("unexpected missing runtime ID delete response body: %s", body)
 		}
 	})
 }

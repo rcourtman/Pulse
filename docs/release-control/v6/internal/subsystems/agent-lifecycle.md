@@ -1670,6 +1670,12 @@ shared backend dependency. When `internal/api/diagnostics.go` emits agent
 health notes for Docker and Podman, the copy must keep Infrastructure as the
 operator recovery surface and must not send users back to retired agent-only
 management routes.
+Lifecycle-adjacent Docker / Podman management responses are part of that same
+shared backend dependency. When `internal/api/docker_agents.go`,
+`internal/api/docker_metadata.go`, or `frontend-modern/src/api/monitoring.ts`
+surface host removal, hide/unhide, pending uninstall, display-name, or metadata
+errors, the operator-facing copy must describe Docker / Podman agents or hosts
+rather than reviving generic container-runtime labels.
 That same shared `internal/api/` dependency now also assumes auth persistence
 compatibility is handled as an explicit migration/import boundary: legacy
 raw-token `sessions.json` and `csrf_tokens.json` files may load for upgrade

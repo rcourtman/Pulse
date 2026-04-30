@@ -242,6 +242,13 @@ the canonical monitored-system blocked payload.
     agent language and route operator recovery to the Infrastructure and
     Security settings surfaces rather than generic runtime family wording or
     retired agent-management destinations.
+3b. Route Docker / Podman management API response copy through
+    `internal/api/docker_agents.go`, `internal/api/docker_metadata.go`,
+    `frontend-modern/src/api/monitoring.ts`, and their route/client tests
+    together. Operator-facing responses for Docker / Podman host removal,
+    hide/unhide, pending uninstall, display-name, and host metadata paths must
+    use Docker / Podman agent or host wording instead of generic container
+    runtime labels.
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
    That same resource payload contract owns `aggregations.policyPosture` on
    `/api/resources` and `/api/resources/stats`. The aggregation must be derived

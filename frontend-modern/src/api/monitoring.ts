@@ -146,7 +146,7 @@ export class MonitoringAPI {
 
     return deleteResource<DeleteDockerRuntimeResponse>(
       url,
-      'Failed to parse delete container runtime response',
+      'Failed to parse Docker / Podman agent delete response',
     );
   }
 
@@ -165,7 +165,7 @@ export class MonitoringAPI {
     await setResourceDisplayName(
       url,
       displayName,
-      'Container runtime not found',
+      'Docker / Podman agent not found',
     );
   }
 
@@ -336,7 +336,7 @@ export class MonitoringAPI {
   }
 
   /**
-   * Triggers an immediate update check for all containers on a specific container runtime.
+   * Triggers an immediate update check for all containers on a specific Docker / Podman agent.
    */
   static async checkDockerUpdates(
     agentId: string,
@@ -349,7 +349,7 @@ export class MonitoringAPI {
   }
 
   /**
-   * Triggers a batch update for all containers with updates available on a specific container runtime.
+   * Triggers a batch update for all containers with updates available on a specific Docker / Podman agent.
    */
   static async updateAllDockerContainers(
     agentId: string,

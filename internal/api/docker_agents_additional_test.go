@@ -219,6 +219,9 @@ func TestDockerAgentHandlers_HandleDeleteHost(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
+	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman agent removed") || strings.Contains(body, "Container runtime") {
+		t.Fatalf("unexpected delete response body: %s", body)
+	}
 }
 
 func TestDockerAgentHandlers_HandleUnhideHost(t *testing.T) {
@@ -231,6 +234,9 @@ func TestDockerAgentHandlers_HandleUnhideHost(t *testing.T) {
 	handler.HandleUnhideHost(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman agent unhidden") || strings.Contains(body, "Container runtime") {
+		t.Fatalf("unexpected unhide response body: %s", body)
 	}
 }
 
@@ -245,6 +251,9 @@ func TestDockerAgentHandlers_HandleMarkPendingUninstall(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
+	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman agent marked as pending uninstall") || strings.Contains(body, "Container runtime") {
+		t.Fatalf("unexpected pending uninstall response body: %s", body)
+	}
 }
 
 func TestDockerAgentHandlers_HandleSetCustomDisplayName(t *testing.T) {
@@ -258,6 +267,9 @@ func TestDockerAgentHandlers_HandleSetCustomDisplayName(t *testing.T) {
 	handler.HandleSetCustomDisplayName(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman agent custom display name updated") || strings.Contains(body, "Container runtime") {
+		t.Fatalf("unexpected display-name response body: %s", body)
 	}
 }
 

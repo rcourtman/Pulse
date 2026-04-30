@@ -113,12 +113,18 @@ func TestDockerAgentHandlers_HandleDeleteHost_Errors(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
 	}
+	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman agent not found") || strings.Contains(body, "Container runtime") {
+		t.Fatalf("unexpected missing hide response body: %s", body)
+	}
 
 	req = httptest.NewRequest(http.MethodDelete, "/api/agents/docker/runtimes/missing?force=true", nil)
 	rec = httptest.NewRecorder()
 	handler.HandleDeleteHost(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman agent already removed") || strings.Contains(body, "Container runtime") {
+		t.Fatalf("unexpected forced delete response body: %s", body)
 	}
 }
 

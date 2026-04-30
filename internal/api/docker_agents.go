@@ -249,7 +249,7 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 	}
 
 	// If a container update succeeded, migrate persisted container metadata (custom URLs, notes, tags)
-	// so the UI doesn't "lose" it when the container runtime ID changes.
+	// so the UI doesn't lose it when the container ID changes.
 	if status == monitoring.DockerCommandStatusCompleted && commandStatus.Type == monitoring.DockerCommandTypeUpdateContainer && len(req.Payload) > 0 {
 		oldContainerID, _ := req.Payload["oldContainerId"].(string)
 		newContainerID, _ := req.Payload["newContainerId"].(string)
@@ -290,7 +290,7 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 	}
 }
 
-// HandleDeleteHost removes or hides a container runtime from the shared state.
+// HandleDeleteHost removes or hides a Docker / Podman host from the shared state.
 // If query parameter ?hide=true is provided, the host is marked as hidden instead of deleted.
 func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
@@ -314,7 +314,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 
 	if shouldHide {
 		if !hostExists {
-			writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Container runtime not found", nil)
+			writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Docker / Podman agent not found", nil)
 			return
 		}
 		host, err := h.getMonitor(r.Context()).HideDockerHost(agentID)
@@ -328,7 +328,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"success": true,
 			"agentId": host.ID,
-			"message": "Container runtime hidden",
+			"message": "Docker / Podman agent hidden",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 		}
@@ -340,14 +340,14 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 			if err := utils.WriteJSONResponse(w, map[string]any{
 				"success": true,
 				"agentId": agentID,
-				"message": "Container runtime already removed",
+				"message": "Docker / Podman agent already removed",
 			}); err != nil {
 				log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 			}
 			return
 		}
 
-		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Container runtime not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Docker / Podman agent not found", nil)
 		return
 	}
 
@@ -382,13 +382,13 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"agentId": host.ID,
-		"message": "Container runtime removed",
+		"message": "Docker / Podman agent removed",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 	}
 }
 
-// HandleAllowReenroll clears the removal block for a container runtime to permit future reports.
+// HandleAllowReenroll clears the removal block for a Docker / Podman host to permit future reports.
 func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -417,7 +417,7 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 	}
 }
 
-// HandleUnhideHost unhides a previously hidden container runtime.
+// HandleUnhideHost unhides a previously hidden Docker / Podman host.
 func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
@@ -441,13 +441,13 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"agentId": host.ID,
-		"message": "Container runtime unhidden",
+		"message": "Docker / Podman agent unhidden",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host unhide response")
 	}
 }
 
-// HandleMarkPendingUninstall marks a container runtime as pending uninstall.
+// HandleMarkPendingUninstall marks a Docker / Podman host as pending uninstall.
 func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
@@ -471,13 +471,13 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"agentId": host.ID,
-		"message": "Container runtime marked as pending uninstall",
+		"message": "Docker / Podman agent marked as pending uninstall",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host pending uninstall response")
 	}
 }
 
-// HandleSetCustomDisplayName updates the custom display name for a container runtime.
+// HandleSetCustomDisplayName updates the custom display name for a Docker / Podman host.
 func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
@@ -515,7 +515,7 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"agentId": host.ID,
-		"message": "Container runtime custom display name updated",
+		"message": "Docker / Podman agent custom display name updated",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host custom display name response")
 	}
@@ -584,7 +584,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 	}
 }
 
-// HandleUpdateAll triggers an update for all containers with updates available on a container runtime.
+// HandleUpdateAll triggers an update for all containers with updates available on a Docker / Podman host.
 // POST /api/agents/docker/runtimes/{agentId}/update-all
 func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -624,7 +624,7 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// HandleCheckUpdates triggers an immediate update check for all containers on a container runtime.
+// HandleCheckUpdates triggers an immediate update check for all containers on a Docker / Podman host.
 // POST /api/agents/docker/runtimes/{agentId}/check-updates
 func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

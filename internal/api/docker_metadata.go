@@ -198,7 +198,7 @@ func (h *DockerMetadataHandler) HandleGetRuntimeMetadata(w http.ResponseWriter, 
 	}
 }
 
-// HandleUpdateRuntimeMetadata updates metadata for a container runtime.
+// HandleUpdateRuntimeMetadata updates metadata for a Docker / Podman host.
 func (h *DockerMetadataHandler) HandleUpdateRuntimeMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut && r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -207,7 +207,7 @@ func (h *DockerMetadataHandler) HandleUpdateRuntimeMetadata(w http.ResponseWrite
 
 	runtimeID := strings.TrimPrefix(r.URL.Path, dockerRuntimeMetadataPathPrefix)
 	if runtimeID == "" || runtimeID == "metadata" {
-		http.Error(w, "Container runtime ID required", http.StatusBadRequest)
+		http.Error(w, "Docker / Podman host ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -243,18 +243,18 @@ func (h *DockerMetadataHandler) HandleUpdateRuntimeMetadata(w http.ResponseWrite
 	}
 
 	if err := store.SetHostMetadata(runtimeID, &meta); err != nil {
-		log.Error().Err(err).Str("runtimeID", runtimeID).Msg("Failed to save container runtime metadata")
+		log.Error().Err(err).Str("runtimeID", runtimeID).Msg("Failed to save Docker / Podman host metadata")
 		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
 	}
 
-	log.Info().Str("runtimeID", runtimeID).Str("url", meta.CustomURL).Msg("Updated container runtime metadata")
+	log.Info().Str("runtimeID", runtimeID).Str("url", meta.CustomURL).Msg("Updated Docker / Podman host metadata")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&meta)
 }
 
-// HandleDeleteRuntimeMetadata removes metadata for a container runtime.
+// HandleDeleteRuntimeMetadata removes metadata for a Docker / Podman host.
 func (h *DockerMetadataHandler) HandleDeleteRuntimeMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -263,17 +263,17 @@ func (h *DockerMetadataHandler) HandleDeleteRuntimeMetadata(w http.ResponseWrite
 
 	runtimeID := strings.TrimPrefix(r.URL.Path, dockerRuntimeMetadataPathPrefix)
 	if runtimeID == "" || runtimeID == "metadata" {
-		http.Error(w, "Container runtime ID required", http.StatusBadRequest)
+		http.Error(w, "Docker / Podman host ID required", http.StatusBadRequest)
 		return
 	}
 	store := h.getStore(r.Context())
 	if err := store.SetHostMetadata(runtimeID, nil); err != nil {
-		log.Error().Err(err).Str("runtimeID", runtimeID).Msg("Failed to delete container runtime metadata")
+		log.Error().Err(err).Str("runtimeID", runtimeID).Msg("Failed to delete Docker / Podman host metadata")
 		http.Error(w, "Failed to delete metadata", http.StatusInternalServerError)
 		return
 	}
 
-	log.Info().Str("runtimeID", runtimeID).Msg("Deleted container runtime metadata")
+	log.Info().Str("runtimeID", runtimeID).Msg("Deleted Docker / Podman host metadata")
 
 	w.WriteHeader(http.StatusNoContent)
 }
