@@ -3,6 +3,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { collectUserDiagnosticsInternalAnalyticsFindings } from './settings-diagnostics-boundary-audit.mjs';
+
 const ROOT = process.cwd();
 const TARGET_DIRS = [path.join(ROOT, 'src')];
 const IGNORE_DIRS = new Set(['__tests__']);
@@ -1706,6 +1708,12 @@ const MAP_RULES = [
 ];
 
 requireGeneratedPlatformSupportProjectionSync();
+findings.push(
+  ...collectUserDiagnosticsInternalAnalyticsFindings({
+    root: ROOT,
+    repoRoot: path.resolve(ROOT, '..'),
+  }),
+);
 
 for (const dir of TARGET_DIRS) {
   for (const filePath of collectFiles(dir)) {

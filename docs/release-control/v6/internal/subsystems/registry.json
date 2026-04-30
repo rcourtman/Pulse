@@ -2979,6 +2979,7 @@
       "owned_files": [
         "frontend-modern/scripts/canonical-platform-audit.mjs",
         "frontend-modern/scripts/header-audit.mjs",
+        "frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
         "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
         "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
@@ -3346,6 +3347,22 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/diagnosticsPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "settings-diagnostics-boundary-audit",
+            "label": "settings diagnostics internal analytics boundary proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/scripts/__tests__/settings-diagnostics-boundary-audit.test.mjs",
+              "frontend-modern/src/components/Settings/__tests__/diagnosticsModel.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/DiagnosticsResultsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
             ]
           },
           {

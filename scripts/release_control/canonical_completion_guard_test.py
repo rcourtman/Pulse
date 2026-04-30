@@ -3273,6 +3273,33 @@ index 1111111..2222222 100644
             ],
         )
 
+    def test_frontend_primitive_settings_diagnostics_boundary_audit_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
+        requirements = build_verification_requirements(
+            rule,
+            ["frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "settings-diagnostics-boundary-audit",
+                    "label": "settings diagnostics internal analytics boundary proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/scripts/__tests__/settings-diagnostics-boundary-audit.test.mjs",
+                        "frontend-modern/src/components/Settings/__tests__/DiagnosticsResultsPanel.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/diagnosticsModel.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                    ],
+                }
+            ],
+        )
+
     def _assert_environment_lock_boundary_requires_frontend_primitives(
         self, touched_path: str, requirement_id: str, exact_files: list[str]
     ) -> None:

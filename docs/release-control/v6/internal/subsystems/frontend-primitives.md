@@ -151,10 +151,11 @@ work extends shared components instead of creating new local variants.
 125. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
 126. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
 127. `frontend-modern/scripts/canonical-platform-audit.mjs`
-128. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-129. `frontend-modern/src/utils/platformSupportManifest.ts`
-130. `frontend-modern/src/utils/sourcePlatformOptions.ts`
-131. `frontend-modern/src/utils/sourcePlatforms.ts`
+128. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
+129. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+130. `frontend-modern/src/utils/platformSupportManifest.ts`
+131. `frontend-modern/src/utils/sourcePlatformOptions.ts`
+132. `frontend-modern/src/utils/sourcePlatforms.ts`
 
 ## Shared Boundaries
 
@@ -1757,6 +1758,10 @@ customer diagnostics surface. `DiagnosticsResultsPanel.tsx`,
 preserve commercial funnel, sales funnel, pricing/checkout conversion, or
 infrastructure onboarding telemetry from `/api/diagnostics`; those signals
 belong in admin-owned metrics surfaces instead of Settings support UI.
+`frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`, called by
+the canonical frontend audit runner, enforces that boundary by failing if the
+diagnostics API, diagnostics results panel, or diagnostics payload model
+reintroduce those analytics fields outside the defensive strip helper.
 Diagnostics cards that summarize Docker and Podman agent coverage must use the
 shared `docker` source-platform label from
 `frontend-modern/src/utils/sourcePlatforms.ts` for their heading and body copy,

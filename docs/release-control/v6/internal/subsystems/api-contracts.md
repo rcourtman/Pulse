@@ -1802,7 +1802,11 @@ That same diagnostics boundary now explicitly excludes maintainer analytics.
 funnel, pricing/checkout conversion, or infrastructure onboarding telemetry in
 `/api/diagnostics`; local upgrade/onboarding metrics remain owned by the
 licensing/admin metrics routes and their admin gates rather than the customer
-support diagnostics contract.
+support diagnostics contract. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
+now checks `internal/api/diagnostics.go` alongside the Settings diagnostics
+frontend boundary through the canonical frontend audit runner, so this
+admin-analytics payload class cannot return as a customer-visible diagnostics
+contract.
 That same public-demo API boundary must also hide runtime-admin operations
 surfaces instead of treating them as harmless reads. Demo sessions must receive
 `404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the

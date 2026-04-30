@@ -2833,6 +2833,33 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_settings_diagnostics_boundary_audit_to_frontend_primitives(
+        self,
+    ) -> None:
+        result = lookup_paths(["frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"frontend-primitives"},
+        )
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"frontend-primitives"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L8")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "settings-diagnostics-boundary-audit",
+        )
+
     def test_lookup_paths_assigns_settings_dialogs_to_frontend_primitives(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/SettingsDialogs.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
