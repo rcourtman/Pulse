@@ -4,6 +4,7 @@ import { Dialog } from '@/components/shared/Dialog';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
+import XIcon from 'lucide-solid/icons/x';
 
 interface UpdateProgressModalProps {
   isOpen: boolean;
@@ -374,9 +375,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   };
 
   const handleClose = () => {
-    if (isComplete()) {
-      props.onClose();
-    }
+    props.onClose();
   };
 
   return (
@@ -384,7 +383,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       isOpen={props.isOpen}
       onClose={handleClose}
       panelClass="max-w-2xl"
-      closeOnBackdrop={isComplete()}
+      closeOnBackdrop={true}
       ariaLabel="Updating Pulse"
     >
       <div class="w-full">
@@ -392,18 +391,23 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         <div class="px-6 py-4 border-b border-border">
           <div class="flex items-center justify-between">
             <h2 class="text-xl font-semibold text-base-content">Updating Pulse</h2>
-            <Show when={isComplete()}>
-              <button onClick={handleClose} class=" hover:text-base-content" type="button">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </Show>
+            <button
+              onClick={handleClose}
+              class="text-muted hover:text-base-content"
+              type="button"
+              aria-label={
+                isComplete()
+                  ? 'Close update progress'
+                  : 'Hide update progress. The update continues server-side.'
+              }
+              title={
+                isComplete()
+                  ? 'Close update progress'
+                  : 'Hide update progress. GlobalUpdateProgressWatcher keeps tracking the server-side update.'
+              }
+            >
+              <XIcon class="w-5 h-5" />
+            </button>
           </div>
         </div>
 
