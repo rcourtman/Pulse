@@ -773,6 +773,21 @@ jobs:
             RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
           fi
 
+          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}")
+          ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
+          ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')
+          RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+
+          if [ "$ACTUAL_RELEASE_TAG" != "$TAG" ]; then
+            echo "::error::Draft release ${RELEASE_ID} is bound to tag ${ACTUAL_RELEASE_TAG}, expected ${TAG}."
+            exit 1
+          fi
+
+          if [ "$ACTUAL_TARGET_COMMITISH" != "$HEAD_SHA" ]; then
+            echo "::error::Draft release ${RELEASE_ID} target_commitish is ${ACTUAL_TARGET_COMMITISH}, expected ${HEAD_SHA}."
+            exit 1
+          fi
+
           rm -f "$NOTES_FILE"
 
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
@@ -939,10 +954,11 @@ jobs:
     needs:
       - prepare
       - create_release
-    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     permissions:
       contents: write
       issues: write
+      statuses: write
     uses: ./.github/workflows/validate-release-assets.yml
     secrets: inherit
     with:

@@ -327,6 +327,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_release_workflow_enforces_rc_lineage_soak_and_v5_notice(self) -> None:
         content = read(".github/workflows/create-release.yml")
+        validation_workflow = read(".github/workflows/validate-release-assets.yml")
         helper = read("scripts/trigger-release.sh")
         renderer = read("scripts/release_control/render_release_body.py")
         policy = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
@@ -373,9 +374,21 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('Retargeting existing draft tag ${TAG}', content)
         self.assertIn('-F target_commitish="${HEAD_SHA}"', content)
         self.assertIn('historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}', content)
-        self.assertIn("if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}", content)
+        self.assertIn(
+            "if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}",
+            content,
+        )
         self.assertIn("if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}", content)
         self.assertIn("issues: write", content)
+        self.assertIn("statuses: write", content)
+        self.assertIn("statuses: write", validation_workflow)
+        self.assertIn("curl --fail-with-body --silent --show-error -X POST", validation_workflow)
+        self.assertIn('"context": "Release Asset Validation"', validation_workflow)
+        self.assertIn('ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r \'.tag_name // empty\')', content)
+        self.assertIn(
+            'ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r \'.target_commitish // empty\')',
+            content,
+        )
         self.assertIn('./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"', content)
         self.assertIn('./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"', content)
         self.assertIn("PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", content)

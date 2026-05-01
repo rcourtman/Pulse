@@ -57,6 +57,7 @@ jobs:
     permissions:
       contents: write
       issues: write
+      statuses: write
 
     steps:
       - name: Checkout repository
@@ -242,7 +243,7 @@ jobs:
       - name: Set commit status - Success
         if: steps.context.outputs.should_run == 'true' && steps.validate.outputs.validation_passed == 'true'
         run: |
-          curl -X POST \
+          curl --fail-with-body --silent --show-error -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/statuses/${{ steps.context.outputs.target_commitish }}" \
@@ -313,7 +314,7 @@ jobs:
       - name: Set commit status - Failure
         if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
         run: |
-          curl -X POST \
+          curl --fail-with-body --silent --show-error -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/statuses/${{ steps.context.outputs.target_commitish }}" \

@@ -100,8 +100,13 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
+	validationContent, err := os.ReadFile(repoFile(".github", "workflows", "validate-release-assets.yml"))
+	if err != nil {
+		t.Fatalf("read validate-release-assets.yml: %v", err)
+	}
 
 	workflow := string(content)
+	validationWorkflow := string(validationContent)
 	required := []string{
 		`historical_asset_backfill_only:`,
 		`description: 'Repair an already-published release packet in place without rebuilding binaries'`,
@@ -131,10 +136,15 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`git push origin "refs/tags/${TAG}" --force`,
 		`-F target_commitish="${HEAD_SHA}"`,
 		`historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}`,
-		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}`,
+		`if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}`,
 		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}`,
 		`permissions:`,
 		`issues: write`,
+		`statuses: write`,
+		`ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')`,
+		`ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')`,
+		`Draft release ${RELEASE_ID} is bound to tag ${ACTUAL_RELEASE_TAG}, expected ${TAG}.`,
+		`Draft release ${RELEASE_ID} target_commitish is ${ACTUAL_TARGET_COMMITISH}, expected ${HEAD_SHA}.`,
 		`./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"`,
 		`./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"`,
 	}
@@ -149,6 +159,17 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	}
 	if strings.Contains(workflow, `provenance: false`) {
 		t.Fatal("create-release.yml must not disable release-image provenance")
+	}
+
+	validationRequired := []string{
+		`statuses: write`,
+		`curl --fail-with-body --silent --show-error -X POST`,
+		`"context": "Release Asset Validation"`,
+	}
+	for _, needle := range validationRequired {
+		if !strings.Contains(validationWorkflow, needle) {
+			t.Fatalf("validate-release-assets.yml missing required status publication contract: %s", needle)
+		}
 	}
 }
 
