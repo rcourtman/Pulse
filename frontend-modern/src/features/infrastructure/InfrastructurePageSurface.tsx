@@ -1,16 +1,12 @@
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
-import {
-  ChartVisibilityToggleButton,
-  LabeledFilterSelect,
-} from '@/components/shared/FilterToolbar';
+import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { ChartVisibilityToggleButton } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
-import { PageControls } from '@/components/shared/PageControls';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { SearchInput } from '@/components/shared/SearchInput';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { InfrastructureSummary } from '@/components/Infrastructure/InfrastructureSummary';
@@ -65,9 +61,6 @@ export function InfrastructurePageSurface() {
     jumpToActiveResourceRow,
     deployCluster,
     setDeployCluster,
-    filtersOpen,
-    setFiltersOpen,
-    activeFilterCount,
     kioskMode,
     clearPinnedSummaryScope,
     sourceOptions,
@@ -178,72 +171,62 @@ export function InfrastructurePageSurface() {
               <div class="space-y-3" data-testid="infrastructure-interaction-surface">
                 <Show when={!kioskMode()}>
                   <div data-summary-clear-ignore>
-                    <Card padding="sm" class="mb-4">
-                      <PageControls
-                        search={
-                          <SearchInput
-                            value={searchQuery}
-                            onChange={setSearchQuery}
-                            placeholder="Search resources, IDs, IPs, or tags..."
-                            class="w-full"
-                            typeToSearch
-                            history={{
-                              storageKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
-                              emptyMessage: 'Recent infrastructure searches appear here.',
-                            }}
+                    <FilterBar
+                      isMobile={isMobile}
+                      search={{
+                        value: searchQuery,
+                        setValue: setSearchQuery,
+                        placeholder: 'Search resources, IDs, IPs, or tags...',
+                        historyKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
+                        emptyMessage: 'Recent infrastructure searches appear here.',
+                      }}
+                      filters={
+                        [
+                          {
+                            id: 'platform',
+                            label: 'Platform',
+                            group: 'scope',
+                            value: selectedSource,
+                            setValue: setSelectedSource,
+                            defaultValue: '',
+                            options: () => [
+                              { value: '', label: 'All' },
+                              ...sourceOptions().map((source) => ({
+                                value: source.key,
+                                label: source.label,
+                              })),
+                            ],
+                          },
+                          {
+                            id: 'status',
+                            label: 'Status',
+                            group: 'status',
+                            value: selectedStatus,
+                            setValue: setSelectedStatus,
+                            defaultValue: '',
+                            options: () => [
+                              { value: '', label: 'All' },
+                              ...statusOptions().map((status) => ({
+                                value: status.key,
+                                label: status.label,
+                              })),
+                            ],
+                          },
+                        ] as FilterDef[]
+                      }
+                      viewOptionsTrailing={
+                        <>
+                          <GroupedTableModeSegmentedControl
+                            value={groupingMode()}
+                            onChange={(value) => setGroupingMode(value as GroupingMode)}
                           />
-                        }
-                        mobileFilters={{
-                          enabled: isMobile(),
-                          onToggle: () => setFiltersOpen((o) => !o),
-                          count: activeFilterCount(),
-                        }}
-                        resetAction={{
-                          show: hasActiveFilters(),
-                          onClick: clearFilters,
-                          label: 'Clear',
-                          class: 'ml-auto text-base-content',
-                        }}
-                        showFilters={!isMobile() || filtersOpen()}
-                        toolbarClass="lg:flex-nowrap"
-                      >
-                        <LabeledFilterSelect
-                          id="infra-source-filter"
-                          label="Platform"
-                          value={selectedSource()}
-                          onChange={(e) => setSelectedSource(e.currentTarget.value)}
-                          selectClass="min-w-[8rem]"
-                        >
-                          <option value="">All</option>
-                          <For each={sourceOptions()}>
-                            {(source) => <option value={source.key}>{source.label}</option>}
-                          </For>
-                        </LabeledFilterSelect>
-
-                        <LabeledFilterSelect
-                          id="infra-status-filter"
-                          label="Status"
-                          value={selectedStatus()}
-                          onChange={(e) => setSelectedStatus(e.currentTarget.value)}
-                          selectClass="min-w-[7rem]"
-                        >
-                          <option value="">All</option>
-                          <For each={statusOptions()}>
-                            {(status) => <option value={status.key}>{status.label}</option>}
-                          </For>
-                        </LabeledFilterSelect>
-
-                        <GroupedTableModeSegmentedControl
-                          value={groupingMode()}
-                          onChange={(value) => setGroupingMode(value as GroupingMode)}
-                        />
-
-                        <ChartVisibilityToggleButton
-                          collapsed={summaryCollapsed()}
-                          onToggle={() => setSummaryCollapsed((collapsed) => !collapsed)}
-                        />
-                      </PageControls>
-                    </Card>
+                          <ChartVisibilityToggleButton
+                            collapsed={summaryCollapsed()}
+                            onToggle={() => setSummaryCollapsed((collapsed) => !collapsed)}
+                          />
+                        </>
+                      }
+                    />
                   </div>
                 </Show>
 

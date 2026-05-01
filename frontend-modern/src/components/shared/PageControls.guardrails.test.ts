@@ -41,23 +41,27 @@ describe('page controls guardrails', () => {
       'searchAccessory={activeSearchTrailing() ?? mobileSearchAccessory()}',
     );
 
-    expect(workloadsFilterSource).toContain('PageControls');
+    // WorkloadsFilter migrated to FilterBar; defensive guards remain. The
+    // <ColumnPicker> tag now appears in WorkloadsFilter via the FilterBar
+    // viewOptionsTrailing slot, so the regression guard is the more specific
+    // FilterHeader check.
     expect(workloadsFilterSource).not.toContain('<FilterHeader');
-    expect(workloadsFilterSource).not.toContain('<ColumnPicker');
 
     expect(storageFilterSource).toContain('PageControls');
     expect(storageFilterSource).not.toContain('<FilterHeader');
     expect(storageFilterSource).not.toContain('<ColumnPicker');
 
-    expect(recoveryProtectedInventorySectionSource).toContain('PageControls');
+    // RecoveryProtectedInventorySection migrated to FilterBar; defensive
+    // assertions remain to catch any regression that reintroduces FilterHeader
+    // / ColumnPicker forks here.
     expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');
     expect(recoveryProtectedInventorySectionSource).not.toContain('<ColumnPicker');
 
-    expect(recoveryHistorySectionSource).toContain('PageControls');
+    // RecoveryHistorySection migrated to FilterBar; defensive guards remain.
     expect(recoveryHistorySectionSource).not.toContain('<FilterHeader');
-    expect(recoveryHistorySectionSource).not.toContain('<ColumnPicker');
 
-    expect(infrastructurePageSurfaceSource).toContain('PageControls');
+    // InfrastructurePageSurface migrated to FilterBar; the FilterHeader
+    // assertion stays as a regression guard.
     expect(infrastructurePageSurfaceSource).not.toContain('<FilterHeader');
   });
 
@@ -97,13 +101,32 @@ describe('page controls guardrails', () => {
 
     expect(filterHeaderUsers).toEqual(['./PageControls.tsx']);
 
-    expect(sharedToolbarImportUsers).toEqual(['./PageControls.tsx']);
+    // FilterBar.tsx imports FilterMobileToggleButton from FilterToolbar so it
+    // shows up in the shared-toolbar import allowlist alongside PageControls.
+    expect(sharedToolbarImportUsers).toEqual([
+      './FilterBar/FilterBar.tsx',
+      './PageControls.tsx',
+    ]);
 
-    expect(columnPickerUsers).toEqual(['./PageControls.tsx']);
+    // RecoveryHistorySection and WorkloadsFilter compose ColumnPicker via
+    // FilterBar's viewOptionsTrailing slot; PageControls plus those two
+    // surfaces are the canonical ColumnPicker consumers.
+    expect(columnPickerUsers).toEqual([
+      '../Recovery/RecoveryHistorySection.tsx',
+      '../Workloads/WorkloadsFilter.tsx',
+      './PageControls.tsx',
+    ]);
 
-    expect(columnPickerImportUsers).toEqual(['./PageControls.tsx']);
+    expect(columnPickerImportUsers).toEqual([
+      '../Recovery/RecoveryHistorySection.tsx',
+      '../Workloads/WorkloadsFilter.tsx',
+      './PageControls.tsx',
+    ]);
 
-    expect(mobileToggleUsers).toEqual(['./PageControls.tsx']);
+    expect(mobileToggleUsers).toEqual([
+      './FilterBar/FilterBar.tsx',
+      './PageControls.tsx',
+    ]);
   });
 
   it('keeps search-row leading content routed through PageControls rather than local FilterHeader forks', () => {
@@ -119,7 +142,9 @@ describe('page controls guardrails', () => {
   });
 
   it('keeps display controls and utility actions on the shared toolbar rail', () => {
-    expect(workloadsFilterSource).toContain('toolbarTrailing={');
+    // WorkloadsFilter migrated to FilterBar's viewOptionsTrailing slot; the
+    // toolbarTrailing PageControls prop is no longer used. ChartVisibilityToggleButton
+    // and the no-aria-label-Charts regression guard still apply.
     expect(storageFilterSource).toContain('toolbarTrailing={');
     expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
     expect(storageFilterSource).toContain('ChartVisibilityToggleButton');
@@ -151,38 +176,28 @@ describe('page controls guardrails', () => {
     expect(filterToolbarSource).toContain('COMPACT_FILTER_TOGGLE_MAX_OPTIONS = 5');
     expect(filterToolbarSource).toContain("class={local.toggleClass ?? 'hidden xl:inline-flex'}");
     expect(filterToolbarSource).toContain("groupClass={local.selectGroupClass ?? 'xl:hidden'}");
-    expect(workloadsFilterSource).toContain('LabeledFilterToggleGroup');
-    expect(workloadsFilterSource).toContain('WORKLOAD_TYPE_OPTIONS');
-    expect(workloadsFilterSource).toContain('WORKLOAD_STATUS_FILTER_OPTIONS');
-    expect(workloadsFilterSource).toContain('workloads-filter-primary-controls');
-    expect(workloadsFilterSource).toContain('workloads-filter-secondary-controls');
-    expect(workloadsFilterSource).toContain('pageControlsFilterSectionClass');
-    expect(workloadsFilterSource).toContain('filterControlsVariant="sectioned-children"');
-    expect(workloadsFilterSource).not.toContain('workloads-filter-control-deck');
-    expect(workloadsFilterSource).not.toContain('controlDeckClass=');
     expect(pageControlsSource).toContain('border border-border bg-surface-alt');
     expect(pageControlsSource).toContain('border border-border-subtle bg-surface');
     expect(pageControlsSource).toContain('xl:grid-cols-[minmax(0,1fr)_auto]');
-    expect(workloadsFilterSource).not.toContain('xl:grid-cols-[max-content_minmax(16rem,1fr)]');
-    expect(workloadsFilterSource).not.toContain('actionsLayout="stacked"');
-    expect(workloadsFilterSource).not.toContain('page-controls-toolbar-actions inline-flex');
-    expect(workloadsFilterSource).toContain('xl:flex-col xl:items-start');
-    expect(workloadsFilterSource).not.toContain(
-      '<LabeledFilterSelect\n          id="workloads-type-filter"',
-    );
-    expect(workloadsFilterSource).not.toContain(
-      '<LabeledFilterSelect\n          id="workloads-status-filter"',
-    );
-    expect(recoveryHistorySectionSource).toContain('LabeledFilterToggleGroup');
-    expect(recoveryHistorySectionSource).not.toContain(
-      '<LabeledFilterSelect\n                id="recovery-status-filter"',
-    );
+    // WorkloadsFilter migrated to FilterBar — the LabeledFilterToggleGroup
+    // segmented Type/Status pair retired in favour of catalog chips, so the
+    // remaining assertions are regression guards against re-introducing the
+    // legacy primitives.
+    expect(workloadsFilterSource).not.toContain('LabeledFilterToggleGroup');
+    expect(workloadsFilterSource).not.toContain('LabeledFilterSelect');
+    expect(workloadsFilterSource).not.toContain('pageControlsFilterSectionClass');
+    expect(workloadsFilterSource).not.toContain('filterControlsVariant');
+    expect(workloadsFilterSource).not.toContain('xl:flex-col xl:items-start');
+    // RecoveryHistorySection migrated to FilterBar; LabeledFilterToggleGroup
+    // / LabeledFilterSelect no longer rendered.
+    expect(recoveryHistorySectionSource).not.toContain('LabeledFilterToggleGroup');
+    expect(recoveryHistorySectionSource).not.toContain('LabeledFilterSelect');
     expect(storageFilterSource).toContain(
       '<LabeledFilterSelect\n          id="storage-status-filter"',
     );
-    expect(infrastructurePageSurfaceSource).toContain(
-      '<LabeledFilterSelect\n                          id="infra-status-filter"',
-    );
+    // Infrastructure migrated to FilterBar; chip popover replaces the labelled
+    // select. Regression guard ensures the legacy primitive stays out.
+    expect(infrastructurePageSurfaceSource).not.toContain('<LabeledFilterSelect');
   });
 
   it('keeps embedded workspace tabs on the canonical shared subtabs class pattern', () => {

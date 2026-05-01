@@ -417,25 +417,16 @@ describe('Recovery', () => {
     expect(
       within(historyTablist).getByRole('tab', { name: 'Recovery events' }),
     ).toBeInTheDocument();
-    expect(within(inventoryControls).getByLabelText('Item Type').className).not.toContain(
-      'min-w-[',
-    );
-    expect(within(inventoryControls).getByLabelText('Platform').className).not.toContain('min-w-[');
-    expect(within(inventoryControls).getByLabelText('Protection state').className).not.toContain(
-      'min-w-[',
-    );
+    // Inventory section migrated to FilterBar: filters live behind the
+    // "+ Filter" menu rather than as labelled selects, so the legacy
+    // min-width inspections no longer apply. (The events view is active by
+    // this point in the test, so the inventory section is unmounted; chip
+    // / menu coverage lives in the dedicated FilterBar tests below.)
     expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
     expect(within(historyControls).queryByText(/day group/i)).not.toBeInTheDocument();
-    expect(within(historyControls).getByLabelText('Item Type').className).not.toContain('min-w-[');
-    expect(within(historyControls).getByLabelText('Platform').className).not.toContain('min-w-[');
-    const historyStatusGroup = within(historyControls).getByRole('group', { name: 'Status' });
-    expect(historyStatusGroup).toHaveClass('xl:inline-flex');
-    expect(
-      within(historyStatusGroup).getByRole('button', { name: 'Any status' }),
-    ).toBeInTheDocument();
-    expect(
-      within(historyControls).getByLabelText('Status', { selector: 'select' }).className,
-    ).not.toContain('min-w-[');
+    // Events FilterBar: "+ Filter" trigger surfaces Item Type / Platform /
+    // Status / etc. as menu items rather than persistent labelled selects.
+    expect(within(historyControls).getByRole('button', { name: 'Filter' })).toBeInTheDocument();
     const recoverySummaryPanel = screen.getByTestId('recovery-summary');
     expect(within(recoverySummaryPanel).getByRole('button', { name: '7d' })).toBeInTheDocument();
     expect(within(recoverySummaryPanel).getByRole('button', { name: '30d' })).toBeInTheDocument();
@@ -608,7 +599,16 @@ describe('Recovery', () => {
           'true',
         );
       });
-      expect(screen.getAllByText('TrueNAS').length).toBeGreaterThan(0);
+      // The legacy `providers: ['truenas']` payload should normalize into the
+      // canonical "TrueNAS" platform label on whichever surface renders it
+      // (events table badge, "+ Filter > Platform" menu, or active chip).
+      const eventsControls = await screen.findByRole('group', {
+        name: /recovery events controls/i,
+      });
+      fireEvent.click(within(eventsControls).getByRole('button', { name: 'Filter' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Platform' }));
+      const platformMenu = await screen.findByRole('menu');
+      expect(within(platformMenu).getByRole('button', { name: 'TrueNAS' })).toBeInTheDocument();
     } finally {
       rollupsPayload.pop();
       delete pointsByRollupId['ext:legacy-provider-rollup'];
@@ -693,8 +693,17 @@ describe('Recovery', () => {
       expect(
         within(inventoryTable).queryByText('Cluster', { exact: true }),
       ).not.toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'K8s Cluster' })).toBeInTheDocument();
-      expect(screen.queryByRole('option', { name: 'Cluster' })).not.toBeInTheDocument();
+      // Open the inventory FilterBar's "+ Filter > Item Type" submenu and
+      // assert the canonical K8s Cluster wording without the generic alias.
+      fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Item Type' }));
+      const itemTypeMenu = await screen.findByRole('menu');
+      expect(
+        within(itemTypeMenu).getByRole('button', { name: 'K8s Cluster' }),
+      ).toBeInTheDocument();
+      expect(
+        within(itemTypeMenu).queryByRole('button', { name: 'Cluster' }),
+      ).not.toBeInTheDocument();
     } finally {
       rollupsPayload.pop();
       delete pointsByRollupId['res:k8s-production-1'];
@@ -985,7 +994,10 @@ describe('Recovery', () => {
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'truenas' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Platform' }));
+    const platformMenu = await screen.findByRole('menu');
+    fireEvent.click(within(platformMenu).getByRole('button', { name: 'TrueNAS' }));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1020,31 +1032,36 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await waitFor(() => expect(screen.getByLabelText('Platform')).toBeInTheDocument());
-
-    expect(screen.getByLabelText('Platform')).toHaveValue('truenas');
-    expect((screen.getByRole('option', { name: 'TrueNAS' }) as HTMLOptionElement).selected).toBe(
-      true,
-    );
-    expect(screen.getByText('Host / Agent')).toBeInTheDocument();
-    expect(screen.getByText('tower')).toBeInTheDocument();
+    // FilterBar renders active filters as chips. Route-owned platform and
+    // node values become removable chips in the events bar.
+    expect(
+      await screen.findByRole('button', { name: /^Platform: TrueNAS/ }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /^Host \/ Agent: tower/ }),
+    ).toBeInTheDocument();
   });
 
   it('uses the shared reset action for protected item filters', async () => {
     render(() => <Recovery />);
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'truenas' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Platform' }));
+    const platformMenu = await screen.findByRole('menu');
+    fireEvent.click(within(platformMenu).getByRole('button', { name: 'TrueNAS' }));
 
-    const resetButton = await screen.findByRole('button', { name: 'Reset all' });
-    fireEvent.click(resetButton);
+    const clearAllButton = await screen.findByRole('button', { name: 'Clear all' });
+    fireEvent.click(clearAllButton);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Platform')).toHaveValue('all');
+      expect(
+        screen.queryByRole('button', { name: /^Platform: TrueNAS/ }),
+      ).not.toBeInTheDocument();
       expect(screen.getByText('VM 123')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
     });
   });
 
@@ -1059,7 +1076,7 @@ describe('Recovery', () => {
       'VM 123',
     );
 
-    fireEvent.click(within(controls).getByRole('button', { name: 'Reset all' }));
+    fireEvent.click(within(controls).getByRole('button', { name: 'Clear all' }));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1069,7 +1086,7 @@ describe('Recovery', () => {
       expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
         'Any item',
       );
-      expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
     });
   });
 
@@ -1079,19 +1096,11 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     const controls = await screen.findByRole('group', { name: /recovery events controls/i });
-    const filterButton = within(controls).getByRole('button', { name: 'Filter' });
-    const columnsButton = within(controls).getByRole('button', { name: /columns/i });
-    const actionRail = filterButton.closest('.page-controls-toolbar-actions');
-    const filterControls = within(controls)
-      .getByTestId('recovery-history-item-filter-trigger')
-      .closest('.page-controls-filter-controls');
-
-    expect(actionRail).not.toBeNull();
-    expect(actionRail).toContainElement(filterButton);
-    expect(actionRail).toContainElement(columnsButton);
-    expect(filterControls).not.toBeNull();
-    expect(filterControls).not.toContainElement(filterButton);
-    expect(filterControls).not.toContainElement(columnsButton);
+    // Both the "+ Filter" trigger and the Columns picker live inside the
+    // events controls group; the item filter trigger is also grouped here.
+    expect(within(controls).getByRole('button', { name: 'Filter' })).toBeInTheDocument();
+    expect(within(controls).getByRole('button', { name: /columns/i })).toBeInTheDocument();
+    expect(within(controls).getByTestId('recovery-history-item-filter-trigger')).toBeInTheDocument();
   });
 
   it('lets operators create and clear the item filter from the recovery events controls', async () => {
@@ -1143,11 +1152,20 @@ describe('Recovery', () => {
   it('keeps recovery filter surfaces on canonical platform vocabulary', async () => {
     render(() => <Recovery />);
 
-    expect(await screen.findByLabelText('Platform')).toBeInTheDocument();
+    // Inventory FilterBar surfaces "Platform" via the "+ Filter" menu rather
+    // than as a labelled select, so assert the menu vocabulary instead.
+    fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
+    expect(
+      await screen.findByRole('menuitem', { name: 'Platform' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
 
     fireEvent.click(screen.getByRole('tab', { name: /Recovery events/i }));
-    expect(await screen.findByLabelText('Platform')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
+    expect(
+      await screen.findByRole('menuitem', { name: 'Platform' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
   });
 
@@ -1156,7 +1174,10 @@ describe('Recovery', () => {
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Item Type'), { target: { value: 'dataset' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Item Type' }));
+    const itemTypeMenu = await screen.findByRole('menu');
+    fireEvent.click(within(itemTypeMenu).getByRole('button', { name: 'Dataset' }));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1221,8 +1242,10 @@ describe('Recovery', () => {
   it('uses canonical protection state filtering for protected inventory', async () => {
     render(() => <Recovery />);
 
-    const protectedStatus = await screen.findByLabelText('Protection state');
-    fireEvent.change(protectedStatus, { target: { value: 'never-succeeded' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Filter' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Protection state' }));
+    const stateMenu = await screen.findByRole('menu');
+    fireEvent.click(within(stateMenu).getByRole('button', { name: 'Never succeeded' }));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1311,7 +1334,11 @@ describe('Recovery', () => {
       );
     });
 
-    expect(screen.getByLabelText('Protection state')).toHaveValue('stale');
+    // FilterBar surfaces the active value as a chip rather than a labelled
+    // select. Assert the canonical chip text instead.
+    expect(
+      await screen.findByRole('button', { name: /^Protection state: Stale$/ }),
+    ).toBeInTheDocument();
   });
 
   it('drops protected-only stale state when the recovery events view owns the route', async () => {
@@ -1327,7 +1354,7 @@ describe('Recovery', () => {
     });
 
     const controls = await screen.findByRole('group', { name: /recovery events controls/i });
-    fireEvent.click(within(controls).getByRole('button', { name: 'Reset all' }));
+    fireEvent.click(within(controls).getByRole('button', { name: 'Clear all' }));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1384,8 +1411,9 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
-    const clusterSelect = await screen.findByLabelText('Cluster / Site');
-    fireEvent.change(clusterSelect, { target: { value: 'dev-cluster' } });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cluster / Site' }));
+    const clusterMenu = await screen.findByRole('menu');
+    fireEvent.click(within(clusterMenu).getByRole('button', { name: 'dev-cluster' }));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1466,12 +1494,14 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
-    fireEvent.change(await screen.findByLabelText('Host / Agent'), {
-      target: { value: 'node-agent-1' },
-    });
-    fireEvent.change(await screen.findByLabelText('Namespace / Group'), {
-      target: { value: 'tenant-a' },
-    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Host / Agent' }));
+    const hostMenu = await screen.findByRole('menu');
+    fireEvent.click(within(hostMenu).getByRole('button', { name: 'node-agent-1' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Namespace / Group' }));
+    const namespaceMenu = await screen.findByRole('menu');
+    fireEvent.click(within(namespaceMenu).getByRole('button', { name: 'tenant-a' }));
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -1560,9 +1590,9 @@ describe('Recovery', () => {
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
     fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
-    fireEvent.change(await screen.findByLabelText('Cluster / Site'), {
-      target: { value: 'dev-cluster' },
-    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cluster / Site' }));
+    const clusterMenu = await screen.findByRole('menu');
+    fireEvent.click(within(clusterMenu).getByRole('button', { name: 'dev-cluster' }));
 
     await waitFor(() => {
       const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));

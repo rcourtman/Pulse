@@ -1,11 +1,8 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { Accessor, Component } from 'solid-js';
 
-import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { LabeledFilterSelect } from '@/components/shared/FilterToolbar';
-import { PageControls } from '@/components/shared/PageControls';
-import { SearchInput } from '@/components/shared/SearchInput';
+import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import {
@@ -149,7 +146,6 @@ const normalizeProtectedStateFilter = (value: string): ProtectedStateFilter => {
 export const RecoveryProtectedInventorySection: Component<
   RecoveryProtectedInventorySectionProps
 > = (props) => {
-  const [protectedFiltersOpen, setProtectedFiltersOpen] = createSignal(false);
   const [protectedSortCol, setProtectedSortCol] = createSignal<ProtectedSortCol>('outcome');
   const [protectedSortDir, setProtectedSortDir] = createSignal<SortDir>('desc');
 
@@ -162,14 +158,7 @@ export const RecoveryProtectedInventorySection: Component<
     }
   };
 
-  const protectedActiveFilterCount = createMemo(() => {
-    let count = 0;
-    if (props.queryFilter().trim() !== '') count += 1;
-    if (props.platformFilter() !== 'all') count += 1;
-    if (props.itemTypeFilter() !== 'all') count += 1;
-    if (props.protectedStateFilter() !== 'all') count += 1;
-    return count;
-  });
+  const isMobileAccessor = createMemo(() => props.isMobile);
 
   const sortedRollups = createMemo<ProtectionRollup[]>(() => {
     const items = props.filteredRollups().slice();
@@ -249,118 +238,82 @@ export const RecoveryProtectedInventorySection: Component<
     protectedSortDir();
   });
 
-  const resetProtectedFilters = () => {
-    props.setQueryFilter('');
-    props.setPlatformFilter('all');
-    props.setItemTypeFilter('all');
-    props.setVerificationFilter('all');
-    props.setProtectedStateFilter('all');
-  };
-
   return (
     <div class="flex flex-col gap-2">
       <Show when={!props.kioskMode}>
-        <Card padding="none" tone="card" class="overflow-visible border-border-subtle bg-surface">
-          <div class="px-4 py-3 sm:px-5">
-            <PageControls
-              role="group"
-              aria-label="Protected items controls"
-              search={
-                <SearchInput
-                  value={props.queryFilter}
-                  onChange={(value) => props.setQueryFilter(value)}
-                  placeholder={getRecoveryProtectedSearchPlaceholder()}
-                  inputClass="py-1.5 text-sm"
-                  clearOnEscape
-                  history={{
-                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                    emptyMessage: getRecoverySearchHistoryEmptyMessage(),
-                  }}
-                />
-              }
-              mobileFilters={{
-                enabled: props.isMobile,
-                onToggle: () => setProtectedFiltersOpen((open) => !open),
-                count: protectedActiveFilterCount(),
-              }}
-              resetAction={{
-                show: protectedActiveFilterCount() > 0,
-                onClick: resetProtectedFilters,
-                label: 'Reset all',
-                title: 'Reset protected item filters',
-              }}
-              showFilters={!props.isMobile || protectedFiltersOpen()}
-              toolbarClass="gap-3 lg:flex-nowrap"
-            >
-              <LabeledFilterSelect
-                id="recovery-item-type-filter"
-                label={getRecoveryArtifactColumnLabel('type', 'Item Type')}
-                value={props.itemTypeFilter()}
-                onChange={(event) =>
-                  props.setItemTypeFilter(
-                    normalizeRecoveryItemTypeQueryValue(event.currentTarget.value) || 'all',
-                  )
-                }
-                groupClass="gap-1.5 px-1.5 py-0.5"
-                selectClass="py-1 text-xs"
-              >
-                <For each={props.itemTypeOptions()}>
-                  {(itemType) => (
-                    <option value={itemType}>
-                      {itemType === 'all'
-                        ? getRecoveryAllItemTypesLabel()
-                        : getRecoveryItemTypePresentation(itemType)?.label || itemType}
-                    </option>
-                  )}
-                </For>
-              </LabeledFilterSelect>
-
-              <LabeledFilterSelect
-                id="recovery-platform-filter"
-                label="Platform"
-                value={props.platformFilter()}
-                onChange={(event) =>
-                  props.setPlatformFilter(
-                    normalizeSourcePlatformQueryValue(event.currentTarget.value),
-                  )
-                }
-                groupClass="gap-1.5 px-1.5 py-0.5"
-                selectClass="py-1 text-xs"
-              >
-                <For each={props.platformOptions()}>
-                  {(platform) => (
-                    <option value={platform}>
-                      {platform === 'all'
-                        ? getRecoveryAllPlatformsLabel()
-                        : getSourcePlatformLabel(platform)}
-                    </option>
-                  )}
-                </For>
-              </LabeledFilterSelect>
-
-              <LabeledFilterSelect
-                id="recovery-protected-status-filter"
-                label="Protection state"
-                value={props.protectedStateFilter()}
-                onChange={(event) => {
-                  const value = normalizeProtectedStateFilter(event.currentTarget.value);
-                  props.setProtectedStateFilter(value);
-                  props.setVerificationFilter('all');
-                }}
-                groupClass="gap-1.5 px-1.5 py-0.5"
-                selectClass="py-1 text-xs"
-              >
-                <For each={availableProtectionStates}>
-                  {(state) => (
-                    <option value={state}>
-                      {state === 'all' ? 'Any state' : getRecoveryRollupInventoryStatusLabel(state)}
-                    </option>
-                  )}
-                </For>
-              </LabeledFilterSelect>
-            </PageControls>
-          </div>
-        </Card>
+        <FilterBar
+            role="group"
+            ariaLabel="Protected items controls"
+            isMobile={isMobileAccessor}
+            search={{
+              value: props.queryFilter,
+              setValue: props.setQueryFilter,
+              placeholder: getRecoveryProtectedSearchPlaceholder(),
+              historyKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+              emptyMessage: getRecoverySearchHistoryEmptyMessage(),
+              clearOnEscape: true,
+            }}
+            filters={
+              [
+                {
+                  id: 'item-type',
+                  label: getRecoveryArtifactColumnLabel('type', 'Item Type'),
+                  group: 'properties',
+                  value: props.itemTypeFilter,
+                  setValue: (value: string) =>
+                    props.setItemTypeFilter(
+                      normalizeRecoveryItemTypeQueryValue(value) || 'all',
+                    ),
+                  defaultValue: 'all',
+                  options: () =>
+                    props.itemTypeOptions().map((itemType) => ({
+                      value: itemType,
+                      label:
+                        itemType === 'all'
+                          ? getRecoveryAllItemTypesLabel()
+                          : getRecoveryItemTypePresentation(itemType)?.label || itemType,
+                    })),
+                },
+                {
+                  id: 'platform',
+                  label: 'Platform',
+                  group: 'scope',
+                  value: props.platformFilter,
+                  setValue: (value: string) =>
+                    props.setPlatformFilter(normalizeSourcePlatformQueryValue(value)),
+                  defaultValue: 'all',
+                  options: () =>
+                    props.platformOptions().map((platform) => ({
+                      value: platform,
+                      label:
+                        platform === 'all'
+                          ? getRecoveryAllPlatformsLabel()
+                          : getSourcePlatformLabel(platform),
+                    })),
+                },
+                {
+                  id: 'protected-state',
+                  label: 'Protection state',
+                  group: 'status',
+                  value: props.protectedStateFilter,
+                  setValue: (value: string) => {
+                    const normalized = normalizeProtectedStateFilter(value);
+                    props.setProtectedStateFilter(normalized);
+                    props.setVerificationFilter('all');
+                  },
+                  defaultValue: 'all',
+                  options: () =>
+                    availableProtectionStates.map((state) => ({
+                      value: state,
+                      label:
+                        state === 'all'
+                          ? 'Any state'
+                          : getRecoveryRollupInventoryStatusLabel(state),
+                    })),
+                },
+              ] as FilterDef[]
+            }
+          />
       </Show>
 
       <TableCard>

@@ -124,6 +124,25 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageRouteStateSource).not.toContain('createRouteStateSearchSignal');
   });
 
+  it('routes the page filter section through the chip-based FilterBar primitive', () => {
+    expect(infrastructurePageSurfaceSource).toContain(
+      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
+    );
+    expect(infrastructurePageSurfaceSource).toContain('<FilterBar');
+    expect(infrastructurePageSurfaceSource).toContain('isMobile={isMobile}');
+    expect(infrastructurePageSurfaceSource).toContain("id: 'platform'");
+    expect(infrastructurePageSurfaceSource).toContain("id: 'status'");
+    expect(infrastructurePageSurfaceSource).toContain("group: 'scope'");
+    expect(infrastructurePageSurfaceSource).toContain("group: 'status'");
+    expect(infrastructurePageSurfaceSource).toContain('viewOptionsTrailing={');
+    expect(infrastructurePageSurfaceSource).not.toContain('PageControls');
+    expect(infrastructurePageSurfaceSource).not.toContain('LabeledFilterSelect');
+    expect(infrastructurePageSurfaceSource).not.toContain('mobileFilters={');
+    expect(infrastructurePageSurfaceSource).not.toContain('resetAction={');
+    expect(infrastructurePageSurfaceSource).not.toContain('showFilters={!isMobile()');
+    expect(infrastructurePageSurfaceSource).not.toContain('toolbarClass="lg:flex-nowrap"');
+  });
+
   it('keeps inline-detail reveal out of infrastructure viewport sync helpers', () => {
     expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
     expect(unifiedResourceTableStateSource).not.toContain('scrollIntoView');

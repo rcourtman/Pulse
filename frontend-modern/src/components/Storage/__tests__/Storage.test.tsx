@@ -77,8 +77,39 @@ let hookLoading = false;
 let hookError: unknown = undefined;
 let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'active';
 
-const getStorageSourceSelect = (): HTMLSelectElement =>
-  screen.getByLabelText('Source', { selector: 'select' }) as HTMLSelectElement;
+const setStorageFilter = (filterLabel: string, optionLabel: string) => {
+  const existingChip = queryStorageChip(filterLabel);
+  if (existingChip) {
+    fireEvent.click(existingChip);
+    const listbox = screen.getByRole('listbox', { name: filterLabel });
+    fireEvent.click(within(listbox).getByRole('option', { name: optionLabel }));
+    return;
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: filterLabel }));
+  const menu = screen.getByRole('menu');
+  fireEvent.click(within(menu).getByRole('button', { name: optionLabel }));
+};
+
+const queryStorageChip = (label: string): HTMLButtonElement | null => {
+  const triggers = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]'),
+  );
+  for (const trigger of triggers) {
+    const text = (trigger.textContent || '').trim();
+    if (text.startsWith(`${label}:`)) return trigger;
+  }
+  return null;
+};
+
+const getStorageChipOptions = async (label: string): Promise<string[]> => {
+  const chip = queryStorageChip(label);
+  if (!chip) throw new Error(`No chip found for filter "${label}"`);
+  fireEvent.click(chip);
+  const listbox = await screen.findByRole('listbox', { name: label });
+  const options = Array.from(listbox.querySelectorAll<HTMLButtonElement>('button[role="option"]'));
+  return options.map((opt) => (opt.textContent || '').trim());
+};
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   const url =
@@ -393,9 +424,7 @@ describe('Storage', () => {
     expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.getByText('Local-LVM-PVE2')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Node'), {
-      target: { value: 'node-1' },
-    });
+    setStorageFilter('Node', 'pve1');
 
     expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.queryByText('Local-LVM-PVE2')).not.toBeInTheDocument();
@@ -671,7 +700,7 @@ describe('Storage', () => {
       expect(orderedRowIds.slice(0, 2)).toEqual(['storage-1', 'storage-2']);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'By status' }));
+    setStorageFilter('Group by', 'By status');
 
     // Group headers now show just the key name (without prefix)
     expect(screen.getAllByText('degraded').length).toBeGreaterThan(0);
@@ -712,19 +741,18 @@ describe('Storage', () => {
       'aria-selected',
       'true',
     );
-    expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
+    // Filter state surfaces as chips on the FilterBar; sort stays as a
+    // labelled select in the view-options trailing slot.
+    expect(queryStorageChip('Node')).toHaveTextContent('Node:pve2');
     expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
-    expect(getStorageSourceSelect().value).toBe('proxmox-pve');
-    expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('warning');
 
     // Grouping controls are only shown on the Pools view.
     fireEvent.click(screen.getByRole('tab', { name: 'Pools' }));
-    expect(screen.getByRole('button', { name: 'By status' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(queryStorageChip('Group by')).toHaveTextContent('Group by:By status');
+    expect(queryStorageChip('Source')).toHaveTextContent('Source:PVE');
+    expect(queryStorageChip('Status')).toHaveTextContent('Status:Warning');
 
-    fireEvent.click(screen.getByRole('button', { name: 'By type' }));
+    setStorageFilter('Group by', 'By type');
 
     await waitFor(() => {
       const [nextPath] = navigateSpy.mock.calls.at(-1) as [string];
@@ -732,9 +760,7 @@ describe('Storage', () => {
       expect(nextParams.get('group')).toBe('type');
     });
 
-    fireEvent.change(screen.getByLabelText('Status'), {
-      target: { value: 'available' },
-    });
+    setStorageFilter('Status', 'Healthy');
 
     await waitFor(() => {
       const [nextPath] = navigateSpy.mock.calls.at(-1) as [string];
@@ -755,8 +781,7 @@ describe('Storage', () => {
       'aria-selected',
       'true',
     );
-    expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
-    expect(getStorageSourceSelect().value).toBe('proxmox-pve');
+    expect(queryStorageChip('Node')).toHaveTextContent('Node:pve2');
   });
 
   it('trims whitespace-padded storage URL params back to canonical state', async () => {
@@ -791,9 +816,7 @@ describe('Storage', () => {
       'aria-selected',
       'true',
     );
-    expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
-    expect(getStorageSourceSelect().value).toBe('proxmox-pve');
-    expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('available');
+    expect(queryStorageChip('Node')).toHaveTextContent('Node:pve2');
     expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
   });
 
@@ -810,7 +833,7 @@ describe('Storage', () => {
       );
     });
 
-    expect(getStorageSourceSelect().value).toBe('proxmox-pve');
+    expect(queryStorageChip('Source')).toHaveTextContent('Source:PVE');
   });
 
   it('collapses explicit all node sentinels in storage URL params back to canonical unset state', async () => {
@@ -823,7 +846,8 @@ describe('Storage', () => {
       expect(navigateSpy).toHaveBeenCalledWith('/storage', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
-    expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('all');
+    // Default Node selection ("all") collapses to no chip on the FilterBar.
+    expect(queryStorageChip('Node')).toBeNull();
   });
 
   it('pins storage group scope into the route without conflating it with expansion', async () => {
@@ -1543,20 +1567,11 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(getStorageSourceSelect()).toHaveValue('truenas');
+      expect(queryStorageChip('Source')).toHaveTextContent('Source:TrueNAS');
     });
 
-    expect(screen.getByLabelText('Node')).toHaveValue('truenas-main');
-    expect(
-      Array.from(getStorageSourceSelect().querySelectorAll('option')).map((option) => ({
-        value: option.value,
-        label: option.textContent,
-      })),
-    ).toEqual([
-      { value: 'all', label: 'All sources' },
-      { value: 'proxmox-pve', label: 'PVE' },
-      { value: 'truenas', label: 'TrueNAS' },
-    ]);
+    expect(queryStorageChip('Node')).toHaveTextContent('Node:TrueNAS Main');
+    expect(await getStorageChipOptions('Source')).toEqual(['All sources', 'PVE', 'TrueNAS']);
     expect(screen.getByText('tank')).toBeInTheDocument();
     expect(screen.queryByText('local-zfs')).not.toBeInTheDocument();
   });
@@ -1727,13 +1742,18 @@ describe('Storage', () => {
 
     fireEvent.click(screen.getAllByRole('tab', { name: 'Physical Disks' })[0]!);
 
-    const options = screen
-      .getAllByRole('option')
-      .map((option) => option.textContent)
-      .filter(Boolean);
-    expect(options).toContain('All disk hosts');
-    expect(options).toContain('pve1');
-    expect(options).not.toContain('mini');
+    // The "+ Filter > Node" submenu lists nodes that have disk resources.
+    // Hosts without disk resources (e.g. 'mini') are filtered out.
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Node' }));
+    const nodeMenu = screen.getByRole('menu');
+    const optionLabels = Array.from(
+      nodeMenu.querySelectorAll<HTMLButtonElement>('button'),
+    )
+      .map((button) => (button.textContent || '').trim())
+      .filter((text) => text.length > 0 && !text.startsWith('Node'));
+    expect(optionLabels).toContain('pve1');
+    expect(optionLabels).not.toContain('mini');
   });
 
   it('resets stale disk node selections that do not map to a physical disk parent', async () => {
@@ -1773,7 +1793,9 @@ describe('Storage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:all:');
     });
-    expect(screen.getAllByLabelText('Node')[0]).toHaveValue('all');
+    // Stale node selection collapses to default ("all"), so no Node chip
+    // remains.
+    expect(queryStorageChip('Node')).toBeNull();
   });
 
   it('renders the storage view as canonical subtabs', () => {
@@ -1798,8 +1820,6 @@ describe('Storage', () => {
     expect(await screen.findByTestId('storage-summary')).toBeInTheDocument();
 
     const chartsButton = screen.getByRole('button', { name: /charts/i });
-    expect(chartsButton.closest('.page-controls-toolbar-actions')).not.toBeNull();
-
     fireEvent.click(chartsButton);
 
     await waitFor(() => {

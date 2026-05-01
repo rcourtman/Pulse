@@ -786,7 +786,14 @@ describe('Workloads performance contract', () => {
     });
 
     it('keeps workloads filter state in canonical workloads filter owners', () => {
-      expect(workloadsFilterSource).toContain('useWorkloadsFilterState');
+      // WorkloadsFilter migrated to FilterBar — the filter component now
+      // composes the chip catalog directly and reads useBreakpoint locally,
+      // so the legacy useWorkloadsFilterState hook is no longer in the
+      // render path. Defaults/derivations stay in workloadsFilterModel.
+      expect(workloadsFilterSource).toContain('FilterBar');
+      expect(workloadsFilterSource).toContain('useBreakpoint');
+      expect(workloadsFilterSource).toContain('hasActiveWorkloadsFilters');
+      expect(workloadsFilterSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
       expect(workloadsSource).not.toContain('SummaryScopeBar');
       expect(workloadsSource).not.toContain('searchTrailing={pinnedScopeFallback()}');
       expect(workloadsSource).not.toContain('mobileTrailing={pinnedScopeFallback()}');
@@ -802,10 +809,8 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('showClearSelection');
       expect(workloadsWorkloadTableSource).toContain('clearPinnedSummaryScope');
       expect(workloadsFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
-      expect(workloadsFilterSource).not.toContain('useBreakpoint');
       expect(workloadsFilterSource).not.toContain("props.setSortKey('name')");
       expect(workloadsFilterSource).toContain('searchTrailing={props.searchTrailing}');
-      expect(workloadsFilterSource).toContain('mobileTrailing={props.mobileTrailing}');
       expect(workloadsFilterStateSource).toContain('countActiveWorkloadsFilters');
       expect(workloadsFilterStateSource).not.toContain('props.containerRuntimeFilter?.onChange');
       expect(workloadsFilterStateSource).toContain('useBreakpoint');

@@ -174,6 +174,12 @@ import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
+import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
+import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
+import addFilterMenuSource from '@/components/shared/FilterBar/AddFilterMenu.tsx?raw';
+import filterCatalogSource from '@/components/shared/FilterBar/filterCatalog.ts?raw';
+import filterBarIndexSource from '@/components/shared/FilterBar/index.ts?raw';
+import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -1516,5 +1522,191 @@ describe('shared primitive guardrails', () => {
     expect(collapsibleSearchInputModelSource).toContain('shouldShowCollapsibleSearchExpanded');
     expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchRootClass');
     expect(collapsibleSearchInputModelSource).toContain('order-last basis-full w-full');
+  });
+
+  it('keeps the chip-based FilterBar on a catalog descriptor with shell, chip, and add-menu owners', () => {
+    expect(filterBarIndexSource).toContain("export { FilterBar } from './FilterBar';");
+    expect(filterBarIndexSource).toContain("export { FilterChip } from './FilterChip';");
+    expect(filterBarIndexSource).toContain("export { AddFilterMenu } from './AddFilterMenu';");
+    expect(filterBarIndexSource).toContain('isFilterSet');
+    expect(filterBarIndexSource).toContain('clearFilter');
+    expect(filterBarIndexSource).toContain('formatFilterChipValue');
+
+    expect(filterCatalogSource).toContain('export interface FilterDef');
+    expect(filterCatalogSource).toContain('defaultValue: string');
+    expect(filterCatalogSource).toContain(
+      'export const isFilterSet = (filter: FilterDef): boolean =>',
+    );
+    expect(filterCatalogSource).toContain('export const clearFilter = (filter: FilterDef): void =>');
+    expect(filterCatalogSource).toContain("filter.value() !== filter.defaultValue");
+
+    expect(filterBarSource).toContain(
+      "import { Card } from '@/components/shared/Card';",
+    );
+    expect(filterBarSource).toContain(
+      "import { SearchInput } from '@/components/shared/SearchInput';",
+    );
+    expect(filterBarSource).toContain(
+      "import { FilterMobileToggleButton } from '@/components/shared/FilterToolbar';",
+    );
+    expect(filterBarSource).toContain("import { AddFilterMenu } from './AddFilterMenu';");
+    expect(filterBarSource).toContain("import { FilterChip } from './FilterChip';");
+    expect(filterBarSource).toContain('props.filters.filter(isFilterSet)');
+    expect(filterBarSource).toContain('activeCount() > 0');
+    expect(filterBarSource).not.toContain("import { PageControls }");
+    expect(filterBarSource).not.toContain('LabeledFilterSelect');
+    expect(filterBarSource).not.toContain('LabeledFilterToggleGroup');
+    expect(filterBarSource).not.toContain('filterControlsVariant');
+
+    expect(filterChipSource).toContain("clearFilter,");
+    expect(filterChipSource).toContain("formatFilterChipValue,");
+    expect(filterChipSource).toContain("from './filterCatalog';");
+    expect(filterChipSource).toContain('aria-haspopup="listbox"');
+    expect(filterChipSource).toContain('aria-label={`Remove ${props.filter.label} filter`}');
+    expect(filterChipSource).toContain('onClick={() => clearFilter(props.filter)}');
+    expect(filterChipSource).toContain("event.key === 'Escape'");
+    expect(filterChipSource).not.toContain('MutationObserver');
+    // Type-ahead parity with AddFilterMenu: chip popover has its own search
+    // input + arrow nav + Enter-to-commit, with activeIndex seeded on the
+    // currently-selected value so Enter without typing is a no-op.
+    expect(filterChipSource).toContain('aria-label={`Filter ${props.filter.label} values`}');
+    expect(filterChipSource).toContain('filteredOptions');
+    expect(filterChipSource).toContain('handleSearchKeyDown');
+    expect(filterChipSource).toContain("event.key === 'ArrowDown'");
+    expect(filterChipSource).toContain("event.key === 'ArrowUp'");
+    expect(filterChipSource).toContain("event.key === 'Enter'");
+    expect(filterChipSource).toContain('commitActive');
+    expect(filterChipSource).toContain('queueMicrotask(() => searchInputRef?.focus())');
+
+    expect(addFilterMenuSource).toContain("isFilterSet,");
+    expect(addFilterMenuSource).toContain('type FilterDef,');
+    expect(addFilterMenuSource).toContain("from './filterCatalog';");
+    expect(addFilterMenuSource).toContain('availableFilters');
+    expect(addFilterMenuSource).toContain('option.value !== filter.defaultValue');
+    expect(addFilterMenuSource).toContain('GROUP_ORDER');
+    expect(addFilterMenuSource).toContain('aria-haspopup="menu"');
+    expect(addFilterMenuSource).not.toContain('LabeledFilterSelect');
+    // Type-ahead: a search input narrows the visible filter (or value) list
+    // and Enter commits the active item, so power users can pick a filter
+    // with one click + a few keystrokes instead of three clicks.
+    expect(addFilterMenuSource).toContain("aria-label={activeFilter() ? 'Filter values' : 'Filter filters'}");
+    expect(addFilterMenuSource).toContain('filteredGroupedAvailable');
+    expect(addFilterMenuSource).toContain('flatVisibleFilters');
+    expect(addFilterMenuSource).toContain('filteredOptions');
+    expect(addFilterMenuSource).toContain('handleSearchKeyDown');
+    expect(addFilterMenuSource).toContain("event.key === 'ArrowDown'");
+    expect(addFilterMenuSource).toContain("event.key === 'ArrowUp'");
+    expect(addFilterMenuSource).toContain("event.key === 'Enter'");
+    expect(addFilterMenuSource).toContain('commitActive');
+    expect(addFilterMenuSource).toContain('queueMicrotask(() => searchInputRef?.focus())');
+
+    // FilterBar consumers — each migrated page should declare a catalog of
+    // FilterDef entries rather than rendering the labelled-select row from
+    // PageControls. Guards against regression to the old layout-per-page
+    // pattern.
+    expect(recoveryProtectedInventorySectionSource).toContain(
+      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
+    );
+    expect(recoveryProtectedInventorySectionSource).toContain('<FilterBar');
+    expect(recoveryProtectedInventorySectionSource).toContain("id: 'item-type'");
+    expect(recoveryProtectedInventorySectionSource).toContain("id: 'platform'");
+    expect(recoveryProtectedInventorySectionSource).toContain("id: 'protected-state'");
+    expect(recoveryProtectedInventorySectionSource).toContain('role="group"');
+    expect(recoveryProtectedInventorySectionSource).toContain(
+      'ariaLabel="Protected items controls"',
+    );
+    expect(recoveryProtectedInventorySectionSource).not.toContain('PageControls');
+    expect(recoveryProtectedInventorySectionSource).not.toContain('LabeledFilterSelect');
+    expect(recoveryProtectedInventorySectionSource).not.toContain('protectedFiltersOpen');
+
+    // Recovery events sub-tab — every advanced filter folds into the catalog
+    // (scope, method, verification, cluster, node, namespace) so the
+    // dedicated "Filter" popover panel and FilterToolbarPanel-based advanced
+    // panel are no longer rendered.
+    expect(recoveryHistorySectionSource).toContain(
+      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
+    );
+    expect(recoveryHistorySectionSource).toContain('<FilterBar');
+    expect(recoveryHistorySectionSource).toContain(
+      'ariaLabel="Recovery events controls"',
+    );
+    expect(recoveryHistorySectionSource).toContain("id: 'item-type'");
+    expect(recoveryHistorySectionSource).toContain("id: 'platform'");
+    expect(recoveryHistorySectionSource).toContain("id: 'outcome'");
+    expect(recoveryHistorySectionSource).toContain("id: 'scope'");
+    expect(recoveryHistorySectionSource).toContain("id: 'method'");
+    expect(recoveryHistorySectionSource).toContain("id: 'verification'");
+    expect(recoveryHistorySectionSource).toContain("id: 'cluster'");
+    expect(recoveryHistorySectionSource).toContain("id: 'node'");
+    expect(recoveryHistorySectionSource).toContain("id: 'namespace'");
+    expect(recoveryHistorySectionSource).toContain('searchTrailing={');
+    expect(recoveryHistorySectionSource).toContain('<RecoveryHistoryItemFilter');
+    expect(recoveryHistorySectionSource).toContain('<ColumnPicker');
+    expect(recoveryHistorySectionSource).toContain('onClearAll={');
+    expect(recoveryHistorySectionSource).toContain(
+      'showClearAll={props.hasActiveArtifactFilters}',
+    );
+    expect(recoveryHistorySectionSource).not.toContain('PageControls');
+    expect(recoveryHistorySectionSource).not.toContain('FilterActionButton');
+    expect(recoveryHistorySectionSource).not.toContain('FilterToolbarPanel');
+    expect(recoveryHistorySectionSource).not.toContain('moreFiltersOpen');
+    expect(recoveryHistorySectionSource).not.toContain('historyFiltersOpen');
+
+    // WorkloadsFilter — Type/Status/Node/Platform/Namespace/Runtime are all
+    // catalog chips. The xl-breakpoint segmented↔select swap retires here.
+    expect(workloadsFilterSource).toContain(
+      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
+    );
+    expect(workloadsFilterSource).toContain('<FilterBar');
+    expect(workloadsFilterSource).toContain('ariaLabel="Workloads filters"');
+    expect(workloadsFilterSource).toContain("id: 'workloads-type'");
+    expect(workloadsFilterSource).toContain("id: 'workloads-status'");
+    expect(workloadsFilterSource).toContain('viewOptionsTrailing={');
+    expect(workloadsFilterSource).toContain('GroupedTableModeSegmentedControl');
+    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).toContain('<ColumnPicker');
+    expect(workloadsFilterSource).toContain('onClearAll={handleClearAll}');
+    expect(workloadsFilterSource).toContain('showClearAll={showClearAll}');
+    expect(workloadsFilterSource).not.toContain('PageControls');
+    expect(workloadsFilterSource).not.toContain('LabeledFilterToggleGroup');
+    expect(workloadsFilterSource).not.toContain('LabeledFilterSelect');
+    expect(workloadsFilterSource).not.toContain('useWorkloadsFilterState');
+
+    // StoragePageControls — Subtabs sit above the FilterBar; sort key/sort
+    // direction live in viewOptionsTrailing as raw view-options (not chips).
+    // Per-view catalog filters (Group by, Source, Status on Pools; Role/Group
+    // on Physical Disks) flow through the FilterBar catalog. The legacy
+    // 3-layer indirection (StoragePageControls → StorageControls →
+    // StorageFilter) collapses to one component.
+    expect(storagePageControlsSource).toContain(
+      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
+    );
+    expect(storagePageControlsSource).toContain('<FilterBar');
+    expect(storagePageControlsSource).toContain('<Subtabs');
+    expect(storagePageControlsSource).toContain('ariaLabel="Storage filters"');
+    expect(storagePageControlsSource).toContain("id: 'storage-node'");
+    expect(storagePageControlsSource).toContain("id: 'storage-group-by'");
+    expect(storagePageControlsSource).toContain("id: 'storage-source'");
+    expect(storagePageControlsSource).toContain("id: 'storage-status'");
+    expect(storagePageControlsSource).toContain("id: 'storage-disk-role'");
+    expect(storagePageControlsSource).toContain("id: 'storage-disk-group'");
+    expect(storagePageControlsSource).toContain('viewOptionsTrailing={');
+    expect(storagePageControlsSource).toContain('aria-label="Sort by"');
+    expect(storagePageControlsSource).toContain('aria-label="Sort direction"');
+    expect(storagePageControlsSource).toContain('ChartVisibilityToggleButton');
+    expect(storagePageControlsSource).toContain('onClearAll={handleClearAll}');
+    expect(storagePageControlsSource).toContain('showClearAll={showClearAll}');
+    // The component name is StoragePageControls but it must not import or
+    // render the legacy PageControls primitive, the StorageControls /
+    // StorageFilter intermediates, or any LabeledFilterSelect /
+    // FilterSegmentedControl forks.
+    expect(storagePageControlsSource).not.toContain(
+      "from '@/components/shared/PageControls'",
+    );
+    expect(storagePageControlsSource).not.toContain('<PageControls');
+    expect(storagePageControlsSource).not.toContain('<StorageControls');
+    expect(storagePageControlsSource).not.toContain('<StorageFilter');
+    expect(storagePageControlsSource).not.toContain('LabeledFilterSelect');
+    expect(storagePageControlsSource).not.toContain('FilterSegmentedControl');
   });
 });
