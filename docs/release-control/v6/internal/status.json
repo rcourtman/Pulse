@@ -4390,6 +4390,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-late-issue-intake-2026-05-01.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-rc3-followup-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
