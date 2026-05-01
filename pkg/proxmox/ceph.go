@@ -65,6 +65,35 @@ type CephMonMap struct {
 	NumMons int `json:"num_mons"`
 }
 
+func (m *CephMonMap) UnmarshalJSON(data []byte) error {
+	type rawCephMonMap struct {
+		NumMons       int               `json:"num_mons"`
+		NumMonsLegacy int               `json:"numMons"`
+		Mons          []json.RawMessage `json:"mons"`
+		Monitors      []json.RawMessage `json:"monitors"`
+	}
+
+	var raw rawCephMonMap
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	switch {
+	case raw.NumMons > 0:
+		m.NumMons = raw.NumMons
+	case raw.NumMonsLegacy > 0:
+		m.NumMons = raw.NumMonsLegacy
+	case len(raw.Mons) > 0:
+		m.NumMons = len(raw.Mons)
+	case len(raw.Monitors) > 0:
+		m.NumMons = len(raw.Monitors)
+	default:
+		m.NumMons = 0
+	}
+
+	return nil
+}
+
 // CephMgrMap captures manager summary information.
 type CephMgrMap struct {
 	Available  bool     `json:"available"`

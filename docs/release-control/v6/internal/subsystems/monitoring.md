@@ -137,10 +137,11 @@ That same monitoring owner also governs collector payload compatibility at the
 shared boundary. Podman container stats must honor Podman's compat payload when
 it exposes a direct CPU percentage and otherwise fall back to Podman's
 wall-clock delta semantics rather than Docker's multi-core normalization, and
-Proxmox Ceph status decoding must accept manager standby entries as either bare
-names or structured objects so collector payload variations do not break the
-canonical monitoring path. That same compatibility boundary also owns legacy
-Unraid raw-status normalization at host-agent ingest: when older agents send
+Proxmox Ceph status decoding must accept monitor totals from either
+`monmap.num_mons` or the concrete monitor arrays and manager standby entries as
+either bare names or structured objects so collector payload variations do not
+break the canonical monitoring path. That same compatibility boundary also owns
+legacy Unraid raw-status normalization at host-agent ingest: when older agents send
 `rawStatus` without the newer normalized `status`, `internal/monitoring/monitor_agents.go`
 must derive the canonical disk status before storage-risk assessment runs so
 v5 aggregate counters do not override clearly healthy per-disk state during v6

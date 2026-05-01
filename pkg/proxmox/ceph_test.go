@@ -63,6 +63,61 @@ func TestGetCephStatus(t *testing.T) {
 	}
 }
 
+func TestGetCephStatusCountsMonitorArrayFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/cluster/ceph/status" {
+			http.NotFound(w, r)
+			return
+		}
+		resp := map[string]interface{}{
+			"data": map[string]interface{}{
+				"fsid": "fsid-1",
+				"health": map[string]interface{}{
+					"status":  "HEALTH_OK",
+					"summary": []map[string]interface{}{},
+					"checks":  map[string]interface{}{},
+				},
+				"servicemap": map[string]interface{}{
+					"services": map[string]interface{}{},
+				},
+				"monmap": map[string]interface{}{
+					"mons": []map[string]interface{}{
+						{"name": "mon-a", "rank": 0},
+						{"name": "mon-b", "rank": 1},
+						{"name": "mon-c", "rank": 2},
+					},
+				},
+				"mgrmap": map[string]interface{}{
+					"available":   true,
+					"num_mgrs":    3,
+					"active_name": "mgr-a",
+					"standbys":    []string{"mgr-b", "mgr-c"},
+				},
+				"osdmap": map[string]interface{}{
+					"num_osds":    9,
+					"num_up_osds": 9,
+					"num_in_osds": 9,
+				},
+				"pgmap": map[string]interface{}{
+					"num_pgs": 129,
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := &Client{baseURL: server.URL, httpClient: server.Client()}
+	status, err := client.GetCephStatus(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if status.MonMap.NumMons != 3 {
+		t.Fatalf("expected monmap.mons fallback to count 3 monitors, got %+v", status.MonMap)
+	}
+}
+
 func TestGetCephStatusAcceptsStructuredManagerStandbys(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/cluster/ceph/status" {
