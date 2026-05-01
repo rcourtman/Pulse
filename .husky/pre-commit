@@ -61,6 +61,12 @@ else
 fi
 echo "Sensitivity check passed."
 
+STAGED_FILES="$(git diff --cached --name-only)"
+
+staged_files_match() {
+    printf '%s\n' "$STAGED_FILES" | grep -qE "$1"
+}
+
 # Governance checks — only run when governance files are present (skipped on fresh clones).
 # Governance files live in docs/release-control/v6/internal/ which is not tracked in the
 # public repo; contributors without that directory get standard linting only.
@@ -121,13 +127,17 @@ python3 scripts/release_control/format_staged_go.py
 
 # Run Go linting (if golangci-lint is available)
 if command -v golangci-lint >/dev/null 2>&1; then
-    echo "Running golangci-lint..."
-    golangci-lint run ./...
+    if staged_files_match '(^|/).*\.go$|(^|/)go\.(mod|sum|work|work\.sum)$|^\.golangci\.ya?ml$'; then
+        echo "Running golangci-lint..."
+        GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" ./...
+    else
+        echo "Skipping golangci-lint (no staged Go/module/linter changes)."
+    fi
 fi
 
 # Run frontend linting (if package.json has lint script)
 if [ -f frontend-modern/package.json ]; then
-    if git diff --cached --name-only | grep -q "^frontend-modern/"; then
+    if staged_files_match "^frontend-modern/"; then
         echo "Running frontend linter..."
         cd frontend-modern
         npm run lint
