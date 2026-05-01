@@ -798,6 +798,8 @@ func TestProcessNotification_NoProcessor(t *testing.T) {
 	}
 	defer func() { _ = nq.Stop() }()
 
+	futureRetry := time.Now().Add(1 * time.Hour)
+
 	// Enqueue a notification first so IncrementAttemptAndSetStatus works
 	notif := &QueuedNotification{
 		ID:          "test-no-processor",
@@ -805,6 +807,7 @@ func TestProcessNotification_NoProcessor(t *testing.T) {
 		Status:      QueueStatusPending,
 		MaxAttempts: 3,
 		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
 	}
 
 	if err := nq.Enqueue(notif); err != nil {
@@ -826,6 +829,8 @@ func TestProcessNotification_ProcessorSuccess(t *testing.T) {
 	}
 	defer func() { _ = nq.Stop() }()
 
+	futureRetry := time.Now().Add(1 * time.Hour)
+
 	// Enqueue a notification
 	notif := &QueuedNotification{
 		ID:          "test-success",
@@ -833,6 +838,7 @@ func TestProcessNotification_ProcessorSuccess(t *testing.T) {
 		Status:      QueueStatusPending,
 		MaxAttempts: 3,
 		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
 	}
 
 	if err := nq.Enqueue(notif); err != nil {
@@ -840,15 +846,20 @@ func TestProcessNotification_ProcessorSuccess(t *testing.T) {
 	}
 
 	// Set a processor that succeeds
-	processorCalled := false
+	processorCalled := make(chan struct{}, 1)
 	nq.SetProcessor(func(n *QueuedNotification) error {
-		processorCalled = true
+		select {
+		case processorCalled <- struct{}{}:
+		default:
+		}
 		return nil
 	})
 
 	nq.processNotification(notif)
 
-	if !processorCalled {
+	select {
+	case <-processorCalled:
+	default:
 		t.Error("Processor was not called")
 	}
 }
@@ -859,6 +870,9 @@ func TestProcessNotification_ProcessorFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(1 * time.Hour)
 
 	// Enqueue a notification with low max attempts
 	notif := &QueuedNotification{
@@ -867,6 +881,7 @@ func TestProcessNotification_ProcessorFailure(t *testing.T) {
 		Status:      QueueStatusPending,
 		MaxAttempts: 1, // Only 1 attempt, so failure goes to DLQ
 		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
 	}
 
 	if err := nq.Enqueue(notif); err != nil {
@@ -889,6 +904,9 @@ func TestScanNotification_DLQWithTimestamps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(1 * time.Hour)
 
 	// Enqueue a notification with max 1 attempt
 	notif := &QueuedNotification{
@@ -897,6 +915,7 @@ func TestScanNotification_DLQWithTimestamps(t *testing.T) {
 		Status:      QueueStatusPending,
 		MaxAttempts: 1, // Will go to DLQ on first failure
 		Config:      []byte(`{"url":"http://example.com"}`),
+		NextRetryAt: &futureRetry,
 	}
 
 	if err := nq.Enqueue(notif); err != nil {
