@@ -206,6 +206,10 @@ runtime gating as separate unlinked claims.
 
 1. Add or change limits through `pkg/licensing/`
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
+   Hosted entitlement refresh is scoped to active workspace rows only. A tenant
+   in any non-`active` lifecycle state must return an inactive hosted entitlement
+   result even when the owning account's Stripe subscription is still active, so
+   soft-deleted or suspended workspaces cannot keep refreshing runtime leases.
 3. Add or change control-plane plan storage through `internal/cloudcp/registry/models.go` and `internal/cloudcp/registry/registry.go`
 4. Add or change MSP account-scoped workspace provisioning entry handlers through `internal/cloudcp/account/tenant_handlers.go`
 5. Add or change public cloud self-serve signup price configuration,

@@ -217,6 +217,51 @@ func TestRefreshPaidEntitlementRejectsTargetMismatch(t *testing.T) {
 	}
 }
 
+func TestRefreshPaidEntitlementRejectsDeletedTenantWithActiveBilling(t *testing.T) {
+	svc, _, reg := newTestService(t)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindIndividual,
+		DisplayName: "Pulse Labs",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  "cus_active_deleted_tenant",
+		PlanVersion:       "cloud_starter",
+		SubscriptionState: "active",
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
+	tenant := &registry.Tenant{
+		ID:        "t-SERVICE06",
+		AccountID: accountID,
+		Email:     "owner@example.com",
+		State:     registry.TenantStateDeleted,
+	}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, _, err := reg.StoreOrIssueHostedEntitlement(tenant.ID, "etr_deleted_tenant", time.Unix(1710000000, 0).UTC()); err != nil {
+		t.Fatalf("StoreOrIssueHostedEntitlement: %v", err)
+	}
+
+	_, err = svc.RefreshEntitlement("etr_deleted_tenant", "t-service06.cloud.example.com")
+	if err == nil {
+		t.Fatal("expected inactive entitlement")
+	}
+	if err != ErrHostedEntitlementInactive {
+		t.Fatalf("err=%v, want %v", err, ErrHostedEntitlementInactive)
+	}
+}
+
 func TestRefreshPaidEntitlementCanonicalizesBaseURLForExpectedHost(t *testing.T) {
 	svc, pub, reg := newTestServiceWithBaseURL(t, "https://Cloud.Example.com:8443/admin")
 

@@ -164,6 +164,9 @@ func (s *Service) refreshPaidEntitlement(entitlement *registry.HostedEntitlement
 	if tenant == nil {
 		return nil, ErrHostedEntitlementNotFound
 	}
+	if tenant.State != registry.TenantStateActive {
+		return nil, ErrHostedEntitlementInactive
+	}
 
 	expectedInstanceHost := tenantInstanceHost(s.baseURL, tenant.ID)
 	if expectedInstanceHost == "" || instanceHost != expectedInstanceHost {
