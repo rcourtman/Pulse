@@ -228,6 +228,11 @@ runtime gating as separate unlinked claims.
    `Summary` destination. The top of `Workspaces` may surface one quiet inline
    facts line plus one next-action row before the list, but it must not turn
    that summary into a second overview deck, metric grid, or competing shell.
+   Portal workspace payloads are live-workspace surfaces, not registry history
+   dumps: tenants in `deleting` or `deleted` state must stay hidden from the
+   browser bootstrap, `/api/portal/dashboard`, and workspace-detail API so
+   soft-deleted runtime cleanup preserves billing/account continuity without
+   presenting retired hosted workspaces as actionable customer state.
    Pulse Account self-hosted upgrade and pricing-preview copy must describe
    Community as included core monitoring plus paid Relay/Pro extras. It must
    not frame self-hosted checkout as buying unlimited monitoring or monitored-

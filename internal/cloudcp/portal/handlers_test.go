@@ -151,6 +151,14 @@ func TestPortalDashboard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tenantDeletedID, err := registry.GenerateTenantID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantDeletingID, err := registry.GenerateTenantID()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	created1 := time.Date(2026, 2, 10, 10, 0, 0, 0, time.UTC)
 	created2 := time.Date(2026, 2, 10, 11, 0, 0, 0, time.UTC)
@@ -174,6 +182,24 @@ func TestPortalDashboard(t *testing.T) {
 		State:         registry.TenantStateSuspended,
 		CreatedAt:     created2,
 		HealthCheckOK: false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Create(&registry.Tenant{
+		ID:          tenantDeletedID,
+		AccountID:   accountID,
+		DisplayName: "Deleted Workspace",
+		State:       registry.TenantStateDeleted,
+		CreatedAt:   created2,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Create(&registry.Tenant{
+		ID:          tenantDeletingID,
+		AccountID:   accountID,
+		DisplayName: "Deleting Workspace",
+		State:       registry.TenantStateDeleting,
+		CreatedAt:   created2,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -376,6 +402,39 @@ func TestPortalWorkspaceDetail(t *testing.T) {
 	}
 	if !resp.Workspace.CreatedAt.Equal(created) {
 		t.Fatalf("workspace.created_at = %v, want %v", resp.Workspace.CreatedAt, created)
+	}
+}
+
+func TestPortalWorkspaceDetailHidesDeletedWorkspaces(t *testing.T) {
+	reg := newTestRegistry(t)
+	mux := newTestMux(reg)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Example MSP"}); err != nil {
+		t.Fatal(err)
+	}
+
+	tenantID, err := registry.GenerateTenantID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Create(&registry.Tenant{
+		ID:          tenantID,
+		AccountID:   accountID,
+		DisplayName: "Deleted Workspace",
+		State:       registry.TenantStateDeleted,
+		CreatedAt:   time.Date(2026, 2, 10, 10, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/workspaces/"+tenantID+"?account_id="+accountID, nil)
+	rec := doRequest(t, mux, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
 }
 

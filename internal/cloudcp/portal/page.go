@@ -166,10 +166,7 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 
 		workspaces := make([]portalPageWorkspace, 0, len(tenants))
 		for _, t := range tenants {
-			if t == nil {
-				continue
-			}
-			if t.State == registry.TenantStateDeleted || t.State == registry.TenantStateDeleting {
+			if !isPortalVisibleTenant(t) {
 				continue
 			}
 			workspaces = append(workspaces, portalPageWorkspace{

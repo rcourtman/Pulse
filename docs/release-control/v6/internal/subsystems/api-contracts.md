@@ -887,6 +887,11 @@ path, signup path, and stable workspace summary fields such as `created_at`.
 That workspace summary contract must expose explicit health semantics: `healthy`
 for passing health checks, `checking` only when no completed health check
 exists yet, and `unhealthy` for a failed latest health check.
+That same portal API contract treats `deleting` and `deleted` tenants as
+control-plane history, not visible workspace payloads: the browser bootstrap,
+`/api/portal/dashboard`, and `/api/portal/workspaces/{tenant_id}` must filter
+soft-deleted rows consistently, with detail reads returning `404` for hidden
+workspaces rather than leaking retired runtime records into the account shell.
 That same shared `internal/api/` plus `internal/websocket/hub.go` boundary also
 owns browser websocket origin continuity for reverse-proxied runtimes. Same-host
 browser origins must continue to connect when a reverse proxy preserves the

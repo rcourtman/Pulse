@@ -115,7 +115,7 @@ func HandlePortalDashboard(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		for _, t := range tenants {
-			if t == nil {
+			if !isPortalVisibleTenant(t) {
 				continue
 			}
 
@@ -190,6 +190,10 @@ func HandlePortalWorkspaceDetail(reg *registry.TenantRegistry) http.HandlerFunc 
 			http.Error(w, "tenant not found", http.StatusNotFound)
 			return
 		}
+		if !isPortalVisibleTenant(t) {
+			http.Error(w, "tenant not found", http.StatusNotFound)
+			return
+		}
 
 		resp := workspaceDetailResponse{
 			Account: accountInfo{
@@ -204,6 +208,13 @@ func HandlePortalWorkspaceDetail(reg *registry.TenantRegistry) http.HandlerFunc 
 		w.WriteHeader(http.StatusOK)
 		encodeJSON(w, resp)
 	}
+}
+
+func isPortalVisibleTenant(t *registry.Tenant) bool {
+	if t == nil {
+		return false
+	}
+	return t.State != registry.TenantStateDeleted && t.State != registry.TenantStateDeleting
 }
 
 // HandlePortalBootstrap returns the renderer-owned Pulse Account bootstrap payload.
