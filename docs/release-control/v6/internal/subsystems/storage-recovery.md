@@ -79,6 +79,11 @@ state.
    `overflow-x-auto` div around the shared table. Storage pools and physical
    disks inherit the surrounding `StorageContentCard` frame and must not add
    a nested `Card` or second scroll wrapper.
+   Recovery's Protected items and Recovery events sub-tabs each opt into
+   shared saved views (`savedViewsKey="recovery-protected"` and
+   `"recovery-events"`) so operators can save and recall named filter
+   combos through the shared `SavedViewsMenu`. The same pattern applies to
+   Storage (`savedViewsKey="storage"`).
    Recovery event filters now compose the shared chip-based `FilterBar`
    (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a
    `FilterDef[]` catalog. The legacy "advanced filter popover" retired: scope,

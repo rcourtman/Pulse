@@ -83,6 +83,8 @@ work extends shared components instead of creating new local variants.
 57. `frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx`
 58. `frontend-modern/src/components/shared/FilterBar/filterCatalog.ts`
 59. `frontend-modern/src/components/shared/FilterBar/index.ts`
+59a. `frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx`
+59b. `frontend-modern/src/components/shared/FilterBar/useSavedViews.ts`
 56. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
 57. `frontend-modern/src/features/`
 58. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
@@ -1657,6 +1659,15 @@ Pages that have not yet migrated (the alert-history filter card,
 Kubernetes deployments drawer) keep using `PageControls` and
 `LabeledFilterSelect`, but new resource-list filter surfaces should reach for
 `FilterBar` with a catalog rather than reintroducing a per-page select row.
+
+Pages may opt into saved views by passing `savedViewsKey` to
+`FilterBar`. The `useSavedViews` hook owns the localStorage IO + URL
+navigation (`pulse:filterbar:saved-views:<key>`); `SavedViewsMenu` owns
+the dropdown chrome. A "view" is the page's URL query string at save
+time, so saved views double as shareable links: copying the bar URL
+after applying a view gives someone else the exact filtered state.
+Implicit "remember last filters" is intentionally not added — defaulting
+to yesterday's filter state on a monitoring page hides real problems.
 That same shared filter-toolbar boundary also owns controlled select continuity
 when filter options materialize asynchronously. `LabeledFilterSelect` must keep
 the caller-owned `value` visibly selected after option children arrive so

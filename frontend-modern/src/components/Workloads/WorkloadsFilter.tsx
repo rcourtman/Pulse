@@ -142,6 +142,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       role="group"
       ariaLabel="Workloads filters"
       isMobile={isMobile}
+      savedViewsKey="workloads"
       search={{
         value: props.search,
         setValue: props.setSearch,

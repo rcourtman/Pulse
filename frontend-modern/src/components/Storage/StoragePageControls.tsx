@@ -230,6 +230,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           role="group"
           ariaLabel="Storage filters"
           isMobile={isMobile}
+          savedViewsKey="storage"
           search={{
             value: props.search,
             setValue: props.setSearch,

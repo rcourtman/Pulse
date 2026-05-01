@@ -179,6 +179,8 @@ import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
 import addFilterMenuSource from '@/components/shared/FilterBar/AddFilterMenu.tsx?raw';
 import filterCatalogSource from '@/components/shared/FilterBar/filterCatalog.ts?raw';
 import filterBarIndexSource from '@/components/shared/FilterBar/index.ts?raw';
+import savedViewsMenuSource from '@/components/shared/FilterBar/SavedViewsMenu.tsx?raw';
+import useSavedViewsSource from '@/components/shared/FilterBar/useSavedViews.ts?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
@@ -1528,6 +1530,8 @@ describe('shared primitive guardrails', () => {
     expect(filterBarIndexSource).toContain("export { FilterBar } from './FilterBar';");
     expect(filterBarIndexSource).toContain("export { FilterChip } from './FilterChip';");
     expect(filterBarIndexSource).toContain("export { AddFilterMenu } from './AddFilterMenu';");
+    expect(filterBarIndexSource).toContain("export { SavedViewsMenu } from './SavedViewsMenu';");
+    expect(filterBarIndexSource).toContain("export { useSavedViews } from './useSavedViews';");
     expect(filterBarIndexSource).toContain('isFilterSet');
     expect(filterBarIndexSource).toContain('clearFilter');
     expect(filterBarIndexSource).toContain('formatFilterChipValue');
@@ -1599,6 +1603,28 @@ describe('shared primitive guardrails', () => {
     expect(addFilterMenuSource).toContain("event.key === 'Enter'");
     expect(addFilterMenuSource).toContain('commitActive');
     expect(addFilterMenuSource).toContain('queueMicrotask(() => searchInputRef?.focus())');
+
+    // Saved views: per-page named filter combos persist to
+    // localStorage under `pulse:filterbar:saved-views:<key>`. The hook owns
+    // storage IO + URL navigation; the menu owns the dropdown chrome.
+    expect(useSavedViewsSource).toContain("import { useLocation, useNavigate } from '@solidjs/router';");
+    expect(useSavedViewsSource).toContain("'pulse:filterbar:saved-views:'");
+    expect(useSavedViewsSource).toContain('export interface SavedView');
+    expect(useSavedViewsSource).toContain('saveCurrent');
+    expect(useSavedViewsSource).toContain('removeView');
+    expect(useSavedViewsSource).toContain('applyView');
+    expect(useSavedViewsSource).toContain('navigate(path,');
+    expect(useSavedViewsSource).toContain('writeStored');
+    expect(useSavedViewsSource).toContain('readStored');
+    // Hook is robust to malformed localStorage and SSR.
+    expect(useSavedViewsSource).toContain("typeof window === 'undefined'");
+    expect(useSavedViewsSource).toContain('JSON.parse');
+
+    expect(savedViewsMenuSource).toContain("from './useSavedViews';");
+    expect(savedViewsMenuSource).toContain('aria-label="Saved views"');
+    expect(savedViewsMenuSource).toContain('Save current view as...');
+    expect(savedViewsMenuSource).toContain("event.key === 'Enter'");
+    expect(savedViewsMenuSource).toContain('queueMicrotask(() => nameInputRef?.focus())');
 
     // FilterBar consumers — each migrated page should declare a catalog of
     // FilterDef entries rather than rendering the labelled-select row from

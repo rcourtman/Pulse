@@ -245,6 +245,7 @@ export const RecoveryProtectedInventorySection: Component<
             role="group"
             ariaLabel="Protected items controls"
             isMobile={isMobileAccessor}
+            savedViewsKey="recovery-protected"
             search={{
               value: props.queryFilter,
               setValue: props.setQueryFilter,

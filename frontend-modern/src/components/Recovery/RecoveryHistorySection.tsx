@@ -342,6 +342,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
           role="group"
           ariaLabel="Recovery events controls"
           isMobile={isMobileAccessor}
+          savedViewsKey="recovery-events"
           search={{
             value: props.queryFilter,
             setValue: (value: string) => {

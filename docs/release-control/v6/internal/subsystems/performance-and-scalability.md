@@ -826,7 +826,9 @@ usage math, threshold-color routing, and fallback handling must extend
 through those owners instead of accreting back into the shell.
 The Workloads filter now follows that same ownership rule: the shell
 stays in `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`, which
-composes the shared `FilterBar` chip primitive, while toolbar defaults,
+composes the shared `FilterBar` chip primitive (with `savedViewsKey="workloads"`
+so operators can save and recall named filter combos through the shared
+`SavedViewsMenu`), while toolbar defaults,
 active-filter counting, and reset semantics live in
 `frontend-modern/src/components/Workloads/workloadsFilterModel.ts`. The legacy
 `useWorkloadsFilterState.ts` hook retired with the FilterBar migration; its

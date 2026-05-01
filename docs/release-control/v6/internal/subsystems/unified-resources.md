@@ -370,6 +370,10 @@ AI-only summary payloads, or page-local heuristics.
     may hide or restore the summary section through the shared
     `ChartVisibilityToggleButton`, but that control must not mutate resource
     identity, table membership, route-backed focus, or summary-hover scope.
+    Infrastructure may also opt into the shared saved-views primitive
+    (`savedViewsKey="infrastructure"`) so operators can save and recall named
+    filter combos through `SavedViewsMenu`; saved views are URL query
+    snapshots and must not introduce a parallel resource-identity path.
 13. Keep infrastructure cluster headers as canonical summary scope. Grouped
     headers in `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
     must publish cluster scope from the same `ResourceGroup` / unified-resource

@@ -1101,6 +1101,10 @@ describe('Recovery', () => {
     expect(within(controls).getByRole('button', { name: 'Filter' })).toBeInTheDocument();
     expect(within(controls).getByRole('button', { name: /columns/i })).toBeInTheDocument();
     expect(within(controls).getByTestId('recovery-history-item-filter-trigger')).toBeInTheDocument();
+    // Recovery events opted into shared saved views — the bookmark menu
+    // sits next to "+ Filter" and persists named filter combos under the
+    // canonical localStorage key.
+    expect(within(controls).getByRole('button', { name: 'Saved views' })).toBeInTheDocument();
   });
 
   it('lets operators create and clear the item filter from the recovery events controls', async () => {

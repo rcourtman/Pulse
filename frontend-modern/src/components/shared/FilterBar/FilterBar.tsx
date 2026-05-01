@@ -4,6 +4,7 @@ import { FilterMobileToggleButton } from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { AddFilterMenu } from './AddFilterMenu';
 import { FilterChip } from './FilterChip';
+import { SavedViewsMenu } from './SavedViewsMenu';
 import {
   clearFilter,
   isFilterSet,
@@ -64,6 +65,9 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
           {props.searchTrailing}
           <Show when={!props.isMobile()}>
             <AddFilterMenu filters={props.filters} />
+            <Show when={props.savedViewsKey}>
+              {(key) => <SavedViewsMenu storageKey={key()} />}
+            </Show>
             <Show when={props.viewOptionsTrailing}>
               <div
                 aria-hidden="true"

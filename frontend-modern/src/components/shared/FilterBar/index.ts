@@ -1,6 +1,9 @@
 export { FilterBar } from './FilterBar';
 export { FilterChip } from './FilterChip';
 export { AddFilterMenu } from './AddFilterMenu';
+export { SavedViewsMenu } from './SavedViewsMenu';
+export { useSavedViews } from './useSavedViews';
+export type { SavedView, UseSavedViewsResult } from './useSavedViews';
 export {
   clearFilter,
   formatFilterChipValue,

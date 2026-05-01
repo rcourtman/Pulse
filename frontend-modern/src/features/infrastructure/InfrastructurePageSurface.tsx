@@ -173,6 +173,7 @@ export function InfrastructurePageSurface() {
                   <div data-summary-clear-ignore>
                     <FilterBar
                       isMobile={isMobile}
+                      savedViewsKey="infrastructure"
                       search={{
                         value: searchQuery,
                         setValue: setSearchQuery,
