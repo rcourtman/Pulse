@@ -1332,6 +1332,87 @@ exit 1
 	}
 }
 
+func TestInstallAdditionalAgentBinariesCopiesLocalExtrasWithoutNetwork(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	installDir := filepath.Join(tmpDir, "opt", "pulse")
+	if err := os.MkdirAll(filepath.Join(sourceDir, "bin"), 0755); err != nil {
+		t.Fatalf("mkdir source bin: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(installDir, "bin"), 0755); err != nil {
+		t.Fatalf("mkdir install bin: %v", err)
+	}
+	agentPath := filepath.Join(sourceDir, "bin", "pulse-agent-linux-arm64")
+	if err := os.WriteFile(agentPath, []byte("unified-agent\n"), 0755); err != nil {
+		t.Fatalf("write agent: %v", err)
+	}
+
+	script := `
+		INSTALL_DIR="` + installDir + `"
+		GITHUB_REPO="rcourtman/Pulse"
+		curl_calls=0
+		wget_calls=0
+		chown() { :; }
+		print_info() { :; }
+		print_warn() { :; }
+		print_success() { :; }
+		curl() { curl_calls=$((curl_calls + 1)); return 99; }
+		wget() { wget_calls=$((wget_calls + 1)); return 99; }
+` + extractRootInstallShellFunction(t, "copy_unified_agent_binaries_from_dir") + `
+` + extractRootInstallShellFunction(t, "install_additional_agent_binaries") + `
+		install_additional_agent_binaries "v6.0.0-rc.3" "` + sourceDir + `"
+		printf 'curl=%s wget=%s\n' "$curl_calls" "$wget_calls"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "curl=0 wget=0" {
+		t.Fatalf("expected no network fallback calls, got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(installDir, "bin", "pulse-agent-linux-arm64")); err != nil {
+		t.Fatalf("expected local unified agent binary to be copied: %v", err)
+	}
+}
+
+func TestInstallAdditionalAgentBinariesSkipsNetworkWhenLocalExtrasAreMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	installDir := filepath.Join(tmpDir, "opt", "pulse")
+	if err := os.MkdirAll(filepath.Join(sourceDir, "bin"), 0755); err != nil {
+		t.Fatalf("mkdir source bin: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(installDir, "bin"), 0755); err != nil {
+		t.Fatalf("mkdir install bin: %v", err)
+	}
+
+	script := `
+		INSTALL_DIR="` + installDir + `"
+		GITHUB_REPO="rcourtman/Pulse"
+		curl_calls=0
+		wget_calls=0
+		chown() { :; }
+		print_info() { :; }
+		print_warn() { :; }
+		print_success() { :; }
+		curl() { curl_calls=$((curl_calls + 1)); return 99; }
+		wget() { wget_calls=$((wget_calls + 1)); return 99; }
+` + extractRootInstallShellFunction(t, "copy_unified_agent_binaries_from_dir") + `
+` + extractRootInstallShellFunction(t, "install_additional_agent_binaries") + `
+		install_additional_agent_binaries "v6.0.0-rc.3" "` + sourceDir + `"
+		printf 'curl=%s wget=%s\n' "$curl_calls" "$wget_calls"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "curl=0 wget=0" {
+		t.Fatalf("expected missing local extras to skip network fallback, got %q", got)
+	}
+}
+
 func TestInstallSHRequiresPinnedSignatureVerificationForReleaseDownloads(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {

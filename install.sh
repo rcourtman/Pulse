@@ -2960,6 +2960,7 @@ copy_unified_agent_binaries_from_dir() {
 install_additional_agent_binaries() {
     local version="$1"
     local source_dir="${2:-}"
+    local local_unified_installed=0
 
     if [[ -z "$version" ]]; then
         return
@@ -2968,7 +2969,9 @@ install_additional_agent_binaries() {
     local unified_targets=("linux-amd64" "linux-arm64" "linux-armv7" "linux-armv6" "linux-386" "darwin-amd64" "darwin-arm64" "windows-amd64" "windows-arm64" "windows-386")
 
     # Prefer locally available agents from the extracted archive to avoid network reliance
-    copy_unified_agent_binaries_from_dir "$source_dir" || true
+    if copy_unified_agent_binaries_from_dir "$source_dir"; then
+        local_unified_installed=1
+    fi
 
     local unified_missing_targets=()
     for target in "${unified_targets[@]}"; do
@@ -2984,55 +2987,18 @@ install_additional_agent_binaries() {
     done
 
     if [[ ${#unified_missing_targets[@]} -eq 0 ]]; then
-        return
-    fi
-
-    local universal_url="https://github.com/$GITHUB_REPO/releases/download/$version/pulse-${version}.tar.gz"
-    local universal_tar="/tmp/pulse-universal-${version}.tar.gz"
-
-    print_info "Downloading universal agent bundle for cross-architecture support..."
-
-    if command -v curl >/dev/null 2>&1; then
-        if ! curl -fsSL --connect-timeout 10 --max-time 300 -o "$universal_tar" "$universal_url"; then
-            print_warn "Failed to download universal agent bundle"
-            rm -f "$universal_tar"
-            return
+        if [[ $local_unified_installed -eq 1 ]]; then
+            print_success "Unified agent binaries installed"
         fi
-    elif command -v wget >/dev/null 2>&1; then
-        if ! wget -q --timeout=300 -O "$universal_tar" "$universal_url"; then
-            print_warn "Failed to download universal agent bundle"
-            rm -f "$universal_tar"
-            return
-        fi
-    else
-        print_warn "Cannot download universal agent bundle (curl or wget not available)"
         return
     fi
 
-    local temp_dir
-    temp_dir=$(mktemp -d -t pulse-universal-XXXXXX)
-    if ! tar -xzf "$universal_tar" -C "$temp_dir"; then
-        print_warn "Failed to extract universal agent bundle"
-        rm -f "$universal_tar"
-        rm -rf "$temp_dir"
-        return
-    fi
-
-    # Install unified agent binaries (preserve symlinks for Windows targets)
-    local unified_installed=0
-    if copy_unified_agent_binaries_from_dir "$temp_dir"; then
-        unified_installed=1
-    fi
-
-    if [[ $unified_installed -eq 1 ]]; then
+    if [[ $local_unified_installed -eq 1 ]]; then
         print_success "Unified agent binaries installed"
     fi
-    if [[ $unified_installed -eq 0 ]]; then
-        print_warn "No agent binaries found in universal bundle"
-    fi
-
-    rm -f "$universal_tar"
-    rm -rf "$temp_dir"
+    print_info "Skipping eager cross-architecture agent bundle download during install"
+    print_info "Missing unified agent binaries will be fetched on demand when requested"
+    return 0
 }
 
 deploy_agent_scripts() {

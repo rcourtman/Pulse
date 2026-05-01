@@ -2478,6 +2478,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-installer-bundle-fallback-2026-05-01.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
           "kind": "file"
         }
@@ -4385,6 +4390,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-duplicate-metrics-2026-05-01.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-installer-bundle-fallback-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
         },
