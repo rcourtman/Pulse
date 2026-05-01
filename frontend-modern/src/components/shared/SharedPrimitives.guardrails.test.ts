@@ -1619,6 +1619,12 @@ describe('shared primitive guardrails', () => {
     // Hook is robust to malformed localStorage and SSR.
     expect(useSavedViewsSource).toContain("typeof window === 'undefined'");
     expect(useSavedViewsSource).toContain('JSON.parse');
+    // saveCurrent must snapshot the full URL search string so saved views
+    // capture every URL-synced state (active filter chips AND the page's
+    // search query, which every page URL-syncs through `?q=...`). A future
+    // refactor that narrows the snapshot to a curated subset would silently
+    // strip search from saved views.
+    expect(useSavedViewsSource).toContain("window.location.search.replace(/^\\?/, '')");
 
     expect(savedViewsMenuSource).toContain("from './useSavedViews';");
     expect(savedViewsMenuSource).toContain('aria-label="Saved views"');
