@@ -237,7 +237,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       </div>
       <Show when={sparkline.hoveredState()}>
         {(hover) => (
-          <TooltipPortal when={true} x={hover().tooltipX} y={hover().tooltipY}>
+          <TooltipPortal when={true} x={hover().tooltipX} y={hover().tooltipY} align="left">
             <div
               data-sparkline-tooltip="true"
               class={`max-w-[220px] text-[10px] ${

@@ -4,7 +4,12 @@ import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
-import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
+import {
+  buildInteractiveSparklineChartData,
+  buildInteractiveSparklineSynchronizedReadout,
+  computeInteractiveSparklineHoverState,
+  getInteractiveSparklineTooltipSideX,
+} from '@/components/shared/interactiveSparklineModel';
 
 describe('InteractiveSparkline hover behavior', () => {
   afterEach(() => {
@@ -14,10 +19,12 @@ describe('InteractiveSparkline hover behavior', () => {
   });
 
   const mockImmediateRaf = () =>
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    });
+    vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      });
 
   it('keeps the sparkline on shell, runtime, and model owners', () => {
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
@@ -26,10 +33,12 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(interactiveSparklineSource).not.toContain('createEffect');
     expect(interactiveSparklineSource).not.toContain('createSignal');
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
+    expect(interactiveSparklineSource).toContain('align="left"');
     expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
     expect(interactiveSparklineStateSource).toContain('createSignal');
     expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
+    expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineTooltipSideX');
   });
 
   it('renders axis labels in fixed-size SVG shells so tick text does not stretch', () => {
@@ -478,6 +487,83 @@ describe('InteractiveSparkline hover behavior', () => {
 
     const secondTop = Number.parseFloat(tooltipHost.getAttribute('y') ?? 'NaN');
     expect(secondTop).toBeGreaterThan(firstTop);
+  });
+
+  it('offsets the tooltip beside the hover cursor so the scrub line remains visible', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    const now = Date.now();
+
+    const chartData = buildInteractiveSparklineChartData({
+      bridgeLeadingGap: false,
+      series: [
+        {
+          name: 'CPU',
+          color: '#ff0000',
+          data: [
+            { timestamp: now - 30_000, value: 40 },
+            { timestamp: now - 10_000, value: 50 },
+          ],
+        },
+      ],
+      shouldUseCanvas: false,
+      timeRange: '1h',
+      vbH: 100,
+      vbW: 200,
+      yMode: 'percent',
+    });
+    const chartRect = {
+      left: 100,
+      top: 100,
+      width: 260,
+      height: 80,
+      right: 360,
+      bottom: 180,
+      x: 100,
+      y: 100,
+      toJSON: () => ({}),
+    } as DOMRect;
+
+    const hover = computeInteractiveSparklineHoverState({
+      chartData,
+      chartRect,
+      clientX: 220,
+      clientY: 140,
+      highlightNearestSeriesOnHover: false,
+      lockedSeriesIndex: null,
+      maxRows: 6,
+      sortTooltipByValue: false,
+      vbH: 100,
+      vbW: 200,
+      yMode: 'percent',
+    });
+
+    expect(hover).not.toBeNull();
+    expect(hover?.x).toBeCloseTo((120 / 260) * 200, 3);
+    expect(hover?.tooltipX).toBeGreaterThan(220 + 8);
+  });
+
+  it('moves the side tooltip left of the cursor near the viewport edge', () => {
+    const chartRect = {
+      left: 560,
+      top: 100,
+      width: 240,
+      height: 80,
+      right: 800,
+      bottom: 180,
+      x: 560,
+      y: 100,
+      toJSON: () => ({}),
+    } as DOMRect;
+
+    const cursorX = chartRect.left + 210;
+    const tooltipX = getInteractiveSparklineTooltipSideX({
+      chartRect,
+      mouseX: 210,
+      viewportWidth: 800,
+    });
+
+    expect(tooltipX).toBeLessThan(cursorX - 200);
   });
 
   it('locks a hovered series on click and unlocks on second click', async () => {

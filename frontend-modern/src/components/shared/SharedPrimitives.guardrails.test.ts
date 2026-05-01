@@ -1069,7 +1069,8 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineCursorXForTimestamp');
-    expect(interactiveSparklineModelSource).toContain('const tooltipX = chartRect.left + mouseX;');
+    expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineTooltipSideX');
+    expect(interactiveSparklineSource).toContain('align="left"');
     expect(interactiveSparklineModelSource).toContain(
       'const tooltipY = chartRect.top + mouseY - 6;',
     );

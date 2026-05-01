@@ -4465,6 +4465,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-summary-sparkline-tooltip-2026-05-01.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-v5-129-delta-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"

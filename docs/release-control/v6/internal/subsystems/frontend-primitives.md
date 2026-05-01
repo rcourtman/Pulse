@@ -841,7 +841,7 @@ work extends shared components instead of creating new local variants.
     settings flows must present provider setup as BYOK/local/self-managed and
     must not surface hosted-model credits, in-app trial starts, or generic
     managed-model claims.
-19. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell.
+19. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell. The hover tooltip must stay side-offset from the active scrub cursor and flip to the available side near viewport edges so it does not cover the highlighted guide or graph point.
 20. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
 21. Keep shared infrastructure/resource selectors on the canonical agent-facet
     truth. Shared primitives and settings-facing selector helpers must treat
@@ -1436,7 +1436,8 @@ policy. Future sparkline work should extend those owners instead of pushing
 canvas scheduling or chart-shape math back into the shared component shell.
 That same sparkline boundary now also owns floating tooltip shell routing:
 local hover tooltips must derive viewport anchor coordinates from the shared
-runtime/model path and render through
+runtime/model path, keep the tooltip beside rather than on top of the scrub
+cursor, and render through
 `frontend-modern/src/components/shared/TooltipPortal.tsx`, not as HTML
 `foreignObject` shells inside the `preserveAspectRatio="none"` chart SVG where
 cross-browser scaling can stretch the tooltip surface or drop its semantic

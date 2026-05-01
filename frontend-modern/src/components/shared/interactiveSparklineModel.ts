@@ -76,6 +76,10 @@ interface HoverSeriesValue extends InteractiveSparklineDisplayValue {
   timestamp: number;
 }
 
+const INTERACTIVE_SPARKLINE_TOOLTIP_GAP = 12;
+const INTERACTIVE_SPARKLINE_TOOLTIP_MAX_WIDTH = 220;
+const INTERACTIVE_SPARKLINE_VIEWPORT_PADDING = 4;
+
 export const formatInteractiveSparklineHoverTime = (timestamp: number): string =>
   new Date(timestamp).toLocaleString([], {
     year: 'numeric',
@@ -457,6 +461,37 @@ export const getInteractiveSparklineCursorXForTimestamp = ({
   return ((clampedTimestamp - chartData.windowStart) / chartData.rangeMs) * vbW;
 };
 
+export const getInteractiveSparklineTooltipSideX = ({
+  chartRect,
+  mouseX,
+  viewportWidth,
+}: {
+  chartRect: DOMRect;
+  mouseX: number;
+  viewportWidth?: number;
+}): number => {
+  const resolvedViewportWidth =
+    viewportWidth ??
+    (typeof window === 'undefined'
+      ? chartRect.right
+      : Math.max(chartRect.right, window.innerWidth));
+  const absoluteCursorX = chartRect.left + mouseX;
+  const rightX = absoluteCursorX + INTERACTIVE_SPARKLINE_TOOLTIP_GAP;
+  const leftX =
+    absoluteCursorX - INTERACTIVE_SPARKLINE_TOOLTIP_MAX_WIDTH - INTERACTIVE_SPARKLINE_TOOLTIP_GAP;
+  const maxRight = Math.max(
+    INTERACTIVE_SPARKLINE_VIEWPORT_PADDING,
+    resolvedViewportWidth - INTERACTIVE_SPARKLINE_VIEWPORT_PADDING,
+  );
+  const canPlaceRight = rightX + INTERACTIVE_SPARKLINE_TOOLTIP_MAX_WIDTH <= maxRight;
+  const canPlaceLeft = leftX >= INTERACTIVE_SPARKLINE_VIEWPORT_PADDING;
+
+  if (canPlaceRight || !canPlaceLeft) {
+    return rightX;
+  }
+  return leftX;
+};
+
 export const getInteractiveSparklineActiveEmphasisSeriesIndex = ({
   highlightNearestSeriesOnHover,
   lockedSeriesIndex,
@@ -702,7 +737,7 @@ export const computeInteractiveSparklineHoverState = ({
   }
 
   const totalValues = focusedTooltip ? tooltipValues.length : values.length;
-  const tooltipX = chartRect.left + mouseX;
+  const tooltipX = getInteractiveSparklineTooltipSideX({ chartRect, mouseX });
   const tooltipY = chartRect.top + mouseY - 6;
 
   return {
