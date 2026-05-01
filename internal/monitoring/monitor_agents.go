@@ -875,13 +875,9 @@ func (m *Monitor) RebuildTokenBindings() {
 		if _, valid := validTokens[tokenID]; !valid {
 			continue
 		}
-		// Use AgentID if available, otherwise fall back to host ID
-		agentID := strings.TrimSpace(host.AgentID())
+		agentID := dockerHostStableID(host)
 		if agentID == "" {
-			agentID = strings.TrimSpace(host.HostSourceID())
-		}
-		if agentID == "" {
-			agentID = strings.TrimSpace(host.ID())
+			agentID = strings.TrimSpace(host.AgentID())
 		}
 		if agentID != "" {
 			newDockerBindings[tokenID] = agentID
@@ -1010,17 +1006,14 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		return models.DockerHost{}, fmt.Errorf("docker host %q had monitoring stopped at %v and cannot report again. Use Allow reconnect in Settings -> Infrastructure or rerun the installer with a docker:manage token to clear this block", identifier, removedAt.Format(time.RFC3339))
 	}
 
-	// Enforce token uniqueness: each token can only be bound to one agent
+	// Enforce token uniqueness: each token can only be bound to one Docker host identity.
 	if tokenRecord != nil && tokenRecord.ID != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
-		agentID := strings.TrimSpace(report.Agent.ID)
-		if agentID == "" {
-			agentID = identifier
-		}
+		agentID, tokenBindingAliases := resolveDockerTokenBindingIdentity(identifier, report, previous, hasPrevious)
 
 		m.mu.Lock()
 		if boundAgentID, exists := m.dockerTokenBindings[tokenID]; exists {
-			if boundAgentID != agentID {
+			if !dockerTokenBindingMatches(boundAgentID, tokenBindingAliases) {
 				m.mu.Unlock()
 				// Find the conflicting host to provide helpful error message
 				conflictingHostname := "unknown"
@@ -1050,6 +1043,9 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 					Msg("Rejecting Docker report: token already bound to different agent")
 				return models.DockerHost{}, fmt.Errorf("API token%s is already in use by agent %q (host: %s). Each Docker agent must use a unique API token. Generate a new token for this agent", tokenHint, boundAgentID, conflictingHostname)
 			}
+			if boundAgentID != agentID {
+				m.dockerTokenBindings[tokenID] = agentID
+			}
 		} else {
 			// First time seeing this token - bind it to this agent
 			m.dockerTokenBindings[tokenID] = agentID
@@ -1057,7 +1053,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 				Str("tokenID", tokenID).
 				Str("agentID", agentID).
 				Str("hostname", report.Host.Hostname).
-				Msg("Bound Docker agent token to agent identity")
+				Msg("Bound Docker agent token to host identity")
 		}
 		m.mu.Unlock()
 	}

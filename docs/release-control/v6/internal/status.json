@@ -3084,6 +3084,12 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-docker-agent-reconnect-2026-05-01.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/monitoring.md",
           "kind": "file"
         },
@@ -4400,6 +4406,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-ceph-monitors-2026-05-01.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-docker-agent-reconnect-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
         },

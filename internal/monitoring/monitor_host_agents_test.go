@@ -94,6 +94,46 @@ func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFal
 	}
 }
 
+func TestApplyDockerReport_RecreatedContainerAgentIDKeepsTokenBinding(t *testing.T) {
+	monitor := newTestMonitor(t)
+	token := &config.APITokenRecord{ID: "token-recreated-container", Name: "Docker Token"}
+
+	firstReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "container-machine-id-a",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-lxc",
+			MachineID: "container-machine-id-a",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host1, err := monitor.ApplyDockerReport(firstReport, token)
+	if err != nil {
+		t.Fatalf("first ApplyDockerReport failed: %v", err)
+	}
+
+	recreatedReport := firstReport
+	recreatedReport.Agent.ID = "container-machine-id-b"
+	recreatedReport.Host.MachineID = "container-machine-id-b"
+	recreatedReport.Timestamp = firstReport.Timestamp.Add(time.Minute)
+
+	host2, err := monitor.ApplyDockerReport(recreatedReport, token)
+	if err != nil {
+		t.Fatalf("recreated container report should keep the existing token binding: %v", err)
+	}
+
+	if host1.ID != host2.ID {
+		t.Fatalf("expected recreated container to retain host ID %q, got %q", host1.ID, host2.ID)
+	}
+	if got := monitor.dockerTokenBindings[token.ID]; got != host1.ID {
+		t.Fatalf("token binding = %q, want stable host ID %q", got, host1.ID)
+	}
+}
+
 func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	t.Helper()
 

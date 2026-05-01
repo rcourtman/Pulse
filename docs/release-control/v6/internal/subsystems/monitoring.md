@@ -640,6 +640,13 @@ monitoring may treat `qnap` and `qnap.local` as the same host when the token
 or machine identity already points at one canonical runtime, but it must not
 invent broader short-name collapsing on its own or fork away from the
 unified-resource monitored-system contract.
+That same Docker host identity boundary also owns token-binding aliases after
+a reconnect match. When `ApplyDockerReport` has already matched a report to an
+existing canonical Docker host, the token uniqueness guard must accept that
+host's stable source ID and previous agent ID as aliases for the current raw
+agent ID so container recreation does not reject the same logical host after it
+has been matched. This must not weaken the one-token-per-Docker-agent rule for
+different hosts.
 Node disk-source selection now also routes through one canonical resolver
 under `internal/monitoring/`. When a Proxmox node has a linked Pulse host
 agent, the node summary must prefer the linked host's canonical disk view over

@@ -724,7 +724,7 @@ func TestMonitor_TokenBindings_UseUnifiedReadState(t *testing.T) {
 
 	m.RebuildTokenBindings()
 
-	if got := m.dockerTokenBindings["docker-token"]; got != "docker-agent-1" {
+	if got := m.dockerTokenBindings["docker-token"]; got != "docker-source-1" {
 		t.Fatalf("expected docker binding from unified read-state, got %q", got)
 	}
 	if got := m.hostTokenBindings["host-token:host-1"]; got != "host-agent-1" {

@@ -955,7 +955,7 @@ type Monitor struct {
 	vmRRDMemCache              map[string]rrdMemCacheEntry
 	vmAgentMemCache            map[string]agentMemCacheEntry
 	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
-	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
+	dockerTokenBindings        map[string]string    // Track token ID -> Docker host identity bindings to enforce uniqueness
 	removedKubernetesClusters  map[string]time.Time // Track deliberately removed Kubernetes clusters (ID -> removal time)
 	kubernetesTokenBindings    map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
 	removedHostAgents          map[string]time.Time // Track deliberately removed host agents (ID -> removal time)

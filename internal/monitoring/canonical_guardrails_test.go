@@ -186,6 +186,38 @@ func TestDockerHostIdentityUsesCanonicalHostnameEquivalence(t *testing.T) {
 	}
 }
 
+func TestDockerTokenBindingUsesCanonicalHostIdentity(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"docker_host_identity.go": {
+			"func resolveDockerTokenBindingIdentity(",
+			"preferred = dockerHostStableID(previous)",
+			"previous.AgentID()",
+			"func dockerTokenBindingMatches(",
+		},
+		"monitor_agents.go": {
+			"resolveDockerTokenBindingIdentity(identifier, report, previous, hasPrevious)",
+			"dockerTokenBindingMatches(boundAgentID, tokenBindingAliases)",
+			"Bound Docker agent token to host identity",
+		},
+		"monitor.go": {
+			"Docker host identity bindings",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestGuestMemoryFallbackUsesCanonicalLowTrustSelector(t *testing.T) {
 	data, err := os.ReadFile("guest_memory_sources.go")
 	if err != nil {

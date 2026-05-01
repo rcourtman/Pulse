@@ -157,6 +157,56 @@ func dockerHostStableID(host *unifiedresources.DockerHostView) string {
 	return strings.TrimSpace(host.ID())
 }
 
+func resolveDockerTokenBindingIdentity(identifier string, report agentsdocker.Report, previous *unifiedresources.DockerHostView, hasPrevious bool) (string, []string) {
+	preferred := ""
+	if hasPrevious {
+		preferred = dockerHostStableID(previous)
+	}
+	if preferred == "" {
+		preferred = strings.TrimSpace(report.Agent.ID)
+	}
+	if preferred == "" {
+		preferred = strings.TrimSpace(identifier)
+	}
+	if preferred == "" {
+		preferred = strings.TrimSpace(report.Host.MachineID)
+	}
+	if preferred == "" {
+		preferred = strings.TrimSpace(report.Host.Hostname)
+	}
+
+	aliases := uniqueNonEmptyStrings(
+		preferred,
+		identifier,
+		report.Agent.ID,
+		report.Host.MachineID,
+		report.Host.Hostname,
+	)
+	if previous != nil {
+		aliases = uniqueNonEmptyStrings(append(aliases,
+			dockerHostStableID(previous),
+			previous.AgentID(),
+			previous.MachineID(),
+			previous.Hostname(),
+		)...)
+	}
+
+	return preferred, aliases
+}
+
+func dockerTokenBindingMatches(boundAgentID string, aliases []string) bool {
+	boundAgentID = strings.TrimSpace(boundAgentID)
+	if boundAgentID == "" {
+		return false
+	}
+	for _, alias := range aliases {
+		if boundAgentID == strings.TrimSpace(alias) {
+			return true
+		}
+	}
+	return false
+}
+
 // dockerHostIDExists checks if a host ID is already in use.
 func dockerHostIDExists(id string, hosts []*unifiedresources.DockerHostView) bool {
 	if strings.TrimSpace(id) == "" {
