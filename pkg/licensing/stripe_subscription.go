@@ -39,6 +39,11 @@ func DeriveStripePlanVersion(metadata map[string]string, priceID string) string 
 		if v := strings.TrimSpace(metadata["plan"]); v != "" {
 			return CanonicalizePlanVersion(v)
 		}
+		if v := strings.TrimSpace(metadata["price_id"]); v != "" {
+			priceID = v
+		} else if v := strings.TrimSpace(metadata["plan_id"]); v != "" {
+			priceID = v
+		}
 	}
 	trimmedPrice := strings.TrimSpace(priceID)
 	if trimmedPrice != "" {

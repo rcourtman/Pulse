@@ -96,9 +96,27 @@ func TestDeriveStripePlanVersion(t *testing.T) {
 			want:     "cloud_starter",
 		},
 		{
+			name:     "metadata price_id resolves to plan",
+			metadata: map[string]string{"price_id": "price_1T5kg2BrHBocJIGHmkoF0zXY"},
+			priceID:  "",
+			want:     "cloud_power",
+		},
+		{
+			name:     "metadata plan_id resolves to plan",
+			metadata: map[string]string{"plan_id": "price_1T5kg4BrHBocJIGHHa8Ecqho"},
+			priceID:  "",
+			want:     "cloud_max",
+		},
+		{
 			name:     "legacy v5 recurring monthly price resolves to grandfathered plan",
 			metadata: nil,
 			priceID:  "price_1ShIsdBrHBocJIGH71yQusLG",
+			want:     "v5_pro_monthly_grandfathered",
+		},
+		{
+			name:     "legacy v5 recurring plan_id resolves to grandfathered plan",
+			metadata: map[string]string{"plan_id": "price_1ShIsdBrHBocJIGH71yQusLG"},
+			priceID:  "",
 			want:     "v5_pro_monthly_grandfathered",
 		},
 		{

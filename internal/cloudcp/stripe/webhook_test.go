@@ -91,6 +91,131 @@ func TestWebhookIgnoresSelfHostedProTrialCheckoutSessions(t *testing.T) {
 	}
 }
 
+func TestWebhookIgnoresSelfHostedLandingCheckoutSessions(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", false)
+
+	const secret = "whsec_test_secret"
+	handler := NewWebhookHandler(secret, provisioner)
+
+	eventJSON := `{
+		"id":"evt_self_hosted_landing_123",
+		"object":"event",
+		"type":"checkout.session.completed",
+		"data":{
+			"object":{
+				"id":"cs_test_self_hosted_landing",
+				"mode":"subscription",
+				"customer":"cus_selfhost_landing",
+				"subscription":"sub_selfhost_landing",
+				"customer_email":"buyer@example.com",
+				"customer_details":{"email":"buyer@example.com"},
+				"metadata":{
+					"plan_id":"price_1ShIsdBrHBocJIGH71yQusLG",
+					"generation":"v5",
+					"checkout_origin":"pulserelay_landing"
+				}
+			}
+		}
+	}`
+	req := signedWebhookRequest(t, secret, eventJSON)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delivery status=%d, want=%d, body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	tenants, err := reg.List()
+	if err != nil {
+		t.Fatalf("List tenants: %v", err)
+	}
+	if len(tenants) != 0 {
+		t.Fatalf("tenant count=%d, want 0 for self-hosted landing checkout", len(tenants))
+	}
+	stripeAccount, err := reg.GetStripeAccountByCustomerID("cus_selfhost_landing")
+	if err != nil {
+		t.Fatalf("GetStripeAccountByCustomerID: %v", err)
+	}
+	if stripeAccount != nil {
+		t.Fatalf("Stripe account mapping was created for self-hosted landing checkout: %#v", stripeAccount)
+	}
+}
+
+func TestHostedProvisioningCheckoutClassification(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata map[string]string
+		want     bool
+	}{
+		{
+			name: "public cloud signup source",
+			metadata: map[string]string{
+				"signup_source": publicCloudSignupSource,
+			},
+			want: true,
+		},
+		{
+			name: "public cloud signup source with self hosted plan id",
+			metadata: map[string]string{
+				"signup_source": publicCloudSignupSource,
+				"plan_id":       "price_1ShIsdBrHBocJIGH71yQusLG",
+			},
+			want: false,
+		},
+		{
+			name: "cloud plan version",
+			metadata: map[string]string{
+				"plan_version": "cloud_starter",
+			},
+			want: true,
+		},
+		{
+			name: "cloud plan id",
+			metadata: map[string]string{
+				"plan_id": "price_1T5kg2BrHBocJIGHmkoF0zXY",
+			},
+			want: true,
+		},
+		{
+			name: "msp plan version",
+			metadata: map[string]string{
+				"plan_version": "msp_growth",
+			},
+			want: true,
+		},
+		{
+			name: "self hosted v5 plan id",
+			metadata: map[string]string{
+				"plan_id": "price_1ShIsdBrHBocJIGH71yQusLG",
+			},
+			want: false,
+		},
+		{
+			name: "self hosted v6 generation",
+			metadata: map[string]string{
+				"plan_id":    "price_1TPmE6BrHBocJIGHHaPwluoM",
+				"generation": "v6",
+			},
+			want: false,
+		},
+		{
+			name:     "missing metadata",
+			metadata: nil,
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isHostedProvisioningCheckout(CheckoutSession{Metadata: tt.metadata})
+			if got != tt.want {
+				t.Fatalf("isHostedProvisioningCheckout=%t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestWebhookEventContext_DetachesCheckoutFromRequestContext(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/stripe/webhook", nil)
 	ctx, cancelReq := context.WithCancel(req.Context())

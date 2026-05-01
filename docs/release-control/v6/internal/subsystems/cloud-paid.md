@@ -239,7 +239,14 @@ runtime gating as separate unlinked claims.
    pairing for handoff, push notifications, and 14-day history; it must not imply that the
    native mobile app is a full monitoring dashboard until that product surface
    exists.
-7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
+7. Add or change Stripe provisioning plan resolution through
+   `internal/cloudcp/stripe/provisioner.go`, `internal/cloudcp/stripe/webhook.go`,
+   and `pkg/licensing/stripe_subscription.go`. Checkout-session provisioning
+   must be explicitly classified as hosted before tenant creation: `cloud_*`
+   and `msp_*` plan versions may provision hosted runtime, public Cloud signup
+   source may provision only when the plan is otherwise unresolved for staging
+   compatibility, and self-hosted v5/v6 checkout metadata must be ignored by
+   the Cloud control-plane webhook even if Stripe delivers the event there.
 8. Add or change activation/grant lifecycle, release build helper gating, or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/testing_helpers.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go`
    That transport boundary must use HTTPS for non-loopback commercial endpoints,
@@ -601,6 +608,12 @@ not see finite monitored-system pressure in the global app shell; when hosted
 capacity policy is active, the banner reviews finite-policy usage on the usage
 ledger rather than sending operators to the plan-selection surface with
 capacity-shaped copy.
+Stripe checkout metadata now treats `plan_id` and `price_id` as Stripe price
+identifiers for plan-version derivation, including grandfathered v5 recurring
+prices. The Cloud control-plane webhook uses that derivation as an admission
+boundary: hosted Cloud/MSP checkout events may provision tenants, while
+self-hosted landing purchases are acknowledged and ignored rather than
+creating hosted containers or Stripe account mappings.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.

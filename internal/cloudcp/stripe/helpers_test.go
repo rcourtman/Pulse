@@ -110,6 +110,8 @@ func TestDerivePlanVersion(t *testing.T) {
 		{"plan_version in metadata", map[string]string{"plan_version": "v2"}, "", "v2"},
 		{"plan in metadata", map[string]string{"plan": "pro"}, "", "pro"},
 		{"plan_version takes priority", map[string]string{"plan_version": "v3", "plan": "pro"}, "", "v3"},
+		{"price_id in metadata", map[string]string{"price_id": "price_1T5kg2BrHBocJIGHmkoF0zXY"}, "", "cloud_power"},
+		{"plan_id in metadata", map[string]string{"plan_id": "price_1ShIsdBrHBocJIGH71yQusLG"}, "", "v5_pro_monthly_grandfathered"},
 		{"price ID fallback", nil, "price_123", "stripe_price:price_123"},
 		{"generic fallback", nil, "", "stripe"},
 		{"nil metadata with price", nil, "price_abc", "stripe_price:price_abc"},

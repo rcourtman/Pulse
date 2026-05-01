@@ -12,6 +12,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 	stripelib "github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
@@ -20,6 +21,7 @@ import (
 const webhookBodyLimit = 1024 * 1024 // 1 MiB
 const checkoutProvisioningTimeout = 2 * time.Minute
 const selfHostedProTrialSignupSource = "pulse_pro_trial"
+const publicCloudSignupSource = "public_cloud_signup"
 
 // WebhookHandler handles incoming Stripe webhook events.
 type WebhookHandler struct {
@@ -144,6 +146,13 @@ func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) er
 				Msg("Stripe webhook ignored retired self-hosted Pro trial checkout")
 			return nil
 		}
+		if !isHostedProvisioningCheckout(session) {
+			log.Info().
+				Str("session_id", strings.TrimSpace(session.ID)).
+				Str("plan_version", DerivePlanVersion(session.Metadata, "")).
+				Msg("Stripe webhook ignored non-hosted checkout")
+			return nil
+		}
 		return h.provisioner.HandleCheckout(ctx, session)
 
 	case "customer.subscription.updated":
@@ -181,6 +190,29 @@ func isSelfHostedProTrialCheckout(session CheckoutSession) bool {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(session.Metadata["signup_source"]), selfHostedProTrialSignupSource)
+}
+
+func isHostedProvisioningCheckout(session CheckoutSession) bool {
+	metadata := session.Metadata
+	if metadata == nil {
+		return false
+	}
+	signupSource := strings.ToLower(strings.TrimSpace(metadata["signup_source"]))
+	planVersion := pkglicensing.CanonicalizePlanVersion(DerivePlanVersion(metadata, ""))
+	if isHostedPlanVersion(planVersion) {
+		return true
+	}
+	return signupSource == publicCloudSignupSource && isUnresolvedPlanVersion(planVersion)
+}
+
+func isHostedPlanVersion(planVersion string) bool {
+	normalized := strings.ToLower(pkglicensing.CanonicalizePlanVersion(planVersion))
+	return strings.HasPrefix(normalized, "cloud_") || strings.HasPrefix(normalized, "msp_")
+}
+
+func isUnresolvedPlanVersion(planVersion string) bool {
+	normalized := strings.ToLower(pkglicensing.CanonicalizePlanVersion(planVersion))
+	return normalized == "" || normalized == "stripe" || strings.HasPrefix(normalized, "stripe_price:")
 }
 
 func webhookEventContext(r *http.Request, eventType stripelib.EventType) (context.Context, context.CancelFunc) {
