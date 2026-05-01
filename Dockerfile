@@ -86,11 +86,13 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -tags release \
       -ldflags="${SERVER_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-linux-amd64 ./cmd/pulse && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
       -tags release \
       -ldflags="${SERVER_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-linux-arm64 ./cmd/pulse
 
@@ -111,50 +113,62 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     AGENT_LDFLAGS="$(./scripts/release_ldflags.sh agent --version "${VERSION}" $(if [ -n "${UPDATE_PUBLIC_KEYS}" ]; then printf '%s %s' --update-public-keys "${UPDATE_PUBLIC_KEYS}"; fi))" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-linux-amd64 ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-linux-arm64 ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-linux-armv7 ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-linux-armv6 ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=linux GOARCH=386 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-linux-386 ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-darwin-amd64 ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-darwin-arm64 ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-windows-amd64.exe ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-windows-arm64.exe ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=windows GOARCH=386 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-windows-386.exe ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-freebsd-amd64 ./cmd/pulse-agent && \
     CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
+      -buildvcs=false \
       -trimpath \
       -o pulse-agent-freebsd-arm64 ./cmd/pulse-agent
 

@@ -206,6 +206,12 @@ server-side update execution surfaces.
    External helper binaries fetched by governed release workflows are part of
    the same supply-chain boundary and must be checksum-verified before they are
    executed.
+   Release-grade Go builds must use `scripts/release_ldflags.sh` as the
+   canonical source for embedded version, commit, license, and update trust-root
+   identity, and must disable Go's automatic VCS stamping with
+   `-buildvcs=false` in `scripts/build-release.sh`, `Dockerfile`, and the demo
+   deployment build so generated frontend or release-packet files cannot leak a
+   misleading dirty-tree marker into published binary metadata.
    Release validation must prove that installer script download endpoints return
    signature headers, and unified-agent download endpoints must return checksum and signature headers whose checksum value matches the served binary.
 8. Add or change the non-secret Pulse Cloud public signup route smoke through

@@ -130,6 +130,7 @@ jobs:
           SERVER_LDFLAGS="$(if [ -n "${PULSE_LICENSE_PUBLIC_KEY:-}" ]; then ./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" --license-public-key "${PULSE_LICENSE_PUBLIC_KEY}"; else ./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"; fi)"
           CGO_ENABLED=0 go build \
             -ldflags="${SERVER_LDFLAGS}" \
+            -buildvcs=false \
             -trimpath \
             -o pulse ./cmd/pulse/
 

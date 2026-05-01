@@ -32,6 +32,7 @@ fi
 
 # Force static binaries so release artifacts run on older glibc hosts
 export CGO_ENABLED=0
+release_go_build_args=(-buildvcs=false -trimpath)
 
 VERSION=${1:-$(cat VERSION)}
 BUILD_DIR="build"
@@ -141,7 +142,7 @@ for i in "${!agent_build_order[@]}"; do
 
     env $build_env go build \
         -ldflags="${agent_ldflags}" \
-        -trimpath \
+        "${release_go_build_args[@]}" \
         -o "$output_path" \
         ./cmd/pulse-agent
 done
@@ -179,7 +180,7 @@ for i in "${!build_order[@]}"; do
     env $build_env go build \
         -tags release \
         -ldflags="${server_ldflags}" \
-        -trimpath \
+        "${release_go_build_args[@]}" \
         -o "$BUILD_DIR/pulse-$build_name" \
         ./cmd/pulse
 done

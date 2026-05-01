@@ -47,6 +47,8 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	requiredScriptWiring := []string{
 		`agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}" "${update_ldflags_args[@]}")"`,
 		`server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}" "${update_ldflags_args[@]}")"`,
+		`release_go_build_args=(-buildvcs=false -trimpath)`,
+		`"${release_go_build_args[@]}"`,
 		`RELEASE_PACKET_SBOM="pulse-v${VERSION}-release.sbom.spdx.json"`,
 		`pulse_release_prepare_signing_state "pulse-installer" "pulse-install"`,
 		`trap 'pulse_release_cleanup_signing_state' EXIT`,
@@ -59,6 +61,9 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("build-release.sh missing canonical ldflags wiring: %s", needle)
 		}
+	}
+	if builds, cleanBuilds := strings.Count(script, `env $build_env go build \`), strings.Count(script, `"${release_go_build_args[@]}"`); builds != cleanBuilds {
+		t.Fatalf("build-release.sh must disable automatic VCS stamping on every release go build: builds=%d clean_builds=%d", builds, cleanBuilds)
 	}
 
 	helperBytes, err := os.ReadFile(repoFile("scripts", "release_asset_common.sh"))
@@ -278,6 +283,8 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		"`checksums.txt` is missing its `.sshsig` sidecar",
 		"release-packet SBOM is absent",
 		"download endpoints must return checksum and signature headers",
+		"must disable Go's automatic VCS stamping",
+		"`-buildvcs=false`",
 	}
 	for _, needle := range contractRequired {
 		if !strings.Contains(contract, needle) {
@@ -314,6 +321,7 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		`mounted update signing key does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY.`,
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
 		`./scripts/release_ldflags.sh agent --version "${VERSION}"`,
+		`-buildvcs=false`,
 		`go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers`,
 		`--allow-empty-installer-ssh-public-key`,
 		`ssh-keygen -q -Y sign -f "${OPENSSH_SIGNING_KEY}" -n pulse-install`,
@@ -340,6 +348,9 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		strings.Contains(dockerfile, `FROM alpine:3.20 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
 	}
+	if builds, cleanBuilds := strings.Count(dockerfile, " go build \\"), strings.Count(dockerfile, "-buildvcs=false"); builds != cleanBuilds {
+		t.Fatalf("Dockerfile release go builds must all disable automatic VCS stamping: builds=%d clean_builds=%d", builds, cleanBuilds)
+	}
 
 	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "deploy-demo-server.yml"))
 	if err != nil {
@@ -348,6 +359,7 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	workflow := string(workflowBytes)
 	workflowRequired := []string{
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
+		`-buildvcs=false`,
 		`demo-preview-v6`,
 		`demo-stable`,
 		`workflow_dispatch:`,
