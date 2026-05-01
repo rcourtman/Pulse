@@ -4477,6 +4477,30 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if strings.Contains(script, `grep -q "$TOKEN_NAME"`) {
 		t.Fatalf("setup script preserved stale broad PVE token rotation detection: %s", script)
 	}
+	if !strings.Contains(script, `resolve_authorized_keys_path() {`) {
+		t.Fatalf("setup script missing authorized_keys symlink resolver: %s", script)
+	}
+	if !strings.Contains(script, `resolved="$(readlink -f "$auth_keys" 2>/dev/null || true)"`) {
+		t.Fatalf("setup script missing canonical authorized_keys target resolution: %s", script)
+	}
+	if !strings.Contains(script, `install_authorized_keys_file() {`) {
+		t.Fatalf("setup script missing shared authorized_keys install helper: %s", script)
+	}
+	if strings.Count(script, `AUTH_KEYS="$(resolve_authorized_keys_path)"`) < 2 {
+		t.Fatalf("setup script install and uninstall paths must both resolve authorized_keys symlinks: %s", script)
+	}
+	if !strings.Contains(script, `grep -vF '# pulse-' "$AUTH_KEYS" > "$TMP_AUTH_KEYS" 2>/dev/null`) {
+		t.Fatalf("setup script uninstall path must remove all Pulse-managed SSH keys through the resolved authorized_keys target: %s", script)
+	}
+	if !strings.Contains(script, `grep -vF "# pulse-" "$AUTH_KEYS" > "$TMP_AUTH_KEYS" 2>/dev/null`) {
+		t.Fatalf("setup script install path must filter existing Pulse-managed SSH keys through the resolved authorized_keys target: %s", script)
+	}
+	if strings.Contains(script, `grep -vF '# pulse-managed-key'`) {
+		t.Fatalf("setup script preserved stale managed-key-only cleanup: %s", script)
+	}
+	if strings.Contains(script, `/root/.ssh/authorized_keys.tmp`) || strings.Contains(script, `echo "$SSH_SENSORS_KEY_ENTRY" >> /root/.ssh/authorized_keys`) {
+		t.Fatalf("setup script preserved symlink-breaking authorized_keys rewrite: %s", script)
+	}
 	if strings.Contains(script, `echo "Please run this script as root"`) {
 		t.Fatalf("setup script preserved stale root-only guidance: %s", script)
 	}

@@ -184,6 +184,67 @@ func TestPVESetupScriptQuotesTemperatureMonitoringAuthorizedKeyEntry(t *testing.
 	}
 }
 
+func TestPVESetupScriptPreservesAuthorizedKeysSymlink(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/setup-script?type=pve&host=https://node.example.internal:8006&pulse_url=https://pulse.example.com:7655",
+		nil,
+	)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	required := []string{
+		`resolve_authorized_keys_path() {`,
+		`if [ -L "$auth_keys" ]; then`,
+		`resolved="$(readlink -f "$auth_keys" 2>/dev/null || true)"`,
+		`install_authorized_keys_file() {`,
+		`chmod --reference="$auth_keys" "$tmp_auth_keys" 2>/dev/null || chmod 600 "$tmp_auth_keys"`,
+		`if mv -f "$tmp_auth_keys" "$auth_keys" 2>/dev/null; then`,
+		`if cp -f "$tmp_auth_keys" "$auth_keys" 2>/dev/null; then`,
+		`grep -vF '# pulse-' "$AUTH_KEYS" > "$TMP_AUTH_KEYS" 2>/dev/null`,
+		`grep -vF "# pulse-" "$AUTH_KEYS" > "$TMP_AUTH_KEYS" 2>/dev/null`,
+		`printf '%s\n' "$SSH_SENSORS_KEY_ENTRY" >> "$TMP_AUTH_KEYS"`,
+		`install_authorized_keys_file "$TMP_AUTH_KEYS" "$AUTH_KEYS"`,
+	}
+	for _, want := range required {
+		if !containsString(script, want) {
+			t.Fatalf("expected setup script to contain %q, got:\n%s", want, truncate(script, 1200))
+		}
+	}
+	if got := strings.Count(script, `AUTH_KEYS="$(resolve_authorized_keys_path)"`); got < 2 {
+		t.Fatalf("expected setup script install and uninstall paths to resolve authorized_keys symlinks, count=%d\n%s", got, truncate(script, 1200))
+	}
+
+	forbidden := []string{
+		`grep -vF '# pulse-managed-key'`,
+		`/root/.ssh/authorized_keys.tmp`,
+		`mv /root/.ssh/authorized_keys.tmp /root/.ssh/authorized_keys`,
+		`mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys`,
+		`echo "$SSH_SENSORS_KEY_ENTRY" >> /root/.ssh/authorized_keys`,
+		`chmod --reference=/root/.ssh/authorized_keys`,
+		`chown --reference=/root/.ssh/authorized_keys`,
+	}
+	for _, stale := range forbidden {
+		if containsString(script, stale) {
+			t.Fatalf("setup script preserved stale authorized_keys handling %q:\n%s", stale, truncate(script, 1200))
+		}
+	}
+}
+
 func TestHandleSetupScriptRejectsPBSBackupPerms(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{

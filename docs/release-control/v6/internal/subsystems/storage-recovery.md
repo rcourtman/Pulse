@@ -132,6 +132,11 @@ state.
    through the shared `Table` wrapper rather than page-local scroll divs or
    inline overflow styles.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   Shared setup-script transport may be reused by storage and recovery-linked
+   setup flows, but it remains API/lifecycle-owned: generated PVE scripts must
+   preserve Proxmox `authorized_keys` symlinks by resolving the target before
+   filtering Pulse-managed `# pulse-` SSH key entries, instead of letting
+   recovery-adjacent setup replace the symlink path with a local file.
    Shared diagnostics routes may include Docker and Podman agent health notes,
    but storage/recovery does not own a recovery-local runtime vocabulary for
    those notes. Recovery-adjacent diagnostics consumers must preserve the
@@ -2139,6 +2144,11 @@ Pulse-managed token prefix for the active Pulse URL, so adjacent setup flows
 do not drift onto IP-pattern token matching that misses hostname-scoped legacy
 tokens. That dependency applies to both generated PVE and PBS setup scripts,
 so adjacent setup flows do not fork cleanup discovery rules by node type.
+That same generated PVE setup-script dependency also assumes temperature-key
+setup and removal preserve Proxmox-managed `/root/.ssh/authorized_keys`
+symlinks: adjacent storage and recovery setup flows may depend on the shared
+script renderer, but they must not replace the symlink path with a local file
+when filtering Pulse-managed `# pulse-` SSH key entries.
 That same shared discovery dependency also assumes runtime discovery state owns
 only structured errors, while adjacent API and WebSocket payloads may derive
 the deprecated string `errors` list only as a compatibility field from those

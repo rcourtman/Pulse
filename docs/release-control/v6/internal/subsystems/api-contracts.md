@@ -326,6 +326,11 @@ the canonical monitored-system blocked payload.
 11. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install state owner, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and install presentation through `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`. Phase 9 retired the InfrastructureOperationsController shell and the useInfrastructureReportingState reporting path; they must not be reintroduced, and aggregator-backed reporting reads are owned by `frontend-modern/src/components/Settings/useConnectionsLedger.ts` under the frontend-primitives contract.
     That same governed infrastructure-operations API boundary also owns discovery polling activation: the shared discovery runtime may only poll `/api/discover` while the settings shell has the `infrastructure-connections` route active, so route-level IA changes cannot silently keep discovery traffic alive on unrelated systems or install screens.
     That same governed setup/install boundary also owns uninstall convergence: when a script-managed Proxmox node removes its local Pulse credentials, the canonical `/api/auto-unregister` API must remove the matching stored node immediately and emit the same discovery/node-deleted refresh semantics as manual deletion, so the infrastructure sources table does not keep a stale active row until the next failed poll.
+    That same governed setup/install boundary also owns Proxmox
+    `authorized_keys` symlink preservation in the rendered PVE setup script:
+    temperature-key install and uninstall edits must resolve the real
+    authorized-keys target before filtering Pulse-managed `# pulse-` lines,
+    and `internal/api/contract_test.go` must pin the generated shell shape.
 12. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
 13. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
 14. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
@@ -2556,6 +2561,12 @@ That same generated-script payload must also remove discovered legacy tokens
 from the concrete `pve` and `pam` token lists it already enumerated, rather
 than iterating an undefined shell variable and silently turning operator-chosen
 cleanup into a no-op.
+That same generated PVE setup-script payload must also preserve Proxmox-managed
+`/root/.ssh/authorized_keys` symlinks when it installs or removes Pulse
+temperature-monitoring SSH keys: the rendered shell must resolve the symlink
+target before filtering Pulse-managed `# pulse-` entries, use the resolved path
+for both install and uninstall edits, and keep this behavior pinned in
+`internal/api/contract_test.go`.
 That same generated-script payload must also preserve the canonical encoded
 rerun URL contract: embedded `SETUP_SCRIPT_URL` values must carry the exact
 selected `host`, `pulse_url`, and `backup_perms` query state instead of

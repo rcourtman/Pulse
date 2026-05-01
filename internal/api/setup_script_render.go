@@ -65,6 +65,44 @@ if [ "$EUID" -ne 0 ]; then
    exit 1
 fi
 
+resolve_authorized_keys_path() {
+    local auth_keys="/root/.ssh/authorized_keys"
+    local resolved=""
+
+    if [ -L "$auth_keys" ]; then
+        resolved="$(readlink -f "$auth_keys" 2>/dev/null || true)"
+        if [ -n "$resolved" ]; then
+            auth_keys="$resolved"
+        fi
+    fi
+
+    printf '%%s\n' "$auth_keys"
+}
+
+install_authorized_keys_file() {
+    local tmp_auth_keys="$1"
+    local auth_keys="$2"
+
+    if [ ! -f "$tmp_auth_keys" ]; then
+        return 1
+    fi
+
+    chmod --reference="$auth_keys" "$tmp_auth_keys" 2>/dev/null || chmod 600 "$tmp_auth_keys"
+    chown --reference="$auth_keys" "$tmp_auth_keys" 2>/dev/null || true
+
+    if mv -f "$tmp_auth_keys" "$auth_keys" 2>/dev/null; then
+        return 0
+    fi
+
+    if cp -f "$tmp_auth_keys" "$auth_keys" 2>/dev/null; then
+        rm -f "$tmp_auth_keys"
+        return 0
+    fi
+
+    rm -f "$tmp_auth_keys"
+    return 1
+}
+
 # Detect environment (Proxmox host vs LXC guest)
 detect_environment() {
     if command -v pveum >/dev/null 2>&1 && command -v pveversion >/dev/null 2>&1; then
@@ -241,23 +279,25 @@ if [[ $MAIN_ACTION =~ ^[2Rr]$ ]]; then
     # Always run manual removal for local services and files
     if true; then
         # Remove SSH keys from authorized_keys (only Pulse-managed entries)
-        if [ -f /root/.ssh/authorized_keys ]; then
+        AUTH_KEYS="$(resolve_authorized_keys_path)"
+        if [ -f "$AUTH_KEYS" ]; then
             echo "  • Removing SSH keys from authorized_keys..."
-            TMP_AUTH_KEYS=$(mktemp)
-            if [ -f "$TMP_AUTH_KEYS" ]; then
-                grep -vF '# pulse-managed-key' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null
+            TMP_AUTH_KEYS="$(mktemp /tmp/.pulse-authorized-keys.XXXXXX 2>/dev/null)" || TMP_AUTH_KEYS=""
+            if [ -n "$TMP_AUTH_KEYS" ] && [ -f "$TMP_AUTH_KEYS" ]; then
+                grep -vF '# pulse-' "$AUTH_KEYS" > "$TMP_AUTH_KEYS" 2>/dev/null
                 GREP_EXIT=$?
                 if [ $GREP_EXIT -eq 0 ] || [ $GREP_EXIT -eq 1 ]; then
-                    chmod --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || chmod 600 "$TMP_AUTH_KEYS"
-                    chown --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || true
-                    if mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys; then
+                    if install_authorized_keys_file "$TMP_AUTH_KEYS" "$AUTH_KEYS"; then
                         :
                     else
                         rm -f "$TMP_AUTH_KEYS"
+                        echo "    ⚠️  Failed to update $AUTH_KEYS"
                     fi
                 else
                     rm -f "$TMP_AUTH_KEYS"
                 fi
+            else
+                echo "    ⚠️  Failed to create temporary authorized_keys file"
             fi
         fi
 
@@ -596,18 +636,40 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
         echo "Configuring temperature monitoring..."
 
         # Add key to root's authorized_keys
+        AUTH_KEYS="$(resolve_authorized_keys_path)"
+        mkdir -p "$(dirname "$AUTH_KEYS")"
         mkdir -p /root/.ssh
-        chmod 700 /root/.ssh
+        chmod 700 /root/.ssh 2>/dev/null || true
 
         # Remove any old pulse keys
-        if [ -f /root/.ssh/authorized_keys ]; then
-            grep -vF "# pulse-" /root/.ssh/authorized_keys > /root/.ssh/authorized_keys.tmp 2>/dev/null || touch /root/.ssh/authorized_keys.tmp
-            mv /root/.ssh/authorized_keys.tmp /root/.ssh/authorized_keys
-        fi
+        SENSORS_KEY_OK=false
+        TMP_AUTH_KEYS="$(mktemp /tmp/.pulse-authorized-keys.XXXXXX 2>/dev/null)" || TMP_AUTH_KEYS=""
+        if [ -n "$TMP_AUTH_KEYS" ] && [ -f "$TMP_AUTH_KEYS" ]; then
+            if [ -f "$AUTH_KEYS" ]; then
+                grep -vF "# pulse-" "$AUTH_KEYS" > "$TMP_AUTH_KEYS" 2>/dev/null
+                GREP_EXIT=$?
+                if [ $GREP_EXIT -ne 0 ] && [ $GREP_EXIT -ne 1 ]; then
+                    echo "  ⚠️  Failed to read $AUTH_KEYS"
+                    rm -f "$TMP_AUTH_KEYS"
+                    TMP_AUTH_KEYS=""
+                fi
+            fi
 
-        echo "$SSH_SENSORS_KEY_ENTRY" >> /root/.ssh/authorized_keys
-        chmod 600 /root/.ssh/authorized_keys
-        echo "  ✓ Sensors key configured (restricted to sensors -j)"
+            if [ -n "$TMP_AUTH_KEYS" ]; then
+                printf '%%s\n' "$SSH_SENSORS_KEY_ENTRY" >> "$TMP_AUTH_KEYS"
+                if install_authorized_keys_file "$TMP_AUTH_KEYS" "$AUTH_KEYS"; then
+                    SENSORS_KEY_OK=true
+                else
+                    echo "  ⚠️  Failed to update $AUTH_KEYS"
+                    rm -f "$TMP_AUTH_KEYS" 2>/dev/null || true
+                fi
+            fi
+        else
+            echo "  ⚠️  Failed to create temp file - cannot update authorized_keys"
+        fi
+        if [ "$SENSORS_KEY_OK" = true ]; then
+            echo "  ✓ Sensors key configured (restricted to sensors -j)"
+        fi
 
         # Check if this is a Raspberry Pi
         IS_RPI=false

@@ -179,6 +179,10 @@ profile and assignment columns, but embedded table framing must route through
    deleted, and the short recent-setup-token grace window must remain valid for
    that follow-up uninstall so operators can immediately back out a reviewed
    script-managed Proxmox setup without leaving a stale node record in Pulse.
+   That same lifecycle-owned setup path also owns Proxmox `authorized_keys`
+   symlink preservation for temperature-monitoring SSH keys: generated PVE
+   setup scripts must resolve the real authorized-keys target before filtering
+   Pulse-managed `# pulse-` lines during install or removal.
    That same shared `internal/api/` adjacency does not transfer ownership of
    AI provider setup or mobile Patrol-provider bridging:
    `internal/api/ai_handlers.go` and `internal/api/chat_service_adapter.go`
@@ -2095,6 +2099,11 @@ lane-local IP-pattern guess that drifts from `buildPulseMonitorTokenName`.
 The generated PBS setup-script boundary must preserve that same cleanup
 discovery contract instead of keeping a separate IP-pattern matcher for old
 token cleanup.
+The same generated PVE setup-script boundary must also preserve
+Proxmox-managed `/root/.ssh/authorized_keys` symlinks when lifecycle setup or
+removal touches Pulse-managed temperature-monitoring SSH keys: scripts must
+resolve the real authorized-keys target before filtering `# pulse-` entries and
+must use that resolved path for both install and uninstall edits.
 That same generated setup-script boundary must also use exact token-name
 matching when it decides whether to rotate an existing Pulse-managed token, so
 reruns do not treat partial-name collisions as the canonical managed token.
