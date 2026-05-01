@@ -1,8 +1,44 @@
 # Contributing to Pulse
 
-Thanks for investing time in Pulse! This document collects the essentials you
-need to be productive across the Go backend, SolidJS/TypeScript frontend, and the
-installer tooling.
+Pulse is maintained as a single-maintainer project.
+
+I am not accepting unsolicited external pull requests for this repository.
+If you have found a bug, want to propose a feature, or have a concrete
+improvement idea, please open an issue instead.
+
+This document also keeps the local development notes needed to reproduce,
+debug, and validate issues across the Go backend, SolidJS/TypeScript frontend,
+and installer tooling.
+
+## What To Open
+
+- Bug reports: use the bug report issue form and include exact reproduction
+  steps, Pulse version, installation type, and any relevant logs or diagnostics.
+- Feature requests: open an issue describing the problem you want solved, the
+  workflow you are trying to improve, and any constraints that matter.
+- Questions and support requests: use GitHub Discussions when you need help,
+  troubleshooting, or general guidance rather than a tracked defect.
+- Security issues: follow [SECURITY.md](SECURITY.md) instead of opening a public
+  report for sensitive problems.
+
+## Pull Request Policy
+
+- External pull requests are not part of the normal contribution flow for this
+  repository.
+- Unsolicited pull requests may be closed without detailed review, even when the
+  underlying idea is valid.
+- If I want code help on a specific issue, I will explicitly ask for it there.
+- Opening an issue first is the right path; it lets me confirm whether the
+  change fits the product direction before anyone spends time building a patch.
+
+## How To Make An Issue Useful
+
+- Search existing issues before opening a new one.
+- Keep reproduction steps minimal and exact.
+- State the Pulse version and image or package you are actually running.
+- Include screenshots, logs, API output, or diagnostics when they clarify the
+  problem.
+- Separate bug reports from feature requests; avoid mixing both into one issue.
 
 ---
 
@@ -152,9 +188,12 @@ before submitting large doc updates.
 
 ---
 
-## Submitting Changes
+## Submitting Requested Changes
 
-1. Fork + branch (`git checkout -b feature/my-change`).
+For maintainer-requested code help on a tracked issue:
+
+1. Link the issue where the maintainer requested the patch.
+2. Fork + branch (`git checkout -b feature/my-change`).
 2. Make your edits and run relevant tests.
 3. Update docs and changelog entries as needed.
 4. Open a PR describing:
@@ -164,4 +203,4 @@ before submitting large doc updates.
    - Rollout / migration concerns
 
 Reviewers will focus on correctness, security, and upgrade paths, so call out
-anything unusual up front. Thanks again for contributing!
+anything unusual up front.

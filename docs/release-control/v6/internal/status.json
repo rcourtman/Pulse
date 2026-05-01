@@ -4295,6 +4295,12 @@
           "path": "docs/release-control/v6/internal/records/documentation-currentness-and-legacy-cleanup-2026-03-13.md",
           "kind": "file",
           "evidence_tier": "local-rehearsal"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/documentation-currentness-and-legacy-cleanup-contribution-policy-2026-05-01.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
         }
       ]
     },
