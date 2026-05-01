@@ -20,6 +20,100 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func pveBackupTemplateSubjectKey(instance, guestType, node string, vmid int) string {
+	return alerts.BuildBackupPVETemplateSubjectKey(instance, guestType, node, vmid)
+}
+
+func (m *Monitor) updatePVEBackupTemplateSubjectsForType(instanceName, guestType string, subjects map[string]struct{}) {
+	if m == nil {
+		return
+	}
+	instanceName = strings.TrimSpace(instanceName)
+	guestType = strings.TrimSpace(guestType)
+	if instanceName == "" || guestType == "" {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pveBackupInventoryReady == nil {
+		m.pveBackupInventoryReady = make(map[string]map[string]bool)
+	}
+	if m.pveBackupInventoryReady[instanceName] == nil {
+		m.pveBackupInventoryReady[instanceName] = make(map[string]bool)
+	}
+	m.pveBackupInventoryReady[instanceName][guestType] = true
+
+	if m.pveBackupTemplateSubjects == nil {
+		m.pveBackupTemplateSubjects = make(map[string]map[string]struct{})
+	}
+	existing := m.pveBackupTemplateSubjects[instanceName]
+	if existing == nil {
+		existing = make(map[string]struct{})
+	}
+	prefix := instanceName + "\x00" + guestType + "\x00"
+	for key := range existing {
+		if strings.HasPrefix(key, prefix) {
+			delete(existing, key)
+		}
+	}
+	for key := range subjects {
+		if key != "" {
+			existing[key] = struct{}{}
+		}
+	}
+	m.pveBackupTemplateSubjects[instanceName] = existing
+}
+
+func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {
+	qemuTemplates := make(map[string]struct{})
+	lxcTemplates := make(map[string]struct{})
+	for _, res := range resources {
+		if res.Template != 1 {
+			continue
+		}
+		switch strings.TrimSpace(res.Type) {
+		case "qemu":
+			if key := pveBackupTemplateSubjectKey(instanceName, "qemu", res.Node, res.VMID); key != "" {
+				qemuTemplates[key] = struct{}{}
+			}
+		case "lxc":
+			if key := pveBackupTemplateSubjectKey(instanceName, "lxc", res.Node, res.VMID); key != "" {
+				lxcTemplates[key] = struct{}{}
+			}
+		}
+	}
+	m.updatePVEBackupTemplateSubjectsForType(instanceName, "qemu", qemuTemplates)
+	m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplates)
+}
+
+func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {
+	if m == nil {
+		return nil
+	}
+	scope := &alerts.BackupInventoryScope{
+		PVEOrphanInventoryReady: make(map[string]map[string]bool),
+		PVETemplateSubjects:     make(map[string]struct{}),
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for instance, readyByType := range m.pveBackupInventoryReady {
+		if len(readyByType) == 0 {
+			continue
+		}
+		scope.PVEOrphanInventoryReady[instance] = make(map[string]bool, len(readyByType))
+		for guestType, ready := range readyByType {
+			scope.PVEOrphanInventoryReady[instance][guestType] = ready
+		}
+	}
+	for _, subjects := range m.pveBackupTemplateSubjects {
+		for key := range subjects {
+			scope.PVETemplateSubjects[key] = struct{}{}
+		}
+	}
+	return scope
+}
+
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 
 	var allBackups []models.StorageBackup
@@ -267,7 +361,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
 		} else {
-			m.alertManager.CheckBackups(rollups, guestsByKey, guestsByVMID)
+			m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
 		}
 	}
 
@@ -1301,7 +1395,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
 		} else {
-			m.alertManager.CheckBackups(rollups, guestsByKey, guestsByVMID)
+			m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
 		}
 	}
 

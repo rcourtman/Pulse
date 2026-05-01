@@ -6216,10 +6216,72 @@ type backupRecord struct {
 	fallbackName string
 	instance     string
 	node         string
+	subjectType  string
 	source       string
 	rollupID     string
 	providers    []recovery.Provider
 	lastTime     time.Time
+}
+
+// BackupInventoryScope carries monitoring-owned inventory readiness into backup
+// alert evaluation. It keeps orphan detection from racing ahead of Proxmox
+// guest/template discovery while preserving the direct CheckBackups API for
+// unit tests and non-monitoring callers.
+type BackupInventoryScope struct {
+	PVEOrphanInventoryReady map[string]map[string]bool
+	PVETemplateSubjects     map[string]struct{}
+}
+
+func BuildBackupPVETemplateSubjectKey(instance, guestType, node string, vmid int) string {
+	instance = strings.TrimSpace(instance)
+	guestType = normalizeBackupGuestType(guestType)
+	node = strings.TrimSpace(node)
+	if instance == "" || guestType == "" || node == "" || vmid <= 0 {
+		return ""
+	}
+	return strings.Join([]string{instance, guestType, node, strconv.Itoa(vmid)}, "\x00")
+}
+
+func normalizeBackupGuestType(guestType string) string {
+	switch strings.ToLower(strings.TrimSpace(guestType)) {
+	case "qemu", "vm", "proxmox-vm":
+		return "qemu"
+	case "lxc", "ct", "container", "system-container", "proxmox-lxc":
+		return "lxc"
+	default:
+		return strings.ToLower(strings.TrimSpace(guestType))
+	}
+}
+
+func backupOrphanInventoryReady(scope *BackupInventoryScope, record backupRecord) bool {
+	if scope == nil || scope.PVEOrphanInventoryReady == nil {
+		return true
+	}
+	if record.source != "PVE" {
+		return true
+	}
+	instance := strings.TrimSpace(record.instance)
+	guestType := normalizeBackupGuestType(record.subjectType)
+	if instance == "" || guestType == "" {
+		return false
+	}
+	return scope.PVEOrphanInventoryReady[instance][guestType]
+}
+
+func backupMatchesKnownPVETemplate(scope *BackupInventoryScope, record backupRecord) bool {
+	if scope == nil || len(scope.PVETemplateSubjects) == 0 || record.source != "PVE" {
+		return false
+	}
+	vmid, err := strconv.Atoi(strings.TrimSpace(record.vmID))
+	if err != nil || vmid <= 0 {
+		return false
+	}
+	key := BuildBackupPVETemplateSubjectKey(record.instance, record.subjectType, record.node, vmid)
+	if key == "" {
+		return false
+	}
+	_, exists := scope.PVETemplateSubjects[key]
+	return exists
 }
 
 func canonicalGuestResourceType(guestType string) unifiedresources.ResourceType {
@@ -6234,6 +6296,12 @@ func canonicalGuestResourceType(guestType string) unifiedresources.ResourceType 
 func canonicalBackupSubjectResourceType(record backupRecord) unifiedresources.ResourceType {
 	if record.lookup.Type != "" {
 		return canonicalGuestResourceType(record.lookup.Type)
+	}
+	switch normalizeBackupGuestType(record.subjectType) {
+	case "lxc":
+		return unifiedresources.ResourceTypeSystemContainer
+	case "qemu":
+		return unifiedresources.ResourceTypeVM
 	}
 	if strings.TrimSpace(record.vmID) != "" {
 		return unifiedresources.ResourceTypeVM
@@ -6535,6 +6603,17 @@ func (m *Manager) CheckBackups(
 	guestsByKey map[string]GuestLookup,
 	guestsByVMID map[string][]GuestLookup,
 ) {
+	m.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, nil)
+}
+
+// CheckBackupsWithInventory evaluates backup rollups with optional monitoring
+// inventory readiness for orphan detection.
+func (m *Manager) CheckBackupsWithInventory(
+	rollups []recovery.ProtectionRollup,
+	guestsByKey map[string]GuestLookup,
+	guestsByVMID map[string][]GuestLookup,
+	inventoryScope *BackupInventoryScope,
+) {
 	m.mu.RLock()
 	enabled := m.config.Enabled
 	backupCfg := m.config.BackupDefaults
@@ -6597,9 +6676,13 @@ func (m *Manager) CheckBackups(
 			instance    string
 			node        string
 			vmID        string
+			subjectType string
 		)
 
 		ref := rollup.SubjectRef
+		if ref != nil {
+			subjectType = normalizeBackupGuestType(ref.Type)
+		}
 
 		// Primary: subjectRef.ID is the canonical proxmox guest source ID (instance:node:vmid) when linked.
 		if ref != nil && strings.TrimSpace(ref.ID) != "" {
@@ -6667,6 +6750,7 @@ func (m *Manager) CheckBackups(
 			fallbackName: displayName,
 			instance:     instance,
 			node:         node,
+			subjectType:  subjectType,
 			source:       source,
 			rollupID:     strings.TrimSpace(rollup.RollupID),
 			providers:    providers,
@@ -6719,6 +6803,12 @@ func (m *Manager) CheckBackups(
 			continue
 		}
 		if record.vmID != "" && record.lookup.ResourceID == "" {
+			if backupMatchesKnownPVETemplate(inventoryScope, *record) {
+				continue
+			}
+			if !backupOrphanInventoryReady(inventoryScope, *record) {
+				continue
+			}
 			if currentBackupCfg.AlertOrphaned != nil && !*currentBackupCfg.AlertOrphaned {
 				continue
 			}

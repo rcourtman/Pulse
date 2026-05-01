@@ -1740,6 +1740,147 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestCheckBackupsSkipsPVEOrphanUntilInventoryReady(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   3,
+		CriticalDays:  5,
+		AlertOrphaned: &alertOrphaned,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "res:vm:proxmox:inst:node:700",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "700",
+				ID:        "inst:node:700",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
+		},
+	}
+
+	m.CheckBackupsWithInventory(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{}, &BackupInventoryScope{
+		PVEOrphanInventoryReady: map[string]map[string]bool{},
+	})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for storageKey, alert := range m.activeAlerts {
+		if strings.HasPrefix(effectiveAlertID(alert, storageKey), "backup-age-") {
+			t.Fatalf("expected no PVE orphan alert before inventory readiness, found %s", effectiveAlertID(alert, storageKey))
+		}
+	}
+}
+
+func TestCheckBackupsCreatesPVEOrphanWhenInventoryReady(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   3,
+		CriticalDays:  5,
+		AlertOrphaned: &alertOrphaned,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "res:vm:proxmox:inst:node:701",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "701",
+				ID:        "inst:node:701",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
+		},
+	}
+
+	m.CheckBackupsWithInventory(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{}, &BackupInventoryScope{
+		PVEOrphanInventoryReady: map[string]map[string]bool{
+			"inst": {"qemu": true},
+		},
+	})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if !testHasActiveAlert(t, m, buildCanonicalStateID("inst:node:701", "inst:node:701-backup-age")) {
+		t.Fatalf("expected PVE orphan backup alert after qemu inventory is ready")
+	}
+}
+
+func TestCheckBackupsSkipsKnownPVETemplateBackupSubject(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	alertOrphaned := true
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:       true,
+		WarningDays:   3,
+		CriticalDays:  5,
+		AlertOrphaned: &alertOrphaned,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "res:vm:proxmox:inst:node:702",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "template-702",
+				ID:        "inst:node:702",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
+		},
+	}
+
+	templateKey := BuildBackupPVETemplateSubjectKey("inst", "qemu", "node", 702)
+	m.CheckBackupsWithInventory(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{}, &BackupInventoryScope{
+		PVEOrphanInventoryReady: map[string]map[string]bool{
+			"inst": {"qemu": true},
+		},
+		PVETemplateSubjects: map[string]struct{}{
+			templateKey: {},
+		},
+	})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for storageKey, alert := range m.activeAlerts {
+		if strings.HasPrefix(effectiveAlertID(alert, storageKey), "backup-age-") {
+			t.Fatalf("expected known template backup subject to be skipped, found %s", effectiveAlertID(alert, storageKey))
+		}
+	}
+}
+
 func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

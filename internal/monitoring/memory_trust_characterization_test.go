@@ -403,6 +403,62 @@ func TestPollVMsWithNodesPreservesProxmoxPool(t *testing.T) {
 	}
 }
 
+func TestPollVMsWithNodesRecordsQEMUTemplateBackupInventoryReadiness(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	client := &vmMemoryTrustStubClient{
+		stubPVEClient: &stubPVEClient{},
+		vms: []proxmox.VM{
+			{
+				VMID:     900,
+				Name:     "tmpl-900",
+				Node:     "node1",
+				Status:   "stopped",
+				Template: 1,
+				MaxMem:   8 * 1024,
+				CPUs:     2,
+			},
+			{
+				VMID:   101,
+				Name:   "vm-101",
+				Node:   "node1",
+				Status: "stopped",
+				MaxMem: 8 * 1024,
+				Mem:    2 * 1024,
+				CPUs:   2,
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
+	nodeEffectiveStatus := map[string]string{"node1": "online"}
+	mon.pollVMsWithNodes(context.Background(), "test", "", false, client, nodes, nodeEffectiveStatus)
+
+	vms := mon.state.GetSnapshot().VMs
+	if len(vms) != 1 {
+		t.Fatalf("expected only non-template VM in runtime state, got %d", len(vms))
+	}
+	if got := vms[0].VMID; got != 101 {
+		t.Fatalf("runtime VMID = %d, want 101", got)
+	}
+
+	scope := mon.backupInventoryScopeForAlerts()
+	if scope == nil {
+		t.Fatal("expected backup inventory scope")
+	}
+	if !scope.PVEOrphanInventoryReady["test"]["qemu"] {
+		t.Fatalf("expected qemu backup orphan inventory readiness for test instance")
+	}
+	templateSubject := pveBackupTemplateSubjectKey("test", "qemu", "node1", 900)
+	if _, ok := scope.PVETemplateSubjects[templateSubject]; !ok {
+		t.Fatalf("expected template subject %q in backup inventory scope", templateSubject)
+	}
+}
+
 func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 

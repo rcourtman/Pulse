@@ -865,6 +865,13 @@ record whose canonical status remains `available` whenever any reporting node
 still has the shared target active; node-local inactive copies may expand node
 affinity, but they must not downgrade the cluster record into an offline
 projection just because that node won the capacity sample.
+That same monitoring-owned Proxmox backup boundary also owns the inventory
+readiness signal used by backup orphan alerts. `internal/monitoring/` must
+record when PVE VM and container inventory has successfully observed a given
+instance and guest type, including template VMIDs that are intentionally
+excluded from normal workload resources. Backup alert evaluation may then
+receive that scoped signal from monitoring, but alert code must not infer PVE
+orphan readiness from recovery rollups alone.
 That same monitoring-owned host-agent ingest boundary now also owns
 vendor-managed NAS RAID normalization. `internal/monitoring/monitor_agents.go`
 must filter vendor-managed system arrays through the shared

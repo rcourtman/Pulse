@@ -450,6 +450,45 @@ func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testi
 	}
 }
 
+func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"monitor.go": {
+			"pveBackupInventoryReady    map[string]map[string]bool",
+			"pveBackupTemplateSubjects  map[string]map[string]struct{}",
+		},
+		"monitor_backups.go": {
+			"func (m *Monitor) updatePVEBackupTemplateSubjectsForType(instanceName, guestType string, subjects map[string]struct{}) {",
+			"func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {",
+			"func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {",
+			"m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())",
+		},
+		"monitor_pve_guest_poll.go": {
+			"m.updatePVEBackupTemplateSubjectsFromClusterResources(instanceName, resources)",
+		},
+		"monitor_polling_vm.go": {
+			`pveBackupTemplateSubjectKey(instanceName, "qemu", n.Node, vm.VMID)`,
+			`m.updatePVEBackupTemplateSubjectsForType(instanceName, "qemu", qemuTemplateSubjects)`,
+		},
+		"monitor_polling_containers.go": {
+			`pveBackupTemplateSubjectKey(instanceName, "lxc", n.Node, int(container.VMID))`,
+			`m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplateSubjects)`,
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestStoragePollingUsesCanonicalPoolMetadataForZFSAttachment(t *testing.T) {
 	data, err := os.ReadFile("monitor_polling_storage.go")
 	if err != nil {

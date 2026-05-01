@@ -241,6 +241,50 @@ func TestEvaluateHostAgentsClearsAlertWhenHostReturns(t *testing.T) {
 	}
 }
 
+func TestCleanupTrackingMapsClearsStalePVEBackupInventoryScope(t *testing.T) {
+	now := time.Now()
+	stale := now.Add(-25 * time.Hour)
+	fresh := now.Add(-time.Hour)
+	staleSubject := pveBackupTemplateSubjectKey("pve-stale", "qemu", "node1", 900)
+	freshSubject := pveBackupTemplateSubjectKey("pve-fresh", "qemu", "node1", 901)
+
+	monitor := &Monitor{
+		lastPVEBackupPoll: map[string]time.Time{
+			"pve-stale": stale,
+			"pve-fresh": fresh,
+		},
+		pveBackupInventoryReady: map[string]map[string]bool{
+			"pve-stale": {"qemu": true},
+			"pve-fresh": {"qemu": true},
+		},
+		pveBackupTemplateSubjects: map[string]map[string]struct{}{
+			"pve-stale": {staleSubject: {}},
+			"pve-fresh": {freshSubject: {}},
+		},
+	}
+
+	monitor.cleanupTrackingMaps(now)
+
+	if _, ok := monitor.lastPVEBackupPoll["pve-stale"]; ok {
+		t.Fatalf("expected stale PVE backup poll marker to be removed")
+	}
+	if _, ok := monitor.pveBackupInventoryReady["pve-stale"]; ok {
+		t.Fatalf("expected stale PVE backup inventory readiness to be removed")
+	}
+	if _, ok := monitor.pveBackupTemplateSubjects["pve-stale"]; ok {
+		t.Fatalf("expected stale PVE backup template subjects to be removed")
+	}
+	if _, ok := monitor.lastPVEBackupPoll["pve-fresh"]; !ok {
+		t.Fatalf("expected fresh PVE backup poll marker to remain")
+	}
+	if !monitor.pveBackupInventoryReady["pve-fresh"]["qemu"] {
+		t.Fatalf("expected fresh PVE backup inventory readiness to remain")
+	}
+	if _, ok := monitor.pveBackupTemplateSubjects["pve-fresh"][freshSubject]; !ok {
+		t.Fatalf("expected fresh PVE backup template subject to remain")
+	}
+}
+
 func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 	t.Helper()
 

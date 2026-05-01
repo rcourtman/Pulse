@@ -17,9 +17,10 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 
 	// Channel to collect container results from each node
 	type nodeResult struct {
-		node       string
-		containers []models.Container
-		err        error
+		node             string
+		containers       []models.Container
+		templateSubjects map[string]struct{}
+		err              error
 	}
 
 	resultChan := make(chan nodeResult, len(nodes))
@@ -81,11 +82,15 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			rootUsageOverrides := m.collectContainerRootUsage(ctx, client, n.Node, vmIDs)
 
 			var nodeContainers []models.Container
+			nodeTemplateSubjects := make(map[string]struct{})
 
 			// Process each container
 			for _, container := range containers {
 				// Skip templates
 				if container.Template == 1 {
+					if key := pveBackupTemplateSubjectKey(instanceName, "lxc", n.Node, int(container.VMID)); key != "" {
+						nodeTemplateSubjects[key] = struct{}{}
+					}
 					continue
 				}
 
@@ -269,7 +274,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 				Dur("duration", nodeDuration).
 				Msg("Node container polling completed")
 
-			resultChan <- nodeResult{node: n.Node, containers: nodeContainers}
+			resultChan <- nodeResult{node: n.Node, containers: nodeContainers, templateSubjects: nodeTemplateSubjects}
 		}(node)
 	}
 
@@ -281,6 +286,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 
 	// Collect results from all nodes
 	var allContainers []models.Container
+	lxcTemplateSubjects := make(map[string]struct{})
 	successfulNodes := 0
 	failedNodes := 0
 
@@ -290,7 +296,13 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 		} else {
 			successfulNodes++
 			allContainers = append(allContainers, result.containers...)
+			for key := range result.templateSubjects {
+				lxcTemplateSubjects[key] = struct{}{}
+			}
 		}
+	}
+	if failedNodes == 0 && successfulNodes > 0 {
+		m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplateSubjects)
 	}
 
 	// If we got ZERO containers but had containers before (likely cluster health issue),

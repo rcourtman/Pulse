@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestPersistGuestIdentity_Concurrent(t *testing.T) {
@@ -171,5 +172,39 @@ func TestBuildGuestLookupsFromReadState_UsesPersistedMetadataWhenCanonicalStateE
 	}
 	if len(byVMID["100"]) != 1 || byVMID["100"][0].Name != "persisted-vm" || byVMID["100"][0].Type != "qemu" {
 		t.Fatalf("expected persisted metadata fallback, got %+v", byVMID["100"])
+	}
+}
+
+func TestPVEBackupTemplateInventoryScopeFromClusterResources(t *testing.T) {
+	m := &Monitor{}
+
+	m.updatePVEBackupTemplateSubjectsFromClusterResources("pve-a", []proxmox.ClusterResource{
+		{Type: "qemu", Node: "node-a", VMID: 700, Template: 1},
+		{Type: "lxc", Node: "node-b", VMID: 701, Template: 1},
+		{Type: "qemu", Node: "node-c", VMID: 702, Template: 0},
+	})
+
+	scope := m.backupInventoryScopeForAlerts()
+	if scope == nil {
+		t.Fatalf("expected backup inventory scope")
+	}
+	if !scope.PVEOrphanInventoryReady["pve-a"]["qemu"] {
+		t.Fatalf("expected qemu backup inventory to be marked ready")
+	}
+	if !scope.PVEOrphanInventoryReady["pve-a"]["lxc"] {
+		t.Fatalf("expected lxc backup inventory to be marked ready")
+	}
+
+	qemuTemplate := alerts.BuildBackupPVETemplateSubjectKey("pve-a", "qemu", "node-a", 700)
+	if _, exists := scope.PVETemplateSubjects[qemuTemplate]; !exists {
+		t.Fatalf("expected qemu template subject to be captured")
+	}
+	lxcTemplate := alerts.BuildBackupPVETemplateSubjectKey("pve-a", "lxc", "node-b", 701)
+	if _, exists := scope.PVETemplateSubjects[lxcTemplate]; !exists {
+		t.Fatalf("expected lxc template subject to be captured")
+	}
+	nonTemplate := alerts.BuildBackupPVETemplateSubjectKey("pve-a", "qemu", "node-c", 702)
+	if _, exists := scope.PVETemplateSubjects[nonTemplate]; exists {
+		t.Fatalf("did not expect non-template subject to be captured")
 	}
 }

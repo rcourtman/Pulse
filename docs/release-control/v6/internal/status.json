@@ -4405,6 +4405,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-backup-orphan-readiness-2026-05-01.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-blocked-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"

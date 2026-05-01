@@ -156,6 +156,13 @@ and identity first-seen tracking. Generic threshold reevaluation must not keep
 or resurrect image-update alerts after their owning Docker alert configuration
 has disabled them.
 
+Backup orphan evaluation is also inventory-scoped. The alerts runtime may
+evaluate recovery rollups for backup age, but unresolved Proxmox PVE backup
+subjects must not be treated as orphaned until monitoring has supplied the
+matching per-instance guest-type inventory readiness signal. Known Proxmox
+template subjects are valid backup subjects, not orphaned workload backups,
+even though templates remain excluded from normal runtime workload resources.
+
 Alert history persistence is also part of that canonical boundary. The history
 manager may choose the owned runtime data directory, but it must normalize that
 directory once and then resolve only the fixed `alert-history.json` and

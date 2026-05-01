@@ -2600,6 +2600,8 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 	for instanceID, ts := range m.lastPVEBackupPoll {
 		if ts.Before(cutoff) {
 			delete(m.lastPVEBackupPoll, instanceID)
+			delete(m.pveBackupInventoryReady, instanceID)
+			delete(m.pveBackupTemplateSubjects, instanceID)
 			cleaned++
 		}
 	}

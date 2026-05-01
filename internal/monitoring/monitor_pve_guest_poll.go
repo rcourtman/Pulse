@@ -25,6 +25,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		log.Debug().Err(err).Str("instance", instanceName).Msg("cluster/resources not available, falling back to traditional polling")
 		return false
 	}
+	m.updatePVEBackupTemplateSubjectsFromClusterResources(instanceName, resources)
 
 	// Capture previous guest state once per poll cycle so fallback and grace-period
 	// behavior is based on a consistent pre-poll snapshot.

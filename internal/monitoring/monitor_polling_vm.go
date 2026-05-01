@@ -19,9 +19,10 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 
 	// Channel to collect VM results from each node
 	type nodeResult struct {
-		node string
-		vms  []models.VM
-		err  error
+		node             string
+		vms              []models.VM
+		templateSubjects map[string]struct{}
+		err              error
 	}
 
 	resultChan := make(chan nodeResult, len(nodes))
@@ -74,11 +75,15 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 			}
 
 			var nodeVMs []models.VM
+			nodeTemplateSubjects := make(map[string]struct{})
 
 			// Process each VM
 			for _, vm := range vms {
 				// Skip templates
 				if vm.Template == 1 {
+					if key := pveBackupTemplateSubjectKey(instanceName, "qemu", n.Node, vm.VMID); key != "" {
+						nodeTemplateSubjects[key] = struct{}{}
+					}
 					continue
 				}
 
@@ -601,7 +606,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 				Dur("duration", nodeDuration).
 				Msg("Node VM polling completed")
 
-			resultChan <- nodeResult{node: n.Node, vms: nodeVMs}
+			resultChan <- nodeResult{node: n.Node, vms: nodeVMs, templateSubjects: nodeTemplateSubjects}
 		}(node)
 	}
 
@@ -613,6 +618,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 
 	// Collect results from all nodes
 	var allVMs []models.VM
+	qemuTemplateSubjects := make(map[string]struct{})
 	successfulNodes := 0
 	failedNodes := 0
 
@@ -622,7 +628,13 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		} else {
 			successfulNodes++
 			allVMs = append(allVMs, result.vms...)
+			for key := range result.templateSubjects {
+				qemuTemplateSubjects[key] = struct{}{}
+			}
 		}
+	}
+	if failedNodes == 0 && successfulNodes > 0 {
+		m.updatePVEBackupTemplateSubjectsForType(instanceName, "qemu", qemuTemplateSubjects)
 	}
 
 	// If we got ZERO VMs but had VMs before (likely cluster health issue),

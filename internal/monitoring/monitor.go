@@ -941,6 +941,8 @@ type Monitor struct {
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
+	pveBackupInventoryReady    map[string]map[string]bool                 // Track PVE guest inventory readiness for backup orphan detection
+	pveBackupTemplateSubjects  map[string]map[string]struct{}             // Track template VMIDs excluded from runtime workloads but valid for backups
 	backupPermissionWarnings   map[string]string                          // Track backup permission issues per instance (instance -> warning message)
 	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
 	pbsBackupPollers           map[string]bool                            // Track PBS backup polling goroutines per instance
@@ -1486,6 +1488,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastPhysicalDiskPoll:       make(map[string]time.Time),
 		lastPVEBackupPoll:          make(map[string]time.Time),
 		lastPBSBackupPoll:          make(map[string]time.Time),
+		pveBackupInventoryReady:    make(map[string]map[string]bool),
+		pveBackupTemplateSubjects:  make(map[string]map[string]struct{}),
 		backupPermissionWarnings:   make(map[string]string),
 		persistence:                config.NewConfigPersistence(cfg.DataPath),
 		pbsBackupPollers:           make(map[string]bool),

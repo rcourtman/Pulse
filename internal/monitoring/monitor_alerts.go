@@ -303,7 +303,7 @@ func (m *Monitor) checkMockAlerts() {
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
 	} else {
-		m.alertManager.CheckBackups(rollups, guestsByKey, guestsByVMID)
+		m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
 	}
 
 	// Limit how many guests we check per cycle to prevent blocking with large datasets

@@ -87,6 +87,8 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	delete(m.lastClusterCheck, instanceName)
 	delete(m.lastPhysicalDiskPoll, instanceName)
 	delete(m.lastPVEBackupPoll, instanceName)
+	delete(m.pveBackupInventoryReady, instanceName)
+	delete(m.pveBackupTemplateSubjects, instanceName)
 	delete(m.backupPermissionWarnings, instanceName)
 	delete(m.authFailures, instanceName)
 	delete(m.authFailures, string(InstanceTypePVE)+"-"+instanceName)
