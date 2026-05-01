@@ -1,8 +1,4 @@
-import type {
-  AggregatedMetricPoint,
-  HistoryTimeRange,
-  ResourceType,
-} from '@/api/charts';
+import type { AggregatedMetricPoint, HistoryTimeRange, ResourceType } from '@/api/charts';
 import { formatBytes } from '@/utils/format';
 
 export interface HistoryChartProps {
@@ -193,14 +189,36 @@ export function getHistoryChartTooltipLayout({
   const width = 156;
   const height = 46;
   const margin = 8;
+  const pointGap = 12;
   const minX = margin;
   const maxX = Math.max(minX, chartWidth - width - margin);
-  const x = Math.min(Math.max(hoveredPoint.x - width / 2, minX), maxX);
-  const showBelow = hoveredPoint.y < height + margin;
   const minY = margin;
   const maxY = Math.max(minY, chartHeight - height - margin);
-  const y = showBelow
-    ? Math.min(Math.max(hoveredPoint.y + 12, minY), maxY)
-    : Math.min(Math.max(hoveredPoint.y - height - 12, minY), maxY);
+  const clampX = (value: number) => Math.min(Math.max(value, minX), maxX);
+  const clampY = (value: number) => Math.min(Math.max(value, minY), maxY);
+
+  const rightX = hoveredPoint.x + pointGap;
+  const leftX = hoveredPoint.x - width - pointGap;
+  const canPlaceRight = rightX <= maxX;
+  const canPlaceLeft = leftX >= minX;
+  const rightRoom = chartWidth - margin - hoveredPoint.x;
+  const leftRoom = hoveredPoint.x - margin;
+  const x =
+    canPlaceRight && (!canPlaceLeft || rightRoom >= leftRoom)
+      ? rightX
+      : canPlaceLeft
+        ? leftX
+        : clampX(hoveredPoint.x - width / 2);
+
+  let y = clampY(hoveredPoint.y - height / 2);
+  const overlapsHoveredPoint =
+    hoveredPoint.x >= x &&
+    hoveredPoint.x <= x + width &&
+    hoveredPoint.y >= y &&
+    hoveredPoint.y <= y + height;
+  if (overlapsHoveredPoint) {
+    const showBelow = hoveredPoint.y < height + margin;
+    y = showBelow ? clampY(hoveredPoint.y + pointGap) : clampY(hoveredPoint.y - height - pointGap);
+  }
   return { x, y, width, height };
 }

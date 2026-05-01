@@ -650,3 +650,34 @@ func TestReevaluateActiveAlertsUsesGuestContextForPoweredOffCustomRules(t *testi
 		t.Fatalf("expected guest powered-off alert to resolve when custom rule disables connectivity")
 	}
 }
+
+func TestReevaluateActiveAlertsUsesPBSResourceTypeMetadata(t *testing.T) {
+	m := newTestManager(t)
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.PBSDefaults = ThresholdConfig{
+		CPU:    &HysteresisThreshold{Trigger: 99, Clear: 94},
+		Memory: &HysteresisThreshold{Trigger: 0, Clear: 0},
+	}
+	state, alert := testNewCanonicalAlert("pbs-1", canonicalMetricSpecID("pbs-1", "memory"), string(alertspecs.AlertSpecKindMetricThreshold), "memory")
+	alert.Value = 90.8
+	alert.Threshold = 85
+	alert.ResourceName = "pbs"
+	alert.Node = "pbs.local"
+	alert.Instance = "pbs"
+	alert.Metadata = map[string]interface{}{
+		"resourceType": "PBS",
+	}
+	m.setActiveAlertNoLock(state, alert)
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[state]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected PBS metric alert to resolve when PBS memory threshold is disabled")
+	}
+}

@@ -295,9 +295,7 @@ func mergeConnectionSystemMembers(
 	if strings.TrimSpace(existing.Endpoint) == "" {
 		existing.Endpoint = candidate.Endpoint
 	}
-	if existing.State == ConnectionStatePending && candidate.State != ConnectionStatePending {
-		existing.State = candidate.State
-	}
+	existing.State = moreSevereConnectionSystemMemberState(existing.State, candidate.State)
 	if existing.LastSeen == nil ||
 		(candidate.LastSeen != nil && candidate.LastSeen.After(*existing.LastSeen)) {
 		existing.LastSeen = candidate.LastSeen
@@ -310,6 +308,35 @@ func mergeConnectionSystemMembers(
 	}
 	existing.HostAliases = appendNormalizedHosts(existing.HostAliases, candidate.HostAliases...)
 	return existing
+}
+
+func moreSevereConnectionSystemMemberState(
+	left ConnectionState,
+	right ConnectionState,
+) ConnectionState {
+	if connectionSystemMemberStateSeverity(right) > connectionSystemMemberStateSeverity(left) {
+		return right
+	}
+	return left
+}
+
+func connectionSystemMemberStateSeverity(state ConnectionState) int {
+	switch state {
+	case ConnectionStateActive:
+		return 0
+	case ConnectionStatePaused:
+		return 1
+	case ConnectionStatePending:
+		return 2
+	case ConnectionStateStale:
+		return 3
+	case ConnectionStateUnauthorized:
+		return 4
+	case ConnectionStateUnreachable:
+		return 5
+	default:
+		return 2
+	}
 }
 
 func connectionSystemMemberHostAliasesFromNode(node models.Node) []string {

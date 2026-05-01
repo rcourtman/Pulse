@@ -2140,7 +2140,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
-		} else if threshold == nil && alert.Instance == "PBS" {
+		} else if threshold == nil && (resourceTypeMeta == "pbs" || alert.Instance == "PBS") {
 			// This is a PBS alert
 			// Check if all PBS alerts are disabled
 			if m.config.DisableAllPBS {

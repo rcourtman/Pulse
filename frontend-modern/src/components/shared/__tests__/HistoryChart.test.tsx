@@ -7,7 +7,10 @@ import historyChartModelSource from '@/components/shared/historyChartModel.ts?ra
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
 import { HistoryChart } from '@/components/shared/HistoryChart';
-import { HISTORY_CHART_RANGES } from '@/components/shared/historyChartModel';
+import {
+  getHistoryChartTooltipLayout,
+  HISTORY_CHART_RANGES,
+} from '@/components/shared/historyChartModel';
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -87,7 +90,9 @@ describe('HistoryChart', () => {
     expect(historyChartOverlaySource).toContain(
       'Historical data beyond {props.chart.lockDays()} days is not enabled on this instance.',
     );
-    expect(historyChartOverlaySource).not.toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).not.toContain(
+      'Unlock {props.chart.lockTierLabel()} Features',
+    );
     expect(historyChartOverlaySource).not.toContain('presentationPolicyHidesUpgradePrompts');
     expect(historyChartOverlaySource).not.toContain('free 14-day trial');
     expect(historyChartOverlaySource).toContain('is not enabled on this');
@@ -111,5 +116,28 @@ describe('HistoryChart', () => {
 
   it('exposes the Relay history range as a first-class chart option', () => {
     expect(HISTORY_CHART_RANGES).toEqual(['24h', '7d', '14d', '30d', '90d']);
+  });
+
+  it('positions the tooltip beside the hovered point when there is chart space', () => {
+    const layout = getHistoryChartTooltipLayout({
+      hoveredPoint: { x: 150, y: 70, timestamp: 0, value: 42 },
+      chartWidth: 420,
+      chartHeight: 180,
+    });
+
+    expect(layout.x).toBe(162);
+    expect(layout.x).toBeGreaterThan(150);
+    expect(layout.y).toBe(47);
+  });
+
+  it('moves the tooltip to the left edge side near the right chart boundary', () => {
+    const layout = getHistoryChartTooltipLayout({
+      hoveredPoint: { x: 380, y: 70, timestamp: 0, value: 42 },
+      chartWidth: 420,
+      chartHeight: 180,
+    });
+
+    expect(layout.x + layout.width).toBeLessThan(380);
+    expect(layout.x).toBe(212);
   });
 });

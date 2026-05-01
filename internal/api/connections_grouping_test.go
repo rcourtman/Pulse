@@ -308,6 +308,35 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 	}
 }
 
+func TestMergeConnectionSystemMembersKeepsMostSevereState(t *testing.T) {
+	activeMember := ConnectionSystemMember{
+		ID:      "node-minipc",
+		Name:    "minipc",
+		State:   ConnectionStateActive,
+		Primary: true,
+	}
+	offlineMember := ConnectionSystemMember{
+		ID:    "resource-node-minipc",
+		Name:  "minipc",
+		State: ConnectionStateUnreachable,
+	}
+
+	merged := mergeConnectionSystemMembers(activeMember, offlineMember)
+	if merged.State != ConnectionStateUnreachable {
+		t.Fatalf("merged state = %q, want %q", merged.State, ConnectionStateUnreachable)
+	}
+	if !merged.Primary {
+		t.Fatalf("expected primary marker to survive merge: %+v", merged)
+	}
+
+	staleMember := ConnectionSystemMember{Name: "minipc", State: ConnectionStateStale}
+	freshMember := ConnectionSystemMember{Name: "minipc", State: ConnectionStateActive}
+	merged = mergeConnectionSystemMembers(staleMember, freshMember)
+	if merged.State != ConnectionStateStale {
+		t.Fatalf("merged state = %q, want %q", merged.State, ConnectionStateStale)
+	}
+}
+
 func TestBuildConnectionSystems_GuestAgentStaysStandaloneWhenOnlyClusterInstanceMatches(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)
