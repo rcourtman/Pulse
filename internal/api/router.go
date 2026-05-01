@@ -139,6 +139,8 @@ type Router struct {
 	relayCancel              context.CancelFunc
 	lifecycleCtx             context.Context
 	lifecycleCancel          context.CancelFunc
+	lifecycleWG              sync.WaitGroup
+	backgroundWorkersOnce    sync.Once
 	hostedMode               bool
 	stripeWebhookHandlers    *StripeWebhookHandlers
 	patrolLifecycleMu        sync.Mutex
@@ -273,12 +275,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 
 	r.setupRoutes()
 	log.Debug().Msg("Routes registered successfully")
-
-	// Start forwarding update progress to WebSocket
-	go r.forwardUpdateProgress()
-
-	// Start background update checker
-	go r.backgroundUpdateChecker(r.lifecycleCtx)
 
 	// Load system settings once at startup and cache them
 	r.reloadSystemSettings()
@@ -1084,6 +1080,32 @@ func (r *Router) Handler() http.Handler {
 		return r.wrapped
 	}
 	return r
+}
+
+// StartBackgroundWorkers starts router-owned background workers for the API
+// server lifecycle. Unit tests that only need the HTTP handler can construct a
+// router without starting update checks or WebSocket forwarding loops.
+func (r *Router) StartBackgroundWorkers() {
+	if r == nil {
+		return
+	}
+	r.backgroundWorkersOnce.Do(func() {
+		r.startLifecycleWorker(r.forwardUpdateProgress)
+		r.startLifecycleWorker(func() {
+			r.backgroundUpdateChecker(r.lifecycleCtx)
+		})
+	})
+}
+
+func (r *Router) startLifecycleWorker(worker func()) {
+	if r == nil || worker == nil {
+		return
+	}
+	r.lifecycleWG.Add(1)
+	go func() {
+		defer r.lifecycleWG.Done()
+		worker()
+	}()
 }
 
 // SetMonitor updates the router and associated handlers with a new monitor instance.
@@ -2170,6 +2192,9 @@ func (r *Router) shutdownBackgroundWorkers() {
 	if r.lifecycleCancel != nil {
 		r.lifecycleCancel()
 	}
+	if r.updateManager != nil {
+		r.updateManager.Close()
+	}
 	if r.sessionStore != nil {
 		r.sessionStore.Shutdown()
 	}
@@ -2193,6 +2218,7 @@ func (r *Router) shutdownBackgroundWorkers() {
 			log.Error().Err(err).Msg("Failed to close deploy store")
 		}
 	}
+	r.lifecycleWG.Wait()
 }
 
 // StartAIChat starts the AI chat service

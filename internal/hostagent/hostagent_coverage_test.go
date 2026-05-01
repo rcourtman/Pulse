@@ -141,7 +141,9 @@ func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.
 	}
 
 	parentCtx, cancel := context.WithCancel(context.Background())
-	_ = parentCtx
+	a.commandClientMu.Lock()
+	a.commandClientParentCtx = parentCtx
+	a.commandClientMu.Unlock()
 	a.startCommandClient(a.commandClient)
 	select {
 	case <-started:
@@ -181,7 +183,9 @@ func TestAgent_CommandClientLifecycle_StopCancelsContext(t *testing.T) {
 
 	parentCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_ = parentCtx
+	a.commandClientMu.Lock()
+	a.commandClientParentCtx = parentCtx
+	a.commandClientMu.Unlock()
 	a.startCommandClient(a.commandClient)
 
 	select {

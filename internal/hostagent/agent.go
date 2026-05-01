@@ -482,20 +482,21 @@ func (a *Agent) signalRemoteConfigChanged() {
 	}
 }
 
-func (a *Agent) startCommandClient(client *CommandClient) {
+func (a *Agent) startCommandClient(client *CommandClient) bool {
 	if client == nil {
-		return
+		return false
 	}
 
 	a.commandClientMu.Lock()
 	if a.commandClientRunCancel != nil {
 		a.commandClientMu.Unlock()
-		return
+		return true
 	}
 
 	parentCtx := a.commandClientParentCtx
 	if parentCtx == nil {
-		parentCtx = context.Background()
+		a.commandClientMu.Unlock()
+		return false
 	}
 	runCtx, cancel := context.WithCancel(parentCtx)
 	a.commandClientRunCancel = cancel
@@ -506,6 +507,7 @@ func (a *Agent) startCommandClient(client *CommandClient) {
 			a.logger.Error().Err(err).Msg("Command client stopped with error")
 		}
 	}()
+	return true
 }
 
 func (a *Agent) stopCommandClient(clearClient bool) {
@@ -921,14 +923,19 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 	case commandsEnabled && !currentlyEnabled:
 		clientToStart = a.newCommandClient(commandCfg, a.agentID, a.hostname, a.platform, a.agentVersion)
 		a.commandClient = clientToStart
+	case commandsEnabled && currentlyEnabled:
+		clientToStart = a.commandClient
 	case !commandsEnabled && currentlyEnabled:
 		shouldStop = true
 	}
 	a.commandClientMu.Unlock()
 
 	if clientToStart != nil {
-		a.logger.Info().Msg("Server enabled command execution - starting command client")
-		a.startCommandClient(clientToStart)
+		if a.startCommandClient(clientToStart) {
+			a.logger.Info().Msg("Server enabled command execution - starting command client")
+		} else {
+			a.logger.Info().Msg("Server enabled command execution - command client configured pending run context")
+		}
 	} else if shouldStop {
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
 		a.stopCommandClient(true)

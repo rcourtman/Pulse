@@ -375,6 +375,7 @@ func Run(ctx context.Context, version string) error {
 		return nil
 	}
 	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version)
+	router.StartBackgroundWorkers()
 
 	// Inject resource store into monitor for WebSocket broadcasts
 	router.SetMonitor(reloadableMonitor.GetMonitor())
