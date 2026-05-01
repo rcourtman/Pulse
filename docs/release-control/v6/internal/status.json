@@ -2483,6 +2483,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-installer-disk-preflight-2026-05-01.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
           "kind": "file"
         }

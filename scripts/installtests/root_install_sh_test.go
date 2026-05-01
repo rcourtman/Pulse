@@ -72,6 +72,10 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 		`resolve_archive_override()`,
 		`infer_release_from_archive_name()`,
 		`validate_pulse_binary_architecture()`,
+		`ensure_update_disk_headroom()`,
+		`UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))`,
+		`UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))`,
+		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
 		`prefetch_pulse_archive_for_container()`,
 		`download_release_archive()`,
 		`install_pulse_archive()`,
@@ -81,6 +85,82 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing archive support contract: %s", needle)
 		}
+	}
+}
+
+func TestRootInstallScriptUpdateDiskHeadroomRejectsSharedLowSpaceFilesystem(t *testing.T) {
+	script := `
+		set -euo pipefail
+		print_error() { :; }
+		print_info() { :; }
+		print_warn() { :; }
+		INSTALL_DIR="/opt/pulse"
+		UPDATE_MIN_TEMP_FREE_BYTES=$((100 * 1024))
+		UPDATE_MIN_INSTALL_FREE_BYTES=$((80 * 1024))
+` + extractRootInstallShellFunction(t, "bytes_to_human") + `
+` + extractRootInstallShellFunction(t, "get_available_bytes_for_path") + `
+` + extractRootInstallShellFunction(t, "get_filesystem_device_for_path") + `
+` + extractRootInstallShellFunction(t, "ensure_update_disk_headroom") + `
+		df() {
+			if [[ "$1" == "-Pk" ]]; then
+				case "$2" in
+					/tmp|/opt/pulse)
+						printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+						printf '/dev/shared 1000 0 150 0%% /\n'
+						return 0
+						;;
+				esac
+			fi
+			command df "$@"
+		}
+		if ensure_update_disk_headroom /tmp /opt/pulse; then
+			echo "ensure_update_disk_headroom unexpectedly passed on a shared full filesystem" >&2
+			exit 1
+		fi
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
+func TestRootInstallScriptUpdateDiskHeadroomAcceptsSeparateFilesystems(t *testing.T) {
+	script := `
+		set -euo pipefail
+		print_error() { :; }
+		print_info() { :; }
+		print_warn() { :; }
+		INSTALL_DIR="/opt/pulse"
+		UPDATE_MIN_TEMP_FREE_BYTES=$((100 * 1024))
+		UPDATE_MIN_INSTALL_FREE_BYTES=$((80 * 1024))
+` + extractRootInstallShellFunction(t, "bytes_to_human") + `
+` + extractRootInstallShellFunction(t, "get_available_bytes_for_path") + `
+` + extractRootInstallShellFunction(t, "get_filesystem_device_for_path") + `
+` + extractRootInstallShellFunction(t, "ensure_update_disk_headroom") + `
+		df() {
+			if [[ "$1" == "-Pk" ]]; then
+				case "$2" in
+					/tmp)
+						printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+						printf '/dev/tmp 1000 0 120 0%% /tmp\n'
+						return 0
+						;;
+					/opt/pulse)
+						printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+						printf '/dev/root 1000 0 90 0%% /\n'
+						return 0
+						;;
+				esac
+			fi
+			command df "$@"
+		}
+		ensure_update_disk_headroom /tmp /opt/pulse
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
 	}
 }
 

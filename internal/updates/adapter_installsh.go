@@ -86,7 +86,7 @@ func (a *InstallShAdapter) PrepareUpdate(ctx context.Context, request UpdateRequ
 		Prerequisites: []string{
 			"Root access (sudo)",
 			"Internet connection",
-			"At least 100MB free disk space",
+			"About 1.2GB free disk space for update staging",
 		},
 	}
 

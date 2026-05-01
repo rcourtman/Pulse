@@ -409,6 +409,13 @@ old snapshot ages out of retention, choose a backup root with enough free
 space, and reject extraction/backup work early with a concrete space error
 instead of drifting into partial update failure on small LXC or single-disk
 installs.
+The root server installer shares that same fail-closed update-space boundary:
+`install.sh` must preflight staging and install-directory filesystem headroom
+before it stops the running Pulse service or downloads/applies a release
+archive, combining the required headroom when `/tmp` and the install directory
+share one filesystem. The install.sh update adapter must advertise that same
+operator prerequisite so in-app updates do not understate the staging
+requirement.
 The same governed promotion path must now stay explicit too:
 `scripts/release_control/resolve_release_promotion.py` is the canonical owner
 for stable-versus-prerelease metadata validation shared by `.github/workflows/release-dry-run.yml`

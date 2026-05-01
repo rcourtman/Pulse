@@ -103,6 +103,8 @@ CURRENT_INSTALL_CTID=""
 CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
+UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))
+UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))
 
 release_signature_key_available() {
     [[ -n "${PINNED_RELEASE_SSH_PUBLIC_KEY:-}" ]]
@@ -155,6 +157,97 @@ AUTO_NODE_REGISTER_ERROR=""
 
 DEBIAN_TEMPLATE_FALLBACK="debian-12-standard_12.12-1_amd64.tar.zst"
 DEBIAN_TEMPLATE=""
+
+bytes_to_human() {
+    local bytes="${1:-0}"
+
+    if [[ ! "$bytes" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$bytes"
+        return 0
+    fi
+
+    local units=("B" "KB" "MB" "GB" "TB")
+    local value="$bytes"
+    local unit_index=0
+
+    while (( value >= 1024 && unit_index < ${#units[@]} - 1 )); do
+        value=$((value / 1024))
+        ((unit_index += 1))
+    done
+
+    printf '%s%s\n' "$value" "${units[$unit_index]}"
+}
+
+get_available_bytes_for_path() {
+    local path="$1"
+    local available_kb=""
+
+    available_kb=$(df -Pk "$path" 2>/dev/null | awk 'NR==2 {print $4}')
+    if [[ ! "$available_kb" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    printf '%s\n' $((available_kb * 1024))
+}
+
+get_filesystem_device_for_path() {
+    local path="$1"
+    local filesystem=""
+
+    filesystem=$(df -Pk "$path" 2>/dev/null | awk 'NR==2 {print $1}')
+    if [[ -z "$filesystem" ]]; then
+        return 1
+    fi
+
+    printf '%s\n' "$filesystem"
+}
+
+ensure_update_disk_headroom() {
+    local temp_path="${1:-/tmp}"
+    local install_path="${2:-$INSTALL_DIR}"
+    local temp_fs=""
+    local install_fs=""
+    local temp_free_bytes=""
+    local install_free_bytes=""
+    local combined_required_bytes=$((UPDATE_MIN_TEMP_FREE_BYTES + UPDATE_MIN_INSTALL_FREE_BYTES))
+
+    temp_fs=$(get_filesystem_device_for_path "$temp_path" 2>/dev/null || true)
+    install_fs=$(get_filesystem_device_for_path "$install_path" 2>/dev/null || true)
+    temp_free_bytes=$(get_available_bytes_for_path "$temp_path" 2>/dev/null || true)
+    install_free_bytes=$(get_available_bytes_for_path "$install_path" 2>/dev/null || true)
+
+    if [[ -z "$temp_free_bytes" || -z "$install_free_bytes" ]]; then
+        print_warn "Could not determine available disk space for the update preflight; continuing anyway"
+        return 0
+    fi
+
+    if [[ -n "$temp_fs" && "$temp_fs" == "$install_fs" ]]; then
+        if (( temp_free_bytes < combined_required_bytes )); then
+            print_error "Not enough free disk space to stage the Pulse update"
+            print_info "The same filesystem backs $temp_path and $install_path"
+            print_info "Available: $(bytes_to_human "$temp_free_bytes"), required: $(bytes_to_human "$combined_required_bytes")"
+            print_info "Free disk space and retry the update"
+            return 1
+        fi
+        return 0
+    fi
+
+    if (( temp_free_bytes < UPDATE_MIN_TEMP_FREE_BYTES )); then
+        print_error "Not enough free disk space in $temp_path to stage the Pulse update"
+        print_info "Available: $(bytes_to_human "$temp_free_bytes"), required: $(bytes_to_human "$UPDATE_MIN_TEMP_FREE_BYTES")"
+        print_info "Free disk space under $temp_path and retry the update"
+        return 1
+    fi
+
+    if (( install_free_bytes < UPDATE_MIN_INSTALL_FREE_BYTES )); then
+        print_error "Not enough free disk space in $install_path to apply the Pulse update"
+        print_info "Available: $(bytes_to_human "$install_free_bytes"), required: $(bytes_to_human "$UPDATE_MIN_INSTALL_FREE_BYTES")"
+        print_info "Free disk space under $install_path and retry the update"
+        return 1
+    fi
+
+    return 0
+}
 
 get_latest_release_from_redirect() {
     # Follow the GitHub "latest" redirect and extract the tag in a way that
@@ -2826,6 +2919,10 @@ download_pulse() {
         local inferred_release=""
 
         rm -f "$BUILD_FROM_SOURCE_MARKER"
+
+        if ! ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"; then
+            exit 1
+        fi
 
         raw_arch=$(uname -m)
         pulse_arch=$(detect_pulse_architecture "$raw_arch") || {
