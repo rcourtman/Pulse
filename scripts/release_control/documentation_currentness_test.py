@@ -146,11 +146,14 @@ class DocumentationCurrentnessTest(unittest.TestCase):
             "docs/architecture/v6-pricing-and-tiering.md",
             "docs/releases/RELEASE_NOTES_v6.md",
             "docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md",
+            "docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md",
             "docs/releases/V6_CHANGELOG.md",
             "docs/releases/V6_CHANGELOG_RC1.md",
             "docs/releases/V6_CHANGELOG_RC2_DRAFT.md",
+            "docs/releases/V6_CHANGELOG_RC3_DRAFT.md",
             "docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md",
             "docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md",
+            "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md",
             "frontend-modern/public/docs/README.md",
         )
         forbidden_phrases = (

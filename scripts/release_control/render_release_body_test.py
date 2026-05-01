@@ -96,6 +96,9 @@ Old metadata section.
             "docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md",
             "docs/releases/V6_CHANGELOG_RC2_DRAFT.md",
             "docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md",
+            "docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md",
+            "docs/releases/V6_CHANGELOG_RC3_DRAFT.md",
+            "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md",
         )
 
         for relative_path in packet_paths:

@@ -7,6 +7,12 @@ For current stable release notes and rollout references, see:
 - `docs/releases/RELEASE_NOTES_v6.md`
 - `docs/releases/V6_CHANGELOG.md`
 
+For the current v6 prerelease packet, see:
+
+- `docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md`
+- `docs/releases/V6_CHANGELOG_RC3_DRAFT.md`
+- `docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md`
+
 ## Before You Upgrade
 
 - Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)
