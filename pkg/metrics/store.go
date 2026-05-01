@@ -641,6 +641,11 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	stmt, err := tx.Prepare(`
 		INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier)
 		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(resource_type, resource_id, metric_type, timestamp, tier)
+		DO UPDATE SET
+			value = excluded.value,
+			min_value = excluded.min_value,
+			max_value = excluded.max_value
 	`)
 	if err != nil {
 		tx.Rollback()

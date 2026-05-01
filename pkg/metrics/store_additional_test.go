@@ -69,6 +69,36 @@ func TestStoreWriteBatchSync(t *testing.T) {
 	}
 }
 
+func TestStoreWriteBatchUpsertsDuplicateRawMetric(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-duplicates.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	ts := time.Now().UTC().Truncate(time.Second)
+	store.writeBatch([]bufferedMetric{
+		{resourceType: "agent", resourceID: "host-1", metricType: "memory", value: 42, timestamp: ts, tier: TierRaw},
+		{resourceType: "agent", resourceID: "host-1", metricType: "memory", value: 55, timestamp: ts, tier: TierRaw},
+	})
+
+	points, err := store.Query("agent", "host-1", "memory", ts.Add(-time.Second), ts.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("Query returned error: %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("expected duplicate timestamp to collapse to one point, got %+v", points)
+	}
+	if points[0].Value != 55 {
+		t.Fatalf("expected latest duplicate value to win, got %+v", points[0])
+	}
+}
+
 func TestResolveStoreDBPathCanonicalizesOwnedPath(t *testing.T) {
 	root := t.TempDir()
 	rawPath := filepath.Join(root, "metrics", "..", "metrics", "metrics.db")

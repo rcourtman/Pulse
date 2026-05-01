@@ -572,10 +572,14 @@ transactions over tiny frequent commits: the default write buffer should stay
 large enough to absorb one poll cycle on modest multi-node installs, queued
 flush batches should coalesce before commit when the worker is already behind,
 and WAL auto-checkpointing should avoid tiny segment rewrite loops that keep
-rewriting `metrics.db` on SSD-backed systems. Any future change that reduces
-that batching headroom or makes WAL checkpoints more aggressive again must
-re-prove the metrics-store hot path with the owned store tests rather than
-assuming the earlier vacuum fixes are sufficient.
+rewriting `metrics.db` on SSD-backed systems. Duplicate samples for the same
+resource type, resource id, metric type, timestamp, and tier must be treated as
+idempotent writes against the metrics table's unique key rather than as noisy
+SQLite constraint failures; for raw writes, the latest buffered value wins and
+aggregate-only min/max columns stay unset. Any future change that reduces that
+batching headroom, makes WAL checkpoints more aggressive again, or reopens
+duplicate-write failures must re-prove the metrics-store hot path with the
+owned store tests rather than assuming the earlier vacuum fixes are sufficient.
 contract instead of inventing an infrastructure-local summary filter branch.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that
