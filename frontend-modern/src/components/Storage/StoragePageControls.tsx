@@ -30,10 +30,10 @@ import {
   normalizeStorageSortKey,
   STORAGE_GROUP_BY_OPTIONS,
   STORAGE_STATUS_FILTER_OPTIONS,
+  type StorageStatusFilterValue,
   type StorageView,
 } from './storagePageState';
 import type { StorageGroupKey, StorageSortKey } from './useStorageModel';
-import type { StorageGroupByFilter, StorageStatusFilter } from './StorageFilter';
 import type { StorageSourceOption } from '@/utils/storageSources';
 
 type StoragePageControlsProps = {
@@ -49,8 +49,8 @@ type StoragePageControlsProps = {
   setSortKey: (value: StorageSortKey) => void;
   sortDirection: () => 'asc' | 'desc';
   setSortDirection: (value: 'asc' | 'desc') => void;
-  statusFilter: () => StorageStatusFilter;
-  setStatusFilter: (value: StorageStatusFilter) => void;
+  statusFilter: () => StorageStatusFilterValue;
+  setStatusFilter: (value: StorageStatusFilterValue) => void;
   sourceFilter: () => string;
   setSourceFilter: (value: string) => void;
   sourceOptions: () => StorageSourceOption[];
@@ -63,7 +63,7 @@ type StoragePageControlsProps = {
   nodeFilterOptions: Array<{ value: string; label: string }>;
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
-  storageFilterGroupBy: () => StorageGroupByFilter;
+  storageFilterGroupBy: () => StorageGroupKey;
   chartsCollapsed?: () => boolean;
   onChartsToggle?: () => void;
 };
@@ -96,7 +96,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
     props.setSortKey(DEFAULT_STORAGE_SORT_KEY);
     props.setSortDirection(DEFAULT_STORAGE_SORT_DIRECTION);
     props.setGroupBy(DEFAULT_STORAGE_GROUP_KEY);
-    props.setStatusFilter(DEFAULT_STORAGE_STATUS_FILTER as StorageStatusFilter);
+    props.setStatusFilter(DEFAULT_STORAGE_STATUS_FILTER as StorageStatusFilterValue);
     props.setSourceFilter(DEFAULT_STORAGE_SOURCE_FILTER);
     props.setDiskRoleFilter?.(DEFAULT_PHYSICAL_DISK_FACET_FILTER);
     props.setDiskGroupFilter?.(DEFAULT_PHYSICAL_DISK_FACET_FILTER);
@@ -155,8 +155,8 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         group: 'status',
         value: () => props.statusFilter(),
         setValue: (value: string) =>
-          props.setStatusFilter(value as StorageStatusFilter),
-        defaultValue: DEFAULT_STORAGE_STATUS_FILTER as StorageStatusFilter,
+          props.setStatusFilter(value as StorageStatusFilterValue),
+        defaultValue: DEFAULT_STORAGE_STATUS_FILTER as StorageStatusFilterValue,
         options: () =>
           STORAGE_STATUS_FILTER_OPTIONS.map((option) => ({
             value: option.value as string,

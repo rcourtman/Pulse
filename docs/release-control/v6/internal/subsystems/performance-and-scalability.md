@@ -40,7 +40,6 @@ regression protection.
 18. `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts`
 19. `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`
 20. `frontend-modern/src/components/Workloads/workloadsFilterModel.ts`
-21. `frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts`
 22. `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
 23. `frontend-modern/src/components/Workloads/thresholdSliderModel.ts`
 24. `frontend-modern/src/components/Workloads/useThresholdSliderState.ts`
@@ -97,7 +96,6 @@ regression protection.
 75. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 76. `frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx`
 77. `frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx`
-78. `frontend-modern/src/components/Workloads/__tests__/useWorkloadsFilterState.test.ts`
 79. `frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts`
 80. `frontend-modern/src/components/Workloads/MetricBar.test.tsx`
 81. `frontend-modern/src/components/Workloads/__tests__/useMetricBarState.test.tsx`
@@ -198,14 +196,7 @@ regression protection.
     duplicate hot-path type matching.
 16. Extend grouped workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`, extend viewport-driven grouped table synchronization through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`, and extend node parent mapping through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, scroll listeners, or topology lookups inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 17. Extend workload control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts` and `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
-18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` and `frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`
-    Workloads filter presentation may consume frontend-primitives responsive
-    toggle controls, the shared `PageControls` structured control deck, and the
-    shared filter-section chrome for its semantic primary and secondary filter
-    groups, but the workload-owned state model must remain the source of truth
-    for active filter counting, reset behavior, and mobile collapse so changing
-    between wide toggle and narrow select presentation does not add a second
-    filter state path or layout-measurement path on the workload hot path.
+18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the chip-based shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. The xl segmented↔select swap retired with the migration; type-ahead in the "+ Filter" menu and chip popovers covers the power-user speed that the segmented controls used to give. View options (grouped/list, charts, columns) sit in the shared `viewOptionsTrailing` slot.
 19. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Workloads/thresholdSliderModel.ts` and `frontend-modern/src/components/Workloads/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
 20. Extend stacked disk-bar capacity math, segment/tooltip derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`
 21. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
@@ -834,21 +825,24 @@ presentation derivations and fallback tooltip/runtime wiring live in
 usage math, threshold-color routing, and fallback handling must extend
 through those owners instead of accreting back into the shell.
 The Workloads filter now follows that same ownership rule: the shell
-stays in `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`, while
-toolbar defaults, active-filter counting, and reset semantics live in
-`frontend-modern/src/components/Workloads/workloadsFilterModel.ts` and
-`frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts`.
+stays in `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`, which
+composes the shared `FilterBar` chip primitive, while toolbar defaults,
+active-filter counting, and reset semantics live in
+`frontend-modern/src/components/Workloads/workloadsFilterModel.ts`. The legacy
+`useWorkloadsFilterState.ts` hook retired with the FilterBar migration; its
+`countActiveWorkloadsFilters` and `hasActiveWorkloadsFilters` helpers stay on
+`workloadsFilterModel.ts`.
 Workloads table-mode controls must also keep their accessible group name aligned
 with the shared table presentation contract by using `Group by` for the
 grouped/list selector instead of reintroducing local `Group By` casing or
 platform-specific cluster wording. Dense workload toolbar variants must keep
 that same row wrap-capable so optional runtime, chart, column, and reset
 controls remain reachable on desktop instead of forcing a single no-wrap row
-that clips trailing actions. The workload shell must route table display
-actions such as grouped/list mode and chart visibility through
-`PageControls.toolbarTrailing`, leaving route/filter selects as primary toolbar
-children so the display-action cluster wraps together with Columns/Reset across
-narrow desktop widths. Workload chart visibility is a display preference, not
+that clips trailing actions. The workload shell now routes table display
+actions such as grouped/list mode and chart visibility through the shared
+`FilterBar.viewOptionsTrailing` slot, leaving filter chips as primary toolbar
+children so the display-action cluster wraps together with Columns and the
+"+ Filter" menu across narrow desktop widths. Workload chart visibility is a display preference, not
 an in-summary collapse affordance: the toolbar action must expose explicit
 `Show charts` / `Hide charts` pressed state, and hiding charts must remove the
 summary section rather than leaving an empty collapsed summary band on screen.

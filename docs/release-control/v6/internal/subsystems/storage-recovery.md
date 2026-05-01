@@ -79,16 +79,20 @@ state.
    `overflow-x-auto` div around the shared table. Storage pools and physical
    disks inherit the surrounding `StorageContentCard` frame and must not add
    a nested `Card` or second scroll wrapper.
-   Recovery event filters must also keep page-level search, advanced filter,
-   column visibility, and reset controls on the shared `PageControls` toolbar
-   rail. Recovery must not reintroduce local no-wrap toolbar overrides or
-   right-aligned utility wrappers that prevent the frontend-primitives action
-   rail and structured control deck from owning responsive collapse behavior
-   and visible filter/action section boundaries.
-   Compact stable recovery-event filters, such as event outcome/status, may use
-   the frontend-primitives responsive toggle/select control, but Recovery must
-   keep route-backed event filter state and query semantics in its recovery
-   owner rather than introducing a page-local presentation state path.
+   Recovery event filters now compose the shared chip-based `FilterBar`
+   (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a
+   `FilterDef[]` catalog. The legacy "advanced filter popover" retired: scope,
+   method, verification, cluster, node, and namespace fold into the same chip
+   catalog as Item Type, Platform, and Status. Page-level search, column
+   visibility, and the rollup item filter live in the shared search row; the
+   chip row appears below it only when filters are active. Recovery must not
+   reintroduce a parallel `PageControls` toolbar or local no-wrap overrides
+   that bypass the FilterBar shell.
+   Compact stable recovery-event filters, such as event outcome/status, ride
+   the same chip popover affordance the rest of the catalog uses, with
+   type-ahead in the "+ Filter" menu and chip popovers, but Recovery must keep
+   route-backed event filter state and query semantics in its recovery owner
+   rather than introducing a page-local presentation state path.
    Recovery inventory protection posture and recovery-event outcome filtering
    must stay separate in that owner: protected inventory uses the route-backed
    `state` query for health, stale, failed, warning, running, unknown, and
@@ -103,17 +107,20 @@ state.
    protected-item, and recovery-outcome readiness claims belong on the Storage
    and Recovery surfaces or their shared summary components, not in a restored
    dashboard panel cluster or Assistant brief.
-   Storage summary chart visibility is a page-level display preference owned
-   by the Storage page model and exposed through the shared `PageControls`
-   trailing action rail. Storage must keep the charts toggle, column picker,
-   and reset affordance on that shared rail so the Workloads and Storage
-   filter sections collapse through the same primitive contract. The charts
-   toggle must read as an explicit `Show charts` / `Hide charts` pressed
-   display action, and the off state must remove the summary section fully
-   instead of leaving a collapsed summary shell in the interface. Storage
-   filters inherit the shared `PageControls` structured deck and must not
-   duplicate page-local control-deck, action-rail, border, or background class
-   strings.
+   Storage filters now compose the shared chip-based `FilterBar` shell
+   through `frontend-modern/src/components/Storage/StoragePageControls.tsx`.
+   The legacy three-layer indirection
+   (`StoragePageControls` → `StorageControls` → `StorageFilter`) and the
+   bare unlabelled Node `<select>` retired with the migration; Node, Source,
+   Status, Group by, and the disk-role / disk-group filters all enter the
+   `FilterDef[]` catalog. Subtabs (Pools / Physical Disks) sit above the bar
+   as navigation, not filters. Storage summary chart visibility remains a
+   page-level display preference, but it now rides the shared
+   `FilterBar.viewOptionsTrailing` slot together with the sort key/direction
+   controls. The charts toggle must read as an explicit `Show charts` /
+   `Hide charts` pressed display action, and the off state must remove the
+   summary section fully instead of leaving a collapsed summary shell in the
+   interface.
    Ceph table shells on the storage route share the same frontend-primitives
    table contract: `frontend-modern/src/pages/Ceph.tsx` may own Ceph-specific
    columns and rows, but horizontal overflow and scrollbar hiding must route

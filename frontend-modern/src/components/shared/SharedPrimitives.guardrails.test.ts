@@ -1708,5 +1708,18 @@ describe('shared primitive guardrails', () => {
     expect(storagePageControlsSource).not.toContain('<StorageFilter');
     expect(storagePageControlsSource).not.toContain('LabeledFilterSelect');
     expect(storagePageControlsSource).not.toContain('FilterSegmentedControl');
+    // Storage's three-layer indirection retired — StoragePageControls no
+    // longer imports the deleted StorageFilter / StorageControls modules,
+    // and reads the canonical Storage types directly from storagePageState
+    // and useStorageModel rather than re-exporting them from the deleted
+    // shell.
+    expect(storagePageControlsSource).not.toContain("from './StorageFilter'");
+    expect(storagePageControlsSource).not.toContain("from './StorageControls'");
+    expect(storagePageControlsSource).not.toContain('useStoragePageControlsModel');
+    expect(storagePageControlsSource).not.toContain('useStorageControlsModel');
+    expect(storagePageControlsSource).toContain("type StorageStatusFilterValue,");
+    expect(storagePageControlsSource).toContain(
+      "import type { StorageGroupKey, StorageSortKey } from './useStorageModel';",
+    );
   });
 });

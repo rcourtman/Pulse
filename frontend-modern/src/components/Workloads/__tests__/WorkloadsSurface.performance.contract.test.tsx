@@ -25,7 +25,6 @@ import workloadsWorkloadViewportSyncSource from '../useWorkloadViewportSync.ts?r
 import workloadsWorkloadRouteStateSource from '../useWorkloadRouteState.ts?raw';
 import workloadsWorkloadUrlSyncSource from '../useWorkloadUrlSync.ts?raw';
 import workloadsStateSource from '../useWorkloadsState.ts?raw';
-import workloadsFilterStateSource from '../useWorkloadsFilterState.ts?raw';
 import groupedTableWindowingSource from '../useGroupedTableWindowing.ts?raw';
 import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
 import thresholdSliderModelSource from '../thresholdSliderModel.ts?raw';
@@ -811,10 +810,8 @@ describe('Workloads performance contract', () => {
       expect(workloadsFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
       expect(workloadsFilterSource).not.toContain("props.setSortKey('name')");
       expect(workloadsFilterSource).toContain('searchTrailing={props.searchTrailing}');
-      expect(workloadsFilterStateSource).toContain('countActiveWorkloadsFilters');
-      expect(workloadsFilterStateSource).not.toContain('props.containerRuntimeFilter?.onChange');
-      expect(workloadsFilterStateSource).toContain('useBreakpoint');
-      expect(workloadsFilterStateSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
+      // useWorkloadsFilterState hook retired in the cleanup commit; the
+      // canonical defaults / activity helpers now live in workloadsFilterModel.
       expect(workloadsFilterModelSource).toContain('export const countActiveWorkloadsFilters');
       expect(workloadsFilterModelSource).toContain('export const hasActiveWorkloadsFilters');
       expect(workloadsFilterModelSource).toContain(

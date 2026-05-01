@@ -18,10 +18,10 @@ import {
   getStorageFilterGroupBy,
   getStorageStatusFilterValue,
   toStorageHealthFilterValue,
+  type StorageStatusFilterValue,
   type StorageView,
 } from './storagePageState';
 import type { StorageNodeOption, StorageGroupKey } from './useStorageModel';
-import type { StorageGroupByFilter, StorageStatusFilter } from './StorageFilter';
 
 type UseStorageFilterStateOptions = {
   view: Accessor<StorageView>;
@@ -80,15 +80,15 @@ export const useStorageFilterState = (options: UseStorageFilterStateOptions) => 
         ],
   );
 
-  const storageFilterGroupBy = (): StorageGroupByFilter => {
+  const storageFilterGroupBy = (): StorageGroupKey => {
     return getStorageFilterGroupBy(options.groupBy());
   };
 
-  const storageFilterStatus = (): StorageStatusFilter => {
+  const storageFilterStatus = (): StorageStatusFilterValue => {
     return getStorageStatusFilterValue(options.healthFilter());
   };
 
-  const setStorageFilterStatus = (value: StorageStatusFilter) => {
+  const setStorageFilterStatus = (value: StorageStatusFilterValue) => {
     options.setHealthFilter(toStorageHealthFilterValue(value));
   };
 

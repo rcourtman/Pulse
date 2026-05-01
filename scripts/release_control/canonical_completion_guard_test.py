@@ -1275,7 +1275,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
-                        "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/useStoragePageSummary.test.ts",
@@ -3062,7 +3061,6 @@ index 1111111..2222222 100644
                         "frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts",
                         "frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts",
                         "frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx",
-                        "frontend-modern/src/components/Workloads/__tests__/useWorkloadsFilterState.test.ts",
                         "frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts",
                         "frontend-modern/src/components/Workloads/__tests__/workloadRouteModel.test.ts",
                         "frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts",

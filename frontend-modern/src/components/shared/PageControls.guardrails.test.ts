@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import pageControlsSource from '@/components/shared/PageControls.tsx?raw';
 import filterToolbarSource from '@/components/shared/FilterToolbar.tsx?raw';
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
-import storageFilterSource from '@/components/Storage/StorageFilter.tsx?raw';
 import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
@@ -47,9 +46,8 @@ describe('page controls guardrails', () => {
     // FilterHeader check.
     expect(workloadsFilterSource).not.toContain('<FilterHeader');
 
-    expect(storageFilterSource).toContain('PageControls');
-    expect(storageFilterSource).not.toContain('<FilterHeader');
-    expect(storageFilterSource).not.toContain('<ColumnPicker');
+    // StorageFilter retired (legacy 3-layer indirection deleted); Storage's
+    // page-level shell is StoragePageControls + FilterBar now.
 
     // RecoveryProtectedInventorySection migrated to FilterBar; defensive
     // assertions remain to catch any regression that reintroduces FilterHeader
@@ -142,15 +140,13 @@ describe('page controls guardrails', () => {
   });
 
   it('keeps display controls and utility actions on the shared toolbar rail', () => {
-    // WorkloadsFilter migrated to FilterBar's viewOptionsTrailing slot; the
-    // toolbarTrailing PageControls prop is no longer used. ChartVisibilityToggleButton
-    // and the no-aria-label-Charts regression guard still apply.
-    expect(storageFilterSource).toContain('toolbarTrailing={');
+    // Workloads / Infrastructure / Storage migrated to FilterBar's
+    // viewOptionsTrailing slot; the toolbarTrailing PageControls prop is no
+    // longer used. ChartVisibilityToggleButton and the
+    // no-aria-label-Charts regression guard still apply.
     expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
-    expect(storageFilterSource).toContain('ChartVisibilityToggleButton');
     expect(infrastructurePageSurfaceSource).toContain('ChartVisibilityToggleButton');
     expect(workloadsFilterSource).not.toContain('aria-label="Charts"');
-    expect(storageFilterSource).not.toContain('aria-label="Charts"');
     expect(infrastructurePageSurfaceSource).not.toContain('aria-label="Charts"');
     expect(pageControlsSource).toContain('page-controls-filter-controls');
     expect(pageControlsSource).toContain('page-controls-toolbar-actions ml-auto');
@@ -192,9 +188,6 @@ describe('page controls guardrails', () => {
     // / LabeledFilterSelect no longer rendered.
     expect(recoveryHistorySectionSource).not.toContain('LabeledFilterToggleGroup');
     expect(recoveryHistorySectionSource).not.toContain('LabeledFilterSelect');
-    expect(storageFilterSource).toContain(
-      '<LabeledFilterSelect\n          id="storage-status-filter"',
-    );
     // Infrastructure migrated to FilterBar; chip popover replaces the labelled
     // select. Regression guard ensures the legacy primitive stays out.
     expect(infrastructurePageSurfaceSource).not.toContain('<LabeledFilterSelect');

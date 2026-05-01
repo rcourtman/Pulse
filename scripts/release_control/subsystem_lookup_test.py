@@ -890,7 +890,6 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/useStoragePageSummary.test.ts",
@@ -2597,7 +2596,6 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
                 "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
-                "frontend-modern/src/components/Workloads/useWorkloadsFilterState.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])

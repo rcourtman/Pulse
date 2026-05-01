@@ -78,7 +78,11 @@ work extends shared components instead of creating new local variants.
 52. `frontend-modern/src/utils/updatesPresentation.ts`
 53. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
 54. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-55. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+55. `frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`
+56. `frontend-modern/src/components/shared/FilterBar/FilterChip.tsx`
+57. `frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx`
+58. `frontend-modern/src/components/shared/FilterBar/filterCatalog.ts`
+59. `frontend-modern/src/components/shared/FilterBar/index.ts`
 56. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
 57. `frontend-modern/src/features/`
 58. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
@@ -1637,6 +1641,22 @@ search-row, filter-row, and inline-leading-slot layout surface. Monitoring
 pages that need workspace tabs or count chips next to search should route that
 through the shared `searchLeading` slot instead of recreating a second local
 header strip above the control bar.
+
+Pages that filter a list-of-resources surface (Infrastructure, Workloads,
+Storage, Recovery Protected items, Recovery events) compose the chip-based
+`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx` shell instead
+of `PageControls`. Each page declares a `FilterDef[]` catalog (label, options,
+value, defaultValue, group); `FilterBar` renders chips for active filters and
+exposes the rest behind a "+ Filter" menu, with type-ahead at both the menu
+and chip popovers (`AddFilterMenu` and `FilterChip`). View options
+(grouping segmented control, charts toggle, columns picker, sort key) sit in
+the `viewOptionsTrailing` slot and are not chips. Subtabs that switch the
+rendered dataset (Recovery's Protected items vs Recovery events, Storage's
+Pools vs Physical Disks) sit above the bar; they are navigation, not filters.
+Pages that have not yet migrated (the alert-history filter card,
+Kubernetes deployments drawer) keep using `PageControls` and
+`LabeledFilterSelect`, but new resource-list filter surfaces should reach for
+`FilterBar` with a catalog rather than reintroducing a per-page select row.
 That same shared filter-toolbar boundary also owns controlled select continuity
 when filter options materialize asynchronously. `LabeledFilterSelect` must keep
 the caller-owned `value` visibly selected after option children arrive so
