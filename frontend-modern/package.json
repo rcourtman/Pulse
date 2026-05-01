@@ -51,7 +51,7 @@
     "eslint-plugin-solid": "file:vendor/eslint-plugin-solid",
     "globals": "^17.3.0",
     "jsdom": "^24.1.0",
-    "postcss": "^8.4.0",
+    "postcss": "^8.5.13",
     "prettier": "^3.3.0",
     "tailwindcss": "^3.4.18",
     "typescript": "^5.3.0",
