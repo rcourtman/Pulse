@@ -3339,6 +3339,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-lifecycle-ai-discovery-adapter-origin-2026-05-01.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/unified-agent-v5-upgrade-continuity-2026-03-12.md",
           "kind": "file"
         },
@@ -4369,6 +4374,12 @@
         "L16"
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-lifecycle-ai-discovery-adapter-origin-2026-05-01.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-2026-04-21.md",

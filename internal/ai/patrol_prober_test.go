@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,14 +24,10 @@ type pingAgentResult struct {
 	err     error
 }
 
-func wsURLFromHTTP(serverURL string) string {
-	return "ws" + strings.TrimPrefix(serverURL, "http")
-}
-
-func dialAndRegisterAgent(t *testing.T, wsURL, agentID, hostname string) *websocket.Conn {
+func dialAndRegisterAgent(t *testing.T, serverURL, agentID, hostname string) *websocket.Conn {
 	t.Helper()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(agentExecWSURLForHTTP(serverURL), agentExecWSHeadersForHTTP(t, serverURL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -99,7 +96,7 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conn := dialAndRegisterAgent(t, wsURLFromHTTP(ts.URL), "agent-1", "node-a")
+	conn := dialAndRegisterAgent(t, ts.URL, "agent-1", "node-a")
 	defer conn.Close()
 
 	prober := NewAgentExecProber(server)
@@ -112,36 +109,58 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 
 	done := make(chan pingAgentResult, 1)
 	go func() {
-		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		var msg agentExecRawMessage
-		if err := conn.ReadJSON(&msg); err != nil {
-			done <- pingAgentResult{err: err}
-			return
-		}
-		if msg.Type != agentexec.MsgTypeExecuteCmd {
-			done <- pingAgentResult{err: nil}
-			return
-		}
+		commands := make([]string, 0, 2)
+		for i := 0; i < 2; i++ {
+			_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+			var msg agentExecRawMessage
+			if err := conn.ReadJSON(&msg); err != nil {
+				done <- pingAgentResult{err: err}
+				return
+			}
+			if msg.Type != agentexec.MsgTypeExecuteCmd {
+				done <- pingAgentResult{err: fmt.Errorf("message type = %q, want %q", msg.Type, agentexec.MsgTypeExecuteCmd)}
+				return
+			}
 
-		var payload agentexec.ExecuteCommandPayload
-		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
-			done <- pingAgentResult{err: err}
-			return
-		}
+			var payload agentexec.ExecuteCommandPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				done <- pingAgentResult{err: err}
+				return
+			}
+			commands = append(commands, payload.Command)
+			if strings.ContainsAny(payload.Command, ";&|`$<>") {
+				done <- pingAgentResult{err: fmt.Errorf("ping command uses shell control: %q", payload.Command)}
+				return
+			}
 
-		cmdResult, _ := json.Marshal(agentexec.CommandResultPayload{
-			RequestID: payload.RequestID,
-			Success:   true,
-			Stdout:    "REACH:10.0.0.1:UP\nREACH:10.0.0.2:DOWN\n",
-			ExitCode:  0,
-		})
-		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-		err := conn.WriteJSON(agentexec.Message{
-			Type:      agentexec.MsgTypeCommandResult,
-			Timestamp: time.Now(),
-			Payload:   cmdResult,
-		})
-		done <- pingAgentResult{command: payload.Command, err: err}
+			exitCode := 1
+			success := false
+			switch payload.Command {
+			case "ping -c 1 -W 1 10.0.0.1":
+				exitCode = 0
+				success = true
+			case "ping -c 1 -W 1 10.0.0.2":
+			default:
+				done <- pingAgentResult{err: fmt.Errorf("unexpected ping command: %q", payload.Command)}
+				return
+			}
+
+			cmdResult, _ := json.Marshal(agentexec.CommandResultPayload{
+				RequestID: payload.RequestID,
+				Success:   success,
+				ExitCode:  exitCode,
+			})
+			_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+			if err := conn.WriteJSON(agentexec.Message{
+				Type:      agentexec.MsgTypeCommandResult,
+				Timestamp: time.Now(),
+				Payload:   cmdResult,
+			}); err != nil {
+				done <- pingAgentResult{err: err}
+				return
+			}
+		}
+		done <- pingAgentResult{command: strings.Join(commands, "\n")}
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -165,10 +184,16 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 	if agent.err != nil {
 		t.Fatalf("agent loop error: %v", agent.err)
 	}
-	if !strings.Contains(agent.command, "for ip in 10.0.0.1 10.0.0.2; do") {
-		t.Fatalf("unexpected command: %q", agent.command)
+	if !strings.Contains(agent.command, "ping -c 1 -W 1 10.0.0.1") || !strings.Contains(agent.command, "ping -c 1 -W 1 10.0.0.2") {
+		t.Fatalf("commands did not include expected IPs: %s", agent.command)
 	}
-	if !strings.Contains(agent.command, "REACH:$ip:UP") {
-		t.Fatalf("unexpected command output marker: %q", agent.command)
+}
+
+func TestAgentExecProber_RejectsInvalidPingTargets(t *testing.T) {
+	prober := NewAgentExecProber(agentexec.NewServer(func(string, string, string) bool { return true }))
+
+	_, err := prober.PingGuests(context.Background(), "agent-1", []string{"10.0.0.1; rm -rf /"})
+	if err == nil || !strings.Contains(err.Error(), "invalid ping target") {
+		t.Fatalf("expected invalid ping target error, got: %v", err)
 	}
 }

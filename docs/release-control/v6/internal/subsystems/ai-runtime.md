@@ -155,6 +155,13 @@ runtime cost control, and shared AI transport surfaces.
     restart, settings-update, request-clone paths, and Patrol execution must
     clamp those values through runtime entitlements before exposing or enforcing
     them.
+14. Keep agent-backed Patrol reachability checks aligned with the agent command
+    policy. `internal/ai/patrol_prober.go` may use connected agents for
+    read-only guest ping probes, but it must validate each target as an IP
+    address and issue only the single-target `ping -c 1 -W 1 <ip>` command
+    shape covered by the agent-exec auto-approval policy. It must not compose
+    shell loops, accept hostnames, interpolate unvalidated targets, or bypass
+    approval requirements for compound commands.
 
 ## Current State
 

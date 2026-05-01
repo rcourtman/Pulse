@@ -5,11 +5,21 @@ package ai
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 )
+
+const maxConcurrentGuestPings = 16
+
+type guestPingProbeResult struct {
+	ip        string
+	reachable bool
+	err       error
+}
 
 // agentExecProber implements GuestProber using the agent execution server.
 type agentExecProber struct {
@@ -30,8 +40,8 @@ func (p *agentExecProber) GetAgentForHost(hostname string) (string, bool) {
 }
 
 // PingGuests pings a list of IPs from a specific agent and returns results.
-// It composes a batch shell command that runs all pings concurrently as background
-// subshells, so total wall time is ~1 second regardless of guest count.
+// It sends one validated read-only ping command per target so the agent-exec
+// policy can auto-approve the command without permitting compound shell input.
 func (p *agentExecProber) PingGuests(ctx context.Context, agentID string, ips []string) (map[string]PingResult, error) {
 	if p.server == nil {
 		return nil, fmt.Errorf("agent exec server not available")
@@ -40,45 +50,86 @@ func (p *agentExecProber) PingGuests(ctx context.Context, agentID string, ips []
 		return map[string]PingResult{}, nil
 	}
 
-	// Build batch ping command: all pings run as background subshells
-	// Each outputs REACH:<ip>:UP or REACH:<ip>:DOWN
-	var sb strings.Builder
-	sb.WriteString("for ip in")
-	for _, ip := range ips {
-		sb.WriteString(" ")
-		sb.WriteString(ip)
-	}
-	sb.WriteString("; do (ping -c1 -W1 \"$ip\" >/dev/null 2>&1 && echo \"REACH:$ip:UP\" || echo \"REACH:$ip:DOWN\") & done; wait")
-
-	result, err := p.server.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		RequestID:  uuid.New().String(),
-		Command:    sb.String(),
-		TargetType: "agent",
-		Timeout:    5, // seconds — generous for parallel pings
-	})
-	if err != nil {
-		return nil, fmt.Errorf("ping command failed: %w", err)
+	targets := make([]string, 0, len(ips))
+	for _, rawIP := range ips {
+		ip, err := canonicalPingIP(rawIP)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, ip)
 	}
 
-	return parsePingOutput(result.Stdout), nil
+	results := make(map[string]PingResult, len(targets))
+	workerLimit := maxConcurrentGuestPings
+	if len(targets) < workerLimit {
+		workerLimit = len(targets)
+	}
+	sem := make(chan struct{}, workerLimit)
+	resultCh := make(chan guestPingProbeResult, len(targets))
+
+	var wg sync.WaitGroup
+	for _, ip := range targets {
+		ip := ip
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				resultCh <- guestPingProbeResult{ip: ip, err: ctx.Err()}
+				return
+			}
+
+			result, err := p.server.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+				RequestID:  uuid.New().String(),
+				Command:    pingCommandForIP(ip),
+				TargetType: "agent",
+				Timeout:    3,
+			})
+			if err != nil {
+				resultCh <- guestPingProbeResult{ip: ip, err: fmt.Errorf("ping %s failed: %w", ip, err)}
+				return
+			}
+			if result == nil {
+				resultCh <- guestPingProbeResult{ip: ip, err: fmt.Errorf("ping %s returned no result", ip)}
+				return
+			}
+
+			resultCh <- guestPingProbeResult{ip: ip, reachable: result.ExitCode == 0}
+		}()
+	}
+
+	wg.Wait()
+	close(resultCh)
+
+	var firstErr error
+	for item := range resultCh {
+		if item.err != nil {
+			if firstErr == nil {
+				firstErr = item.err
+			}
+			continue
+		}
+		results[item.ip] = PingResult{Reachable: item.reachable}
+	}
+	if firstErr != nil {
+		return nil, firstErr
+	}
+
+	return results, nil
 }
 
-// parsePingOutput parses the output of the batch ping command.
-// Expected lines: "REACH:<ip>:UP" or "REACH:<ip>:DOWN"
-func parsePingOutput(output string) map[string]PingResult {
-	results := make(map[string]PingResult)
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "REACH:") {
-			continue
-		}
-		parts := strings.SplitN(line, ":", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		ip := parts[1]
-		up := parts[2] == "UP"
-		results[ip] = PingResult{Reachable: up}
+func canonicalPingIP(rawIP string) (string, error) {
+	rawIP = strings.TrimSpace(rawIP)
+	addr, err := netip.ParseAddr(rawIP)
+	if err != nil {
+		return "", fmt.Errorf("invalid ping target %q: expected an IP address", rawIP)
 	}
-	return results
+	return addr.Unmap().String(), nil
+}
+
+func pingCommandForIP(ip string) string {
+	return "ping -c 1 -W 1 " + ip
 }

@@ -44,6 +44,8 @@ func DefaultPolicy() *CommandPolicy {
 			`^ss(\s|$)`,
 			`^ip\s+(addr|route|link)`,
 			`^ifconfig`,
+			`^ping\s+-c\s*1\s+-w\s*1\s+([0-9]{1,3}\.){3}[0-9]{1,3}$`,
+			`^ping\s+-c\s*1\s+-w\s*1\s+[0-9a-f:]+$`,
 			`^w$`,
 			`^who$`,
 			`^last(\s|$)`,

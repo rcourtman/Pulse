@@ -24,11 +24,15 @@ func TestDefaultPolicyEvaluate(t *testing.T) {
 		{"blocked proc kcore", "cat /proc/kcore", PolicyBlock},
 		{"auto approve", "df -h", PolicyAllow},
 		{"auto approve safe proc meminfo", "cat /proc/meminfo", PolicyAllow},
+		{"auto approve ipv4 ping probe", "ping -c 1 -W 1 10.0.0.1", PolicyAllow},
+		{"auto approve ipv6 ping probe", "ping -c 1 -W 1 2001:db8::1", PolicyAllow},
 		{"require approval", "systemctl restart nginx", PolicyRequireApproval},
 		{"generic proc read requires approval", "cat /proc/1/status", PolicyRequireApproval},
+		{"hostname ping requires approval", "ping -c 1 -W 1 example.com", PolicyRequireApproval},
 		{"unknown defaults to approval", "echo hello", PolicyRequireApproval},
 		{"sudo with flags remains conservative", "sudo -u root df -h", PolicyRequireApproval},
 		{"compound command requires approval", "df -h && echo ok", PolicyRequireApproval},
+		{"compound ping requires approval", "ping -c 1 -W 1 10.0.0.1; echo ok", PolicyRequireApproval},
 		{"find delete requires approval", "find /var -type f -delete", PolicyRequireApproval},
 
 		// Proxmox VM control - should require approval, not be blocked
@@ -75,5 +79,8 @@ func TestPolicyHelpers(t *testing.T) {
 	}
 	if !p.IsAutoApproved("cat /proc/meminfo") {
 		t.Fatalf("expected cat /proc/meminfo to be auto approved")
+	}
+	if !p.IsAutoApproved("ping -c 1 -W 1 10.0.0.1") {
+		t.Fatalf("expected single-target ping probe to be auto approved")
 	}
 }

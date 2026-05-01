@@ -334,61 +334,45 @@ func TestGatherGuestIntelligence_NilReadState(t *testing.T) {
 	}
 }
 
-// --- parsePingOutput tests ---
+// --- agent-exec ping probe helper tests ---
 
-func TestParsePingOutput_Normal(t *testing.T) {
-	output := "REACH:10.0.0.1:UP\nREACH:10.0.0.2:DOWN\nREACH:10.0.0.3:UP\n"
-	results := parsePingOutput(output)
+func TestCanonicalPingIP(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"ipv4", " 10.0.0.1 ", "10.0.0.1"},
+		{"ipv6", "2001:db8::1", "2001:db8::1"},
+		{"ipv4 mapped ipv6", "::ffff:10.0.0.2", "10.0.0.2"},
+	}
 
-	if len(results) != 3 {
-		t.Fatalf("expected 3 results, got %d", len(results))
-	}
-	if !results["10.0.0.1"].Reachable {
-		t.Error("10.0.0.1 should be reachable")
-	}
-	if results["10.0.0.2"].Reachable {
-		t.Error("10.0.0.2 should be unreachable")
-	}
-	if !results["10.0.0.3"].Reachable {
-		t.Error("10.0.0.3 should be reachable")
-	}
-}
-
-func TestParsePingOutput_Empty(t *testing.T) {
-	results := parsePingOutput("")
-	if len(results) != 0 {
-		t.Fatalf("expected 0 results for empty output, got %d", len(results))
-	}
-}
-
-func TestParsePingOutput_NoiseLines(t *testing.T) {
-	output := "bash: some warning\nREACH:10.0.0.1:UP\nsome other output\n"
-	results := parsePingOutput(output)
-
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
-	}
-	if !results["10.0.0.1"].Reachable {
-		t.Error("10.0.0.1 should be reachable")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := canonicalPingIP(tc.raw)
+			if err != nil {
+				t.Fatalf("canonicalPingIP(%q) returned error: %v", tc.raw, err)
+			}
+			if got != tc.want {
+				t.Fatalf("canonicalPingIP(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
 	}
 }
 
-func TestParsePingOutput_MalformedLines(t *testing.T) {
-	output := "REACH:\nREACH:10.0.0.1\nREACH:10.0.0.2:UP\n"
-	results := parsePingOutput(output)
-
-	// Only the well-formed line should parse
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
+func TestCanonicalPingIPRejectsInvalidTargets(t *testing.T) {
+	for _, raw := range []string{"", "example.com", "10.0.0.1; rm -rf /"} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := canonicalPingIP(raw); err == nil {
+				t.Fatalf("expected canonicalPingIP(%q) to reject target", raw)
+			}
+		})
 	}
 }
 
-func TestParsePingOutput_WhitespaceHandling(t *testing.T) {
-	output := "  REACH:10.0.0.1:UP  \n\n  REACH:10.0.0.2:DOWN\n"
-	results := parsePingOutput(output)
-
-	if len(results) != 2 {
-		t.Fatalf("expected 2 results, got %d", len(results))
+func TestPingCommandForIP(t *testing.T) {
+	if got := pingCommandForIP("10.0.0.1"); got != "ping -c 1 -W 1 10.0.0.1" {
+		t.Fatalf("pingCommandForIP() = %q", got)
 	}
 }
 

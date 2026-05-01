@@ -82,8 +82,7 @@ func TestDiscoveryCommandAdapter_ConnectedAgentsAndLookup(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(agentExecWSURLForHTTP(ts.URL), agentExecWSHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
 	}
@@ -159,8 +158,7 @@ func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(agentExecWSURLForHTTP(ts.URL), agentExecWSHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
 	}
