@@ -8,6 +8,7 @@ import routePreloadSource from '@/routing/routePreload.ts?raw';
 import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
 
 const appStylesSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
+const headerAuditSource = readFileSync(join(process.cwd(), 'scripts/header-audit.mjs'), 'utf8');
 
 describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
@@ -46,6 +47,7 @@ describe('App architecture', () => {
       '<Route path={INFRASTRUCTURE_ROUTE_PATH} component={InfrastructurePage} />',
     );
     expect(appSource).not.toContain('DashboardPage');
+    expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
     expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");
     expect(appSource).toContain('<Route path="/login" component={RuntimeHomePage} />');
     expect(appSource).toContain('<Route path="/" component={RuntimeHomePage} />');

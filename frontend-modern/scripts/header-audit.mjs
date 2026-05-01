@@ -7,7 +7,6 @@ const ROOT = process.cwd();
 const REQUIRED_PAGE_HEADERS = new Map([
   ['src/pages/AIIntelligence.tsx', 'PageHeader'],
   ['src/pages/Ceph.tsx', 'PageHeader'],
-  ['src/pages/Dashboard.tsx', 'PageHeader'],
   ['src/pages/Infrastructure.tsx', 'PageHeader'],
   ['src/pages/NotFound.tsx', 'PageHeader'],
   ['src/pages/PricingHandoff.tsx', 'PageHeader'],

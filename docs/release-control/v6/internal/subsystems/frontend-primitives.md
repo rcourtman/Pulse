@@ -865,7 +865,10 @@ work extends shared components instead of creating new local variants.
     shell therefore owns the shared `PageHeader` for support tools, and
     `frontend-modern/src/pages/Operations.tsx` must stay a redirect-only
     compatibility handoff instead of regrowing a second route-local heading,
-    tab strip, or page shell for diagnostics, reporting, or logs.
+    tab strip, or page shell for diagnostics, reporting, or logs. Because the
+    dashboard route is retired, that audit must also discover live top-level
+    pages from `src/pages/` and may not keep a hard required-header entry for
+    `frontend-modern/src/pages/Dashboard.tsx`.
 23. Keep the authenticated app root aligned with that same first-session path.
     That same shared-primitive ownership now includes contextual row focus.
     `frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
