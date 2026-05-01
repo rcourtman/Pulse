@@ -324,8 +324,10 @@ func TestSendGroupedEmail_UsesFromAsRecipient(t *testing.T) {
 	}
 
 	config := EmailConfig{
-		From: "sender@example.com",
-		To:   nil,
+		From:     "sender@example.com",
+		To:       nil,
+		SMTPHost: "smtp.example.com",
+		SMTPPort: 25,
 	}
 
 	alertList := []*alerts.Alert{
@@ -360,7 +362,7 @@ func TestSendEmail_UsesSharedDeliveryExecutor(t *testing.T) {
 		EmailConfig: EmailConfig{
 			From:     "old@example.com",
 			To:       []string{"old-recipient@example.com"},
-			SMTPHost: "old.localhost.test",
+			SMTPHost: "smtp.example.com",
 			SMTPPort: 25,
 		},
 	})

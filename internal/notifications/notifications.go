@@ -1660,6 +1660,49 @@ func effectiveEmailRecipients(config EmailConfig) []string {
 	return recipients
 }
 
+func newEmailDeliveryManager(config EmailConfig, recipients []string) *EnhancedEmailManager {
+	rl := effectiveEmailRateLimit(config.RateLimit)
+	return NewEnhancedEmailManager(EmailProviderConfig{
+		EmailConfig: EmailConfig{
+			Provider:  config.Provider,
+			From:      config.From,
+			To:        recipients,
+			SMTPHost:  config.SMTPHost,
+			SMTPPort:  config.SMTPPort,
+			Username:  config.Username,
+			Password:  config.Password,
+			TLS:       config.TLS,
+			StartTLS:  config.StartTLS,
+			RateLimit: config.RateLimit,
+		},
+		Provider:      config.Provider,
+		StartTLS:      config.StartTLS,
+		MaxRetries:    2,
+		RetryDelay:    3,
+		RateLimit:     rl,
+		SkipTLSVerify: false,
+		AuthRequired:  config.Username != "" && config.Password != "",
+	})
+}
+
+func emailDeliveryTransportMatches(manager *EnhancedEmailManager, config EmailConfig) bool {
+	if manager == nil {
+		return false
+	}
+	persisted := manager.config.EmailConfig
+	persistedProvider := manager.config.Provider
+	if persistedProvider == "" {
+		persistedProvider = persisted.Provider
+	}
+	return persisted.SMTPHost == config.SMTPHost &&
+		persisted.SMTPPort == config.SMTPPort &&
+		persisted.Username == config.Username &&
+		persisted.Password == config.Password &&
+		persisted.TLS == config.TLS &&
+		persisted.StartTLS == config.StartTLS &&
+		persistedProvider == config.Provider
+}
+
 func (n *NotificationManager) emailDeliveryManager(config EmailConfig) (*EnhancedEmailManager, []string) {
 	recipients := effectiveEmailRecipients(config)
 
@@ -1668,38 +1711,24 @@ func (n *NotificationManager) emailDeliveryManager(config EmailConfig) (*Enhance
 	n.mu.RUnlock()
 
 	if manager == nil {
-		rl := effectiveEmailRateLimit(config.RateLimit)
-		manager = NewEnhancedEmailManager(EmailProviderConfig{
-			EmailConfig: EmailConfig{
-				From:     config.From,
-				To:       recipients,
-				SMTPHost: config.SMTPHost,
-				SMTPPort: config.SMTPPort,
-				Username: config.Username,
-				Password: config.Password,
-				TLS:      config.TLS,
-				StartTLS: config.StartTLS,
-			},
-			Provider:      config.Provider,
-			StartTLS:      config.StartTLS,
-			MaxRetries:    2,
-			RetryDelay:    3,
-			RateLimit:     rl,
-			SkipTLSVerify: false,
-			AuthRequired:  config.Username != "" && config.Password != "",
-		})
-		return manager, recipients
+		return newEmailDeliveryManager(config, recipients), recipients
+	}
+
+	if !emailDeliveryTransportMatches(manager, config) {
+		return newEmailDeliveryManager(config, recipients), recipients
 	}
 
 	manager.config.EmailConfig = EmailConfig{
-		From:     config.From,
-		To:       recipients,
-		SMTPHost: config.SMTPHost,
-		SMTPPort: config.SMTPPort,
-		Username: config.Username,
-		Password: config.Password,
-		TLS:      config.TLS,
-		StartTLS: config.StartTLS,
+		Provider:  config.Provider,
+		From:      config.From,
+		To:        recipients,
+		SMTPHost:  config.SMTPHost,
+		SMTPPort:  config.SMTPPort,
+		Username:  config.Username,
+		Password:  config.Password,
+		TLS:       config.TLS,
+		StartTLS:  config.StartTLS,
+		RateLimit: config.RateLimit,
 	}
 	manager.config.Provider = config.Provider
 	manager.config.StartTLS = config.StartTLS

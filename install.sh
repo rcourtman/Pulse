@@ -1866,7 +1866,9 @@ create_lxc_container() {
     fi
     echo
     echo "  First-time setup:"
-    echo "    pct exec $CTID -- cat $CONFIG_DIR/.bootstrap_token  # Get bootstrap token"
+    local QUOTED_CONFIG_DIR
+    printf -v QUOTED_CONFIG_DIR '%q' "$CONFIG_DIR"
+    echo "    pct exec $CTID -- env PULSE_DATA_DIR=$QUOTED_CONFIG_DIR pulse bootstrap-token"
     echo
     echo "  Common commands:"
     echo "    pct enter $CTID              # Enter container"
@@ -3786,17 +3788,36 @@ print_completion() {
     local TOKEN_DATA_DIR="${CONFIG_DIR:-/etc/pulse}"
     local TOKEN_FILE="$TOKEN_DATA_DIR/.bootstrap_token"
     if [[ -f "$TOKEN_FILE" ]]; then
-        BOOTSTRAP_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null | tr -d '\n')
-        if [[ -n "$BOOTSTRAP_TOKEN" ]]; then
-            echo
+        local -a BOOTSTRAP_TOKEN_COMMAND=()
+        if [[ -x "$BINARY_LINK_PATH" ]]; then
+            BOOTSTRAP_TOKEN_COMMAND=("$BINARY_LINK_PATH" "bootstrap-token")
+        elif [[ -x "$INSTALL_DIR/bin/pulse" ]]; then
+            BOOTSTRAP_TOKEN_COMMAND=("$INSTALL_DIR/bin/pulse" "bootstrap-token")
+        elif command -v pulse >/dev/null 2>&1; then
+            BOOTSTRAP_TOKEN_COMMAND=("$(command -v pulse)" "bootstrap-token")
+        fi
+
+        echo
+        if [[ ${#BOOTSTRAP_TOKEN_COMMAND[@]} -gt 0 ]]; then
+            if ! PULSE_DATA_DIR="$TOKEN_DATA_DIR" "${BOOTSTRAP_TOKEN_COMMAND[@]}"; then
+                local QUOTED_TOKEN_DATA_DIR
+                local TOKEN_COMMAND_DISPLAY
+                printf -v QUOTED_TOKEN_DATA_DIR '%q' "$TOKEN_DATA_DIR"
+                printf -v TOKEN_COMMAND_DISPLAY '%q ' "${BOOTSTRAP_TOKEN_COMMAND[@]}"
+                TOKEN_COMMAND_DISPLAY="${TOKEN_COMMAND_DISPLAY% }"
+                print_warn "Bootstrap token exists but could not be displayed automatically."
+                print_info "Run: PULSE_DATA_DIR=$QUOTED_TOKEN_DATA_DIR $TOKEN_COMMAND_DISPLAY"
+            fi
+        else
             echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════════════╗${NC}"
             echo -e "${YELLOW}║          BOOTSTRAP TOKEN REQUIRED FOR FIRST-TIME SETUP                ║${NC}"
             echo -e "${YELLOW}╠═══════════════════════════════════════════════════════════════════════╣${NC}"
-            printf "${YELLOW}║${NC}  Token: ${GREEN}%-61s${YELLOW}║${NC}\n" "$BOOTSTRAP_TOKEN"
-            printf "${YELLOW}║${NC}  File:  %-61s${YELLOW}║${NC}\n" "$TOKEN_FILE"
+            echo -e "${YELLOW}║${NC}  Run this command on the Pulse host to reveal the setup token:      ${YELLOW}║${NC}"
+            printf "${YELLOW}║${NC}  PULSE_DATA_DIR=%-47s${YELLOW}║${NC}\n" "$TOKEN_DATA_DIR"
+            printf "${YELLOW}║${NC}  %s/bin/pulse bootstrap-token%-37s${YELLOW}║${NC}\n" "$INSTALL_DIR" ""
             echo -e "${YELLOW}╠═══════════════════════════════════════════════════════════════════════╣${NC}"
-            echo -e "${YELLOW}║${NC}  Copy this token and paste it into the unlock screen in your browser. ${YELLOW}║${NC}"
-            echo -e "${YELLOW}║${NC}  This token will be automatically deleted after successful setup.     ${YELLOW}║${NC}"
+            echo -e "${YELLOW}║${NC}  Paste the token into the unlock screen in your browser.            ${YELLOW}║${NC}"
+            echo -e "${YELLOW}║${NC}  This token will be automatically deleted after successful setup.   ${YELLOW}║${NC}"
             echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════════╝${NC}"
         fi
     fi

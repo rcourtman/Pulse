@@ -96,6 +96,14 @@ Email single-alert, grouped, resolved, and HTML send paths must follow that
 same ownership rule: they may expose different calling surfaces, but they must
 all route through one canonical enhanced email executor instead of rebuilding
 separate manager/config setup paths.
+That enhanced email executor owns the production-manager reuse boundary as
+well as the transport send itself. A test or ad hoc send whose SMTP host, port,
+username, password, TLS, STARTTLS, or provider differs from the shared manager
+must build an isolated delivery manager and leave the production manager
+untouched, so unsaved relay-mode tests cannot inherit stale saved SMTP auth.
+When the transport identity matches, the shared manager may still update
+From/To and rate-limit presentation state so grouped and resolved sends keep
+their persistent limiter continuity.
 Notification test APIs must follow that same truthfulness rule: test email and
 webhook paths may keep dedicated top-level entry points, but they must route
 through canonical error-returning single-delivery executors instead of

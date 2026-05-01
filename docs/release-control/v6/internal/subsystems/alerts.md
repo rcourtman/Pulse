@@ -305,6 +305,12 @@ reset behavior, quiet-hours day/category toggles, cooldown/grouping/escalation
 update policy, and the canonical defaults handoff. Future schedule control-flow
 work should extend that hook instead of rebuilding those mutations inline in
 the tab shell.
+The backend cooldown gate is part of that same schedule contract. A disabled
+cooldown (`0` or negative) means "do not send periodic re-notifications for
+the same active alert"; it still allows the first notification for a new alert
+occurrence, while level-escalation delivery remains owned by the separate
+escalation path. Runtime evaluation must not treat disabled cooldown as
+"always notify" because the alert loop runs every metric tick.
 
 Incident-event filter chip and filter-action styling now routes through
 `frontend-modern/src/utils/alertIncidentPresentation.ts` for both

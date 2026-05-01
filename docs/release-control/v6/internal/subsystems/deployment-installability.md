@@ -658,6 +658,11 @@ developer/runtime bootstrap. Changes to `package.json`, `package-lock.json`,
 `frontend-modern/vite.config.ts`, `go.mod`, and `go.sum` must remain governed
 with that entrypoint boundary rather than floating as unowned dependency or
 build-runtime drift.
+Security-driven lockfile bumps for packages shipped in the release frontend
+are part of the same governed bootstrap input even when the package manifest
+range already permits the newer version; the lockfile must identify the
+resolved package version and integrity that the release build will actually
+consume.
 When the managed launcher reports runtime status, it must tell operators which
 browser URL to use and whether the frontend shell, proxied API path, and
 direct backend health endpoint all agree, instead of leaving `5173` versus
@@ -989,6 +994,11 @@ setup-token-authenticated endpoint or depend on scraping a plaintext
 `.bootstrap_token` file just to call it. The supported operator retrieval path
 for first-session bootstrap is `pulse bootstrap-token`, and runtime bootstrap
 token persistence must stay encrypted at rest.
+Root installer completion output, LXC post-install guidance, and copied
+first-session setup instructions must also route operators through
+`pulse bootstrap-token` with the correct runtime data directory instead of
+printing or instructing users to `cat` `.bootstrap_token`, because the file is
+an encrypted persistence artifact rather than the raw setup token.
 That same bootstrap artifact contract must now be backend-owned as one
 canonical install artifact model rather than a handler-local bootstrap struct
 plus a second response envelope. Shell downloads, setup-script-url responses,

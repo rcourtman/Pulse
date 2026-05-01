@@ -483,9 +483,11 @@ func TestSendResolvedNotificationsDirectDispatchesEnabledTargets(t *testing.T) {
 
 	manager.sendResolvedNotificationsDirect(
 		EmailConfig{
-			Enabled: true,
-			From:    "new@example.com",
-			To:      []string{"new@example.com"},
+			Enabled:  true,
+			From:     "new@example.com",
+			To:       []string{"new@example.com"},
+			SMTPHost: "invalid.localhost.test",
+			SMTPPort: 25,
 		},
 		[]WebhookConfig{
 			{Name: "enabled", URL: server.URL + "/ok", Enabled: true, Service: "ntfy"},

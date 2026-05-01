@@ -4776,8 +4776,7 @@ func TestApplyRelaxedGuestThresholds(t *testing.T) {
 func TestShouldNotifyAfterCooldown(t *testing.T) {
 	// t.Parallel()
 
-	t.Run("cooldown disabled allows notification", func(t *testing.T) {
-		// t.Parallel()
+	t.Run("cooldown disabled allows first-time notification", func(t *testing.T) {
 		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.Cooldown = 0
@@ -4789,12 +4788,28 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 		}
 
 		if !m.shouldNotifyAfterCooldown(alert) {
-			t.Error("expected true when cooldown is 0")
+			t.Error("expected true for first-time alert when cooldown is 0")
 		}
 	})
 
-	t.Run("negative cooldown allows notification", func(t *testing.T) {
-		// t.Parallel()
+	t.Run("cooldown disabled suppresses re-notification", func(t *testing.T) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Schedule.Cooldown = 0
+		m.mu.Unlock()
+
+		now := time.Now()
+		alert := &Alert{
+			ID:           "test-alert",
+			LastNotified: &now,
+		}
+
+		if m.shouldNotifyAfterCooldown(alert) {
+			t.Error("expected false: cooldown=0 must not allow re-notification spam (#1444)")
+		}
+	})
+
+	t.Run("negative cooldown suppresses re-notification", func(t *testing.T) {
 		m := newTestManager(t)
 		m.mu.Lock()
 		m.config.Schedule.Cooldown = -5
@@ -4806,8 +4821,8 @@ func TestShouldNotifyAfterCooldown(t *testing.T) {
 			LastNotified: &now,
 		}
 
-		if !m.shouldNotifyAfterCooldown(alert) {
-			t.Error("expected true when cooldown is negative")
+		if m.shouldNotifyAfterCooldown(alert) {
+			t.Error("expected false: negative cooldown is treated the same as disabled cooldown")
 		}
 	})
 

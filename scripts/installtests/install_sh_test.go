@@ -1954,6 +1954,79 @@ func TestBuildPrintedManagementCommandPreservesRCChannel(t *testing.T) {
 	}
 }
 
+func TestRootPrintCompletionRevealsBootstrapTokenThroughCLI(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, "config")
+	installDir := filepath.Join(tmpDir, "install")
+	pulseBin := filepath.Join(tmpDir, "bin", "pulse")
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(pulseBin), 0755); err != nil {
+		t.Fatalf("mkdir pulse bin dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, ".bootstrap_token"), []byte(`{"version":2,"token_ciphertext":"encrypted-token","token_hash":"hash"}`), 0600); err != nil {
+		t.Fatalf("write encrypted bootstrap token marker: %v", err)
+	}
+	if err := os.WriteFile(pulseBin, []byte(`#!/usr/bin/env bash
+if [[ "$1" != "bootstrap-token" ]]; then
+  exit 2
+fi
+printf 'Token: raw-bootstrap-token\n'
+printf 'Data: %s\n' "$PULSE_DATA_DIR"
+`), 0755); err != nil {
+		t.Fatalf("write fake pulse binary: %v", err)
+	}
+
+	script := `
+		RED=''
+		GREEN=''
+		YELLOW=''
+		BLUE=''
+		NC=''
+		CONFIG_DIR="$TEST_CONFIG_DIR"
+		INSTALL_DIR="$TEST_INSTALL_DIR"
+		BINARY_LINK_PATH="$TEST_PULSE_BIN"
+		UPDATE_HELPER_PATH="/bin/update"
+		SERVICE_NAME="pulse"
+		UPDATE_TIMER_UNIT="pulse-update.timer"
+		hostname() { if [[ "${1:-}" == "-I" ]]; then printf '127.0.0.1\n'; else command hostname "$@"; fi; }
+		current_frontend_port() { printf '7655\n'; }
+		print_header() { :; }
+		print_success() { printf '%s\n' "$1"; }
+		print_warn() { printf 'WARN: %s\n' "$1"; }
+		print_info() { printf 'INFO: %s\n' "$1"; }
+		update_timer_exists() { return 1; }
+		update_timer_enabled() { return 1; }
+		build_printed_management_command() { printf '/bin/update\n'; }
+` + extractRootInstallShellFunction(t, "print_completion") + `
+		print_completion
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(),
+		"TEST_CONFIG_DIR="+configDir,
+		"TEST_INSTALL_DIR="+installDir,
+		"TEST_PULSE_BIN="+pulseBin,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := string(out)
+	if !strings.Contains(got, "raw-bootstrap-token") {
+		t.Fatalf("completion output did not include revealed token:\n%s", got)
+	}
+	if !strings.Contains(got, "Data: "+configDir) {
+		t.Fatalf("completion output did not pass PULSE_DATA_DIR to bootstrap-token:\n%s", got)
+	}
+	if strings.Contains(got, "encrypted-token") || strings.Contains(got, "token_ciphertext") {
+		t.Fatalf("completion output leaked encrypted bootstrap file contents:\n%s", got)
+	}
+}
+
 func TestBuildPrintedManagementCommandPreservesForcedVersion(t *testing.T) {
 	script := `
 		GITHUB_REPO="rcourtman/Pulse"

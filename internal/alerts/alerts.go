@@ -2658,20 +2658,28 @@ func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 	return suppressed
 }
 
-// shouldNotifyAfterCooldown checks if enough time has passed since the last notification
-// Returns true if notification should be sent, false if still in cooldown period
+// shouldNotifyAfterCooldown decides whether a re-notification can be sent for
+// an existing alert based on the configured cooldown.
+//
+// Cooldown semantics:
+//   - cooldown > 0: re-notify after that many minutes have passed since the
+//     last notification.
+//   - cooldown <= 0: cooldown is disabled, so only the first notification for
+//     an alert occurrence is allowed. The alert evaluation loop runs every
+//     metric tick, so treating disabled cooldown as "always allow" causes
+//     repeated notifications for the same active alert.
+//
+// Level-escalation re-notifications are handled separately at the call site.
+// Returns true if a notification should be sent, false otherwise.
 func (m *Manager) shouldNotifyAfterCooldown(alert *Alert) bool {
-	// If cooldown is 0 or negative, always allow notifications
-	if m.config.Schedule.Cooldown <= 0 {
-		return true
-	}
-
-	// If this is the first notification, allow it
 	if alert.LastNotified == nil {
 		return true
 	}
 
-	// Check if enough time has passed
+	if m.config.Schedule.Cooldown <= 0 {
+		return false
+	}
+
 	cooldownDuration := time.Duration(m.config.Schedule.Cooldown) * time.Minute
 	timeSinceLastNotification := time.Since(*alert.LastNotified)
 

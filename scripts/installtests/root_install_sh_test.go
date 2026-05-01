@@ -172,6 +172,35 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 	}
 }
 
+func TestRootInstallShowsBootstrapTokenCommandInsteadOfEncryptedFile(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`pulse bootstrap-token`,
+		`PULSE_DATA_DIR=`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("root install.sh missing bootstrap-token display fragment: %s", needle)
+		}
+	}
+
+	forbidden := []string{
+		`cat $CONFIG_DIR/.bootstrap_token`,
+		`cat "$TOKEN_FILE"`,
+		`Token: ${GREEN}`,
+	}
+	for _, needle := range forbidden {
+		if strings.Contains(script, needle) {
+			t.Fatalf("root install.sh still exposes encrypted bootstrap file contents: %s", needle)
+		}
+	}
+}
+
 func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 	rootInstall, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
 	if err != nil {
