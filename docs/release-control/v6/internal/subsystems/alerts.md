@@ -148,6 +148,14 @@ override identity candidates. Static metric-color defaults are only fallback
 presentation behavior for callers that do not have alert configuration in
 scope.
 
+Docker container image-update alerts are lifecycle-governed by the alerts
+runtime. Disabling Docker update alerts globally, disabling alerts for a
+specific Docker container, ignoring a Docker container prefix, or disabling all
+Docker container alerts must clear the active image-update alert plus resource
+and identity first-seen tracking. Generic threshold reevaluation must not keep
+or resurrect image-update alerts after their owning Docker alert configuration
+has disabled them.
+
 Alert history persistence is also part of that canonical boundary. The history
 manager may choose the owned runtime data directory, but it must normalize that
 directory once and then resolve only the fixed `alert-history.json` and

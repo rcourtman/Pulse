@@ -526,6 +526,160 @@ func TestDockerUpdateTrackingCleanup(t *testing.T) {
 	}
 }
 
+func seedDockerUpdateAlert(t *testing.T, m *Manager, host models.DockerHost, container models.DockerContainer, resourceID string, firstSeen time.Time) (string, string, string) {
+	t.Helper()
+
+	containerName := dockerContainerDisplayName(container)
+	alertID := "docker-container-update-" + resourceID
+	canonicalAlertID := buildCanonicalStateID(resourceID, resourceID+"-image-update")
+	trackingKey := dockerUpdateTrackingKey(host, container)
+	alert := &Alert{
+		ID:             alertID,
+		Type:           "docker-container-update",
+		Level:          AlertLevelWarning,
+		ResourceID:     resourceID,
+		ResourceName:   containerName,
+		Instance:       dockerInstanceName(host),
+		CanonicalState: canonicalAlertID,
+		Metadata:       dockerContainerAlertMetadata(host, container, containerName),
+		StartTime:      firstSeen,
+		LastSeen:       firstSeen,
+	}
+
+	m.mu.Lock()
+	m.setActiveAlertNoLock(canonicalAlertID, alert)
+	m.dockerUpdateFirstSeen[resourceID] = firstSeen
+	m.dockerUpdateFirstSeenByIdentity[trackingKey] = firstSeen
+	m.mu.Unlock()
+
+	return alertID, canonicalAlertID, trackingKey
+}
+
+func TestUpdateConfigClearsDockerContainerUpdateAlertsWhenDisabled(t *testing.T) {
+	m := NewManager()
+
+	host := models.DockerHost{
+		ID:          "docker-host-1",
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+	}
+	container := models.DockerContainer{
+		ID:    "container-1",
+		Name:  "/frontend",
+		Image: "nginx:latest",
+	}
+	resourceID := dockerResourceID(host.ID, container.ID)
+	firstSeen := time.Now().Add(-48 * time.Hour)
+	_, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
+
+	config := m.GetConfig()
+	config.DockerDefaults.UpdateAlertDelayHours = -1
+	m.UpdateConfig(config)
+
+	m.mu.RLock()
+	_, hasAlert := m.activeAlerts[canonicalAlertID]
+	_, hasResourceTracking := m.dockerUpdateFirstSeen[resourceID]
+	_, hasIdentityTracking := m.dockerUpdateFirstSeenByIdentity[trackingKey]
+	m.mu.RUnlock()
+
+	if hasAlert {
+		t.Fatalf("expected docker update alert to be cleared when update alerts are disabled")
+	}
+	if hasResourceTracking {
+		t.Fatalf("expected docker update resource tracking to be cleared when update alerts are disabled")
+	}
+	if hasIdentityTracking {
+		t.Fatalf("expected docker update identity tracking to be cleared when update alerts are disabled")
+	}
+}
+
+func TestUpdateConfigKeepsDockerContainerUpdateAlertsWhenStillEnabled(t *testing.T) {
+	m := NewManager()
+
+	host := models.DockerHost{
+		ID:          "docker-host-2",
+		DisplayName: "Docker Host",
+		Hostname:    "docker-2.local",
+	}
+	container := models.DockerContainer{
+		ID:    "container-2",
+		Name:  "/api",
+		Image: "ghcr.io/example/api:latest",
+	}
+	resourceID := dockerResourceID(host.ID, container.ID)
+	firstSeen := time.Now().Add(-30 * time.Hour)
+	_, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
+
+	config := m.GetConfig()
+	config.DockerDefaults.UpdateAlertDelayHours = 24
+	config.DockerDefaults.CPU.Trigger = 95
+	config.DockerDefaults.CPU.Clear = 90
+	m.UpdateConfig(config)
+
+	m.mu.RLock()
+	_, hasAlert := m.activeAlerts[canonicalAlertID]
+	resourceFirstSeen, hasResourceTracking := m.dockerUpdateFirstSeen[resourceID]
+	identityFirstSeen, hasIdentityTracking := m.dockerUpdateFirstSeenByIdentity[trackingKey]
+	m.mu.RUnlock()
+
+	if !hasAlert {
+		t.Fatalf("expected docker update alert to remain active when update alerts are still enabled")
+	}
+	if !hasResourceTracking {
+		t.Fatalf("expected docker update resource tracking to remain when update alerts stay enabled")
+	}
+	if !hasIdentityTracking {
+		t.Fatalf("expected docker update identity tracking to remain when update alerts stay enabled")
+	}
+	if !resourceFirstSeen.Equal(firstSeen) {
+		t.Fatalf("expected docker update resource tracking to preserve firstSeen, got %s want %s", resourceFirstSeen, firstSeen)
+	}
+	if !identityFirstSeen.Equal(firstSeen) {
+		t.Fatalf("expected docker update identity tracking to preserve firstSeen, got %s want %s", identityFirstSeen, firstSeen)
+	}
+}
+
+func TestEvaluateDockerContainerClearsUpdateAlertWhenOverrideDisabled(t *testing.T) {
+	m := NewManager()
+
+	host := models.DockerHost{
+		ID:          "docker-host-3",
+		DisplayName: "Docker Host",
+		Hostname:    "docker-3.local",
+	}
+	container := models.DockerContainer{
+		ID:    "container-3",
+		Name:  "/worker",
+		Image: "ghcr.io/example/worker:latest",
+	}
+	resourceID := dockerResourceID(host.ID, container.ID)
+	firstSeen := time.Now().Add(-36 * time.Hour)
+	alertID, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
+
+	m.mu.Lock()
+	m.config.Overrides[resourceID] = ThresholdConfig{Disabled: true}
+	m.mu.Unlock()
+
+	m.evaluateDockerContainer(host, container, resourceID)
+
+	m.mu.RLock()
+	_, hasCanonicalAlert := m.activeAlerts[canonicalAlertID]
+	_, hasLegacyAlias := m.activeAlertAlias[alertID]
+	_, hasResourceTracking := m.dockerUpdateFirstSeen[resourceID]
+	_, hasIdentityTracking := m.dockerUpdateFirstSeenByIdentity[trackingKey]
+	m.mu.RUnlock()
+
+	if hasCanonicalAlert || hasLegacyAlias {
+		t.Fatalf("expected docker update alert to be cleared when the container override disables alerts")
+	}
+	if hasResourceTracking {
+		t.Fatalf("expected docker update resource tracking to be cleared when the container override disables alerts")
+	}
+	if hasIdentityTracking {
+		t.Fatalf("expected docker update identity tracking to be cleared when the container override disables alerts")
+	}
+}
+
 func TestDockerUpdateTrackingHostKeyFallbackOrder(t *testing.T) {
 	tests := []struct {
 		name string
