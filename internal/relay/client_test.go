@@ -1004,7 +1004,7 @@ func TestClient_HandleDataDecryptsBeforeReturning(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		client.handleData(context.Background(), frame, sendCh, dataLimiter)
+		client.handleData(context.Background(), frame, sendCh, dataLimiter, nil)
 		close(done)
 	}()
 

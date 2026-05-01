@@ -405,6 +405,10 @@ type Hub struct {
 	unregister         chan *Client
 	stopChan           chan struct{} // Signals shutdown
 	stopOnce           sync.Once
+	runStarted         chan struct{}
+	runDone            chan struct{}
+	runStartOnce       sync.Once
+	runDoneOnce        sync.Once
 	mu                 sync.RWMutex
 	getState           func(orgID string) interface{} // Function to get state for specific tenant
 	allowedOrigins     []string                       // Allowed origins for CORS
@@ -488,6 +492,8 @@ func NewHub(getState func(orgID string) interface{}) *Hub {
 		register:              make(chan *Client),
 		unregister:            make(chan *Client),
 		stopChan:              make(chan struct{}),
+		runStarted:            make(chan struct{}),
+		runDone:               make(chan struct{}),
 		getState:              getState,
 		allowedOrigins:        []string{},             // Default to empty (will be set based on actual host)
 		coalesceWindow:        100 * time.Millisecond, // Coalesce rapid updates within 100ms
@@ -498,8 +504,22 @@ func NewHub(getState func(orgID string) interface{}) *Hub {
 
 // Run starts the hub's main loop
 func (h *Hub) Run() {
+	h.runStartOnce.Do(func() {
+		close(h.runStarted)
+	})
+
 	// Start broadcast sequencer goroutine
-	go h.runBroadcastSequencer()
+	sequencerDone := make(chan struct{})
+	go func() {
+		defer close(sequencerDone)
+		h.runBroadcastSequencer()
+	}()
+	defer func() {
+		<-sequencerDone
+		h.runDoneOnce.Do(func() {
+			close(h.runDone)
+		})
+	}()
 	log.Info().Msg("WebSocket state payload configured for unified resources")
 
 	pingTicker := time.NewTicker(30 * time.Second)
@@ -660,6 +680,11 @@ func (h *Hub) Stop() {
 	h.stopOnce.Do(func() {
 		close(h.stopChan)
 	})
+	select {
+	case <-h.runStarted:
+		<-h.runDone
+	default:
+	}
 }
 
 func (h *Hub) isStopping() bool {

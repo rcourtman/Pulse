@@ -1531,6 +1531,28 @@ func (h *AISettingsHandler) StopPatrol() {
 	}
 }
 
+// StopServices stops all AI services owned by the handler, including their
+// debounced persistence timers and background discovery/patrol workers.
+func (h *AISettingsHandler) StopServices() {
+	if h == nil {
+		return
+	}
+	if h.defaultAIService != nil {
+		h.defaultAIService.Stop()
+	}
+	h.aiServicesMu.RLock()
+	services := make([]*ai.Service, 0, len(h.aiServices))
+	for _, svc := range h.aiServices {
+		if svc != nil {
+			services = append(services, svc)
+		}
+	}
+	h.aiServicesMu.RUnlock()
+	for _, svc := range services {
+		svc.Stop()
+	}
+}
+
 // StopPatrolForOrg stops patrol for a single org without affecting others.
 func (h *AISettingsHandler) StopPatrolForOrg(orgID string) {
 	orgID = normalizeAIIntelligenceOrgID(orgID)

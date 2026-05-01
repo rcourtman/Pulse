@@ -41,6 +41,7 @@ type RecoveryTokenStore struct {
 	mu          sync.RWMutex
 	dataPath    string
 	stopCleanup chan struct{}
+	cleanupDone chan struct{}
 	stopOnce    sync.Once
 }
 
@@ -106,6 +107,7 @@ func ensureRecoveryTokenStore(dataPath string) *RecoveryTokenStore {
 		tokens:      make(map[string]*RecoveryToken),
 		dataPath:    newDataPath,
 		stopCleanup: make(chan struct{}),
+		cleanupDone: make(chan struct{}),
 	}
 	recoveryStoreDataPath = newDataPath
 	recoveryStore.load()
@@ -220,6 +222,9 @@ func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken str
 func (r *RecoveryTokenStore) cleanupRoutine() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
+	if r.cleanupDone != nil {
+		defer close(r.cleanupDone)
+	}
 
 	for {
 		select {
@@ -237,8 +242,13 @@ func (r *RecoveryTokenStore) Shutdown() {
 		return
 	}
 	r.stopOnce.Do(func() {
-		close(r.stopCleanup)
+		if r.stopCleanup != nil {
+			close(r.stopCleanup)
+		}
 	})
+	if r.cleanupDone != nil {
+		<-r.cleanupDone
+	}
 }
 
 func resetRecoveryStoreForTests() {

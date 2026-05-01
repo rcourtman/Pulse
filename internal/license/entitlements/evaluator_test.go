@@ -277,7 +277,7 @@ func TestEvaluatorMeterEnabled(t *testing.T) {
 }
 
 func TestTokenSourceLegacyDerivation(t *testing.T) {
-	t.Run("legacy claims", func(t *testing.T) {
+	t.Run("legacy self-hosted claims keep capabilities but scrub monitored-system caps", func(t *testing.T) {
 		claims := &license.Claims{
 			Tier:                license.TierPro,
 			MaxMonitoredSystems: 25,
@@ -291,8 +291,8 @@ func TestTokenSourceLegacyDerivation(t *testing.T) {
 		}
 
 		limits := source.Limits()
-		if got, ok := limits["max_monitored_systems"]; !ok || got != 25 {
-			t.Fatalf("expected max_monitored_systems limit 25, got (%d, %t)", got, ok)
+		if got, ok := limits["max_monitored_systems"]; ok {
+			t.Fatalf("expected self-hosted Pro monitored-system limit to be scrubbed, got %d", got)
 		}
 	})
 

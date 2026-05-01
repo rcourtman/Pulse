@@ -201,7 +201,7 @@ func newMigrationTestServer(t *testing.T, dataDir string) *httptest.Server {
 	router := api.NewRouter(cfg, monitor, nil, hub, func() error {
 		monitor.SyncAlertState()
 		return nil
-	}, "6.0.0-test", nil)
+	}, "6.0.0-test")
 
 	ln, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {

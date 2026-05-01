@@ -462,19 +462,28 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 	// goroutines spawned by handleData. Without this, stream goroutines
 	// would keep running against a stale sendCh until the whole client stops.
 	connCtx, connCancel := context.WithCancel(ctx)
-	defer connCancel()
+	var connWG sync.WaitGroup
+	defer func() {
+		connCancel()
+		_ = conn.Close()
+		connWG.Wait()
+	}()
 	go func() {
 		<-connCtx.Done()
 		_ = conn.Close()
 	}()
 
-	go c.writePump(connCtx, conn, sendCh)
+	connWG.Add(1)
+	go func() {
+		defer connWG.Done()
+		c.writePump(connCtx, conn, sendCh)
+	}()
 
 	// Read pump (blocking) — passes connCtx so handleData streams inherit it
 	// Rate-limit concurrent DATA stream handlers per connection.
 	dataLimiter := make(chan struct{}, maxConcurrentDataHandlers)
 
-	return true, c.readPump(connCtx, conn, sendCh, dataLimiter)
+	return true, c.readPump(connCtx, conn, sendCh, dataLimiter, &connWG)
 }
 
 func relayTLSConfig() (*tls.Config, error) {
@@ -604,7 +613,7 @@ func (c *Client) register(conn *websocket.Conn) error {
 	}
 }
 
-func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan<- []byte, dataLimiter chan struct{}) error {
+func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan<- []byte, dataLimiter chan struct{}, connWG *sync.WaitGroup) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -632,7 +641,7 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 			c.handleKeyExchange(frame, sendCh)
 
 		case FrameData:
-			c.handleData(ctx, frame, sendCh, dataLimiter)
+			c.handleData(ctx, frame, sendCh, dataLimiter, connWG)
 
 		case FrameChannelClose:
 			c.handleChannelClose(frame)
@@ -762,7 +771,7 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 	}
 }
 
-func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- []byte, dataLimiter chan struct{}) {
+func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- []byte, dataLimiter chan struct{}, connWG *sync.WaitGroup) {
 	channelID := frame.Channel
 
 	// Snapshot channel state under lock so the goroutine below doesn't race
@@ -810,7 +819,13 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 	}
 
 	// Handle in background goroutine so we don't block the read pump
+	if connWG != nil {
+		connWG.Add(1)
+	}
 	go func(payload []byte) {
+		if connWG != nil {
+			defer connWG.Done()
+		}
 		defer func() { <-dataLimiter }()
 
 		// Derive from the connection context so streams are cancelled on disconnect.

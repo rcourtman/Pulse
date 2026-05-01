@@ -5,6 +5,7 @@
 FRONTEND_DIR := frontend-modern
 FRONTEND_DIST := $(FRONTEND_DIR)/dist
 FRONTEND_EMBED_DIR := internal/api/frontend-modern
+GO_TEST_PACKAGES := ./cmd/... ./internal/... ./pkg/... ./scripts/... ./tests/...
 
 # Build everything (including all agent binaries)
 all: frontend backend build-agents
@@ -89,8 +90,8 @@ control-plane:
 
 test:
 	@./scripts/ensure_test_assets.sh
-	@echo "Running backend tests (excluding tmp tooling)..."
-	go test -race -timeout 10m $$(go list ./... | grep -v '/tmp$$')
+	@echo "Running backend tests..."
+	go test -race -timeout 10m $$(go list $(GO_TEST_PACKAGES))
 
 # Run integration tests (requires Ollama at OLLAMA_URL or 127.0.0.1:11434)
 test-integration:

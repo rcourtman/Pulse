@@ -473,7 +473,7 @@ func TestRunLoop_LicenseErrorIsDetectedByIsLicenseError(t *testing.T) {
 			}
 			defer wsConn.Close()
 
-			rpErr := client.readPump(context.Background(), wsConn, make(chan []byte, 1), make(chan struct{}, 1))
+			rpErr := client.readPump(context.Background(), wsConn, make(chan []byte, 1), make(chan struct{}, 1), nil)
 			if rpErr == nil {
 				t.Fatal("expected readPump() to return error")
 			}
@@ -512,7 +512,7 @@ func TestRunLoop_NonLicenseErrorIsNotLicenseError(t *testing.T) {
 			}
 			defer wsConn.Close()
 
-			rpErr := client.readPump(context.Background(), wsConn, make(chan []byte, 1), make(chan struct{}, 1))
+			rpErr := client.readPump(context.Background(), wsConn, make(chan []byte, 1), make(chan struct{}, 1), nil)
 			// Non-license errors either return nil or a non-license error
 			if rpErr != nil && isLicenseError(rpErr) {
 				t.Errorf("isLicenseError() = true for non-license code %q", code)

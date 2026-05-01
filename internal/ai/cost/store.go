@@ -41,9 +41,10 @@ type Store struct {
 	persistence Persistence
 
 	// Debounced persistence to avoid frequent disk writes.
-	saveTimer    *time.Timer
-	savePending  bool
-	saveDebounce time.Duration
+	saveTimer     *time.Timer
+	saveTimerDone chan struct{}
+	savePending   bool
+	saveDebounce  time.Duration
 
 	// Error tracking for persistence
 	lastSaveError error
@@ -276,19 +277,32 @@ func (s *Store) GetSummary(days int) Summary {
 // Flush immediately writes any pending changes to persistence.
 func (s *Store) Flush() error {
 	s.mu.Lock()
-	if s.saveTimer != nil {
-		s.saveTimer.Stop()
-	}
+	timerDone := s.stopSaveTimerLocked()
 	s.savePending = false
 	events := make([]UsageEvent, len(s.events))
 	copy(events, s.events)
 	p := s.persistence
 	s.mu.Unlock()
 
+	if timerDone != nil {
+		<-timerDone
+	}
 	if p != nil {
 		return p.SaveUsageHistory(events)
 	}
 	return nil
+}
+
+func (s *Store) stopSaveTimerLocked() chan struct{} {
+	done := s.saveTimerDone
+	if s.saveTimer != nil {
+		if s.saveTimer.Stop() && done != nil {
+			close(done)
+		}
+	}
+	s.saveTimer = nil
+	s.saveTimerDone = nil
+	return done
 }
 
 func (s *Store) trimLocked(now time.Time) {
@@ -310,12 +324,13 @@ func (s *Store) scheduleSaveLocked() {
 		return
 	}
 
-	if s.saveTimer != nil {
-		s.saveTimer.Stop()
-	}
+	_ = s.stopSaveTimerLocked()
 
 	s.savePending = true
+	done := make(chan struct{})
+	s.saveTimerDone = done
 	s.saveTimer = time.AfterFunc(s.saveDebounce, func() {
+		defer close(done)
 		s.mu.Lock()
 		if !s.savePending {
 			s.mu.Unlock()

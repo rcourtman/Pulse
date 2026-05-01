@@ -10,6 +10,8 @@
 // Output:
 //
 //	frontend-modern/src/api/generated/aiChatEvents.ts
+//go:build ignore
+
 package main
 
 import (

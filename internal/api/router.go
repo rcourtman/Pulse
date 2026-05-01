@@ -2179,6 +2179,9 @@ func (r *Router) shutdownBackgroundWorkers() {
 	if r.recoveryTokenStore != nil {
 		r.recoveryTokenStore.Shutdown()
 	}
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.StopServices()
+	}
 	if r.trueNASPoller != nil {
 		r.trueNASPoller.Stop()
 	}

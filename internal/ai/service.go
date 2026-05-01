@@ -1061,6 +1061,7 @@ func (s *Service) Stop() {
 	incidentStore := s.incidentStore
 	infraDiscovery := s.infraDiscoveryService
 	discoveryService := s.discoveryService
+	costStore := s.costStore
 	s.resourceExportStore = nil
 	s.resourceExportStoreOrgID = ""
 	defer s.mu.Unlock()
@@ -1074,6 +1075,12 @@ func (s *Service) Stop() {
 	}
 	if discoveryService != nil {
 		discoveryService.Stop()
+	}
+
+	if costStore != nil {
+		if err := costStore.Flush(); err != nil {
+			log.Warn().Err(err).Msg("failed to flush AI usage cost store")
+		}
 	}
 
 	if store != nil {
