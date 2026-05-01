@@ -168,6 +168,12 @@ cross-source deduplication.
    infrastructure tables must use the shared `Table` primitive's scroll frame
    directly instead of reintroducing page-local `overflow-x-auto` wrappers
    inside the canonical card shell.
+   Unified resource host metric cells may consume alert-backed agent
+   thresholds, but resource consumers must not resolve alert defaults or
+   overrides locally. Host table state exposes the alerts-owned threshold
+   resolver and row renderers pass the resolved values into metric bars while
+   preserving unified-resource ownership over identity, rows, grouping, and
+   detail presentation.
    Docker Swarm service, Kubernetes namespace/deployment, and PMG detail
    tables follow that same shell boundary: their platform-specific rows and
    actions are unified-resource-owned, while horizontal overflow is owned by

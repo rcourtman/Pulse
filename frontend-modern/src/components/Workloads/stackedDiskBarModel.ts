@@ -8,12 +8,14 @@ import {
   formatPercent,
 } from '@/utils/format';
 import { getMetricColorRgba } from '@/utils/metricThresholds';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
 export interface StackedDiskBarProps {
   disks?: Disk[];
   aggregateDisk?: Disk;
   mode?: 'stacked' | 'aggregate' | 'mini';
   anomaly?: AnomalyReport | null;
+  thresholds?: MetricDisplayThresholds | null;
 }
 
 export interface StackedDiskSegment {
@@ -85,12 +87,18 @@ function getDiskLabel(disk: Disk, index: number): string {
   return disk.mountpoint || disk.device || `Disk ${index + 1}`;
 }
 
-function getStackedDiskColor(percent: number, index: number): string {
-  if (percent >= 90) {
-    return getMetricColorRgba(90, 'disk');
+function getStackedDiskColor(
+  percent: number,
+  index: number,
+  thresholds?: MetricDisplayThresholds | null,
+): string {
+  const critical = thresholds?.critical ?? 90;
+  const warning = thresholds?.warning ?? 80;
+  if (percent >= critical) {
+    return getMetricColorRgba(percent, 'disk', thresholds);
   }
-  if (percent >= 80) {
-    return getMetricColorRgba(80, 'disk');
+  if (percent >= warning) {
+    return getMetricColorRgba(percent, 'disk', thresholds);
   }
   return SEGMENT_COLORS[index % SEGMENT_COLORS.length];
 }
@@ -101,6 +109,7 @@ function buildTooltipContent(
     aggregateDisk: Disk | undefined;
     aggregateMode: boolean;
     miniMode: boolean;
+    thresholds?: MetricDisplayThresholds | null;
   },
 ): StackedDiskTooltipItem[] {
   const useUsageColors = options.aggregateMode || options.miniMode;
@@ -109,8 +118,8 @@ function buildTooltipContent(
       const percentValue = getDiskUsagePercent(disk);
       return {
         color: useUsageColors
-          ? getMetricColorRgba(percentValue, 'disk')
-          : getStackedDiskColor(percentValue, index),
+          ? getMetricColorRgba(percentValue, 'disk', options.thresholds)
+          : getStackedDiskColor(percentValue, index, options.thresholds),
         label: getDiskLabel(disk, index),
         percent: formatPercent(percentValue),
         total: formatBytes(disk.total),
@@ -123,7 +132,7 @@ function buildTooltipContent(
     const percentValue = getDiskUsagePercent(options.aggregateDisk);
     return [
       {
-        color: getMetricColorRgba(percentValue, 'disk'),
+        color: getMetricColorRgba(percentValue, 'disk', options.thresholds),
         label: 'Total',
         percent: formatPercent(percentValue),
         total: formatBytes(options.aggregateDisk.total),
@@ -174,9 +183,7 @@ export function buildStackedDiskBarPresentation(
   const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
   const maxInfo = getMaxDiskInfo(disks);
   const maxLabelShort = maxInfo ? `max ${formatPercent(maxInfo.percent)}` : '';
-  const maxLabelFull = maxInfo
-    ? `Max ${formatPercent(maxInfo.percent)} (${maxInfo.label})`
-    : '';
+  const maxLabelFull = maxInfo ? `Max ${formatPercent(maxInfo.percent)} (${maxInfo.label})` : '';
   const displayLabel = formatPercent(overallPercent);
   const displaySublabel = `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
   const showMaxLabel =
@@ -191,14 +198,14 @@ export function buildStackedDiskBarPresentation(
     );
   const barColor =
     aggregateMode && hasMultipleDisks && maxInfo
-      ? getMetricColorRgba(maxInfo.percent, 'disk')
-      : getMetricColorRgba(overallPercent, 'disk');
+      ? getMetricColorRgba(maxInfo.percent, 'disk', props.thresholds)
+      : getMetricColorRgba(overallPercent, 'disk', props.thresholds);
   const segments =
     useStackedSegments && totalCapacity > 0
       ? disks.map((disk, index) => {
           const diskUsagePercent = getDiskUsagePercent(disk);
           return {
-            color: getStackedDiskColor(diskUsagePercent, index),
+            color: getStackedDiskColor(diskUsagePercent, index, props.thresholds),
             disk,
             diskUsagePercent,
             index,
@@ -209,7 +216,7 @@ export function buildStackedDiskBarPresentation(
   const miniDisks = disks.map((disk, index) => {
     const percent = getDiskUsagePercent(disk);
     return {
-      color: getMetricColorRgba(percent, 'disk'),
+      color: getMetricColorRgba(percent, 'disk', props.thresholds),
       label: getDiskLabel(disk, index),
       percent,
     };
@@ -218,6 +225,7 @@ export function buildStackedDiskBarPresentation(
     aggregateDisk: props.aggregateDisk,
     aggregateMode,
     miniMode,
+    thresholds: props.thresholds,
   });
 
   return {
@@ -230,7 +238,9 @@ export function buildStackedDiskBarPresentation(
     barColor,
     barPercent,
     containerClass:
-      miniMode && hasDisks ? 'metric-text w-full' : 'metric-text w-full h-4 flex items-center justify-center',
+      miniMode && hasDisks
+        ? 'metric-text w-full'
+        : 'metric-text w-full h-4 flex items-center justify-center',
     displayLabel,
     displaySublabel,
     hasDisks,

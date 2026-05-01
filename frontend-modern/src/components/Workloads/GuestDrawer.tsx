@@ -16,6 +16,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     discoveryLoadingState,
     discoveryResourceId,
     discoveryResourceType,
+    diskThresholds,
     guestId,
     hasAgentInfo,
     hasDiscoverySupport,
@@ -51,9 +52,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           <button
             onClick={() => switchTab('discovery')}
             class={`pb-2 text-sm font-medium transition-colors relative ${
-              activeTab() === 'discovery'
-                ? 'text-blue-600 dark:text-blue-400'
-                : ' hover:text-muted'
+              activeTab() === 'discovery' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
             }`}
           >
             Discovery
@@ -93,6 +92,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           onCustomUrlChange={props.onCustomUrlChange}
           customUrl={props.customUrl}
           backupPresentation={backupPresentation()}
+          diskThresholds={diskThresholds()}
           webInterfaceTargetLabel={webInterfaceTargetLabel()}
         />
       </div>

@@ -1,6 +1,6 @@
 import { estimateTextWidth } from '@/utils/format';
 import { getMetricColorClass } from '@/utils/metricThresholds';
-import type { MetricType } from '@/utils/metricThresholds';
+import type { MetricDisplayThresholds, MetricType } from '@/utils/metricThresholds';
 
 export interface MetricBarProps {
   value: number;
@@ -8,6 +8,7 @@ export interface MetricBarProps {
   sublabel?: string;
   showLabel?: boolean;
   type?: 'cpu' | 'memory' | 'disk' | 'generic';
+  thresholds?: MetricDisplayThresholds | null;
   resourceId?: string;
   class?: string;
 }
@@ -33,10 +34,9 @@ export function buildMetricBarPresentation(
   const metricType: MetricType = metric === 'generic' ? 'cpu' : metric;
 
   return {
-    progressColorClass: getMetricColorClass(props.value, metricType),
+    progressColorClass: getMetricColorClass(props.value, metricType, props.thresholds),
     showLabel,
     showSublabel,
     width,
   };
 }
-

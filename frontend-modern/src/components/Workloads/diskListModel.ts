@@ -2,10 +2,12 @@ import type { Disk } from '@/types/api';
 
 import { formatBytes } from '@/utils/format';
 import { getMetricColorClass } from '@/utils/metricThresholds';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
 export interface DiskListProps {
   disks: Disk[];
   diskStatusReason?: string;
+  thresholds?: MetricDisplayThresholds | null;
 }
 
 export interface WorkloadsDiskPresentation {
@@ -44,8 +46,10 @@ export const getWorkloadsDiskUsageText = (disk: Disk): string =>
 export const getWorkloadsDiskUsagePercentLabel = (disk: Disk): string =>
   hasWorkloadsDiskCapacity(disk) ? `${getWorkloadsDiskUsagePercent(disk).toFixed(0)}%` : '—';
 
-export const getWorkloadsDiskProgressClass = (disk: Disk): string =>
-  getMetricColorClass(getWorkloadsDiskUsagePercent(disk), 'disk');
+export const getWorkloadsDiskProgressClass = (
+  disk: Disk,
+  thresholds?: MetricDisplayThresholds | null,
+): string => getMetricColorClass(getWorkloadsDiskUsagePercent(disk), 'disk', thresholds);
 
 export const getWorkloadsDiskProgressWidth = (disk: Disk): string =>
   `${Math.min(getWorkloadsDiskUsagePercent(disk), 100)}%`;
@@ -55,6 +59,7 @@ export const getWorkloadsDiskTypeLabel = (disk: Disk): string => disk.type?.toUp
 export const buildWorkloadsDiskPresentation = (
   disk: Disk,
   index: number,
+  thresholds?: MetricDisplayThresholds | null,
 ): WorkloadsDiskPresentation => {
   const label = getWorkloadsDiskLabel(disk);
 
@@ -62,7 +67,7 @@ export const buildWorkloadsDiskPresentation = (
     key: `${disk.mountpoint ?? ''}:${disk.device ?? ''}:${index}`,
     label,
     labelTitle: getWorkloadsDiskLabelTitle(label),
-    progressClass: getWorkloadsDiskProgressClass(disk),
+    progressClass: getWorkloadsDiskProgressClass(disk, thresholds),
     progressWidth: getWorkloadsDiskProgressWidth(disk),
     typeLabel: getWorkloadsDiskTypeLabel(disk),
     usageText: getWorkloadsDiskUsageText(disk),

@@ -11,6 +11,7 @@ import {
 } from '@/components/shared/groupedTableRowPresentation';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TableCard } from '@/components/shared/TableCard';
+import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   Table,
   TableBody,
@@ -237,6 +238,18 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   getAgentStatusIndicator({ status: resource.status }),
                 );
                 const metricsKey = createMemo(() => buildMetricKeyForUnifiedResource(resource));
+                const alertResourceIdCandidates = createMemo(() =>
+                  hostOverrideIdCandidates(resource),
+                );
+                const cpuThresholds = createMemo(() =>
+                  table.getMetricThresholds('agent', 'cpu', alertResourceIdCandidates()),
+                );
+                const memoryThresholds = createMemo(() =>
+                  table.getMetricThresholds('agent', 'memory', alertResourceIdCandidates()),
+                );
+                const diskThresholds = createMemo(() =>
+                  table.getMetricThresholds('agent', 'disk', alertResourceIdCandidates()),
+                );
                 const detailControlsId = createMemo(() =>
                   buildSummaryDisclosureControlsId(resource.id),
                 );
@@ -436,6 +449,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                             resourceId={table.isMobile() ? undefined : metricsKey()}
                             isRunning={isResourceOnline(resource)}
                             showMobile={false}
+                            thresholds={cpuThresholds()}
                           />
                         </Show>
                       </TableCell>
@@ -460,6 +474,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               }
                               swapUsed={resource.agent?.memory?.swapUsed ?? 0}
                               swapTotal={resource.agent?.memory?.swapTotal ?? 0}
+                              thresholds={memoryThresholds()}
                             />
                           </div>
                         </Show>
@@ -487,6 +502,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                                     } as Disk)
                                   : undefined
                               }
+                              thresholds={diskThresholds()}
                             />
                           </div>
                         </Show>

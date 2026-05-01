@@ -1291,6 +1291,7 @@
       ],
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx",
+        "frontend-modern/src/stores/alertsActivation.ts",
         "frontend-modern/src/utils/alertActivationPresentation.ts",
         "frontend-modern/src/utils/alertAdministrationPresentation.ts",
         "frontend-modern/src/utils/alertBulkEditPresentation.ts",
@@ -1306,9 +1307,11 @@
         "frontend-modern/src/utils/alertSchedulePresentation.ts",
         "frontend-modern/src/utils/alertSeverityPresentation.ts",
         "frontend-modern/src/utils/alertTabsPresentation.ts",
+        "frontend-modern/src/utils/alertThresholdDefaults.ts",
         "frontend-modern/src/utils/alertThresholdsPresentation.ts",
         "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts",
-        "frontend-modern/src/utils/alertWebhookPresentation.ts"
+        "frontend-modern/src/utils/alertWebhookPresentation.ts",
+        "frontend-modern/src/utils/metricThresholds.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -1377,6 +1380,7 @@
               "frontend-modern/src/components/Alerts/Thresholds/hooks/__tests__/useCollapsedSections.test.ts",
               "frontend-modern/src/components/Alerts/Thresholds/sections/__tests__/CollapsibleSection.test.tsx",
               "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts",
               "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
@@ -1421,6 +1425,21 @@
               "frontend-modern/src/utils/__tests__/alertTabsPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/alertThresholdsPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/alertThresholdsSectionPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "alert-display-threshold-resolution",
+            "label": "alert display threshold proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/stores/alertsActivation.ts",
+              "frontend-modern/src/utils/alertThresholdDefaults.ts",
+              "frontend-modern/src/utils/metricThresholds.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/metricThresholds.test.ts"
             ]
           },
           {

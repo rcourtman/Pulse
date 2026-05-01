@@ -3,7 +3,7 @@ import { MetricBar } from '@/components/Workloads/MetricBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatPercent } from '@/utils/format';
 import { getMetricSeverity } from '@/utils/metricThresholds';
-import type { MetricSeverity } from '@/utils/metricThresholds';
+import type { MetricDisplayThresholds, MetricSeverity } from '@/utils/metricThresholds';
 
 export interface ResponsiveMetricCellProps {
   /** Metric value (0-100 percentage) */
@@ -32,6 +32,9 @@ export interface ResponsiveMetricCellProps {
 
   /** Additional CSS classes for container */
   class?: string;
+
+  /** Resolved warning/critical thresholds for alert-aligned coloring. */
+  thresholds?: MetricDisplayThresholds | null;
 }
 
 /** Map metric severity to text color + weight for compact metric display */
@@ -41,8 +44,12 @@ const METRIC_TEXT_STYLES: Record<MetricSeverity, string> = {
   normal: 'text-muted',
 };
 
-function metricTextClass(value: number, type: 'cpu' | 'memory' | 'disk'): string {
-  return METRIC_TEXT_STYLES[getMetricSeverity(value, type)];
+function metricTextClass(
+  value: number,
+  type: 'cpu' | 'memory' | 'disk',
+  thresholds?: MetricDisplayThresholds | null,
+): string {
+  return METRIC_TEXT_STYLES[getMetricSeverity(value, type, thresholds)];
 }
 
 function compactCapacityLabel(sublabel?: string): string | undefined {
@@ -91,7 +98,7 @@ function compactCapacityLabel(sublabel?: string): string | undefined {
 export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props) => {
   const { isAtLeast, isBelow } = useBreakpoint();
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type, props.thresholds));
   const isRunning = () => props.isRunning !== false; // Default to true if not specified
 
   const isVeryNarrow = createMemo(() => isBelow('xs'));
@@ -135,6 +142,7 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
             showLabel={showLabel()}
             type={props.type}
             resourceId={props.resourceId}
+            thresholds={props.thresholds}
           />
         </div>
       </div>
@@ -151,9 +159,10 @@ export const MetricText: Component<{
   type: 'cpu' | 'memory' | 'disk';
   label?: string;
   class?: string;
+  thresholds?: MetricDisplayThresholds | null;
 }> = (props) => {
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type, props.thresholds));
 
   return (
     <span class={`text-xs text-center ${colorClass()} ${props.class || ''}`}>{displayLabel()}</span>
@@ -176,9 +185,10 @@ export const DualMetricCell: Component<{
   desktopContent?: JSX.Element;
   fallback?: JSX.Element;
   class?: string;
+  thresholds?: MetricDisplayThresholds | null;
 }> = (props) => {
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type, props.thresholds));
   const isRunning = () => props.isRunning !== false;
 
   const defaultFallback = (
@@ -198,6 +208,7 @@ export const DualMetricCell: Component<{
       sublabel={props.sublabel}
       type={props.type}
       resourceId={props.resourceId}
+      thresholds={props.thresholds}
     />
   );
 

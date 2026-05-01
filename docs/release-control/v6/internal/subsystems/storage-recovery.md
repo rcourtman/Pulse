@@ -131,6 +131,11 @@ state.
    columns and rows, but horizontal overflow and scrollbar hiding must route
    through the shared `Table` wrapper rather than page-local scroll divs or
    inline overflow styles.
+   Storage capacity bars may consume alert-backed disk thresholds, but storage
+   surfaces do not own threshold selection. `EnhancedStorageBar` and its model
+   must pass resolved thresholds from the alerts activation boundary into the
+   shared metric-color helper instead of carrying storage-local usage color
+   bands.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    Shared setup-script transport may be reused by storage and recovery-linked
    setup flows, but it remains API/lifecycle-owned: generated PVE scripts must

@@ -29,6 +29,7 @@ vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
     activationState: () => 'active',
     getTemperatureThreshold: () => 80,
+    getMetricThresholds: () => ({ warning: 75, critical: 80 }),
   }),
 }));
 

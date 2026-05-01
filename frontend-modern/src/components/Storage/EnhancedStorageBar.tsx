@@ -28,6 +28,7 @@ import {
 import { useTooltip } from '@/hooks/useTooltip';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { ZFSPool } from '@/types/api';
 import { useEnhancedStorageBarModel } from './useEnhancedStorageBarModel';
 
@@ -40,11 +41,13 @@ interface EnhancedStorageBarProps {
 
 export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
   const tip = useTooltip();
+  const alertsActivation = useAlertsActivation();
   const { usagePercent, barColor, label, tooltipRows, zfsSummary } = useEnhancedStorageBarModel({
     used: () => props.used,
     total: () => props.total,
     free: () => props.free,
     zfsPool: () => props.zfsPool,
+    thresholds: () => alertsActivation.getMetricThresholds('storage', 'disk'),
   });
 
   return (
@@ -68,9 +71,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
         }
         label={
           <span class={STORAGE_BAR_LABEL_WRAP_CLASS}>
-            <span class={STORAGE_BAR_LABEL_TEXT_CLASS}>
-              {label()}
-            </span>
+            <span class={STORAGE_BAR_LABEL_TEXT_CLASS}>{label()}</span>
           </span>
         }
       />
@@ -78,9 +79,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
       {/* Tooltip */}
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
         <div class={STORAGE_BAR_TOOLTIP_WRAP_CLASS}>
-          <div class={STORAGE_BAR_TOOLTIP_TITLE_CLASS}>
-            {getStorageBarTooltipTitle()}
-          </div>
+          <div class={STORAGE_BAR_TOOLTIP_TITLE_CLASS}>{getStorageBarTooltipTitle()}</div>
 
           <For each={tooltipRows()}>
             {(row) => (
@@ -106,9 +105,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
                 </div>
               </Show>
               <Show when={zfsSummary()?.errorSummary}>
-                <div class={`${getZfsErrorTextClass()} mt-0.5`}>
-                  {zfsSummary()?.errorSummary}
-                </div>
+                <div class={`${getZfsErrorTextClass()} mt-0.5`}>{zfsSummary()?.errorSummary}</div>
               </Show>
             </div>
           </Show>

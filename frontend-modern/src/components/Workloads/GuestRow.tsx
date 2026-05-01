@@ -46,10 +46,12 @@ export function GuestRow(props: GuestRowProps) {
     clusterName,
     contextLabel,
     cpuAnomaly,
+    cpuThresholds,
     customUrl,
     diskAnomaly,
     diskIOEmphasis,
     diskRead,
+    diskThresholds,
     diskWrite,
     displayId,
     dockerHostId,
@@ -71,6 +73,7 @@ export function GuestRow(props: GuestRowProps) {
     lockLabel,
     memoryAnomaly,
     memoryPercentOnly,
+    memoryThresholds,
     memoryTooltip,
     metricsKey,
     namespace,
@@ -227,6 +230,7 @@ export function GuestRow(props: GuestRowProps) {
                 cores={isMobile() ? undefined : props.guest.cpus}
                 resourceId={metricsKey()}
                 anomaly={cpuAnomaly()}
+                thresholds={cpuThresholds()}
               />
             </div>
           </td>
@@ -245,6 +249,7 @@ export function GuestRow(props: GuestRowProps) {
                 swapTotal={props.guest.memory?.swapTotal || 0}
                 resourceId={metricsKey()}
                 anomaly={memoryAnomaly()}
+                thresholds={memoryThresholds()}
               />
             </div>
           </td>
@@ -267,6 +272,7 @@ export function GuestRow(props: GuestRowProps) {
                 disks={props.guest.disks}
                 aggregateDisk={props.guest.disk}
                 anomaly={diskAnomaly()}
+                thresholds={diskThresholds()}
               />
             </Show>
           </td>
@@ -538,9 +544,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('update')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
-              <Show
-                when={workloadType() === 'app-container' && dockerHostId()}
-              >
+              <Show when={workloadType() === 'app-container' && dockerHostId()}>
                 <UpdateButton
                   updateStatus={props.guest.updateStatus}
                   agentId={dockerHostId()}

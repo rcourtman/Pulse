@@ -7,6 +7,7 @@ import {
   formatPercent,
 } from '@/utils/format';
 import { getMetricColorRgba } from '@/utils/metricThresholds';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
 export interface StackedMemoryBarProps {
   used: number;
@@ -17,6 +18,7 @@ export interface StackedMemoryBarProps {
   balloon?: number;
   resourceId?: string;
   anomaly?: AnomalyReport | null;
+  thresholds?: MetricDisplayThresholds | null;
 }
 
 export interface StackedMemorySegment {
@@ -63,14 +65,17 @@ function getUtilizationPercent(props: StackedMemoryBarProps): number {
   return 0;
 }
 
-function getSegments(props: StackedMemoryBarProps, utilizationPercent: number): StackedMemorySegment[] {
+function getSegments(
+  props: StackedMemoryBarProps,
+  utilizationPercent: number,
+): StackedMemorySegment[] {
   if (props.total <= 0) {
     if (utilizationPercent <= 0) {
       return [];
     }
     return [
       {
-        color: getMetricColorRgba(utilizationPercent, 'memory'),
+        color: getMetricColorRgba(utilizationPercent, 'memory', props.thresholds),
         label: 'Utilization',
         leftPercent: 0,
         widthPercent: utilizationPercent,
@@ -88,7 +93,7 @@ function getSegments(props: StackedMemoryBarProps, utilizationPercent: number): 
     }
     return [
       {
-        color: getMetricColorRgba(usedPercent, 'memory'),
+        color: getMetricColorRgba(usedPercent, 'memory', props.thresholds),
         label: 'Active',
         leftPercent: 0,
         widthPercent: usedPercent,
@@ -99,7 +104,7 @@ function getSegments(props: StackedMemoryBarProps, utilizationPercent: number): 
   const segments: StackedMemorySegment[] = [];
   if (props.used > 0) {
     segments.push({
-      color: getMetricColorRgba(usedPercent, 'memory'),
+      color: getMetricColorRgba(usedPercent, 'memory', props.thresholds),
       label: 'Active',
       leftPercent: 0,
       widthPercent: usedPercent,

@@ -118,6 +118,14 @@ describe('EnhancedCPUBar', () => {
     expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
   });
 
+  it('uses resolved alert thresholds when provided', () => {
+    const { container } = render(() => (
+      <EnhancedCPUBar usage={82} thresholds={{ warning: 70, critical: 85 }} />
+    ));
+    const bar = getBarFill(container);
+    expect(bar?.getAttribute('fill')).toContain('234, 179, 8');
+  });
+
   it('uses critical color class well above critical threshold', () => {
     const { container } = render(() => <EnhancedCPUBar usage={99} />);
     const bar = getBarFill(container);
@@ -309,7 +317,7 @@ describe('EnhancedCPUBar', () => {
       expect(tooltipValue!).toHaveTextContent('95%');
     });
 
-    it('does not apply red text to usage <=90% in tooltip', async () => {
+    it('does not apply red text below the critical threshold in tooltip', async () => {
       const { container } = render(() => <EnhancedCPUBar usage={85} />);
       await fireEvent.mouseEnter(getBarTrigger(container));
       const tooltipValue = getTooltipUsageValue();
@@ -318,13 +326,12 @@ describe('EnhancedCPUBar', () => {
       expect(tooltipValue!).toHaveClass('text-base-content');
     });
 
-    it('uses text-base-content for usage exactly 90% in tooltip', async () => {
+    it('applies red text at the critical threshold in tooltip', async () => {
       const { container } = render(() => <EnhancedCPUBar usage={90} />);
       await fireEvent.mouseEnter(getBarTrigger(container));
       const tooltipValue = getTooltipUsageValue();
       expect(tooltipValue).not.toBeNull();
-      expect(tooltipValue!).toHaveClass('text-base-content');
-      expect(tooltipValue!).not.toHaveClass('text-red-400');
+      expect(tooltipValue!).toHaveClass('text-red-400');
     });
 
     it('applies red text at usage boundary (91%)', async () => {

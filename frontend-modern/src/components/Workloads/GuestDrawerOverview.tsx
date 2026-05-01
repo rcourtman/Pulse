@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { formatBytes, formatUptime } from '@/utils/format';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
 import { DiskList } from './DiskList';
 import { isGuestDrawerVM } from './guestDrawerModel';
@@ -29,6 +30,7 @@ interface GuestDrawerOverviewProps {
     ageLabel: string;
     dateLabel: string;
   } | null;
+  diskThresholds?: MetricDisplayThresholds | null;
   webInterfaceTargetLabel: string;
 }
 
@@ -50,7 +52,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             <Show when={props.guest.uptime > 0}>
               <div class="flex items-center justify-between">
                 <span class="text-muted">Uptime</span>
-                <span class="font-medium text-base-content">{formatUptime(props.guest.uptime)}</span>
+                <span class="font-medium text-base-content">
+                  {formatUptime(props.guest.uptime)}
+                </span>
               </div>
             </Show>
             <Show when={props.guest.node}>
@@ -82,7 +86,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                     <span class="font-medium">{props.guest.osName}</span>
                   </Show>
                   <Show
-                    when={(props.guest.osName?.length ?? 0) > 0 && (props.guest.osVersion?.length ?? 0) > 0}
+                    when={
+                      (props.guest.osName?.length ?? 0) > 0 &&
+                      (props.guest.osVersion?.length ?? 0) > 0
+                    }
                   >
                     <span class="text-muted mx-1">•</span>
                   </Show>
@@ -160,7 +167,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           </div>
         </Show>
 
-        <Show when={props.hasFilesystemDetails && props.guest.disks && props.guest.disks.length > 0}>
+        <Show
+          when={props.hasFilesystemDetails && props.guest.disks && props.guest.disks.length > 0}
+        >
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Filesystems
@@ -171,6 +180,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 diskStatusReason={
                   isGuestDrawerVM(props.guest) ? (props.guest as any).diskStatusReason : undefined
                 }
+                thresholds={props.diskThresholds}
               />
             </div>
           </div>

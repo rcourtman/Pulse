@@ -46,6 +46,9 @@ operator-facing alert routing behavior for live runtime alerts.
 24. `frontend-modern/src/utils/alertThresholdsPresentation.ts`
 25. `frontend-modern/src/utils/alertThresholdsSectionPresentation.ts`
 26. `internal/alerts/history.go`
+27. `frontend-modern/src/stores/alertsActivation.ts`
+28. `frontend-modern/src/utils/alertThresholdDefaults.ts`
+29. `frontend-modern/src/utils/metricThresholds.ts`
 
 ## Shared Boundaries
 
@@ -62,6 +65,12 @@ operator-facing alert routing behavior for live runtime alerts.
    preserving the shared upgrade-navigation contract; the alert surface may
    route to the canonical destination, but must not emit browser-local upgrade
    metrics or present Pro-required copy when prompt suppression applies.
+6. Add or change frontend metric color thresholds through
+   `frontend-modern/src/utils/metricThresholds.ts`,
+   `frontend-modern/src/utils/alertThresholdDefaults.ts`, and
+   `frontend-modern/src/stores/alertsActivation.ts` so browser display colors
+   consume the same configured alert thresholds and override identity chain as
+   the alert runtime instead of hard-coded per-surface thresholds.
 
 ## Forbidden Paths
 
@@ -129,6 +138,15 @@ incidents. ZFS device alert labels must preserve raw device names such as
 `/dev/sda4`, but must not join pool and device labels with a raw slash because
 device paths can already begin with `/`; browser alert surfaces consume the
 runtime `resourceName` as authored rather than patching storage labels locally.
+
+Browser metric severity colors are also alert-backed. Workloads,
+Infrastructure, and Storage may pass resolved display thresholds into their
+local bars, but threshold selection must flow through the shared alert activation
+store and `frontend-modern/src/utils/metricThresholds.ts`, including configured
+hysteresis, disabled thresholds, storage usage defaults, and guest/Docker
+override identity candidates. Static metric-color defaults are only fallback
+presentation behavior for callers that do not have alert configuration in
+scope.
 
 Alert history persistence is also part of that canonical boundary. The history
 manager may choose the owned runtime data directory, but it must normalize that

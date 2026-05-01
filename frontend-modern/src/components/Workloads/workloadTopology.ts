@@ -1,10 +1,12 @@
 import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
+import { guestOverrideIdCandidates } from '@/features/alerts/guestOverrideIdentity';
 import {
   getCanonicalWorkloadId,
   resolveDiscoveryTargetForWorkload,
   resolveWorkloadType,
 } from '@/utils/workloads';
+import type { AlertThresholdScope } from '@/utils/metricThresholds';
 
 const firstTrimmed = (values: Array<string | null | undefined>): string => {
   for (const value of values) {
@@ -46,6 +48,43 @@ export const getWorkloadDockerHostId = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
   if (type !== 'app-container') return '';
   return (guest.dockerHostId || '').trim();
+};
+
+export const getWorkloadAlertThresholdScope = (guest: WorkloadGuest): AlertThresholdScope => {
+  const type = resolveWorkloadType(guest);
+  return type === 'app-container' ? 'docker' : 'guest';
+};
+
+export const getWorkloadAlertResourceIdCandidates = (guest: WorkloadGuest): string[] => {
+  const type = resolveWorkloadType(guest);
+  if (type === 'vm' || type === 'system-container') {
+    return guestOverrideIdCandidates(guest);
+  }
+
+  if (type === 'app-container') {
+    const discoveryTarget = resolveDiscoveryTargetForWorkload(guest);
+    const hostCandidates = dedupeTrimmed([
+      discoveryTarget?.agentId,
+      guest.dockerHostId,
+      guest.contextLabel,
+      guest.node,
+      guest.instance,
+    ]);
+    const idSegments = guest.id.split(/[:/]/).filter(Boolean);
+    const shortId = idSegments[idSegments.length - 1] || guest.id;
+    const containerIds = dedupeTrimmed([
+      discoveryTarget?.resourceId,
+      guest.containerId,
+      shortId,
+      guest.id,
+    ]);
+    const dockerOverrideIds = hostCandidates.flatMap((hostId) =>
+      containerIds.map((containerId) => `docker:${hostId}/${containerId}`),
+    );
+    return dedupeTrimmed([...dockerOverrideIds, guest.id]);
+  }
+
+  return dedupeTrimmed([getCanonicalWorkloadId(guest), guest.id]);
 };
 
 export const getWorkloadContainerHostId = (guest: WorkloadGuest): string => {

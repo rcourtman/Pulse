@@ -161,7 +161,11 @@ vi.mock('@/api/guestMetadata', () => ({
 }));
 
 vi.mock('@/stores/alertsActivation', () => ({
-  useAlertsActivation: () => ({ activationState: () => 'active' }),
+  useAlertsActivation: () => ({
+    activationState: () => 'active',
+    getMetricThresholds: () => ({ warning: 70, critical: 85 }),
+    getBackupThresholds: () => ({ freshHours: 24, staleHours: 72 }),
+  }),
 }));
 
 vi.mock('@/stores/aiChat', () => ({
@@ -916,6 +920,11 @@ describe('Workloads performance contract', () => {
       expect(guestRowSource).not.toContain('function NetworkInfoCell(');
       expect(guestRowSource).not.toContain('function OSInfoCell(');
       expect(guestRowSource).not.toContain('function BackupStatusCell(');
+      expect(guestRowSource).toContain('thresholds={cpuThresholds()}');
+      expect(guestRowSource).toContain('thresholds={memoryThresholds()}');
+      expect(guestRowSource).toContain('thresholds={diskThresholds()}');
+      expect(guestRowStateSource).toContain('getWorkloadAlertThresholdScope');
+      expect(guestRowStateSource).toContain('getMetricThresholds');
       expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
       expect(guestRowModelSource).toContain('export const VIEW_MODE_COLUMNS');
       expect(guestRowStateSource).toContain('getCanonicalWorkloadId');

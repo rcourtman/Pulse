@@ -301,6 +301,7 @@ vi.mock('@/contexts/appRuntime', () => ({
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
     activationState: () => alertsActivationState,
+    getMetricThresholds: () => ({ warning: 80, critical: 85 }),
   }),
 }));
 
@@ -1747,9 +1748,7 @@ describe('Storage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Node' }));
     const nodeMenu = screen.getByRole('menu');
-    const optionLabels = Array.from(
-      nodeMenu.querySelectorAll<HTMLButtonElement>('button'),
-    )
+    const optionLabels = Array.from(nodeMenu.querySelectorAll<HTMLButtonElement>('button'))
       .map((button) => (button.textContent || '').trim())
       .filter((text) => text.length > 0 && !text.startsWith('Node'));
     expect(optionLabels).toContain('pve1');

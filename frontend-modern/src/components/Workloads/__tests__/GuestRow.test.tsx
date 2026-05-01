@@ -52,6 +52,7 @@ vi.mock('@/stores/alertsActivation', () => ({
     isPastObservationWindow: () => true,
     getBackupThresholds: () => ({ staleHours: 48, criticalHours: 168 }),
     getTemperatureThreshold: () => null,
+    getMetricThresholds: () => ({ warning: 70, critical: 85 }),
     refreshConfig: vi.fn(),
     refreshActiveAlerts: vi.fn(),
     activate: vi.fn(),
@@ -104,9 +105,8 @@ vi.mock('@/components/shared/workloadTypeBadges', () => ({
 }));
 
 vi.mock('@/routing/resourceLinks', async () => {
-  const actual = await vi.importActual<typeof import('@/routing/resourceLinks')>(
-    '@/routing/resourceLinks',
-  );
+  const actual =
+    await vi.importActual<typeof import('@/routing/resourceLinks')>('@/routing/resourceLinks');
   return {
     ...actual,
     buildInfrastructureHrefForWorkload: () => '/infrastructure/node1',
@@ -114,6 +114,9 @@ vi.mock('@/routing/resourceLinks', async () => {
 });
 
 vi.mock('../workloadTopology', () => ({
+  getWorkloadAlertResourceIdCandidates: (guest: WorkloadGuest) => [guest.id],
+  getWorkloadAlertThresholdScope: (guest: WorkloadGuest) =>
+    guest.workloadType === 'app-container' ? 'docker' : 'guest',
   getWorkloadDockerHostId: (guest: WorkloadGuest) => guest.dockerHostId || '',
 }));
 
@@ -1051,9 +1054,7 @@ describe('OCI container handling', () => {
     });
     const badge = screen.getByText('SYSTEM-CONTAINER');
     expect(badge).toBeTruthy();
-    expect(badge.getAttribute('title')).toBe(
-      'OCI Container • docker.io/library/alpine:3.18',
-    );
+    expect(badge.getAttribute('title')).toBe('OCI Container • docker.io/library/alpine:3.18');
   });
 });
 

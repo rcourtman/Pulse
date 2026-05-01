@@ -1,6 +1,8 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
+import type { DisplayMetricType } from '@/utils/metricThresholds';
 import {
   getCanonicalWorkloadId,
   getDiscoveryResourceTypeForWorkload,
@@ -12,6 +14,8 @@ import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
 import {
   getDiscoveryHostIdForWorkload,
   getDiscoveryResourceIdForWorkload,
+  getWorkloadAlertResourceIdCandidates,
+  getWorkloadAlertThresholdScope,
 } from './workloadTopology';
 import {
   getGuestDrawerAgentLabel,
@@ -27,9 +31,23 @@ import {
 } from './guestDrawerModel';
 
 export function useGuestDrawerState(props: GuestDrawerProps) {
+  const alertsActivation = useAlertsActivation();
   const [activeTab, setActiveTab] = createSignal<GuestDrawerTab>('overview');
 
   const guestId = createMemo(() => getCanonicalWorkloadId(props.guest));
+  const alertThresholdScope = createMemo(() => getWorkloadAlertThresholdScope(props.guest));
+  const alertResourceIdCandidates = createMemo(() =>
+    getWorkloadAlertResourceIdCandidates(props.guest),
+  );
+  const metricThresholds = (metric: DisplayMetricType) =>
+    createMemo(() =>
+      alertsActivation.getMetricThresholds(
+        alertThresholdScope(),
+        metric,
+        alertResourceIdCandidates(),
+      ),
+    );
+  const diskThresholds = metricThresholds('disk');
   const infrastructureHref = createMemo(() => buildInfrastructureHrefForWorkload(props.guest));
   const osName = createMemo(() => props.guest.osName || '');
   const osVersion = createMemo(() => props.guest.osVersion || '');
@@ -55,9 +73,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const hasDiscoverySupport = createMemo(() => hasDiscoverySupportForWorkload(props.guest));
   const discoveryAgentId = createMemo(() => getDiscoveryHostIdForWorkload(props.guest));
   const discoveryResourceId = createMemo(() => getDiscoveryResourceIdForWorkload(props.guest));
-  const discoveryResourceType = createMemo(() =>
-    getDiscoveryResourceTypeForWorkload(props.guest),
-  );
+  const discoveryResourceType = createMemo(() => getDiscoveryResourceTypeForWorkload(props.guest));
   const webInterfaceTargetLabel = createMemo(() =>
     getWebInterfaceTargetLabelForWorkload(props.guest),
   );
@@ -81,6 +97,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     discoveryLoadingState: getDiscoveryLoadingState(),
     discoveryResourceId,
     discoveryResourceType,
+    diskThresholds,
     guestId,
     guestOsSummary,
     hasAgentInfo,

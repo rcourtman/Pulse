@@ -59,13 +59,17 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
   const isExpanded = createMemo(() => props.table.isExpandedNode(nodeId()));
 
   const statusIndicator = createMemo(() =>
-    isPVEItem ? getNodeStatusIndicator(node() as Node) : getPBSStatusIndicator(pbs() as PBSInstance),
+    isPVEItem
+      ? getNodeStatusIndicator(node() as Node)
+      : getPBSStatusIndicator(pbs() as PBSInstance),
   );
   const cpuPercentValue = createMemo(() => getInfrastructureSummaryCpuPercent(props.item));
   const memoryPercentValue = createMemo(() => getInfrastructureSummaryMemoryPercent(props.item));
   const diskPercentValue = createMemo(() => getInfrastructureSummaryDiskPercent(props.item));
   const diskSublabel = createMemo(() => getInfrastructureSummaryDiskSublabel(props.item));
-  const cpuTemperatureValue = createMemo(() => getInfrastructureSummaryCpuTemperatureValue(props.item));
+  const cpuTemperatureValue = createMemo(() =>
+    getInfrastructureSummaryCpuTemperatureValue(props.item),
+  );
   const uptimeValue = createMemo(() => props.item.uptime ?? 0);
   const displayName = () => (isPVEItem ? getNodeDisplayName(node() as Node) : pbs()!.name);
   const showActualName = () => isPVEItem && hasAlternateDisplayName(node() as Node);
@@ -74,12 +78,23 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
       ? resolveInfrastructureSummaryLinkedAgent(node() as Node, props.tableProps.agents)
       : undefined;
   const metricsKey = createMemo(() => getInfrastructureSummaryMetricsKey(props.item));
+  const alertThresholdScope = createMemo((): 'node' | 'pbs' => (isPVEItem ? 'node' : 'pbs'));
+  const cpuThresholds = createMemo(() =>
+    props.table.getMetricThresholds(alertThresholdScope(), 'cpu', resourceId()),
+  );
+  const memoryThresholds = createMemo(() =>
+    props.table.getMetricThresholds(alertThresholdScope(), 'memory', resourceId()),
+  );
+  const diskThresholds = createMemo(() =>
+    props.table.getMetricThresholds(alertThresholdScope(), 'disk', resourceId()),
+  );
+  const temperatureThresholds = createMemo(() =>
+    isPVEItem ? props.table.getMetricThresholds('node', 'temperature', resourceId()) : null,
+  );
   const alertStyles = createMemo(() =>
     getAlertStyles(resourceId(), props.table.activeAlerts, props.table.alertsEnabled()),
   );
-  const showAlertHighlight = createMemo(
-    () => alertStyles().hasUnacknowledgedAlert && online(),
-  );
+  const showAlertHighlight = createMemo(() => alertStyles().hasUnacknowledgedAlert && online());
 
   const rowStyle = createMemo(() => {
     const styles: Record<string, string> = {};
@@ -103,8 +118,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
   });
 
   const rowClass = createMemo(() => {
-    const baseHover =
-      'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
+    const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
 
     if (isSelected()) {
       return `${baseHover} z-10 bg-blue-50 dark:bg-blue-900`;
@@ -259,9 +273,12 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
             <EnhancedCPUBar
               usage={cpuPercentValue()}
               loadAverage={isPVEItem ? node()!.loadAverage?.[0] : undefined}
-              cores={props.table.isMobile() ? undefined : isPVEItem ? node()!.cpuInfo?.cores : undefined}
+              cores={
+                props.table.isMobile() ? undefined : isPVEItem ? node()!.cpuInfo?.cores : undefined
+              }
               model={isPVEItem ? node()!.cpuInfo?.model : undefined}
               resourceId={metricsKey()}
+              thresholds={cpuThresholds()}
             />
           </div>
         </TableCell>
@@ -285,6 +302,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                   }
                   isRunning={online()}
                   showMobile={false}
+                  thresholds={memoryThresholds()}
                 />
               }
             >
@@ -295,6 +313,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                 swapUsed={node()!.memory?.swapUsed || 0}
                 swapTotal={node()!.memory?.swapTotal || 0}
                 resourceId={metricsKey()}
+                thresholds={memoryThresholds()}
               />
             </Show>
           </div>
@@ -315,6 +334,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                   sublabel={diskSublabel()}
                   isRunning={online()}
                   showMobile={false}
+                  thresholds={diskThresholds()}
                 />
               }
             >
@@ -325,6 +345,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                   free: (node()!.disk?.total || 0) - (node()!.disk?.used || 0),
                   usage: node()!.disk?.total ? node()!.disk!.used / node()!.disk!.total : 0,
                 }}
+                thresholds={diskThresholds()}
               />
             </Show>
           </div>
@@ -374,8 +395,13 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                           value={value}
                           min={min}
                           max={max}
-                          critical={props.table.temperatureThreshold()}
-                          warning={Math.max(0, props.table.temperatureThreshold() - 5)}
+                          critical={
+                            temperatureThresholds()?.critical ?? props.table.temperatureThreshold()
+                          }
+                          warning={
+                            temperatureThresholds()?.warning ??
+                            Math.max(0, props.table.temperatureThreshold() - 5)
+                          }
                         />
                       </div>
                     );
@@ -384,8 +410,13 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                   return (
                     <TemperatureGauge
                       value={value}
-                      critical={props.table.temperatureThreshold()}
-                      warning={Math.max(0, props.table.temperatureThreshold() - 5)}
+                      critical={
+                        temperatureThresholds()?.critical ?? props.table.temperatureThreshold()
+                      }
+                      warning={
+                        temperatureThresholds()?.warning ??
+                        Math.max(0, props.table.temperatureThreshold() - 5)
+                      }
                     />
                   );
                 })()}
@@ -438,8 +469,11 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
             <div class="flex justify-center">
               <span class={online() ? 'text-xs text-base-content' : 'text-xs text-muted'}>
                 {online()
-                  ? (getInfrastructureSummaryCountValue(props.item, 'diskCount', props.tableProps) ??
-                    '-')
+                  ? (getInfrastructureSummaryCountValue(
+                      props.item,
+                      'diskCount',
+                      props.tableProps,
+                    ) ?? '-')
                   : '-'}
               </span>
             </div>
@@ -463,7 +497,9 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
         </Show>
 
         <TableCell class="px-0 py-1 align-middle text-center">
-          <Show when={isPVEItem ? node()!.guestURL || node()!.host : pbs()!.guestURL || pbs()!.host}>
+          <Show
+            when={isPVEItem ? node()!.guestURL || node()!.host : pbs()!.guestURL || pbs()!.host}
+          >
             <a
               href={
                 isPVEItem

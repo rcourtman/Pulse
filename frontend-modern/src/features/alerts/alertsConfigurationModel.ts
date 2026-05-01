@@ -1,4 +1,21 @@
-import type { AlertConfig, ActivationState, BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
+import type {
+  AlertConfig,
+  ActivationState,
+  BackupAlertConfig,
+  SnapshotAlertConfig,
+} from '@/types/alerts';
+import {
+  FACTORY_AGENT_DEFAULTS,
+  FACTORY_BACKUP_DEFAULTS,
+  FACTORY_DOCKER_DEFAULTS,
+  FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
+  FACTORY_DOCKER_STATE_SEVERITY,
+  FACTORY_GUEST_DEFAULTS,
+  FACTORY_NODE_DEFAULTS,
+  FACTORY_PBS_DEFAULTS,
+  FACTORY_SNAPSHOT_DEFAULTS,
+  FACTORY_STORAGE_DEFAULT,
+} from '@/utils/alertThresholdDefaults';
 
 import {
   clampMaxAlertsPerHour,
@@ -21,64 +38,18 @@ import type {
 } from './types';
 import { GROUPING_WINDOW_DEFAULT_SECONDS, clampCooldownMinutes } from './types';
 
-export const FACTORY_GUEST_DEFAULTS = {
-  cpu: 80,
-  memory: 85,
-  disk: 90,
-  diskRead: -1,
-  diskWrite: -1,
-  networkIn: -1,
-  networkOut: -1,
-};
-
-export const FACTORY_NODE_DEFAULTS = {
-  cpu: 80,
-  memory: 85,
-  disk: 90,
-  temperature: 80,
-};
-
-export const FACTORY_PBS_DEFAULTS = {
-  cpu: 80,
-  memory: 85,
-};
-
-export const FACTORY_AGENT_DEFAULTS = {
-  cpu: 80,
-  memory: 85,
-  disk: 90,
-  diskTemperature: 55,
-};
-
-export const FACTORY_DOCKER_DEFAULTS = {
-  cpu: 80,
-  memory: 85,
-  disk: 85,
-  restartCount: 3,
-  restartWindow: 300,
-  memoryWarnPct: 90,
-  memoryCriticalPct: 95,
-  serviceWarnGapPercent: 10,
-  serviceCriticalGapPercent: 50,
-};
-
-export const FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY = false;
-export const FACTORY_DOCKER_STATE_SEVERITY: 'warning' | 'critical' = 'warning';
-export const FACTORY_STORAGE_DEFAULT = 85;
-export const FACTORY_SNAPSHOT_DEFAULTS: SnapshotAlertConfig = {
-  enabled: false,
-  warningDays: 30,
-  criticalDays: 45,
-};
-export const FACTORY_BACKUP_DEFAULTS: BackupAlertConfig = {
-  enabled: false,
-  warningDays: 7,
-  criticalDays: 14,
-  freshHours: 24,
-  staleHours: 72,
-  alertOrphaned: true,
-  ignoreVMIDs: [],
-};
+export {
+  FACTORY_AGENT_DEFAULTS,
+  FACTORY_BACKUP_DEFAULTS,
+  FACTORY_DOCKER_DEFAULTS,
+  FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
+  FACTORY_DOCKER_STATE_SEVERITY,
+  FACTORY_GUEST_DEFAULTS,
+  FACTORY_NODE_DEFAULTS,
+  FACTORY_PBS_DEFAULTS,
+  FACTORY_SNAPSHOT_DEFAULTS,
+  FACTORY_STORAGE_DEFAULT,
+} from '@/utils/alertThresholdDefaults';
 
 export interface AlertsConfigurationSnapshot {
   scheduleQuietHours: QuietHoursConfig;
@@ -452,13 +423,12 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
             friday: quietHours.days.includes(5),
             saturday: quietHours.days.includes(6),
           }
-        : ((quietHours.days as Record<string, boolean>) || createDefaultQuietHours().days);
+        : (quietHours.days as Record<string, boolean>) || createDefaultQuietHours().days;
       snapshot.scheduleQuietHours = {
         enabled: quietHours.enabled || false,
         start: quietHours.start || '22:00',
         end: quietHours.end || '08:00',
-        timezone:
-          quietHours.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        timezone: quietHours.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         days,
         suppress: {
           performance: quietHours.suppress?.performance ?? false,
@@ -525,7 +495,8 @@ export function buildAlertsConfigurationPayload({
 } {
   if (
     snapshot.dockerDefaults.serviceCriticalGapPercent > 0 &&
-    snapshot.dockerDefaults.serviceWarnGapPercent > snapshot.dockerDefaults.serviceCriticalGapPercent
+    snapshot.dockerDefaults.serviceWarnGapPercent >
+      snapshot.dockerDefaults.serviceCriticalGapPercent
   ) {
     return {
       dockerValidationError: ALERT_DOCKER_GAP_VALIDATION_ERROR,

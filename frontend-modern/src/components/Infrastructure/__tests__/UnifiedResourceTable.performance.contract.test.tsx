@@ -394,9 +394,23 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableStateSource).toContain('clearPinnedSummaryScope?: () => void;');
       expect(unifiedResourceTableStateSource).toContain('showHostClearAction');
       expect(unifiedResourceTableStateSource).toContain('showServiceClearAction');
+      expect(unifiedResourceTableStateSource).toContain('useAlertsActivation');
+      expect(unifiedResourceTableStateSource).toContain('getMetricThresholds');
       expect(unifiedResourceTableStateSource).not.toContain(
         'const resourceColumnStyle = createMemo(() =>',
       );
+      expect(unifiedResourceHostTableCardSource).toContain(
+        "table.getMetricThresholds('agent', 'cpu', alertResourceIdCandidates())",
+      );
+      expect(unifiedResourceHostTableCardSource).toContain(
+        "table.getMetricThresholds('agent', 'memory', alertResourceIdCandidates())",
+      );
+      expect(unifiedResourceHostTableCardSource).toContain(
+        "table.getMetricThresholds('agent', 'disk', alertResourceIdCandidates())",
+      );
+      expect(unifiedResourceHostTableCardSource).toContain('thresholds={cpuThresholds()}');
+      expect(unifiedResourceHostTableCardSource).toContain('thresholds={memoryThresholds()}');
+      expect(unifiedResourceHostTableCardSource).toContain('thresholds={diskThresholds()}');
       expect(unifiedResourceHostTableCardSource).not.toContain('style={');
       expect(unifiedResourcePBSTableSectionSource).not.toContain('style={');
       expect(unifiedResourcePMGTableSectionSource).not.toContain('style={');

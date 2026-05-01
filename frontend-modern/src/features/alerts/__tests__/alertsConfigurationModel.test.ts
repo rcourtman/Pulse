@@ -6,6 +6,9 @@ import {
   ALERT_DOCKER_GAP_VALIDATION_ERROR,
   buildAlertsConfigurationPayload,
   createDefaultAlertsConfigurationSnapshot,
+  FACTORY_DOCKER_DEFAULTS,
+  FACTORY_GUEST_DEFAULTS,
+  FACTORY_STORAGE_DEFAULT,
   readAlertsConfigurationSnapshot,
 } from '../alertsConfigurationModel';
 
@@ -13,8 +16,11 @@ describe('alertsConfigurationModel', () => {
   it('creates the canonical default snapshot', () => {
     const snapshot = createDefaultAlertsConfigurationSnapshot();
 
-    expect(snapshot.guestDefaults.cpu).toBe(80);
-    expect(snapshot.dockerDefaults.serviceWarnGapPercent).toBe(10);
+    expect(snapshot.guestDefaults.cpu).toBe(FACTORY_GUEST_DEFAULTS.cpu);
+    expect(snapshot.dockerDefaults.serviceWarnGapPercent).toBe(
+      FACTORY_DOCKER_DEFAULTS.serviceWarnGapPercent,
+    );
+    expect(snapshot.storageDefault).toBe(FACTORY_STORAGE_DEFAULT);
     expect(snapshot.timeThresholds.guest).toBe(5);
     expect(snapshot.scheduleCooldown.enabled).toBe(true);
     expect(snapshot.backupDefaults.ignoreVMIDs).toEqual([]);

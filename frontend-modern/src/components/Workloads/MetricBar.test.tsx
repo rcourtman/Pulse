@@ -104,6 +104,22 @@ describe('MetricBar', () => {
     result.unmount();
   });
 
+  it('uses resolved alert thresholds when provided', () => {
+    let result = render(() => (
+      <MetricBar value={80} label="val" type="cpu" thresholds={{ warning: 70, critical: 85 }} />
+    ));
+    let bar = result.container.querySelector('.bg-metric-warning-bg');
+    expect(bar).toBeInTheDocument();
+    result.unmount();
+
+    result = render(() => (
+      <MetricBar value={85} label="val" type="cpu" thresholds={{ warning: 70, critical: 85 }} />
+    ));
+    bar = result.container.querySelector('.bg-metric-critical-bg');
+    expect(bar).toBeInTheDocument();
+    result.unmount();
+  });
+
   it('shows sublabel when space permits', () => {
     render(() => <MetricBar value={50} label="val" sublabel="sub" />);
     expect(screen.getByText('(sub)')).toBeInTheDocument();

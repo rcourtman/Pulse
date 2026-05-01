@@ -2,6 +2,8 @@ import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import type { ColumnPriority } from '@/hooks/useBreakpoint';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import type { AlertThresholdScope, DisplayMetricType } from '@/utils/metricThresholds';
 import {
   buildInfrastructureSummaryGroupScope,
   splitPrimaryAndServiceResources,
@@ -61,6 +63,7 @@ export interface UnifiedResourceTableProps {
 
 export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const breakpoint = useBreakpoint();
+  const alertsActivation = useAlertsActivation();
   const [tableContainerWidth, setTableContainerWidth] = createSignal<number | null>(null);
   const [tableRootElement, setTableRootElement] = createSignal<HTMLDivElement | null>(null);
   const [sortKey, setSortKey] = createSignal<SortKey>('default');
@@ -191,6 +194,12 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const renderSortIndicator = (key: SortKey) =>
     getUnifiedResourceTableSortIndicator(sortKey(), sortDirection(), key);
 
+  const getMetricThresholds = (
+    scope: AlertThresholdScope,
+    metric: DisplayMetricType,
+    resourceIds?: string | string[],
+  ) => alertsActivation.getMetricThresholds(scope, metric, resourceIds);
+
   const toggleExpand = (resourceId: string) => {
     props.onExpandedResourceChange(props.expandedResourceId === resourceId ? null : resourceId);
   };
@@ -219,6 +228,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     isHostDiskIoVisible,
     isVisible,
     isServiceVisible,
+    getMetricThresholds,
     handleSort,
     renderSortIndicator,
     resolveResourceLabel,

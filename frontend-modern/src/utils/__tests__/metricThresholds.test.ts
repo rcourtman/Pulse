@@ -5,9 +5,12 @@ import {
   getMetricColorRgba,
   getMetricColorHex,
   getMetricTextColorClass,
+  getDefaultMetricDisplayThresholds,
+  resolveMetricDisplayThresholds,
   METRIC_THRESHOLDS,
   type MetricType,
 } from '@/utils/metricThresholds';
+import type { AlertConfig } from '@/types/alerts';
 
 describe('metricThresholds', () => {
   describe('getMetricSeverity', () => {
@@ -151,6 +154,88 @@ describe('metricThresholds', () => {
 
     it('has correct values for disk', () => {
       expect(METRIC_THRESHOLDS.disk).toEqual({ warning: 80, critical: 90 });
+    });
+  });
+
+  describe('alert-backed display thresholds', () => {
+    it('derives guest display thresholds from alert trigger and clear defaults', () => {
+      expect(getDefaultMetricDisplayThresholds('cpu')).toEqual({ warning: 75, critical: 80 });
+      expect(getDefaultMetricDisplayThresholds('memory')).toEqual({ warning: 80, critical: 85 });
+      expect(getDefaultMetricDisplayThresholds('disk')).toEqual({ warning: 85, critical: 90 });
+      expect(getDefaultMetricDisplayThresholds('generic')).toEqual({
+        warning: 75,
+        critical: 90,
+      });
+    });
+
+    it('resolves configured defaults and resource override candidates', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {
+          cpu: { trigger: 82, clear: 77 },
+        },
+        nodeDefaults: {},
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {
+          'guest:cluster-a:100': {
+            cpu: { trigger: 95, clear: 90 },
+          },
+        },
+      } as AlertConfig;
+
+      expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', 'missing')).toEqual({
+        warning: 77,
+        critical: 82,
+      });
+      expect(
+        resolveMetricDisplayThresholds(config, 'guest', 'cpu', [
+          'cluster-a:node-a:100',
+          'guest:cluster-a:100',
+        ]),
+      ).toEqual({
+        warning: 90,
+        critical: 95,
+      });
+    });
+
+    it('treats disabled thresholds as normal display coloring', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {
+          'guest:cluster-a:100': {
+            disk: { trigger: -1, clear: 0 },
+          },
+        },
+      } as AlertConfig;
+
+      expect(
+        resolveMetricDisplayThresholds(config, 'guest', 'disk', 'guest:cluster-a:100'),
+      ).toBeNull();
+      expect(getMetricColorClass(99, 'disk', null)).toContain('bg-metric-normal-bg');
+    });
+
+    it('honors disabled docker defaults and storage usage aliases', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        dockerDefaults: {
+          cpu: { trigger: 0, clear: 0 },
+          memory: { trigger: 0, clear: 0 },
+          disk: { trigger: 0, clear: 0 },
+        },
+        storageDefault: { trigger: 92, clear: 86 },
+        overrides: {},
+      } as AlertConfig;
+
+      expect(resolveMetricDisplayThresholds(config, 'docker', 'cpu')).toBeNull();
+      expect(resolveMetricDisplayThresholds(config, 'storage', 'usage')).toEqual({
+        warning: 86,
+        critical: 92,
+      });
     });
   });
 });

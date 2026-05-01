@@ -2,7 +2,9 @@ import { createMemo } from 'solid-js';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Container } from '@/types/api';
+import type { DisplayMetricType } from '@/utils/metricThresholds';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { getShortImageName, formatBytes } from '@/utils/format';
@@ -15,7 +17,11 @@ import {
 import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
-import { getWorkloadDockerHostId } from './workloadTopology';
+import {
+  getWorkloadAlertResourceIdCandidates,
+  getWorkloadAlertThresholdScope,
+  getWorkloadDockerHostId,
+} from './workloadTopology';
 import {
   DEFAULT_FIRST_CELL_INDENT,
   EMPTY_IO_EMPHASIS,
@@ -26,6 +32,7 @@ import {
 
 export function useGuestRowState(props: GuestRowProps) {
   const { isMobile } = useBreakpoint();
+  const alertsActivation = useAlertsActivation();
 
   const guestId = createMemo(() => getCanonicalWorkloadId(props.guest));
   const infrastructureHref = createMemo(() => buildInfrastructureHrefForWorkload(props.guest));
@@ -44,6 +51,21 @@ export function useGuestRowState(props: GuestRowProps) {
   const metricsKey = createMemo(() =>
     buildMetricKey(getWorkloadMetricsKind(props.guest), guestId()),
   );
+  const alertThresholdScope = createMemo(() => getWorkloadAlertThresholdScope(props.guest));
+  const alertResourceIdCandidates = createMemo(() =>
+    getWorkloadAlertResourceIdCandidates(props.guest),
+  );
+  const metricThresholds = (metric: DisplayMetricType) =>
+    createMemo(() =>
+      alertsActivation.getMetricThresholds(
+        alertThresholdScope(),
+        metric,
+        alertResourceIdCandidates(),
+      ),
+    );
+  const cpuThresholds = metricThresholds('cpu');
+  const memoryThresholds = metricThresholds('memory');
+  const diskThresholds = metricThresholds('disk');
 
   const cpuAnomaly = useAnomalyForMetric(guestId, () => 'cpu');
   const memoryAnomaly = useAnomalyForMetric(guestId, () => 'memory');
@@ -256,11 +278,13 @@ export function useGuestRowState(props: GuestRowProps) {
   return {
     appContainerRuntimeLabel,
     cpuAnomaly,
+    cpuThresholds,
     customUrl,
     diskAnomaly,
     diskIOEmphasis,
     diskPercent,
     diskRead,
+    diskThresholds,
     diskWrite,
     displayId,
     dockerHostId,
@@ -283,6 +307,7 @@ export function useGuestRowState(props: GuestRowProps) {
     lockLabel,
     memoryAnomaly,
     memoryPercentOnly,
+    memoryThresholds,
     memoryTooltip,
     metricsKey,
     namespace,

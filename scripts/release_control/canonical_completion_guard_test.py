@@ -2843,6 +2843,7 @@ index 1111111..2222222 100644
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts",
                         "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
                         "frontend-modern/src/features/alerts/identity.test.ts",
                         "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",

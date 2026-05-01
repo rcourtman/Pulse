@@ -94,6 +94,8 @@ vi.mock('@/api/guestMetadata', () => ({
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
     activationState: () => 'active',
+    getMetricThresholds: () => ({ warning: 70, critical: 85 }),
+    getBackupThresholds: () => ({ freshHours: 24, staleHours: 72 }),
   }),
 }));
 

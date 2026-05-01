@@ -2,6 +2,7 @@ import { createMemo, createSignal } from 'solid-js';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import type { AlertThresholdScope, DisplayMetricType } from '@/utils/metricThresholds';
 import {
   getInfrastructureSummaryDefaultSortDirection,
   isTemperatureMonitoringEnabled,
@@ -16,6 +17,11 @@ export function useInfrastructureSummaryTableState(props: InfrastructureSummaryT
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const { isMobile } = useBreakpoint();
   const temperatureThreshold = createMemo(() => alertsActivation.getTemperatureThreshold());
+  const getMetricThresholds = (
+    scope: AlertThresholdScope,
+    metric: DisplayMetricType,
+    resourceIds?: string | string[],
+  ) => alertsActivation.getMetricThresholds(scope, metric, resourceIds);
 
   const [sortKey, setSortKey] = createSignal<InfrastructureSummarySortKey>('default');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -73,6 +79,7 @@ export function useInfrastructureSummaryTableState(props: InfrastructureSummaryT
     alertsEnabled,
     handleSort,
     hasAnyTemperatureData,
+    getMetricThresholds,
     isExpandedNode: (nodeId: string) => expandedNodeId() === nodeId,
     isMobile,
     isTemperatureMonitoringEnabled: (node: Parameters<typeof isTemperatureMonitoringEnabled>[0]) =>

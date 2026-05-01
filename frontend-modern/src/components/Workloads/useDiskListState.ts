@@ -10,7 +10,7 @@ export function useDiskListState(props: DiskListProps) {
     getWorkloadGuestDiskStatusMessage(props.diskStatusReason),
   );
   const diskPresentation = createMemo(() =>
-    props.disks.map((disk, index) => buildWorkloadsDiskPresentation(disk, index)),
+    props.disks.map((disk, index) => buildWorkloadsDiskPresentation(disk, index, props.thresholds)),
   );
 
   return {

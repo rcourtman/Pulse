@@ -1396,6 +1396,11 @@ owns sorting, count, identity-alias, and linked-agent derivation, and
 owns the per-row render/runtime surface. Future work should extend those
 owners instead of pushing websocket, alert, or identity plumbing back into the
 shared table shell.
+The shared infrastructure summary row may consume alert-backed metric
+thresholds from the table state, but threshold selection itself remains
+alerts-owned through `frontend-modern/src/stores/alertsActivation.ts` and
+`frontend-modern/src/utils/metricThresholds.ts`; shared primitive cells and rows
+must only pass resolved warning/critical values into metric presentation.
 The shared infrastructure selector now follows that same owner split.
 `frontend-modern/src/components/shared/InfrastructureSelector.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
