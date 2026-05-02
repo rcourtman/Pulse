@@ -18,5 +18,8 @@ describe('storage page route shell', () => {
     expect(storageSurfaceSource).toContain('<PageHeader');
     expect(storageSurfaceSource).toContain('title="Storage"');
     expect(storageSurfaceSource).toContain('useStoragePageModel');
+    expect(storageSurfaceSource).toContain(
+      '<StickySummarySection desktopOnly={false} stickyDesktopOnly>',
+    );
   });
 });

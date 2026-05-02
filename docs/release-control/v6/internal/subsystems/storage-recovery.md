@@ -125,7 +125,10 @@ state.
    controls. The charts toggle must read as an explicit `Show charts` /
    `Hide charts` pressed display action, and the off state must remove the
    summary section fully instead of leaving a collapsed summary shell in the
-   interface.
+   interface. When the storage summary remains visible below the desktop
+   breakpoint, it must use the frontend-primitives-owned
+   `StickySummarySection` desktop-sticky mode so the wrapped 2x2 chart grid
+   scrolls with the page instead of pinning most of a narrow viewport.
    Ceph table shells on the storage route share the same frontend-primitives
    table contract: `frontend-modern/src/pages/Ceph.tsx` may own Ceph-specific
    columns and rows, but horizontal overflow and scrollbar hiding must route

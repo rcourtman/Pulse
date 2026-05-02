@@ -92,7 +92,7 @@ const Storage: Component = () => {
       />
 
       <Show when={!storageSummaryCollapsed()}>
-        <StickySummarySection desktopOnly={false}>
+        <StickySummarySection desktopOnly={false} stickyDesktopOnly>
           <StoragePageSummary
             filteredRecords={filteredRecords}
             search={search}

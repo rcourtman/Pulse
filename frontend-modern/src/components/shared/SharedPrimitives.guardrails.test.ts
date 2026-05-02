@@ -64,6 +64,7 @@ import summaryCardInteractionSource from '@/components/shared/summaryCardInterac
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
+import stickySummarySectionSource from '@/components/shared/StickySummarySection.tsx?raw';
 import tableSource from '@/components/shared/Table.tsx?raw';
 import tableCardHeaderSource from '@/components/shared/TableCardHeader.tsx?raw';
 import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHeader.tsx?raw';
@@ -1469,6 +1470,16 @@ describe('shared primitive guardrails', () => {
     expect(summaryMetricCardSource).toContain('!p-1.5 sm:!p-2');
     expect(summaryMetricCardSource).not.toContain('Recovery Posture');
     expect(summaryMetricCardSource).not.toContain('Freshness');
+  });
+
+  it('keeps sticky summary breakpoint behavior on the shared primitive', () => {
+    expect(stickySummarySectionSource).toContain('stickyDesktopOnly?: boolean');
+    expect(stickySummarySectionSource).toContain(
+      "stickyDesktopOnly() ? 'static lg:sticky' : 'sticky'",
+    );
+    expect(stickySummarySectionSource).toContain(
+      'data-sticky-summary-sticky-desktop-only={stickyDesktopOnly() ?',
+    );
   });
 
   it('keeps tooltip on shell, runtime, and model owners', () => {

@@ -496,7 +496,7 @@ describe('Storage', () => {
     storageSummarySpy.mockRestore();
   });
 
-  it('routes hovered pool rows into the shared summary highlight contract and keeps the summary sticky', async () => {
+  it('routes hovered pool rows into the shared summary highlight contract and keeps the summary sticky only on desktop widths', async () => {
     const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
       pools: {
         'pool:alpha': {
@@ -556,7 +556,9 @@ describe('Storage', () => {
     const summary = await screen.findByTestId('storage-summary');
     const stickyWrapper = summary.closest('[data-sticky-summary="true"]');
     expect(stickyWrapper).toHaveAttribute('data-sticky-summary-desktop-only', 'false');
-    expect(stickyWrapper?.className).toContain('sticky');
+    expect(stickyWrapper).toHaveAttribute('data-sticky-summary-sticky-desktop-only', 'true');
+    expect(stickyWrapper?.className).toContain('static');
+    expect(stickyWrapper?.className).toContain('lg:sticky');
     expect(stickyWrapper?.className).toContain('top-0');
 
     const alphaRow = screen.getByText('Alpha-Store').closest('tr')!;
