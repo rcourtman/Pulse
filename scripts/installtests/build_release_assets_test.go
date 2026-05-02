@@ -165,6 +165,12 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`statuses: write`,
 		`curl --fail-with-body --silent --show-error -X POST`,
 		`"context": "Release Asset Validation"`,
+		`--arg tag "${{ steps.context.outputs.tag }}"`,
+		`--arg target_commitish "${{ steps.context.outputs.target_commitish }}"`,
+		`{body: $body, tag_name: $tag, target_commitish: $target_commitish}`,
+		`{draft: true, tag_name: $tag, target_commitish: $target_commitish}`,
+		`Validation release body update detached release tag`,
+		`Validation release body update changed target_commitish`,
 	}
 	for _, needle := range validationRequired {
 		if !strings.Contains(validationWorkflow, needle) {

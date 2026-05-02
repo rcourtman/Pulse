@@ -305,11 +305,26 @@ jobs:
 
           $CURRENT_BODY"
 
-          curl -X PATCH \
+          RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
-            -d "$(jq -n --arg body "$NEW_BODY" '{body: $body}')"
+            -d "$(jq -n \
+              --arg body "$NEW_BODY" \
+              --arg tag "${{ steps.context.outputs.tag }}" \
+              --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
+              '{body: $body, tag_name: $tag, target_commitish: $target_commitish}')")
+
+          ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
+          ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')
+          if [ "$ACTUAL_RELEASE_TAG" != "${{ steps.context.outputs.tag }}" ]; then
+            echo "::error::Validation release body update detached release tag ${ACTUAL_RELEASE_TAG}; expected ${{ steps.context.outputs.tag }}."
+            exit 1
+          fi
+          if [ "$ACTUAL_TARGET_COMMITISH" != "${{ steps.context.outputs.target_commitish }}" ]; then
+            echo "::error::Validation release body update changed target_commitish ${ACTUAL_TARGET_COMMITISH}; expected ${{ steps.context.outputs.target_commitish }}."
+            exit 1
+          fi
 
       - name: Set commit status - Failure
         if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
@@ -333,11 +348,24 @@ jobs:
           INITIAL_STATE="${{ steps.context.outputs.draft }}"
           if [ "$INITIAL_STATE" != "true" ]; then
             echo "Release was published; reverting to draft before deleting assets..."
-            curl -X PATCH \
+            RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
-              -d '{"draft": true}'
+              -d "$(jq -n \
+                --arg tag "${{ steps.context.outputs.tag }}" \
+                --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
+                '{draft: true, tag_name: $tag, target_commitish: $target_commitish}')")
+            ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
+            ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')
+            if [ "$ACTUAL_RELEASE_TAG" != "${{ steps.context.outputs.tag }}" ]; then
+              echo "::error::Validation failure draft update detached release tag ${ACTUAL_RELEASE_TAG}; expected ${{ steps.context.outputs.tag }}."
+              exit 1
+            fi
+            if [ "$ACTUAL_TARGET_COMMITISH" != "${{ steps.context.outputs.target_commitish }}" ]; then
+              echo "::error::Validation failure draft update changed target_commitish ${ACTUAL_TARGET_COMMITISH}; expected ${{ steps.context.outputs.target_commitish }}."
+              exit 1
+            fi
             echo "Release marked as draft to block downloads during remediation."
             sleep 5
           fi
@@ -434,11 +462,26 @@ jobs:
 
           $CURRENT_BODY"
 
-          curl -X PATCH \
+          RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
-            -d "$(jq -n --arg body "$NEW_BODY" '{body: $body}')"
+            -d "$(jq -n \
+              --arg body "$NEW_BODY" \
+              --arg tag "${{ steps.context.outputs.tag }}" \
+              --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
+              '{body: $body, tag_name: $tag, target_commitish: $target_commitish}')")
+
+          ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
+          ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')
+          if [ "$ACTUAL_RELEASE_TAG" != "${{ steps.context.outputs.tag }}" ]; then
+            echo "::error::Validation failure body update detached release tag ${ACTUAL_RELEASE_TAG}; expected ${{ steps.context.outputs.tag }}."
+            exit 1
+          fi
+          if [ "$ACTUAL_TARGET_COMMITISH" != "${{ steps.context.outputs.target_commitish }}" ]; then
+            echo "::error::Validation failure body update changed target_commitish ${ACTUAL_TARGET_COMMITISH}; expected ${{ steps.context.outputs.target_commitish }}."
+            exit 1
+          fi
 
       - name: Fail the workflow
         if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')

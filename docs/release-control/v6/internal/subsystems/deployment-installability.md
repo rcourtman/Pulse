@@ -450,6 +450,12 @@ That same reusable-validation call boundary also owns permission handoff.
 `.github/workflows/validate-release-assets.yml` call the write scopes it
 requests (`contents: write` and `issues: write`), rather than inheriting the
 release pipeline's top-level read-only default and failing at workflow startup.
+That same validation status boundary must preserve release identity when it
+annotates a draft or failed release. Every release-body or draft-state PATCH
+from `.github/workflows/validate-release-assets.yml` must carry the intended
+`tag_name` and `target_commitish`, then verify the API response still matches
+those values, so validation status updates cannot detach a draft release back
+onto GitHub's generated `untagged-*` placeholder.
 That same governed release boundary also owns unpublished draft retry
 reconciliation. Re-running `.github/workflows/create-release.yml` for the same
 unpublished tag must locate the existing draft release, retarget its git tag

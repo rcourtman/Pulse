@@ -384,6 +384,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("statuses: write", validation_workflow)
         self.assertIn("curl --fail-with-body --silent --show-error -X POST", validation_workflow)
         self.assertIn('"context": "Release Asset Validation"', validation_workflow)
+        self.assertIn('--arg tag "${{ steps.context.outputs.tag }}"', validation_workflow)
+        self.assertIn('--arg target_commitish "${{ steps.context.outputs.target_commitish }}"', validation_workflow)
+        self.assertIn("{body: $body, tag_name: $tag, target_commitish: $target_commitish}", validation_workflow)
+        self.assertIn("{draft: true, tag_name: $tag, target_commitish: $target_commitish}", validation_workflow)
+        self.assertIn("Validation release body update detached release tag", validation_workflow)
+        self.assertIn("Validation release body update changed target_commitish", validation_workflow)
         self.assertIn('ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r \'.tag_name // empty\')', content)
         self.assertIn(
             'ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r \'.target_commitish // empty\')',
