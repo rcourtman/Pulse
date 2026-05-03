@@ -254,6 +254,8 @@ describe('settings architecture guardrails', () => {
   it('keeps SAML SSO available without a self-hosted Pro upsell boundary', () => {
     expect(ssoProvidersPanelSource).toContain("openAddModal('saml')");
     expect(ssoProvidersPanelSource).toContain('getSSOProviderAddButtonLabel');
+    expect(ssoProvidersPanelSource).toContain('Groups Claim');
+    expect(ssoProvidersPanelSource).toContain('Claim used for OIDC allowed groups and role mappings.');
     expect(ssoProvidersPanelSource).not.toContain('showSamlUpsell');
     expect(ssoProvidersPanelSource).not.toContain('UpgradeLink');
     expect(ssoProvidersPanelSource).not.toContain('Add SAML (Pro)');

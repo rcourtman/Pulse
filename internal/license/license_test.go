@@ -32,6 +32,8 @@ func TestTierHasFeature(t *testing.T) {
 	}{
 		{"free has AI patrol (BYOK)", TierFree, FeatureAIPatrol, true},
 		{"free has no AI autofix", TierFree, FeatureAIAutoFix, false},
+		{"free has core SSO", TierFree, FeatureSSO, true},
+		{"free has multi-provider SSO compatibility", TierFree, FeatureAdvancedSSO, true},
 		{"pro has AI patrol", TierPro, FeatureAIPatrol, true},
 		{"pro has AI alerts", TierPro, FeatureAIAlerts, true},
 		{"pro has AI autofix", TierPro, FeatureAIAutoFix, true},
@@ -42,10 +44,10 @@ func TestTierHasFeature(t *testing.T) {
 		{"msp does not have multi-user yet", TierMSP, FeatureMultiUser, false},
 		{"enterprise has multi-user", TierEnterprise, FeatureMultiUser, true},
 		{"enterprise has white-label", TierEnterprise, FeatureWhiteLabel, true},
-		{"pro has Basic SSO", TierPro, FeatureSSO, true},
-		{"pro has Advanced SSO", TierPro, FeatureAdvancedSSO, true},
+		{"pro has core SSO", TierPro, FeatureSSO, true},
+		{"pro has multi-provider SSO compatibility", TierPro, FeatureAdvancedSSO, true},
 		{"pro has audit logging", TierPro, FeatureAuditLogging, true},
-		{"enterprise has Advanced SSO", TierEnterprise, FeatureAdvancedSSO, true},
+		{"enterprise has multi-provider SSO compatibility", TierEnterprise, FeatureAdvancedSSO, true},
 		{"enterprise has audit logging", TierEnterprise, FeatureAuditLogging, true},
 		{"enterprise has SSO", TierEnterprise, FeatureSSO, true},
 		{"unknown tier has nothing", Tier("unknown"), FeatureAIPatrol, false},
@@ -1410,7 +1412,7 @@ func TestEvaluatorMatrix(t *testing.T) {
 			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
 		}
 		// Hosted path unions free-tier baseline capabilities with evaluator-provided capabilities.
-		assertFeatureSetEq(t, status.Features, []string{FeatureUpdateAlerts, FeatureSSO, FeatureAIPatrol, FeatureAIAutoFix})
+		assertFeatureSetEq(t, status.Features, []string{FeatureUpdateAlerts, FeatureSSO, FeatureAdvancedSSO, FeatureAIPatrol, FeatureAIAutoFix})
 		if status.MaxMonitoredSystems != 42 {
 			t.Fatalf("Status().MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, 42)
 		}

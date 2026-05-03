@@ -428,8 +428,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <label class={labelClass()}>Groups Attribute</label>
                       <input
                         type="text"
-                        value={form.samlGroupsAttr}
-                        onInput={(e) => setForm('samlGroupsAttr', e.currentTarget.value)}
+                        value={form.groupsClaim}
+                        onInput={(e) => setForm('groupsClaim', e.currentTarget.value)}
                         placeholder="groups"
                         class={controlClass()}
                       />
@@ -550,6 +550,21 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
                 <Show when={advancedOpen()}>
                   <div class="mt-4 space-y-4 p-4 bg-surface-alt rounded-md">
+                    <Show when={form.type === 'oidc'}>
+                      <div class={formField}>
+                        <label class={labelClass()}>Groups Claim</label>
+                        <input
+                          type="text"
+                          value={form.groupsClaim}
+                          onInput={(e) => setForm('groupsClaim', e.currentTarget.value)}
+                          placeholder="groups"
+                          class={controlClass()}
+                        />
+                        <p class={formHelpText}>
+                          Claim used for OIDC allowed groups and role mappings.
+                        </p>
+                      </div>
+                    </Show>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div class={formField}>
                         <label class={labelClass()}>Allowed Groups</label>

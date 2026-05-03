@@ -2078,6 +2078,18 @@ func TestContract_SSOLocalRedirectTargetsStayCanonical(t *testing.T) {
 	}
 }
 
+func TestContract_SAMLLoginRejectsUnsupportedMethods(t *testing.T) {
+	router := newSAMLRouter(t, testSAMLProvider("okta", true))
+	req := httptest.NewRequest(http.MethodPut, "/api/saml/okta/login", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleSAMLLogin(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusMethodNotAllowed, rec.Body.String())
+	}
+}
+
 func TestContract_FindingJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
 	lastSeen := now.Add(5 * time.Minute)

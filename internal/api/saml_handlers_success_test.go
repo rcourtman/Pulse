@@ -198,6 +198,18 @@ func TestHandleSAMLLogin_SuccessGetAndPost(t *testing.T) {
 	}
 }
 
+func TestHandleSAMLLogin_MethodNotAllowed(t *testing.T) {
+	router := newSAMLRouter(t, testSAMLProvider("okta", true))
+	req := httptest.NewRequest(http.MethodPut, "/api/saml/okta/login", nil)
+	rr := httptest.NewRecorder()
+
+	router.handleSAMLLogin(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+}
+
 func TestHandleSAMLLogin_InitFailure(t *testing.T) {
 	router := newSAMLRouter(t, config.SSOProvider{
 		ID:      "broken",

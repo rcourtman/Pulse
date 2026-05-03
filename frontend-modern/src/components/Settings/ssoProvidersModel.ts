@@ -83,7 +83,7 @@ export interface ProviderForm {
   samlAllowIdpInitiated: boolean;
   samlUsernameAttr: string;
   samlEmailAttr: string;
-  samlGroupsAttr: string;
+  groupsClaim: string;
   allowedGroups: string;
   allowedDomains: string;
   allowedEmails: string;
@@ -147,7 +147,7 @@ export const createEmptyProviderForm = (): ProviderForm => ({
   samlAllowIdpInitiated: false,
   samlUsernameAttr: '',
   samlEmailAttr: 'email',
-  samlGroupsAttr: '',
+  groupsClaim: '',
   allowedGroups: '',
   allowedDomains: '',
   allowedEmails: '',
@@ -204,7 +204,7 @@ export const mapProviderDetailsToForm = (full: SSOProviderDetailsResponse): Prov
   samlAllowIdpInitiated: full.saml?.allowIdpInitiated || false,
   samlUsernameAttr: full.saml?.usernameAttr || '',
   samlEmailAttr: full.saml?.emailAttr || 'email',
-  samlGroupsAttr: full.saml?.groupsAttr || full.groupsClaim || '',
+  groupsClaim: full.saml?.groupsAttr || full.groupsClaim || '',
   allowedGroups: listToString(full.allowedGroups),
   allowedDomains: listToString(full.allowedDomains),
   allowedEmails: listToString(full.allowedEmails),
@@ -234,7 +234,7 @@ export const buildProviderPayload = (form: ProviderForm): Record<string, unknown
       logoutUrl: form.oidcLogoutUrl.trim() || undefined,
       scopes: splitList(form.oidcScopes),
     };
-    payload.groupsClaim = form.samlGroupsAttr.trim() || undefined;
+    payload.groupsClaim = form.groupsClaim.trim() || undefined;
     return payload;
   }
 
@@ -249,9 +249,9 @@ export const buildProviderPayload = (form: ProviderForm): Record<string, unknown
     allowIdpInitiated: form.samlAllowIdpInitiated,
     usernameAttr: form.samlUsernameAttr.trim() || undefined,
     emailAttr: form.samlEmailAttr.trim() || undefined,
-    groupsAttr: form.samlGroupsAttr.trim() || undefined,
+    groupsAttr: form.groupsClaim.trim() || undefined,
   };
-  payload.groupsClaim = form.samlGroupsAttr.trim() || undefined;
+  payload.groupsClaim = form.groupsClaim.trim() || undefined;
   return payload;
 };
 

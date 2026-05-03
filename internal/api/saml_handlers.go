@@ -103,6 +103,11 @@ func (r *Router) syncSAMLPublicURL() error {
 
 // handleSAMLLogin initiates a SAML authentication flow
 func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet && req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET or POST is allowed", nil)
+		return
+	}
+
 	providerID := extractSAMLProviderID(req.URL.Path, "login")
 	if providerID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_provider", "Provider ID is required", nil)
