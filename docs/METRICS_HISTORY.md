@@ -24,6 +24,8 @@ Default retention values (subject to change) are:
 - Minute: 24 hours
 - Hourly: 7 days
 - Daily: 90 days
+- Rollups: every 15 minutes by default, bounded so rollups still run well
+  before raw samples expire
 
 ## Advanced: Retention Tuning
 
@@ -44,6 +46,42 @@ Keys:
 ```
 
 After changing these values, restart Pulse.
+
+## Advanced: Disk Write Tuning
+
+Pulse keeps metrics history on disk by default. SSD-sensitive installs can move
+only the metrics SQLite database without moving secrets or general config:
+
+```bash
+PULSE_METRICS_DB_PATH=/dev/shm/pulse/metrics.db
+```
+
+For Docker, mount a tmpfs at the selected directory and keep `/data` on a
+persistent volume:
+
+```yaml
+services:
+  pulse:
+    environment:
+      PULSE_METRICS_DB_PATH: /metrics-tmpfs/metrics.db
+    tmpfs:
+      - /metrics-tmpfs:size=512m,uid=1000,gid=1000,mode=0700
+```
+
+Using tmpfs makes metrics history ephemeral across restarts. It should not be
+used for `/data`, because `/data` also contains config, encrypted credentials,
+tokens, and other state that must remain durable.
+
+The aggregation cadence can also be lengthened when an install prefers fewer,
+larger rollup writes over more frequent smaller writes:
+
+```bash
+PULSE_METRICS_ROLLUP_INTERVAL=30m
+```
+
+Values below 5 minutes are ignored. Values longer than half of the raw-retention
+window are capped by the metrics store so raw samples are still rolled up before
+retention pruning can remove them.
 
 ## API Access
 

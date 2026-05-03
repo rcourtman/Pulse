@@ -58,10 +58,26 @@ Pulse is configured via the UI (`system.json`) with optional environment overrid
 | `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
+| `PULSE_METRICS_DB_PATH` | Optional path for only `metrics.db`, useful with tmpfs | `/data/metrics.db` |
+| `PULSE_METRICS_ROLLUP_INTERVAL` | Metrics aggregation cadence; minimum 5 minutes | `15m` |
 
 > **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
 > **Note**: API tokens are managed in the UI and stored in `api_tokens.json`.
 > **Note**: Plain text values in `PULSE_AUTH_PASS` are auto-hashed on startup.
+
+For SSD-sensitive installs, keep `/data` persistent and put only metrics
+history on tmpfs:
+
+```yaml
+services:
+  pulse:
+    environment:
+      PULSE_METRICS_DB_PATH: /metrics-tmpfs/metrics.db
+    tmpfs:
+      - /metrics-tmpfs:size=512m,uid=1000,gid=1000,mode=0700
+```
+
+Metrics history stored this way is lost on container restart.
 
 <details>
 <summary><strong>Advanced: Resource Limits & Healthcheck</strong></summary>

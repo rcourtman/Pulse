@@ -17,6 +17,63 @@ func TestDefaultConfigUsesLargerWriteBuffer(t *testing.T) {
 	if cfg.WriteBufferSize != 500 {
 		t.Fatalf("WriteBufferSize = %d, want 500", cfg.WriteBufferSize)
 	}
+	if cfg.RollupInterval != defaultRollupInterval {
+		t.Fatalf("RollupInterval = %v, want %v", cfg.RollupInterval, defaultRollupInterval)
+	}
+}
+
+func TestNormalizeRollupInterval(t *testing.T) {
+	tests := []struct {
+		name         string
+		interval     time.Duration
+		rawRetention time.Duration
+		want         time.Duration
+	}{
+		{
+			name:         "default",
+			interval:     0,
+			rawRetention: 2 * time.Hour,
+			want:         defaultRollupInterval,
+		},
+		{
+			name:         "minimum",
+			interval:     time.Minute,
+			rawRetention: 2 * time.Hour,
+			want:         minRollupInterval,
+		},
+		{
+			name:         "configured",
+			interval:     30 * time.Minute,
+			rawRetention: 2 * time.Hour,
+			want:         30 * time.Minute,
+		},
+		{
+			name:         "bounded by raw retention",
+			interval:     3 * time.Hour,
+			rawRetention: 2 * time.Hour,
+			want:         time.Hour,
+		},
+		{
+			name:         "no raw retention bound",
+			interval:     2 * time.Hour,
+			rawRetention: 0,
+			want:         2 * time.Hour,
+		},
+		{
+			name:         "short raw retention still honors minimum",
+			interval:     20 * time.Minute,
+			rawRetention: 6 * time.Minute,
+			want:         minRollupInterval,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeRollupInterval(tt.interval, tt.rawRetention); got != tt.want {
+				t.Fatalf("normalizeRollupInterval(%v, %v) = %v, want %v", tt.interval, tt.rawRetention, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestStoreCoalesceQueuedBatches(t *testing.T) {

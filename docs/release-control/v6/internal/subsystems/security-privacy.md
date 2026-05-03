@@ -486,6 +486,12 @@ state must otherwise come from the resolved `ConfigPath` / `DataPath` owner or
 the shared `PULSE_DATA_DIR` fallback. These surfaces may not probe `/etc/pulse`
 or `/data` independently and silently override the configured path authority
 just because those directories exist on the host.
+`PULSE_METRICS_DB_PATH` is the explicit non-secret exception for metrics
+history placement only: it may move `metrics.db` to tmpfs or a dedicated mount,
+but it must not become a second authority for `.env`, tokens, encrypted
+credentials, sessions, bootstrap state, billing state, or other security
+persistence. `internal/config/config.go` owns that env parsing so the exception
+stays visible at the shared runtime config boundary.
 That same auth-env boundary must also fail closed on password normalization:
 `internal/config/config.go` and `internal/config/watcher.go` may auto-hash a
 plaintext `PULSE_AUTH_PASS`, but they must never preserve a raw plaintext value

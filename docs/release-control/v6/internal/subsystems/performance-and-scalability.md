@@ -581,10 +581,18 @@ rewriting `metrics.db` on SSD-backed systems. Duplicate samples for the same
 resource type, resource id, metric type, timestamp, and tier must be treated as
 idempotent writes against the metrics table's unique key rather than as noisy
 SQLite constraint failures; for raw writes, the latest buffered value wins and
-aggregate-only min/max columns stay unset. Any future change that reduces that
-batching headroom, makes WAL checkpoints more aggressive again, or reopens
-duplicate-write failures must re-prove the metrics-store hot path with the
-owned store tests rather than assuming the earlier vacuum fixes are sufficient.
+aggregate-only min/max columns stay unset. Rollups must not be hard-coded to a
+5-minute disk-write cadence: the default cadence should favor fewer, larger
+rollup transactions, remain bounded by raw retention so data is aggregated
+before pruning, and stay overrideable for operators who deliberately trade
+freshness for lower write frequency. The runtime must also allow an explicit
+metrics database path so SSD-sensitive Docker/LXC installs can place only the
+metrics SQLite store on tmpfs while keeping secrets and general configuration on
+durable storage. Any future change that reduces that batching headroom, makes
+WAL checkpoints more aggressive again, reopens duplicate-write failures, or
+removes the metrics DB path/cadence controls must re-prove the metrics-store
+hot path with the owned store tests rather than assuming the earlier vacuum
+fixes are sufficient.
 contract instead of inventing an infrastructure-local summary filter branch.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that

@@ -48,6 +48,9 @@ All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes)
 
 Path overrides:
 - `PULSE_DATA_DIR` sets the base directory for `system.json`, encrypted files, and the bootstrap token.
+- `PULSE_METRICS_DB_PATH` sets only the metrics SQLite database path. Use this
+  for tmpfs-backed metrics history without moving secrets or config off the
+  persistent data directory.
 
 Multi-tenant layout:
 - Default org uses the root data directory for backward compatibility.

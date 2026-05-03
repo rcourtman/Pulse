@@ -91,6 +91,26 @@ func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	}
 }
 
+func TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"metricsStoreConfig := metrics.DefaultConfig(cfg.DataPath)",
+		"if strings.TrimSpace(cfg.MetricsDBPath) != \"\" {",
+		"metricsStoreConfig.DBPath = cfg.MetricsDBPath",
+		"if cfg.MetricsRollupInterval > 0 {",
+		"metricsStoreConfig.RollupInterval = cfg.MetricsRollupInterval",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestEscalationDeliveryDefersToCanonicalAlertSuppression(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"monitor.go": {

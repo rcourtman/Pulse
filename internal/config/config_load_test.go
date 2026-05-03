@@ -85,6 +85,31 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, "admin", cfg.AuthUser)
 }
 
+func TestLoad_MetricsStorageEnvOverrides(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("PULSE_METRICS_DB_PATH", "/dev/shm/pulse/metrics.db")
+	t.Setenv("PULSE_METRICS_ROLLUP_INTERVAL", "30m")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, "/dev/shm/pulse/metrics.db", cfg.MetricsDBPath)
+	assert.Equal(t, 30*time.Minute, cfg.MetricsRollupInterval)
+	assert.True(t, cfg.EnvOverrides["PULSE_METRICS_DB_PATH"])
+	assert.True(t, cfg.EnvOverrides["PULSE_METRICS_ROLLUP_INTERVAL"])
+}
+
+func TestLoad_InvalidMetricsRollupIntervalIgnored(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("PULSE_METRICS_ROLLUP_INTERVAL", "2m")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Zero(t, cfg.MetricsRollupInterval)
+	assert.False(t, cfg.EnvOverrides["PULSE_METRICS_ROLLUP_INTERVAL"])
+}
+
 func TestLoad_DotEnv(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")

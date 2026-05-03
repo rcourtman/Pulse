@@ -1402,6 +1402,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 	// Initialize persistent metrics store (SQLite) with configurable retention
 	var metricsStore *metrics.Store
 	metricsStoreConfig := metrics.DefaultConfig(cfg.DataPath)
+	if strings.TrimSpace(cfg.MetricsDBPath) != "" {
+		metricsStoreConfig.DBPath = cfg.MetricsDBPath
+	}
+	if cfg.MetricsRollupInterval > 0 {
+		metricsStoreConfig.RollupInterval = cfg.MetricsRollupInterval
+	}
 	// Override retention settings from config (allows tier-based pricing in future)
 	if cfg.MetricsRetentionRawHours > 0 {
 		metricsStoreConfig.RetentionRaw = time.Duration(cfg.MetricsRetentionRawHours) * time.Hour

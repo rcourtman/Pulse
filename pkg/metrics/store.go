@@ -44,11 +44,17 @@ type StoreConfig struct {
 	DBPath          string
 	WriteBufferSize int           // Number of records to buffer before batch write
 	FlushInterval   time.Duration // Max time between flushes
+	RollupInterval  time.Duration // How often to aggregate raw samples into coarser tiers
 	RetentionRaw    time.Duration // How long to keep raw data
 	RetentionMinute time.Duration // How long to keep minute data
 	RetentionHourly time.Duration // How long to keep hourly data
 	RetentionDaily  time.Duration // How long to keep daily data
 }
+
+const (
+	minRollupInterval     = 5 * time.Minute
+	defaultRollupInterval = 15 * time.Minute
+)
 
 // DefaultConfig returns sensible defaults for metrics storage
 func DefaultConfig(dataDir string) StoreConfig {
@@ -64,6 +70,7 @@ func DefaultConfig(dataDir string) StoreConfig {
 		// more often, which materially reduces WAL churn on SSD-backed setups.
 		WriteBufferSize: 500,
 		FlushInterval:   5 * time.Second,
+		RollupInterval:  defaultRollupInterval,
 		RetentionRaw:    2 * time.Hour,
 		RetentionMinute: 24 * time.Hour,
 		RetentionHourly: 7 * 24 * time.Hour,
@@ -89,6 +96,27 @@ func resolveStoreDBPath(dbPath string) (string, error) {
 	}
 
 	return resolvedPath, nil
+}
+
+func normalizeRollupInterval(interval, rawRetention time.Duration) time.Duration {
+	if interval <= 0 {
+		interval = defaultRollupInterval
+	}
+	if interval < minRollupInterval {
+		interval = minRollupInterval
+	}
+	if rawRetention <= 0 {
+		return interval
+	}
+
+	maxInterval := rawRetention / 2
+	if maxInterval < minRollupInterval {
+		maxInterval = minRollupInterval
+	}
+	if interval > maxInterval {
+		return maxInterval
+	}
+	return interval
 }
 
 // bufferedMetric holds a metric waiting to be written
@@ -143,6 +171,7 @@ func NewStore(config StoreConfig) (*Store, error) {
 		return nil, err
 	}
 	config.DBPath = resolvedDBPath
+	config.RollupInterval = normalizeRollupInterval(config.RollupInterval, config.RetentionRaw)
 
 	// Ensure directory exists
 	dir := filepath.Dir(config.DBPath)
@@ -198,6 +227,7 @@ func NewStore(config StoreConfig) (*Store, error) {
 	log.Info().
 		Str("path", config.DBPath).
 		Int("bufferSize", config.WriteBufferSize).
+		Dur("rollupInterval", config.RollupInterval).
 		Msg("Metrics store initialized")
 
 	return store, nil
@@ -1301,7 +1331,7 @@ func (s *Store) backgroundWorker() {
 	defer close(s.doneCh)
 
 	flushTicker := time.NewTicker(s.config.FlushInterval)
-	rollupTicker := time.NewTicker(5 * time.Minute)
+	rollupTicker := time.NewTicker(s.config.RollupInterval)
 	retentionTicker := time.NewTicker(1 * time.Hour)
 
 	defer flushTicker.Stop()

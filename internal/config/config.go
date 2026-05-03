@@ -178,10 +178,12 @@ type Config struct {
 
 	// Metrics retention settings (tiered storage)
 	// These control how long historical metrics are retained at each aggregation level.
-	MetricsRetentionRawHours    int `json:"metricsRetentionRawHours"`    // Raw data (~5s intervals), default: 2 hours
-	MetricsRetentionMinuteHours int `json:"metricsRetentionMinuteHours"` // Minute averages, default: 24 hours
-	MetricsRetentionHourlyDays  int `json:"metricsRetentionHourlyDays"`  // Hourly averages, default: 7 days
-	MetricsRetentionDailyDays   int `json:"metricsRetentionDailyDays"`   // Daily averages, default: 90 days
+	MetricsRetentionRawHours    int           `json:"metricsRetentionRawHours"`    // Raw data (~5s intervals), default: 2 hours
+	MetricsRetentionMinuteHours int           `json:"metricsRetentionMinuteHours"` // Minute averages, default: 24 hours
+	MetricsRetentionHourlyDays  int           `json:"metricsRetentionHourlyDays"`  // Hourly averages, default: 7 days
+	MetricsRetentionDailyDays   int           `json:"metricsRetentionDailyDays"`   // Daily averages, default: 90 days
+	MetricsDBPath               string        `json:"-"`                           // Optional env-only SQLite path override for metrics.db
+	MetricsRollupInterval       time.Duration `json:"-"`                           // Optional env-only rollup cadence override
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -698,6 +700,33 @@ func parsePollingIntervalEnv(envName string, minDuration time.Duration) (time.Du
 	}
 
 	log.Warn().Str("value", intervalStr).Msgf("Invalid %s value, expected duration or seconds", envName)
+	return 0, false
+}
+
+func parseDurationOverrideEnv(envName string, minDuration time.Duration) (time.Duration, bool) {
+	value := utils.GetenvTrim(envName)
+	if value == "" {
+		return 0, false
+	}
+
+	if dur, err := time.ParseDuration(value); err == nil {
+		if dur < minDuration {
+			log.Warn().Dur("duration", dur).Msgf("Ignoring %s below %s from environment", envName, minDuration)
+			return 0, false
+		}
+		return dur, true
+	}
+
+	if seconds, err := strconv.Atoi(value); err == nil {
+		dur := time.Duration(seconds) * time.Second
+		if dur < minDuration {
+			log.Warn().Int("seconds", seconds).Msgf("Ignoring %s below %s from environment", envName, minDuration)
+			return 0, false
+		}
+		return dur, true
+	}
+
+	log.Warn().Str("value", value).Msgf("Invalid %s value, expected duration or seconds", envName)
 	return 0, false
 }
 
@@ -1346,6 +1375,16 @@ func load(initLogging bool) (*Config, error) {
 		cfg.MetricsToken = metricsToken
 		cfg.EnvOverrides["PULSE_METRICS_TOKEN"] = true
 		log.Debug().Msg("Metrics token configured from env var")
+	}
+	if metricsDBPath := utils.GetenvTrim("PULSE_METRICS_DB_PATH"); metricsDBPath != "" {
+		cfg.MetricsDBPath = metricsDBPath
+		cfg.EnvOverrides["PULSE_METRICS_DB_PATH"] = true
+		log.Info().Str("path", metricsDBPath).Msg("Metrics database path overridden by environment")
+	}
+	if dur, ok := parseDurationOverrideEnv("PULSE_METRICS_ROLLUP_INTERVAL", 5*time.Minute); ok {
+		cfg.MetricsRollupInterval = dur
+		cfg.EnvOverrides["PULSE_METRICS_ROLLUP_INTERVAL"] = true
+		log.Info().Dur("interval", dur).Msg("Metrics rollup interval overridden by environment")
 	}
 
 	// Support PULSE_AGENT_URL as an alias for PULSE_AGENT_CONNECT_URL

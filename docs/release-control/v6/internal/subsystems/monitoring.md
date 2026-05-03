@@ -435,6 +435,12 @@ The registry proof map now treats provider discovery and metrics history as
 their own governed runtime surfaces instead of leaving them folded into a
 generic monitoring catch-all. Changes to provider wiring, discovery helpers,
 or metrics history retention must stay attached to those explicit proof routes.
+Monitor construction is the runtime handoff for metrics-store placement and
+aggregation cadence: `internal/monitoring/monitor.go` may pass the resolved
+data path, `PULSE_METRICS_DB_PATH`, and `PULSE_METRICS_ROLLUP_INTERVAL` through
+to `pkg/metrics`, but the SQLite path normalization, rollup bounds, and write
+amplification policy stay owned by the metrics store rather than by a
+monitoring-local helper.
 Install-wide telemetry counts are also monitoring-owned now. Any telemetry or
 reporting surface that claims installation totals must aggregate across the
 provisioned tenant set through the reloadable multi-tenant monitor boundary,

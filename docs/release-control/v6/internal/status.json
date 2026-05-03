@@ -4465,6 +4465,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-metrics-write-amplification-2026-05-03.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-rc3-followup-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
