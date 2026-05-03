@@ -63,7 +63,7 @@
       "profile_id": "v6",
       "kind": "feature",
       "status": "active",
-      "summary": "Promote policy-aware data governance, resource-change intelligence, action-governance, and fleet-governance gaps only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven.",
+      "summary": "Promote policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, and agent-ready operations contract proof only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven; agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts.",
       "completion_rule": "manual",
       "proof_scope": "none"
     }

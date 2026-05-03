@@ -4575,6 +4575,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             {decision["id"] for decision in lane_context["resolved_decisions"]},
             {
+                "agent-ready-operations-api-cli-contract",
                 "canonical-timeline-source-precedence",
                 "host-type-migration-boundary-audit",
                 "mixed-private-infrastructure-operations-direction",
