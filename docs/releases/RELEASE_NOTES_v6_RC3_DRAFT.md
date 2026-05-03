@@ -23,16 +23,18 @@ before broader retesting:
   current v5 maintenance line
 - Workloads, Storage, and Infrastructure should be retestable with the current
   table-first and responsive UI corrections
+- self-hosted SSO entitlement, SAML login method handling, and OIDC group
+  claim provider settings should match the current Community-tier model
 - Pulse Account, hosted signup, MSP, mobile, policy-aware data, resource
   change, action governance, platform admission, and fleet governance proofs
   should remain represented in the candidate
 - the support packet should be explicit about the post-`rc.2` update-signer
   transition and the stable rollback target
 
-This packet was audited against all `597` commits in
-`v6.0.0-rc.2..v6.0.0-rc.3`, from
+This packet was audited against all `601` commits in the current candidate
+range, from
 `2868b44cf91b59bca85cd886711d78cd3c376fab` through
-`9ba0c3fa960ad9e90471dc5f443a62e01ac01836`.
+`83f6296c94e91fb53d088d0b53776de518b1389b`.
 
 ## Support Stance
 
@@ -76,6 +78,9 @@ This packet was audited against all `597` commits in
   paths were hardened after `rc.2`.
 - Skip-auth local/dev login now treats the expected unauthenticated response as
   auth state instead of surfacing it as a client-side request failure.
+- SAML login explicitly rejects unsupported HTTP methods, and the SSO provider
+  settings model now serializes the OIDC groups-claim field used for allowed
+  groups and role mappings.
 
 ### Installer And Update Continuity
 
@@ -149,6 +154,9 @@ This packet was audited against all `597` commits in
   self-hosted plans include core monitoring, Relay adds remote/mobile
   convenience and 14-day history, and Pro adds AI operations, automation,
   advanced admin features, and 90-day history.
+- OIDC, SAML, and multi-provider SSO are Community-tier capabilities. The
+  `advanced_sso` entitlement key remains as compatibility metadata rather than
+  a paid SAML wall.
 - Stale self-hosted trial, quickstart, upgrade, monitored-system cap, and
   customer-side commercial analytics paths were retired or hidden from public
   runtime and docs.
@@ -173,7 +181,8 @@ This packet was audited against all `597` commits in
 still described as secure remote access to the Pulse web UI,
 Pulse Mobile pairing for handoff, push notifications, and 14-day history. Pro
 remains Relay plus AI operations, automation, advanced admin features, and
-90-day history.
+90-day history. SSO is included with Community and higher tiers rather than
+being positioned as a Pro-only feature.
 
 ## What Existing v5 Users Should Re-Test In `rc.3`
 
@@ -188,9 +197,11 @@ remains Relay plus AI operations, automation, advanced admin features, and
 6. Workloads, Storage, and Infrastructure table layouts at desktop and mobile
    sizes, including summary-chart hover behavior.
 7. Skip-auth local/dev login if that mode is used for testing.
-8. AI/Patrol local discovery and Ollama-backed flows if those features are in
+8. OIDC and SAML SSO provider creation, login, allowed groups, and role
+   mapping behavior, including Community-tier entitlement behavior.
+9. AI/Patrol local discovery and Ollama-backed flows if those features are in
    use.
-9. Release asset download, checksum/signature, installer, and draft-release
+10. Release asset download, checksum/signature, installer, and draft-release
    validation paths before broader retesting.
 
 ## Feedback

@@ -120,9 +120,10 @@ Old metadata section.
             repo_root / "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("v6.0.0-rc.2..v6.0.0-rc.3", release_notes)
-        self.assertIn("commit count: `597`", changelog)
+        self.assertIn("83f6296c94e91fb53d088d0b53776de518b1389b", release_notes)
+        self.assertIn("commit count: `601`", changelog)
         self.assertIn("broad hardening RC with a corrective maintenance core", changelog)
+        self.assertIn("Community-tier capabilities", release_notes)
         self.assertIn("Release asset uploads use bounded retries", release_notes)
         self.assertIn(
             "release artifact validation, draft metadata preservation, upload retries",

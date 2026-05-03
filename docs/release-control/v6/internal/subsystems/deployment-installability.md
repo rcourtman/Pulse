@@ -174,6 +174,11 @@ server-side update execution surfaces.
    current-candidate commit coverage audit, include any new artifact
    validation or release-pipeline assertions in the release-control evidence,
    and refresh the draft release from the new branch head before publication.
+   If more candidate commits land after that audit but before the release
+   workflow is dispatched, the same packet must be refreshed again against the
+   new candidate head, including the exact commit count, candidate commit hash,
+   changed-scope summary, and any new release-risk themes introduced by those
+   commits.
    The prerelease feedback intake template and active demo/update metadata must
    also stay on generic or current-RC wording instead of hard-coding stale
    `rc.1` examples once later candidates exist.

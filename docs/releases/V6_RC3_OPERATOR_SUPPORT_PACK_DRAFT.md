@@ -12,6 +12,8 @@ _Draft only. Use this as the working support brief for the planned
   maintenance core: it carries late v5 maintenance fixes, current RC feedback,
   release packaging hardening, security/auth tightening, and post-`rc.2`
   readiness work into the v6 candidate before broader retesting.
+- Self-hosted SSO is included with Community and higher tiers. Do not describe
+  SAML or multi-provider SSO as a Pro-only upgrade path for this RC.
 - Systems pinned to the historical `rc.2` update trust root should use a manual
   reinstall or explicit trust migration for later prerelease or GA builds.
 
@@ -48,7 +50,8 @@ packet.
 Current plan shorthand:
 
 - Community:
-  core monitoring included, 7-day history
+  core monitoring included, OIDC/SAML SSO with multi-provider support, 7-day
+  history
 - Relay:
   core monitoring included, secure remote access to the Pulse web UI,
   Pulse Mobile pairing for handoff, push notifications, and 14-day history
@@ -90,6 +93,9 @@ Use this cohort breakdown:
 - Workloads summary-chart tooltips no longer cover the guide line
 - skip-auth local/dev login handles the expected unauthenticated response
   without surfacing a request failure
+- OIDC, SAML, and multi-provider SSO are Community-tier capabilities, and the
+  SSO settings UI exposes the groups-claim field used by allowed groups and
+  role mappings
 
 ### What if a fresh Proxmox LXC stable install lands on a v6 RC?
 
@@ -141,9 +147,11 @@ posting.
 7. Re-test alerts, backup/recovery, snapshots, PBS/ZFS attribution, Synology
    RAID scrub handling, and Ceph inventory.
 8. Re-test Workloads, Storage, and Infrastructure at desktop and mobile sizes.
-9. Re-test release artifact download, checksum/signature, installer, and draft
+9. Re-test OIDC and SAML SSO provider creation, login, allowed groups, and
+   role mapping behavior on Community-tier entitlement state.
+10. Re-test release artifact download, checksum/signature, installer, and draft
    validation paths before broader retesting.
-10. Upgrade agents separately only when the user is explicitly testing the
+11. Upgrade agents separately only when the user is explicitly testing the
    v5-to-v6 agent path.
 
 ## Ask For These Details
@@ -155,7 +163,7 @@ When a user reports an `rc.3` problem, ask for:
 - whether the host was previously on v5, `rc.1`, or `rc.2`
 - whether a manual reinstall or trust migration was used after `rc.2`
 - whether the issue happened during server upgrade, agent upgrade, alerting,
-  backup/recovery, platform inventory, or first use
+  backup/recovery, SSO setup/login, platform inventory, or first use
 - whether Unified Agents were upgraded yet
 - expected result
 - actual result
@@ -172,6 +180,7 @@ Escalate without asking the user to keep experimenting when the report involves:
 - monitoring or reporting that stops entirely after upgrade
 - alert storms after notifications were explicitly disabled
 - rollback failure or inability to return to v5.1.29
+- SSO setup or login blocked by an unexpected paid-license requirement
 - data-loss, destructive behavior, or security-sensitive regressions
 
 ## Canonical References

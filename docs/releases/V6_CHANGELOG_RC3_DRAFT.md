@@ -20,20 +20,22 @@ tested after `rc.2`.
 
 ## Commit Coverage Audit
 
-The changelog was audited against every commit in the exact release range:
+The changelog was audited against every commit in the exact release range for
+the current candidate head:
 
 - `v6.0.0-rc.2`: `2868b44cf91b59bca85cd886711d78cd3c376fab`
-- `v6.0.0-rc.3`: `9ba0c3fa960ad9e90471dc5f443a62e01ac01836`
-- range: `v6.0.0-rc.2..v6.0.0-rc.3`
-- commit count: `597`
-- changed scope: `1755` files, `112950` insertions, `72377` deletions
+- candidate commit: `83f6296c94e91fb53d088d0b53776de518b1389b`
+- range: `v6.0.0-rc.2..83f6296c94e91fb53d088d0b53776de518b1389b`
+- commit count: `601`
+- changed scope: `1765` files, `113498` insertions, `72686` deletions
 
 Those commits are grouped in this changelog rather than listed one by one. The
 range includes release/install/update work, security and trust-boundary
 hardening, commercial and hosted-account cleanup, infrastructure and agent
 platform work, monitoring/storage/recovery corrections, AI/Patrol/action
-governance, mobile/hosted proof, documentation/governance records, and
-frontend layout and product-surface polish.
+governance, mobile/hosted proof, SSO entitlement and provider-settings
+cleanup, documentation/governance records, and frontend layout and
+product-surface polish.
 
 ## Major Changes
 
@@ -80,6 +82,9 @@ release, hosted, local, and agent boundaries:
   webhook, and license persistence paths were hardened
 - skip-auth login handling now treats the expected 401 as a local-mode auth
   state instead of surfacing it as a client failure
+- SAML login rejects unsupported HTTP methods explicitly, and SSO provider
+  settings expose the OIDC groups-claim field used by allowed groups and role
+  mapping
 
 ### 3. Agent identity and setup paths are less fragile
 
@@ -135,10 +140,12 @@ The range keeps the `rc.2` free-first self-hosted direction while removing
 stale sales, trial, and cap-era assumptions from runtime and public docs:
 
 - self-hosted core monitoring remains included on the current public plans
+- OIDC, SAML, and multi-provider SSO are included Community-tier capabilities,
+  with `advanced_sso` retained only as a compatibility entitlement key
 - Relay remains secure remote access to the Pulse web UI. Relay includes
   Pulse Mobile pairing for handoff, push notifications, and 14-day history
 - Pro remains Relay plus AI operations, automation, advanced admin features,
-  and 90-day history
+  RBAC, audit logging, reporting, agent profiles, and 90-day history
 - inactive self-hosted upsell, trial-start, quickstart, and customer-side
   commercial analytics paths are retired or hidden from the public runtime
 - hosted signup, Pulse Account, tenant/workspace, MSP, mobile approval, and
@@ -181,8 +188,10 @@ instead of leaving readers on older `rc.2` assumptions.
    including sticky summary tiles, filter wrapping, saved views, and chart
    hover behavior.
 7. Skip-auth local/dev login flows where enabled.
-8. AI/Patrol local discovery and Ollama-backed flows where enabled.
-9. Release artifact download, checksum/signature, and installer validation
+8. OIDC and SAML SSO provider creation, login, allowed groups, and role
+   mapping flows.
+9. AI/Patrol local discovery and Ollama-backed flows where enabled.
+10. Release artifact download, checksum/signature, and installer validation
    paths before broad retesting.
 
 ## Evidence Appendix
