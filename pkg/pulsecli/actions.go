@@ -43,10 +43,27 @@ type actionPlanOptions struct {
 	Params         []string
 }
 
+type actionCapabilitiesOptions struct {
+	APIURL     string
+	Token      string
+	ResourceID string
+}
+
+type actionCapabilitiesResponse struct {
+	ResourceID   string                       `json:"resourceId"`
+	Count        int                          `json:"count"`
+	Capabilities []unified.ResourceCapability `json:"capabilities"`
+}
+
+type actionResourceFacetsResponse struct {
+	ResourceID   string                       `json:"resourceId"`
+	Capabilities []unified.ResourceCapability `json:"capabilities,omitempty"`
+}
+
 func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	actionsCmd := &cobra.Command{
 		Use:   "actions",
-		Short: "Plan governed Pulse actions",
+		Short: "Inspect and plan governed Pulse actions",
 	}
 
 	opts := actionPlanOptions{
@@ -77,7 +94,30 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	planCmd.Flags().StringArrayVar(&opts.Params, "param", nil, "request param as key=value; repeatable, values parse as JSON when possible")
 
 	actionsCmd.AddCommand(planCmd)
+	actionsCmd.AddCommand(newActionCapabilitiesCmd(deps))
 	return actionsCmd
+}
+
+func newActionCapabilitiesCmd(deps *ActionsDeps) *cobra.Command {
+	opts := actionCapabilitiesOptions{
+		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
+		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
+	}
+	if opts.APIURL == "" {
+		opts.APIURL = defaultActionsAPIURL
+	}
+
+	cmd := &cobra.Command{
+		Use:   "capabilities",
+		Short: "List capabilities advertised by a unified resource",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runActionCapabilities(cmd, deps, opts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.ResourceID, "resource-id", "", "canonical unified resource id")
+	return cmd
 }
 
 func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions) error {
@@ -120,7 +160,7 @@ func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions
 		return fmt.Errorf("failed to read action plan response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return actionStatusError(resp.Status, respBody)
+		return actionStatusError("action plan request", resp.Status, respBody)
 	}
 
 	var plan unified.ActionPlan
@@ -132,6 +172,69 @@ func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(plan); err != nil {
 		return fmt.Errorf("failed to write action plan response: %w", err)
+	}
+	return nil
+}
+
+func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCapabilitiesOptions) error {
+	token := strings.TrimSpace(opts.Token)
+	if token == "" {
+		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	}
+
+	resourceID := unified.CanonicalResourceID(opts.ResourceID)
+	if resourceID == "" {
+		return fmt.Errorf("resourceId is required (use --resource-id)")
+	}
+
+	endpoint, err := actionResourceFacetsEndpoint(opts.APIURL, resourceID)
+	if err != nil {
+		return err
+	}
+
+	httpReq, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build action capabilities request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := actionHTTPClient(deps).Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("action capabilities request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxActionPlanResponseBytes, "action capabilities response")
+	if err != nil {
+		return fmt.Errorf("failed to read action capabilities response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return actionStatusError("action capabilities request", resp.Status, respBody)
+	}
+
+	var facets actionResourceFacetsResponse
+	if err := decodeJSONBytes(respBody, &facets); err != nil {
+		return fmt.Errorf("failed to decode action capabilities response: %w", err)
+	}
+	output := actionCapabilitiesResponse{
+		ResourceID:   resourceID,
+		Capabilities: facets.Capabilities,
+		Count:        len(facets.Capabilities),
+	}
+	if strings.TrimSpace(facets.ResourceID) != "" {
+		if canonical := unified.CanonicalResourceID(facets.ResourceID); canonical != "" {
+			output.ResourceID = canonical
+		}
+	}
+	if output.Capabilities == nil {
+		output.Capabilities = []unified.ResourceCapability{}
+	}
+
+	encoder := json.NewEncoder(cmd.OutOrStdout())
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(output); err != nil {
+		return fmt.Errorf("failed to write action capabilities response: %w", err)
 	}
 	return nil
 }
@@ -303,6 +406,43 @@ func actionPlanEndpoint(raw string) (string, error) {
 	return parsed.String(), nil
 }
 
+func actionResourceFacetsEndpoint(raw, resourceID string) (string, error) {
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		return "", fmt.Errorf("resourceId is required (use --resource-id)")
+	}
+
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("api url is required (use --api-url or PULSE_API_URL)")
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid api url: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("invalid api url: scheme must be http or https")
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("invalid api url: host is required")
+	}
+
+	path := strings.TrimRight(parsed.Path, "/")
+	resourcePath := "/resources/" + url.PathEscape(resourceID) + "/facets"
+	switch {
+	case path == "":
+		parsed.Path = "/api" + resourcePath
+	case path == "/api" || strings.HasSuffix(path, "/api"):
+		parsed.Path = path + resourcePath
+	default:
+		parsed.Path = path + "/api" + resourcePath
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), nil
+}
+
 func actionHTTPClient(deps *ActionsDeps) HTTPDoer {
 	if deps != nil && deps.HTTPClient != nil {
 		return deps.HTTPClient
@@ -317,15 +457,18 @@ func actionGetenv(deps *ActionsDeps, key string) string {
 	return os.Getenv(key)
 }
 
-func actionStatusError(status string, body []byte) error {
+func actionStatusError(operation, status string, body []byte) error {
+	if strings.TrimSpace(operation) == "" {
+		operation = "request"
+	}
 	message := strings.TrimSpace(string(body))
 	if message == "" {
-		return fmt.Errorf("action plan request failed: %s", status)
+		return fmt.Errorf("%s failed: %s", operation, status)
 	}
 	if len(message) > maxActionErrorBodyChars {
 		message = message[:maxActionErrorBodyChars] + "..."
 	}
-	return fmt.Errorf("action plan request failed: %s: %s", status, message)
+	return fmt.Errorf("%s failed: %s: %s", operation, status, message)
 }
 
 func decodeJSONBytes(data []byte, out any) error {

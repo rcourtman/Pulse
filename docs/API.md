@@ -145,6 +145,10 @@ This endpoint is API-first and plan-only: it resolves the resource from the unif
 
 CLI adapter:
 ```bash
+PULSE_API_TOKEN=your-token pulse actions capabilities \
+  --api-url http://localhost:7655 \
+  --resource-id vm:42
+
 PULSE_API_TOKEN=your-token pulse actions plan \
   --api-url http://localhost:7655 \
   --request-id agent-run-123 \

@@ -122,6 +122,84 @@ func TestActionsPlanCommandRequiresToken(t *testing.T) {
 	}
 }
 
+func TestActionsCapabilitiesCommandFetchesResourceFacets(t *testing.T) {
+	var receivedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/api/resources/vm:42/facets" {
+			t.Fatalf("path = %s, want /api/resources/vm:42/facets", r.URL.Path)
+		}
+		receivedAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"resourceId": "vm:42",
+			"capabilities": []map[string]any{
+				{
+					"name":                 "restart",
+					"type":                 unified.CapabilityTypeCommon,
+					"description":          "Restart the VM",
+					"minimumApprovalLevel": unified.ApprovalAdmin,
+					"internalHandler":      "proxmox.vm.restart",
+					"params": []map[string]any{
+						{"name": "mode", "type": "string", "enum": []string{"graceful", "force"}, "defaultValue": "graceful"},
+					},
+				},
+			},
+			"recentChanges": []any{},
+			"counts":        map[string]any{"recentChanges": 0},
+		})
+	}))
+	defer server.Close()
+
+	cmd := newTestActionsRootCommand(map[string]string{
+		"PULSE_API_TOKEN": "test-token",
+		"PULSE_API_URL":   server.URL + "/api",
+	})
+	cmd.SetArgs([]string{
+		"actions", "capabilities",
+		"--resource-id", "vm:42",
+	})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute actions capabilities: %v", err)
+	}
+	if receivedAuth != "Bearer test-token" {
+		t.Fatalf("Authorization = %q", receivedAuth)
+	}
+	if strings.Contains(out.String(), "proxmox.vm.restart") {
+		t.Fatalf("capabilities output exposed internal handler: %s", out.String())
+	}
+
+	var capabilities actionCapabilitiesResponse
+	if err := json.Unmarshal(out.Bytes(), &capabilities); err != nil {
+		t.Fatalf("decode command output: %v\n%s", err, out.String())
+	}
+	if capabilities.ResourceID != "vm:42" || capabilities.Count != 1 {
+		t.Fatalf("capabilities output = %+v", capabilities)
+	}
+	if capabilities.Capabilities[0].Name != "restart" || capabilities.Capabilities[0].Params[0].Name != "mode" {
+		t.Fatalf("capabilities output = %+v", capabilities)
+	}
+}
+
+func TestActionsCapabilitiesCommandRequiresToken(t *testing.T) {
+	cmd := newTestActionsRootCommand(nil)
+	cmd.SetArgs([]string{
+		"actions", "capabilities",
+		"--api-url", "http://127.0.0.1:7655",
+		"--resource-id", "vm:42",
+	})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "api token is required") {
+		t.Fatalf("expected token error, got %v", err)
+	}
+}
+
 func TestActionsPlanCommandUsesRequestFileFromStdin(t *testing.T) {
 	var received unified.ActionRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

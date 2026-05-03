@@ -288,7 +288,10 @@ the canonical monitored-system blocked payload.
    by `pkg/pulsecli/actions.go` and registered from `pkg/pulsecli/root.go`.
    It must remain a thin authenticated client for `POST /api/actions/plan`
    rather than importing planner internals, creating action IDs, or approving
-   and executing capabilities locally.
+   and executing capabilities locally. `pulse actions capabilities` may read
+   the canonical `GET /api/resources/{id}/facets` payload to discover resource
+   capability names and parameter schemas before planning, but it must not
+   invent a parallel capability inventory or expose internal handler names.
 6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
    `/api/resources/{id}/timeline` and `/api/resources/{id}/facets` must keep
    resource timelines relationship-aware by opting into the canonical
