@@ -62,41 +62,42 @@ server-side update execution surfaces.
 38. `scripts/hot-dev-bg.sh`
 39. `scripts/hot-dev.sh`
 40. `scripts/install-container-agent.sh`
-41. `scripts/install.ps1`
-42. `scripts/install.sh`
-43. `scripts/pulse-auto-update.sh`
-44. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
-45. `scripts/release_control/record_rc_to_ga_rehearsal.py`
-46. `scripts/release_control/release_promotion_policy_support.py`
-47. `scripts/release_control/resolve_release_promotion.py`
-48. `scripts/release_ldflags.sh`
-49. `scripts/run_cloud_public_signup_smoke.sh`
-50. `scripts/run_demo_public_browser_smoke.sh`
-51. `scripts/demo_public_browser_smoke.cjs`
-52. `scripts/run_hosted_staging_smoke.sh`
-53. `scripts/trigger-release-dry-run.sh`
-54. `scripts/trigger-release.sh`
-55. `scripts/toggle-mock.sh`
-56. `deploy/helm/pulse/`
-57. `tests/integration/playwright.config.ts`
-58. `tests/integration/QUICK_START.md`
-59. `tests/integration/README.md`
-60. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
-61. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
-62. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
-63. `tests/integration/scripts/hosted-tenant-runtime.mjs`
-64. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
-65. `tests/integration/scripts/managed-dev-runtime.mjs`
-66. `tests/integration/scripts/relay-mobile-token-helper.go`
-67. `tests/integration/tests/helpers.ts`
-68. `tests/integration/tests/runtime-defaults.ts`
-67. `docker-compose.yml`
-68. `scripts/install-docker.sh`
-69. `scripts/validate-published-release.sh`
-69. `scripts/validate-release.sh`
-70. `scripts/release_asset_common.sh`
-71. `scripts/backfill-release-assets.sh`
-72. `.github/workflows/backfill-release-assets.yml`
+41. `install.sh`
+42. `scripts/install.ps1`
+43. `scripts/install.sh`
+44. `scripts/pulse-auto-update.sh`
+45. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
+46. `scripts/release_control/record_rc_to_ga_rehearsal.py`
+47. `scripts/release_control/release_promotion_policy_support.py`
+48. `scripts/release_control/resolve_release_promotion.py`
+49. `scripts/release_ldflags.sh`
+50. `scripts/run_cloud_public_signup_smoke.sh`
+51. `scripts/run_demo_public_browser_smoke.sh`
+52. `scripts/demo_public_browser_smoke.cjs`
+53. `scripts/run_hosted_staging_smoke.sh`
+54. `scripts/trigger-release-dry-run.sh`
+55. `scripts/trigger-release.sh`
+56. `scripts/toggle-mock.sh`
+57. `deploy/helm/pulse/`
+58. `tests/integration/playwright.config.ts`
+59. `tests/integration/QUICK_START.md`
+60. `tests/integration/README.md`
+61. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
+62. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
+63. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
+64. `tests/integration/scripts/hosted-tenant-runtime.mjs`
+65. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
+66. `tests/integration/scripts/managed-dev-runtime.mjs`
+67. `tests/integration/scripts/relay-mobile-token-helper.go`
+68. `tests/integration/tests/helpers.ts`
+69. `tests/integration/tests/runtime-defaults.ts`
+70. `docker-compose.yml`
+71. `scripts/install-docker.sh`
+72. `scripts/validate-published-release.sh`
+73. `scripts/validate-release.sh`
+74. `scripts/release_asset_common.sh`
+75. `scripts/backfill-release-assets.sh`
+76. `.github/workflows/backfill-release-assets.yml`
 
 ## Shared Boundaries
 
@@ -115,7 +116,7 @@ server-side update execution surfaces.
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
 2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
-3. Add or change shell installer, Docker bootstrap installer, Windows installer, container-agent installer, repo-root compose defaults, or auto-update script behavior through `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
+3. Add or change root server installer, shell installer, Docker bootstrap installer, Windows installer, container-agent installer, repo-root compose defaults, or auto-update script behavior through `install.sh`, `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `scripts/dev-deploy-agent.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
 6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`

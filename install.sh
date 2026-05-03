@@ -284,6 +284,35 @@ get_latest_release_from_redirect() {
     return 0
 }
 
+is_stable_release_tag() {
+    local tag="${1:-}"
+    tag="${tag#v}"
+
+    [[ "$tag" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]
+}
+
+latest_stable_release_tag_from_json() {
+    local releases_json="${1:-}"
+    local latest_release=""
+
+    if [[ -z "$releases_json" ]]; then
+        return 1
+    fi
+
+    if command -v jq >/dev/null 2>&1; then
+        latest_release=$(printf '%s' "$releases_json" | jq -r '[.[] | select(.draft == false and .prerelease == false and (.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$")))][0].tag_name // empty' 2>/dev/null || true)
+    else
+        latest_release=$(printf '%s' "$releases_json" | grep -oE '"tag_name":[[:space:]]*"v?[0-9]+\.[0-9]+\.[0-9]+"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+    fi
+
+    if is_stable_release_tag "$latest_release"; then
+        printf '%s\n' "$latest_release"
+        return 0
+    fi
+
+    return 1
+}
+
 read_configured_update_channel() {
     if [[ "${IGNORE_CONFIGURED_UPDATE_CHANNEL:-false}" == "true" ]]; then
         return 1
@@ -310,7 +339,12 @@ resolve_install_script_download_url() {
 
     local channel="${FORCE_CHANNEL:-${UPDATE_CHANNEL:-stable}}"
     if [[ "$channel" != "rc" ]]; then
-        printf 'https://github.com/%s/releases/latest/download/install.sh\n' "$GITHUB_REPO"
+        local stable_release=""
+        stable_release=$(resolve_latest_release_tag_for_channel stable 2>/dev/null || true)
+        if [[ -z "$stable_release" || "$stable_release" == "null" ]]; then
+            return 1
+        fi
+        printf 'https://github.com/%s/releases/download/%s/install.sh\n' "$GITHUB_REPO" "$stable_release"
         return 0
     fi
 
@@ -761,31 +795,24 @@ resolve_latest_release_tag_for_channel() {
     local channel="${1:-stable}"
 
     if [[ "$channel" != "rc" ]]; then
+        local releases_json=""
         local stable_release=""
-        stable_release=$(get_latest_release_from_redirect 2>/dev/null || true)
+
+        if command -v timeout >/dev/null 2>&1; then
+            releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
+        else
+            releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
+        fi
+
+        stable_release=$(latest_stable_release_tag_from_json "$releases_json" 2>/dev/null || true)
         if [[ -n "$stable_release" ]]; then
             printf '%s\n' "$stable_release"
             return 0
         fi
 
-        local latest_json=""
-        if command -v timeout >/dev/null 2>&1; then
-            latest_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null || true)
-        else
-            latest_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null || true)
-        fi
-
-        local latest_release=""
-        if [[ -n "$latest_json" ]]; then
-            if command -v jq >/dev/null 2>&1; then
-                latest_release=$(echo "$latest_json" | jq -r '.tag_name' 2>/dev/null || true)
-            else
-                latest_release=$(echo "$latest_json" | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-            fi
-        fi
-
-        if [[ -n "$latest_release" && "$latest_release" != "null" ]]; then
-            printf '%s\n' "$latest_release"
+        stable_release=$(get_latest_release_from_redirect 2>/dev/null || true)
+        if is_stable_release_tag "$stable_release"; then
+            printf '%s\n' "$stable_release"
             return 0
         fi
 
@@ -2703,11 +2730,7 @@ resolve_target_release() {
                 LATEST_RELEASE=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
             fi
         else
-            if command -v jq >/dev/null 2>&1; then
-                LATEST_RELEASE=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false and .prerelease == false)][0].tag_name' 2>/dev/null || true)
-            else
-                LATEST_RELEASE=$(echo "$releases_json" | awk '/"draft": true/,/"tag_name":/ {next} /"prerelease": true/,/"tag_name":/ {next} /"tag_name":/ {print; exit}' | sed -E 's/.*"([^"]+)".*/\1/' || true)
-            fi
+            LATEST_RELEASE=$(latest_stable_release_tag_from_json "$releases_json" 2>/dev/null || true)
         fi
     fi
 
@@ -2715,7 +2738,9 @@ resolve_target_release() {
         print_info "GitHub API unavailable, trying alternative method..."
         local redirect_version=""
         redirect_version=$(get_latest_release_from_redirect 2>/dev/null || true)
-        if [[ -n "$redirect_version" ]]; then
+        if [[ "$UPDATE_CHANNEL" == "rc" && -n "$redirect_version" ]]; then
+            LATEST_RELEASE="$redirect_version"
+        elif is_stable_release_tag "$redirect_version"; then
             LATEST_RELEASE="$redirect_version"
         fi
     fi
@@ -4038,21 +4063,7 @@ main() {
         # Get both stable and RC versions
         # Try GitHub API first, but have a fallback - with timeout protection
         local STABLE_VERSION=""
-        if command -v timeout >/dev/null 2>&1; then
-            STABLE_VERSION=$(timeout 10 curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
-        else
-            STABLE_VERSION=$(curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
-        fi
-        
-        # If rate limited or failed, try direct GitHub latest URL
-        if [[ -z "$STABLE_VERSION" ]] || [[ "$STABLE_VERSION" == *"rate limit"* ]]; then
-            # Use the GitHub latest release redirect to get version
-            local redirect_version=""
-            redirect_version=$(get_latest_release_from_redirect 2>/dev/null || true)
-            if [[ -n "$redirect_version" ]]; then
-                STABLE_VERSION="$redirect_version"
-            fi
-        fi
+        STABLE_VERSION=$(resolve_latest_release_tag_for_channel stable 2>/dev/null || true)
         
         # For RC, we need the API, so if it fails just use empty
         local RC_VERSION=""

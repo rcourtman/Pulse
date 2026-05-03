@@ -2670,6 +2670,7 @@
         "frontend-modern/vite.config.ts",
         "go.mod",
         "go.sum",
+        "install.sh",
         "internal/api/updates.go",
         "internal/cloudcp/docker/labels.go",
         "internal/cloudcp/docker/manager.go",
@@ -2885,6 +2886,7 @@
             "match_prefixes": [],
             "match_files": [
               "docker-compose.yml",
+              "install.sh",
               "scripts/install-container-agent.sh",
               "scripts/install-docker.sh",
               "scripts/install.ps1",

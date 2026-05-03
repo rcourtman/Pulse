@@ -1286,6 +1286,156 @@ func TestResolveInstallScriptDownloadURLUsesForcedVersion(t *testing.T) {
 	}
 }
 
+func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
+	script := `
+` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+		if ! is_stable_release_tag v5.1.29; then
+			echo "rejected v-prefixed stable tag" >&2
+			exit 1
+		fi
+		if ! is_stable_release_tag 5.1.29; then
+			echo "rejected bare stable tag" >&2
+			exit 1
+		fi
+		if is_stable_release_tag v6.0.0-rc.2; then
+			echo "accepted rc tag" >&2
+			exit 1
+		fi
+		if is_stable_release_tag v6.0.0-beta.1; then
+			echo "accepted beta tag" >&2
+			exit 1
+		fi
+		if is_stable_release_tag latest; then
+			echo "accepted floating tag" >&2
+			exit 1
+		fi
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
+func TestResolveLatestReleaseTagForStableChannelSkipsPrereleaseShapedTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	timeoutPath := filepath.Join(tmpDir, "timeout")
+	curlPath := filepath.Join(tmpDir, "curl")
+
+	if err := os.WriteFile(timeoutPath, []byte("#!/usr/bin/env bash\nshift\nexec \"$@\"\n"), 0755); err != nil {
+		t.Fatalf("write timeout stub: %v", err)
+	}
+
+	curlStub := `#!/usr/bin/env bash
+for arg in "$@"; do
+	if [[ "$arg" == "https://api.github.com/repos/rcourtman/Pulse/releases" ]]; then
+		printf '%s\n' '[{"draft":false,"prerelease":false,"tag_name":"v6.0.0-rc.2"},{"draft":false,"prerelease":false,"tag_name":"v5.1.29"}]'
+		exit 0
+	fi
+done
+echo "unexpected curl invocation: $*" >&2
+exit 1
+`
+	if err := os.WriteFile(curlPath, []byte(curlStub), 0755); err != nil {
+		t.Fatalf("write curl stub: %v", err)
+	}
+
+	script := `
+		PATH="` + tmpDir + `:$PATH"
+		GITHUB_REPO="rcourtman/Pulse"
+		get_latest_release_from_redirect() {
+			printf '%s\n' v6.0.0-rc.2
+		}
+` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
+		resolve_latest_release_tag_for_channel stable
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	if got := strings.TrimSpace(string(out)); got != "v5.1.29" {
+		t.Fatalf("stable release = %q, want v5.1.29", got)
+	}
+}
+
+func TestResolveLatestReleaseTagForStableChannelRejectsPrereleaseRedirect(t *testing.T) {
+	script := `
+		GITHUB_REPO="rcourtman/Pulse"
+		curl() { return 1; }
+		timeout() { shift; "$@"; }
+		get_latest_release_from_redirect() {
+			printf '%s\n' v6.0.0-rc.2
+		}
+` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
+		if resolve_latest_release_tag_for_channel stable; then
+			echo "stable channel accepted prerelease redirect" >&2
+			exit 1
+		fi
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
+func TestResolveInstallScriptDownloadURLUsesStableReleaseTag(t *testing.T) {
+	tmpDir := t.TempDir()
+	timeoutPath := filepath.Join(tmpDir, "timeout")
+	curlPath := filepath.Join(tmpDir, "curl")
+
+	if err := os.WriteFile(timeoutPath, []byte("#!/usr/bin/env bash\nshift\nexec \"$@\"\n"), 0755); err != nil {
+		t.Fatalf("write timeout stub: %v", err)
+	}
+
+	curlStub := `#!/usr/bin/env bash
+for arg in "$@"; do
+	if [[ "$arg" == "https://api.github.com/repos/rcourtman/Pulse/releases" ]]; then
+		printf '%s\n' '[{"draft":false,"prerelease":true,"tag_name":"v6.0.0-rc.2"},{"draft":false,"prerelease":false,"tag_name":"v5.1.29"}]'
+		exit 0
+	fi
+done
+echo "unexpected curl invocation: $*" >&2
+exit 1
+`
+	if err := os.WriteFile(curlPath, []byte(curlStub), 0755); err != nil {
+		t.Fatalf("write curl stub: %v", err)
+	}
+
+	script := `
+		PATH="` + tmpDir + `:$PATH"
+		GITHUB_REPO="rcourtman/Pulse"
+		FORCE_VERSION=""
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		get_latest_release_from_redirect() {
+			printf '%s\n' v6.0.0-rc.2
+		}
+` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
+` + extractRootInstallShellFunction(t, "resolve_install_script_download_url") + `
+		resolve_install_script_download_url
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := strings.TrimSpace(string(out))
+	want := "https://github.com/rcourtman/Pulse/releases/download/v5.1.29/install.sh"
+	if got != want {
+		t.Fatalf("download url = %q, want %q", got, want)
+	}
+}
+
 func TestResolveInstallScriptDownloadURLUsesRCReleaseTag(t *testing.T) {
 	tmpDir := t.TempDir()
 	timeoutPath := filepath.Join(tmpDir, "timeout")
@@ -1940,6 +2090,8 @@ func TestRepoDockerDocsURLFallsBackToReleaseLandingPageWhenVersionUnknown(t *tes
 		curl() { return 1; }
 		timeout() { return 1; }
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
+` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "repo_release_docs_ref") + `
 ` + extractRootInstallShellFunction(t, "repo_docs_url_for_path") + `
@@ -2196,7 +2348,7 @@ func TestResolveTargetReleaseIgnoresHostConfiguredRCChannelForFreshLXCInstall(t 
 	curlStub := `#!/usr/bin/env bash
 for arg in "$@"; do
 	if [[ "$arg" == "https://api.github.com/repos/rcourtman/Pulse/releases" ]]; then
-		printf '%s\n' '[{"draft":false,"prerelease":true,"tag_name":"v6.0.0-rc.1"},{"draft":false,"prerelease":false,"tag_name":"v5.1.28"}]'
+		printf '%s\n' '[{"draft":false,"prerelease":false,"tag_name":"v6.0.0-rc.1"},{"draft":false,"prerelease":false,"tag_name":"v5.1.28"}]'
 		exit 0
 	fi
 done
@@ -2219,6 +2371,8 @@ exit 1
 		print_warn() { :; }
 		get_latest_release_from_redirect() { return 1; }
 ` + extractRootInstallShellFunction(t, "read_configured_update_channel") + `
+` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_target_release") + `
 		resolve_target_release
 		printf '%s\n' "$LATEST_RELEASE"
