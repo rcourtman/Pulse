@@ -200,6 +200,161 @@ func TestActionsCapabilitiesCommandRequiresToken(t *testing.T) {
 	}
 }
 
+func TestActionsAuditCommandFetchesActionAudits(t *testing.T) {
+	now := time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC)
+	var receivedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/api/audit/actions" {
+			t.Fatalf("path = %s, want /api/audit/actions", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("resourceId"); got != "vm:42" {
+			t.Fatalf("resourceId query = %q", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "5" {
+			t.Fatalf("limit query = %q", got)
+		}
+		if got := r.URL.Query().Get("since"); got != "2026-05-03T10:00:00Z" {
+			t.Fatalf("since query = %q", got)
+		}
+		receivedAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(actionAuditListResponse{
+			Audits: []unified.ActionAuditRecord{
+				{
+					ID:        "act_test",
+					CreatedAt: now,
+					UpdatedAt: now,
+					State:     unified.ActionStatePlanned,
+					Request: unified.ActionRequest{
+						RequestID:      "req-1",
+						ResourceID:     "vm:42",
+						CapabilityName: "restart",
+						Reason:         "Recover",
+						RequestedBy:    "agent:oncall-helper",
+					},
+					Plan: unified.ActionPlan{
+						ActionID:        "act_test",
+						RequestID:       "req-1",
+						Allowed:         true,
+						ApprovalPolicy:  unified.ApprovalAdmin,
+						PlannedAt:       now,
+						ExpiresAt:       now.Add(5 * time.Minute),
+						ResourceVersion: "resource:sha256:test",
+						PolicyVersion:   "policy:sha256:test",
+						PlanHash:        "sha256:test",
+					},
+				},
+			},
+			Count:      1,
+			ResourceID: "vm:42",
+		})
+	}))
+	defer server.Close()
+
+	cmd := newTestActionsRootCommand(map[string]string{
+		"PULSE_API_TOKEN": "test-token",
+		"PULSE_API_URL":   server.URL + "/api",
+	})
+	cmd.SetArgs([]string{
+		"actions", "audit",
+		"--resource-id", "vm:42",
+		"--limit", "5",
+		"--since", "2026-05-03T11:00:00+01:00",
+	})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute actions audit: %v", err)
+	}
+	if receivedAuth != "Bearer test-token" {
+		t.Fatalf("Authorization = %q", receivedAuth)
+	}
+
+	var audits actionAuditListResponse
+	if err := json.Unmarshal(out.Bytes(), &audits); err != nil {
+		t.Fatalf("decode command output: %v\n%s", err, out.String())
+	}
+	if audits.ResourceID != "vm:42" || audits.Count != 1 || audits.Audits[0].ID != "act_test" {
+		t.Fatalf("audit output = %+v", audits)
+	}
+}
+
+func TestActionsEventsCommandFetchesLifecycleEvents(t *testing.T) {
+	now := time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC)
+	var receivedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/api/audit/actions/act_test/events" {
+			t.Fatalf("path = %s, want /api/audit/actions/act_test/events", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "2" {
+			t.Fatalf("limit query = %q", got)
+		}
+		receivedAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(actionLifecycleEventsResponse{
+			ActionID: "act_test",
+			Events: []unified.ActionLifecycleEvent{
+				{
+					ActionID:  "act_test",
+					Timestamp: now,
+					State:     unified.ActionStatePlanned,
+					Actor:     "agent:oncall-helper",
+					Message:   "Plan created",
+				},
+			},
+			Count: 1,
+		})
+	}))
+	defer server.Close()
+
+	cmd := newTestActionsRootCommand(map[string]string{
+		"PULSE_API_TOKEN": "test-token",
+		"PULSE_API_URL":   server.URL + "/api",
+	})
+	cmd.SetArgs([]string{
+		"actions", "events",
+		"--action-id", "act_test",
+		"--limit", "2",
+	})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute actions events: %v", err)
+	}
+	if receivedAuth != "Bearer test-token" {
+		t.Fatalf("Authorization = %q", receivedAuth)
+	}
+
+	var events actionLifecycleEventsResponse
+	if err := json.Unmarshal(out.Bytes(), &events); err != nil {
+		t.Fatalf("decode command output: %v\n%s", err, out.String())
+	}
+	if events.ActionID != "act_test" || events.Count != 1 || events.Events[0].Message != "Plan created" {
+		t.Fatalf("events output = %+v", events)
+	}
+}
+
+func TestActionsEventsCommandRequiresActionID(t *testing.T) {
+	cmd := newTestActionsRootCommand(map[string]string{
+		"PULSE_API_TOKEN": "test-token",
+		"PULSE_API_URL":   "http://127.0.0.1:7655",
+	})
+	cmd.SetArgs([]string{"actions", "events"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "actionId is required") {
+		t.Fatalf("expected action id error, got %v", err)
+	}
+}
+
 func TestActionsPlanCommandUsesRequestFileFromStdin(t *testing.T) {
 	var received unified.ActionRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

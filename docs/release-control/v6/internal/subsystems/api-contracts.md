@@ -292,6 +292,10 @@ the canonical monitored-system blocked payload.
    the canonical `GET /api/resources/{id}/facets` payload to discover resource
    capability names and parameter schemas before planning, but it must not
    invent a parallel capability inventory or expose internal handler names.
+   `pulse actions audit` and `pulse actions events` may read
+   `GET /api/audit/actions` and `GET /api/audit/actions/{id}/events` as
+   verification adapters, but they must remain read-only views of the canonical
+   action audit and lifecycle trail rather than a second audit store.
 6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
    `/api/resources/{id}/timeline` and `/api/resources/{id}/facets` must keep
    resource timelines relationship-aware by opting into the canonical

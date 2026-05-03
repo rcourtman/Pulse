@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/spf13/cobra"
@@ -49,6 +50,22 @@ type actionCapabilitiesOptions struct {
 	ResourceID string
 }
 
+type actionAuditOptions struct {
+	APIURL     string
+	Token      string
+	ResourceID string
+	Since      string
+	Limit      int
+}
+
+type actionEventsOptions struct {
+	APIURL   string
+	Token    string
+	ActionID string
+	Since    string
+	Limit    int
+}
+
 type actionCapabilitiesResponse struct {
 	ResourceID   string                       `json:"resourceId"`
 	Count        int                          `json:"count"`
@@ -58,6 +75,18 @@ type actionCapabilitiesResponse struct {
 type actionResourceFacetsResponse struct {
 	ResourceID   string                       `json:"resourceId"`
 	Capabilities []unified.ResourceCapability `json:"capabilities,omitempty"`
+}
+
+type actionAuditListResponse struct {
+	Audits     []unified.ActionAuditRecord `json:"audits"`
+	Count      int                         `json:"count"`
+	ResourceID string                      `json:"resourceId,omitempty"`
+}
+
+type actionLifecycleEventsResponse struct {
+	ActionID string                         `json:"actionId"`
+	Events   []unified.ActionLifecycleEvent `json:"events"`
+	Count    int                            `json:"count"`
 }
 
 func newActionsCmd(deps *ActionsDeps) *cobra.Command {
@@ -95,6 +124,8 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 
 	actionsCmd.AddCommand(planCmd)
 	actionsCmd.AddCommand(newActionCapabilitiesCmd(deps))
+	actionsCmd.AddCommand(newActionAuditCmd(deps))
+	actionsCmd.AddCommand(newActionEventsCmd(deps))
 	return actionsCmd
 }
 
@@ -117,6 +148,56 @@ func newActionCapabilitiesCmd(deps *ActionsDeps) *cobra.Command {
 	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
 	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
 	cmd.Flags().StringVar(&opts.ResourceID, "resource-id", "", "canonical unified resource id")
+	return cmd
+}
+
+func newActionAuditCmd(deps *ActionsDeps) *cobra.Command {
+	opts := actionAuditOptions{
+		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
+		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
+		Limit:  100,
+	}
+	if opts.APIURL == "" {
+		opts.APIURL = defaultActionsAPIURL
+	}
+
+	cmd := &cobra.Command{
+		Use:   "audit",
+		Short: "List governed action audit records",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runActionAudit(cmd, deps, opts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.ResourceID, "resource-id", "", "canonical unified resource id")
+	cmd.Flags().StringVar(&opts.Since, "since", "", "RFC3339 lower bound for audit records")
+	cmd.Flags().IntVar(&opts.Limit, "limit", opts.Limit, "maximum audit records to return")
+	return cmd
+}
+
+func newActionEventsCmd(deps *ActionsDeps) *cobra.Command {
+	opts := actionEventsOptions{
+		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
+		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
+		Limit:  100,
+	}
+	if opts.APIURL == "" {
+		opts.APIURL = defaultActionsAPIURL
+	}
+
+	cmd := &cobra.Command{
+		Use:   "events",
+		Short: "List lifecycle events for a governed action",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runActionEvents(cmd, deps, opts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.ActionID, "action-id", "", "governed action id")
+	cmd.Flags().StringVar(&opts.Since, "since", "", "RFC3339 lower bound for lifecycle events")
+	cmd.Flags().IntVar(&opts.Limit, "limit", opts.Limit, "maximum lifecycle events to return")
 	return cmd
 }
 
@@ -235,6 +316,122 @@ func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCap
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output); err != nil {
 		return fmt.Errorf("failed to write action capabilities response: %w", err)
+	}
+	return nil
+}
+
+func runActionAudit(cmd *cobra.Command, deps *ActionsDeps, opts actionAuditOptions) error {
+	token := strings.TrimSpace(opts.Token)
+	if token == "" {
+		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	}
+
+	query, err := actionAuditQuery(opts.ResourceID, opts.Since, opts.Limit)
+	if err != nil {
+		return err
+	}
+	endpoint, err := actionAPIEndpoint(opts.APIURL, "/audit/actions")
+	if err != nil {
+		return err
+	}
+	endpoint.RawQuery = query.Encode()
+
+	httpReq, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to build action audit request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := actionHTTPClient(deps).Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("action audit request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxActionPlanResponseBytes, "action audit response")
+	if err != nil {
+		return fmt.Errorf("failed to read action audit response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return actionStatusError("action audit request", resp.Status, respBody)
+	}
+
+	var audits actionAuditListResponse
+	if err := decodeJSONBytes(respBody, &audits); err != nil {
+		return fmt.Errorf("failed to decode action audit response: %w", err)
+	}
+	if audits.Audits == nil {
+		audits.Audits = []unified.ActionAuditRecord{}
+	}
+	audits.Count = len(audits.Audits)
+
+	encoder := json.NewEncoder(cmd.OutOrStdout())
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(audits); err != nil {
+		return fmt.Errorf("failed to write action audit response: %w", err)
+	}
+	return nil
+}
+
+func runActionEvents(cmd *cobra.Command, deps *ActionsDeps, opts actionEventsOptions) error {
+	token := strings.TrimSpace(opts.Token)
+	if token == "" {
+		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	}
+
+	actionID := strings.TrimSpace(opts.ActionID)
+	if actionID == "" {
+		return fmt.Errorf("actionId is required (use --action-id)")
+	}
+
+	query, err := actionAuditQuery("", opts.Since, opts.Limit)
+	if err != nil {
+		return err
+	}
+	endpoint, err := actionAPIEndpoint(opts.APIURL, "/audit/actions/"+url.PathEscape(actionID)+"/events")
+	if err != nil {
+		return err
+	}
+	endpoint.RawQuery = query.Encode()
+
+	httpReq, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to build action lifecycle request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := actionHTTPClient(deps).Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("action lifecycle request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxActionPlanResponseBytes, "action lifecycle response")
+	if err != nil {
+		return fmt.Errorf("failed to read action lifecycle response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return actionStatusError("action lifecycle request", resp.Status, respBody)
+	}
+
+	var events actionLifecycleEventsResponse
+	if err := decodeJSONBytes(respBody, &events); err != nil {
+		return fmt.Errorf("failed to decode action lifecycle response: %w", err)
+	}
+	if strings.TrimSpace(events.ActionID) == "" {
+		events.ActionID = actionID
+	}
+	if events.Events == nil {
+		events.Events = []unified.ActionLifecycleEvent{}
+	}
+	events.Count = len(events.Events)
+
+	encoder := json.NewEncoder(cmd.OutOrStdout())
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(events); err != nil {
+		return fmt.Errorf("failed to write action lifecycle response: %w", err)
 	}
 	return nil
 }
@@ -441,6 +638,64 @@ func actionResourceFacetsEndpoint(raw, resourceID string) (string, error) {
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed.String(), nil
+}
+
+func actionAPIEndpoint(raw, apiPath string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("api url is required (use --api-url or PULSE_API_URL)")
+	}
+	if !strings.HasPrefix(apiPath, "/") {
+		return nil, fmt.Errorf("api path must start with /")
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid api url: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("invalid api url: scheme must be http or https")
+	}
+	if parsed.Host == "" {
+		return nil, fmt.Errorf("invalid api url: host is required")
+	}
+
+	apiPath = strings.TrimRight(apiPath, "/")
+	fullPath := "/api" + apiPath
+	path := strings.TrimRight(parsed.Path, "/")
+	switch {
+	case path == "":
+		parsed.Path = fullPath
+	case path == fullPath || strings.HasSuffix(path, fullPath):
+		parsed.Path = path
+	case path == "/api" || strings.HasSuffix(path, "/api"):
+		parsed.Path = path + apiPath
+	default:
+		parsed.Path = path + fullPath
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed, nil
+}
+
+func actionAuditQuery(resourceID, since string, limit int) (url.Values, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit must be greater than zero")
+	}
+
+	query := url.Values{}
+	if resourceID = unified.CanonicalResourceID(resourceID); resourceID != "" {
+		query.Set("resourceId", resourceID)
+	}
+	if since = strings.TrimSpace(since); since != "" {
+		parsed, err := time.Parse(time.RFC3339, since)
+		if err != nil {
+			return nil, fmt.Errorf("since must be RFC3339: %w", err)
+		}
+		query.Set("since", parsed.UTC().Format(time.RFC3339))
+	}
+	query.Set("limit", fmt.Sprintf("%d", limit))
+	return query, nil
 }
 
 func actionHTTPClient(deps *ActionsDeps) HTTPDoer {

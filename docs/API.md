@@ -157,6 +157,15 @@ PULSE_API_TOKEN=your-token pulse actions plan \
   --param mode=graceful \
   --reason "Recover after confirmed outage" \
   --requested-by agent:oncall-helper
+
+PULSE_API_TOKEN=your-token pulse actions audit \
+  --api-url http://localhost:7655 \
+  --resource-id vm:42 \
+  --limit 10
+
+PULSE_API_TOKEN=your-token pulse actions events \
+  --api-url http://localhost:7655 \
+  --action-id act_...
 ```
 
 Request:
