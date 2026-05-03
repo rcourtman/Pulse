@@ -15,17 +15,18 @@ described the v5.1.29 maintenance ports and current RC issue follow-up. That
 was accurate but under-scoped for the full `rc.2` to `rc.3` delta.
 
 The packet was refreshed again after the later RC3 candidate commits that made
-self-hosted SSO a Community-tier capability and audited SSO provider settings.
+self-hosted SSO a Community-tier capability, audited SSO provider settings,
+and fixed stable installer prerelease selection.
 
 ## Reviewed Range
 
 - From tag: `v6.0.0-rc.2`
 - From commit: `2868b44cf91b59bca85cd886711d78cd3c376fab`
-- To candidate commit: `83f6296c94e91fb53d088d0b53776de518b1389b`
-- Git range: `v6.0.0-rc.2..83f6296c94e91fb53d088d0b53776de518b1389b`
-- Commit count: `601`
+- To candidate commit: `c27814d1901ec59fad510dfb5c57358dfa6525b1`
+- Git range: `v6.0.0-rc.2..c27814d1901ec59fad510dfb5c57358dfa6525b1`
+- Commit count: `603`
 - Date span in the range: `2026-04-16` through `2026-05-03`
-- Changed scope: `1765` files, `113498` insertions, `72686` deletions
+- Changed scope: `1765` files, `113745` insertions, `72725` deletions
 
 ## Review Method
 
@@ -47,11 +48,11 @@ Commands used for the coverage pass:
 
 ## Commit Coverage Summary
 
-The 601 commits were covered by these release-note buckets:
+The 603 commits were covered by these release-note buckets:
 
 - release packaging, release validation, signed assets, installer resolution,
-  update signer continuity, rollback posture, Helm, Docker, and workflow
-  hardening
+  stable-channel prerelease filtering, update signer continuity, rollback
+  posture, Helm, Docker, and workflow hardening
 - security, auth, token handling, setup/bootstrap state, transport validation,
   trusted proxy, websocket origin, workflow permission, webhook, and outbound
   HTTP hardening
@@ -80,17 +81,18 @@ corrective maintenance RC:
 - `docs/releases/V6_CHANGELOG_RC3_DRAFT.md`
   - records the exact commit range and count
   - adds release packaging, security/auth, hosted/mobile, governance, latest
-    storage, skip-auth, SSO entitlement, provider-settings, and
-    artifact-validation coverage
+    storage, skip-auth, SSO entitlement, provider-settings, stable installer
+    selection, and artifact-validation coverage
 - `docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md`
   - expands the release intent from a narrow corrective RC to a broad
     hardening RC with corrective maintenance at its core
   - adds release packaging, security/auth, hosted/mobile, governance, storage
-    summary, skip-auth, SSO entitlement, provider-settings, and
-    artifact-validation re-test notes
+    summary, skip-auth, SSO entitlement, provider-settings, stable installer
+    selection, and artifact-validation re-test notes
 - `docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md`
   - aligns maintainer-facing support language with the broader audited delta
-  - adds the newest storage, skip-auth, SSO, and release-asset validation notes
+  - adds the newest storage, skip-auth, SSO, stable installer selection, and
+    release-asset validation notes
 - `docs/release-control/v6/internal/subsystems/deployment-installability.md`
   - records that post-draft packet changes must carry exact commit coverage,
     artifact/release-pipeline evidence, and a refreshed draft before

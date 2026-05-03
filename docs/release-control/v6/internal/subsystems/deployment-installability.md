@@ -180,6 +180,9 @@ server-side update execution surfaces.
    new candidate head, including the exact commit count, candidate commit hash,
    changed-scope summary, and any new release-risk themes introduced by those
    commits.
+   Installer-resolution fixes that affect stable versus prerelease selection
+   are one of those release-risk themes and must be named in the current RC
+   packet before the release workflow is restarted.
    The prerelease feedback intake template and active demo/update metadata must
    also stay on generic or current-RC wording instead of hard-coding stale
    `rc.1` examples once later candidates exist.

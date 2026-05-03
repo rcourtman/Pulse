@@ -24,10 +24,10 @@ The changelog was audited against every commit in the exact release range for
 the current candidate head:
 
 - `v6.0.0-rc.2`: `2868b44cf91b59bca85cd886711d78cd3c376fab`
-- candidate commit: `83f6296c94e91fb53d088d0b53776de518b1389b`
-- range: `v6.0.0-rc.2..83f6296c94e91fb53d088d0b53776de518b1389b`
-- commit count: `601`
-- changed scope: `1765` files, `113498` insertions, `72686` deletions
+- candidate commit: `c27814d1901ec59fad510dfb5c57358dfa6525b1`
+- range: `v6.0.0-rc.2..c27814d1901ec59fad510dfb5c57358dfa6525b1`
+- commit count: `603`
+- changed scope: `1765` files, `113745` insertions, `72725` deletions
 
 Those commits are grouped in this changelog rather than listed one by one. The
 range includes release/install/update work, security and trust-boundary
@@ -53,6 +53,9 @@ The release and installer changes in this candidate include:
   not leave a partially populated RC draft
 - clean VCS metadata inside released container images and release builds
 - Proxmox LXC stable installs do not accidentally fall through to a v6 RC
+- stable installer resolution ignores prerelease-shaped tags and downloads the
+  installer from the latest stable release asset instead of trusting GitHub's
+  floating latest-release redirect when an RC is current
 - low-disk updates fail before stopping the current service
 - installer bundle fallback logic works without relying on a missing external
   helper

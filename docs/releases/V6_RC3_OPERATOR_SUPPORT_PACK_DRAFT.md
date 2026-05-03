@@ -14,6 +14,9 @@ _Draft only. Use this as the working support brief for the planned
   readiness work into the v6 candidate before broader retesting.
 - Self-hosted SSO is included with Community and higher tiers. Do not describe
   SAML or multi-provider SSO as a Pro-only upgrade path for this RC.
+- Stable-channel installer resolution must stay on the latest stable semver
+  tag even if GitHub's floating latest-release redirect currently points at an
+  RC.
 - Systems pinned to the historical `rc.2` update trust root should use a manual
   reinstall or explicit trust migration for later prerelease or GA builds.
 
@@ -83,6 +86,8 @@ Use this cohort breakdown:
 - release artifact validation, draft metadata preservation, upload retries,
   signing, and clean version metadata are hardened for the RC path
 - stable install paths stay on v5.1.29 unless the user explicitly opts into v6
+- stable installer downloads resolve from the latest stable release asset
+  instead of accepting an RC-shaped latest-release redirect
 - installer disk preflight runs before stopping the current service
 - bootstrap-token display uses the supported command path
 - Docker agents in Proxmox LXC keep host identity after restart/recreation

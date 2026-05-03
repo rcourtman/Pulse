@@ -13,6 +13,8 @@ before broader retesting:
 
 - release artifacts, draft metadata, upload retries, signing, validation, and
   installer resolution should match the current release workflow
+- stable installer resolution should stay on the latest stable semver tag even
+  when GitHub's floating latest release points at an RC
 - auth, token, update, hosted callback, transport, and workflow trust
   boundaries should fail closed where the `rc.2` line was too loose
 - v5-to-v6 installs and updates should avoid avoidable installer, disk-space,
@@ -31,10 +33,10 @@ before broader retesting:
 - the support packet should be explicit about the post-`rc.2` update-signer
   transition and the stable rollback target
 
-This packet was audited against all `601` commits in the current candidate
+This packet was audited against all `603` commits in the current candidate
 range, from
 `2868b44cf91b59bca85cd886711d78cd3c376fab` through
-`83f6296c94e91fb53d088d0b53776de518b1389b`.
+`c27814d1901ec59fad510dfb5c57358dfa6525b1`.
 
 ## Support Stance
 
@@ -86,6 +88,9 @@ range, from
 
 - The stable install path remains anchored to v5.1.29 instead of accidentally
   resolving to a v6 RC from the fresh Proxmox LXC script path.
+- The root installer now filters stable-channel release resolution to stable
+  semver tags and downloads the installer from that stable release asset, so
+  the stable path does not follow an RC-shaped GitHub latest-release redirect.
 - The installer now checks available disk space before stopping the current
   service, so a low-space update should fail before interrupting a working
   install.
