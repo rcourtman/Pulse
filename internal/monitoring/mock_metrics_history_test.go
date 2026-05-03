@@ -43,6 +43,36 @@ func compactMockFixtureConfig() mock.MockConfig {
 
 const boundedMockHistoryProofWindow = 4 * time.Hour
 
+func expectedCanonicalStoreBucketAverage(t *testing.T, resourceType, resourceID, metricType string, now time.Time, seedDuration, interval time.Duration, bucket time.Time, stepSecs int64) float64 {
+	t.Helper()
+	if stepSecs <= 0 {
+		t.Fatalf("expected positive step seconds, got %d", stepSecs)
+	}
+
+	alignedNow := normalizeMockMetricTimestamp(now, interval)
+	startUnix := now.Add(-seedDuration).Unix()
+	endUnix := now.Unix()
+	bucketUnix := bucket.Unix()
+	var sum float64
+	var count int
+
+	for _, ts := range buildTieredTimestamps(alignedNow, seedDuration) {
+		tsUnix := ts.Unix()
+		if tsUnix < startUnix || tsUnix > endUnix {
+			continue
+		}
+		if (tsUnix/stepSecs)*stepSecs+(stepSecs/2) != bucketUnix {
+			continue
+		}
+		sum += mock.SampleMetric(resourceType, resourceID, metricType, ts)
+		count++
+	}
+	if count == 0 {
+		t.Fatalf("expected seeded samples in %s bucket at %s", metricType, bucket.Format(time.RFC3339))
+	}
+	return sum / float64(count)
+}
+
 func compactMockChartFixtureConfig() mock.MockConfig {
 	cfg := compactMockFixtureConfig()
 	cfg.DockerHostCount = 1
@@ -544,8 +574,8 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded VMware datastore usage points")
 	}
 	lastStoragePoint := storagePoints[len(storagePoints)-1]
-	if got, want := lastStoragePoint.Value, mock.SampleMetric("storage", "vc-mock-1:datastore:datastore-201", "usage", lastStoragePoint.Timestamp); math.Abs(got-want) > 0.1 {
-		t.Fatalf("expected VMware datastore usage seed at %s to match canonical sampler, got=%v want=%v", lastStoragePoint.Timestamp.Format(time.RFC3339), got, want)
+	if got, want := lastStoragePoint.Value, expectedCanonicalStoreBucketAverage(t, "storage", "vc-mock-1:datastore:datastore-201", "usage", now, seedDuration, time.Minute, lastStoragePoint.Timestamp, 3600); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected VMware datastore usage seed at %s to match canonical downsample bucket, got=%v want=%v", lastStoragePoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
 	storageUsedPoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "used", now.Add(-seedDuration), now, 3600)
@@ -615,8 +645,8 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS dataset usage points")
 	}
 	lastDatasetPoint := datasetPoints[len(datasetPoints)-1]
-	if got, want := lastDatasetPoint.Value, mock.SampleMetric("storage", "dataset:"+fixtures.Datasets[0].Name, "usage", lastDatasetPoint.Timestamp); math.Abs(got-want) > 0.1 {
-		t.Fatalf("expected TrueNAS dataset usage seed at %s to match canonical sampler, got=%v want=%v", lastDatasetPoint.Timestamp.Format(time.RFC3339), got, want)
+	if got, want := lastDatasetPoint.Value, expectedCanonicalStoreBucketAverage(t, "storage", "dataset:"+fixtures.Datasets[0].Name, "usage", now, seedDuration, time.Minute, lastDatasetPoint.Timestamp, 3600); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected TrueNAS dataset usage seed at %s to match canonical downsample bucket, got=%v want=%v", lastDatasetPoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
 	poolUsedPoints, err := store.Query("storage", "pool:"+fixtures.Pools[0].Name, "used", now.Add(-seedDuration), now, 3600)
