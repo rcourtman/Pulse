@@ -74,6 +74,10 @@ Storage/recovery may also consume org-scoped session identity from the shared
 API boundary, but durable user IDs remain the authorization principal. Contact
 email may support display or legacy lookup only; storage and recovery surfaces
 must not create their own email-keyed membership or entitlement interpretation.
+The canonical actor vocabulary for those shared sessions is
+`docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; recovery and storage
+work may consume accepted org access, but must not mint or widen access from a
+delivery email.
 Storage/recovery remediation or restore-adjacent workflows may consume
 `POST /api/actions/plan` only as the API-owned resource capability planning
 contract. This subsystem must not create a storage-local approval policy,

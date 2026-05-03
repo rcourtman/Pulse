@@ -2,11 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
@@ -31,6 +33,12 @@ func NewMagicLinkHandlers(
 		hostedMode:       hostedMode,
 		resolvePublicURL: resolvePublicURL,
 	}
+}
+
+type magicLinkPrincipal struct {
+	UserID string
+	Email  string
+	Role   models.OrganizationRole
 }
 
 func (h *MagicLinkHandlers) HandlePublicMagicLinkRequest(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +164,16 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_magic_link", "Invalid or expired magic link", nil)
 		return
 	}
+	principal, err := h.resolveMagicLinkPrincipal(token.OrgID, token.Email)
+	if err != nil {
+		log.Warn().Err(err).Str("org_id", token.OrgID).Str("email", token.Email).Msg("Magic link verify: failed to resolve stable principal")
+		if !strings.Contains(r.Header.Get("Accept"), "application/json") {
+			http.Redirect(w, r, "/login?error=magic_link_invalid", http.StatusTemporaryRedirect)
+			return
+		}
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_magic_link", "Invalid or expired magic link", nil)
+		return
+	}
 
 	// Invalidate any pre-existing session to prevent session fixation attacks.
 	InvalidateOldSessionFromRequest(r)
@@ -170,8 +188,8 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 	userAgent := r.Header.Get("User-Agent")
 	clientIP := GetClientIP(r)
 	sessionDuration := 24 * time.Hour
-	GetSessionStore().CreateSession(sessionToken, sessionDuration, userAgent, clientIP, token.Email)
-	TrackUserSession(token.Email, sessionToken)
+	GetSessionStore().CreateSession(sessionToken, sessionDuration, userAgent, clientIP, principal.UserID)
+	TrackUserSession(principal.UserID, sessionToken)
 
 	csrfToken := generateCSRFToken(sessionToken)
 	isSecure, sameSitePolicy := getCookieSettings(r)
@@ -209,7 +227,8 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"org_id":  token.OrgID,
-			"user_id": token.Email,
+			"user_id": principal.UserID,
+			"email":   principal.Email,
 		})
 		return
 	}
@@ -247,4 +266,32 @@ func (h *MagicLinkHandlers) findOrgForEmail(email string) (string, bool, error) 
 		}
 	}
 	return "", false, nil
+}
+
+func (h *MagicLinkHandlers) resolveMagicLinkPrincipal(orgID, email string) (*magicLinkPrincipal, error) {
+	if h == nil || h.persistence == nil {
+		return nil, fmt.Errorf("organization persistence is not configured")
+	}
+	orgID = strings.TrimSpace(orgID)
+	email = strings.ToLower(strings.TrimSpace(email))
+	if !isValidOrganizationID(orgID) || email == "" {
+		return nil, fmt.Errorf("invalid magic link principal input")
+	}
+
+	org, err := h.persistence.LoadOrganizationStrict(orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load organization %s: %w", orgID, err)
+	}
+	userID, role, ok := org.ResolvePrincipalByEmail(email)
+	if !ok {
+		return nil, fmt.Errorf("no organization principal for magic link email")
+	}
+	if userID == "" || !models.IsValidOrganizationRole(role) {
+		return nil, fmt.Errorf("invalid organization principal for magic link email")
+	}
+	return &magicLinkPrincipal{
+		UserID: userID,
+		Email:  email,
+		Role:   role,
+	}, nil
 }

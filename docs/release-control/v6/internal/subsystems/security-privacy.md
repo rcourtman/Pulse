@@ -112,6 +112,10 @@ controls as normal product settings.
    receive distinct bounded replacement tokens for one session, but explicit
    session deletion, password-change invalidation, and logout must invalidate
    every retained CSRF hash for that session.
+   Auth and session changes that involve hosted, SSO, or commercial identity
+   must also preserve `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`:
+   email is contact metadata once a stable principal exists, and browser
+   sessions must bind to the durable principal rather than a delivery address.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
@@ -151,6 +155,11 @@ controls as normal product settings.
     quickstart/trial transport as absent from normal self-hosted v6 GA docs.
     Both disclosures must state that governed resource details use
     resource-policy redaction before non-local model transport.
+11. Keep durable identity and email-contact semantics aligned with the
+    canonical identity invariant record. Hosted and commercial auth paths must
+    use stable Pulse user/account/tenant IDs where they exist; SSO subject
+    migration must be explicit and compatible rather than silently substituting
+    email or display claims as durable principals.
 
 ## Current State
 

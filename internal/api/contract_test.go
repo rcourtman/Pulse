@@ -104,6 +104,14 @@ func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	if !strings.Contains(string(invariantDoc), "Email is contact metadata") {
 		t.Fatal("identity invariant contract must define email as contact metadata")
 	}
+
+	modelSource, err := os.ReadFile(filepath.Clean("../models/organization.go"))
+	if err != nil {
+		t.Fatalf("read organization model: %v", err)
+	}
+	if !strings.Contains(string(modelSource), "ResolvePrincipalByEmail") {
+		t.Fatal("organization model must expose email-to-stable-principal resolution")
+	}
 }
 
 func TestContractAISettingsClampsPaidRuntimeControlsToEntitlements(t *testing.T) {

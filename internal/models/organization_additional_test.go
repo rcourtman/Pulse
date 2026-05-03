@@ -62,6 +62,34 @@ func TestOrganizationPrincipalIdentityCanonicalization(t *testing.T) {
 	}
 }
 
+func TestOrganizationResolvePrincipalByEmail(t *testing.T) {
+	org := &Organization{
+		ID:          "org-1",
+		OwnerUserID: "u_owner",
+		OwnerEmail:  "owner@example.com",
+		Members: []OrganizationMember{
+			{UserID: "u_owner", Email: "owner@example.com", Role: OrgRoleOwner},
+			{UserID: "u_admin", Email: "admin@example.com", Role: OrgRoleAdmin},
+			{UserID: "legacy@example.com", Role: OrgRoleViewer},
+		},
+	}
+
+	userID, role, ok := org.ResolvePrincipalByEmail("OWNER@example.com")
+	if !ok || userID != "u_owner" || role != OrgRoleOwner {
+		t.Fatalf("owner principal = (%q, %q, %v), want stable owner", userID, role, ok)
+	}
+
+	userID, role, ok = org.ResolvePrincipalByEmail("admin@example.com")
+	if !ok || userID != "u_admin" || role != OrgRoleAdmin {
+		t.Fatalf("member principal = (%q, %q, %v), want stable admin", userID, role, ok)
+	}
+
+	userID, role, ok = org.ResolvePrincipalByEmail("legacy@example.com")
+	if !ok || userID != "legacy@example.com" || role != OrgRoleViewer {
+		t.Fatalf("legacy principal = (%q, %q, %v), want legacy email fallback", userID, role, ok)
+	}
+}
+
 func TestOrganizationRoleNormalization(t *testing.T) {
 	if got := NormalizeOrganizationRole("member"); got != OrganizationRole("member") {
 		t.Fatalf("expected member to remain unchanged, got %q", got)

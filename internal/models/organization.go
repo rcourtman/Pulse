@@ -372,6 +372,37 @@ func (o *Organization) GetMemberRoleForPrincipal(userID, email string) Organizat
 	return ""
 }
 
+// ResolvePrincipalByEmail returns the durable principal for a contact email.
+// It is intended for email-delivery flows such as magic links where the email
+// proves delivery but the session should still bind to the stored user ID.
+func (o *Organization) ResolvePrincipalByEmail(email string) (string, OrganizationRole, bool) {
+	if o == nil {
+		return "", "", false
+	}
+	email = normalizeOrganizationEmail(email)
+	if email == "" {
+		return "", "", false
+	}
+	if ownerMatchesEmail(o, email) {
+		userID := normalizeOrganizationIdentityValue(o.OwnerUserID)
+		if userID == "" {
+			userID = email
+		}
+		return userID, OrgRoleOwner, true
+	}
+	for _, member := range o.Members {
+		if !memberMatchesEmail(member, email) {
+			continue
+		}
+		userID := normalizeOrganizationIdentityValue(member.UserID)
+		if userID == "" {
+			userID = email
+		}
+		return userID, NormalizeOrganizationRole(member.Role), true
+	}
+	return "", "", false
+}
+
 // CanonicalizePrincipalIdentity upgrades legacy email-keyed membership records
 // to a stable user ID while preserving email as contact metadata.
 func (o *Organization) CanonicalizePrincipalIdentity(userID, email string) bool {

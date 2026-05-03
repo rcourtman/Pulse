@@ -170,6 +170,11 @@ control-plane user IDs exist, while `OwnerEmail` and member `Email` carry
 delivery/display email. Email-shaped owner/member IDs remain only as legacy
 fallback and migration input, and hosted handoff may canonicalize those records
 to stable user IDs without changing the stored role.
+Email-delivery flows that need to mint sessions, including hosted magic links,
+must resolve contact email back through this organization model before
+authorizing. `internal/models/organization.go` owns the email-to-principal
+helper so handlers do not duplicate membership lookup or accidentally bind
+sessions to email.
 That same org-control surface also treats owner transfer as a re-auth-bound
 operation. Existing membership remains a prerequisite for the target user, and
 the acting owner must present a fresh browser session minted through the

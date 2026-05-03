@@ -185,6 +185,10 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle surfaces may display contact email when supplied by the shared
    auth boundary, but they must not reinterpret SSO or Stripe email as the
    canonical user identifier for setup, install, or fleet-management actions.
+   The canonical durable-principal vocabulary for those shared auth routes is
+   recorded in `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; agent
+   lifecycle work may consume that identity but must not define a parallel
+   email-keyed actor model for fleet operations.
    That same lifecycle-owned setup path also owns script teardown behavior:
    rerunning the governed setup script in remove mode must call canonical
    `/api/auto-unregister` with `source:"script"` before local credentials are

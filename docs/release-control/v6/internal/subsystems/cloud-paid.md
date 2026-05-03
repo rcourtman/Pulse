@@ -231,6 +231,10 @@ runtime gating as separate unlinked claims.
    delivery metadata only; they may be used for idempotent lookup or legacy
    fallback, but they must not become the primary hosted tenant user key when a
    stable account user ID exists.
+   Hosted magic links are a delivery mechanism inside that same boundary:
+   verification must re-read the tenant organization and session as the stored
+   stable owner/member principal, so an old token cannot keep email as the
+   runtime identity or survive removal from tenant membership.
    That same portal boundary also owns the signed-in shell shape: hosted
    arrivals default to `Workspaces`, self-hosted-only arrivals default to
    `Billing`, and the shell destinations are limited to `Workspaces`,

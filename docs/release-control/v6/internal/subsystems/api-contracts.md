@@ -359,6 +359,10 @@ the canonical monitored-system blocked payload.
     as legacy membership lookup and delivery metadata, and any canonicalization
     of email-keyed tenant membership must preserve the stored role instead of
     creating or elevating membership from the token.
+    Hosted magic-link verification follows the same API/session identity rule:
+    the token may carry contact email for delivery, but `/api/public/magic-link/verify`
+    must resolve that email against current server-side organization metadata
+    and create the browser session for the stored owner/member principal.
 19. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
     Hosted handoff must not be treated as an org-management side effect for that same privilege boundary. Only
     canonical invitation, membership-management, or explicit owner-transfer flows may create tenant membership or
