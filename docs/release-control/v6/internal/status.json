@@ -5037,7 +5037,58 @@
       "subsystem_ids": []
     }
   ],
-  "coverage_gaps": [],
+  "coverage_gaps": [
+    {
+      "id": "agent-ready-operations-contract-product-proof",
+      "summary": "Pulse has the ingredients for agent-ready operations across AI runtime, API contracts, unified resources, security/privacy, resource-change intelligence, action governance, platform admission, and fleet governance, but does not yet have a coherent product proof that external agents can safely use Pulse as the operations trust boundary through stable API/CLI-first contracts, with MCP only as an adapter over those contracts.",
+      "owner": "product",
+      "status": "triaged",
+      "recorded_at": "2026-05-03",
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L14",
+        "L16",
+        "L18",
+        "L19",
+        "L20",
+        "L21",
+        "L22"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "api-contracts",
+        "monitoring",
+        "security-privacy",
+        "unified-resources"
+      ],
+      "proposed_resolution": "target-update",
+      "coverage_impact": 35,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/AI_AUTONOMY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/API.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/architecture/v6-agentic-control-plane-spec.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/actions.go",
+          "kind": "file"
+        }
+      ]
+    }
+  ],
   "candidate_lanes": [],
   "work_claims": [],
   "open_decisions": [],
