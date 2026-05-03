@@ -108,6 +108,27 @@ Old metadata section.
                 self.assertNotIn("mobile app pairing", text)
                 self.assertNotIn("remote access/mobile/push", text)
 
+    def test_rc3_packet_records_commit_coverage_and_release_artifact_hardening(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        release_notes = (repo_root / "docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md").read_text(
+            encoding="utf-8"
+        )
+        changelog = (repo_root / "docs/releases/V6_CHANGELOG_RC3_DRAFT.md").read_text(
+            encoding="utf-8"
+        )
+        support_pack = (
+            repo_root / "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("v6.0.0-rc.2..v6.0.0-rc.3", release_notes)
+        self.assertIn("commit count: `597`", changelog)
+        self.assertIn("broad hardening RC with a corrective maintenance core", changelog)
+        self.assertIn("Release asset uploads use bounded retries", release_notes)
+        self.assertIn(
+            "release artifact validation, draft metadata preservation, upload retries",
+            support_pack,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -169,6 +169,11 @@ server-side update execution surfaces.
    rollback target and any prerelease trust-root continuity caveat in the
    current release notes, changelog, operator support pack, upgrade guide, and
    release-control evidence record before the release workflow is dispatched.
+   When a draft packet is updated after the candidate tag or draft release has
+   already been prepared, the packet must record an exact previous-RC to
+   current-candidate commit coverage audit, include any new artifact
+   validation or release-pipeline assertions in the release-control evidence,
+   and refresh the draft release from the new branch head before publication.
    The prerelease feedback intake template and active demo/update metadata must
    also stay on generic or current-RC wording instead of hard-coding stale
    `rc.1` examples once later candidates exist.

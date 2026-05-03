@@ -8,9 +8,10 @@ _Draft only. Use this as the working support brief for the planned
 - Pulse v5.1.29 remains the current stable line.
 - Pulse v6 `rc.3` is an opt-in evaluation build, not the default production
   recommendation.
-- `rc.3` should be described as a corrective maintenance RC: it carries late v5
-  maintenance fixes and current RC feedback into the v6 candidate before
-  broader retesting.
+- `rc.3` should be described as a broad hardening RC with a corrective
+  maintenance core: it carries late v5 maintenance fixes, current RC feedback,
+  release packaging hardening, security/auth tightening, and post-`rc.2`
+  readiness work into the v6 candidate before broader retesting.
 - Systems pinned to the historical `rc.2` update trust root should use a manual
   reinstall or explicit trust migration for later prerelease or GA builds.
 
@@ -76,6 +77,8 @@ Use this cohort breakdown:
 
 ### What changed from `rc.2` that users should notice immediately?
 
+- release artifact validation, draft metadata preservation, upload retries,
+  signing, and clean version metadata are hardened for the RC path
 - stable install paths stay on v5.1.29 unless the user explicitly opts into v6
 - installer disk preflight runs before stopping the current service
 - bootstrap-token display uses the supported command path
@@ -83,7 +86,10 @@ Use this cohort breakdown:
 - alert notification disablement, thresholds, and PBS/Docker alert paths are
   corrected
 - backup, snapshot, and linked filesystem views carry the late v5 fixes
+- Storage summary tiles wrap cleanly in the shared sticky summary grid
 - Workloads summary-chart tooltips no longer cover the guide line
+- skip-auth local/dev login handles the expected unauthenticated response
+  without surfacing a request failure
 
 ### What if a fresh Proxmox LXC stable install lands on a v6 RC?
 
@@ -135,7 +141,9 @@ posting.
 7. Re-test alerts, backup/recovery, snapshots, PBS/ZFS attribution, Synology
    RAID scrub handling, and Ceph inventory.
 8. Re-test Workloads, Storage, and Infrastructure at desktop and mobile sizes.
-9. Upgrade agents separately only when the user is explicitly testing the
+9. Re-test release artifact download, checksum/signature, installer, and draft
+   validation paths before broader retesting.
+10. Upgrade agents separately only when the user is explicitly testing the
    v5-to-v6 agent path.
 
 ## Ask For These Details

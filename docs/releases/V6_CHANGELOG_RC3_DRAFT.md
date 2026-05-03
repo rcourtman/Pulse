@@ -1,28 +1,55 @@
 # Pulse v6.0.0-rc.3 Draft Changelog
 
 _Draft only. This changelog describes the current `pulse/v6-release` delta
-since the planned `v6.0.0-rc.2` candidate. Do not treat it as published until
+since the `v6.0.0-rc.2` tag. Do not treat it as published until
 the governed `v6.0.0-rc.3` prerelease exists._
 
 ## What `rc.3` changes compared with `rc.2`
 
-`v6.0.0-rc.3` is a corrective maintenance RC. It carries the late v5.1.29
-maintenance sweep and the current RC feedback fixes into the v6 release branch
-without reopening the product model that `rc.2` settled.
+`v6.0.0-rc.3` is a broad hardening RC with a corrective maintenance core. It
+carries the late v5.1.29 maintenance sweep and the current RC feedback fixes
+into the v6 release branch while also preserving the post-`rc.2` release
+packaging, security, hosted/mobile, commercial-model, governance, and UI
+readiness work that landed on the release line.
 
 The main release risk addressed here is regression drift: fixes that users
 already received on the v5 stable line should not disappear when they evaluate
-v6.
+v6. The secondary risk is release drift: the candidate should publish with the
+same signed-artifact, validation, auth, UI, and documentation behavior that was
+tested after `rc.2`.
+
+## Commit Coverage Audit
+
+The changelog was audited against every commit in the exact release range:
+
+- `v6.0.0-rc.2`: `2868b44cf91b59bca85cd886711d78cd3c376fab`
+- `v6.0.0-rc.3`: `9ba0c3fa960ad9e90471dc5f443a62e01ac01836`
+- range: `v6.0.0-rc.2..v6.0.0-rc.3`
+- commit count: `597`
+- changed scope: `1755` files, `112950` insertions, `72377` deletions
+
+Those commits are grouped in this changelog rather than listed one by one. The
+range includes release/install/update work, security and trust-boundary
+hardening, commercial and hosted-account cleanup, infrastructure and agent
+platform work, monitoring/storage/recovery corrections, AI/Patrol/action
+governance, mobile/hosted proof, documentation/governance records, and
+frontend layout and product-surface polish.
 
 ## Major Changes
 
-### 1. Installer and rollback behavior is safer for RC retesting
+### 1. Release packaging, install/update, and rollback behavior are safer for RC retesting
 
 The release branch now keeps the stable install/update path anchored to
 v5.1.29 while preparing the `rc.3` prerelease packet.
 
-The installer changes in this candidate include:
+The release and installer changes in this candidate include:
 
+- signed installer downloads, signed release sidecars, SBOM publication, and
+  release-asset validation gates
+- draft-release validation that preserves GitHub draft metadata
+- bounded release-asset upload retries so transient GitHub upload failures do
+  not leave a partially populated RC draft
+- clean VCS metadata inside released container images and release builds
 - Proxmox LXC stable installs do not accidentally fall through to a v6 RC
 - low-disk updates fail before stopping the current service
 - installer bundle fallback logic works without relying on a missing external
@@ -37,7 +64,24 @@ historical `rc.2` update trust root should use a manual reinstall or explicit
 trust migration for later prerelease and GA builds. Do not assume unattended
 `rc.2` to `rc.3` continuity.
 
-### 2. Agent identity and setup paths are less fragile
+### 2. Security, auth, and trust boundaries are tighter
+
+The post-`rc.2` range includes a concentrated hardening pass across the
+release, hosted, local, and agent boundaries:
+
+- workflow token permissions, CI image pins, Docker base-image digests, and
+  release asset signing are restricted
+- update, installer, bootstrap, and self-update token paths keep sensitive
+  values out of logs and process arguments
+- setup tokens, recovery/bootstrap auth, non-loopback local transport, trusted
+  proxy configuration, websocket origins, and outbound HTTP helpers fail closed
+  where the earlier behavior was too permissive
+- org invitation, ownership transfer, hosted callback, purchase return,
+  webhook, and license persistence paths were hardened
+- skip-auth login handling now treats the expected 401 as a local-mode auth
+  state instead of surfacing it as a client failure
+
+### 3. Agent identity and setup paths are less fragile
 
 `rc.3` carries the v5/v6 agent continuity corrections from the late issue
 sweep:
@@ -50,7 +94,7 @@ sweep:
 - the agent privilege model is documented for operators
 - Patrol discovery probes align with the agent command policy
 
-### 3. Alerts, recovery, and storage views match late v5 fixes
+### 4. Alerts, recovery, and storage views match late v5 fixes
 
 The candidate includes the alert and recovery correctness fixes from the
 maintenance audit:
@@ -66,34 +110,62 @@ maintenance audit:
 - host-linked PBS/ZFS filesystems merge into guest overviews where ownership is
   known
 
-### 4. Runtime history and AI behavior are quieter
+### 5. Runtime history and AI behavior are quieter
 
 The duplicate-metrics path is idempotent, reducing noisy historical rows during
 polling overlap. Local Ollama-backed AI calls also use a shorter keep-alive
 window so evaluation systems are less likely to retain model resources
 unnecessarily.
 
-### 5. Workloads, Storage, and Infrastructure are ready for another UI pass
+### 6. Workloads, Storage, and Infrastructure are ready for another UI pass
 
 The current branch keeps the table-first v6 operational UI corrections:
 
 - Workloads, Storage, and Infrastructure have the current filter, saved-view,
   table, chart-toggle, and responsive wrapping fixes
 - narrow Workloads layouts keep charts out of the primary mobile table flow
+- Storage summary tiles keep their labels and values inside the shared sticky
+  summary grid at narrow widths
 - summary-chart hover tooltips now offset away from the guide line instead of
   covering the value being inspected
 
-### 6. Security dependencies and contribution guidance are current
+### 7. Commercial, hosted, and mobile readiness stays aligned with the `rc.2` model
+
+The range keeps the `rc.2` free-first self-hosted direction while removing
+stale sales, trial, and cap-era assumptions from runtime and public docs:
+
+- self-hosted core monitoring remains included on the current public plans
+- Relay remains secure remote access to the Pulse web UI. Relay includes
+  Pulse Mobile pairing for handoff, push notifications, and 14-day history
+- Pro remains Relay plus AI operations, automation, advanced admin features,
+  and 90-day history
+- inactive self-hosted upsell, trial-start, quickstart, and customer-side
+  commercial analytics paths are retired or hidden from the public runtime
+- hosted signup, Pulse Account, tenant/workspace, MSP, mobile approval, and
+  mobile companion-role proofs were refreshed for the RC floor
+
+### 8. Data, resource, action, platform, and fleet governance reached the RC floor
+
+The post-`rc.2` release line also includes the governed v6 architecture slices
+that are now part of the RC candidate:
+
+- policy-aware data handling and AI resource sanitization
+- resource-change envelopes, relationship-aware timelines, and the resource
+  relationship map
+- approval-backed action plans, action-audit preflight, resource action
+  history, and command-policy alignment
+- platform support-floor projection and admitted-platform classification
+- fleet-governance projection for enrollment, liveness, version drift, adapter
+  health, credential posture, update posture, and remote-control posture
+
+### 9. Dependencies, docs, and contribution guidance are current
 
 The frontend sanitizer and Go network dependency updates are present on the
 release branch. Public contribution guidance now matches the issue-first
 policy for the current RC cycle while preserving the dedicated v6 feedback
-template.
-
-The self-hosted paid wording remains aligned with `rc.2`: Relay is secure
-remote access to the Pulse web UI, Pulse Mobile pairing for handoff, push
-notifications, and 14-day history, while Pro adds AI operations, automation,
-advanced admin features, and 90-day history.
+template. The release packet also reflects the Dashboard retirement,
+Infrastructure-first routing, and current first-session/setup documentation
+instead of leaving readers on older `rc.2` assumptions.
 
 ## What existing v5 users should re-test in `rc.3`
 
@@ -105,8 +177,13 @@ advanced admin features, and 90-day history.
    alert paths.
 5. Backup, snapshot, recovery, PBS, ZFS, Synology RAID, and Ceph inventory
    views.
-6. Workloads, Storage, and Infrastructure at desktop and mobile sizes.
-7. AI/Patrol local discovery and Ollama-backed flows where enabled.
+6. Workloads, Storage, and Infrastructure at desktop and mobile sizes,
+   including sticky summary tiles, filter wrapping, saved views, and chart
+   hover behavior.
+7. Skip-auth local/dev login flows where enabled.
+8. AI/Patrol local discovery and Ollama-backed flows where enabled.
+9. Release artifact download, checksum/signature, and installer validation
+   paths before broad retesting.
 
 ## Evidence Appendix
 
@@ -118,3 +195,4 @@ release line, see:
 - `docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-v5-129-delta-2026-05-01.md`
 - `docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-late-issue-intake-2026-05-01.md`
 - `docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-summary-sparkline-tooltip-2026-05-01.md`
+- `docs/release-control/v6/internal/records/documentation-currentness-and-legacy-cleanup-rc3-commit-audit-2026-05-03.md`

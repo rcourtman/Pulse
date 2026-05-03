@@ -3,13 +3,18 @@
 _Draft only. Do not treat this as published until the governed
 `v6.0.0-rc.3` tag and GitHub prerelease exist._
 
-`v6.0.0-rc.3` is intended to be the second corrective RC after the public
-`rc.1` release and the first candidate after the `v5.1.29` maintenance sweep.
-Pulse v5.1.29 remains the current stable line.
+`v6.0.0-rc.3` is intended to be a broad hardening RC after `rc.2` and the
+first candidate after the `v5.1.29` maintenance sweep. Pulse v5.1.29 remains
+the current stable line.
 
-The purpose of this RC is to carry late v5 maintenance fixes and recent RC
-feedback into the v6 candidate before broader retesting:
+The purpose of this RC is to carry late v5 maintenance fixes, recent RC
+feedback, and the post-`rc.2` release-readiness work into the v6 candidate
+before broader retesting:
 
+- release artifacts, draft metadata, upload retries, signing, validation, and
+  installer resolution should match the current release workflow
+- auth, token, update, hosted callback, transport, and workflow trust
+  boundaries should fail closed where the `rc.2` line was too loose
 - v5-to-v6 installs and updates should avoid avoidable installer, disk-space,
   token-display, and rollback surprises
 - agent identity and reconnect behavior should remain stable across Docker LXC,
@@ -18,8 +23,16 @@ feedback into the v6 candidate before broader retesting:
   current v5 maintenance line
 - Workloads, Storage, and Infrastructure should be retestable with the current
   table-first and responsive UI corrections
+- Pulse Account, hosted signup, MSP, mobile, policy-aware data, resource
+  change, action governance, platform admission, and fleet governance proofs
+  should remain represented in the candidate
 - the support packet should be explicit about the post-`rc.2` update-signer
   transition and the stable rollback target
+
+This packet was audited against all `597` commits in
+`v6.0.0-rc.2..v6.0.0-rc.3`, from
+`2868b44cf91b59bca85cd886711d78cd3c376fab` through
+`9ba0c3fa960ad9e90471dc5f443a62e01ac01836`.
 
 ## Support Stance
 
@@ -35,6 +48,34 @@ feedback into the v6 candidate before broader retesting:
   `./scripts/install.sh --version v5.1.29`
 
 ## What Changed Since `rc.2`
+
+### Release Packaging And Publish Readiness
+
+- The release workflow now validates signed release sidecars, generated SBOM
+  assets, prerelease metadata, and expected artifact completeness before
+  treating the RC draft as publishable.
+- GitHub draft-release validation preserves draft metadata instead of
+  accidentally changing release visibility during validation.
+- Release asset uploads use bounded retries so transient upload failures are
+  less likely to leave a partially populated RC draft.
+- Released images and release builds keep clean VCS metadata for version
+  reporting and validation.
+- The release packet records the exact `rc.2` to `rc.3` commit coverage audit
+  in the release-control evidence appendix.
+
+### Security, Auth, And Trust Boundaries
+
+- Workflow token permissions, CI image pins, Docker base images, signed
+  installer downloads, and local release sidecars are restricted for the
+  release path.
+- Setup tokens, bootstrap state, update tokens, self-update preflight tokens,
+  and installer-support paths avoid leaking sensitive values through logs,
+  arguments, or overly broad fallback behavior.
+- Local loopback, websocket origin, trusted proxy, TLS, outbound HTTP, hosted
+  callback, ownership-transfer, invitation, webhook, and license-persistence
+  paths were hardened after `rc.2`.
+- Skip-auth local/dev login now treats the expected unauthenticated response as
+  auth state instead of surfacing it as a client-side request failure.
 
 ### Installer And Update Continuity
 
@@ -97,10 +138,27 @@ feedback into the v6 candidate before broader retesting:
   v6 release branch.
 - On narrow/mobile Workloads views, summary charts stay out of the primary
   table flow so the table remains usable.
+- Storage summary tiles keep labels and values inside the shared sticky summary
+  grid at narrow widths.
 - Summary-chart hover tooltips now offset from the guide line instead of
   covering the exact value under the cursor.
 
-### Security And Public Feedback Flow
+### Commercial, Hosted, Mobile, And Governance Readiness
+
+- The `rc.2` self-hosted plan direction remains intact: current public
+  self-hosted plans include core monitoring, Relay adds remote/mobile
+  convenience and 14-day history, and Pro adds AI operations, automation,
+  advanced admin features, and 90-day history.
+- Stale self-hosted trial, quickstart, upgrade, monitored-system cap, and
+  customer-side commercial analytics paths were retired or hidden from public
+  runtime and docs.
+- Hosted signup, Pulse Account, workspace/tenant, MSP, mobile approval, and
+  mobile companion-role proofs were refreshed.
+- Policy-aware data handling, resource-change intelligence, action governance,
+  platform admission, and fleet-governance projections are included in the
+  candidate rather than left as untracked post-`rc.2` drift.
+
+### Dependencies And Public Feedback Flow
 
 - Frontend sanitization and Go network dependencies are current for this
   release branch.
@@ -129,8 +187,11 @@ remains Relay plus AI operations, automation, advanced admin features, and
    and PBS/ZFS filesystem attribution.
 6. Workloads, Storage, and Infrastructure table layouts at desktop and mobile
    sizes, including summary-chart hover behavior.
-7. AI/Patrol local discovery and Ollama-backed flows if those features are in
+7. Skip-auth local/dev login if that mode is used for testing.
+8. AI/Patrol local discovery and Ollama-backed flows if those features are in
    use.
+9. Release asset download, checksum/signature, installer, and draft-release
+   validation paths before broader retesting.
 
 ## Feedback
 
