@@ -172,7 +172,7 @@ func (p *Provisioner) findExistingOrganizationByOwnerEmail(email string) (*Provi
 		if org == nil {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(org.OwnerUserID), email) {
+		if strings.EqualFold(strings.TrimSpace(org.OwnerEmail), email) || strings.EqualFold(strings.TrimSpace(org.OwnerUserID), email) {
 			return &ProvisionResult{
 				OrgID:  org.ID,
 				UserID: strings.TrimSpace(org.OwnerUserID),
@@ -246,9 +246,11 @@ func (p *Provisioner) createOrganization(ctx context.Context, orgID, userID, org
 		DisplayName: orgName,
 		CreatedAt:   now,
 		OwnerUserID: userID,
+		OwnerEmail:  contactEmailForLegacyUserID(userID),
 		Members: []models.OrganizationMember{
 			{
 				UserID:  userID,
+				Email:   contactEmailForLegacyUserID(userID),
 				Role:    models.OrgRoleOwner,
 				AddedAt: now,
 				AddedBy: userID,
@@ -283,6 +285,14 @@ func (p *Provisioner) createOrganization(ctx context.Context, orgID, userID, org
 		UserID: userID,
 		Status: ProvisionStatusCreated,
 	}, nil
+}
+
+func contactEmailForLegacyUserID(userID string) string {
+	userID = strings.ToLower(strings.TrimSpace(userID))
+	if strings.Contains(userID, "@") {
+		return userID
+	}
+	return ""
 }
 
 func (p *Provisioner) cleanupOrgDirectory(orgID, dataDir string) {

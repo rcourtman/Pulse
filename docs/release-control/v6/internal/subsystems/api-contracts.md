@@ -344,6 +344,11 @@ the canonical monitored-system blocked payload.
     repair org metadata, or upgrade roles on arrival. Handoff may mint a browser session only when the tenant org
     already contains the account as the owner or a member with a valid stored role, and tenant orgs with a blank
     `OwnerUserID` must fail closed instead of being claimed by the first owner-shaped handoff token.
+    Hosted handoff session identity must bind to the signed stable user subject
+    (`sub`/`UserID`) rather than the contact email. Email may participate only
+    as legacy membership lookup and delivery metadata, and any canonicalization
+    of email-keyed tenant membership must preserve the stored role instead of
+    creating or elevating membership from the token.
 19. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
     Hosted handoff must not be treated as an org-management side effect for that same privilege boundary. Only
     canonical invitation, membership-management, or explicit owner-transfer flows may create tenant membership or

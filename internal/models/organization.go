@@ -134,6 +134,10 @@ type OrganizationMember struct {
 	// UserID is the unique identifier of the member.
 	UserID string `json:"userId"`
 
+	// Email is the member's contact/display email. It is not the durable
+	// identity key; legacy records may still have email-shaped UserID values.
+	Email string `json:"email,omitempty"`
+
 	// Role is the member's role within the organization.
 	Role OrganizationRole `json:"role"`
 
@@ -216,6 +220,10 @@ type Organization struct {
 	// The owner has full administrative rights and cannot be removed.
 	OwnerUserID string `json:"ownerUserId,omitempty"`
 
+	// OwnerEmail is the owner's contact/display email. It is not the durable
+	// identity key; legacy records may still have email-shaped OwnerUserID values.
+	OwnerEmail string `json:"ownerEmail,omitempty"`
+
 	// Members is the list of users who have access to this organization.
 	// This includes the owner (with OrgRoleOwner) and any additional members.
 	Members []OrganizationMember `json:"members,omitempty"`
@@ -244,10 +252,69 @@ type Organization struct {
 	EncryptionKeyID string `json:"encryptionKeyId,omitempty"`
 }
 
+func normalizeOrganizationIdentityValue(value string) string {
+	return strings.TrimSpace(value)
+}
+
+func normalizeOrganizationEmail(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func identityLooksLikeEmail(value string) bool {
+	return strings.Contains(strings.TrimSpace(value), "@")
+}
+
+func memberEmail(member OrganizationMember) string {
+	email := normalizeOrganizationEmail(member.Email)
+	if email != "" {
+		return email
+	}
+	if identityLooksLikeEmail(member.UserID) {
+		return normalizeOrganizationEmail(member.UserID)
+	}
+	return ""
+}
+
+func memberMatchesUserID(member OrganizationMember, userID string) bool {
+	userID = normalizeOrganizationIdentityValue(userID)
+	return userID != "" && normalizeOrganizationIdentityValue(member.UserID) == userID
+}
+
+func memberMatchesEmail(member OrganizationMember, email string) bool {
+	email = normalizeOrganizationEmail(email)
+	return email != "" && memberEmail(member) == email
+}
+
+func ownerMatchesUserID(org *Organization, userID string) bool {
+	if org == nil {
+		return false
+	}
+	userID = normalizeOrganizationIdentityValue(userID)
+	return userID != "" && normalizeOrganizationIdentityValue(org.OwnerUserID) == userID
+}
+
+func ownerMatchesEmail(org *Organization, email string) bool {
+	if org == nil {
+		return false
+	}
+	email = normalizeOrganizationEmail(email)
+	if email == "" {
+		return false
+	}
+	ownerEmail := normalizeOrganizationEmail(org.OwnerEmail)
+	if ownerEmail != "" {
+		return ownerEmail == email
+	}
+	if identityLooksLikeEmail(org.OwnerUserID) {
+		return normalizeOrganizationEmail(org.OwnerUserID) == email
+	}
+	return false
+}
+
 // HasMember checks if a user is a member of the organization.
 func (o *Organization) HasMember(userID string) bool {
 	for _, member := range o.Members {
-		if member.UserID == userID {
+		if memberMatchesUserID(member, userID) || memberMatchesEmail(member, userID) {
 			return true
 		}
 	}
@@ -258,7 +325,7 @@ func (o *Organization) HasMember(userID string) bool {
 // Returns empty string if the user is not a member.
 func (o *Organization) GetMemberRole(userID string) OrganizationRole {
 	for _, member := range o.Members {
-		if member.UserID == userID {
+		if memberMatchesUserID(member, userID) || memberMatchesEmail(member, userID) {
 			return NormalizeOrganizationRole(member.Role)
 		}
 	}
@@ -267,12 +334,12 @@ func (o *Organization) GetMemberRole(userID string) OrganizationRole {
 
 // IsOwner checks if a user is the owner of the organization.
 func (o *Organization) IsOwner(userID string) bool {
-	return o.OwnerUserID == userID
+	return ownerMatchesUserID(o, userID) || ownerMatchesEmail(o, userID)
 }
 
 // CanUserAccess checks if a user has any level of access to the organization.
 func (o *Organization) CanUserAccess(userID string) bool {
-	if o.OwnerUserID == userID {
+	if o.IsOwner(userID) {
 		return true
 	}
 	return o.HasMember(userID)
@@ -280,8 +347,74 @@ func (o *Organization) CanUserAccess(userID string) bool {
 
 // CanUserManage checks if a user can manage the organization (owner or admin).
 func (o *Organization) CanUserManage(userID string) bool {
-	if o.OwnerUserID == userID {
+	if o.IsOwner(userID) {
 		return true
 	}
 	return OrganizationRoleAtLeast(o.GetMemberRole(userID), OrgRoleAdmin)
+}
+
+// GetMemberRoleForPrincipal resolves a role using the durable user ID first,
+// then email only as a legacy/contact fallback.
+func (o *Organization) GetMemberRoleForPrincipal(userID, email string) OrganizationRole {
+	if o == nil {
+		return ""
+	}
+	if ownerMatchesUserID(o, userID) || ownerMatchesEmail(o, email) {
+		return OrgRoleOwner
+	}
+	userID = normalizeOrganizationIdentityValue(userID)
+	email = normalizeOrganizationEmail(email)
+	for _, member := range o.Members {
+		if memberMatchesUserID(member, userID) || memberMatchesEmail(member, email) {
+			return NormalizeOrganizationRole(member.Role)
+		}
+	}
+	return ""
+}
+
+// CanonicalizePrincipalIdentity upgrades legacy email-keyed membership records
+// to a stable user ID while preserving email as contact metadata.
+func (o *Organization) CanonicalizePrincipalIdentity(userID, email string) bool {
+	if o == nil {
+		return false
+	}
+	userID = normalizeOrganizationIdentityValue(userID)
+	email = normalizeOrganizationEmail(email)
+	if userID == "" || email == "" {
+		return false
+	}
+
+	changed := false
+	if ownerMatchesUserID(o, userID) || ownerMatchesEmail(o, email) {
+		if normalizeOrganizationIdentityValue(o.OwnerUserID) != userID {
+			o.OwnerUserID = userID
+			changed = true
+		}
+		if normalizeOrganizationEmail(o.OwnerEmail) != email {
+			o.OwnerEmail = email
+			changed = true
+		}
+	}
+
+	for i := range o.Members {
+		member := o.Members[i]
+		if !memberMatchesUserID(member, userID) && !memberMatchesEmail(member, email) {
+			continue
+		}
+		oldUserID := normalizeOrganizationIdentityValue(member.UserID)
+		if oldUserID != userID {
+			o.Members[i].UserID = userID
+			changed = true
+		}
+		if normalizeOrganizationEmail(member.Email) != email {
+			o.Members[i].Email = email
+			changed = true
+		}
+		if addedBy := normalizeOrganizationIdentityValue(member.AddedBy); addedBy != "" && (addedBy == oldUserID || normalizeOrganizationEmail(addedBy) == email) && addedBy != userID {
+			o.Members[i].AddedBy = userID
+			changed = true
+		}
+	}
+
+	return changed
 }

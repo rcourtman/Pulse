@@ -51,18 +51,24 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 			return
 		}
 		email := normalizeHandoffEmail(claims.Email)
+		userID := strings.TrimSpace(claims.UserID)
 		tenantID := strings.TrimSpace(claims.TenantID)
-		if email == "" || !isValidOrganizationID(tenantID) {
+		if userID == "" {
+			userID = email
+		}
+		if email == "" || userID == "" || !isValidOrganizationID(tenantID) {
 			log.Warn().Str("tenant_id", tenantID).Msg("Cloud handoff token rejected due to invalid tenant ID")
 			http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
 			return
 		}
-		if _, err := authorizeHandoffOrganizationMembership(dataPath, tenantID, email, claims.Role); err != nil {
+		authz, err := authorizeHandoffOrganizationMembership(dataPath, tenantID, userID, email, claims.Role)
+		if err != nil {
 			if errors.Is(err, errHandoffAuthorizationDenied) {
 				log.Warn().
 					Err(err).
 					Str("tenant_id", tenantID).
 					Str("email", email).
+					Str("user_id", userID).
 					Msg("Cloud handoff authorization denied")
 				http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
 				return
@@ -71,6 +77,7 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 				Err(err).
 				Str("tenant_id", tenantID).
 				Str("email", email).
+				Str("user_id", userID).
 				Msg("Cloud handoff authorization lookup failed")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -102,8 +109,8 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 		userAgent := r.Header.Get("User-Agent")
 		clientIP := GetClientIP(r)
 		sessionDuration := 24 * time.Hour
-		GetSessionStore().CreateSession(sessionToken, sessionDuration, userAgent, clientIP, email)
-		TrackUserSession(email, sessionToken)
+		GetSessionStore().CreateSession(sessionToken, sessionDuration, userAgent, clientIP, authz.UserID)
+		TrackUserSession(authz.UserID, sessionToken)
 
 		csrfToken := generateCSRFToken(sessionToken)
 		isSecure, sameSitePolicy := getCookieSettings(r)
@@ -137,6 +144,7 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 
 		log.Info().
 			Str("email", email).
+			Str("user_id", authz.UserID).
 			Msg("Cloud handoff completed, session created")
 
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)

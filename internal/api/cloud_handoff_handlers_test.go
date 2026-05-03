@@ -458,8 +458,8 @@ func TestHandleHandoffExchange(t *testing.T) {
 		if session == nil {
 			t.Fatal("expected session to exist")
 		}
-		if session.Username != "operator.owner+mixed@pulserelay.pro" {
-			t.Fatalf("session username = %q, want %q", session.Username, "operator.owner+mixed@pulserelay.pro")
+		if session.Username != "user-123" {
+			t.Fatalf("session username = %q, want stable subject %q", session.Username, "user-123")
 		}
 	})
 }

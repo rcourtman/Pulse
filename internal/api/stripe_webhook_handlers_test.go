@@ -40,6 +40,15 @@ func (e *captureEmailer) Count() int {
 	return len(e.calls)
 }
 
+func (e *captureEmailer) LastTo() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(e.calls) == 0 {
+		return ""
+	}
+	return e.calls[len(e.calls)-1].to
+}
+
 func createTestOrg(t *testing.T, persistence *config.MultiTenantPersistence, orgID, ownerEmail string) {
 	t.Helper()
 
@@ -431,6 +440,86 @@ func TestStripeWebhook_CheckoutCompleted_RetriesUntilLinkedOrgExists(t *testing.
 
 	if emailer.Count() != 1 {
 		t.Fatalf("magic link send count=%d, want %d", emailer.Count(), 1)
+	}
+}
+
+func TestStripeWebhook_CheckoutCompleted_UsesContactEmailForStableOwnerIdentity(t *testing.T) {
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_stable_owner_contact")
+
+	tmp := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(tmp)
+	rbacProvider := NewTenantRBACProvider(tmp)
+	billingStore := config.NewFileBillingStore(tmp)
+
+	emailer := &captureEmailer{}
+	magicLinks := NewMagicLinkServiceWithKey([]byte("01234567890123456789012345678901"), nil, emailer, nil)
+	t.Cleanup(magicLinks.Stop)
+
+	publicURL := func(_ *http.Request) string { return "https://pulse.example.test" }
+	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, magicLinks, publicURL, true, tmp)
+
+	orgID := "org_stable_owner_contact"
+	if _, err := persistence.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s): %v", orgID, err)
+	}
+	now := time.Now().UTC()
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          orgID,
+		DisplayName: "Stable Owner Contact",
+		CreatedAt:   now,
+		OwnerUserID: "u_owner_stable",
+		OwnerEmail:  "owner@example.com",
+		Members: []models.OrganizationMember{
+			{
+				UserID:  "u_owner_stable",
+				Email:   "owner@example.com",
+				Role:    models.OrgRoleOwner,
+				AddedAt: now,
+				AddedBy: "u_owner_stable",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("SaveOrganization(%s): %v", orgID, err)
+	}
+
+	event := map[string]any{
+		"id":   "evt_checkout_stable_owner_contact",
+		"type": "checkout.session.completed",
+		"data": map[string]any{
+			"object": map[string]any{
+				"id":             "cs_stable_owner_contact",
+				"mode":           "subscription",
+				"customer":       "cus_stable_owner_contact",
+				"customer_email": "OWNER@example.com",
+				"subscription":   "sub_stable_owner_contact",
+				"metadata": map[string]any{
+					"org_id":       orgID,
+					"org_name":     "Stable Owner Contact",
+					"plan_version": "cloud-v1",
+				},
+			},
+		},
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
+	signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+		Payload:   payload,
+		Secret:    "whsec_test_stable_owner_contact",
+		Timestamp: time.Now(),
+		Scheme:    "v1",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(payload))
+	req.Header.Set("Stripe-Signature", signed.Header)
+	rr := httptest.NewRecorder()
+	h.HandleStripeWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if got := emailer.LastTo(); got != "owner@example.com" {
+		t.Fatalf("magic link recipient=%q, want owner contact email", got)
 	}
 }
 

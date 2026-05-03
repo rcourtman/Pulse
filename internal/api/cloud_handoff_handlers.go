@@ -36,6 +36,12 @@ type cloudHandoffClaims struct {
 	jwt.RegisteredClaims
 }
 
+type handoffAuthorization struct {
+	UserID string
+	Email  string
+	Role   models.OrganizationRole
+}
+
 type jtiReplayStore struct {
 	once sync.Once
 	db   *sql.DB
@@ -344,7 +350,8 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			return
 		}
 		claims.Email = normalizeHandoffEmail(claims.Email)
-		if strings.TrimSpace(claims.ID) == "" || strings.TrimSpace(claims.Subject) == "" || claims.Email == "" {
+		subject := strings.TrimSpace(claims.Subject)
+		if strings.TrimSpace(claims.ID) == "" || subject == "" || claims.Email == "" {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
@@ -359,7 +366,7 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			return
 		}
 
-		effectiveRole, err := authorizeHandoffOrganizationMembership(configDir, tenantID, claims.Email, claims.Role)
+		authz, err := authorizeHandoffOrganizationMembership(configDir, tenantID, subject, claims.Email, claims.Role)
 		if err != nil {
 			if errors.Is(err, errHandoffAuthorizationDenied) {
 				http.Error(w, "forbidden", http.StatusForbidden)
@@ -381,8 +388,8 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 		userAgent := r.Header.Get("User-Agent")
 		clientIP := GetClientIP(r)
 		sessionDuration := 24 * time.Hour
-		GetSessionStore().CreateSession(sessionToken, sessionDuration, userAgent, clientIP, claims.Email)
-		TrackUserSession(claims.Email, sessionToken)
+		GetSessionStore().CreateSession(sessionToken, sessionDuration, userAgent, clientIP, authz.UserID)
+		TrackUserSession(authz.UserID, sessionToken)
 
 		csrfToken := generateCSRFToken(sessionToken)
 		isSecure, sameSitePolicy := getCookieSettings(r)
@@ -419,9 +426,9 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 				"ok":         true,
 				"tenant_id":  tenantID,
 				"account_id": claims.AccountID,
-				"user_id":    claims.Subject,
-				"email":      claims.Email,
-				"role":       string(effectiveRole),
+				"user_id":    authz.UserID,
+				"email":      authz.Email,
+				"role":       string(authz.Role),
 				"jti":        claims.ID,
 				"exp":        claims.ExpiresAt.Time.UTC().Format(time.RFC3339),
 			}
@@ -435,54 +442,58 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 	}
 }
 
-func authorizeHandoffOrganizationMembership(configDir, tenantID, email, role string) (models.OrganizationRole, error) {
+func authorizeHandoffOrganizationMembership(configDir, tenantID, userID, email, role string) (*handoffAuthorization, error) {
 	mtp := config.NewMultiTenantPersistence(configDir)
 	org, err := mtp.LoadOrganization(tenantID)
 	if err != nil {
-		return "", fmt.Errorf("load tenant organization %s: %w", tenantID, err)
+		return nil, fmt.Errorf("load tenant organization %s: %w", tenantID, err)
 	}
 	if org == nil {
-		return "", fmt.Errorf("%w: tenant organization %s is missing", errHandoffAuthorizationDenied, tenantID)
+		return nil, fmt.Errorf("%w: tenant organization %s is missing", errHandoffAuthorizationDenied, tenantID)
 	}
 
+	userID = strings.TrimSpace(userID)
 	email = normalizeHandoffEmail(email)
-	if email == "" {
-		return "", fmt.Errorf("%w: handoff email is empty", errHandoffAuthorizationDenied)
+	if userID == "" {
+		userID = email
+	}
+	if email == "" && strings.Contains(userID, "@") {
+		email = normalizeHandoffEmail(userID)
+	}
+	if userID == "" {
+		return nil, fmt.Errorf("%w: handoff user id is empty", errHandoffAuthorizationDenied)
 	}
 
-	effectiveRole := models.OrganizationRole("")
-	if strings.EqualFold(strings.TrimSpace(org.OwnerUserID), email) {
-		effectiveRole = models.OrgRoleOwner
-	} else {
-		for i := range org.Members {
-			if !strings.EqualFold(strings.TrimSpace(org.Members[i].UserID), email) {
-				continue
-			}
-			effectiveRole = models.NormalizeOrganizationRole(org.Members[i].Role)
-			break
-		}
-	}
-
+	effectiveRole := org.GetMemberRoleForPrincipal(userID, email)
 	if effectiveRole == "" {
-		return "", fmt.Errorf("%w: no pre-existing membership for %s", errHandoffAuthorizationDenied, email)
+		return nil, fmt.Errorf("%w: no pre-existing membership for %s", errHandoffAuthorizationDenied, userID)
 	}
 	if !models.IsValidOrganizationRole(effectiveRole) {
-		return "", fmt.Errorf("%w: stored role %q for %s is invalid", errHandoffAuthorizationDenied, effectiveRole, email)
+		return nil, fmt.Errorf("%w: stored role %q for %s is invalid", errHandoffAuthorizationDenied, effectiveRole, userID)
+	}
+	if changed := org.CanonicalizePrincipalIdentity(userID, email); changed {
+		if err := mtp.SaveOrganization(org); err != nil {
+			return nil, fmt.Errorf("save canonicalized handoff identity for %s: %w", tenantID, err)
+		}
 	}
 	if effectiveRole == models.OrgRoleOwner && strings.TrimSpace(org.OwnerUserID) == "" {
-		return "", fmt.Errorf("%w: tenant organization %s has blank owner", errHandoffAuthorizationDenied, tenantID)
+		return nil, fmt.Errorf("%w: tenant organization %s has blank owner", errHandoffAuthorizationDenied, tenantID)
 	}
 
 	desiredRole := models.OrganizationRoleFromAccountRole(role)
 	if !models.OrganizationRoleAtLeast(effectiveRole, desiredRole) {
-		return "", fmt.Errorf(
+		return nil, fmt.Errorf(
 			"%w: requested role %q exceeds stored role %q for %s",
 			errHandoffAuthorizationDenied,
 			desiredRole,
 			effectiveRole,
-			email,
+			userID,
 		)
 	}
 
-	return effectiveRole, nil
+	return &handoffAuthorization{
+		UserID: userID,
+		Email:  email,
+		Role:   effectiveRole,
+	}, nil
 }

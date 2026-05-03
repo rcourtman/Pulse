@@ -313,12 +313,12 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 	if h.magicLinks != nil && email != "" {
 		// Only send a link to an existing org member/owner. Stripe customer email is user-controlled.
 		sendTo := ""
-		if strings.EqualFold(org.OwnerUserID, email) {
-			sendTo = org.OwnerUserID
+		if strings.EqualFold(org.OwnerEmail, email) || strings.EqualFold(org.OwnerUserID, email) {
+			sendTo = email
 		} else {
 			for _, m := range org.Members {
-				if strings.EqualFold(m.UserID, email) {
-					sendTo = m.UserID
+				if strings.EqualFold(m.Email, email) || strings.EqualFold(m.UserID, email) {
+					sendTo = email
 					break
 				}
 			}

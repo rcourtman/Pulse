@@ -70,6 +70,10 @@ Storage/recovery auth-adjacent changes may consume SSO-authenticated sessions,
 but they must not reinterpret SAML or multi-provider SSO availability as a
 storage/recovery entitlement; that provider-route and license truth belongs to
 the shared API/security boundary.
+Storage/recovery may also consume org-scoped session identity from the shared
+API boundary, but durable user IDs remain the authorization principal. Contact
+email may support display or legacy lookup only; storage and recovery surfaces
+must not create their own email-keyed membership or entitlement interpretation.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`

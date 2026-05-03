@@ -184,10 +184,10 @@ func TestHandleCloudHandoffLowercasesSessionEmailIdentity(t *testing.T) {
 	}
 
 	sessionsMu.RLock()
-	tracked := append([]string(nil), allSessions["operator.owner+mixed@pulserelay.pro"]...)
+	tracked := append([]string(nil), allSessions["user-mixed-email"]...)
 	sessionsMu.RUnlock()
 	if len(tracked) == 0 {
-		t.Fatal("expected normalized user session to be tracked")
+		t.Fatal("expected stable user session to be tracked")
 	}
 
 	var session *SessionData
@@ -200,8 +200,8 @@ func TestHandleCloudHandoffLowercasesSessionEmailIdentity(t *testing.T) {
 	if session == nil {
 		t.Fatal("expected tracked session to exist in the session store")
 	}
-	if session.Username != "operator.owner+mixed@pulserelay.pro" {
-		t.Fatalf("session username = %q, want %q", session.Username, "operator.owner+mixed@pulserelay.pro")
+	if session.Username != "user-mixed-email" {
+		t.Fatalf("session username = %q, want stable user id %q", session.Username, "user-mixed-email")
 	}
 }
 
@@ -258,8 +258,11 @@ func TestHandleCloudHandoffUsesExistingTenantOrganizationMembership(t *testing.T
 	if org.OwnerUserID != "legacy-owner@example.com" {
 		t.Fatalf("ownerUserID = %q, want %q", org.OwnerUserID, "legacy-owner@example.com")
 	}
-	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
+	if got := org.GetMemberRole("user-claims-membership"); got != models.OrgRoleOwner {
 		t.Fatalf("member role = %q, want %q", got, models.OrgRoleOwner)
+	}
+	if got := org.Members[1].Email; got != "courtmanr@gmail.com" {
+		t.Fatalf("canonicalized member email = %q, want %q", got, "courtmanr@gmail.com")
 	}
 }
 

@@ -125,8 +125,18 @@ func TestCloudLifecycle_CheckoutToBillingToMonitoredSystemLimits(t *testing.T) {
 			if org.DisplayName != tenant.ID {
 				t.Fatalf("org.DisplayName = %q, want %q", org.DisplayName, tenant.ID)
 			}
-			if org.OwnerUserID != session.CustomerEmail {
-				t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, session.CustomerEmail)
+			ownerUser, err := reg.GetUserByEmail(strings.ToLower(session.CustomerEmail))
+			if err != nil {
+				t.Fatalf("GetUserByEmail(%s): %v", session.CustomerEmail, err)
+			}
+			if ownerUser == nil {
+				t.Fatalf("expected owner user for %s", session.CustomerEmail)
+			}
+			if org.OwnerUserID != ownerUser.ID {
+				t.Fatalf("org.OwnerUserID = %q, want stable user id %q", org.OwnerUserID, ownerUser.ID)
+			}
+			if org.OwnerEmail != session.CustomerEmail {
+				t.Fatalf("org.OwnerEmail = %q, want %q", org.OwnerEmail, session.CustomerEmail)
 			}
 			if org.GetMemberRole(session.CustomerEmail) != models.OrgRoleOwner {
 				t.Fatalf("org role for %q = %q, want %q", session.CustomerEmail, org.GetMemberRole(session.CustomerEmail), models.OrgRoleOwner)

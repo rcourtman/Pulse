@@ -350,7 +350,7 @@ func TestBuildSeededTenantOrganization_UsesDeterministicOldestOwnerFallback(t *t
 		t.Fatalf("CreateAccount: %v", err)
 	}
 
-	createOwner := func(email string, createdAt int64) {
+	createOwner := func(email string, createdAt int64) string {
 		t.Helper()
 		userID, err := registry.GenerateUserID()
 		if err != nil {
@@ -367,17 +367,21 @@ func TestBuildSeededTenantOrganization_UsesDeterministicOldestOwnerFallback(t *t
 		}); err != nil {
 			t.Fatalf("CreateMembership(%s): %v", email, err)
 		}
+		return userID
 	}
 
 	createOwner("new-owner@example.com", 200)
-	createOwner("old-owner@example.com", 100)
+	oldOwnerID := createOwner("old-owner@example.com", 100)
 
 	org, err := p.buildSeededTenantOrganization(accountID, "t-example", "Example", "")
 	if err != nil {
 		t.Fatalf("buildSeededTenantOrganization: %v", err)
 	}
-	if org.OwnerUserID != "old-owner@example.com" {
-		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "old-owner@example.com")
+	if org.OwnerUserID != oldOwnerID {
+		t.Fatalf("org.OwnerUserID = %q, want stable user id %q", org.OwnerUserID, oldOwnerID)
+	}
+	if org.OwnerEmail != "old-owner@example.com" {
+		t.Fatalf("org.OwnerEmail = %q, want %q", org.OwnerEmail, "old-owner@example.com")
 	}
 }
 
@@ -398,7 +402,7 @@ func TestBuildSeededTenantOrganization_PrefersExplicitFallbackOwner(t *testing.T
 		t.Fatalf("CreateAccount: %v", err)
 	}
 
-	createMember := func(email string, role registry.MemberRole, createdAt int64) {
+	createMember := func(email string, role registry.MemberRole, createdAt int64) string {
 		t.Helper()
 		userID, err := registry.GenerateUserID()
 		if err != nil {
@@ -415,17 +419,21 @@ func TestBuildSeededTenantOrganization_PrefersExplicitFallbackOwner(t *testing.T
 		}); err != nil {
 			t.Fatalf("CreateMembership(%s): %v", email, err)
 		}
+		return userID
 	}
 
 	createMember("legacy-owner@example.com", registry.MemberRoleOwner, 100)
-	createMember("operator@example.com", registry.MemberRoleAdmin, 200)
+	operatorID := createMember("operator@example.com", registry.MemberRoleAdmin, 200)
 
 	org, err := p.buildSeededTenantOrganization(accountID, "t-example", "Example", "operator@example.com")
 	if err != nil {
 		t.Fatalf("buildSeededTenantOrganization: %v", err)
 	}
-	if org.OwnerUserID != "operator@example.com" {
-		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "operator@example.com")
+	if org.OwnerUserID != operatorID {
+		t.Fatalf("org.OwnerUserID = %q, want stable user id %q", org.OwnerUserID, operatorID)
+	}
+	if org.OwnerEmail != "operator@example.com" {
+		t.Fatalf("org.OwnerEmail = %q, want %q", org.OwnerEmail, "operator@example.com")
 	}
 	if org.GetMemberRole("operator@example.com") != models.OrgRoleOwner {
 		t.Fatalf("org role for operator@example.com = %q, want %q", org.GetMemberRole("operator@example.com"), models.OrgRoleOwner)
@@ -457,12 +465,14 @@ func TestProvisionWorkspaceSeedsOrganizationMembershipsFromAccountMembers(t *tes
 		t.Fatalf("CreateStripeAccount: %v", err)
 	}
 
+	userIDsByEmail := map[string]string{}
 	createMember := func(email string, role registry.MemberRole) {
 		t.Helper()
 		userID, err := registry.GenerateUserID()
 		if err != nil {
 			t.Fatalf("GenerateUserID: %v", err)
 		}
+		userIDsByEmail[email] = userID
 		if err := reg.CreateUser(&registry.User{ID: userID, Email: email}); err != nil {
 			t.Fatalf("CreateUser(%s): %v", email, err)
 		}
@@ -491,8 +501,11 @@ func TestProvisionWorkspaceSeedsOrganizationMembershipsFromAccountMembers(t *tes
 	if err != nil {
 		t.Fatalf("LoadOrganizationStrict(%s): %v", tenant.ID, err)
 	}
-	if org.OwnerUserID != "owner@acmemsp.com" {
-		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "owner@acmemsp.com")
+	if org.OwnerUserID != userIDsByEmail["owner@acmemsp.com"] {
+		t.Fatalf("org.OwnerUserID = %q, want stable user id %q", org.OwnerUserID, userIDsByEmail["owner@acmemsp.com"])
+	}
+	if org.OwnerEmail != "owner@acmemsp.com" {
+		t.Fatalf("org.OwnerEmail = %q, want %q", org.OwnerEmail, "owner@acmemsp.com")
 	}
 
 	wantRoles := map[string]models.OrganizationRole{
@@ -507,6 +520,9 @@ func TestProvisionWorkspaceSeedsOrganizationMembershipsFromAccountMembers(t *tes
 	for email, wantRole := range wantRoles {
 		if got := org.GetMemberRole(email); got != wantRole {
 			t.Fatalf("org role for %q = %q, want %q", email, got, wantRole)
+		}
+		if got := org.GetMemberRole(userIDsByEmail[email]); got != wantRole {
+			t.Fatalf("org role for stable user %q = %q, want %q", userIDsByEmail[email], got, wantRole)
 		}
 	}
 }

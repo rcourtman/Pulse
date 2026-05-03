@@ -232,7 +232,7 @@ func (h *MagicLinkHandlers) findOrgForEmail(email string) (string, bool, error) 
 		if org == nil {
 			continue
 		}
-		if strings.EqualFold(org.OwnerUserID, email) {
+		if strings.EqualFold(org.OwnerEmail, email) || strings.EqualFold(org.OwnerUserID, email) {
 			return org.ID, true, nil
 		}
 	}
@@ -241,7 +241,7 @@ func (h *MagicLinkHandlers) findOrgForEmail(email string) (string, bool, error) 
 			continue
 		}
 		for _, m := range org.Members {
-			if strings.EqualFold(m.UserID, email) {
+			if strings.EqualFold(m.Email, email) || strings.EqualFold(m.UserID, email) {
 				return org.ID, true, nil
 			}
 		}

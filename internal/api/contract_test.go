@@ -7059,8 +7059,11 @@ func TestContract_HostedCloudHandoffUsesExistingTenantOrganizationMembership(t *
 	if org.OwnerUserID != "legacy-owner@example.com" {
 		t.Fatalf("ownerUserID=%q, want %q", org.OwnerUserID, "legacy-owner@example.com")
 	}
-	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
-		t.Fatalf("member role=%q, want %q", got, models.OrgRoleOwner)
+	if got := org.GetMemberRole("user-contract-membership"); got != models.OrgRoleOwner {
+		t.Fatalf("stable member role=%q, want %q", got, models.OrgRoleOwner)
+	}
+	if got := org.Members[1].Email; got != "courtmanr@gmail.com" {
+		t.Fatalf("canonicalized member email=%q, want %q", got, "courtmanr@gmail.com")
 	}
 }
 
@@ -7116,8 +7119,11 @@ func TestContract_HostedDirectCloudHandoffUsesExistingTenantMembership(t *testin
 	if org.OwnerUserID != "legacy-owner@example.com" {
 		t.Fatalf("ownerUserID=%q, want %q", org.OwnerUserID, "legacy-owner@example.com")
 	}
-	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
-		t.Fatalf("member role=%q, want %q", got, models.OrgRoleOwner)
+	if got := org.GetMemberRole("user-direct-contract"); got != models.OrgRoleOwner {
+		t.Fatalf("stable member role=%q, want %q", got, models.OrgRoleOwner)
+	}
+	if got := org.Members[1].Email; got != "courtmanr@gmail.com" {
+		t.Fatalf("canonicalized member email=%q, want %q", got, "courtmanr@gmail.com")
 	}
 }
 

@@ -173,6 +173,11 @@ profile and assignment columns, but embedded table framing must route through
    the one-time `authToken` only and must not also send the long-lived
    `X-API-Token` header. The header-backed `agent:report` fallback exists only
    for update-only re-registration when setup-token fetch is unavailable.
+   Shared `internal/api/` session and auth changes consumed by lifecycle
+   routes must preserve durable principal IDs as the authorization key. Agent
+   lifecycle surfaces may display contact email when supplied by the shared
+   auth boundary, but they must not reinterpret SSO or Stripe email as the
+   canonical user identifier for setup, install, or fleet-management actions.
    That same lifecycle-owned setup path also owns script teardown behavior:
    rerunning the governed setup script in remove mode must call canonical
    `/api/auto-unregister` with `source:"script"` before local credentials are

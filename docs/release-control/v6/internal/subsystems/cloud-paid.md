@@ -225,6 +225,12 @@ runtime gating as separate unlinked claims.
    portal-targeted magic link carrying tenant identity so the first
    authenticated landing is Pulse Account rather than a tenant-runtime-only
    redirect.
+   Hosted tenant identity created from checkout, Pulse Account, or handoff
+   must use the control-plane registry's stable `User.ID` as the tenant org
+   owner/member principal. Stripe customer email and SSO email are contact and
+   delivery metadata only; they may be used for idempotent lookup or legacy
+   fallback, but they must not become the primary hosted tenant user key when a
+   stable account user ID exists.
    That same portal boundary also owns the signed-in shell shape: hosted
    arrivals default to `Workspaces`, self-hosted-only arrivals default to
    `Billing`, and the shell destinations are limited to `Workspaces`,
@@ -275,6 +281,10 @@ runtime gating as separate unlinked claims.
     signup. Repeated signup requests for the same owner email must resolve to
     the existing tenant record instead of creating parallel orgs for one
     account identity.
+    The idempotency key remains the contact email only at the provisioning
+    edge. Once a stable control-plane user exists, hosted org `OwnerUserID` and
+    member `UserID` values must carry that durable user ID while owner/member
+    email fields preserve delivery and display contact metadata.
 13. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`

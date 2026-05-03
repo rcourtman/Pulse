@@ -197,16 +197,19 @@ func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, display
 	}
 
 	type memberSeed struct {
-		email string
-		role  models.OrganizationRole
+		userID string
+		email  string
+		role   models.OrganizationRole
 	}
 	type ownerCandidate struct {
+		userID    string
 		email     string
 		createdAt time.Time
 	}
 
 	memberSeeds := map[string]memberSeed{}
 	ownerEmail := strings.ToLower(strings.TrimSpace(fallbackOwnerEmail))
+	ownerUserID := ""
 	var fallbackOwner *ownerCandidate
 
 	if p.registry != nil && strings.TrimSpace(accountID) != "" {
@@ -229,18 +232,26 @@ func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, display
 			if email == "" {
 				return nil, fmt.Errorf("account member %s has empty email", membership.UserID)
 			}
+			userID := strings.TrimSpace(user.ID)
+			if userID == "" {
+				return nil, fmt.Errorf("account member %s has empty stable user id", membership.UserID)
+			}
 			role := models.OrganizationRoleFromAccountRole(string(membership.Role))
-			if existing, ok := memberSeeds[email]; !ok || models.OrganizationRoleAtLeast(role, existing.role) {
-				memberSeeds[email] = memberSeed{email: email, role: role}
+			if existing, ok := memberSeeds[userID]; !ok || models.OrganizationRoleAtLeast(role, existing.role) {
+				memberSeeds[userID] = memberSeed{userID: userID, email: email, role: role}
+			}
+			if ownerEmail != "" && ownerEmail == email {
+				ownerUserID = userID
 			}
 			if membership.Role == registry.MemberRoleOwner {
 				candidate := ownerCandidate{
+					userID:    userID,
 					email:     email,
 					createdAt: membership.CreatedAt.UTC(),
 				}
 				if fallbackOwner == nil ||
 					candidate.createdAt.Before(fallbackOwner.createdAt) ||
-					(candidate.createdAt.Equal(fallbackOwner.createdAt) && candidate.email < fallbackOwner.email) {
+					(candidate.createdAt.Equal(fallbackOwner.createdAt) && candidate.userID < fallbackOwner.userID) {
 					fallbackOwner = &candidate
 				}
 			}
@@ -248,28 +259,48 @@ func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, display
 	}
 	if ownerEmail == "" && fallbackOwner != nil {
 		ownerEmail = fallbackOwner.email
+		ownerUserID = fallbackOwner.userID
 	}
 
 	if ownerEmail != "" {
-		memberSeeds[ownerEmail] = memberSeed{email: ownerEmail, role: models.OrgRoleOwner}
-		org.OwnerUserID = ownerEmail
+		if ownerUserID == "" && p.registry != nil {
+			if user, err := p.registry.GetUserByEmail(ownerEmail); err != nil {
+				return nil, fmt.Errorf("lookup owner user by email: %w", err)
+			} else if user != nil {
+				ownerUserID = strings.TrimSpace(user.ID)
+			}
+		}
+		if ownerUserID == "" {
+			ownerUserID = ownerEmail
+		}
+		memberSeeds[ownerUserID] = memberSeed{userID: ownerUserID, email: ownerEmail, role: models.OrgRoleOwner}
+		org.OwnerUserID = ownerUserID
+		org.OwnerEmail = ownerEmail
 	}
 
-	memberEmails := make([]string, 0, len(memberSeeds))
-	for email := range memberSeeds {
-		memberEmails = append(memberEmails, email)
+	memberIDs := make([]string, 0, len(memberSeeds))
+	for userID := range memberSeeds {
+		memberIDs = append(memberIDs, userID)
 	}
-	sort.Strings(memberEmails)
+	sort.Slice(memberIDs, func(i, j int) bool {
+		left := memberSeeds[memberIDs[i]]
+		right := memberSeeds[memberIDs[j]]
+		if left.email != right.email {
+			return left.email < right.email
+		}
+		return left.userID < right.userID
+	})
 
-	members := make([]models.OrganizationMember, 0, len(memberEmails))
-	for _, email := range memberEmails {
-		seed := memberSeeds[email]
+	members := make([]models.OrganizationMember, 0, len(memberIDs))
+	for _, userID := range memberIDs {
+		seed := memberSeeds[userID]
 		addedBy := org.OwnerUserID
 		if addedBy == "" {
-			addedBy = seed.email
+			addedBy = seed.userID
 		}
 		members = append(members, models.OrganizationMember{
-			UserID:  seed.email,
+			UserID:  seed.userID,
+			Email:   seed.email,
 			Role:    seed.role,
 			AddedAt: now,
 			AddedBy: addedBy,

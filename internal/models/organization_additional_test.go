@@ -32,6 +32,36 @@ func TestOrganizationAccessors(t *testing.T) {
 	}
 }
 
+func TestOrganizationPrincipalIdentityCanonicalization(t *testing.T) {
+	org := &Organization{
+		ID:          "org-1",
+		OwnerUserID: "owner@example.com",
+		Members: []OrganizationMember{
+			{UserID: "owner@example.com", Role: OrgRoleOwner, AddedBy: "owner@example.com"},
+			{UserID: "admin@example.com", Role: OrgRoleAdmin, AddedBy: "owner@example.com"},
+		},
+	}
+
+	if role := org.GetMemberRoleForPrincipal("u_owner", "OWNER@example.com"); role != OrgRoleOwner {
+		t.Fatalf("owner role = %q, want %q", role, OrgRoleOwner)
+	}
+	if !org.CanonicalizePrincipalIdentity("u_owner", "OWNER@example.com") {
+		t.Fatal("expected owner identity to be canonicalized")
+	}
+	if org.OwnerUserID != "u_owner" || org.OwnerEmail != "owner@example.com" {
+		t.Fatalf("owner identity = (%q, %q), want stable id + email", org.OwnerUserID, org.OwnerEmail)
+	}
+	if got := org.GetMemberRole("u_owner"); got != OrgRoleOwner {
+		t.Fatalf("stable owner role = %q, want %q", got, OrgRoleOwner)
+	}
+	if got := org.GetMemberRole("owner@example.com"); got != OrgRoleOwner {
+		t.Fatalf("legacy email owner role = %q, want %q", got, OrgRoleOwner)
+	}
+	if got := org.Members[0].Email; got != "owner@example.com" {
+		t.Fatalf("member email = %q, want %q", got, "owner@example.com")
+	}
+}
+
 func TestOrganizationRoleNormalization(t *testing.T) {
 	if got := NormalizeOrganizationRole("member"); got != OrganizationRole("member") {
 		t.Fatalf("expected member to remain unchanged, got %q", got)
