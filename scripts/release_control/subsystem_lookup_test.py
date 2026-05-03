@@ -109,6 +109,27 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(["README.md"])
         self.assertEqual(result["unowned_runtime_files"], ["README.md"])
 
+    def test_lookup_paths_assigns_action_planning_cli_to_api_contracts(self) -> None:
+        result = lookup_paths(["pkg/pulsecli/actions.go", "pkg/pulsecli/root.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"api-contracts"},
+        )
+
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(
+                {match["subsystem"] for match in file_entry["matches"]},
+                {"api-contracts"},
+            )
+            match = file_entry["matches"][0]
+            self.assertEqual(match["lane_context"]["lane_id"], "L6")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "pulse-cli-action-planning-contract",
+            )
+
     def test_lookup_paths_normalizes_cross_repo_absolute_runtime_paths(self) -> None:
         result = lookup_paths([str(REPO_ROOT.parent / "pulse-mobile" / "src/relay/client.ts")])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -3604,8 +3625,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 158,
-                    "heading_line": 93,
+                    "line": 160,
+                    "heading_line": 95,
                 }
             ],
         )

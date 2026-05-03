@@ -143,6 +143,18 @@ Returns the deterministic pre-execution plan for a capability advertised on a un
 
 This endpoint is API-first and plan-only: it resolves the resource from the unified registry, verifies the requested capability and parameter schema, returns approval policy, blast radius, stale-plan hashes, and preflight checks, and does not approve or execute anything.
 
+CLI adapter:
+```bash
+PULSE_API_TOKEN=your-token pulse actions plan \
+  --api-url http://localhost:7655 \
+  --request-id agent-run-123 \
+  --resource-id vm:42 \
+  --capability restart \
+  --param mode=graceful \
+  --reason "Recover after confirmed outage" \
+  --requested-by agent:oncall-helper
+```
+
 Request:
 ```json
 {

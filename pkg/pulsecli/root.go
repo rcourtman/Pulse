@@ -25,6 +25,7 @@ type CommandDeps struct {
 	Config    *ConfigDeps
 	Bootstrap *BootstrapDeps
 	Mock      *MockDeps
+	Actions   *ActionsDeps
 }
 
 func NewRootCommand(command CommandSpec, runtime RuntimeSpec, deps CommandDeps) *cobra.Command {
@@ -50,6 +51,7 @@ func NewRootCommand(command CommandSpec, runtime RuntimeSpec, deps CommandDeps) 
 	cmd.AddCommand(newConfigCmd(deps.Config))
 	cmd.AddCommand(newBootstrapTokenCmd(deps.Bootstrap))
 	cmd.AddCommand(newMockCmd(deps.Mock))
+	cmd.AddCommand(newActionsCmd(deps.Actions))
 
 	return cmd
 }

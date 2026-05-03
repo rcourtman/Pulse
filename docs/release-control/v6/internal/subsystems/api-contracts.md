@@ -31,6 +31,8 @@ product API routes free of maintainer commercial analytics.
 4. `internal/api/activity_audit_handlers.go`
 5. `internal/api/actions.go`
 6. `internal/actionplanner/planner.go`
+7. `pkg/pulsecli/actions.go`
+8. `pkg/pulsecli/root.go`
 5. `frontend-modern/src/types/api.ts`
 6. `frontend-modern/src/types/actionAudit.ts`
 7. `frontend-modern/src/api/actionAudit.ts`
@@ -282,6 +284,11 @@ the canonical monitored-system blocked payload.
    versions, plan hash, and preflight checks without approving or executing the
    capability. MCP, CLI, and UI consumers may adapt this payload, but they must
    not become the source of truth for action planning semantics.
+   The supported CLI adapter for this contract is `pulse actions plan`, owned
+   by `pkg/pulsecli/actions.go` and registered from `pkg/pulsecli/root.go`.
+   It must remain a thin authenticated client for `POST /api/actions/plan`
+   rather than importing planner internals, creating action IDs, or approving
+   and executing capabilities locally.
 6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
    `/api/resources/{id}/timeline` and `/api/resources/{id}/facets` must keep
    resource timelines relationship-aware by opting into the canonical
