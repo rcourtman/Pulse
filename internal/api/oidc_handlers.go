@@ -549,6 +549,13 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 	if username == "" {
 		username = idToken.Subject
 	}
+	principal, err := stableSSOPrincipal(config.SSOProviderTypeOIDC, providerID, idToken.Subject)
+	if err != nil {
+		log.Error().Err(err).Str("provider_id", providerID).Msg("OIDC subject is not usable as a stable SSO principal")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", username, GetClientIP(req), req.URL.Path, false, "Missing stable OIDC subject")
+		r.redirectOIDCError(w, req, entry.ReturnTo, "missing_subject")
+		return
+	}
 
 	// Apply access restrictions from SSO provider config
 	if len(provider.AllowedEmails) > 0 && !matchesValue(email, provider.AllowedEmails) {
@@ -570,7 +577,8 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		}
 	}
 
-	// RBAC: Always call UpdateUserRoles so user appears in Users list
+	// RBAC: Always call UpdateUserRoles so user appears in Users list, but key
+	// SSO users by the provider-scoped subject instead of mutable display claims.
 	if authManager := internalauth.GetManager(); authManager != nil {
 		groups := extractStringSliceClaim(claims, provider.GroupsClaim)
 		var rolesToAssign []string
@@ -583,10 +591,11 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 				}
 			}
 		}
-		if err := authManager.UpdateUserRoles(username, rolesToAssign); err != nil {
-			log.Error().Err(err).Str("user", username).Msg("Failed to update SSO OIDC user roles")
+		legacyCandidates := ssoLegacyPrincipalCandidates(username, email, extractStringClaim(claims, "name"))
+		if err := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, true); err != nil {
+			log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to update SSO OIDC user roles")
 		} else if len(rolesToAssign) > 0 {
-			LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_role_assignment", username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
+			LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 		}
 	}
 
@@ -601,13 +610,13 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		}
 	}
 
-	if err := r.establishOIDCSession(w, req, username, oidcTokens); err != nil {
+	if err := r.establishOIDCSession(w, req, principal, oidcTokens); err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after SSO OIDC login")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "session_failed")
 		return
 	}
 
-	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", username, GetClientIP(req), req.URL.Path, true, "SSO OIDC login success via provider: "+providerID)
+	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", principal, GetClientIP(req), req.URL.Path, true, "SSO OIDC login success via provider: "+providerID)
 
 	http.Redirect(w, req, buildLocalRedirectTarget(entry.ReturnTo, map[string]string{
 		"oidc": "success",

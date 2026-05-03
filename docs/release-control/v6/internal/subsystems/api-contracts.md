@@ -975,6 +975,13 @@ local auth handoff. OIDC and SAML success/error handlers must build their
 local `returnTo` targets through one canonical local-path helper that rejects
 absolute or host-bearing targets before query params are appended, so shared
 identity flows cannot drift back to per-handler open-redirect shaping.
+That same runtime SSO contract also owns browser-session principal identity:
+`internal/api/oidc_handlers.go`, `internal/api/saml_handlers.go`,
+`internal/api/auth_principal_identity.go`, and `internal/api/contract_test.go` must derive
+OIDC/SAML session users from provider-scoped stable subjects (`sub`/`NameID`
+plus provider ID), not mutable username, email, or display-name claims. Legacy
+username/email RBAC assignments may be copied only as compatibility migration
+inputs when no authoritative group mapping is present.
 The SSO entitlement contract is part of that same API boundary. Provider
 administration, SAML metadata preview/test, and runtime SAML routes may require
 the core `sso` capability, but they must not gate SAML or multi-provider

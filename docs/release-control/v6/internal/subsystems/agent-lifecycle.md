@@ -188,7 +188,9 @@ profile and assignment columns, but embedded table framing must route through
    The canonical durable-principal vocabulary for those shared auth routes is
    recorded in `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; agent
    lifecycle work may consume that identity but must not define a parallel
-   email-keyed actor model for fleet operations.
+   email-keyed actor model for fleet operations. SSO-authenticated lifecycle
+   callers must already arrive with the API-owned provider-scoped principal;
+   lifecycle code must not recover authority from SSO email or display claims.
    That same lifecycle-owned setup path also owns script teardown behavior:
    rerunning the governed setup script in remove mode must call canonical
    `/api/auto-unregister` with `source:"script"` before local credentials are

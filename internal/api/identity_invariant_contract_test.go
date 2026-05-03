@@ -18,12 +18,15 @@ func readIdentityContractFile(t *testing.T, rel string) string {
 
 func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 	files := map[string]string{
-		"magic_link_handlers.go":                                        readIdentityContractFile(t, "magic_link_handlers.go"),
-		"cloud_handoff.go":                                              readIdentityContractFile(t, "cloud_handoff.go"),
-		"cloud_handoff_handlers.go":                                     readIdentityContractFile(t, "cloud_handoff_handlers.go"),
-		"payments_webhook_handlers.go":                                  readIdentityContractFile(t, "payments_webhook_handlers.go"),
-		"../cloudcp/stripe/provisioner.go":                              readIdentityContractFile(t, "../cloudcp/stripe/provisioner.go"),
-		"../models/organization.go":                                     readIdentityContractFile(t, "../models/organization.go"),
+		"magic_link_handlers.go":           readIdentityContractFile(t, "magic_link_handlers.go"),
+		"cloud_handoff.go":                 readIdentityContractFile(t, "cloud_handoff.go"),
+		"cloud_handoff_handlers.go":        readIdentityContractFile(t, "cloud_handoff_handlers.go"),
+		"oidc_handlers.go":                 readIdentityContractFile(t, "oidc_handlers.go"),
+		"payments_webhook_handlers.go":     readIdentityContractFile(t, "payments_webhook_handlers.go"),
+		"saml_handlers.go":                 readIdentityContractFile(t, "saml_handlers.go"),
+		"auth_principal_identity.go":       readIdentityContractFile(t, "auth_principal_identity.go"),
+		"../cloudcp/stripe/provisioner.go": readIdentityContractFile(t, "../cloudcp/stripe/provisioner.go"),
+		"../models/organization.go":        readIdentityContractFile(t, "../models/organization.go"),
 		"../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md": readIdentityContractFile(t, "../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md"),
 	}
 
@@ -41,6 +44,21 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, authz.UserID)",
 			"TrackUserSession(authz.UserID, sessionToken)",
 		},
+		"oidc_handlers.go": {
+			"stableSSOPrincipal(config.SSOProviderTypeOIDC, providerID, idToken.Subject)",
+			"applySSORoleAssignments(authManager, principal",
+			"establishOIDCSession(w, req, principal, oidcTokens)",
+		},
+		"saml_handlers.go": {
+			"stableSSOPrincipal(config.SSOProviderTypeSAML, providerID, result.NameID)",
+			"applySSORoleAssignments(authManager, principal",
+			"establishSAMLSession(w, req, principal, samlSession)",
+		},
+		"auth_principal_identity.go": {
+			"stableSSOPrincipal",
+			"ssoLegacyPrincipalCandidates",
+			"applySSORoleAssignments",
+		},
 		"../cloudcp/stripe/provisioner.go": {
 			"ownerUserID = strings.TrimSpace(user.ID)",
 			"org.OwnerEmail = ownerEmail",
@@ -56,6 +74,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"Email is contact metadata",
 			"Pulse control-plane user ID",
 			"SSO provider subject",
+			"Self-hosted SSO sessions now use provider-scoped",
 		},
 	}
 	for file, needles := range required {
@@ -78,6 +97,14 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		"cloud_handoff_handlers.go": {
 			"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, claims.Email)",
 			"TrackUserSession(claims.Email, sessionToken)",
+		},
+		"oidc_handlers.go": {
+			"establishOIDCSession(w, req, username, oidcTokens)",
+			"UpdateUserRoles(username, rolesToAssign)",
+		},
+		"saml_handlers.go": {
+			"establishSAMLSession(w, req, username, samlSession)",
+			"UpdateUserRoles(result.Username, rolesToAssign)",
 		},
 		"payments_webhook_handlers.go": {
 			"sendTo = org.OwnerUserID",

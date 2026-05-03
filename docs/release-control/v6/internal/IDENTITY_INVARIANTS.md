@@ -48,10 +48,11 @@ principal once a stable user ID exists.
 6. SSO provider subject
    - Shape: provider-scoped OIDC `sub` or SAML `NameID`, paired with provider ID.
    - Owns: external identity continuity for SSO.
-   - Email role: access restriction, contact, display, and legacy username
-     fallback. A future SSO migration must move self-hosted RBAC from unscoped
-     username/email keys to provider-scoped subject keys with a compatibility
-     migration, not by changing session names silently.
+   - Email role: access restriction, contact, display, and legacy RBAC
+     migration. Self-hosted SSO sessions now use provider-scoped stable
+     principals; mutable username/email/display claims may only seed
+     compatibility role migration when no authoritative group mapping is
+     present.
 
 7. API token ID/hash
    - Shape: token hash plus token metadata in config/auth storage.
@@ -76,12 +77,16 @@ principal once a stable user ID exists.
    They may update billing only after server-owned org/customer linkage exists.
 5. Legacy email-keyed records may be accepted only at migration boundaries and
    should be canonicalized to stable user IDs when the stable ID is known.
+6. Self-hosted OIDC and SAML sessions bind to an opaque principal derived from
+   provider type, provider ID, and the provider subject (`sub` or `NameID`).
+   RBAC may copy a legacy username/email assignment to that principal during
+   compatibility migration, but the browser session and tracked active-session
+   owner must be the stable SSO principal.
 
 ## Current Explicit Exception
 
-Self-hosted local auth and SSO RBAC still use the historical `username` session
-field as the local principal. That is a compatibility boundary, not the desired
-long-term model for SSO. Any future SSO hardening must introduce a provider-
-scoped stable principal and migration path for existing RBAC assignments,
-audit records, and active sessions instead of substituting email with another
-display claim in-place.
+Self-hosted local password/proxy auth still uses the historical `username`
+session field as the local principal. That is a compatibility boundary for
+local operators and reverse-proxy deployments. SSO no longer shares that
+exception: OIDC and SAML sessions must use provider-scoped stable principals,
+with legacy username/email assignments treated only as migration inputs.

@@ -114,6 +114,52 @@ func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	}
 }
 
+func TestContract_SSOStablePrincipalProof(t *testing.T) {
+	ssoIdentity, err := os.ReadFile(filepath.Clean("auth_principal_identity.go"))
+	if err != nil {
+		t.Fatalf("read auth_principal_identity.go: %v", err)
+	}
+	oidcSource, err := os.ReadFile(filepath.Clean("oidc_handlers.go"))
+	if err != nil {
+		t.Fatalf("read oidc_handlers.go: %v", err)
+	}
+	samlSource, err := os.ReadFile(filepath.Clean("saml_handlers.go"))
+	if err != nil {
+		t.Fatalf("read saml_handlers.go: %v", err)
+	}
+
+	for file, text := range map[string]string{
+		"auth_principal_identity.go": string(ssoIdentity),
+		"oidc_handlers.go":           string(oidcSource),
+		"saml_handlers.go":           string(samlSource),
+	} {
+		for _, required := range []string{
+			"stableSSOPrincipal",
+			"applySSORoleAssignments",
+		} {
+			if !strings.Contains(text, required) {
+				t.Fatalf("%s must contain %q", file, required)
+			}
+		}
+	}
+	for _, forbidden := range []string{
+		"establishOIDCSession(w, req, username, oidcTokens)",
+		"UpdateUserRoles(username, rolesToAssign)",
+	} {
+		if strings.Contains(string(oidcSource), forbidden) {
+			t.Fatalf("oidc_handlers.go must not contain legacy SSO principal pattern %q", forbidden)
+		}
+	}
+	for _, forbidden := range []string{
+		"establishSAMLSession(w, req, username, samlSession)",
+		"UpdateUserRoles(result.Username, rolesToAssign)",
+	} {
+		if strings.Contains(string(samlSource), forbidden) {
+			t.Fatalf("saml_handlers.go must not contain legacy SSO principal pattern %q", forbidden)
+		}
+	}
+}
+
 func TestContractAISettingsClampsPaidRuntimeControlsToEntitlements(t *testing.T) {
 	t.Parallel()
 

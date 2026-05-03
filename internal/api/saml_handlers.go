@@ -256,8 +256,18 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// RBAC Integration: Map SAML groups to Pulse roles
-	if authManager := internalauth.GetManager(); authManager != nil && len(provider.GroupRoleMappings) > 0 {
+	principal, err := stableSSOPrincipal(config.SSOProviderTypeSAML, providerID, result.NameID)
+	if err != nil {
+		log.Error().Err(err).Str("provider_id", providerID).Msg("SAML NameID is not usable as a stable SSO principal")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", result.Username, GetClientIP(req), req.URL.Path, false, "Missing stable SAML subject")
+		r.redirectSAMLError(w, req, relayState, "missing_subject")
+		return
+	}
+
+	// RBAC Integration: Map SAML groups to Pulse roles under the stable SSO
+	// principal. When mappings are configured they are authoritative, including
+	// the case where the current assertion maps to no roles.
+	if authManager := internalauth.GetManager(); authManager != nil {
 		var rolesToAssign []string
 		seenRoles := make(map[string]bool)
 
@@ -270,27 +280,21 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		if len(rolesToAssign) > 0 {
+		legacyCandidates := ssoLegacyPrincipalCandidates(result.Username, result.Email, result.NameID)
+		roleErr := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, false)
+		if roleErr != nil {
+			log.Error().Err(roleErr).Str("user", principal).Str("display_user", result.Username).Msg("Failed to update SAML user roles")
+			if len(rolesToAssign) > 0 {
+				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", principal, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
+			}
+		} else if len(rolesToAssign) > 0 {
 			log.Info().
-				Str("user", result.Username).
+				Str("user", principal).
+				Str("display_user", result.Username).
 				Strs("mapped_roles", rolesToAssign).
 				Msg("Auto-assigning roles based on SAML group mapping")
-			if err := authManager.UpdateUserRoles(result.Username, rolesToAssign); err != nil {
-				log.Error().Err(err).Str("user", result.Username).Msg("Failed to auto-assign SAML roles")
-				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", result.Username, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
-			} else {
-				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", result.Username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
-			}
+			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 		}
-	}
-
-	// Establish session
-	username := result.Username
-	if username == "" {
-		username = result.Email
-	}
-	if username == "" {
-		username = result.NameID
 	}
 
 	// Store SAML session info for potential SLO
@@ -300,14 +304,14 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		SessionIndex: result.SessionIdx,
 	}
 
-	if err := r.establishSAMLSession(w, req, username, samlSession); err != nil {
+	if err := r.establishSAMLSession(w, req, principal, samlSession); err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after SAML login")
-		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", username, GetClientIP(req), req.URL.Path, false, "Session creation failed")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", principal, GetClientIP(req), req.URL.Path, false, "Session creation failed")
 		r.redirectSAMLError(w, req, relayState, "session_failed")
 		return
 	}
 
-	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", username, GetClientIP(req), req.URL.Path, true, "SAML login success via "+providerID)
+	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", principal, GetClientIP(req), req.URL.Path, true, "SAML login success via "+providerID)
 
 	http.Redirect(w, req, buildLocalRedirectTarget(relayState, map[string]string{
 		"saml": "success",
