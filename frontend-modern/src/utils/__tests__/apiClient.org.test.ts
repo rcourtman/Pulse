@@ -17,6 +17,8 @@ describe('apiClient org context', () => {
     mockFetch.mockReset();
     global.fetch = mockFetch as unknown as typeof fetch;
     window.sessionStorage.clear();
+    window.localStorage.clear();
+    document.cookie = 'pulse_csrf=; Path=/; Max-Age=0';
     clearApiToken();
     setOrgID(null);
   });
@@ -129,6 +131,26 @@ describe('apiClient org context', () => {
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     const headers = options.headers as Record<string, string>;
     expect(headers['X-Pulse-Org-ID']).toBe('default');
+  });
+
+  it('does not treat intentional unauthenticated 401 responses as expired sessions', async () => {
+    document.cookie = 'pulse_csrf=csrf-token; Path=/';
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ success: false, message: 'Invalid username or password' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const response = await apiFetch('/api/login', {
+      method: 'POST',
+      skipAuth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'wrong', password: 'wrong' }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(window.localStorage.getItem('just_logged_out')).toBeNull();
   });
 
   it('rejects malformed org IDs from storage and does not forward them to headers', async () => {

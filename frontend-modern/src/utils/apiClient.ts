@@ -680,7 +680,7 @@ class ApiClient {
       '/api/charts/infrastructure',
     ];
     const shouldSkipRedirect = skipRedirectUrls.some((path) => url.includes(path));
-    if (response.status === 401 && !shouldSkipRedirect) {
+    if (response.status === 401 && !skipAuth && !shouldSkipRedirect) {
       logger.warn('Authentication expired - redirecting to login');
       // Clear auth and redirect to login
       if (typeof window !== 'undefined') {
