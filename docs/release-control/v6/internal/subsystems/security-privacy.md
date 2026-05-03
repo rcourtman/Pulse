@@ -320,6 +320,11 @@ That same governed settings trust boundary now also includes
 copy, security posture scoring, audit-log wording, audit-webhook wording, and
 SSO provider-type presentation remain part of the governed security trust
 surface instead of floating as unowned settings helpers.
+That SSO security surface is not a paid-feature trust boundary. OIDC, SAML,
+and multi-provider SSO share the same Community-tier authentication control
+plane; security/privacy code may enforce authenticated settings capability
+reads and writes, but it must not turn SAML metadata, SAML runtime routes, or
+multi-provider administration into an `advanced_sso` paywall.
 Audit-log filter option wording is part of that same trust surface: event,
 success, and verification filter labels must be sourced from
 `frontend-modern/src/utils/auditLogPresentation.ts` and the shared filter-option

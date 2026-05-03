@@ -8,7 +8,7 @@ test-connection validation, enable/disable toggling, and cleanup via delete.
 ## Steps
 
 1. Log in as admin.
-2. GET `/api/security/sso/providers` — verify the endpoint responds (200 or 402).
+2. GET `/api/security/sso/providers` — verify the endpoint responds with 200.
 3. POST `/api/security/sso/providers` — create a SAML provider with stub IdP metadata.
 4. GET `/api/security/sso/providers` — verify the new provider appears.
 5. GET `/api/saml/{providerID}/metadata` — verify SP metadata XML is returned.
@@ -19,9 +19,8 @@ test-connection validation, enable/disable toggling, and cleanup via delete.
 10. DELETE `/api/security/sso/providers/{id}` — delete and verify removal.
 
 ## Expected Outcomes
-- Provider CRUD works end-to-end when `advanced_sso` is licensed.
-- 402 paywall response is correct when not licensed.
-- SSO settings page renders SSO-related content or upgrade messaging.
+- Provider CRUD works end-to-end on the Community SSO capability.
+- SSO settings page renders SSO-related content.
 
 ## Environment Variables
 - `PULSE_E2E_SAML_IDP_METADATA_URL` — optional live IdP metadata URL.

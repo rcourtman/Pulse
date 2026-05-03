@@ -243,7 +243,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Community',
-      body: 'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
+      body: 'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), update alerts, and SSO.',
       unlockedFeaturesLabel: 'Included on this instance',
       unlockedFeatures: [
         'Real-time monitoring',
@@ -307,7 +307,6 @@ describe('licensePresentation', () => {
       ],
       includedExtrasLabel: 'Included extras',
       includedExtras: [
-        'Advanced SSO (SAML/Multi-Provider)',
         'Role-Based Access Control (RBAC)',
         'Audit Logging',
         'PDF/CSV Reporting',
@@ -368,7 +367,6 @@ describe('licensePresentation', () => {
       ],
       includedExtrasLabel: 'Included extras',
       includedExtras: [
-        'Advanced SSO (SAML/Multi-Provider)',
         'Role-Based Access Control (RBAC)',
         'Audit Logging',
         'PDF/CSV Reporting',
@@ -437,12 +435,11 @@ describe('licensePresentation', () => {
         },
         {
           title: 'What Pulse Pro adds',
-          body: 'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
+          body: 'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, RBAC, audit logging, reporting, and agent profiles.',
           highlights: [
             'Alert Root-Cause Analysis',
             'Safe Remediation Workflows',
             '90-day metric history',
-            'Advanced SSO (SAML/Multi-Provider)',
             'Role-Based Access Control (RBAC)',
             'Audit Logging',
             'PDF/CSV Reporting',
@@ -466,12 +463,11 @@ describe('licensePresentation', () => {
       cards: [
         {
           title: 'What Pulse Pro adds',
-          body: 'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
+          body: 'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, RBAC, audit logging, reporting, and agent profiles.',
           highlights: [
             'Alert Root-Cause Analysis',
             'Safe Remediation Workflows',
             '90-day metric history',
-            'Advanced SSO (SAML/Multi-Provider)',
             'Role-Based Access Control (RBAC)',
             'Audit Logging',
             'PDF/CSV Reporting',
@@ -609,7 +605,6 @@ describe('licensePresentation', () => {
         'Alert Root-Cause Analysis',
         'Safe Remediation Workflows',
         '90-day metric history',
-        'Advanced SSO (SAML/Multi-Provider)',
         'Role-Based Access Control (RBAC)',
         'Audit Logging',
         'PDF/CSV Reporting',

@@ -20,30 +20,28 @@ func ssoTestIP() string {
 	return fmt.Sprintf("10.99.%d.%d:12345", (n>>8)&0xFF, n&0xFF)
 }
 
-// TestSAMLAdminEndpointsRequireAdvancedSSOLicense verifies that the SSO admin
-// endpoints return 402 Payment Required when a user attempts SAML operations
-// without a Pro license. OIDC SSO is free-tier, but SAML is an advanced_sso
-// feature requiring Pro.
+// TestSAMLAdminEndpointsAllowedWithoutPaidLicense verifies that the SSO admin
+// endpoints do not return 402 Payment Required when a user attempts SAML
+// operations without a paid license. OIDC, SAML, and multi-provider SSO are
+// Community-tier SSO capabilities.
 //
 // The SSO admin routes are gated at the route level by featureSSOKey ("sso"),
-// which is free-tier and passes without a license. The inner handlers
-// additionally check featureAdvancedSSOKey ("advanced_sso") when the request
-// involves SAML. This test verifies those defense-in-depth checks:
+// which is included on the default self-hosted Community tier.
 //
-//   - handleCreateSSOProvider (POST /api/security/sso/providers) — line 247
-//   - handleUpdateSSOProvider (PUT /api/security/sso/providers/{id}) — line 373
-//   - handleTestSSOProvider (POST /api/security/sso/providers/test) — line 694
-//   - handleMetadataPreview (POST /api/security/sso/providers/metadata/preview) — line 1002
-func TestSAMLAdminEndpointsRequireAdvancedSSOLicense(t *testing.T) {
+//   - handleCreateSSOProvider (POST /api/security/sso/providers)
+//   - handleUpdateSSOProvider (PUT /api/security/sso/providers/{id})
+//   - handleTestSSOProvider (POST /api/security/sso/providers/test)
+//   - handleMetadataPreview (POST /api/security/sso/providers/metadata/preview)
+func TestSAMLAdminEndpointsAllowedWithoutPaidLicense(t *testing.T) {
 	rawToken := "sso-admin-license-test-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
-	// Test 1: POST /api/security/sso/providers with type=saml → 402
+	// Test 1: POST /api/security/sso/providers with type=saml should create.
 	t.Run("CreateSAMLProvider", func(t *testing.T) {
-		body := `{"name":"test-saml","type":"saml","saml":{"metadataUrl":"https://idp.example.com/metadata"}}`
+		body := `{"id":"test-saml-create","name":"test-saml","type":"saml","saml":{"idpMetadataUrl":"https://idp.example.com/metadata"}}`
 		req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers", strings.NewReader(body))
 		req.RemoteAddr = ssoTestIP()
 		req.Header.Set("X-API-Token", rawToken)
@@ -51,13 +49,12 @@ func TestSAMLAdminEndpointsRequireAdvancedSSOLicense(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusPaymentRequired {
-			t.Errorf("POST /api/security/sso/providers (saml): expected 402, got %d (body: %s)", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusCreated {
+			t.Errorf("POST /api/security/sso/providers (saml): expected 201, got %d (body: %s)", rec.Code, rec.Body.String())
 		}
-		assertAdvancedSSOResponse(t, rec)
 	})
 
-	// Test 2: PUT /api/security/sso/providers/{id} with type=saml → 402
+	// Test 2: PUT /api/security/sso/providers/{id} with type=saml should update.
 	// First create an OIDC provider (OIDC is free-tier), then try to update it to SAML.
 	t.Run("UpdateToSAMLProvider", func(t *testing.T) {
 		// Create an OIDC provider first
@@ -73,8 +70,8 @@ func TestSAMLAdminEndpointsRequireAdvancedSSOLicense(t *testing.T) {
 			t.Fatalf("setup: failed to create OIDC provider, got %d (body: %s)", createRec.Code, createRec.Body.String())
 		}
 
-		// Now try to update it to SAML type
-		updateBody := `{"name":"test-saml-updated","type":"saml","saml":{"metadataUrl":"https://idp.example.com/metadata"}}`
+		// Now update it to SAML type.
+		updateBody := `{"name":"test-saml-updated","type":"saml","saml":{"idpMetadataUrl":"https://idp.example.com/metadata"}}`
 		req := httptest.NewRequest(http.MethodPut, "/api/security/sso/providers/test-oidc-for-update", strings.NewReader(updateBody))
 		req.RemoteAddr = ssoTestIP()
 		req.Header.Set("X-API-Token", rawToken)
@@ -82,15 +79,14 @@ func TestSAMLAdminEndpointsRequireAdvancedSSOLicense(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusPaymentRequired {
-			t.Errorf("PUT /api/security/sso/providers/{id} (saml): expected 402, got %d (body: %s)", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusOK {
+			t.Errorf("PUT /api/security/sso/providers/{id} (saml): expected 200, got %d (body: %s)", rec.Code, rec.Body.String())
 		}
-		assertAdvancedSSOResponse(t, rec)
 	})
 
-	// Test 3: POST /api/security/sso/providers/test with type=saml → 402
+	// Test 3: POST /api/security/sso/providers/test with type=saml should reach validation.
 	t.Run("TestSAMLConnection", func(t *testing.T) {
-		body := `{"type":"saml","saml":{"metadataUrl":"https://idp.example.com/metadata"}}`
+		body := `{"type":"saml","saml":{"idpMetadataUrl":"https://idp.example.com/metadata"}}`
 		req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", strings.NewReader(body))
 		req.RemoteAddr = ssoTestIP()
 		req.Header.Set("X-API-Token", rawToken)
@@ -98,13 +94,12 @@ func TestSAMLAdminEndpointsRequireAdvancedSSOLicense(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusPaymentRequired {
-			t.Errorf("POST /api/security/sso/providers/test (saml): expected 402, got %d (body: %s)", rec.Code, rec.Body.String())
+		if rec.Code == http.StatusPaymentRequired {
+			t.Errorf("POST /api/security/sso/providers/test (saml): should not get 402 for SAML, got body: %s", rec.Body.String())
 		}
-		assertAdvancedSSOResponse(t, rec)
 	})
 
-	// Test 4: POST /api/security/sso/providers/metadata/preview with type=saml → 402
+	// Test 4: POST /api/security/sso/providers/metadata/preview with type=saml should reach validation.
 	t.Run("PreviewSAMLMetadata", func(t *testing.T) {
 		body := `{"type":"saml","metadataUrl":"https://idp.example.com/metadata"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/metadata/preview", strings.NewReader(body))
@@ -114,16 +109,15 @@ func TestSAMLAdminEndpointsRequireAdvancedSSOLicense(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusPaymentRequired {
-			t.Errorf("POST /api/security/sso/providers/metadata/preview (saml): expected 402, got %d (body: %s)", rec.Code, rec.Body.String())
+		if rec.Code == http.StatusPaymentRequired {
+			t.Errorf("POST /api/security/sso/providers/metadata/preview (saml): should not get 402 for SAML, got body: %s", rec.Body.String())
 		}
-		assertAdvancedSSOResponse(t, rec)
 	})
 }
 
 // TestOIDCAdminEndpointsAllowedWithoutProLicense verifies that OIDC operations
 // through the same SSO admin endpoints succeed without a Pro license. OIDC is
-// free-tier and should NOT be blocked by the advanced_sso gate.
+// part of the same Community SSO contract as SAML.
 func TestOIDCAdminEndpointsAllowedWithoutProLicense(t *testing.T) {
 	rawToken := "sso-admin-oidc-test-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
@@ -159,17 +153,16 @@ func TestOIDCAdminEndpointsAllowedWithoutProLicense(t *testing.T) {
 	}
 }
 
-// TestSAMLAdminLicenseGatingResponseFormat verifies that the 402 response from
-// SAML admin endpoints includes a JSON body with the advanced_sso feature key
-// and an upgrade URL, matching the canonical WriteLicenseRequired format.
-func TestSAMLAdminLicenseGatingResponseFormat(t *testing.T) {
+// TestSAMLAdminCreateDoesNotEmitUpgradeResponse verifies SAML creation does not
+// produce the old upgrade response shape.
+func TestSAMLAdminCreateDoesNotEmitUpgradeResponse(t *testing.T) {
 	rawToken := "sso-admin-format-test-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
-	body := `{"name":"format-test","type":"saml","saml":{"metadataUrl":"https://idp.example.com/metadata"}}`
+	body := `{"id":"format-test","name":"format-test","type":"saml","saml":{"idpMetadataUrl":"https://idp.example.com/metadata"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers", strings.NewReader(body))
 	req.RemoteAddr = ssoTestIP()
 	req.Header.Set("X-API-Token", rawToken)
@@ -177,8 +170,8 @@ func TestSAMLAdminLicenseGatingResponseFormat(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402, got %d", rec.Code)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	ct := rec.Header().Get("Content-Type")
@@ -187,26 +180,7 @@ func TestSAMLAdminLicenseGatingResponseFormat(t *testing.T) {
 	}
 
 	respBody := rec.Body.String()
-	if !strings.Contains(respBody, "advanced_sso") {
-		t.Errorf("expected body to reference advanced_sso feature, got: %s", respBody)
-	}
-	if !strings.Contains(respBody, "upgrade_url") {
-		t.Errorf("expected body to contain upgrade_url, got: %s", respBody)
-	}
-	if !strings.Contains(respBody, "SAML SSO requires a Pro license") {
-		t.Errorf("expected body to contain SAML-specific message, got: %s", respBody)
-	}
-}
-
-// assertAdvancedSSOResponse checks that a 402 response references the
-// advanced_sso feature in its body.
-func assertAdvancedSSOResponse(t *testing.T, rec *httptest.ResponseRecorder) {
-	t.Helper()
-	if rec.Code != http.StatusPaymentRequired {
-		return // Primary status check already logged by caller
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "advanced_sso") {
-		t.Errorf("402 body should reference advanced_sso feature, got: %s", body)
+	if strings.Contains(respBody, "upgrade_url") {
+		t.Errorf("SAML create returned old upgrade response shape: %s", respBody)
 	}
 }

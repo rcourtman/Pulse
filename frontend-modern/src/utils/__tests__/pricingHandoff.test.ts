@@ -73,7 +73,6 @@ describe('pricingHandoff', () => {
       'ai_alerts',
       'ai_autofix',
       'long_term_metrics',
-      'advanced_sso',
       'rbac',
       'audit_logging',
       'advanced_reporting',
@@ -167,9 +166,9 @@ describe('pricingHandoff', () => {
         '?intent=max_monitored_systems',
       ),
     ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
-    expect(
-      resolveCanonicalSelfHostedBillingHref(`${SELF_HOSTED_PRO_BILLING_ROUTE}/history`),
-    ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(resolveCanonicalSelfHostedBillingHref(`${SELF_HOSTED_PRO_BILLING_ROUTE}/history`)).toBe(
+      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+    );
   });
 
   it('derives billing focus and arrival intent from canonical routes', () => {

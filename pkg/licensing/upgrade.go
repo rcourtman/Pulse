@@ -94,8 +94,6 @@ func UpgradeURLForFeature(feature string) string {
 		return DefaultUpgradeURL + "&feature=rbac"
 	case FeatureAgentProfiles:
 		return DefaultUpgradeURL + "&feature=agent_profiles"
-	case FeatureAdvancedSSO:
-		return DefaultUpgradeURL + "&feature=advanced_sso"
 	case FeatureAuditLogging:
 		return DefaultUpgradeURL + "&feature=audit_logging"
 	case FeatureAdvancedReporting:

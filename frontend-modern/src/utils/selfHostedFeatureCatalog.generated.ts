@@ -46,8 +46,8 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   },
   {
     "key": "sso",
-    "displayName": "Basic SSO (OIDC)",
-    "comparisonName": "Basic SSO (OIDC)",
+    "displayName": "Core SSO (OIDC/SAML)",
+    "comparisonName": "Core SSO (OIDC/SAML)",
     "showInComparisonTable": true,
     "displayableInSelfHostedPlan": true,
     "roles": {
@@ -182,18 +182,18 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   },
   {
     "key": "advanced_sso",
-    "displayName": "Advanced SSO (SAML/Multi-Provider)",
-    "comparisonName": "Advanced SSO (SAML/Multi-Provider)",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
+    "displayName": "Multi-Provider SSO",
+    "comparisonName": "Multi-Provider SSO",
+    "showInComparisonTable": false,
+    "displayableInSelfHostedPlan": false,
     "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "included_extra"
+      "community": "included",
+      "relay": "included",
+      "pro": "included"
     },
     "includedIn": {
-      "community": false,
-      "relay": false,
+      "community": true,
+      "relay": true,
       "pro": true
     }
   },

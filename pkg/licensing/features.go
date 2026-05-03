@@ -15,7 +15,8 @@ import (
 const (
 	// Free tier features
 	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates
-	FeatureSSO          = "sso"           // Basic OIDC/SSO authentication
+	FeatureSSO          = "sso"           // Core OIDC/SAML SSO authentication
+	FeatureAdvancedSSO  = "advanced_sso"  // Compatibility key for SAML and multi-provider SSO; included in Community
 	FeatureAIPatrol     = "ai_patrol"     // Background AI health monitoring (BYOK, free with own key)
 
 	// Relay tier features (everything in Free, plus:)
@@ -31,7 +32,6 @@ const (
 	FeatureAgentProfiles     = "agent_profiles"     // Centralized agent configuration profiles
 	FeatureRBAC              = "rbac"               // Role-Based Access Control
 	FeatureAuditLogging      = "audit_logging"      // Persistent audit logs with signing
-	FeatureAdvancedSSO       = "advanced_sso"       // SAML, Multi-provider, Role Mapping
 	FeatureAdvancedReporting = "advanced_reporting" // PDF/CSV reporting engine
 
 	// MSP/Enterprise tier features
@@ -274,6 +274,7 @@ var TierHistoryDays = map[Tier]int{
 var freeFeatures = []string{
 	FeatureUpdateAlerts,
 	FeatureSSO,
+	FeatureAdvancedSSO,
 	FeatureAIPatrol, // Patrol is free with BYOK; remediation workflows require Pro.
 }
 
@@ -291,7 +292,6 @@ var proFeatures = appendFeatures(relayFeatures,
 	FeatureAIAutoFix,
 	FeatureKubernetesAI,
 	FeatureAgentProfiles,
-	FeatureAdvancedSSO,
 	FeatureRBAC,
 	FeatureAuditLogging,
 	FeatureAdvancedReporting,

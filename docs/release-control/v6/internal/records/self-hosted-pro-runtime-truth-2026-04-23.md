@@ -17,8 +17,8 @@ The canonical v6 Pro story should be:
 1. Alert-triggered root-cause analysis.
 2. Safe remediation through Patrol auto-fix and higher-autonomy controls.
 3. Longer operating history on self-hosted installs.
-4. Included team/admin extras: SAML SSO, RBAC, audit logging, reporting, and
-   agent profiles.
+4. Included team/admin extras: RBAC, audit logging, reporting, and agent
+   profiles. SSO is part of the Community tier and no longer a Pro value claim.
 
 The following should not be treated as primary marketed Pro pillars:
 
@@ -44,7 +44,7 @@ The following should not be treated as primary marketed Pro pillars:
 | Incident memory | The real backing is longer metrics retention plus Patrol run history and alert history. No distinct memory engine, incident notebook, or learned remediation memory surfaced in v6. | `shipped but weakly packaged` | `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`; `internal/api/router_routes_ai_relay.go`; `internal/api/alerts.go`; `internal/api/ai_handlers.go` |
 | Remote access / mobile / push | Relay remains a dedicated, real settings surface with live configuration, status, and pairing flows, and it is explicitly license-gated. | `shipped and productized` | `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`; `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`; `internal/api/router_routes_ai_relay.go` |
 | Agent profiles | Dedicated settings panel with CRUD, assignment, and AI suggestion affordances. The surface is explicitly paywalled behind `agent_profiles`. | `shipped and productized` | `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`; `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`; `internal/api/router_routes_registration.go` |
-| Advanced SSO | Dedicated SSO providers surface. OIDC remains free, while SAML/multi-provider flows are clearly gated behind `advanced_sso`. | `shipped and productized` | `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`; `frontend-modern/src/components/Settings/useSSOProvidersState.ts`; `internal/api/router_routes_auth_security.go` |
+| SSO providers | Dedicated SSO providers surface. OIDC, SAML, and multi-provider flows are included with Community; `advanced_sso` remains only as an included compatibility capability. | `shipped and productized outside the paid bundle` | `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`; `frontend-modern/src/components/Settings/useSSOProvidersState.ts`; `internal/api/router_routes_auth_security.go` |
 | RBAC | Dedicated roles surface, user/role admin routes, integrity check, and admin reset paths. | `shipped and productized` | `frontend-modern/src/components/Settings/RolesPanel.tsx`; `frontend-modern/src/components/Settings/useRolesPanelState.ts`; `internal/api/router_routes_licensing.go` |
 | Audit logging | Dedicated audit log surface with filtering and signature verification, backed by gated audit endpoints. | `shipped and productized` | `frontend-modern/src/components/Settings/AuditLogPanel.tsx`; `frontend-modern/src/components/Settings/useAuditLogPanelState.ts`; `internal/api/router_routes_licensing.go` |
 | PDF/CSV reporting | Dedicated reporting panel, reporting catalog, report generation, multi-report generation, and VM inventory export. | `shipped and productized` | `frontend-modern/src/components/Settings/ReportingPanel.tsx`; `frontend-modern/src/components/Settings/useReportingPanelState.ts`; `internal/api/reporting_catalog_handlers.go`; `internal/api/metrics_reporting_handlers.go`; `internal/api/reporting_inventory_handlers.go` |

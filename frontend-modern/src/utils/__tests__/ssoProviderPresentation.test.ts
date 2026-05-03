@@ -58,9 +58,9 @@ describe('ssoProviderPresentation', () => {
 
   it('returns capability-focused SAML feature gate copy', () => {
     expect(getSSOSamlFeatureGateCopy()).toMatchObject({
-      title: 'Advanced SSO',
-      subtitle: 'Advanced SSO',
-      body: expect.stringContaining('paid self-hosted and hosted plans'),
+      title: 'Single Sign-On',
+      subtitle: 'Single Sign-On',
+      body: expect.stringContaining('included with Community'),
     });
     expect(getSSOSamlFeatureGateCopy().body).not.toContain('Pro');
   });
@@ -74,9 +74,7 @@ describe('ssoProviderPresentation', () => {
 
   it('formats provider operational messages canonically', () => {
     expect(getSSOProvidersLoadErrorMessage()).toBe('Unable to load SSO providers.');
-    expect(getSSOProviderDetailsLoadErrorMessage()).toBe(
-      'Unable to load SSO provider details.',
-    );
+    expect(getSSOProviderDetailsLoadErrorMessage()).toBe('Unable to load SSO provider details.');
     expect(getSSOProviderSaveSuccessMessage(true)).toBe('SSO provider has been updated.');
     expect(getSSOProviderSaveSuccessMessage(false)).toBe('SSO provider has been created.');
     expect(getSSOProviderSaveErrorMessage('boom')).toBe('Unable to save the SSO provider: boom');
@@ -92,9 +90,7 @@ describe('ssoProviderPresentation', () => {
     );
     expect(getSSOConnectionTestErrorMessage()).toBe('Unable to run the connection test.');
     expect(getSSOMetadataUrlRequiredMessage()).toBe('Enter an IdP metadata URL.');
-    expect(getSSOMetadataFetchErrorMessage('timeout')).toBe(
-      'Unable to fetch metadata: timeout',
-    );
+    expect(getSSOMetadataFetchErrorMessage('timeout')).toBe('Unable to fetch metadata: timeout');
   });
 
   it('formats certificate tone and expired label canonically', () => {

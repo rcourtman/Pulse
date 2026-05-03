@@ -147,7 +147,6 @@ func TestUpgradeReasonMatrixDerivesFromCanonicalFeatureMetadata(t *testing.T) {
 		FeatureAIAlerts,
 		FeatureRBAC,
 		FeatureAgentProfiles,
-		FeatureAdvancedSSO,
 		FeatureAuditLogging,
 		FeatureAdvancedReporting,
 	}

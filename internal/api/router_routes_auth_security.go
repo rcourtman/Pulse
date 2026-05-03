@@ -99,9 +99,9 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		ssoAdminEndpoints.HandleProviderItem(w, req)
 	})))
 
-	// SAML login flow routes (unauthenticated - these are login/callback endpoints)
-	// SAML is an advanced_sso feature requiring a Pro license.
-	r.mux.HandleFunc("/api/saml/", RequireLicenseFeature(r.licenseHandlers, featureAdvancedSSOKey, func(w http.ResponseWriter, req *http.Request) {
+	// SAML login flow routes (unauthenticated - these are login/callback endpoints).
+	// SAML is part of the core SSO contract and is included with Community.
+	r.mux.HandleFunc("/api/saml/", RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
 		parts := strings.Split(strings.TrimPrefix(req.URL.Path, "/"), "/")
 		if len(parts) < 4 {
 			http.NotFound(w, req)

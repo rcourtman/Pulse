@@ -20,7 +20,7 @@ func TestDeriveCapabilitiesFromTier(t *testing.T) {
 			tier:             TierFree,
 			explicitFeatures: nil,
 			wantLen:          len(freeFeatures),
-			wantContains:     []string{FeatureUpdateAlerts, FeatureSSO, FeatureAIPatrol},
+			wantContains:     []string{FeatureUpdateAlerts, FeatureSSO, FeatureAdvancedSSO, FeatureAIPatrol},
 			wantNotContains:  []string{FeatureRelay, FeatureAIAutoFix, FeatureLongTermMetrics},
 		},
 		{
@@ -144,6 +144,7 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 			wantIncludedCapabilities: []string{
 				FeatureUpdateAlerts,
 				FeatureSSO,
+				FeatureAdvancedSSO,
 				FeatureAIPatrol,
 			},
 			wantExcludedCapabilities: []string{
@@ -165,6 +166,7 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 			wantIncludedCapabilities: []string{
 				FeatureUpdateAlerts,
 				FeatureSSO,
+				FeatureAdvancedSSO,
 				FeatureAIPatrol,
 				FeatureRelay,
 				FeatureMobileApp,
@@ -288,6 +290,7 @@ func TestTierHasFeature(t *testing.T) {
 		{TierFree, FeatureAIAutoFix, false},
 		{TierFree, FeatureRelay, false},
 		{TierFree, FeatureUpdateAlerts, true},
+		{TierFree, FeatureAdvancedSSO, true},
 		{TierFree, FeatureAIPatrol, true},
 		{TierRelay, FeatureRelay, true},
 		{TierRelay, FeatureMobileApp, true},
@@ -357,8 +360,8 @@ func TestGetFeatureDisplayName(t *testing.T) {
 		{FeatureUnlimited, "Hosted Capacity Policy"},
 		{FeatureAgentProfiles, "Centralized Agent Profiles"},
 		{FeatureAuditLogging, "Audit Logging"},
-		{FeatureSSO, "Basic SSO (OIDC)"},
-		{FeatureAdvancedSSO, "Advanced SSO (SAML/Multi-Provider)"},
+		{FeatureSSO, "Core SSO (OIDC/SAML)"},
+		{FeatureAdvancedSSO, "Multi-Provider SSO"},
 		{FeatureRelay, "Pulse Relay (Remote Access)"},
 		{FeatureMobileApp, "Pulse Mobile Pairing"},
 		{FeaturePushNotifications, "Push Notifications"},

@@ -80,7 +80,7 @@ export function getSelfHostedPlanEntitlementSummary(
 ): string {
   switch (tier) {
     case 'community':
-      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.`;
+      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), update alerts, and SSO.`;
     case 'relay':
       return `${planLabel} is active on this instance. Remote web access, Pulse Mobile pairing, push notifications, and longer history are available right now.`;
     case 'pro':
@@ -104,7 +104,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: 'Free forever',
     subline: 'Core monitoring included',
     metricHistoryDays: 7,
-    billingExtrasSummary: 'Patrol, alerts, and OIDC',
+    billingExtrasSummary: 'Patrol, alerts, and SSO',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('community'),
     entitlementHighlights: [
       'Real-time monitoring',
@@ -120,7 +120,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       '7-day metric history',
       'Pulse Patrol (BYOK)',
       'Update alerts',
-      'Basic SSO (OIDC)',
+      'SSO (OIDC/SAML)',
       'Community support',
     ],
   },
@@ -156,13 +156,13 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:
-      'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
+      'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, RBAC, audit logging, reporting, and agent profiles.',
     highlights: [
       'Everything in Relay',
       'Alert root-cause analysis',
       'Safe remediation workflows',
       '90-day metric history',
-      'RBAC, audit logging, SAML SSO',
+      'RBAC and audit logging',
       'Agent profiles · PDF/CSV reports',
     ],
   },

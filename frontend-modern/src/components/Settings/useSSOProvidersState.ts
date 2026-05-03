@@ -2,10 +2,6 @@ import { createMemo, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
-import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { loadRuntimeCapabilities } from '@/stores/license';
 import {
   getSSOCopySuccessMessage,
   getSSOConnectionTestErrorMessage,
@@ -54,16 +50,13 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [advancedOpen, setAdvancedOpen] = createSignal(false);
   const [deleteConfirm, setDeleteConfirm] = createSignal<string | null>(null);
   const [publicUrl, setPublicUrl] = createSignal('');
-  const [showSamlUpsell, setShowSamlUpsell] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
   const [testResult, setTestResult] = createSignal<SSOProviderTestResult | null>(null);
   const [showMetadataPreview, setShowMetadataPreview] = createSignal(false);
   const [metadataPreview, setMetadataPreview] = createSignal<MetadataPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = createSignal(false);
 
-  const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
   const canManage = () => props.canManage !== false;
-  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
 
   const loadProviders = async () => {
     setLoading(true);
@@ -90,15 +83,11 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   };
 
   onMount(() => {
-    loadRuntimeCapabilities();
     void loadProviders();
   });
 
   const openAddModal = (type: 'oidc' | 'saml') => {
     if (!canManage()) {
-      return;
-    }
-    if (type === 'saml' && !hasAdvancedSSO() && !showUpgradePrompts()) {
       return;
     }
     setEditingProvider(null);
@@ -305,9 +294,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     deleteConfirm,
     setDeleteConfirm,
     publicUrl,
-    showSamlUpsell,
-    setShowSamlUpsell,
-    showUpgradePrompts,
     testing,
     testResult,
     setTestResult,
@@ -315,7 +301,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     setShowMetadataPreview,
     metadataPreview,
     loadingPreview,
-    hasAdvancedSSO,
     canManage,
     openAddModal,
     openEditModal,
@@ -327,7 +312,5 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     testConnection,
     canTest,
     fetchMetadataPreview,
-    getUpgradeActionDestination,
-    runtimeCapabilitiesLoaded,
   };
 };

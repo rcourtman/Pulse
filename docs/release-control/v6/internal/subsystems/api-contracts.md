@@ -946,6 +946,12 @@ local auth handoff. OIDC and SAML success/error handlers must build their
 local `returnTo` targets through one canonical local-path helper that rejects
 absolute or host-bearing targets before query params are appended, so shared
 identity flows cannot drift back to per-handler open-redirect shaping.
+The SSO entitlement contract is part of that same API boundary. Provider
+administration, SAML metadata preview/test, and runtime SAML routes may require
+the core `sso` capability, but they must not gate SAML or multi-provider
+provider management on the compatibility `advanced_sso` key. `advanced_sso`
+remains only an included entitlement payload key for older clients, while OIDC,
+SAML, and multi-provider SSO are Community-tier runtime capabilities.
 Commercial self-service actions in that shell must stay same-origin as well:
 the frontend may only call the portal-owned `/api/portal/commercial/*` routes,
 and `internal/cloudcp/portal/commercial_proxy.go` plus `internal/cloudcp/routes.go`

@@ -92,8 +92,8 @@ investing in, surfacing, and marketing:
 - Alert-triggered root-cause analysis.
 - Safe remediation workflows through Patrol fix execution and autonomy controls.
 - 90-day history.
-- Included team/admin extras: Advanced SSO (SAML), RBAC, audit logging,
-  reporting, and agent profiles.
+- Included team/admin extras: RBAC, audit logging, reporting, and agent
+  profiles. SSO is included with Community and higher tiers.
 
 ### Compatibility-Only In v6
 
@@ -124,7 +124,7 @@ surface upgrade prompts unless the user deliberately enters a commercial path.
 | Relay includes secure remote web access, Pulse Mobile pairing for handoff, push notifications, and 14-day history. | `pkg/licensing/features.go` grants `relay`, `mobile_app`, `push_notifications`, and `long_term_metrics` to Relay with `TierHistoryDays[relay] == 14`; relay onboarding/settings routes are gated behind Relay. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, `internal/api/relay_sso_license_gating_test.go`, and `frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx`. |
 | Pro includes alert-triggered root-cause analysis and safe remediation workflows. | `internal/api/ai_handlers.go` gates alert-triggered analysis behind `ai_alerts` and remediation/autonomy behind `ai_autofix`; `internal/ai/service.go` enforces the same capabilities in service-level paths. | `pkg/licensing/features_test.go`, `internal/api/router_routes_ai_execute_stream_test.go`, `internal/api/ai_intelligence_handlers_remediation_more_test.go`, and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx`. |
 | Pro includes 90-day history. | `pkg/licensing/features.go` sets `TierHistoryDays[pro] == 90`; `pkg/licensing/entitlement_payload.go` emits `max_history_days`; `frontend-modern/src/stores/license.ts` and `frontend-modern/src/components/shared/useHistoryChartState.ts` lock ranges above the entitlement. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, and `frontend-modern/src/stores/__tests__/license.test.ts`. |
-| Pro includes business/admin extras: Advanced SSO, RBAC, audit logging, reporting, and agent profiles. | Router and settings gates use `advanced_sso`, `rbac`, `audit_logging`, `advanced_reporting`, and `agent_profiles`; audit capture is SQLite-backed in `pkg/server/server.go` and `pkg/audit/sqlite_factory.go`, while query/export remains license-gated. | `internal/api/security_regression_test.go`, `internal/api/sso_handlers_crud_test.go`, `internal/api/rbac_lifecycle_test.go`, `pkg/reporting/catalog_test.go`, and `frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx`. |
+| Pro includes business/admin extras: RBAC, audit logging, reporting, and agent profiles. | Router and settings gates use `rbac`, `audit_logging`, `advanced_reporting`, and `agent_profiles`; audit capture is SQLite-backed in `pkg/server/server.go` and `pkg/audit/sqlite_factory.go`, while query/export remains license-gated. | `internal/api/security_regression_test.go`, `internal/api/rbac_lifecycle_test.go`, `pkg/reporting/catalog_test.go`, and `frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx`. |
 
 ## Feature Matrix
 
@@ -143,8 +143,8 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 | `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
 | `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
 | `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
-| `FeatureSSO` | `sso` | Basic SSO (OIDC) | Y | Y | Y | Y | Basic SSO is included in Community tier. |
-| `FeatureAdvancedSSO` | `advanced_sso` | Advanced SSO (SAML/Multi-Provider) | N | N | Y | Y | Used to gate advanced SSO capabilities such as SAML and multi-provider flows. |
+| `FeatureSSO` | `sso` | Core SSO (OIDC/SAML) | Y | Y | Y | Y | OIDC and SAML SSO are included in Community tier. |
+| `FeatureAdvancedSSO` | `advanced_sso` | Multi-Provider SSO | Y | Y | Y | Y | Compatibility capability key; retained for existing entitlement payloads and included in Community to avoid an SSO tax. |
 | `FeatureRBAC` | `rbac` | Role-Based Access Control (RBAC) | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., rbac, ...)`. |
 | `FeatureAuditLogging` | `audit_logging` | Audit Logging | N | N | Y | Y | API route gating for audit query, verify, and export endpoints. |
 | `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
@@ -170,7 +170,7 @@ Patrol and the Assistant support tiered autonomy:
 - Core self-hosted monitoring included without a monitored-system volume gate.
 - 7-day history.
 - Pulse Patrol with your own provider or local model.
-- Basic SSO and update alerts.
+- Core SSO and update alerts.
 
 ### Relay
 - Everything in Community, plus:
@@ -183,7 +183,7 @@ Patrol and the Assistant support tiered autonomy:
 - Alert-triggered root-cause analysis.
 - Safe remediation workflows and autonomy controls.
 - Centralized agent profiles.
-- Advanced SSO, RBAC, audit logging, and advanced reporting.
+- RBAC, audit logging, and advanced reporting.
 - 90-day history.
 
 ### Legacy Pro+

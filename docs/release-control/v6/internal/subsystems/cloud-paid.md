@@ -404,8 +404,8 @@ runtime gating as separate unlinked claims.
     customer-facing plan cards, top-summary highlights, and comparison rows
     must lead with the canonical plan story: `Community = monitor`, `Relay =
     reach Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro = root-cause analysis, safe
-    remediation workflows, and longer history`. Team/admin capabilities such as SAML
-    SSO, RBAC, audit logging, reporting, and agent profiles may appear as
+    remediation workflows, and longer history`. Team/admin capabilities such as
+    RBAC, audit logging, reporting, and agent profiles may appear as
     secondary included extras, while platform-specific compatibility keys such
     as `kubernetes_ai` must not be elevated into a marquee marketed Pro line
     item on the self-hosted Plans surface. Legacy packaging nouns such as
@@ -596,7 +596,7 @@ runtime gating as separate unlinked claims.
 
 `frontend-modern/src/utils/pricingHandoff.ts` now routes displayable paid
 self-hosted feature keys (`relay`, `mobile_app`, `push_notifications`,
-`ai_alerts`, `ai_autofix`, `long_term_metrics`, `advanced_sso`, `rbac`,
+`ai_alerts`, `ai_autofix`, `long_term_metrics`, `rbac`,
 `audit_logging`, `advanced_reporting`, `agent_profiles`) to the
 self-hosted billing plan page instead of the Pulse Account purchase-start
 handoff. The purchase-start handoff requires a `PublicURL` and fails on local

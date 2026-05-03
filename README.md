@@ -185,8 +185,7 @@ Runtime-aligned capability summary:
 | Safe Remediation Workflows | — | — | ✅ | ✅ |
 | Centralized Agent Profiles | — | — | ✅ | ✅ |
 | Update Alerts (Container/Package Updates) | ✅ | ✅ | ✅ | ✅ |
-| Basic SSO (OIDC) | ✅ | ✅ | ✅ | ✅ |
-| Advanced SSO (SAML/Multi-Provider) | — | — | ✅ | ✅ |
+| SSO (OIDC/SAML/Multi-Provider) | ✅ | ✅ | ✅ | ✅ |
 | Role-Based Access Control (RBAC) | — | — | ✅ | ✅ |
 | Enterprise Audit Logging | — | — | ✅ | ✅ |
 | Advanced Infrastructure Reporting (PDF/CSV) | — | — | ✅ | ✅ |

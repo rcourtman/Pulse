@@ -650,8 +650,7 @@ const buildCapabilityProofItem = ({
     label,
     state,
     statusLabel: getProofStatusLabel(state),
-    detail:
-      state === 'active' ? activeDetail : state === 'partial' ? partialDetail : missingDetail,
+    detail: state === 'active' ? activeDetail : state === 'partial' ? partialDetail : missingDetail,
   };
 };
 
@@ -724,15 +723,8 @@ export const getSelfHostedActivationProofPresentation = (
       buildCapabilityProofItem({
         capabilities,
         label: 'Team and admin controls',
-        requiredCapabilities: [
-          'advanced_sso',
-          'rbac',
-          'audit_logging',
-          'advanced_reporting',
-          'agent_profiles',
-        ],
-        activeDetail:
-          'Advanced SSO, RBAC, audit logging, reporting, and agent-profile capabilities are present.',
+        requiredCapabilities: ['rbac', 'audit_logging', 'advanced_reporting', 'agent_profiles'],
+        activeDetail: 'RBAC, audit logging, reporting, and agent-profile capabilities are present.',
         partialDetail:
           'Some team/admin capabilities are present. Refresh or recover activation if any admin tools stay unavailable.',
         missingDetail:

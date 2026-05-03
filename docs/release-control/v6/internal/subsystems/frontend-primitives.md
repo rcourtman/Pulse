@@ -182,6 +182,11 @@ work extends shared components instead of creating new local variants.
 
 ## Extension Points
 
+SSO provider settings changes must preserve the shared Community-tier action
+path: SAML and OIDC provider creation stay on the same settings-shell control
+surface, while paid-plan copy and compatibility feature probes stay out of the
+frontend primitive boundary.
+
 1. Add shared primitives in `frontend-modern/src/components/shared/`
    Framed product table surfaces must consume the shared `TableCard` frame and
    `TableCardHeader` title/action band instead of composing page-local `Card`
@@ -2606,6 +2611,13 @@ into section-local strings.
 the canonical SSO provider settings runtime boundary: `SSOProvidersPanel.tsx`
 is the shell, `useSSOProvidersState.ts` owns the reactive/API lifecycle, and
 `ssoProvidersModel.ts` owns provider-form normalization and payload building.
+That boundary must keep SAML creation on the same first-class action path as
+OIDC. `SSOProvidersPanel.tsx` may show read-only state from settings
+capabilities, but it must not render a self-hosted Pro upsell, `UpgradeLink`,
+or `advanced_sso` feature probe before opening the SAML provider modal.
+`useSSOProvidersState.ts` must treat provider type as form state only; SSO
+entitlement truth belongs to the backend/runtime capability contract, where
+OIDC, SAML, and multi-provider SSO are Community-tier capabilities.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.

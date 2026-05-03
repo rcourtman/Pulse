@@ -251,6 +251,17 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps SAML SSO available without a self-hosted Pro upsell boundary', () => {
+    expect(ssoProvidersPanelSource).toContain("openAddModal('saml')");
+    expect(ssoProvidersPanelSource).toContain('getSSOProviderAddButtonLabel');
+    expect(ssoProvidersPanelSource).not.toContain('showSamlUpsell');
+    expect(ssoProvidersPanelSource).not.toContain('UpgradeLink');
+    expect(ssoProvidersPanelSource).not.toContain('Add SAML (Pro)');
+    expect(ssoProvidersStateSource).not.toContain('advanced_sso');
+    expect(ssoProvidersStateSource).not.toContain('getUpgradeActionDestination');
+    expect(ssoProvidersStateSource).not.toContain('loadRuntimeCapabilities');
+  });
+
   it('keeps Docker and Podman update-action copy on the system settings presentation owner', () => {
     expect(dockerRuntimeSettingsCardSource).toContain('DOCKER_UPDATE_ACTIONS_SECTION_TITLE');
     expect(dockerRuntimeSettingsCardSource).toContain('DOCKER_UPDATE_ACTIONS_ENV_VAR');

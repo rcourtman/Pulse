@@ -90,7 +90,7 @@ describe('selfHostedPlans', () => {
   it('keeps Community copy free-first and Pro copy focused on operational extras', () => {
     expect(SELF_HOSTED_PLAN_BY_TIER.community.subline).toBe('Core monitoring included');
     expect(SELF_HOSTED_PLAN_BY_TIER.community.billingExtrasSummary).toBe(
-      'Patrol, alerts, and OIDC',
+      'Patrol, alerts, and SSO',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementSummary).toContain(
       'Community is active on this instance.',
@@ -141,7 +141,6 @@ describe('selfHostedPlans', () => {
       '90-day metric history',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.includedExtras).toEqual([
-      'Advanced SSO (SAML/Multi-Provider)',
       'Role-Based Access Control (RBAC)',
       'Audit Logging',
       'PDF/CSV Reporting',
@@ -199,7 +198,6 @@ describe('selfHostedPlans', () => {
       'ai_alerts',
       'ai_autofix',
       'long_term_metrics',
-      'advanced_sso',
       'rbac',
       'audit_logging',
       'advanced_reporting',
@@ -212,7 +210,7 @@ describe('selfHostedPlans', () => {
         extras: plan.billingExtrasSummary,
       })),
     ).toEqual([
-      { tier: 'community', historyDays: 7, extras: 'Patrol, alerts, and OIDC' },
+      { tier: 'community', historyDays: 7, extras: 'Patrol, alerts, and SSO' },
       {
         tier: 'relay',
         historyDays: 14,

@@ -147,9 +147,6 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(
       currentPlanCard.getByText('Alert Root-Cause Analysis', { exact: true }),
     ).toBeVisible();
-    await expect(
-      currentPlanCard.getByText('Advanced SSO (SAML/Multi-Provider)', { exact: true }),
-    ).toBeVisible();
     await expect(currentPlanCard.getByText('PDF/CSV Reporting', { exact: true })).toBeVisible();
     await expect(
       currentPlanCard.getByText('Centralized Agent Profiles', { exact: true }),

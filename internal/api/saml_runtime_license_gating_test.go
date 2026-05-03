@@ -9,14 +9,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-// TestSAMLRuntimeEndpointsRequireLicenseFeature verifies that the SAML
+// TestSAMLRuntimeEndpointsUseCommunitySSOFeature verifies that the SAML
 // login-flow endpoints (/api/saml/{id}/login, /acs, /metadata, /logout, /slo)
-// return 402 Payment Required when no Pro license is active. SAML is an
-// advanced_sso feature and must not be usable on the free tier.
-//
-// Covers assessment gap #1: "SAML runtime endpoints have NO advanced_sso
-// license enforcement."
-func TestSAMLRuntimeEndpointsRequireLicenseFeature(t *testing.T) {
+// do not return the old paid-feature 402 when no paid license is active. SAML
+// is part of the Community SSO capability.
+func TestSAMLRuntimeEndpointsUseCommunitySSOFeature(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{DataPath: tempDir, ConfigPath: tempDir}
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -43,16 +40,15 @@ func TestSAMLRuntimeEndpointsRequireLicenseFeature(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusPaymentRequired {
-			t.Errorf("%s %s: expected 402 for missing advanced_sso license, got %d", tc.method, tc.path, rec.Code)
+		if rec.Code == http.StatusPaymentRequired {
+			t.Errorf("%s %s: should not get 402 for Community SSO, got body: %s", tc.method, tc.path, rec.Body.String())
 		}
 	}
 }
 
-// TestSAMLRuntimeLicenseGatingResponseFormat verifies that the 402 response
-// from SAML runtime endpoints includes a JSON body with upgrade information
-// referencing the advanced_sso feature.
-func TestSAMLRuntimeLicenseGatingResponseFormat(t *testing.T) {
+// TestSAMLRuntimeNoUpgradeResponse verifies SAML runtime endpoints do not emit
+// upgrade metadata when the provider is missing.
+func TestSAMLRuntimeNoUpgradeResponse(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{DataPath: tempDir, ConfigPath: tempDir}
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -62,20 +58,12 @@ func TestSAMLRuntimeLicenseGatingResponseFormat(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402, got %d", rec.Code)
-	}
-
-	ct := rec.Header().Get("Content-Type")
-	if !strings.Contains(ct, "application/json") {
-		t.Errorf("expected Content-Type to contain application/json, got %q", ct)
+	if rec.Code == http.StatusPaymentRequired {
+		t.Fatalf("expected non-402 for Community SSO, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "advanced_sso") {
-		t.Errorf("expected 402 body to reference advanced_sso feature, got: %s", body)
-	}
-	if !strings.Contains(body, "upgrade_url") {
-		t.Errorf("expected 402 body to contain upgrade_url, got: %s", body)
+	if strings.Contains(body, "upgrade_url") || strings.Contains(body, "advanced_sso") {
+		t.Errorf("SAML runtime returned old upgrade response body: %s", body)
 	}
 }

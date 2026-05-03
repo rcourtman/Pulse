@@ -103,7 +103,7 @@ than sold by monitored-system volume.
 | Monitoring scope | **Core self-hosted monitoring included** |
 | Monitoring | Full (Proxmox, Docker, K8s, agents) |
 | Alerts | Threshold-based |
-| SSO | Basic OIDC |
+| SSO | OIDC/SAML with multi-provider support |
 | Update notifications | Yes |
 | Metrics history | **7 days** |
 | AI Patrol | Monitor + root-cause summaries + fix suggestions with the operator's configured provider or local model |
@@ -114,7 +114,7 @@ than sold by monitored-system volume.
 | Customer-specific Relay URL | No |
 | RBAC | No |
 | Audit logging | No |
-| SAML SSO | No |
+| SAML SSO | Yes |
 | Agent profiles | No |
 | PDF/CSV reporting | No |
 
@@ -140,7 +140,7 @@ remediation actions through Pulse.
 | Metrics history | **14 days** |
 | Safe remediation workflows | No |
 | Alert-triggered root-cause analysis | No |
-| RBAC/Audit/SAML | No |
+| RBAC/Audit/Reporting | No |
 | Reporting | No |
 
 **Positioning:** The convenience tier. It should feel cheap enough to buy on the spot when
@@ -158,7 +158,7 @@ without changing their self-hosted monitoring scope.
 | Metrics history | **90 days** |
 | RBAC | **Yes** |
 | Audit logging | **Yes** |
-| SAML SSO | **Yes** |
+| SAML SSO | Included with Community |
 | Agent profiles | **Yes** |
 | PDF/CSV reporting | **Yes** |
 | Self-hosted trial acquisition | No; local trial CTAs are retired for v6 GA |
@@ -169,7 +169,7 @@ into operations. The marketing pitch focuses on three things:
 2. "Fix it safely" (safe remediation workflows)
 3. "Keep longer operating memory" (90-day history)
 
-Relay convenience and the team extras (RBAC, audit logging, SAML, reporting, and agent
+Relay convenience and the team extras (RBAC, audit logging, reporting, and agent
 profiles) are included, but they are supporting value rather than the headline.
 
 ### Pro+ — Legacy continuity tier only

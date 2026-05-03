@@ -668,7 +668,7 @@ Returns minimal server info for installer scripts.
 
 OIDC and SAML configuration is managed via SSO providers.
 
-### SSO Provider Management (Pro)
+### SSO Provider Management (Community)
 - `GET /api/security/sso/providers` (admin)
 - `POST /api/security/sso/providers` (admin)
 - `GET /api/security/sso/providers/{id}` (admin)
@@ -679,9 +679,9 @@ Provider mutation request contract:
 - Max request body: 1MB.
 - Strict JSON contract: unknown fields and trailing payload are rejected.
 - Provider IDs must match server validation.
-- SAML providers require `advanced_sso` feature entitlement.
+- OIDC and SAML providers are included with the Community SSO entitlement.
 
-### SSO Test and Metadata Preview (Pro)
+### SSO Test and Metadata Preview (Community)
 - `POST /api/security/sso/providers/test` (admin)
 - `POST /api/security/sso/providers/metadata/preview` (admin)
 

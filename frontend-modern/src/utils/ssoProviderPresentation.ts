@@ -23,9 +23,9 @@ export function getSSOProviderAddButtonLabel(type: SSOProviderType): string {
 
 export function getSSOSamlFeatureGateCopy(): SSOProviderFeatureGateCopy {
   return {
-    title: 'Advanced SSO',
-    subtitle: 'Advanced SSO',
-    body: 'SAML 2.0 and multi-provider SSO are available on paid self-hosted and hosted plans. Basic OIDC remains available without a paid plan.',
+    title: 'Single Sign-On',
+    subtitle: 'Single Sign-On',
+    body: 'OIDC, SAML, and multi-provider SSO are included with Community and higher tiers.',
   };
 }
 
@@ -124,7 +124,8 @@ export function getSSOProviderTypeBadgeClass(): string {
 export function getSSOTestResultPresentation(success: boolean) {
   if (success) {
     return {
-      panelClass: 'p-4 rounded-md border bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800',
+      panelClass:
+        'p-4 rounded-md border bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800',
       iconClass: 'w-5 h-5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5',
       titleClass: 'text-sm font-medium text-green-800 dark:text-green-200',
       errorClass: 'text-xs text-red-600 dark:text-red-400 mt-1',
@@ -132,7 +133,8 @@ export function getSSOTestResultPresentation(success: boolean) {
   }
 
   return {
-    panelClass: 'p-4 rounded-md border bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800',
+    panelClass:
+      'p-4 rounded-md border bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800',
     iconClass: 'w-5 h-5 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5',
     titleClass: 'text-sm font-medium text-red-800 dark:text-red-200',
     errorClass: 'text-xs text-red-600 dark:text-red-400 mt-1',

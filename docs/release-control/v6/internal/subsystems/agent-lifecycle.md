@@ -276,7 +276,7 @@ profile and assignment columns, but embedded table framing must route through
    valid for one authenticated session, but retained CSRF hashes are not
    install tokens, setup-token state, enrollment authority, or agent credential
    continuity.
-   The same shared-helper rule now covers SSO outbound discovery and metadata fetches plus credential-file loads in `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`: lifecycle-adjacent setup or auth work may depend on that shared trust boundary, but it must not fork a second HTTP client, redirect policy, or file-read rule inside lifecycle-local flows.
+   The same shared-helper rule now covers SSO outbound discovery and metadata fetches plus credential-file loads in `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`: lifecycle-adjacent setup or auth work may depend on that shared trust boundary, but it must not fork a second HTTP client, redirect policy, file-read rule, or SSO entitlement interpretation inside lifecycle-local flows. SAML and multi-provider SSO availability remains API/security-owned Community-tier behavior, not an agent lifecycle setup gate.
    The same shared-helper rule also covers organization membership and
    cross-organization sharing transport in `internal/api/org_handlers.go` plus
    adjacent route wiring. Lifecycle surfaces may coexist on the same settings

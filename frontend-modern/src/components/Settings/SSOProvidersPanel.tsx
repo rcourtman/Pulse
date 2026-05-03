@@ -1,15 +1,13 @@
 import { Component, For, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
-import { Dialog } from '@/components/shared/Dialog';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
+import { Dialog } from '@/components/shared/Dialog';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Shield from 'lucide-solid/icons/shield';
 import Copy from 'lucide-solid/icons/copy';
-import ExternalLink from 'lucide-solid/icons/external-link';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import XCircle from 'lucide-solid/icons/x-circle';
 import Eye from 'lucide-solid/icons/eye';
@@ -26,12 +24,7 @@ import {
   getSSOProviderSummary,
   getSSOProviderTypeBadgeClass,
   getSSOProviderTypeLabel,
-  getSSOSamlFeatureGateCopy,
 } from '@/utils/ssoProviderPresentation';
-import {
-  getUpgradeActionButtonClass,
-  UPGRADE_ACTION_LABEL,
-} from '@/utils/upgradePresentation';
 import { ALERT_EMAIL_REPLY_TO_PLACEHOLDER } from '@/utils/alertEmailPresentation';
 import { useSSOProvidersState } from '@/components/Settings/useSSOProvidersState';
 
@@ -41,7 +34,6 @@ interface SSOProvidersPanelProps {
 }
 
 export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
-  const samlFeatureGateCopy = getSSOSamlFeatureGateCopy();
   const {
     providers,
     loading,
@@ -56,8 +48,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     deleteConfirm,
     setDeleteConfirm,
     publicUrl,
-    showSamlUpsell,
-    setShowSamlUpsell,
     testing,
     testResult,
     setTestResult,
@@ -65,7 +55,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     setShowMetadataPreview,
     metadataPreview,
     loadingPreview,
-    hasAdvancedSSO,
     canManage,
     openAddModal,
     openEditModal,
@@ -77,86 +66,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     testConnection,
     canTest,
     fetchMetadataPreview,
-    getUpgradeActionDestination,
-    runtimeCapabilitiesLoaded,
-    showUpgradePrompts,
   } = useSSOProvidersState(props);
 
   return (
     <div class="space-y-6">
-      <Show when={showUpgradePrompts() && showSamlUpsell()}>
-        <Dialog
-          isOpen={true}
-          onClose={() => setShowSamlUpsell(false)}
-          panelClass="max-w-lg"
-          closeOnBackdrop={false}
-          ariaLabel="Add SAML provider"
-        >
-          <div class="w-full">
-            <div class="flex items-center justify-between px-6 py-4 border-b border-border">
-              <div>
-                <h3 class="text-lg font-semibold text-base-content">Add SAML Provider</h3>
-                <p class="text-xs text-muted mt-0.5">{samlFeatureGateCopy.subtitle}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSamlUpsell(false)}
-                class="p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
-                aria-label="Close"
-              >
-                <X class="w-5 h-5" />
-              </button>
-            </div>
-            <div class="px-6 py-5 space-y-4">
-              <p class="text-sm text-muted">{samlFeatureGateCopy.body}</p>
-              <div class="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSamlUpsell(false)}
-                  class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md"
-                >
-                  Not now
-                </button>
-                <UpgradeLink
-                  destination={getUpgradeActionDestination('advanced_sso')}
-                  class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
-                >
-                  {UPGRADE_ACTION_LABEL}
-                  <ExternalLink class="w-4 h-4" />
-                </UpgradeLink>
-              </div>
-            </div>
-          </div>
-        </Dialog>
-      </Show>
-
-      {/* License banner */}
-      <Show
-        when={
-          showUpgradePrompts() && runtimeCapabilitiesLoaded() && !hasAdvancedSSO() && !loading()
-        }
-      >
-        <div class="p-4 bg-surface-alt border border-border rounded-md">
-          <div class="flex flex-col sm:flex-row items-center gap-4">
-            <div class="flex-1">
-              <h4 class="text-base font-semibold text-base-content">
-                {samlFeatureGateCopy.title}
-              </h4>
-              <p class="text-sm text-muted mt-1">{samlFeatureGateCopy.body}</p>
-            </div>
-            <div class="flex flex-col sm:flex-row items-center gap-2">
-              <UpgradeLink
-                destination={getUpgradeActionDestination('advanced_sso')}
-                class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
-              >
-                {UPGRADE_ACTION_LABEL}
-                <ExternalLink class="w-4 h-4" />
-              </UpgradeLink>
-            </div>
-          </div>
-        </div>
-      </Show>
-
       {/* Main panel */}
       <SettingsPanel
         title="Single Sign-On Providers"
@@ -172,28 +85,15 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Plus class="w-4 h-4" />
               {getSSOProviderAddButtonLabel('oidc')}
             </button>
-            <Show when={hasAdvancedSSO()}>
-              <button
-                type="button"
-                onClick={() => openAddModal('saml')}
-                disabled={!canManage()}
-                class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
-              >
-                <Plus class="w-4 h-4" />
-                {getSSOProviderAddButtonLabel('saml')}
-              </button>
-            </Show>
-            <Show when={showUpgradePrompts() && runtimeCapabilitiesLoaded() && !hasAdvancedSSO()}>
-              <button
-                type="button"
-                onClick={() => setShowSamlUpsell(true)}
-                disabled={!canManage()}
-                class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
-              >
-                <Plus class="w-4 h-4" />
-                {getSSOProviderAddButtonLabel('saml')}
-              </button>
-            </Show>
+            <button
+              type="button"
+              onClick={() => openAddModal('saml')}
+              disabled={!canManage()}
+              class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
+            >
+              <Plus class="w-4 h-4" />
+              {getSSOProviderAddButtonLabel('saml')}
+            </button>
           </div>
         }
         bodyClass="space-y-6"

@@ -26,8 +26,6 @@ import {
  *
  * When no live IdP is available, the journey validates the full CRUD
  * lifecycle using inline metadata XML and verifies the SSO admin UI.
- * When `advanced_sso` is not licensed, the journey validates that 402
- * paywall responses are correct.
  */
 
 const IDP_METADATA_URL = process.env.PULSE_E2E_SAML_IDP_METADATA_URL || '';
@@ -50,8 +48,8 @@ const PROVIDER_NAME = `e2e-saml-${Date.now()}`;
 /** Provider ID populated after creation (for cleanup). */
 let providerId = '';
 
-/** Whether the `advanced_sso` feature is licensed. */
-let samlLicensed = true;
+/** Whether the SAML provider surface is available in the current runtime. */
+let samlAvailable = true;
 
 test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', () => {
   test.afterAll(async ({ browser }) => {
@@ -79,11 +77,9 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
     const res = await apiRequest(page, '/api/security/sso/providers');
 
     if (res.status() === 402) {
-      // SSO feature is not licensed — record for downstream tests.
-      // The `sso` base feature is free-tier, so 402 here is unexpected
-      // but we handle it gracefully.
-      samlLicensed = false;
-      // Validate the 402 paywall response format.
+      // The `sso` feature is Community-tier, so 402 here is unexpected but
+      // we handle it gracefully for runtimes with custom feature overrides.
+      samlAvailable = false;
       const body = await res.json();
       expect(body).toHaveProperty('error');
       expect(body).toHaveProperty('feature');
@@ -97,7 +93,7 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
 
   test('create SAML SSO provider', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop SSO journey');
-    test.skip(!samlLicensed, 'SSO not licensed');
+    test.skip(!samlAvailable, 'SAML unavailable');
 
     await ensureAuthenticated(page);
 
@@ -118,11 +114,10 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
     });
 
     if (res.status() === 402) {
-      // `advanced_sso` is not licensed — SAML create requires Pro.
-      samlLicensed = false;
+      samlAvailable = false;
       const body = await res.json();
       expect(body).toHaveProperty('feature');
-      expect(body.feature).toBe('advanced_sso');
+      expect(body.feature).toBe('sso');
       return;
     }
 
@@ -138,7 +133,7 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
 
   test('provider appears in SSO provider list', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop SSO journey');
-    test.skip(!samlLicensed, 'SAML not licensed');
+    test.skip(!samlAvailable, 'SAML unavailable');
     test.skip(!providerId, 'Provider was not created');
 
     await ensureAuthenticated(page);
@@ -158,14 +153,14 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
 
   test('SP metadata endpoint returns XML', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop SSO journey');
-    test.skip(!samlLicensed, 'SAML not licensed');
+    test.skip(!samlAvailable, 'SAML unavailable');
     test.skip(!providerId, 'Provider was not created');
 
     // The SP metadata endpoint is unauthenticated (IdPs need to fetch it).
     const res = await page.request.get(`/api/saml/${providerId}/metadata`);
 
     if (res.status() === 402) {
-      // advanced_sso gate on the SAML runtime route.
+      samlAvailable = false;
       return;
     }
 
@@ -187,7 +182,7 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
 
   test('test-connection validates provider metadata', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop SSO journey');
-    test.skip(!samlLicensed, 'SAML not licensed');
+    test.skip(!samlAvailable, 'SAML unavailable');
 
     await ensureAuthenticated(page);
 
@@ -205,7 +200,7 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
     });
 
     if (res.status() === 402) {
-      samlLicensed = false;
+      samlAvailable = false;
       return;
     }
 
@@ -230,21 +225,21 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
     await expect(page.locator('#root')).toBeVisible();
 
     // The SSO panel main content area should render a heading or add button
-    // (when licensed) or an upgrade link (when not licensed). Target the main
-    // content area to avoid matching sidebar navigation text.
+    // content area. Target the main content area to avoid matching sidebar
+    // navigation text.
     const ssoContent = page.locator(
-      'main h1:has-text("SSO"), main h2:has-text("SSO"), main h1:has-text("Sign-On"), main h2:has-text("Sign-On"), main a:has-text("Upgrade"), main button:has-text("Add Provider")',
+      'main h1:has-text("SSO"), main h2:has-text("SSO"), main h1:has-text("Sign-On"), main h2:has-text("Sign-On"), main button:has-text("Add SAML"), main button:has-text("Add OIDC")',
     ).first();
 
     await expect(
       ssoContent,
-      'SSO settings page should render SSO content or upgrade link in main area',
+      'SSO settings page should render SSO content in main area',
     ).toBeVisible({ timeout: 15_000 });
   });
 
   test('provider can be disabled and re-enabled', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop SSO journey');
-    test.skip(!samlLicensed, 'SAML not licensed');
+    test.skip(!samlAvailable, 'SAML unavailable');
     test.skip(!providerId, 'Provider was not created');
 
     await ensureAuthenticated(page);
@@ -305,7 +300,7 @@ test.describe.serial('Journey: SAML SSO → IdP Login → Role-Mapped Access', (
 
   test('provider can be deleted and is removed', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop SSO journey');
-    test.skip(!samlLicensed, 'SAML not licensed');
+    test.skip(!samlAvailable, 'SAML unavailable');
     test.skip(!providerId, 'Provider was not created');
 
     await ensureAuthenticated(page);

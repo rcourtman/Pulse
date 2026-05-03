@@ -16,11 +16,11 @@ python3 scripts/release_control/paid_feature_claims_proof.py --json
 
 - Community keeps core monitoring free and does not introduce monitored-system volume caps.
 - Relay claims only remote web access, Pulse Mobile pairing for handoff, push notifications, and 14-day metric history.
-- Pro preserves Relay capabilities and adds operator extras: root-cause analysis, safe remediation workflows, 90-day metric history, RBAC, audit logging, reporting, SAML SSO, and agent profiles.
-- Public app, docs, and site copy must not reintroduce old self-hosted monitoring-limit, higher-limit, default-trial, hosted-model-credit, or bundled-Patrol-credit claims.
+- Pro preserves Relay capabilities and adds operator extras: root-cause analysis, safe remediation workflows, 90-day metric history, RBAC, audit logging, reporting, and agent profiles.
+- Public app, docs, and site copy must not reintroduce old self-hosted monitoring-limit, higher-limit, default-trial, hosted-model-credit, bundled-Patrol-credit, or paid-SSO claims.
 - Relay must not be marketed as including a customer-specific `*.pulserelay.pro` URL until that product surface exists; v6 GA Relay is the standard outbound relay service.
 - History claims are enforced by the runtime metrics-history API, not only shown in copy.
-- Pro admin extras are backed by concrete core and enterprise runtime tests for RBAC, audit logging, reporting, SAML SSO, and agent profile behavior.
+- Pro admin extras are backed by concrete core and enterprise runtime tests for RBAC, audit logging, reporting, and agent profile behavior.
 - Public pricing, checkout, download, and relay-server entitlement behavior remain consistent with those claims.
 
 ## Final Paid-User Value Audit
@@ -33,7 +33,7 @@ What paid users keep or gain in v6:
 - Legacy paid installs can migrate into the v6 activation model without buying monitoring capacity again.
 - Self-hosted monitoring and child-resource volume are not metered under the current v6 self-hosted packaging.
 - Relay-capable paid users have the real Relay/Pulse Mobile handoff/push capability set.
-- Pro users have 90-day history, alert-triggered root-cause analysis, safe remediation workflows, and the admin extras bundle: Advanced SSO, RBAC, audit logging, PDF/CSV reporting, and centralized agent profiles.
+- Pro users have 90-day history, alert-triggered root-cause analysis, safe remediation workflows, and the admin extras bundle: RBAC, audit logging, PDF/CSV reporting, and centralized agent profiles.
 
 What must not be sold as v6 Pro value:
 
@@ -51,7 +51,7 @@ What must not be sold as v6 Pro value:
 | Relay provides remote web access, Pulse Mobile pairing for handoff, push, and 14-day history | `pkg/licensing` grants `relay`, `mobile_app`, `push_notifications`, and `long_term_metrics`; `internal/api` enforces tier-aware metrics history; `pulse-pro/relay-server` rejects missing Relay entitlement. | Relay copy in `docs/PULSE_PRO.md`, `frontend-modern/src/utils/selfHostedPlans.ts`, `pulse-pro/landing-page/index.html`, and `pulse-pro/license-server/public_pricing.go` is covered by the static copy audit. |
 | Pro adds root-cause analysis and safe remediation workflows | Licensing grants `ai_alerts` and `ai_autofix`; `internal/api` and core AI tests cover gated analysis/remediation paths. | Plan copy and Pro value proof list the features as primary Pro capabilities; stale hosted-model/trial claims are forbidden by the copy audit. |
 | Pro includes 90-day history | `TierHistoryDays[pro] == 90`, `max_history_days` is emitted in entitlements, and metrics-history API tests enforce history ranges. | `HistoryChart` and `ProLicensePanel` frontend tests verify entitlement-aware history presentation. |
-| Pro includes admin extras | API and enterprise package tests cover Advanced SSO, RBAC, audit logging, reporting, and agent profile behavior. | `tests/integration/tests/59-self-hosted-plans-entitlement-summary.spec.ts` proves the advertised Pro settings sections and SAML/agent-profile controls are reachable when Pro capabilities are active. |
+| Pro includes admin extras | API and enterprise package tests cover RBAC, audit logging, reporting, and agent profile behavior. | `tests/integration/tests/59-self-hosted-plans-entitlement-summary.spec.ts` proves the advertised Pro settings sections and agent-profile controls are reachable when Pro capabilities are active. |
 | Existing v5 Pro customers keep paid continuity | Migration and auto-exchange tests prove legacy Pro/Lifetime plans migrate to active v6 entitlements. | The self-hosted plan summary foregrounds grandfathered price continuity and explains that monitoring volume is not metered under current v6 policy. |
 
 ## Release Recommendation

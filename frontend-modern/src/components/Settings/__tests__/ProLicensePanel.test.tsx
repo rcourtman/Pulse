@@ -515,7 +515,6 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
     expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
     expect(screen.getByText('Included extras')).toBeInTheDocument();
-    expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
     expect(screen.getByText('Pulse Pro value proof')).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -793,7 +792,7 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     await waitFor(() => {
-      expect(screen.getByText('Basic SSO (OIDC)')).toBeInTheDocument();
+      expect(screen.getByText('Core SSO (OIDC/SAML)')).toBeInTheDocument();
     });
 
     // Verify self-hosted displayable capabilities render with their expected labels.
@@ -801,7 +800,6 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
     expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
     expect(screen.getByText('Update Alerts')).toBeInTheDocument();
-    expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
     expect(screen.getByText('Role-Based Access Control (RBAC)')).toBeInTheDocument();
     expect(screen.getByText('Audit Logging')).toBeInTheDocument();
     expect(screen.getByText('PDF/CSV Reporting')).toBeInTheDocument();

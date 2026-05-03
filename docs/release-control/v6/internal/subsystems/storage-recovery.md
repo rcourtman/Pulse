@@ -66,6 +66,11 @@ state.
 
 ## Extension Points
 
+Storage/recovery auth-adjacent changes may consume SSO-authenticated sessions,
+but they must not reinterpret SAML or multi-provider SSO availability as a
+storage/recovery entitlement; that provider-route and license truth belongs to
+the shared API/security boundary.
+
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
    Recovery table surfaces must consume the frontend-primitives-owned
@@ -2519,6 +2524,11 @@ ingress must stay direct-loopback only, recovery-token validation must remain
 bound to the generating client IP, and break-glass recovery must clear or mint
 browser sessions rather than toggling a shared `.auth_recovery` file for every
 localhost caller.
+That same adjacent auth boundary may consume SSO-authenticated browser
+sessions, but storage/recovery code must not reinterpret SAML or
+multi-provider SSO availability as a recovery entitlement. SSO license and
+provider-route truth stays on the shared API/security boundary, where OIDC,
+SAML, and multi-provider SSO are Community-tier authentication capabilities.
 That same shared `internal/api/` boundary also owns hosted AI bootstrap
 continuity. Storage- and recovery-adjacent hosted flows may surface Patrol-
 backed investigation or AI-assisted recovery guidance before an operator has

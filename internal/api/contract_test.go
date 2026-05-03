@@ -5382,7 +5382,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","advanced_sso","rbac","audit_logging","advanced_reporting"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -5426,7 +5426,7 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","ai_patrol"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[
@@ -5438,7 +5438,6 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 			{"key":"ai_alerts","reason":"Upgrade to Pro so alerts arrive with root-cause analysis instead of a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
 			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
 			{"key":"agent_profiles","reason":"Upgrade to Pro to standardize agent behavior across systems without reconfiguring every install by hand.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=agent_profiles"},
-			{"key":"advanced_sso","reason":"Upgrade to Pro to connect your identity provider and keep operator access aligned with your existing auth controls.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=advanced_sso"},
 			{"key":"audit_logging","reason":"Upgrade to Pro to keep a trustworthy action trail for incident review, accountability, and compliance.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=audit_logging"},
 			{"key":"advanced_reporting","reason":"Upgrade to Pro to turn live infrastructure state into shareable reports without manual screenshot work.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=advanced_reporting"}
 		],
@@ -5488,7 +5487,7 @@ func TestContract_SelfHostedCommunityRuntimeCapabilitiesJSONSnapshot(t *testing.
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","ai_patrol"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol"],
 		"limits":[],
 		"hosted_mode":false,
 		"max_history_days":7,
@@ -5520,7 +5519,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","advanced_sso","rbac","audit_logging","advanced_reporting"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting"],
 		"limits":[{"key":"max_monitored_systems","limit":15,"current":0,"current_available":false,"current_unavailable_reason":"supplemental_inventory_unsettled","state":"ok"}],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -5565,7 +5564,7 @@ func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","advanced_sso","rbac","audit_logging","advanced_reporting"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],

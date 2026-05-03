@@ -67,8 +67,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureSSO: {
 		Key:                   FeatureSSO,
-		DisplayName:           "Basic SSO (OIDC)",
-		ComparisonName:        "Basic SSO (OIDC)",
+		DisplayName:           "Core SSO (OIDC/SAML)",
+		ComparisonName:        "Core SSO (OIDC/SAML)",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -229,17 +229,15 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureAdvancedSSO: {
 		Key:                   FeatureAdvancedSSO,
-		DisplayName:           "Advanced SSO (SAML/Multi-Provider)",
-		ComparisonName:        "Advanced SSO (SAML/Multi-Provider)",
-		ShowInComparisonTable: true,
-		DisplayableInPlanUI:   true,
+		DisplayName:           "Multi-Provider SSO",
+		ComparisonName:        "Multi-Provider SSO",
+		ShowInComparisonTable: false,
+		DisplayableInPlanUI:   false,
 		SelfHostedRoles: SelfHostedFeatureRoles{
-			Community: SelfHostedFeatureRoleHidden,
-			Relay:     SelfHostedFeatureRoleHidden,
-			Pro:       SelfHostedFeatureRoleIncludedExtra,
+			Community: SelfHostedFeatureRoleIncluded,
+			Relay:     SelfHostedFeatureRoleIncluded,
+			Pro:       SelfHostedFeatureRoleIncluded,
 		},
-		UpgradeReason:   "Upgrade to Pro to connect your identity provider and keep operator access aligned with your existing auth controls.",
-		UpgradePriority: 7,
 	},
 	FeatureAdvancedReporting: {
 		Key:                   FeatureAdvancedReporting,
