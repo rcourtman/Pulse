@@ -16,17 +16,18 @@ was accurate but under-scoped for the full `rc.2` to `rc.3` delta.
 
 The packet was refreshed again after the later RC3 candidate commits that made
 self-hosted SSO a Community-tier capability, audited SSO provider settings,
-and fixed stable installer prerelease selection.
+fixed stable installer prerelease selection, and corrected the mock metrics
+store downsample assertion that failed the draft backend race proof.
 
 ## Reviewed Range
 
 - From tag: `v6.0.0-rc.2`
 - From commit: `2868b44cf91b59bca85cd886711d78cd3c376fab`
-- To candidate commit: `c27814d1901ec59fad510dfb5c57358dfa6525b1`
-- Git range: `v6.0.0-rc.2..c27814d1901ec59fad510dfb5c57358dfa6525b1`
-- Commit count: `603`
+- To candidate commit: `158d65ccdb81077c35b9237a1652b2774ddb5d5c`
+- Git range: `v6.0.0-rc.2..158d65ccdb81077c35b9237a1652b2774ddb5d5c`
+- Commit count: `605`
 - Date span in the range: `2026-04-16` through `2026-05-03`
-- Changed scope: `1765` files, `113745` insertions, `72725` deletions
+- Changed scope: `1766` files, `113798` insertions, `72729` deletions
 
 ## Review Method
 
@@ -48,7 +49,7 @@ Commands used for the coverage pass:
 
 ## Commit Coverage Summary
 
-The 603 commits were covered by these release-note buckets:
+The 605 commits were covered by these release-note buckets:
 
 - release packaging, release validation, signed assets, installer resolution,
   stable-channel prerelease filtering, update signer continuity, rollback
@@ -62,7 +63,8 @@ The 603 commits were covered by these release-note buckets:
 - infrastructure, connections, Unified Agent, Proxmox, PBS, PMG, TrueNAS,
   VMware, Docker, Podman, platform admission, and fleet governance
 - monitoring, alerts, metrics history, Workloads, Storage, Recovery, backup,
-  snapshot, Ceph, ZFS, RAID, filters, tables, charts, and summary layout
+  snapshot, Ceph, ZFS, RAID, filters, tables, charts, summary layout, and
+  mock metrics store downsample proof
 - AI, Patrol, action governance, approval/audit history, command policy, and
   Ollama local-runtime behavior
 - mobile companion-role, hosted mobile proof, approval routing, and device
@@ -82,13 +84,14 @@ corrective maintenance RC:
   - records the exact commit range and count
   - adds release packaging, security/auth, hosted/mobile, governance, latest
     storage, skip-auth, SSO entitlement, provider-settings, stable installer
-    selection, and artifact-validation coverage
+    selection, backend mock metrics proof, and artifact-validation coverage
 - `docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md`
   - expands the release intent from a narrow corrective RC to a broad
     hardening RC with corrective maintenance at its core
   - adds release packaging, security/auth, hosted/mobile, governance, storage
     summary, skip-auth, SSO entitlement, provider-settings, stable installer
-    selection, and artifact-validation re-test notes
+    selection, backend mock metrics proof, and artifact-validation re-test
+    notes
 - `docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md`
   - aligns maintainer-facing support language with the broader audited delta
   - adds the newest storage, skip-auth, SSO, stable installer selection, and

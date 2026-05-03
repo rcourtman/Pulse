@@ -120,8 +120,8 @@ Old metadata section.
             repo_root / "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("c27814d1901ec59fad510dfb5c57358dfa6525b1", release_notes)
-        self.assertIn("commit count: `603`", changelog)
+        self.assertIn("158d65ccdb81077c35b9237a1652b2774ddb5d5c", release_notes)
+        self.assertIn("commit count: `605`", changelog)
         self.assertIn("broad hardening RC with a corrective maintenance core", changelog)
         self.assertIn("Community-tier capabilities", release_notes)
         self.assertIn("stable-channel release resolution", release_notes)

@@ -24,10 +24,10 @@ The changelog was audited against every commit in the exact release range for
 the current candidate head:
 
 - `v6.0.0-rc.2`: `2868b44cf91b59bca85cd886711d78cd3c376fab`
-- candidate commit: `c27814d1901ec59fad510dfb5c57358dfa6525b1`
-- range: `v6.0.0-rc.2..c27814d1901ec59fad510dfb5c57358dfa6525b1`
-- commit count: `603`
-- changed scope: `1765` files, `113745` insertions, `72725` deletions
+- candidate commit: `158d65ccdb81077c35b9237a1652b2774ddb5d5c`
+- range: `v6.0.0-rc.2..158d65ccdb81077c35b9237a1652b2774ddb5d5c`
+- commit count: `605`
+- changed scope: `1766` files, `113798` insertions, `72729` deletions
 
 Those commits are grouped in this changelog rather than listed one by one. The
 range includes release/install/update work, security and trust-boundary
@@ -56,6 +56,9 @@ The release and installer changes in this candidate include:
 - stable installer resolution ignores prerelease-shaped tags and downloads the
   installer from the latest stable release asset instead of trusting GitHub's
   floating latest-release redirect when an RC is current
+- mock metrics store downsample proof now compares seeded history against the
+  canonical bucket average used by the backend query path, avoiding
+  time-of-hour-dependent backend race-test failures during RC validation
 - low-disk updates fail before stopping the current service
 - installer bundle fallback logic works without relying on a missing external
   helper

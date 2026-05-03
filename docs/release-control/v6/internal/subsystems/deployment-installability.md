@@ -183,6 +183,10 @@ server-side update execution surfaces.
    Installer-resolution fixes that affect stable versus prerelease selection
    are one of those release-risk themes and must be named in the current RC
    packet before the release workflow is restarted.
+   Release-validation proof corrections that unblock an RC draft, including
+   backend CI proof fixes that do not change runtime behavior, must still be
+   named in the audit record and reflected in the candidate commit hash,
+   commit count, and changed-scope summary before the workflow is restarted.
    The prerelease feedback intake template and active demo/update metadata must
    also stay on generic or current-RC wording instead of hard-coding stale
    `rc.1` examples once later candidates exist.

@@ -32,11 +32,13 @@ before broader retesting:
   should remain represented in the candidate
 - the support packet should be explicit about the post-`rc.2` update-signer
   transition and the stable rollback target
+- backend RC validation should no longer fail the mock metrics history proof
+  because an hourly downsample bucket was compared with a single point sample
 
-This packet was audited against all `603` commits in the current candidate
+This packet was audited against all `605` commits in the current candidate
 range, from
 `2868b44cf91b59bca85cd886711d78cd3c376fab` through
-`c27814d1901ec59fad510dfb5c57358dfa6525b1`.
+`158d65ccdb81077c35b9237a1652b2774ddb5d5c`.
 
 ## Support Stance
 
@@ -66,6 +68,9 @@ range, from
   reporting and validation.
 - The release packet records the exact `rc.2` to `rc.3` commit coverage audit
   in the release-control evidence appendix.
+- Mock metrics store downsample validation now matches the backend query
+  contract, so RC backend race proof is not sensitive to the minute inside the
+  current hourly bucket.
 
 ### Security, Auth, And Trust Boundaries
 
