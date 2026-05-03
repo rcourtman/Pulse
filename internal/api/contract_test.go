@@ -49,7 +49,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type resourceContractSnapshot struct {
@@ -8217,14 +8216,10 @@ func TestContract_BootstrapTokenPersistenceJSONSnapshot(t *testing.T) {
 func TestContract_InitializeBootstrapTokenLogsPathNotSecret(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{DataPath: tempDir}
-	router := &Router{config: cfg}
 
 	var logBuf bytes.Buffer
-	origLogger := log.Logger
-	log.Logger = zerolog.New(&logBuf)
-	t.Cleanup(func() {
-		log.Logger = origLogger
-	})
+	logger := zerolog.New(&logBuf)
+	router := &Router{config: cfg, eventLogger: &logger}
 
 	router.initializeBootstrapToken()
 

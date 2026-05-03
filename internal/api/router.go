@@ -66,6 +66,7 @@ import (
 type Router struct {
 	mux                             *http.ServeMux
 	config                          *config.Config
+	eventLogger                     routerEventLogger
 	monitor                         *monitoring.Monitor            // Legacy/Default support
 	mtMonitor                       *monitoring.MultiTenantMonitor // Multi-tenant manager
 	alertHandlers                   *AlertHandlers

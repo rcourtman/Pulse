@@ -51,8 +51,9 @@ func (r *Router) initializeBootstrapToken() {
 	}
 
 	token, created, path, err := loadOrCreateBootstrapToken(r.config.DataPath)
+	logger := r.logEvents()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to prepare bootstrap setup token")
+		logger.Error().Err(err).Msg("Failed to prepare bootstrap setup token")
 		return
 	}
 
@@ -60,11 +61,11 @@ func (r *Router) initializeBootstrapToken() {
 	r.bootstrapTokenPath = path
 
 	if created {
-		log.Warn().
+		logger.Warn().
 			Str("token_path", path).
 			Msg("Bootstrap setup token created on disk; reveal it locally with `pulse bootstrap-token` or by reading the token file path")
 	} else {
-		log.Info().
+		logger.Info().
 			Str("token_path", path).
 			Msg("Bootstrap setup token loaded from disk")
 	}
@@ -87,13 +88,14 @@ func (r *Router) clearBootstrapToken() {
 	}
 
 	if r.bootstrapTokenPath != "" {
+		logger := r.logEvents()
 		if err := os.Remove(r.bootstrapTokenPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Warn().
+			logger.Warn().
 				Err(err).
 				Str("token_path", r.bootstrapTokenPath).
 				Msg("Failed to remove bootstrap setup token")
 		} else if err == nil {
-			log.Info().
+			logger.Info().
 				Str("token_path", r.bootstrapTokenPath).
 				Msg("Bootstrap setup token removed")
 		}

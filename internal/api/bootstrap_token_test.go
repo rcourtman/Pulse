@@ -13,7 +13,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func TestLoadOrCreateBootstrapToken_EmptyDataPath(t *testing.T) {
@@ -430,14 +429,10 @@ func TestInitializeBootstrapToken_LoadOrCreateFails(t *testing.T) {
 func TestInitializeBootstrapToken_DoesNotLogSecretValue(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{DataPath: tmpDir}
-	r := &Router{config: cfg}
 
 	var logBuf bytes.Buffer
-	origLogger := log.Logger
-	log.Logger = zerolog.New(&logBuf)
-	t.Cleanup(func() {
-		log.Logger = origLogger
-	})
+	logger := zerolog.New(&logBuf)
+	r := &Router{config: cfg, eventLogger: &logger}
 
 	r.initializeBootstrapToken()
 
