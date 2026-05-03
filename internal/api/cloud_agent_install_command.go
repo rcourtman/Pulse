@@ -56,8 +56,9 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 
 	tokenName := fmt.Sprintf("cloud-tenant-agent-%s-%s-%d", orgID, installType, time.Now().UTC().Unix())
 	rawToken, record, err := issueAndPersistAgentInstallToken(r.config, r.persistence, issueAgentInstallTokenOptions{
-		TokenName: tokenName,
-		OrgID:     orgID,
+		TokenName:   tokenName,
+		OrgID:       orgID,
+		OwnerUserID: apiTokenOwnerUserIDForRequest(r.config, req),
 		Metadata: map[string]string{
 			"install_type": installType,
 			"issued_via":   "hosted_agent_install_command",

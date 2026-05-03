@@ -269,8 +269,9 @@ func TestIssueAndPersistAgentInstallToken(t *testing.T) {
 	persistence := config.NewConfigPersistence(dataDir)
 
 	rawToken, record, err := issueAndPersistAgentInstallToken(cfg, persistence, issueAgentInstallTokenOptions{
-		TokenName: "test-install-token",
-		OrgID:     "acme",
+		TokenName:   "test-install-token",
+		OrgID:       "acme",
+		OwnerUserID: "alice",
 		Metadata: map[string]string{
 			"install_type": "pbs",
 			"issued_via":   "test",
@@ -280,6 +281,7 @@ func TestIssueAndPersistAgentInstallToken(t *testing.T) {
 	require.NotEmpty(t, rawToken)
 	require.NotNil(t, record)
 	require.Equal(t, "acme", record.OrgID)
+	require.Equal(t, "alice", record.Metadata[apiTokenMetadataOwnerUserID])
 	require.Equal(t, "pbs", record.Metadata["install_type"])
 	require.Equal(t, "test", record.Metadata["issued_via"])
 
@@ -287,9 +289,37 @@ func TestIssueAndPersistAgentInstallToken(t *testing.T) {
 	savedRecord, ok := cfg.ValidateAPIToken(rawToken)
 	require.True(t, ok)
 	require.Equal(t, "acme", savedRecord.OrgID)
+	require.Equal(t, "alice", savedRecord.Metadata[apiTokenMetadataOwnerUserID])
 
 	tokens, err := persistence.LoadAPITokens()
 	require.NoError(t, err)
 	require.Len(t, tokens, 1)
 	require.True(t, strings.HasPrefix(tokens[0].Name, "test-install-token"))
+	require.Equal(t, "alice", tokens[0].Metadata[apiTokenMetadataOwnerUserID])
+}
+
+func TestIssueAndPersistAgentInstallTokenRejectsOwnerMetadataOverride(t *testing.T) {
+	dataDir := t.TempDir()
+	cfg := &config.Config{DataPath: dataDir}
+	persistence := config.NewConfigPersistence(dataDir)
+
+	rawToken, record, err := issueAndPersistAgentInstallToken(cfg, persistence, issueAgentInstallTokenOptions{
+		TokenName:   "bad-install-token",
+		OrgID:       "acme",
+		OwnerUserID: "alice",
+		Metadata: map[string]string{
+			apiTokenMetadataOwnerUserID: "mallory",
+			"install_type":              "pbs",
+		},
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, errAgentInstallTokenRecord)
+	require.Contains(t, err.Error(), "reserved token metadata key")
+	require.Empty(t, rawToken)
+	require.Nil(t, record)
+	require.Empty(t, cfg.APITokens)
+
+	tokens, loadErr := persistence.LoadAPITokens()
+	require.NoError(t, loadErr)
+	require.Empty(t, tokens)
 }

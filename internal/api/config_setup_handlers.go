@@ -1553,7 +1553,8 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 	if authConfiguredForAgentLifecycle(cfg) {
 		tokenName := fmt.Sprintf("proxmox-agent-%s-%d", installType, time.Now().Unix())
 		rawToken, _, err = issueAndPersistAgentInstallToken(cfg, persistence, issueAgentInstallTokenOptions{
-			TokenName: tokenName,
+			TokenName:   tokenName,
+			OwnerUserID: apiTokenOwnerUserIDForRequest(cfg, r),
 			Metadata: map[string]string{
 				"install_type": installType,
 				"issued_via":   "config_agent_install_command",

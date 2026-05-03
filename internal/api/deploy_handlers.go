@@ -728,7 +728,7 @@ func (h *DeployHandlers) closeSSESub(jobID string) {
 
 // MintBootstrapTokenForTarget creates a single-use bootstrap token for a deploy target.
 // Used by the deploy job creation flow to issue per-target tokens.
-func (h *DeployHandlers) MintBootstrapTokenForTarget(req deploy.BootstrapTokenRequest) (rawToken string, tokenID string, err error) {
+func (h *DeployHandlers) MintBootstrapTokenForTarget(req deploy.BootstrapTokenRequest, ownerUserID string) (rawToken string, tokenID string, err error) {
 	if req.TTL <= 0 {
 		return "", "", fmt.Errorf("TTL must be positive, got %v", req.TTL)
 	}
@@ -748,7 +748,10 @@ func (h *DeployHandlers) MintBootstrapTokenForTarget(req deploy.BootstrapTokenRe
 	exp := time.Now().UTC().Add(req.TTL)
 	record.ExpiresAt = &exp
 	record.OrgID = req.OrgID
-	record.Metadata = req.BuildMetadata()
+	setAPITokenOwnerUserID(record, ownerUserID)
+	if err := mergeAPITokenMetadata(record, req.BuildMetadata()); err != nil {
+		return "", "", fmt.Errorf("attach bootstrap token metadata: %w", err)
+	}
 
 	config.Mu.Lock()
 	h.config.UpsertAPIToken(*record)
@@ -903,6 +906,7 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 		"bound_hostname": req.Hostname,
 		"deploy_job_id":  jobID,
 	}
+	setAPITokenOwnerUserID(runtimeRecord, apiTokenOwnerUserID(*bootstrapToken))
 
 	config.Mu.Lock()
 	h.config.UpsertAPIToken(*runtimeRecord)
@@ -1198,7 +1202,7 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 			SourceAgentID: req.SourceAgentID,
 			OrgID:         orgID,
 			TTL:           30 * time.Minute,
-		})
+		}, apiTokenOwnerUserIDForRequest(h.config, r))
 		if err != nil {
 			log.Error().Err(err).Str("target_id", targetID).Msg("Failed to mint bootstrap token")
 			_ = h.store.UpdateTargetStatus(ctx, targetID, deploy.TargetFailedPermanent, "failed to mint bootstrap token")
@@ -1658,7 +1662,7 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 			SourceAgentID: job.SourceAgentID,
 			OrgID:         orgID,
 			TTL:           30 * time.Minute,
-		})
+		}, apiTokenOwnerUserIDForRequest(h.config, r))
 		if err != nil {
 			log.Error().Err(err).Str("target_id", t.ID).Msg("Failed to mint retry bootstrap token")
 			_ = h.store.UpdateTargetStatus(ctx, t.ID, deploy.TargetFailedPermanent, "failed to mint bootstrap token for retry")

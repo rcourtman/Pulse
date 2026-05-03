@@ -60,6 +60,11 @@ principal once a stable user ID exists.
    - `owner_user_id` metadata must carry the authenticated principal, not an
      arbitrary email copied from a browser payload. Token minting helpers must
      reject caller-supplied metadata that attempts to set `owner_user_id`.
+   - User/admin-initiated token minting paths, including security-token
+     creation/regeneration, agent install commands, deploy bootstrap and
+     enrollment runtime tokens, container runtime migration, and first-run
+     security setup must attach owner identity through the shared server-side
+     owner helper rather than through extension metadata.
 
 8. Mobile/relay device identity
    - Shape: relay/mobile device registration IDs and platform device tokens.

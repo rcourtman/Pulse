@@ -42,9 +42,10 @@ func proxmoxAgentInstallScopes() []string {
 }
 
 type issueAgentInstallTokenOptions struct {
-	TokenName string
-	OrgID     string
-	Metadata  map[string]string
+	TokenName   string
+	OrgID       string
+	OwnerUserID string
+	Metadata    map[string]string
 }
 
 func issueAndPersistAgentInstallToken(cfg *config.Config, persistence *config.ConfigPersistence, opts issueAgentInstallTokenOptions) (string, *config.APITokenRecord, error) {
@@ -63,11 +64,9 @@ func issueAndPersistAgentInstallToken(cfg *config.Config, persistence *config.Co
 	}
 
 	record.OrgID = strings.TrimSpace(opts.OrgID)
-	if len(opts.Metadata) > 0 {
-		record.Metadata = make(map[string]string, len(opts.Metadata))
-		for k, v := range opts.Metadata {
-			record.Metadata[k] = v
-		}
+	setAPITokenOwnerUserID(record, opts.OwnerUserID)
+	if err := mergeAPITokenMetadata(record, opts.Metadata); err != nil {
+		return "", nil, fmt.Errorf("%w: %w", errAgentInstallTokenRecord, err)
 	}
 
 	config.Mu.Lock()

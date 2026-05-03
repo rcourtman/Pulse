@@ -50,6 +50,20 @@ func mergeAPITokenMetadata(record *config.APITokenRecord, metadata map[string]st
 	return nil
 }
 
+func setAPITokenOwnerUserID(record *config.APITokenRecord, ownerUserID string) {
+	if record == nil {
+		return
+	}
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	if ownerUserID == "" || strings.HasPrefix(ownerUserID, "token:") {
+		return
+	}
+	if record.Metadata == nil {
+		record.Metadata = make(map[string]string)
+	}
+	record.Metadata[apiTokenMetadataOwnerUserID] = ownerUserID
+}
+
 func apiTokenOwnerUserID(record config.APITokenRecord) string {
 	if record.Metadata == nil {
 		return ""
@@ -189,12 +203,7 @@ func (r *Router) createAPITokenRecord(
 	if record.OrgID == "" {
 		record.OrgID = "default"
 	}
-	if ownerUserID := apiTokenOwnerUserIDForRequest(r.config, req); ownerUserID != "" {
-		if record.Metadata == nil {
-			record.Metadata = make(map[string]string)
-		}
-		record.Metadata[apiTokenMetadataOwnerUserID] = ownerUserID
-	}
+	setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))
 	if err := mergeAPITokenMetadata(record, metadata); err != nil {
 		return "", nil, err
 	}

@@ -164,6 +164,11 @@ regression protection.
    process version once, but they must not add per-request release lookups,
    filesystem walks, or other heavy work just to compute whether an attached
    agent is current.
+   Container runtime migration token minting follows that same rule: adding
+   server-derived owner metadata in `internal/api/router.go` must reuse the
+   already-authenticated request context or caller token and must not add
+   monitor scans, persistence reads, or other broad hot-path work before the
+   route-local handler owns the mutation.
    Retiring self-hosted trial acquisition follows that same rule: removing
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather

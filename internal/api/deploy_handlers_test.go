@@ -522,6 +522,7 @@ func TestHandleEnroll_Success(t *testing.T) {
 	h, store := newEnrollTestHandlers(t)
 	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
+	rec.Metadata[apiTokenMetadataOwnerUserID] = "alice"
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "pve-node2"))
 	attachAPITokenRecord(req, rec)
@@ -543,8 +544,25 @@ func TestHandleEnroll_Success(t *testing.T) {
 	if resp["runtimeTokenId"] == nil || resp["runtimeTokenId"] == "" {
 		t.Fatal("expected runtimeTokenId in response")
 	}
+	runtimeTokenID, _ := resp["runtimeTokenId"].(string)
 	if resp["agentId"] != "agent-pve-node2" {
 		t.Fatalf("expected agentId=agent-pve-node2, got %v", resp["agentId"])
+	}
+
+	config.Mu.Lock()
+	var runtimeRecord *config.APITokenRecord
+	for i := range h.config.APITokens {
+		if h.config.APITokens[i].ID == runtimeTokenID {
+			runtimeRecord = &h.config.APITokens[i]
+			break
+		}
+	}
+	config.Mu.Unlock()
+	if runtimeRecord == nil {
+		t.Fatal("runtime token should be stored")
+	}
+	if got := runtimeRecord.Metadata[apiTokenMetadataOwnerUserID]; got != "alice" {
+		t.Fatalf("runtime token owner_user_id = %q, want alice", got)
 	}
 
 	// Target should now be verifying.
@@ -736,7 +754,7 @@ func TestMintBootstrapTokenForTarget(t *testing.T) {
 		ClusterID: "c1", NodeID: "n1", ExpectedNode: "pve-3",
 		JobID: "job-m1", TargetID: "tgt-m1", SourceAgentID: "agent-src",
 		OrgID: "test-org", TTL: 15 * time.Minute,
-	})
+	}, "alice")
 	if err != nil {
 		t.Fatalf("MintBootstrapTokenForTarget: %v", err)
 	}
@@ -766,6 +784,9 @@ func TestMintBootstrapTokenForTarget(t *testing.T) {
 	if rec.Metadata[deploy.MetaKeyExpectedNode] != "pve-3" {
 		t.Fatalf("expected expectedNode=pve-3, got %q", rec.Metadata[deploy.MetaKeyExpectedNode])
 	}
+	if rec.Metadata[apiTokenMetadataOwnerUserID] != "alice" {
+		t.Fatalf("expected owner_user_id=alice, got %q", rec.Metadata[apiTokenMetadataOwnerUserID])
+	}
 }
 
 func TestMintBootstrapTokenForTarget_InvalidTTL(t *testing.T) {
@@ -779,7 +800,7 @@ func TestMintBootstrapTokenForTarget_InvalidTTL(t *testing.T) {
 		ClusterID: "c1", NodeID: "n1", ExpectedNode: "pve-3",
 		JobID: "job-1", TargetID: "tgt-1", SourceAgentID: "a1",
 		OrgID: "org", TTL: 0,
-	})
+	}, "alice")
 	if err == nil {
 		t.Fatal("expected error for zero TTL")
 	}
@@ -788,7 +809,7 @@ func TestMintBootstrapTokenForTarget_InvalidTTL(t *testing.T) {
 		ClusterID: "c1", NodeID: "n1", ExpectedNode: "pve-3",
 		JobID: "job-1", TargetID: "tgt-1", SourceAgentID: "a1",
 		OrgID: "org", TTL: -5 * time.Minute,
-	})
+	}, "alice")
 	if err == nil {
 		t.Fatal("expected error for negative TTL")
 	}

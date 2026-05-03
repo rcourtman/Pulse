@@ -308,6 +308,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			http.Error(w, "Failed to process API token", http.StatusInternalServerError)
 			return
 		}
+		setAPITokenOwnerUserID(tokenRecord, setupRequest.Username)
 
 		if r.config.HasAPITokens() && r.config.AuthUser == "" && r.config.AuthPass == "" {
 			// We had API-only access before, now replacing with full security
@@ -566,6 +567,7 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
+	setAPITokenOwnerUserID(tokenRecord, apiTokenOwnerUserIDForRequest(r.config, rq))
 
 	config.Mu.Lock()
 	r.config.APITokens = []config.APITokenRecord{*tokenRecord}

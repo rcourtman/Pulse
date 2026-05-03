@@ -26,6 +26,10 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		"saml_handlers.go":                 readIdentityContractFile(t, "saml_handlers.go"),
 		"auth_principal_identity.go":       readIdentityContractFile(t, "auth_principal_identity.go"),
 		"security_tokens.go":               readIdentityContractFile(t, "security_tokens.go"),
+		"agent_install_command_shared.go":  readIdentityContractFile(t, "agent_install_command_shared.go"),
+		"deploy_handlers.go":               readIdentityContractFile(t, "deploy_handlers.go"),
+		"router.go":                        readIdentityContractFile(t, "router.go"),
+		"security_setup_fix.go":            readIdentityContractFile(t, "security_setup_fix.go"),
 		"../cloudcp/stripe/provisioner.go": readIdentityContractFile(t, "../cloudcp/stripe/provisioner.go"),
 		"../models/organization.go":        readIdentityContractFile(t, "../models/organization.go"),
 		"../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md": readIdentityContractFile(t, "../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md"),
@@ -62,8 +66,26 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		},
 		"security_tokens.go": {
 			"mergeAPITokenMetadata",
+			"setAPITokenOwnerUserID",
 			"reserved token metadata key",
 			"apiTokenOwnerUserIDForRequest",
+		},
+		"agent_install_command_shared.go": {
+			"OwnerUserID string",
+			"setAPITokenOwnerUserID(record, opts.OwnerUserID)",
+			"mergeAPITokenMetadata(record, opts.Metadata)",
+		},
+		"deploy_handlers.go": {
+			"setAPITokenOwnerUserID(record, ownerUserID)",
+			"setAPITokenOwnerUserID(runtimeRecord, apiTokenOwnerUserID(*bootstrapToken))",
+			"apiTokenOwnerUserIDForRequest(h.config, r)",
+		},
+		"router.go": {
+			"setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))",
+		},
+		"security_setup_fix.go": {
+			"setAPITokenOwnerUserID(tokenRecord, setupRequest.Username)",
+			"setAPITokenOwnerUserID(tokenRecord, apiTokenOwnerUserIDForRequest(r.config, rq))",
 		},
 		"../cloudcp/stripe/provisioner.go": {
 			"ownerUserID = strings.TrimSpace(user.ID)",

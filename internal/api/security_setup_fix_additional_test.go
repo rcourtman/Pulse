@@ -77,6 +77,47 @@ func TestHandleRegenerateAPIToken_DoesNotRequireEnvFile(t *testing.T) {
 	}
 }
 
+func TestHandleRegenerateAPITokenInheritsOwnerFromCallerToken(t *testing.T) {
+	dataDir := t.TempDir()
+	rawCallerToken := "regen-owner-token-123.12345678"
+	callerRecord, err := config.NewAPITokenRecord(rawCallerToken, "admin-token", []string{config.ScopeSettingsWrite})
+	if err != nil {
+		t.Fatalf("new caller token record: %v", err)
+	}
+	callerRecord.Metadata = map[string]string{apiTokenMetadataOwnerUserID: "alice"}
+
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		APITokens:  []config.APITokenRecord{*callerRecord},
+	}
+	cfg.SortAPITokens()
+
+	router := &Router{
+		config:      cfg,
+		persistence: config.NewConfigPersistence(cfg.DataPath),
+	}
+	handler := http.HandlerFunc(router.HandleRegenerateAPIToken)
+
+	authLimiter.Reset("127.0.0.1")
+
+	req := newLoopbackRequest(http.MethodPost, "/api/security/regenerate-token", nil)
+	req.Header.Set("X-API-Token", rawCallerToken)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 {
+		t.Fatalf("expected one regenerated API token, got %d", len(cfg.APITokens))
+	}
+	if got := cfg.APITokens[0].Metadata[apiTokenMetadataOwnerUserID]; got != "alice" {
+		t.Fatalf("regenerated token owner_user_id=%q, want alice", got)
+	}
+}
+
 func TestHandleValidateAPIToken_InvalidJSON(t *testing.T) {
 	router := &Router{config: &config.Config{}}
 	handler := http.HandlerFunc(router.HandleValidateAPIToken)
@@ -366,6 +407,12 @@ func TestQuickSecuritySetupAcceptsSetupTokenInBody(t *testing.T) {
 	if router.bootstrapTokenHash != "" {
 		t.Fatalf("expected bootstrap token hash to be cleared after successful setup")
 	}
+	if len(cfg.APITokens) != 1 {
+		t.Fatalf("expected one API token, got %d", len(cfg.APITokens))
+	}
+	if got := cfg.APITokens[0].Metadata[apiTokenMetadataOwnerUserID]; got != "bootstrap" {
+		t.Fatalf("setup token owner_user_id=%q, want bootstrap", got)
+	}
 }
 
 func TestQuickSecuritySetupRotatesWithBasicAuth(t *testing.T) {
@@ -412,6 +459,9 @@ func TestQuickSecuritySetupRotatesWithBasicAuth(t *testing.T) {
 	}
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected one API token, got %d", len(cfg.APITokens))
+	}
+	if got := cfg.APITokens[0].Metadata[apiTokenMetadataOwnerUserID]; got != "newadmin" {
+		t.Fatalf("rotated token owner_user_id=%q, want newadmin", got)
 	}
 
 	cookies := rec.Result().Cookies()

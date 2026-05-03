@@ -142,3 +142,24 @@ func TestSecurityTokens_CreateRejectsCallerMetadataOwnerOverride(t *testing.T) {
 		t.Fatalf("expected no stored tokens after rejected metadata, got %d", len(cfg.APITokens))
 	}
 }
+
+func TestSecurityTokens_OwnerHelperRejectsCallerMetadataOverride(t *testing.T) {
+	record, err := config.NewAPITokenRecord("owner-helper-token-123.12345678", "owner-helper", []string{config.ScopeMonitoringRead})
+	if err != nil {
+		t.Fatalf("new token record: %v", err)
+	}
+
+	setAPITokenOwnerUserID(record, "alice")
+	err = mergeAPITokenMetadata(record, map[string]string{
+		apiTokenMetadataOwnerUserID: "mallory",
+	})
+	if err == nil {
+		t.Fatalf("expected owner_user_id metadata override to be rejected")
+	}
+	if !strings.Contains(err.Error(), "reserved token metadata key") {
+		t.Fatalf("expected reserved metadata error, got %v", err)
+	}
+	if got := record.Metadata[apiTokenMetadataOwnerUserID]; got != "alice" {
+		t.Fatalf("owner_user_id=%q, want alice", got)
+	}
+}

@@ -160,6 +160,46 @@ func TestContract_SSOStablePrincipalProof(t *testing.T) {
 	}
 }
 
+func TestContract_APITokenOwnerBindingCoversSharedMintingPaths(t *testing.T) {
+	files := map[string][]string{
+		"security_tokens.go": {
+			"setAPITokenOwnerUserID",
+			"apiTokenOwnerUserIDForRequest",
+			"reserved token metadata key",
+		},
+		"agent_install_command_shared.go": {
+			"OwnerUserID string",
+			"setAPITokenOwnerUserID(record, opts.OwnerUserID)",
+			"mergeAPITokenMetadata(record, opts.Metadata)",
+		},
+		"deploy_handlers.go": {
+			"setAPITokenOwnerUserID(record, ownerUserID)",
+			"setAPITokenOwnerUserID(runtimeRecord, apiTokenOwnerUserID(*bootstrapToken))",
+			"apiTokenOwnerUserIDForRequest(h.config, r)",
+		},
+		"router.go": {
+			"setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))",
+		},
+		"security_setup_fix.go": {
+			"setAPITokenOwnerUserID(tokenRecord, setupRequest.Username)",
+			"setAPITokenOwnerUserID(tokenRecord, apiTokenOwnerUserIDForRequest(r.config, rq))",
+		},
+	}
+
+	for file, needles := range files {
+		source, err := os.ReadFile(filepath.Clean(file))
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		text := string(source)
+		for _, needle := range needles {
+			if !strings.Contains(text, needle) {
+				t.Fatalf("%s must contain %q", file, needle)
+			}
+		}
+	}
+}
+
 func TestContractAISettingsClampsPaidRuntimeControlsToEntitlements(t *testing.T) {
 	t.Parallel()
 

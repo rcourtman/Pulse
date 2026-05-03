@@ -188,6 +188,10 @@ profile and assignment columns, but embedded table framing must route through
    API-token owner metadata follows the same rule: lifecycle-adjacent setup or
    mobile-pairing token flows may consume the shared token helper, but they
    must not pass extension metadata that authors or overwrites `owner_user_id`.
+   Agent install command and deploy bootstrap/enrollment tokens must derive
+   owner identity from the API-authenticated caller through the shared
+   server-side token owner helper; bootstrap deploy metadata may bind cluster,
+   job, target, and expected node, but not the human owner.
    The canonical durable-principal vocabulary for those shared auth routes is
    recorded in `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; agent
    lifecycle work may consume that identity but must not define a parallel

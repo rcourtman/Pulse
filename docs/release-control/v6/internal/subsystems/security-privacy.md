@@ -269,7 +269,11 @@ revocation targets, or operator-facing token ownership.
 That same token-management boundary also reserves token-owner identity for the
 server-authenticated principal. Token-minting helpers must derive
 `owner_user_id` from the authenticated session or caller token and reject any
-extension metadata that attempts to overwrite that field.
+extension metadata that attempts to overwrite that field. This applies beyond
+the visible API-token manager: agent install command tokens, deploy bootstrap
+tokens, enrollment runtime tokens, container runtime migration tokens, and
+first-run/regenerated admin tokens must use the same shared server-side owner
+setter rather than carrying owner identity in caller-controlled metadata.
 Telemetry/privacy disclosures now also route through the shipped frontend docs
 boundary: `frontend-modern/src/utils/docsLinks.ts` is the canonical frontend
 owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`

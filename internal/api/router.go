@@ -9719,6 +9719,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	if record.OrgID == "" {
 		record.OrgID = "default"
 	}
+	setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))
 
 	activeConfig := r.config
 	activePersistence := r.persistence

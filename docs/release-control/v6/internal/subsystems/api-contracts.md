@@ -225,7 +225,11 @@ product API routes free of maintainer commercial analytics.
     Token owner identity is reserved for the server-authenticated principal:
     shared token-minting helpers must derive `owner_user_id` from the current
     session or caller token and reject extension metadata that tries to
-    overwrite that field.
+    overwrite that field. API-owned token minting paths that bypass
+    `/api/security/tokens`, including agent install, deploy bootstrap/enroll,
+    container runtime migration, quick security setup, and API-token
+    regeneration must still call the shared owner setter and must not encode
+    owner identity inside their extension metadata maps.
     The dedicated Pulse Mobile relay token route is part of that same API
     contract even though its runtime capability is Relay-owned:
     `POST /api/security/tokens/relay-mobile` must pass normal admin and
@@ -3162,7 +3166,10 @@ binding: token create/list responses must preserve the originating
 `ownerUserId` together with org scope so long-lived automation credentials
 cannot appear detached from their intended human identity, and shared
 token-minting helpers must reject caller-supplied metadata that attempts to
-overwrite the reserved `owner_user_id` field.
+overwrite the reserved `owner_user_id` field. That owner binding now extends
+to token constructors outside the generic token manager, including agent
+install, deploy bootstrap/runtime enrollment, container runtime migration,
+first-run setup, and token-regeneration paths.
 The shared direct-node/discovery settings boundary now also includes
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`, so the
 customer-facing mutation and validation copy used by the governed runtime

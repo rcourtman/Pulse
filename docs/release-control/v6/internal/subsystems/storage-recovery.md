@@ -163,7 +163,10 @@ stale-plan hash, blast-radius model, or execution protocol outside
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity
    metadata; storage/recovery extensions must not pass metadata that authors
-   or overwrites that owner field.
+   or overwrites that owner field. Adjacent first-run, regeneration, install,
+   deploy-bootstrap, and enrollment token constructors must attach owner
+   identity through the shared API/security helper, not through recovery or
+   storage metadata maps.
    Shared setup-script transport may be reused by storage and recovery-linked
    setup flows, but it remains API/lifecycle-owned: generated PVE scripts must
    preserve Proxmox `authorized_keys` symlinks by resolving the target before
