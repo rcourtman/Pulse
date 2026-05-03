@@ -799,13 +799,40 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
-          gh release upload "${TAG}" release/checksums.txt --clobber
-          gh release upload "${TAG}" release/*.sha256 --clobber
+          release_upload_with_retry() {
+            local attempt=1
+            local max_attempts=5
+            local wait_seconds=15
+
+            while true; do
+              if gh release upload "$@"; then
+                return 0
+              fi
+
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "::error::gh release upload failed after ${max_attempts} attempts: $*"
+                return 1
+              fi
+
+              echo "gh release upload failed on attempt ${attempt}/${max_attempts}; retrying in ${wait_seconds}s: $*"
+              sleep "$wait_seconds"
+              attempt=$((attempt + 1))
+              if [ "$wait_seconds" -lt 120 ]; then
+                wait_seconds=$((wait_seconds * 2))
+                if [ "$wait_seconds" -gt 120 ]; then
+                  wait_seconds=120
+                fi
+              fi
+            done
+          }
+
+          release_upload_with_retry "${TAG}" release/checksums.txt --clobber
+          release_upload_with_retry "${TAG}" release/*.sha256 --clobber
           if ls release/*.sig 1> /dev/null 2>&1; then
-            gh release upload "${TAG}" release/*.sig --clobber
+            release_upload_with_retry "${TAG}" release/*.sig --clobber
           fi
           if ls release/*.sshsig 1> /dev/null 2>&1; then
-            gh release upload "${TAG}" release/*.sshsig --clobber
+            release_upload_with_retry "${TAG}" release/*.sshsig --clobber
           fi
 
       - name: Upload release assets
@@ -813,13 +840,40 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
+          release_upload_with_retry() {
+            local attempt=1
+            local max_attempts=5
+            local wait_seconds=15
+
+            while true; do
+              if gh release upload "$@"; then
+                return 0
+              fi
+
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "::error::gh release upload failed after ${max_attempts} attempts: $*"
+                return 1
+              fi
+
+              echo "gh release upload failed on attempt ${attempt}/${max_attempts}; retrying in ${wait_seconds}s: $*"
+              sleep "$wait_seconds"
+              attempt=$((attempt + 1))
+              if [ "$wait_seconds" -lt 120 ]; then
+                wait_seconds=$((wait_seconds * 2))
+                if [ "$wait_seconds" -gt 120 ]; then
+                  wait_seconds=120
+                fi
+              fi
+            done
+          }
+
           if ls release/*.sbom.spdx.json 1> /dev/null 2>&1; then
-            gh release upload "${TAG}" release/*.sbom.spdx.json --clobber
+            release_upload_with_retry "${TAG}" release/*.sbom.spdx.json --clobber
           fi
-          gh release upload "${TAG}" release/*.tar.gz --clobber
-          gh release upload "${TAG}" release/*.zip --clobber
+          release_upload_with_retry "${TAG}" release/*.tar.gz --clobber
+          release_upload_with_retry "${TAG}" release/*.zip --clobber
           if ls release/*.tgz 1> /dev/null 2>&1; then
-            gh release upload "${TAG}" release/*.tgz --clobber
+            release_upload_with_retry "${TAG}" release/*.tgz --clobber
           fi
           for bare_agent in \
             release/pulse-agent-linux-amd64 \
@@ -833,15 +887,15 @@ jobs:
             release/pulse-agent-windows-arm64.exe \
             release/pulse-agent-windows-386.exe; do
             if [ -f "${bare_agent}" ]; then
-              gh release upload "${TAG}" "${bare_agent}" --clobber
+              release_upload_with_retry "${TAG}" "${bare_agent}" --clobber
             fi
           done
-          gh release upload "${TAG}" release/install.sh --clobber
+          release_upload_with_retry "${TAG}" release/install.sh --clobber
           if [ -f release/install.ps1 ]; then
-            gh release upload "${TAG}" release/install.ps1 --clobber
+            release_upload_with_retry "${TAG}" release/install.ps1 --clobber
           fi
-          gh release upload "${TAG}" release/install-docker.sh --clobber
-          gh release upload "${TAG}" release/pulse-auto-update.sh --clobber
+          release_upload_with_retry "${TAG}" release/install-docker.sh --clobber
+          release_upload_with_retry "${TAG}" release/pulse-auto-update.sh --clobber
 
       - name: Publish release
         if: ${{ github.event.inputs.draft_only != 'true' }}

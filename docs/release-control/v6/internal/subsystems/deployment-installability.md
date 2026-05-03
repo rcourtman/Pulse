@@ -462,6 +462,11 @@ unpublished tag must locate the existing draft release, retarget its git tag
 and release `target_commitish` to the current governed release-line head, and
 continue publication without requiring an operator to delete the tag manually;
 published tags remain immutable and must still fail closed.
+That same upload boundary must tolerate transient GitHub release-asset API
+failures. `.github/workflows/create-release.yml` must retry every
+`gh release upload` operation with bounded backoff before failing the release
+job, because a single 5xx response during upload can otherwise strand a draft
+release with a partial asset set and no validation run.
 That same public release-body boundary also owns publish-safe packet rendering.
 When operators pass draft packet markdown to `.github/workflows/create-release.yml`,
 the workflow must sanitize draft-only framing and append the standardized
