@@ -121,6 +121,13 @@ management, and fleet control surfaces.
 22. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 23. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
+Agent lifecycle and fleet-operation surfaces may consume
+`POST /api/actions/plan` for resource capability planning, but the action plan
+contract remains API-owned through `internal/api/actions.go` and
+`internal/actionplanner/planner.go`. Agent lifecycle work must not define a
+parallel approval policy, blast-radius model, stale-plan hash, or execution
+contract for those resource actions.
+
 The node setup modal boundary must keep guided setup and manual credential
 submission separate. For new PVE/PBS setup, Agent Install and Direct Connection
 setup-script modes are command-driven auto-registration paths; Token ID/Value

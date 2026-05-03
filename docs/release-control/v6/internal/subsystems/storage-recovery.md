@@ -74,6 +74,11 @@ Storage/recovery may also consume org-scoped session identity from the shared
 API boundary, but durable user IDs remain the authorization principal. Contact
 email may support display or legacy lookup only; storage and recovery surfaces
 must not create their own email-keyed membership or entitlement interpretation.
+Storage/recovery remediation or restore-adjacent workflows may consume
+`POST /api/actions/plan` only as the API-owned resource capability planning
+contract. This subsystem must not create a storage-local approval policy,
+stale-plan hash, blast-radius model, or execution protocol outside
+`internal/api/actions.go` and `internal/actionplanner/planner.go`.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`

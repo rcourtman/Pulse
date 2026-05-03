@@ -29,6 +29,8 @@ product API routes free of maintainer commercial analytics.
 2. `internal/api/resources.go`
 3. `internal/api/alerts.go`
 4. `internal/api/activity_audit_handlers.go`
+5. `internal/api/actions.go`
+6. `internal/actionplanner/planner.go`
 5. `frontend-modern/src/types/api.ts`
 6. `frontend-modern/src/types/actionAudit.ts`
 7. `frontend-modern/src/api/actionAudit.ts`
@@ -272,6 +274,14 @@ the canonical monitored-system blocked payload.
    resource API JSON, and exercised with backend contract tests plus the
    canonical `useUnifiedResources` frontend hook proof whenever it changes.
 5. Route unified-resource action, lifecycle, and export audit reads through `internal/api/activity_audit_handlers.go`, `internal/api/router_routes_licensing.go`, and `internal/api/contract_test.go` together so the control-plane execution trail stays on a governed API contract instead of a store-only shape
+   Plan-only unified action planning is part of that same API-first action
+   contract: `POST /api/actions/plan` must route through
+   `internal/api/actions.go`, `internal/actionplanner/planner.go`, and
+   `internal/api/contract_test.go` together, returning deterministic
+   `ActionPlan` identity, approval policy, blast radius, resource/policy
+   versions, plan hash, and preflight checks without approving or executing the
+   capability. MCP, CLI, and UI consumers may adapt this payload, but they must
+   not become the source of truth for action planning semantics.
 6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
    `/api/resources/{id}/timeline` and `/api/resources/{id}/facets` must keep
    resource timelines relationship-aware by opting into the canonical

@@ -137,6 +137,61 @@ Report an incorrect merge (creates exclusions).
 { "sources": ["proxmox", "agent"], "notes": "optional note" }
 ```
 
+### Unified Action Planning
+`POST /api/actions/plan`
+Returns the deterministic pre-execution plan for a capability advertised on a unified resource. Requires `ai:execute`.
+
+This endpoint is API-first and plan-only: it resolves the resource from the unified registry, verifies the requested capability and parameter schema, returns approval policy, blast radius, stale-plan hashes, and preflight checks, and does not approve or execute anything.
+
+Request:
+```json
+{
+  "requestId": "agent-run-123",
+  "resourceId": "vm:42",
+  "capabilityName": "restart",
+  "params": { "mode": "graceful" },
+  "reason": "Recover after confirmed outage",
+  "requestedBy": "agent:oncall-helper"
+}
+```
+
+Response:
+```json
+{
+  "actionId": "act_...",
+  "requestId": "agent-run-123",
+  "allowed": true,
+  "requiresApproval": true,
+  "approvalPolicy": "admin",
+  "predictedBlastRadius": ["vm:42", "node-1"],
+  "rollbackAvailable": false,
+  "message": "Plan created for restart on web-42. Execution requires admin approval and is not performed by this endpoint.",
+  "plannedAt": "2026-05-03T10:00:00Z",
+  "expiresAt": "2026-05-03T10:05:00Z",
+  "resourceVersion": "resource:sha256:...",
+  "policyVersion": "policy:sha256:...",
+  "planHash": "sha256:...",
+  "preflight": {
+    "target": "vm:42",
+    "currentState": "web-42 is warning",
+    "intendedChange": "Restart the VM",
+    "dryRunAvailable": false,
+    "dryRunSummary": "No provider-supported dry run is advertised for this capability.",
+    "safetyChecks": [
+      "Resource was resolved from the unified resource registry.",
+      "Capability is advertised by the resource contract.",
+      "This endpoint plans only; it does not approve or execute the action.",
+      "Execution requires admin approval."
+    ],
+    "verificationSteps": [
+      "Refresh the resource and confirm the expected state after execution.",
+      "Review /api/audit/actions/{actionId}/events for lifecycle evidence."
+    ],
+    "generatedAt": "2026-05-03T10:00:00Z"
+  }
+}
+```
+
 ### Resource Metadata
 User notes, tags, and custom URLs for resources.
 

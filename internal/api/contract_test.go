@@ -21,6 +21,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -69,6 +70,39 @@ func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T)
 			strings.Contains(text, "Auto-Fix requires Pulse Pro") {
 			t.Fatalf("%s must not expose legacy Auto-Fix license copy", file)
 		}
+	}
+}
+
+func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
+	source, err := os.ReadFile(filepath.Clean("magic_link_handlers.go"))
+	if err != nil {
+		t.Fatalf("read magic_link_handlers.go: %v", err)
+	}
+	text := string(source)
+	for _, required := range []string{
+		"resolveMagicLinkPrincipal",
+		"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, principal.UserID)",
+		"TrackUserSession(principal.UserID, sessionToken)",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("magic_link_handlers.go must contain %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, token.Email)",
+		"TrackUserSession(token.Email, sessionToken)",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("magic_link_handlers.go must not contain legacy email-principal pattern %q", forbidden)
+		}
+	}
+
+	invariantDoc, err := os.ReadFile(filepath.Clean("../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md"))
+	if err != nil {
+		t.Fatalf("read identity invariant contract: %v", err)
+	}
+	if !strings.Contains(string(invariantDoc), "Email is contact metadata") {
+		t.Fatal("identity invariant contract must define email as contact metadata")
 	}
 }
 
@@ -11178,6 +11212,96 @@ func TestContract_ResourceFacetsDeriveCanonicalParentRelationship(t *testing.T) 
 				"metadata":{"source":"parentId"}
 			}
 		]
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
+	resource := unifiedresources.Resource{
+		ID:        "vm:42",
+		Type:      unifiedresources.ResourceTypeVM,
+		Name:      "web-42",
+		Status:    unifiedresources.StatusWarning,
+		LastSeen:  now,
+		UpdatedAt: now,
+		Sources:   []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+		Capabilities: []unifiedresources.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unifiedresources.CapabilityTypeCommon,
+				Description:          "Restart the VM",
+				MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+				InternalHandler:      "proxmox.vm.restart",
+				Params: []unifiedresources.CapabilityParam{
+					{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
+				},
+			},
+		},
+		Relationships: []unifiedresources.ResourceRelationship{
+			{
+				SourceID:   "vm:42",
+				TargetID:   "node-1",
+				Type:       unifiedresources.RelRunsOn,
+				Confidence: 1,
+				Active:     true,
+				Discoverer: "proxmox_adapter",
+				ObservedAt: now,
+				LastSeenAt: now,
+			},
+		},
+	}
+	req := unifiedresources.ActionRequest{
+		RequestID:      "agent-run-123",
+		ResourceID:     "vm:42",
+		CapabilityName: "restart",
+		Params:         map[string]any{"mode": "graceful"},
+		Reason:         "Recover after confirmed outage",
+		RequestedBy:    "agent:oncall-helper",
+	}
+
+	plan, err := (actionplanner.Planner{Now: func() time.Time { return now }}).Plan(req, resource)
+	if err != nil {
+		t.Fatalf("plan action: %v", err)
+	}
+	got, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatalf("marshal action plan: %v", err)
+	}
+
+	const want = `{
+		"actionId":"act_371d0bcde73818752f83bb759e1fa523",
+		"requestId":"agent-run-123",
+		"allowed":true,
+		"requiresApproval":true,
+		"approvalPolicy":"admin",
+		"predictedBlastRadius":["vm:42","node-1"],
+		"rollbackAvailable":false,
+		"message":"Plan created for restart on web-42. Execution requires admin approval and is not performed by this endpoint.",
+		"plannedAt":"2026-05-03T10:00:00Z",
+		"expiresAt":"2026-05-03T10:05:00Z",
+		"resourceVersion":"resource:sha256:3a87c71cf83bd017736bcb25",
+		"policyVersion":"policy:sha256:0bce3cd2df181ace685598eb",
+		"planHash":"sha256:38e8a016794bae597cd6129e65506556048bcac88d6a5a1b59e1337a2acc5a05",
+		"preflight":{
+			"target":"vm:42",
+			"currentState":"web-42 is warning",
+			"intendedChange":"Restart the VM",
+			"dryRunAvailable":false,
+			"dryRunSummary":"No provider-supported dry run is advertised for this capability.",
+			"safetyChecks":[
+				"Resource was resolved from the unified resource registry.",
+				"Capability is advertised by the resource contract.",
+				"This endpoint plans only; it does not approve or execute the action.",
+				"Execution requires admin approval."
+			],
+			"verificationSteps":[
+				"Refresh the resource and confirm the expected state after execution.",
+				"Review /api/audit/actions/act_371d0bcde73818752f83bb759e1fa523/events for lifecycle evidence."
+			],
+			"generatedAt":"2026-05-03T10:00:00Z"
+		}
 	}`
 
 	assertJSONSnapshot(t, got, want)

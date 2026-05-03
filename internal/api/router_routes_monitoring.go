@@ -37,6 +37,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/resources/{id}/facets", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceFacets)))
 	r.mux.HandleFunc("/api/resources/{id}/timeline", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceTimeline)))
 	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
+	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandlePlanAction)))
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
 	r.mux.HandleFunc("/api/guests/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
