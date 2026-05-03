@@ -58,7 +58,8 @@ principal once a stable user ID exists.
    - Shape: token hash plus token metadata in config/auth storage.
    - Owns: API credential identity, scope, and revocation.
    - `owner_user_id` metadata must carry the authenticated principal, not an
-     arbitrary email copied from a browser payload.
+     arbitrary email copied from a browser payload. Token minting helpers must
+     reject caller-supplied metadata that attempts to set `owner_user_id`.
 
 8. Mobile/relay device identity
    - Shape: relay/mobile device registration IDs and platform device tokens.

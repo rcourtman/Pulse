@@ -160,6 +160,10 @@ stale-plan hash, blast-radius model, or execution protocol outside
    shared metric-color helper instead of carrying storage-local usage color
    bands.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   Shared API-token transport helpers may be consumed by storage/recovery-
+   adjacent flows, but `owner_user_id` remains server-authored token identity
+   metadata; storage/recovery extensions must not pass metadata that authors
+   or overwrites that owner field.
    Shared setup-script transport may be reused by storage and recovery-linked
    setup flows, but it remains API/lifecycle-owned: generated PVE scripts must
    preserve Proxmox `authorized_keys` symlinks by resolving the target before
@@ -2517,7 +2521,10 @@ shared auth/security helpers may inspect token metadata, but they must not
 treat a displayed relay pairing token as disposable once canonical metadata
 shows `lastUsedAt`. Shared transport mutations must preserve used-token
 continuity instead of deleting a credential that an already paired device
-still depends on.
+still depends on. Storage- and recovery-adjacent helpers must also treat
+`owner_user_id` as API-authored identity metadata, not caller-supplied storage
+or recovery metadata, so shared token records cannot be rebound through
+extension-specific metadata maps.
 That same shared backend helper layer now also owns hosted relay bootstrap
 continuity. Storage- and recovery-adjacent consumers may read relay status or
 mobile onboarding payloads, but they must not assume hosted tenants need a

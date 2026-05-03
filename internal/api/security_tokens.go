@@ -30,6 +30,26 @@ const apiTokenMetadataOwnerUserID = "owner_user_id"
 const apiTokenMetadataPurpose = "purpose"
 const apiTokenPurposeRelayMobileAccess = "relay_mobile_access"
 
+func mergeAPITokenMetadata(record *config.APITokenRecord, metadata map[string]string) error {
+	if record == nil || len(metadata) == 0 {
+		return nil
+	}
+	if record.Metadata == nil {
+		record.Metadata = make(map[string]string)
+	}
+	for key, value := range metadata {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if key == apiTokenMetadataOwnerUserID {
+			return fmt.Errorf("reserved token metadata key %q cannot be supplied by caller metadata", apiTokenMetadataOwnerUserID)
+		}
+		record.Metadata[key] = value
+	}
+	return nil
+}
+
 func apiTokenOwnerUserID(record config.APITokenRecord) string {
 	if record.Metadata == nil {
 		return ""
@@ -175,13 +195,8 @@ func (r *Router) createAPITokenRecord(
 		}
 		record.Metadata[apiTokenMetadataOwnerUserID] = ownerUserID
 	}
-	if len(metadata) > 0 {
-		if record.Metadata == nil {
-			record.Metadata = make(map[string]string)
-		}
-		for key, value := range metadata {
-			record.Metadata[key] = value
-		}
+	if err := mergeAPITokenMetadata(record, metadata); err != nil {
+		return "", nil, err
 	}
 
 	if expiresIn != nil && *expiresIn != "" {

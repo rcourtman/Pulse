@@ -185,6 +185,9 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle surfaces may display contact email when supplied by the shared
    auth boundary, but they must not reinterpret SSO or Stripe email as the
    canonical user identifier for setup, install, or fleet-management actions.
+   API-token owner metadata follows the same rule: lifecycle-adjacent setup or
+   mobile-pairing token flows may consume the shared token helper, but they
+   must not pass extension metadata that authors or overwrites `owner_user_id`.
    The canonical durable-principal vocabulary for those shared auth routes is
    recorded in `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; agent
    lifecycle work may consume that identity but must not define a parallel

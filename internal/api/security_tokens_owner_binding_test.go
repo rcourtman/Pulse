@@ -108,3 +108,37 @@ func TestSecurityTokens_CreateInheritsOwnerUserIDFromTokenCaller(t *testing.T) {
 		t.Fatalf("stored child org = %q, want acme", got)
 	}
 }
+
+func TestSecurityTokens_CreateRejectsCallerMetadataOwnerOverride(t *testing.T) {
+	cfg := &config.Config{}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{}`))
+	req = req.WithContext(authpkg.WithUser(req.Context(), "alice"))
+
+	_, record, err := router.createAPITokenRecord(
+		req,
+		"bad-owner",
+		[]string{config.ScopeMonitoringRead},
+		nil,
+		map[string]string{
+			apiTokenMetadataOwnerUserID: "mallory@example.com",
+		},
+	)
+	if err == nil {
+		t.Fatalf("expected reserved owner_user_id metadata to be rejected")
+	}
+	if !strings.Contains(err.Error(), "reserved token metadata key") {
+		t.Fatalf("expected reserved metadata error, got %v", err)
+	}
+	if record != nil {
+		t.Fatalf("expected no token record after rejected metadata, got %+v", record)
+	}
+	if len(cfg.APITokens) != 0 {
+		t.Fatalf("expected no stored tokens after rejected metadata, got %d", len(cfg.APITokens))
+	}
+}

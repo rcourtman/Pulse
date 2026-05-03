@@ -222,6 +222,10 @@ product API routes free of maintainer commercial analytics.
     session revocation must still delete the full session token set rather than
     leaving any retained replacement token valid.
 48. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+    Token owner identity is reserved for the server-authenticated principal:
+    shared token-minting helpers must derive `owner_user_id` from the current
+    session or caller token and reject extension metadata that tries to
+    overwrite that field.
     The dedicated Pulse Mobile relay token route is part of that same API
     contract even though its runtime capability is Relay-owned:
     `POST /api/security/tokens/relay-mobile` must pass normal admin and
@@ -3156,7 +3160,9 @@ the broader API lane.
 The `/api/security/tokens` payload contract now also carries explicit owner
 binding: token create/list responses must preserve the originating
 `ownerUserId` together with org scope so long-lived automation credentials
-cannot appear detached from their intended human identity.
+cannot appear detached from their intended human identity, and shared
+token-minting helpers must reject caller-supplied metadata that attempts to
+overwrite the reserved `owner_user_id` field.
 The shared direct-node/discovery settings boundary now also includes
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`, so the
 customer-facing mutation and validation copy used by the governed runtime

@@ -266,6 +266,10 @@ helper. Security surfaces may consume compatibility-normalized
 `platformType: 'truenas'` resources, but they must not reintroduce a separate
 `resource.type === 'truenas'` trust path when calculating token usage,
 revocation targets, or operator-facing token ownership.
+That same token-management boundary also reserves token-owner identity for the
+server-authenticated principal. Token-minting helpers must derive
+`owner_user_id` from the authenticated session or caller token and reject any
+extension metadata that attempts to overwrite that field.
 Telemetry/privacy disclosures now also route through the shipped frontend docs
 boundary: `frontend-modern/src/utils/docsLinks.ts` is the canonical frontend
 owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`

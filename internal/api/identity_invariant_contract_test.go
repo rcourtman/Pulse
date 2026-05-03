@@ -25,6 +25,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		"payments_webhook_handlers.go":     readIdentityContractFile(t, "payments_webhook_handlers.go"),
 		"saml_handlers.go":                 readIdentityContractFile(t, "saml_handlers.go"),
 		"auth_principal_identity.go":       readIdentityContractFile(t, "auth_principal_identity.go"),
+		"security_tokens.go":               readIdentityContractFile(t, "security_tokens.go"),
 		"../cloudcp/stripe/provisioner.go": readIdentityContractFile(t, "../cloudcp/stripe/provisioner.go"),
 		"../models/organization.go":        readIdentityContractFile(t, "../models/organization.go"),
 		"../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md": readIdentityContractFile(t, "../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md"),
@@ -59,6 +60,11 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"ssoLegacyPrincipalCandidates",
 			"applySSORoleAssignments",
 		},
+		"security_tokens.go": {
+			"mergeAPITokenMetadata",
+			"reserved token metadata key",
+			"apiTokenOwnerUserIDForRequest",
+		},
 		"../cloudcp/stripe/provisioner.go": {
 			"ownerUserID = strings.TrimSpace(user.ID)",
 			"org.OwnerEmail = ownerEmail",
@@ -74,6 +80,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"Email is contact metadata",
 			"Pulse control-plane user ID",
 			"SSO provider subject",
+			"reject caller-supplied metadata",
 			"Self-hosted SSO sessions now use provider-scoped",
 		},
 	}
