@@ -90,6 +90,28 @@ func TestOrganizationResolvePrincipalByEmail(t *testing.T) {
 	}
 }
 
+func TestOrganizationResolvePrincipalByEmailRejectsBlankStoredPrincipal(t *testing.T) {
+	ownerOnlyEmail := &Organization{
+		ID:         "org-blank-owner",
+		OwnerEmail: "owner@example.com",
+	}
+	userID, role, ok := ownerOnlyEmail.ResolvePrincipalByEmail("owner@example.com")
+	if ok || userID != "" || role != "" {
+		t.Fatalf("blank owner principal = (%q, %q, %v), want rejection", userID, role, ok)
+	}
+
+	memberOnlyEmail := &Organization{
+		ID: "org-blank-member",
+		Members: []OrganizationMember{
+			{Email: "member@example.com", Role: OrgRoleViewer},
+		},
+	}
+	userID, role, ok = memberOnlyEmail.ResolvePrincipalByEmail("member@example.com")
+	if ok || userID != "" || role != "" {
+		t.Fatalf("blank member principal = (%q, %q, %v), want rejection", userID, role, ok)
+	}
+}
+
 func TestOrganizationRoleNormalization(t *testing.T) {
 	if got := NormalizeOrganizationRole("member"); got != OrganizationRole("member") {
 		t.Fatalf("expected member to remain unchanged, got %q", got)

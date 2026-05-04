@@ -386,7 +386,7 @@ func (o *Organization) ResolvePrincipalByEmail(email string) (string, Organizati
 	if ownerMatchesEmail(o, email) {
 		userID := normalizeOrganizationIdentityValue(o.OwnerUserID)
 		if userID == "" {
-			userID = email
+			return "", "", false
 		}
 		return userID, OrgRoleOwner, true
 	}
@@ -396,7 +396,7 @@ func (o *Organization) ResolvePrincipalByEmail(email string) (string, Organizati
 		}
 		userID := normalizeOrganizationIdentityValue(member.UserID)
 		if userID == "" {
-			userID = email
+			return "", "", false
 		}
 		return userID, NormalizeOrganizationRole(member.Role), true
 	}

@@ -113,6 +113,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"OwnerEmail string",
 			"ResolvePrincipalByEmail",
 			"CanonicalizePrincipalIdentity",
+			"return \"\", \"\", false",
 		},
 		"../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md": {
 			"Email is contact metadata",
@@ -171,6 +172,9 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"OwnerUserID: ownerEmail",
 			"UserID:  ownerEmail",
 			"contactEmailForLegacyUserID",
+		},
+		"../models/organization.go": {
+			"userID = email",
 		},
 	}
 	for file, needles := range forbidden {

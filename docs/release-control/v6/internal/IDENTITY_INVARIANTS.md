@@ -79,6 +79,9 @@ principal once a stable user ID exists.
    email-keyed tenant records after a stable subject is already present.
 2. Magic-link sessions bind to the stored organization principal resolved from
    contact email at verification time, not to the email embedded in the token.
+   If the matching organization owner/member has no stored principal, the
+   magic-link flow must fail closed instead of synthesizing a principal from
+   contact email.
 3. Hosted checkout and tenant provisioning seed organization membership from
    stable Pulse user IDs. Registry-backed paths must create or resolve the
    registry user before writing hosted tenant `OwnerUserID` or member `UserID`;

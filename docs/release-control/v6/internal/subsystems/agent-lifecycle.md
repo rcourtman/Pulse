@@ -193,6 +193,10 @@ profile and assignment columns, but embedded table framing must route through
    already be stable, non-email principals; lifecycle-adjacent routes must not
    recover authority from a blank handoff subject by falling back to contact
    email.
+   The same rule applies to hosted public magic-link sessions consumed by
+   lifecycle-adjacent routes: shared auth must mint a browser session only for
+   a stored organization principal, not for a contact email on a blank
+   owner/member row.
    API-token owner metadata follows the same rule: lifecycle-adjacent setup or
    mobile-pairing token flows may consume the shared token helper, but they
    must not pass extension metadata that authors or overwrites `owner_user_id`.

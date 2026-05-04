@@ -246,23 +246,13 @@ func (h *MagicLinkHandlers) findOrgForEmail(email string) (string, bool, error) 
 		return "", false, nil
 	}
 
-	// Prefer exact owner match; otherwise accept membership.
 	for _, org := range orgs {
 		if org == nil {
 			continue
 		}
-		if strings.EqualFold(org.OwnerEmail, email) || strings.EqualFold(org.OwnerUserID, email) {
+		userID, role, ok := org.ResolvePrincipalByEmail(email)
+		if ok && strings.TrimSpace(userID) != "" && models.IsValidOrganizationRole(role) {
 			return org.ID, true, nil
-		}
-	}
-	for _, org := range orgs {
-		if org == nil {
-			continue
-		}
-		for _, m := range org.Members {
-			if strings.EqualFold(m.Email, email) || strings.EqualFold(m.UserID, email) {
-				return org.ID, true, nil
-			}
 		}
 	}
 	return "", false, nil

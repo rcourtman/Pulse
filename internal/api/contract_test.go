@@ -112,6 +112,9 @@ func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	if !strings.Contains(string(modelSource), "ResolvePrincipalByEmail") {
 		t.Fatal("organization model must expose email-to-stable-principal resolution")
 	}
+	if strings.Contains(string(modelSource), "userID = email") {
+		t.Fatal("organization model must not synthesize magic-link principals from email")
+	}
 }
 
 func TestContract_HostedHandoffRequiresStableSubjectProof(t *testing.T) {

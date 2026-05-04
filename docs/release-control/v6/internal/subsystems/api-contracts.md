@@ -395,6 +395,9 @@ the canonical monitored-system blocked payload.
     the token may carry contact email for delivery, but `/api/public/magic-link/verify`
     must resolve that email against current server-side organization metadata
     and create the browser session for the stored owner/member principal.
+    Magic-link request and verify paths must fail closed when contact email
+    matches a blank owner/member principal instead of sending or accepting a
+    token that would turn email into the session identity.
     Public hosted signup must therefore keep the generated owner user ID
     server-side for org metadata and RBAC assignment while using returned
     contact email only for `GenerateToken`/`SendMagicLink`; the accepted signup

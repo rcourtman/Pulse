@@ -78,6 +78,10 @@ Hosted direct handoff subjects that reach recovery-adjacent protected routes
 must therefore already be stable non-email principals; a blank handoff `UserID`
 must fail at the shared API boundary instead of being repaired from contact
 email.
+Hosted public magic-link sessions follow the same dependent-auth contract:
+storage/recovery-adjacent routes may consume the resulting browser session, but
+shared auth must reject blank owner/member principals rather than minting an
+email-keyed session from delivery metadata.
 The canonical actor vocabulary for those shared sessions is
 `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; recovery and storage
 work may consume accepted org access, but must not mint or widen access from a

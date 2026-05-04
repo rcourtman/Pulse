@@ -4,12 +4,24 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+type magicLinkCaptureEmailer struct {
+	to   []string
+	urls []string
+}
+
+func (c *magicLinkCaptureEmailer) SendMagicLink(to, magicLinkURL string) error {
+	c.to = append(c.to, to)
+	c.urls = append(c.urls, magicLinkURL)
+	return nil
+}
 
 func TestHandlePublicMagicLinkVerifyRejectsInvalidOrgIDInToken(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
@@ -136,6 +148,81 @@ func TestHandlePublicMagicLinkVerifyUsesStableOrganizationPrincipal(t *testing.T
 	}
 	if len(emailTracked) != 0 {
 		t.Fatalf("email-keyed sessions = %v, want none", emailTracked)
+	}
+}
+
+func TestHandlePublicMagicLinkVerifyRejectsBlankOrganizationPrincipal(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+
+	dataDir := t.TempDir()
+	InitSessionStore(dataDir)
+	InitCSRFStore(dataDir)
+	persistence := config.NewMultiTenantPersistence(dataDir)
+
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          "org_magic_blank_owner",
+		DisplayName: "Magic Blank Owner",
+		CreatedAt:   time.Now().UTC(),
+		OwnerEmail:  "owner@example.com",
+	}); err != nil {
+		t.Fatalf("SaveOrganization: %v", err)
+	}
+
+	key := []byte("0123456789abcdef0123456789abcdef")
+	store := NewInMemoryMagicLinkStore()
+	svc := NewMagicLinkServiceWithKey(key, store, nil, nil)
+	t.Cleanup(func() { svc.Stop() })
+	token, err := svc.GenerateToken("owner@example.com", "org_magic_blank_owner")
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+
+	h := NewMagicLinkHandlers(persistence, svc, true, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/public/magic-link/verify?format=json&token="+token, nil)
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	h.HandlePublicMagicLinkVerify(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == cookieNameSession {
+			t.Fatalf("did not expect session cookie for blank stored principal")
+		}
+	}
+}
+
+func TestHandlePublicMagicLinkRequestDoesNotSendForBlankOrganizationPrincipal(t *testing.T) {
+	dataDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(dataDir)
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          "org_magic_blank_request",
+		DisplayName: "Magic Blank Request",
+		CreatedAt:   time.Now().UTC(),
+		OwnerEmail:  "owner@example.com",
+	}); err != nil {
+		t.Fatalf("SaveOrganization: %v", err)
+	}
+
+	emailer := &magicLinkCaptureEmailer{}
+	svc := NewMagicLinkServiceWithKey([]byte("0123456789abcdef0123456789abcdef"), NewInMemoryMagicLinkStore(), emailer, nil)
+	t.Cleanup(func() { svc.Stop() })
+	h := NewMagicLinkHandlers(persistence, svc, true, func(*http.Request) string {
+		return "https://pulse.example.com"
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/public/magic-link/request", strings.NewReader(`{"email":"owner@example.com"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.HandlePublicMagicLinkRequest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if len(emailer.to) != 0 || len(emailer.urls) != 0 {
+		t.Fatalf("sent magic links = to:%v urls:%v, want none", emailer.to, emailer.urls)
 	}
 }
 

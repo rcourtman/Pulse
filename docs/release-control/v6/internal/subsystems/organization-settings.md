@@ -174,7 +174,9 @@ Email-delivery flows that need to mint sessions, including hosted magic links,
 must resolve contact email back through this organization model before
 authorizing. `internal/models/organization.go` owns the email-to-principal
 helper so handlers do not duplicate membership lookup or accidentally bind
-sessions to email.
+sessions to email. A matching owner/member contact email without a stored
+`OwnerUserID` or member `UserID` is not a principal; the helper must fail
+closed instead of manufacturing a session key from email.
 That same org-control surface also treats owner transfer as a re-auth-bound
 operation. Existing membership remains a prerequisite for the target user, and
 the acting owner must present a fresh browser session minted through the
