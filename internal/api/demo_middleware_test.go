@@ -70,6 +70,10 @@ func TestDemoModeMiddleware(t *testing.T) {
 		{"demo on hidden logs download", true, http.MethodGet, "/api/logs/download", "", false, http.StatusNotFound, true},
 		{"demo on hidden logs level read", true, http.MethodGet, "/api/logs/level", "", false, http.StatusNotFound, true},
 		{"demo on hidden logs level write", true, http.MethodPost, "/api/logs/level", "", false, http.StatusNotFound, true},
+		{"demo on hidden admin users read", true, http.MethodGet, "/api/admin/users", "", false, http.StatusNotFound, true},
+		{"demo on hidden admin users read head", true, http.MethodHead, "/api/admin/users", "", false, http.StatusNotFound, true},
+		{"demo on hidden manual discovery read", true, http.MethodGet, "/api/discover", "", false, http.StatusNotFound, true},
+		{"demo on hidden manual discovery head", true, http.MethodHead, "/api/discover", "", false, http.StatusNotFound, true},
 		{"demo on hidden checkout start", true, http.MethodGet, "/auth/license-purchase-start", "", false, http.StatusNotFound, true},
 		{"demo on hidden license activate", true, http.MethodPost, "/api/license/activate", "", false, http.StatusNotFound, true},
 		{"demo on hidden purchase start", true, http.MethodGet, licensePurchaseStartPath, "", false, http.StatusNotFound, true},
@@ -89,6 +93,8 @@ func TestDemoModeMiddleware(t *testing.T) {
 		// Demo mode enabled - POST to other paths blocked
 		{"demo on POST settings", true, http.MethodPost, "/api/settings", "", false, http.StatusForbidden, true},
 		{"demo on POST config", true, http.MethodPost, "/api/config", "", false, http.StatusForbidden, true},
+		{"demo on POST discover", true, http.MethodPost, "/api/discover", "", false, http.StatusForbidden, true},
+		{"demo on POST admin users", true, http.MethodPost, "/api/admin/users", "", false, http.StatusForbidden, true},
 		{"demo on DELETE docker host", true, http.MethodDelete, "/api/docker-hosts/1", "", false, http.StatusForbidden, true},
 	}
 

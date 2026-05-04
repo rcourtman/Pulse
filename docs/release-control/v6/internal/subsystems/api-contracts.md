@@ -84,8 +84,9 @@ product API routes free of maintainer commercial analytics.
 51. `internal/api/recovery_handlers.go`
 52. `internal/api/config_setup_handlers.go`
 53. `internal/api/demo_mode_commercial.go`
-54. `internal/api/security_status_capabilities.go`
-55. `internal/api/demo_middleware.go`
+54. `internal/api/demo_mode_operations.go`
+55. `internal/api/security_status_capabilities.go`
+56. `internal/api/demo_middleware.go`
 56. `frontend-modern/src/stores/aiRuntimeState.ts`
 57. `internal/api/connections_types.go`
 58. `internal/api/connections_aggregator.go`
@@ -1913,7 +1914,10 @@ surfaces instead of treating them as harmless reads. Demo sessions must receive
 `404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the
 shared `/api/logs/*` endpoints, so the preview shell cannot expose runtime
 diagnostics, log streams, or downloadable log bundles behind a supposedly
-read-only demo account.
+read-only demo account. That same hidden read-side boundary includes `GET` and
+`HEAD` reads for `/api/admin/users` and manual discovery at `/api/discover`;
+public demo mode may block writes generically, but it must not reveal that
+admin-user inventory or manual-discovery read routes exist.
 That shared infrastructure install boundary now also preserves copied shell
 command payload continuity: any privilege-escalation wrapper applied at
 `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
@@ -3419,6 +3423,10 @@ reads or preview probes whenever `DEMO_MODE` is enabled. Demo runtimes may
 still use real server-side entitlement evaluation internally, but the
 governed browser/API contract must not expose commercial identity, usage, or
 upgrade-state payloads back to public viewers through those read surfaces.
+The adjacent public-demo admin-operations policy also hides `GET`/`HEAD`
+probes for `/api/admin/users` and `/api/discover` with the same generic `404`
+posture, while non-read attempts still fall through to the demo read-only
+mutation block so write probes retain the canonical `403`.
 That same monitored-system admission contract now also owns direct write-path
 failure semantics for platform connections. `internal/api/truenas_handlers.go`,
 `internal/api/vmware_handlers.go`,

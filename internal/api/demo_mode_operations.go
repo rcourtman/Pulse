@@ -6,7 +6,7 @@ var publicDemoAdminOperationsPolicies = []publicDemoCommercialRoutePolicy{
 	{
 		route:    "GET /api/diagnostics",
 		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/diagnostics"),
+		matches:  readDemoCommercialPath("/api/diagnostics"),
 	},
 	{
 		route:    "POST /api/diagnostics/docker/prepare-token",
@@ -16,22 +16,32 @@ var publicDemoAdminOperationsPolicies = []publicDemoCommercialRoutePolicy{
 	{
 		route:    "GET /api/logs/stream",
 		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/logs/stream"),
+		matches:  readDemoCommercialPath("/api/logs/stream"),
 	},
 	{
 		route:    "GET /api/logs/download",
 		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/logs/download"),
+		matches:  readDemoCommercialPath("/api/logs/download"),
 	},
 	{
 		route:    "GET /api/logs/level",
 		exposure: publicDemoCommercialExposureHidden,
-		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/logs/level"),
+		matches:  readDemoCommercialPath("/api/logs/level"),
 	},
 	{
 		route:    "POST /api/logs/level",
 		exposure: publicDemoCommercialExposureHidden,
 		matches:  exactDemoCommercialMethodPath(http.MethodPost, "/api/logs/level"),
+	},
+	{
+		route:    "GET /api/admin/users",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  readDemoCommercialPath("/api/admin/users"),
+	},
+	{
+		route:    "GET /api/discover",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  readDemoCommercialPath("/api/discover"),
 	},
 }
 

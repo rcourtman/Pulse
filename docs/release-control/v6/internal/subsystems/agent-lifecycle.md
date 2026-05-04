@@ -816,7 +816,10 @@ That same demo-hidden API boundary also keeps runtime-admin operations out of
 public lifecycle flows: `/api/diagnostics`,
 `/api/diagnostics/docker/prepare-token`, and `/api/logs/*` must return `404`
 in demo mode instead of exposing runtime bundles, log streams, or diagnostics
-payloads through a nominally read-only preview account.
+payloads through a nominally read-only preview account. `GET` and `HEAD` reads
+for `/api/admin/users` and manual discovery at `/api/discover` are part of
+that same hidden boundary; lifecycle-adjacent UI must not rely on those routes
+remaining discoverable in public demo mode.
 Lifecycle-owned browser shells must also defer any commercial helper reads
 until that presentation policy resolves so demo suppression stays fail-closed
 during first render instead of racing hidden commercial endpoints from shared

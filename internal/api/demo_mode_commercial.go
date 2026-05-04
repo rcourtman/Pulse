@@ -166,6 +166,15 @@ func exactDemoCommercialMethodPath(method, path string) func(*http.Request) bool
 	}
 }
 
+func readDemoCommercialPath(path string) func(*http.Request) bool {
+	return func(r *http.Request) bool {
+		if r == nil || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+			return false
+		}
+		return exactDemoCommercialPath(path)(r)
+	}
+}
+
 func exactDemoCommercialOrgBillingStatePath(method string) func(*http.Request) bool {
 	return func(r *http.Request) bool {
 		if r == nil || r.Method != method || r.URL == nil {

@@ -18,6 +18,11 @@ func TestPublicDemoAdminOperationsPolicyForRequest(t *testing.T) {
 		{name: "logs download", method: http.MethodGet, path: "/api/logs/download"},
 		{name: "logs level read", method: http.MethodGet, path: "/api/logs/level"},
 		{name: "logs level write", method: http.MethodPost, path: "/api/logs/level"},
+		{name: "admin users read", method: http.MethodGet, path: "/api/admin/users"},
+		{name: "admin users trailing slash read", method: http.MethodGet, path: "/api/admin/users/"},
+		{name: "admin users head", method: http.MethodHead, path: "/api/admin/users"},
+		{name: "manual discovery read", method: http.MethodGet, path: "/api/discover"},
+		{name: "manual discovery head", method: http.MethodHead, path: "/api/discover"},
 	}
 
 	for _, tc := range hiddenRoutes {
@@ -41,6 +46,8 @@ func TestPublicDemoAdminOperationsPolicyForRequest(t *testing.T) {
 		{name: "health", method: http.MethodGet, path: "/api/health"},
 		{name: "resources", method: http.MethodGet, path: "/api/resources"},
 		{name: "runtime capabilities", method: http.MethodGet, path: "/api/license/runtime-capabilities"},
+		{name: "admin users write", method: http.MethodPost, path: "/api/admin/users"},
+		{name: "manual discovery write", method: http.MethodPost, path: "/api/discover"},
 	}
 
 	for _, tc := range allowedRoutes {

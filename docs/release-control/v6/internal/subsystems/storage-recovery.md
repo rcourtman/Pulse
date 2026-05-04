@@ -275,7 +275,10 @@ stale-plan hash, blast-radius model, or execution protocol outside
    hidden from public preview sessions: `/api/diagnostics`,
    `/api/diagnostics/docker/prepare-token`, and `/api/logs/*` must not remain
    readable side channels while storage or recovery demo routes are otherwise
-   presented as read-only product surfaces.
+   presented as read-only product surfaces. `GET` and `HEAD` reads for
+   `/api/admin/users` and manual discovery at `/api/discover` must stay hidden
+   for the same reason; recovery-adjacent pages must not treat those
+   admin-oriented read routes as safe public-demo evidence.
    Storage and recovery consumers must also inherit the hook's canonical
    `ResourceType` normalization for route/query filters, so storage subtypes
    such as `physical_disk` stay on the same cache-backed snapshot instead of
