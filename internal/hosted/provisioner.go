@@ -168,6 +168,7 @@ func (p *Provisioner) ProvisionHostedSignup(ctx context.Context, req HostedSignu
 }
 
 func (p *Provisioner) findExistingOrganizationByOwnerEmail(email string) (*ProvisionResult, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
 	orgs, err := p.persistence.ListOrganizations()
 	if err != nil {
 		return nil, &SystemError{Op: "list_organizations", Err: err}
@@ -177,13 +178,13 @@ func (p *Provisioner) findExistingOrganizationByOwnerEmail(email string) (*Provi
 			continue
 		}
 		if strings.EqualFold(strings.TrimSpace(org.OwnerEmail), email) || strings.EqualFold(strings.TrimSpace(org.OwnerUserID), email) {
-			userID, _, ok := org.ResolvePrincipalByEmail(email)
-			if !ok {
-				userID = strings.TrimSpace(org.OwnerUserID)
+			userID, err := p.ensureExistingOwnerStablePrincipal(org, email)
+			if err != nil {
+				return nil, err
 			}
 			ownerEmail := strings.ToLower(strings.TrimSpace(org.OwnerEmail))
 			if ownerEmail == "" {
-				ownerEmail = strings.ToLower(strings.TrimSpace(email))
+				ownerEmail = email
 			}
 			return &ProvisionResult{
 				OrgID:      org.ID,
@@ -194,6 +195,116 @@ func (p *Provisioner) findExistingOrganizationByOwnerEmail(email string) (*Provi
 		}
 	}
 	return nil, nil
+}
+
+func (p *Provisioner) ensureExistingOwnerStablePrincipal(org *models.Organization, email string) (string, error) {
+	if org == nil {
+		return "", &SystemError{Op: "canonicalize_existing_owner_identity", Err: errors.New("organization is nil")}
+	}
+	userID, _, ok := org.ResolvePrincipalByEmail(email)
+	userID = strings.TrimSpace(userID)
+	if ok && userID != "" && !strings.Contains(userID, "@") {
+		return userID, nil
+	}
+
+	return p.canonicalizeExistingOwnerPrincipal(org, email)
+}
+
+func (p *Provisioner) canonicalizeExistingOwnerPrincipal(org *models.Organization, email string) (string, error) {
+	orgID := strings.TrimSpace(org.ID)
+	if orgID == "" {
+		return "", &SystemError{Op: "canonicalize_existing_owner_identity", Err: errors.New("organization id is empty")}
+	}
+	userID, err := p.generateOwnerUserID()
+	if err != nil {
+		return "", &SystemError{Op: "canonicalize_existing_owner_user_id", Err: err}
+	}
+
+	oldOwnerUserID := org.OwnerUserID
+	oldOwnerEmail := org.OwnerEmail
+	oldMembers := append([]models.OrganizationMember(nil), org.Members...)
+	p.applyExistingOwnerPrincipal(org, userID, email)
+
+	if err := p.persistence.SaveOrganization(org); err != nil {
+		org.OwnerUserID = oldOwnerUserID
+		org.OwnerEmail = oldOwnerEmail
+		org.Members = oldMembers
+		return "", &SystemError{Op: "save_existing_owner_identity", Err: err}
+	}
+	if err := p.assignExistingOwnerAdminRole(orgID, userID); err != nil {
+		org.OwnerUserID = oldOwnerUserID
+		org.OwnerEmail = oldOwnerEmail
+		org.Members = oldMembers
+		if rollbackErr := p.persistence.SaveOrganization(org); rollbackErr != nil {
+			return "", &SystemError{
+				Op:  "rollback_existing_owner_identity",
+				Err: fmt.Errorf("%w; rollback failed: %v", err, rollbackErr),
+			}
+		}
+		return "", err
+	}
+
+	return userID, nil
+}
+
+func (p *Provisioner) applyExistingOwnerPrincipal(org *models.Organization, userID, email string) {
+	oldOwnerUserID := strings.TrimSpace(org.OwnerUserID)
+	email = strings.ToLower(strings.TrimSpace(email))
+	now := p.now().UTC()
+
+	org.OwnerUserID = userID
+	org.OwnerEmail = email
+
+	found := false
+	for i := range org.Members {
+		memberUserID := strings.TrimSpace(org.Members[i].UserID)
+		memberEmail := strings.ToLower(strings.TrimSpace(org.Members[i].Email))
+		if memberEmail == "" && strings.Contains(memberUserID, "@") {
+			memberEmail = strings.ToLower(memberUserID)
+		}
+		matchesOwner := memberUserID == userID ||
+			(oldOwnerUserID != "" && strings.EqualFold(memberUserID, oldOwnerUserID)) ||
+			strings.EqualFold(memberUserID, email) ||
+			memberEmail == email
+		if !matchesOwner {
+			continue
+		}
+
+		org.Members[i].UserID = userID
+		org.Members[i].Email = email
+		org.Members[i].Role = models.OrgRoleOwner
+		if org.Members[i].AddedAt.IsZero() {
+			org.Members[i].AddedAt = now
+		}
+		addedBy := strings.TrimSpace(org.Members[i].AddedBy)
+		if addedBy == "" || strings.EqualFold(addedBy, oldOwnerUserID) || strings.EqualFold(addedBy, email) {
+			org.Members[i].AddedBy = userID
+		}
+		found = true
+	}
+	if !found {
+		org.Members = append(org.Members, models.OrganizationMember{
+			UserID:  userID,
+			Email:   email,
+			Role:    models.OrgRoleOwner,
+			AddedAt: now,
+			AddedBy: userID,
+		})
+	}
+}
+
+func (p *Provisioner) assignExistingOwnerAdminRole(orgID, userID string) error {
+	authManager, err := p.authProvider.GetManager(orgID)
+	if err != nil {
+		return &SystemError{Op: "get_existing_owner_auth_manager", Err: err}
+	}
+	if authManager == nil {
+		return &SystemError{Op: "get_existing_owner_auth_manager", Err: errors.New("auth manager is nil")}
+	}
+	if err := authManager.UpdateUserRoles(userID, []string{auth.RoleAdmin}); err != nil {
+		return &SystemError{Op: "assign_existing_owner_role", Err: err}
+	}
+	return nil
 }
 
 func (p *Provisioner) RollbackProvisioning(orgID string) {

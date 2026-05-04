@@ -88,6 +88,9 @@ principal once a stable user ID exists.
    legacy public hosted signup must generate an opaque `u_...` owner principal
    and copy email only into contact metadata and magic-link delivery. No hosted
    provisioning path may synthesize durable owner/member IDs from email.
+   Duplicate-signup recovery for older hosted org rows must canonicalize blank
+   or email-shaped owner principals to a generated stable `u_...` owner before
+   returning the existing org for magic-link delivery.
 4. Webhook payloads must never create organizations or memberships from email.
    They may update billing only after server-owned org/customer linkage exists.
 5. Legacy email-keyed records may be accepted only at migration boundaries and

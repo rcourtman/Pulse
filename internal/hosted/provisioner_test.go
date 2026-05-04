@@ -489,6 +489,133 @@ func TestProvisionHostedSignupIdempotentDuplicateEmailCaseInsensitive(t *testing
 	}
 }
 
+func TestProvisionHostedSignupCanonicalizesLegacyEmailOwnerPrincipal(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	authManager := &mockAuthManager{}
+	authProvider := &mockAuthProvider{manager: authManager}
+	provisioner := NewProvisioner(persistence, authProvider)
+	provisioner.newUserID = func() (string, error) { return "u_migrated_owner", nil }
+	provisioner.now = func() time.Time { return time.Unix(1700000200, 0).UTC() }
+
+	legacyOrg := &models.Organization{
+		ID:          "legacy-org",
+		DisplayName: "Legacy Org",
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "owner@example.com",
+		Members: []models.OrganizationMember{
+			{
+				UserID:  "owner@example.com",
+				Role:    models.OrgRoleOwner,
+				AddedAt: time.Now().UTC(),
+				AddedBy: "owner@example.com",
+			},
+		},
+	}
+	if err := persistence.SaveOrganization(legacyOrg); err != nil {
+		t.Fatalf("SaveOrganization returned error: %v", err)
+	}
+
+	result, err := provisioner.ProvisionHostedSignup(context.Background(), HostedSignupRequest{
+		Email:   "Owner@Example.com",
+		OrgName: "Another Org",
+	})
+	if err != nil {
+		t.Fatalf("ProvisionHostedSignup returned error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.Status != ProvisionStatusExisting {
+		t.Fatalf("expected status %q, got %q", ProvisionStatusExisting, result.Status)
+	}
+	if result.OrgID != "legacy-org" {
+		t.Fatalf("expected org ID legacy-org, got %q", result.OrgID)
+	}
+	if result.UserID != "u_migrated_owner" {
+		t.Fatalf("expected migrated owner user ID, got %q", result.UserID)
+	}
+	if result.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", result.OwnerEmail)
+	}
+
+	org, err := persistence.LoadOrganization("legacy-org")
+	if err != nil {
+		t.Fatalf("LoadOrganization returned error: %v", err)
+	}
+	if org.OwnerUserID != "u_migrated_owner" {
+		t.Fatalf("owner user ID = %q, want u_migrated_owner", org.OwnerUserID)
+	}
+	if org.OwnerEmail != "owner@example.com" {
+		t.Fatalf("owner email = %q, want owner@example.com", org.OwnerEmail)
+	}
+	if len(org.Members) != 1 {
+		t.Fatalf("expected 1 member, got %d", len(org.Members))
+	}
+	if org.Members[0].UserID != "u_migrated_owner" || org.Members[0].Email != "owner@example.com" || org.Members[0].Role != models.OrgRoleOwner {
+		t.Fatalf("member = %+v, want migrated owner member", org.Members[0])
+	}
+	if org.Members[0].AddedBy != "u_migrated_owner" {
+		t.Fatalf("member AddedBy = %q, want u_migrated_owner", org.Members[0].AddedBy)
+	}
+	if authProvider.calls != 1 || authProvider.lastOrgID != "legacy-org" {
+		t.Fatalf("expected auth manager lookup for legacy-org, got calls=%d org=%q", authProvider.calls, authProvider.lastOrgID)
+	}
+	if authManager.calls != 1 || authManager.lastUser != "u_migrated_owner" {
+		t.Fatalf("expected admin role assignment for u_migrated_owner, got calls=%d user=%q", authManager.calls, authManager.lastUser)
+	}
+	if len(authManager.lastRoles) != 1 || authManager.lastRoles[0] != auth.RoleAdmin {
+		t.Fatalf("expected roles [%s], got %v", auth.RoleAdmin, authManager.lastRoles)
+	}
+}
+
+func TestProvisionHostedSignupCanonicalizesBlankOwnerPrincipal(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	authManager := &mockAuthManager{}
+	authProvider := &mockAuthProvider{manager: authManager}
+	provisioner := NewProvisioner(persistence, authProvider)
+	provisioner.newUserID = func() (string, error) { return "u_blank_owner_migrated", nil }
+	provisioner.now = func() time.Time { return time.Unix(1700000300, 0).UTC() }
+
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          "blank-owner-org",
+		DisplayName: "Blank Owner Org",
+		CreatedAt:   time.Now().UTC(),
+		OwnerEmail:  "owner@example.com",
+	}); err != nil {
+		t.Fatalf("SaveOrganization returned error: %v", err)
+	}
+
+	result, err := provisioner.ProvisionHostedSignup(context.Background(), HostedSignupRequest{
+		Email:   "owner@example.com",
+		OrgName: "Another Org",
+	})
+	if err != nil {
+		t.Fatalf("ProvisionHostedSignup returned error: %v", err)
+	}
+	if result.UserID != "u_blank_owner_migrated" || result.Status != ProvisionStatusExisting {
+		t.Fatalf("result = %+v, want existing migrated owner", result)
+	}
+
+	org, err := persistence.LoadOrganization("blank-owner-org")
+	if err != nil {
+		t.Fatalf("LoadOrganization returned error: %v", err)
+	}
+	if org.OwnerUserID != "u_blank_owner_migrated" || org.OwnerEmail != "owner@example.com" {
+		t.Fatalf("owner identity = (%q, %q), want migrated stable owner", org.OwnerUserID, org.OwnerEmail)
+	}
+	if len(org.Members) != 1 {
+		t.Fatalf("expected appended owner member, got %d members", len(org.Members))
+	}
+	if org.Members[0].UserID != "u_blank_owner_migrated" || org.Members[0].Email != "owner@example.com" || org.Members[0].Role != models.OrgRoleOwner {
+		t.Fatalf("member = %+v, want appended stable owner", org.Members[0])
+	}
+	if authManager.calls != 1 || authManager.lastUser != "u_blank_owner_migrated" {
+		t.Fatalf("expected admin role assignment for migrated owner, got calls=%d user=%q", authManager.calls, authManager.lastUser)
+	}
+}
+
 func TestCleanupOrgDirectorySkipsUnsafePath(t *testing.T) {
 	baseDir := t.TempDir()
 	p := &Provisioner{}

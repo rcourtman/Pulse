@@ -235,6 +235,11 @@ runtime gating as separate unlinked claims.
    the account owner registry user before tenant org seeding. The Stripe
    provisioner must fail closed instead of synthesizing `OwnerUserID` or member
    `UserID` from an email when no stable registry user exists.
+   Public hosted signup must also repair older duplicate-signup rows at the
+   provisioning boundary: if the existing org owner principal is blank or
+   email-shaped, the hosted provisioner must generate a stable `u_...` owner,
+   rewrite owner/member metadata, and grant the tenant admin role before
+   returning the existing org for magic-link delivery.
    Hosted magic links are a delivery mechanism inside that same boundary:
    verification must re-read the tenant organization and session as the stored
    stable owner/member principal, so an old token cannot keep email as the
