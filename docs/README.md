@@ -57,7 +57,7 @@ All other documents are supporting references unless explicitly required for evi
 - **[Privacy](PRIVACY.md)** – What leaves your network (and what doesn’t).
 - **[OIDC / SSO](OIDC.md)** – OIDC Single Sign-On configuration (Authentik, Keycloak, Azure AD, etc.).
 - **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
-- **[Agent Security](AGENT_SECURITY.md)** – Agent self-update verification and API security.
+- **[Agent Security](AGENT_SECURITY.md)** – Agent privilege model, Proxmox API-only choices, and self-update verification.
 
 ## 📖 Advanced Topics (Relay / Pro / legacy Pro+ / Cloud)
 

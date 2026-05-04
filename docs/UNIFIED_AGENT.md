@@ -3,6 +3,14 @@
 The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces older split-agent installs with one deployment and one service for simpler operations.
 Install it on each host you want Pulse to monitor. This is the primary monitoring path for infrastructure onboarding.
 
+For Proxmox, install the agent only where you need telemetry that the Proxmox
+API cannot provide, such as inside-guest Docker/Podman visibility, host SMART
+and temperature data, local ZFS/Ceph/mdadm detail, or arbitrary mount reads.
+Basic Proxmox inventory and utilization can use a read-only or narrowly scoped
+Proxmox API token instead. See [Agent Security](AGENT_SECURITY.md) for the
+root-service trade-off, restricted-user expectations, and supply-chain
+verification guidance.
+
 > Note: For temperature monitoring, use `pulse-agent --enable-proxmox` (recommended) or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
 
 ## Quick Start
@@ -91,6 +99,9 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
 | `--log-level` | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `:9191` |
+
+Use `--health-addr 127.0.0.1:9191` when only local Prometheus scraping needs
+the health/metrics endpoint, or `--health-addr ""` to disable that listener.
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
 

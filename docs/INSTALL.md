@@ -150,7 +150,13 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
    - Set your **Admin Username** and **Password** (or let Pulse generate one).
    - Pulse generates an **API token** for agents and automations.
    - Copy the credentials before leaving the page.
-4. Open **Settings → Infrastructure → Install on a host** and install the unified agent on each host you want monitored.
+4. Open **Settings → Infrastructure → Install on a host** and install the
+   unified agent only on hosts where you need agent-provided telemetry. For
+   Proxmox, start with API-only monitoring when inventory, node status,
+   VM/container status, and storage metrics are enough; use agents for
+   inside-guest Docker/Podman visibility, host SMART/temperature data, local
+   ZFS/Ceph/mdadm detail, or other telemetry that requires local host access.
+   See [Agent Security](AGENT_SECURITY.md).
 
 > **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`), the bootstrap token is automatically removed and this step is skipped.
 

@@ -142,7 +142,7 @@ and Recovery desktop history-table layout are all aligned.
 - **[AI Features](docs/AI.md)**: Pulse Assistant (Chat) and Pulse Patrol documentation.
 - **[Multi-Tenant](docs/MULTI_TENANT.md)**: Enterprise multi-tenant setup and configuration.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
-- **[Agent Security](docs/AGENT_SECURITY.md)**: Details on checksum-verified updates and verification.
+- **[Agent Security](docs/AGENT_SECURITY.md)**: Agent privilege model, Proxmox API-only choices, and checksum/signature verification.
 - **[Docker Monitoring](docs/DOCKER.md)**: Setup and management of Docker agents.
 - **[Unified Navigation](docs/MIGRATION_UNIFIED_NAV.md)**: Guide to the new task-based navigation.
 
