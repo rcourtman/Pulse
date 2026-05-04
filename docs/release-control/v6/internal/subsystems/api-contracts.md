@@ -411,6 +411,11 @@ the canonical monitored-system blocked payload.
     delivery after server-owned org linkage is validated, and it must not send
     when the linked org row has matching contact metadata but no stored
     owner/member principal.
+    Live org authorization is stricter than those delivery and migration
+    helpers: `internal/api/authorization.go`, `internal/api/org_handlers.go`,
+    `internal/api/cloud_org_admin_auth.go`, and settings-scope checks must use
+    strict `OwnerUserID`/member `UserID` membership helpers for request access,
+    not the email-aware compatibility accessors.
     Public hosted signup must therefore keep the generated owner user ID
     server-side for org metadata and RBAC assignment while using returned
     contact email only for `GenerateToken`/`SendMagicLink`; the accepted signup

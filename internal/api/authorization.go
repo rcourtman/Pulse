@@ -120,7 +120,7 @@ func (c *DefaultAuthorizationChecker) UserCanAccessOrg(userID, orgID string) boo
 		return false
 	}
 
-	canAccess := org.CanUserAccess(userID)
+	canAccess := org.CanUserIDAccess(userID)
 	if !canAccess {
 		log.Debug().
 			Str("user_id", userID).

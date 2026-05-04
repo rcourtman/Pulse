@@ -62,6 +62,32 @@ func TestOrganizationPrincipalIdentityCanonicalization(t *testing.T) {
 	}
 }
 
+func TestOrganizationStrictUserIDAccessRejectsContactEmail(t *testing.T) {
+	org := &Organization{
+		ID:          "org-1",
+		OwnerUserID: "u_owner",
+		OwnerEmail:  "owner@example.com",
+		Members: []OrganizationMember{
+			{UserID: "u_owner", Email: "owner@example.com", Role: OrgRoleOwner},
+			{UserID: "u_admin", Email: "admin@example.com", Role: OrgRoleAdmin},
+			{UserID: "u_viewer", Email: "viewer@example.com", Role: OrgRoleViewer},
+		},
+	}
+
+	if !org.CanUserIDAccess("u_owner") || !org.CanUserIDManage("u_admin") {
+		t.Fatal("strict user ID access should accept stored owner/admin principals")
+	}
+	if org.CanUserIDAccess("owner@example.com") || org.CanUserIDManage("admin@example.com") {
+		t.Fatal("strict user ID access must not authorize contact email")
+	}
+	if got := org.GetMemberRoleByUserID("admin@example.com"); got != "" {
+		t.Fatalf("strict member role for contact email = %q, want empty", got)
+	}
+	if got := org.GetMemberRole("admin@example.com"); got != OrgRoleAdmin {
+		t.Fatalf("legacy member role for contact email = %q, want %q", got, OrgRoleAdmin)
+	}
+}
+
 func TestOrganizationResolvePrincipalByEmail(t *testing.T) {
 	org := &Organization{
 		ID:          "org-1",

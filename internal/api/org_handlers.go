@@ -295,7 +295,7 @@ func (h *OrgHandlers) HandleUpdateOrg(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !org.CanUserManage(username) {
+	if !org.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -349,7 +349,7 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !org.CanUserManage(username) {
+	if !org.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -438,7 +438,7 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !org.CanUserManage(username) {
+	if !org.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -586,7 +586,7 @@ func (h *OrgHandlers) HandleRemoveMember(w http.ResponseWriter, r *http.Request)
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !org.CanUserManage(username) {
+	if !org.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -640,7 +640,7 @@ func (h *OrgHandlers) HandleListInvitations(w http.ResponseWriter, r *http.Reque
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !org.CanUserManage(username) {
+	if !org.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -676,7 +676,7 @@ func (h *OrgHandlers) HandleRevokeInvitation(w http.ResponseWriter, r *http.Requ
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !org.CanUserManage(username) {
+	if !org.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -916,7 +916,7 @@ func (h *OrgHandlers) HandleListIncomingShares(w http.ResponseWriter, r *http.Re
 		return
 	}
 	targetRole := organizationRoleForUser(targetOrg, username)
-	canManageTargetOrg := targetOrg.CanUserManage(username)
+	canManageTargetOrg := targetOrg.CanUserIDManage(username)
 
 	orgs, err := h.persistence.ListOrganizations()
 	if err != nil {
@@ -979,7 +979,7 @@ func (h *OrgHandlers) HandleAcceptIncomingShare(w http.ResponseWriter, r *http.R
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !targetOrg.CanUserManage(username) {
+	if !targetOrg.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for the target organization", nil)
 		return
 	}
@@ -1031,7 +1031,7 @@ func (h *OrgHandlers) HandleDeclineIncomingShare(w http.ResponseWriter, r *http.
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !targetOrg.CanUserManage(username) {
+	if !targetOrg.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for the target organization", nil)
 		return
 	}
@@ -1081,7 +1081,7 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !sourceOrg.CanUserManage(username) {
+	if !sourceOrg.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -1209,7 +1209,7 @@ func (h *OrgHandlers) HandleDeleteShare(w http.ResponseWriter, r *http.Request) 
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !sourceOrg.CanUserManage(username) {
+	if !sourceOrg.CanUserIDManage(username) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -1305,17 +1305,17 @@ func (h *OrgHandlers) canAccessOrg(username string, token *config.APITokenRecord
 	if org.ID == "default" {
 		return true
 	}
-	return org.CanUserAccess(username)
+	return org.CanUserIDAccess(username)
 }
 
 func organizationRoleForUser(org *models.Organization, username string) models.OrganizationRole {
 	if org == nil || strings.TrimSpace(username) == "" {
 		return ""
 	}
-	if org.IsOwner(username) {
+	if org.IsOwnerUserID(username) {
 		return models.OrgRoleOwner
 	}
-	return org.GetMemberRole(username)
+	return org.GetMemberRoleByUserID(username)
 }
 
 func (h *OrgHandlers) writeLoadOrgError(w http.ResponseWriter, err error) {

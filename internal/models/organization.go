@@ -321,6 +321,16 @@ func (o *Organization) HasMember(userID string) bool {
 	return false
 }
 
+// HasMemberUserID checks membership using only the stored durable user ID.
+func (o *Organization) HasMemberUserID(userID string) bool {
+	for _, member := range o.Members {
+		if memberMatchesUserID(member, userID) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetMemberRole returns the role of a user in the organization.
 // Returns empty string if the user is not a member.
 func (o *Organization) GetMemberRole(userID string) OrganizationRole {
@@ -332,9 +342,24 @@ func (o *Organization) GetMemberRole(userID string) OrganizationRole {
 	return ""
 }
 
+// GetMemberRoleByUserID returns a role using only the stored durable user ID.
+func (o *Organization) GetMemberRoleByUserID(userID string) OrganizationRole {
+	for _, member := range o.Members {
+		if memberMatchesUserID(member, userID) {
+			return NormalizeOrganizationRole(member.Role)
+		}
+	}
+	return ""
+}
+
 // IsOwner checks if a user is the owner of the organization.
 func (o *Organization) IsOwner(userID string) bool {
 	return ownerMatchesUserID(o, userID) || ownerMatchesEmail(o, userID)
+}
+
+// IsOwnerUserID checks ownership using only the stored durable owner user ID.
+func (o *Organization) IsOwnerUserID(userID string) bool {
+	return ownerMatchesUserID(o, userID)
 }
 
 // CanUserAccess checks if a user has any level of access to the organization.
@@ -345,12 +370,28 @@ func (o *Organization) CanUserAccess(userID string) bool {
 	return o.HasMember(userID)
 }
 
+// CanUserIDAccess checks access using only durable owner/member user IDs.
+func (o *Organization) CanUserIDAccess(userID string) bool {
+	if o.IsOwnerUserID(userID) {
+		return true
+	}
+	return o.HasMemberUserID(userID)
+}
+
 // CanUserManage checks if a user can manage the organization (owner or admin).
 func (o *Organization) CanUserManage(userID string) bool {
 	if o.IsOwner(userID) {
 		return true
 	}
 	return OrganizationRoleAtLeast(o.GetMemberRole(userID), OrgRoleAdmin)
+}
+
+// CanUserIDManage checks management access using only durable user IDs.
+func (o *Organization) CanUserIDManage(userID string) bool {
+	if o.IsOwnerUserID(userID) {
+		return true
+	}
+	return OrganizationRoleAtLeast(o.GetMemberRoleByUserID(userID), OrgRoleAdmin)
 }
 
 // GetMemberRoleForPrincipal resolves a role using the durable user ID first,

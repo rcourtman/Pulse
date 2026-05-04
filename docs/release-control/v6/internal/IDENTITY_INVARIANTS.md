@@ -97,9 +97,14 @@ principal once a stable user ID exists.
    Stripe contact email through current server-side org membership first;
    matching contact metadata with a blank owner/member principal is not enough
    to send a sign-in link.
-5. Legacy email-keyed records may be accepted only at migration boundaries and
+5. Live organization authorization paths must use strict user-ID membership
+   checks against `OwnerUserID` and member `UserID`. Email-aware organization
+   helpers are migration/delivery compatibility only; they must not authorize
+   a request just because a session user string matches `OwnerEmail` or member
+   `Email` after a stable principal exists.
+6. Legacy email-keyed records may be accepted only at migration boundaries and
    should be canonicalized to stable user IDs when the stable ID is known.
-6. Self-hosted OIDC and SAML sessions bind to an opaque principal derived from
+7. Self-hosted OIDC and SAML sessions bind to an opaque principal derived from
    provider type, provider ID, and the provider subject (`sub` or `NameID`).
    RBAC may copy a legacy username/email assignment to that principal during
    compatibility migration, but the browser session and tracked active-session

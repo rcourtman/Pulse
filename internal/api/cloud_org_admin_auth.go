@@ -162,7 +162,7 @@ func RequireOrgOwnerOrPlatformAdmin(cfg *config.Config, orgs OrgPersistenceProvi
 			return
 		}
 
-		if !strings.EqualFold(strings.TrimSpace(org.OwnerUserID), strings.TrimSpace(userID)) {
+		if !org.IsOwnerUserID(userID) {
 			writeErrorResponse(w, http.StatusForbidden, "access_denied", "Organization owner or platform admin required", nil)
 			return
 		}

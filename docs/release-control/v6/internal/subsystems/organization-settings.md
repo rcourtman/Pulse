@@ -170,6 +170,13 @@ control-plane user IDs exist, while `OwnerEmail` and member `Email` carry
 delivery/display email. Email-shaped owner/member IDs remain only as legacy
 fallback and migration input, and hosted handoff may canonicalize those records
 to stable user IDs without changing the stored role.
+Live organization authorization must use strict user-ID checks from
+`internal/models/organization.go`: `internal/api/authorization.go`,
+`internal/api/org_handlers.go`, `internal/api/cloud_org_admin_auth.go`, and
+settings-scope admin checks may authorize only against `OwnerUserID` or member
+`UserID`. The legacy email-aware organization helpers remain migration and
+delivery compatibility only, so a stable-principal org cannot be entered by a
+session whose user string merely matches `OwnerEmail` or member `Email`.
 Email-delivery flows that need to mint sessions, including hosted magic links,
 must resolve contact email back through this organization model before
 authorizing. `internal/models/organization.go` owns the email-to-principal

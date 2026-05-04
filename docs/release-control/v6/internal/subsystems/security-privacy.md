@@ -118,6 +118,10 @@ controls as normal product settings.
    sessions must bind to the durable principal rather than a delivery address.
    For SSO, the durable principal is the provider-scoped subject, and mutable
    username/email/display claims may not be written as the session owner.
+   Live organization authorization follows the same trust boundary: contact
+   email can support display, delivery, or migration, but request access must
+   match the authenticated principal against stored `OwnerUserID` or member
+   `UserID`.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.

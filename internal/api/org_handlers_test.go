@@ -313,6 +313,58 @@ func TestOrgHandlersViewerCannotManageOrg(t *testing.T) {
 	}
 }
 
+func TestOrgHandlersRejectContactEmailWithoutStoredPrincipalMatch(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          "acme",
+		DisplayName: "Acme",
+		OwnerUserID: "u_owner",
+		OwnerEmail:  "owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "u_owner", Email: "owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now()},
+			{UserID: "u_admin", Email: "admin@example.com", Role: models.OrgRoleAdmin, AddedAt: time.Now()},
+		},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+
+	getReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme", nil), "owner@example.com")
+	getReq.SetPathValue("id", "acme")
+	getRec := httptest.NewRecorder()
+	h.HandleGetOrg(getRec, getReq)
+	if getRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for owner contact-email read, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+
+	updateReq := withUser(
+		httptest.NewRequest(http.MethodPut, "/api/orgs/acme", bytes.NewBufferString(`{"displayName":"Nope"}`)),
+		"admin@example.com",
+	)
+	updateReq.SetPathValue("id", "acme")
+	updateRec := httptest.NewRecorder()
+	h.HandleUpdateOrg(updateRec, updateReq)
+	if updateRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for admin contact-email update, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+
+	principalReq := withUser(
+		httptest.NewRequest(http.MethodPut, "/api/orgs/acme", bytes.NewBufferString(`{"displayName":"Renamed"}`)),
+		"u_admin",
+	)
+	principalReq.SetPathValue("id", "acme")
+	principalRec := httptest.NewRecorder()
+	h.HandleUpdateOrg(principalRec, principalReq)
+	if principalRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for stored admin principal update, got %d: %s", principalRec.Code, principalRec.Body.String())
+	}
+}
+
 func TestOrgHandlersTokenListAllowedButWriteForbidden(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	defer SetMultiTenantEnabled(false)

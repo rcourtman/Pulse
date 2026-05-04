@@ -69,7 +69,7 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 		// privileges for settings-bound routes.
 		if org := GetOrganization(req.Context()); org != nil {
 			orgID := strings.TrimSpace(org.ID)
-			if orgID != "" && orgID != "default" && org.CanUserManage(sessionUser) {
+			if orgID != "" && orgID != "default" && org.CanUserIDManage(sessionUser) {
 				return true
 			}
 		}

@@ -87,6 +87,10 @@ boundary: storage/recovery may observe billing activation for a server-linked
 org, but Stripe contact email must not become recovery or storage authority
 unless the shared API organization resolver maps it to a stored owner/member
 principal first.
+Runtime org authorization on that shared API boundary must also stay strict:
+storage/recovery-adjacent routes may consume accepted org access only after
+`OwnerUserID` or member `UserID` matches the authenticated principal, not after
+the session user string matches `OwnerEmail` or member `Email`.
 The canonical actor vocabulary for those shared sessions is
 `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; recovery and storage
 work may consume accepted org access, but must not mint or widen access from a

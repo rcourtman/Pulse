@@ -121,6 +121,54 @@ func TestTenantMiddlewareRejectsNonMemberSession(t *testing.T) {
 	}
 }
 
+func TestTenantMiddlewareRejectsContactEmailWithoutStoredPrincipalMatch(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+	t.Setenv("PULSE_DEV", "true")
+
+	dataDir := t.TempDir()
+	hashed, err := internalauth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		AuthUser:   "admin",
+		AuthPass:   hashed,
+	}
+
+	org := &models.Organization{
+		ID:          "org-a",
+		DisplayName: "Org A",
+		OwnerUserID: "u_owner",
+		OwnerEmail:  "owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "u_owner", Email: "owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now()},
+		},
+	}
+	mtp := config.NewMultiTenantPersistence(dataDir)
+	if err := mtp.SaveOrganization(org); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	sessionToken := "contact-email-session-token"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "owner@example.com")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	req.Header.Set("X-Pulse-Org-ID", "org-a")
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for contact-email session, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestMultiTenantListOrgsShowsOnlyMemberOrganizations(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)

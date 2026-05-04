@@ -205,6 +205,11 @@ profile and assignment columns, but embedded table framing must route through
    after server-owned org linkage, but they must not treat Stripe contact email
    as fleet authority unless the API-owned organization resolver maps it to a
    stored owner/member principal first.
+   Runtime org authorization consumed by lifecycle-adjacent setup and fleet
+   routes must use strict `OwnerUserID`/member `UserID` membership checks; the
+   API-owned email-aware organization helpers are migration/delivery helpers
+   only and must not let contact email become setup, install, or fleet
+   authority after a stable principal exists.
    API-token owner metadata follows the same rule: lifecycle-adjacent setup or
    mobile-pairing token flows may consume the shared token helper, but they
    must not pass extension metadata that authors or overwrites `owner_user_id`.

@@ -153,6 +153,76 @@ func TestContract_CheckoutMagicLinkDeliveryRequiresStoredPrincipalProof(t *testi
 	}
 }
 
+func TestContract_OrganizationRuntimeAccessUsesStrictUserIDProof(t *testing.T) {
+	modelSource, err := os.ReadFile(filepath.Clean("../models/organization.go"))
+	if err != nil {
+		t.Fatalf("read organization model: %v", err)
+	}
+	modelText := string(modelSource)
+	for _, required := range []string{
+		"HasMemberUserID",
+		"GetMemberRoleByUserID",
+		"IsOwnerUserID",
+		"CanUserIDAccess",
+		"CanUserIDManage",
+	} {
+		if !strings.Contains(modelText, required) {
+			t.Fatalf("organization model must contain strict user ID helper %q", required)
+		}
+	}
+
+	requiredByFile := map[string][]string{
+		"authorization.go": {
+			"org.CanUserIDAccess(userID)",
+		},
+		"org_handlers.go": {
+			"org.CanUserIDAccess(username)",
+			"org.CanUserIDManage(username)",
+			"org.IsOwnerUserID(username)",
+			"org.GetMemberRoleByUserID(username)",
+		},
+		"security_setup_fix.go": {
+			"org.CanUserIDManage(sessionUser)",
+		},
+		"cloud_org_admin_auth.go": {
+			"org.IsOwnerUserID(userID)",
+		},
+	}
+	for file, required := range requiredByFile {
+		source, err := os.ReadFile(filepath.Clean(file))
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		text := string(source)
+		for _, needle := range required {
+			if !strings.Contains(text, needle) {
+				t.Fatalf("%s must contain strict runtime authorization proof %q", file, needle)
+			}
+		}
+		for _, forbidden := range []string{
+			".CanUserAccess(username)",
+			".CanUserAccess(userID)",
+			".CanUserManage(username)",
+			".CanUserManage(sessionUser)",
+			".IsOwner(username)",
+			".GetMemberRole(username)",
+		} {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("%s must not use legacy email-aware runtime accessor %q", file, forbidden)
+			}
+		}
+	}
+
+	identityDoc, err := os.ReadFile(filepath.Clean("../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md"))
+	if err != nil {
+		t.Fatalf("read identity invariant contract: %v", err)
+	}
+	identityText := string(identityDoc)
+	if !strings.Contains(identityText, "strict user-ID") || !strings.Contains(identityText, "OwnerUserID") {
+		t.Fatal("identity invariant contract must require strict user-ID membership checks for live authorization")
+	}
+}
+
 func TestContract_HostedHandoffRequiresStableSubjectProof(t *testing.T) {
 	directSource, err := os.ReadFile(filepath.Clean("cloud_handoff.go"))
 	if err != nil {
