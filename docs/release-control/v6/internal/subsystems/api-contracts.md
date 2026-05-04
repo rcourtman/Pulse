@@ -388,7 +388,9 @@ the canonical monitored-system blocked payload.
     (`sub`/`UserID`) rather than the contact email. Email may participate only
     as legacy membership lookup and delivery metadata, and any canonicalization
     of email-keyed tenant membership must preserve the stored role instead of
-    creating or elevating membership from the token.
+    creating or elevating membership from the token. Blank or email-shaped
+    handoff subjects are invalid even when the tenant still contains legacy
+    email-keyed owner/member rows.
     Hosted magic-link verification follows the same API/session identity rule:
     the token may carry contact email for delivery, but `/api/public/magic-link/verify`
     must resolve that email against current server-side organization metadata

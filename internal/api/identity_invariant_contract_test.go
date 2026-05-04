@@ -46,10 +46,13 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		"cloud_handoff.go": {
 			"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, authz.UserID)",
 			"TrackUserSession(authz.UserID, sessionToken)",
+			"isEmailShapedHandoffUserID(userID)",
 		},
 		"cloud_handoff_handlers.go": {
 			"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, authz.UserID)",
 			"TrackUserSession(authz.UserID, sessionToken)",
+			"isEmailShapedHandoffUserID(userID)",
+			"handoff user id must be a stable subject",
 		},
 		"oidc_handlers.go": {
 			"stableSSOPrincipal(config.SSOProviderTypeOIDC, providerID, idToken.Subject)",
@@ -135,10 +138,13 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		"cloud_handoff.go": {
 			"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, email)",
 			"TrackUserSession(email, sessionToken)",
+			"userID = email",
 		},
 		"cloud_handoff_handlers.go": {
 			"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, claims.Email)",
 			"TrackUserSession(claims.Email, sessionToken)",
+			"userID = email",
+			"email = normalizeHandoffEmail(userID)",
 		},
 		"oidc_handlers.go": {
 			"establishOIDCSession(w, req, username, oidcTokens)",

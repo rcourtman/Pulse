@@ -239,6 +239,10 @@ runtime gating as separate unlinked claims.
    verification must re-read the tenant organization and session as the stored
    stable owner/member principal, so an old token cannot keep email as the
    runtime identity or survive removal from tenant membership.
+   Tenant-targeted hosted magic-link handoff must fail closed when the
+   control-plane registry cannot resolve a stable account `User.ID`; it must
+   not sign a tenant handoff with a blank subject and let the tenant runtime
+   promote contact email into identity.
    That same portal boundary also owns the signed-in shell shape: hosted
    arrivals default to `Workspaces`, self-hosted-only arrivals default to
    `Billing`, and the shell destinations are limited to `Workspaces`,

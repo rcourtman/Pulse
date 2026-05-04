@@ -189,6 +189,10 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle surfaces may display contact email when supplied by the shared
    auth boundary, but they must not reinterpret SSO or Stripe email as the
    canonical user identifier for setup, install, or fleet-management actions.
+   Hosted handoff subjects consumed through the shared API auth boundary must
+   already be stable, non-email principals; lifecycle-adjacent routes must not
+   recover authority from a blank handoff subject by falling back to contact
+   email.
    API-token owner metadata follows the same rule: lifecycle-adjacent setup or
    mobile-pairing token flows may consume the shared token helper, but they
    must not pass extension metadata that authors or overwrites `owner_user_id`.

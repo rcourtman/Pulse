@@ -242,3 +242,143 @@ func TestHandleMagicLinkVerifyTenantTargetStillRedirectsToTenantHandoff(t *testi
 		t.Fatal("expected claims.UserID to be populated")
 	}
 }
+
+func TestHandleMagicLinkVerifyTenantTargetRejectsMissingStableIdentity(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	if err := reg.Create(&registry.Tenant{
+		ID:          "t-tenant-no-account",
+		Email:       "tenant@example.com",
+		DisplayName: "Hosted Workspace",
+		State:       registry.TenantStateActive,
+	}); err != nil {
+		t.Fatalf("Create tenant: %v", err)
+	}
+
+	tenantsDir := filepath.Join(dir, "tenants")
+	tenantDir := filepath.Join(tenantsDir, "t-tenant-no-account")
+	if err := os.MkdirAll(tenantDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll tenant dir: %v", err)
+	}
+	handoffKey, err := cloudauth.GenerateHandoffKey()
+	if err != nil {
+		t.Fatalf("GenerateHandoffKey: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tenantDir, cloudauth.HandoffKeyFile), handoffKey, 0o600); err != nil {
+		t.Fatalf("WriteFile handoff key: %v", err)
+	}
+
+	svc, err := NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(svc.Close)
+
+	token, err := svc.GenerateToken("tenant@example.com", "t-tenant-no-account")
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/magic-link/verify?token="+token, nil)
+	rec := httptest.NewRecorder()
+
+	HandleMagicLinkVerify(svc, reg, tenantsDir, "cloud.example.com", "/portal")(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Location") != "" {
+		t.Fatalf("location=%q, want no tenant handoff redirect", rec.Header().Get("Location"))
+	}
+	user, err := reg.GetUserByEmail("tenant@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	if user != nil {
+		t.Fatalf("user = %+v, want nil", user)
+	}
+}
+
+func TestHandleMagicLinkVerifyTenantTargetRejectsEmailShapedRegistryUserID(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindIndividual,
+		DisplayName: "Hosted Account",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.Create(&registry.Tenant{
+		ID:          "t-tenant-email-user",
+		AccountID:   accountID,
+		Email:       "tenant@example.com",
+		DisplayName: "Hosted Workspace",
+		State:       registry.TenantStateActive,
+	}); err != nil {
+		t.Fatalf("Create tenant: %v", err)
+	}
+	if err := reg.CreateUser(&registry.User{
+		ID:    "tenant@example.com",
+		Email: "tenant@example.com",
+	}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	tenantsDir := filepath.Join(dir, "tenants")
+	tenantDir := filepath.Join(tenantsDir, "t-tenant-email-user")
+	if err := os.MkdirAll(tenantDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll tenant dir: %v", err)
+	}
+	handoffKey, err := cloudauth.GenerateHandoffKey()
+	if err != nil {
+		t.Fatalf("GenerateHandoffKey: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tenantDir, cloudauth.HandoffKeyFile), handoffKey, 0o600); err != nil {
+		t.Fatalf("WriteFile handoff key: %v", err)
+	}
+
+	svc, err := NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(svc.Close)
+
+	token, err := svc.GenerateToken("tenant@example.com", "t-tenant-email-user")
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/magic-link/verify?token="+token, nil)
+	rec := httptest.NewRecorder()
+
+	HandleMagicLinkVerify(svc, reg, tenantsDir, "cloud.example.com", "/portal")(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Location") != "" {
+		t.Fatalf("location=%q, want no tenant handoff redirect", rec.Header().Get("Location"))
+	}
+	membership, err := reg.GetMembership(accountID, "tenant@example.com")
+	if err != nil {
+		t.Fatalf("GetMembership: %v", err)
+	}
+	if membership != nil {
+		t.Fatalf("membership = %+v, want nil", membership)
+	}
+}

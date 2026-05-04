@@ -74,6 +74,10 @@ Storage/recovery may also consume org-scoped session identity from the shared
 API boundary, but durable user IDs remain the authorization principal. Contact
 email may support display or legacy lookup only; storage and recovery surfaces
 must not create their own email-keyed membership or entitlement interpretation.
+Hosted direct handoff subjects that reach recovery-adjacent protected routes
+must therefore already be stable non-email principals; a blank handoff `UserID`
+must fail at the shared API boundary instead of being repaired from contact
+email.
 The canonical actor vocabulary for those shared sessions is
 `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; recovery and storage
 work may consume accepted org access, but must not mint or widen access from a
@@ -2595,7 +2599,8 @@ opens that still redirect through `/auth/cloud-handoff` must carry enough
 canonical account/role identity for the tenant runtime to validate existing
 membership and derive the stored effective role before protected routes load,
 not just the newer portal exchange path. The direct path must not repair org
-membership, claim a blank owner, or honor role upgrades from handoff claims.
+membership, claim a blank owner, promote email into a missing handoff subject,
+or honor role upgrades from handoff claims.
 That same adjacent onboarding boundary must also keep the dedicated
 relay-mobile bootstrap credential sufficient for QR, deep-link, and
 connection-validation reads, so hosted recovery/support flows that hand a

@@ -715,6 +715,78 @@ func TestHandleHandoffExchangeRejectsOwnerHandoffWhenOwnerUserIDBlank(t *testing
 	}
 }
 
+func TestAuthorizeHandoffOrganizationMembershipRejectsEmailShapedUserID(t *testing.T) {
+	configDir := t.TempDir()
+	tenantID := "tenant-email-user-id"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Email User ID Test",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	})
+
+	authz, err := authorizeHandoffOrganizationMembership(configDir, tenantID, "owner@example.com", "owner@example.com", "owner")
+	if authz != nil {
+		t.Fatalf("authz = %+v, want nil", authz)
+	}
+	if !errors.Is(err, errHandoffAuthorizationDenied) {
+		t.Fatalf("err = %v, want %v", err, errHandoffAuthorizationDenied)
+	}
+}
+
+func TestHandleHandoffExchangeRejectsEmailShapedSubject(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	tenantID := "tenant-email-subject"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Email Subject Test",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	})
+
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID: "acct-email-subject",
+		Email:     "owner@example.com",
+		Role:      "owner",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-email-subject",
+			Subject:   "owner@example.com",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	rec := makeExchangeRequest(t, HandleHandoffExchange(configDir), tenantID+".example.com", token)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+}
+
 func TestHandleHandoffExchangeKeyMissing(t *testing.T) {
 	handler := HandleHandoffExchange(t.TempDir())
 	t.Setenv("PULSE_TENANT_ID", "")

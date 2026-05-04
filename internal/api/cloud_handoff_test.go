@@ -23,7 +23,12 @@ func TestHandleCloudHandoffRejectsReplay(t *testing.T) {
 		t.Fatalf("write handoff key: %v", err)
 	}
 
-	token, err := cloudauth.Sign(key, "alice@example.com", "tenant-1", 5*time.Minute)
+	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
+		Email:    "alice@example.com",
+		TenantID: "tenant-1",
+		UserID:   "user-alice",
+		Role:     "owner",
+	}, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("sign handoff token: %v", err)
 	}
@@ -72,7 +77,12 @@ func TestHandleCloudHandoffSetsTenantOrgCookie(t *testing.T) {
 		t.Fatalf("write handoff key: %v", err)
 	}
 
-	token, err := cloudauth.Sign(key, "alice@example.com", "tenant-1", 5*time.Minute)
+	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
+		Email:    "alice@example.com",
+		TenantID: "tenant-1",
+		UserID:   "user-alice",
+		Role:     "owner",
+	}, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("sign handoff token: %v", err)
 	}
@@ -118,10 +128,50 @@ func TestHandleCloudHandoffRejectsInvalidTenantID(t *testing.T) {
 		t.Fatalf("write handoff key: %v", err)
 	}
 
-	token, err := cloudauth.Sign(key, "alice@example.com", "../tenant-1", 5*time.Minute)
+	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
+		Email:    "alice@example.com",
+		TenantID: "../tenant-1",
+		UserID:   "user-alice",
+		Role:     "owner",
+	}, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("sign handoff token: %v", err)
 	}
+
+	handler := HandleCloudHandoff(dataPath)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/cloud-handoff?token="+url.QueryEscape(token), nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+	if got := rec.Header().Get("Location"); got != "/login?error=handoff_invalid" {
+		t.Fatalf("redirect = %q, want %q", got, "/login?error=handoff_invalid")
+	}
+}
+
+func TestHandleCloudHandoffRejectsBlankUserID(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+	dataPath := t.TempDir()
+	key := []byte("0123456789abcdef0123456789abcdef")
+	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
+		t.Fatalf("write handoff key: %v", err)
+	}
+
+	token, err := cloudauth.Sign(key, "alice@example.com", "tenant-1", 5*time.Minute)
+	if err != nil {
+		t.Fatalf("sign handoff token: %v", err)
+	}
+	saveHandoffTestOrganization(t, dataPath, &models.Organization{
+		ID:          "tenant-1",
+		DisplayName: "Tenant One",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "alice@example.com",
+	})
 
 	handler := HandleCloudHandoff(dataPath)
 

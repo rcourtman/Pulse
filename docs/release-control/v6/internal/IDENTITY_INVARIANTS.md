@@ -74,7 +74,9 @@ principal once a stable user ID exists.
 ## Runtime Requirements
 
 1. Handoff sessions bind to the signed stable subject or `UserID`, then verify
-   that subject against existing server-side organization membership.
+   that subject against existing server-side organization membership. Blank or
+   email-shaped handoff subjects are invalid; email may only help find legacy
+   email-keyed tenant records after a stable subject is already present.
 2. Magic-link sessions bind to the stored organization principal resolved from
    contact email at verification time, not to the email embedded in the token.
 3. Hosted checkout and tenant provisioning seed organization membership from

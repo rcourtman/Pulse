@@ -151,20 +151,26 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 			return
 		}
 
-		userID, identityErr := ensureAccountUserAndMembership(reg, tenant, token.Email)
-		if identityErr != nil {
-			log.Warn().
-				Err(identityErr).
+		userID, err := ensureAccountUserAndMembership(reg, tenant, token.Email)
+		trimmedUserID := strings.TrimSpace(userID)
+		if err != nil || trimmedUserID == "" || strings.Contains(trimmedUserID, "@") {
+			auditEvent(r, "cp_magic_link_verify", "failure").
+				Err(err).
 				Str("tenant_id", tenant.ID).
 				Str("email", token.Email).
-				Msg("Failed to establish control-plane session identity")
+				Bool("email_shaped_user_id", strings.Contains(trimmedUserID, "@")).
+				Str("reason", "handoff_identity_failed").
+				Msg("Magic link verification failed")
+			writeError(w, http.StatusInternalServerError, "handoff_error", "Unable to establish hosted handoff identity")
+			return
 		}
+		userID = trimmedUserID
 
 		claims := cloudauth.Claims{
 			Email:     token.Email,
 			TenantID:  tenant.ID,
 			AccountID: strings.TrimSpace(tenant.AccountID),
-			UserID:    strings.TrimSpace(userID),
+			UserID:    userID,
 			Role:      string(registry.MemberRoleOwner),
 		}
 
@@ -184,31 +190,29 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		redirectURL := fmt.Sprintf("https://%s.%s/auth/cloud-handoff?token=%s",
 			tenant.ID, baseDomain, handoffToken)
 
-		if identityErr == nil {
-			if sessionVersion, err := reg.GetUserSessionVersion(userID); err != nil {
-				log.Warn().
-					Err(err).
-					Str("tenant_id", tenant.ID).
-					Str("email", token.Email).
-					Str("user_id", userID).
-					Msg("Failed to read user session version")
-			} else if sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, SessionTTL); err != nil {
-				log.Warn().
-					Err(err).
-					Str("tenant_id", tenant.ID).
-					Str("email", token.Email).
-					Msg("Failed to issue control-plane session")
-			} else {
-				http.SetCookie(w, &http.Cookie{
-					Name:     SessionCookieName,
-					Value:    sessionToken,
-					Path:     "/",
-					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteLaxMode,
-					MaxAge:   int(SessionTTL.Seconds()),
-				})
-			}
+		if sessionVersion, err := reg.GetUserSessionVersion(userID); err != nil {
+			log.Warn().
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("email", token.Email).
+				Str("user_id", userID).
+				Msg("Failed to read user session version")
+		} else if sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, SessionTTL); err != nil {
+			log.Warn().
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("email", token.Email).
+				Msg("Failed to issue control-plane session")
+		} else {
+			http.SetCookie(w, &http.Cookie{
+				Name:     SessionCookieName,
+				Value:    sessionToken,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+				MaxAge:   int(SessionTTL.Seconds()),
+			})
 		}
 
 		auditEvent(r, "cp_magic_link_verify", "success").
@@ -445,14 +449,21 @@ func ensurePortalUser(reg *registry.TenantRegistry, email string) (string, error
 			user = candidate
 		}
 	}
-	if user == nil || strings.TrimSpace(user.ID) == "" {
+	userID := ""
+	if user != nil {
+		userID = strings.TrimSpace(user.ID)
+	}
+	if userID == "" {
 		return "", fmt.Errorf("user resolution failed")
 	}
-	if err := reg.AcceptInvitationsForUser(email, user.ID); err != nil {
+	if strings.Contains(userID, "@") {
+		return "", fmt.Errorf("resolved user id must be stable")
+	}
+	if err := reg.AcceptInvitationsForUser(email, userID); err != nil {
 		return "", fmt.Errorf("accept account invitations: %w", err)
 	}
-	_ = reg.UpdateUserLastLogin(user.ID)
-	return user.ID, nil
+	_ = reg.UpdateUserLastLogin(userID)
+	return userID, nil
 }
 
 func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *registry.Tenant, email string) (string, error) {

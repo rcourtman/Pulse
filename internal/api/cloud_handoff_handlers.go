@@ -286,6 +286,10 @@ func normalizeHandoffEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
+func isEmailShapedHandoffUserID(userID string) bool {
+	return strings.Contains(strings.TrimSpace(userID), "@")
+}
+
 // HandleHandoffExchange verifies a control-plane-minted handoff JWT, records its
 // jti to prevent replay, then creates a tenant session and redirects to the app.
 //
@@ -351,7 +355,7 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 		}
 		claims.Email = normalizeHandoffEmail(claims.Email)
 		subject := strings.TrimSpace(claims.Subject)
-		if strings.TrimSpace(claims.ID) == "" || subject == "" || claims.Email == "" {
+		if strings.TrimSpace(claims.ID) == "" || subject == "" || isEmailShapedHandoffUserID(subject) || claims.Email == "" {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
@@ -455,13 +459,10 @@ func authorizeHandoffOrganizationMembership(configDir, tenantID, userID, email, 
 	userID = strings.TrimSpace(userID)
 	email = normalizeHandoffEmail(email)
 	if userID == "" {
-		userID = email
-	}
-	if email == "" && strings.Contains(userID, "@") {
-		email = normalizeHandoffEmail(userID)
-	}
-	if userID == "" {
 		return nil, fmt.Errorf("%w: handoff user id is empty", errHandoffAuthorizationDenied)
+	}
+	if isEmailShapedHandoffUserID(userID) {
+		return nil, fmt.Errorf("%w: handoff user id must be a stable subject", errHandoffAuthorizationDenied)
 	}
 
 	effectiveRole := org.GetMemberRoleForPrincipal(userID, email)

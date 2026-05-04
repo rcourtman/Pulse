@@ -114,6 +114,42 @@ func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	}
 }
 
+func TestContract_HostedHandoffRequiresStableSubjectProof(t *testing.T) {
+	directSource, err := os.ReadFile(filepath.Clean("cloud_handoff.go"))
+	if err != nil {
+		t.Fatalf("read cloud_handoff.go: %v", err)
+	}
+	exchangeSource, err := os.ReadFile(filepath.Clean("cloud_handoff_handlers.go"))
+	if err != nil {
+		t.Fatalf("read cloud_handoff_handlers.go: %v", err)
+	}
+
+	for file, source := range map[string]string{
+		"cloud_handoff.go":          string(directSource),
+		"cloud_handoff_handlers.go": string(exchangeSource),
+	} {
+		for _, required := range []string{
+			"isEmailShapedHandoffUserID(userID)",
+			"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, authz.UserID)",
+			"TrackUserSession(authz.UserID, sessionToken)",
+		} {
+			if !strings.Contains(source, required) {
+				t.Fatalf("%s must contain %q", file, required)
+			}
+		}
+		for _, forbidden := range []string{
+			"userID = email",
+			"email = normalizeHandoffEmail(userID)",
+			"CreateSession(sessionToken, sessionDuration, userAgent, clientIP, claims.Email)",
+			"TrackUserSession(claims.Email, sessionToken)",
+		} {
+			if strings.Contains(source, forbidden) {
+				t.Fatalf("%s must not contain legacy email-principal pattern %q", file, forbidden)
+			}
+		}
+	}
+}
+
 func TestContract_SSOStablePrincipalProof(t *testing.T) {
 	ssoIdentity, err := os.ReadFile(filepath.Clean("auth_principal_identity.go"))
 	if err != nil {

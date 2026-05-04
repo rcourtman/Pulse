@@ -53,11 +53,12 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 		email := normalizeHandoffEmail(claims.Email)
 		userID := strings.TrimSpace(claims.UserID)
 		tenantID := strings.TrimSpace(claims.TenantID)
-		if userID == "" {
-			userID = email
-		}
-		if email == "" || userID == "" || !isValidOrganizationID(tenantID) {
-			log.Warn().Str("tenant_id", tenantID).Msg("Cloud handoff token rejected due to invalid tenant ID")
+		if email == "" || userID == "" || isEmailShapedHandoffUserID(userID) || !isValidOrganizationID(tenantID) {
+			log.Warn().
+				Str("tenant_id", tenantID).
+				Bool("missing_user_id", userID == "").
+				Bool("email_shaped_user_id", isEmailShapedHandoffUserID(userID)).
+				Msg("Cloud handoff token rejected due to invalid identity claims")
 			http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
 			return
 		}
