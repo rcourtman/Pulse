@@ -428,6 +428,12 @@ persisted action records must identify the requester, resource, capability,
 approval policy, preflight dry-run posture, and lifecycle state before they are
 read through audit APIs, so audit history cannot silently accept an unscoped or
 unplanned execution record.
+Action planning and action decision mutations remain privileged runtime
+control surfaces even though the decision endpoint does not execute the
+capability. `POST /api/actions/plan` and
+`POST /api/actions/{id}/decision` must both require the governed `ai:execute`
+scope so API tokens cannot create or approve executable action intent through a
+read-only or mobile-only grant.
 That same token-scope boundary now also governs Pulse Mobile relay runtime
 credentials: `internal/api/security_tokens.go` must mint only the dedicated
 backend-owned `relay:mobile:access` scope for new mobile relay tokens, and the

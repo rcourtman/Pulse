@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1315,6 +1316,117 @@ func TestMemoryStore_RecordActionAudit_UpsertsByID(t *testing.T) {
 	}
 	if results[0].Result == nil || results[0].Result.Output != "done" {
 		t.Fatalf("expected latest action result to win, got %+v", results[0].Result)
+	}
+}
+
+func TestActionAudit_GetActionAuditByID(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 5, 4, 13, 0, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act_lookup",
+		CreatedAt: now,
+		UpdatedAt: now,
+		State:     ActionStatePending,
+		Request: ActionRequest{
+			RequestID:      "req-lookup",
+			ResourceID:     "vm:302",
+			CapabilityName: "restart",
+			Reason:         "lookup proof",
+			RequestedBy:    "agent:test",
+		},
+		Plan: ActionPlan{
+			ActionID:        "act_lookup",
+			RequestID:       "req-lookup",
+			ExpiresAt:       now.Add(5 * time.Minute),
+			ResourceVersion: "resource:sha256:test",
+			PolicyVersion:   "policy:sha256:test",
+			PlanHash:        "sha256:test",
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	got, ok, err := store.GetActionAudit("act_lookup")
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || got.ID != "act_lookup" || got.Request.ResourceID != "vm:302" {
+		t.Fatalf("GetActionAudit = %#v, %v", got, ok)
+	}
+	_, ok, err = store.GetActionAudit("missing")
+	if err != nil {
+		t.Fatalf("GetActionAudit missing: %v", err)
+	}
+	if ok {
+		t.Fatal("missing action unexpectedly found")
+	}
+}
+
+func TestRecordActionDecision_UpdatesAuditAndAppendsLifecycle(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 5, 4, 13, 30, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act_decision",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-time.Minute),
+		State:     ActionStatePending,
+		Request: ActionRequest{
+			RequestID:      "req-decision",
+			ResourceID:     "vm:303",
+			CapabilityName: "restart",
+			Reason:         "decision proof",
+			RequestedBy:    "agent:test",
+		},
+		Plan: ActionPlan{
+			ActionID:        "act_decision",
+			RequestID:       "req-decision",
+			ExpiresAt:       now.Add(5 * time.Minute),
+			ResourceVersion: "resource:sha256:test",
+			PolicyVersion:   "policy:sha256:test",
+			PlanHash:        "sha256:test",
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+	updated, event, err := ApplyActionDecision(record, ActionApprovalRecord{
+		Actor:   "operator@example.com",
+		Outcome: OutcomeApproved,
+		Reason:  "approved for proof",
+	}, now)
+	if err != nil {
+		t.Fatalf("ApplyActionDecision: %v", err)
+	}
+	if err := store.RecordActionDecision(updated, event); err != nil {
+		t.Fatalf("RecordActionDecision: %v", err)
+	}
+
+	got, ok, err := store.GetActionAudit("act_decision")
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || got.State != ActionStateApproved || len(got.Approvals) != 1 {
+		t.Fatalf("decision audit = %#v, %v", got, ok)
+	}
+	events, err := store.GetActionLifecycleEvents("act_decision", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	if len(events) != 1 || events[0].State != ActionStateApproved || events[0].Actor != "operator@example.com" {
+		t.Fatalf("decision events = %#v", events)
+	}
+
+	staleUpdate, staleEvent, err := ApplyActionDecision(record, ActionApprovalRecord{
+		Actor:   "second-operator@example.com",
+		Outcome: OutcomeRejected,
+		Reason:  "late rejection",
+	}, now.Add(time.Second))
+	if err != nil {
+		t.Fatalf("ApplyActionDecision stale: %v", err)
+	}
+	if err := store.RecordActionDecision(staleUpdate, staleEvent); !errors.Is(err, ErrActionNotPending) {
+		t.Fatalf("stale RecordActionDecision error = %v, want %v", err, ErrActionNotPending)
 	}
 }
 

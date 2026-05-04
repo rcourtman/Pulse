@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -85,5 +86,90 @@ func TestNormalizeActionLifecycleEventRejectsInvalidEvents(t *testing.T) {
 	}
 	if _, err := NormalizeActionLifecycleEvent(ActionLifecycleEvent{ActionID: "action-1", State: ActionState("paused")}); err == nil {
 		t.Fatal("expected invalid lifecycle state to be rejected")
+	}
+}
+
+func TestApplyActionDecisionApprovesPendingActionWithoutExecution(t *testing.T) {
+	now := time.Date(2026, 5, 4, 12, 0, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act_test",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-time.Minute),
+		State:     ActionStatePending,
+		Request: ActionRequest{
+			RequestID:      "req-1",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "recover service",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: ActionPlan{
+			ActionID:         "act_test",
+			RequestID:        "req-1",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   ApprovalAdmin,
+			PlannedAt:        now.Add(-time.Minute),
+			ExpiresAt:        now.Add(time.Minute),
+			ResourceVersion:  "resource:sha256:test",
+			PolicyVersion:    "policy:sha256:test",
+			PlanHash:         "sha256:test",
+		},
+	}
+
+	updated, event, err := ApplyActionDecision(record, ActionApprovalRecord{
+		Actor:   "operator@example.com",
+		Outcome: OutcomeApproved,
+		Reason:  "inside maintenance window",
+	}, now)
+	if err != nil {
+		t.Fatalf("ApplyActionDecision: %v", err)
+	}
+	if updated.State != ActionStateApproved || updated.Result != nil {
+		t.Fatalf("updated action = %#v, want approved without execution result", updated)
+	}
+	if len(updated.Approvals) != 1 || updated.Approvals[0].Method != MethodAPI || updated.Approvals[0].Actor != "operator@example.com" {
+		t.Fatalf("approval record = %#v", updated.Approvals)
+	}
+	if event.ActionID != "act_test" || event.State != ActionStateApproved || !strings.Contains(event.Message, "Execution remains pending") {
+		t.Fatalf("lifecycle event = %#v", event)
+	}
+}
+
+func TestApplyActionDecisionRejectsUnsafeTransitions(t *testing.T) {
+	now := time.Date(2026, 5, 4, 12, 0, 0, 0, time.UTC)
+	base := ActionAuditRecord{
+		ID:        "act_test",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-time.Minute),
+		State:     ActionStatePending,
+		Request: ActionRequest{
+			RequestID:      "req-1",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "recover service",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: ActionPlan{
+			ActionID:        "act_test",
+			RequestID:       "req-1",
+			ExpiresAt:       now.Add(time.Minute),
+			ResourceVersion: "resource:sha256:test",
+			PolicyVersion:   "policy:sha256:test",
+			PlanHash:        "sha256:test",
+		},
+	}
+	if _, _, err := ApplyActionDecision(base, ActionApprovalRecord{Outcome: ApprovalOutcome("maybe")}, now); !errors.Is(err, ErrInvalidApprovalOutcome) {
+		t.Fatalf("invalid outcome error = %v", err)
+	}
+	notPending := base
+	notPending.State = ActionStateApproved
+	if _, _, err := ApplyActionDecision(notPending, ActionApprovalRecord{Outcome: OutcomeApproved}, now); !errors.Is(err, ErrActionNotPending) {
+		t.Fatalf("not pending error = %v", err)
+	}
+	expired := base
+	expired.Plan.ExpiresAt = now.Add(-time.Second)
+	if _, _, err := ApplyActionDecision(expired, ActionApprovalRecord{Outcome: OutcomeApproved}, now); !errors.Is(err, ErrActionPlanExpired) {
+		t.Fatalf("expired error = %v", err)
 	}
 }

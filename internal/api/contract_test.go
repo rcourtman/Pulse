@@ -11570,6 +11570,167 @@ func TestContract_ActionPlanAuditLifecycleSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 5, 4, 15, 0, 0, 0, time.UTC)
+	plannedAt := now.Add(-time.Minute)
+	record := unifiedresources.ActionAuditRecord{
+		ID:        "act_decision_contract",
+		CreatedAt: plannedAt,
+		UpdatedAt: plannedAt,
+		State:     unifiedresources.ActionStatePending,
+		Request: unifiedresources.ActionRequest{
+			RequestID:      "agent-run-approve",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "Recover after confirmed outage",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: unifiedresources.ActionPlan{
+			ActionID:          "act_decision_contract",
+			RequestID:         "agent-run-approve",
+			Allowed:           true,
+			RequiresApproval:  true,
+			ApprovalPolicy:    unifiedresources.ApprovalAdmin,
+			RollbackAvailable: false,
+			PlannedAt:         plannedAt,
+			ExpiresAt:         now.Add(4 * time.Minute),
+			ResourceVersion:   "resource:sha256:contract",
+			PolicyVersion:     "policy:sha256:contract",
+			PlanHash:          "sha256:contract",
+			Preflight: &unifiedresources.ActionPreflight{
+				Target:          "vm:42",
+				CurrentState:    "web-42 is warning",
+				IntendedChange:  "Restart the VM",
+				DryRunAvailable: false,
+				DryRunSummary:   "No provider-supported dry run is advertised for this capability.",
+				SafetyChecks: []string{
+					"Resource was resolved from the unified resource registry.",
+					"This endpoint plans only; it does not approve or execute the action.",
+				},
+				VerificationSteps: []string{
+					"Review /api/audit/actions/act_decision_contract/events for lifecycle evidence.",
+				},
+				GeneratedAt: plannedAt,
+			},
+		},
+	}
+
+	updated, event, err := unifiedresources.ApplyActionDecision(record, unifiedresources.ActionApprovalRecord{
+		Actor:   "operator@example.com",
+		Outcome: unifiedresources.OutcomeApproved,
+		Reason:  "inside maintenance window",
+	}, now)
+	if err != nil {
+		t.Fatalf("apply action decision: %v", err)
+	}
+	response := actionDecisionResponse{
+		ActionID: updated.ID,
+		State:    updated.State,
+		Approval: updated.Approvals[len(updated.Approvals)-1],
+		Audit:    updated,
+	}
+
+	payload := struct {
+		Response actionDecisionResponse `json:"response"`
+		Event    struct {
+			ActionID string                               `json:"actionId"`
+			State    unifiedresources.ActionState         `json:"state"`
+			Actor    string                               `json:"actor"`
+			Message  string                               `json:"message"`
+			Result   *unifiedresources.ExecutionResult    `json:"result,omitempty"`
+			Method   unifiedresources.ApprovalMethod      `json:"method"`
+			Outcome  unifiedresources.ApprovalOutcome     `json:"outcome"`
+			Policy   unifiedresources.ActionApprovalLevel `json:"policy"`
+		} `json:"event"`
+	}{Response: response}
+	payload.Event.ActionID = event.ActionID
+	payload.Event.State = event.State
+	payload.Event.Actor = event.Actor
+	payload.Event.Message = event.Message
+	payload.Event.Result = response.Audit.Result
+	payload.Event.Method = response.Approval.Method
+	payload.Event.Outcome = response.Approval.Outcome
+	payload.Event.Policy = response.Audit.Plan.ApprovalPolicy
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal action decision contract: %v", err)
+	}
+	const want = `{
+		"response":{
+			"actionId":"act_decision_contract",
+			"state":"approved",
+			"approval":{
+				"actor":"operator@example.com",
+				"method":"api",
+				"timestamp":"2026-05-04T15:00:00Z",
+				"outcome":"approved",
+				"reason":"inside maintenance window"
+			},
+			"audit":{
+				"id":"act_decision_contract",
+				"createdAt":"2026-05-04T14:59:00Z",
+				"updatedAt":"2026-05-04T15:00:00Z",
+				"state":"approved",
+				"request":{
+					"requestId":"agent-run-approve",
+					"resourceId":"vm:42",
+					"capabilityName":"restart",
+					"reason":"Recover after confirmed outage",
+					"requestedBy":"agent:oncall-helper"
+				},
+				"plan":{
+					"actionId":"act_decision_contract",
+					"requestId":"agent-run-approve",
+					"allowed":true,
+					"requiresApproval":true,
+					"approvalPolicy":"admin",
+					"rollbackAvailable":false,
+					"plannedAt":"2026-05-04T14:59:00Z",
+					"expiresAt":"2026-05-04T15:04:00Z",
+					"resourceVersion":"resource:sha256:contract",
+					"policyVersion":"policy:sha256:contract",
+					"planHash":"sha256:contract",
+					"preflight":{
+						"target":"vm:42",
+						"currentState":"web-42 is warning",
+						"intendedChange":"Restart the VM",
+						"dryRunAvailable":false,
+						"dryRunSummary":"No provider-supported dry run is advertised for this capability.",
+						"safetyChecks":[
+							"Resource was resolved from the unified resource registry.",
+							"This endpoint plans only; it does not approve or execute the action."
+						],
+						"verificationSteps":[
+							"Review /api/audit/actions/act_decision_contract/events for lifecycle evidence."
+						],
+						"generatedAt":"2026-05-04T14:59:00Z"
+					}
+				},
+				"approvals":[
+					{
+						"actor":"operator@example.com",
+						"method":"api",
+						"timestamp":"2026-05-04T15:00:00Z",
+						"outcome":"approved",
+						"reason":"inside maintenance window"
+					}
+				]
+			}
+		},
+		"event":{
+			"actionId":"act_decision_contract",
+			"state":"approved",
+			"actor":"operator@example.com",
+			"message":"Action approved. Execution remains pending a separate execution contract.",
+			"method":"api",
+			"outcome":"approved",
+			"policy":"admin"
+		}
+	}`
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResourceTimelineEndpointsIncludeRelatedChanges(t *testing.T) {
 	now := time.Date(2026, 4, 25, 22, 15, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})

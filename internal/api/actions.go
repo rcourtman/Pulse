@@ -13,6 +13,19 @@ import (
 )
 
 const maxActionPlanRequestBytes = 1 << 20
+const maxActionDecisionRequestBytes = 64 << 10
+
+type actionDecisionRequest struct {
+	Outcome unified.ApprovalOutcome `json:"outcome"`
+	Reason  string                  `json:"reason,omitempty"`
+}
+
+type actionDecisionResponse struct {
+	ActionID string                       `json:"actionId"`
+	State    unified.ActionState          `json:"state"`
+	Approval unified.ActionApprovalRecord `json:"approval"`
+	Audit    unified.ActionAuditRecord    `json:"audit"`
+}
 
 func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -162,4 +175,127 @@ func plannedActionState(plan unified.ActionPlan) unified.ActionState {
 		return unified.ActionStatePending
 	}
 	return unified.ActionStatePlanned
+}
+
+func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	actionID := strings.TrimSpace(r.PathValue("id"))
+	if actionID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Missing action ID", nil)
+		return
+	}
+	if !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format", nil)
+		return
+	}
+
+	var decision actionDecisionRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionDecisionRequestBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decision); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+			"body": "request body must be a valid action decision JSON object",
+		})
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+			"body": "request body must contain one JSON object",
+		})
+		return
+	}
+	decision.Outcome = unified.ApprovalOutcome(strings.TrimSpace(string(decision.Outcome)))
+	decision.Reason = strings.TrimSpace(decision.Reason)
+	if decision.Outcome != unified.OutcomeApproved && decision.Outcome != unified.OutcomeRejected {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+			"outcome": "outcome must be approved or rejected",
+		})
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getStore(orgID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available", nil)
+		return
+	}
+	record, ok, err := store.GetActionAudit(actionID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit", nil)
+		return
+	}
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "action_not_found", "Action not found", map[string]string{
+			"actionId": actionID,
+		})
+		return
+	}
+
+	actor := actionDecisionActor(h, r)
+	now := time.Now().UTC()
+	approval := unified.ActionApprovalRecord{
+		Actor:     actor,
+		Method:    unified.MethodAPI,
+		Timestamp: now,
+		Outcome:   decision.Outcome,
+		Reason:    decision.Reason,
+	}
+	updated, event, err := unified.ApplyActionDecision(record, approval, now)
+	if err != nil {
+		writeActionDecisionApplyError(w, err)
+		return
+	}
+	if err := store.RecordActionDecision(updated, event); err != nil {
+		if errors.Is(err, unified.ErrActionNotPending) {
+			writeActionDecisionApplyError(w, err)
+			return
+		}
+		writeErrorResponse(w, http.StatusInternalServerError, "action_decision_persist_failed", sanitizeErrorForClient(err, "Failed to persist action decision"), nil)
+		return
+	}
+
+	responseApproval := approval
+	if len(updated.Approvals) > 0 {
+		responseApproval = updated.Approvals[len(updated.Approvals)-1]
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(actionDecisionResponse{
+		ActionID: updated.ID,
+		State:    updated.State,
+		Approval: responseApproval,
+		Audit:    updated,
+	}); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "action_decision_encode_failed", "Failed to encode action decision", nil)
+	}
+}
+
+func actionDecisionActor(h *ResourceHandlers, r *http.Request) string {
+	if h != nil {
+		if actor := strings.TrimSpace(getAuthUsername(h.cfg, r)); actor != "" {
+			return actor
+		}
+	}
+	if actor := strings.TrimSpace(getUserID(r)); actor != "" {
+		return actor
+	}
+	return "api:authenticated"
+}
+
+func writeActionDecisionApplyError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, unified.ErrInvalidApprovalOutcome):
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+			"outcome": "outcome must be approved or rejected",
+		})
+	case errors.Is(err, unified.ErrActionNotPending):
+		writeErrorResponse(w, http.StatusConflict, "action_not_pending", "Action is not pending approval", nil)
+	case errors.Is(err, unified.ErrActionPlanExpired):
+		writeErrorResponse(w, http.StatusConflict, "action_plan_expired", "Action plan has expired", nil)
+	default:
+		writeErrorResponse(w, http.StatusInternalServerError, "action_decision_failed", sanitizeErrorForClient(err, "Action decision failed"), nil)
+	}
 }

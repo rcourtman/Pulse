@@ -300,11 +300,19 @@ the canonical monitored-system blocked payload.
    not duplicate the initial lifecycle events. MCP, CLI, and UI consumers may
    adapt this payload, but they must not become the source of truth for action
    planning semantics.
-   The supported CLI adapter for this contract is `pulse actions plan`, owned
-   by `pkg/pulsecli/actions.go` and registered from `pkg/pulsecli/root.go`.
-   It must remain a thin authenticated client for `POST /api/actions/plan`
-   rather than importing planner internals, creating action IDs, or approving
-   and executing capabilities locally. `pulse actions capabilities` may read
+   Action approval decisions are API-owned as a separate non-execution
+   contract: `POST /api/actions/{id}/decision` may only record an
+   `approved` or `rejected` decision against a persisted `pending_approval`
+   action, update the canonical action audit, and append lifecycle evidence
+   atomically. It must not invoke the capability driver, create an
+   `executing`/`completed` event, or attach an execution result; execution
+   requires a later explicit execution contract.
+   The supported CLI adapters for this contract are `pulse actions plan` and
+   `pulse actions decide`, owned by `pkg/pulsecli/actions.go` and registered
+   from `pkg/pulsecli/root.go`. They must remain thin authenticated clients
+   for `POST /api/actions/plan` and `POST /api/actions/{id}/decision`
+   rather than importing planner internals, creating action IDs, or executing
+   capabilities locally. `pulse actions capabilities` may read
    the canonical `GET /api/resources/{id}/facets` payload to discover resource
    capability names and parameter schemas before planning, but it must not
    invent a parallel capability inventory or expose internal handler names.

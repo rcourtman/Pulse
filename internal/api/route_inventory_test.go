@@ -407,6 +407,7 @@ var allRouteAllowlist = []string{
 	"/api/resources/{id}/facets",
 	"/api/resources/{id}/timeline",
 	"POST /api/actions/plan",
+	"POST /api/actions/{id}/decision",
 	"/api/guests/metadata",
 	"/api/guests/metadata/",
 	"/api/docker/metadata",

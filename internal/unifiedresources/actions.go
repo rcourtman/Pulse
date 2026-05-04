@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -123,6 +124,72 @@ type ActionEngine interface {
 	PlanAction(req ActionRequest) (*ActionPlan, error)
 	ApproveAction(actionID string, approval ActionApprovalRecord) error
 	ExecuteAction(actionID string) (*ExecutionResult, error)
+}
+
+var (
+	ErrActionNotPending       = errors.New("action is not pending approval")
+	ErrActionPlanExpired      = errors.New("action plan expired")
+	ErrInvalidApprovalOutcome = errors.New("invalid approval outcome")
+)
+
+// ApplyActionDecision records an explicit approval or rejection against a
+// pending governed action without starting execution. Execution remains a
+// separate contract so approvals cannot become an implicit control bypass.
+func ApplyActionDecision(record ActionAuditRecord, approval ActionApprovalRecord, now time.Time) (ActionAuditRecord, ActionLifecycleEvent, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	approval.Actor = strings.TrimSpace(approval.Actor)
+	approval.Reason = strings.TrimSpace(approval.Reason)
+	if approval.Method == "" {
+		approval.Method = MethodAPI
+	}
+	if approval.Timestamp.IsZero() {
+		approval.Timestamp = now
+	} else {
+		approval.Timestamp = approval.Timestamp.UTC()
+	}
+
+	var nextState ActionState
+	var message string
+	switch approval.Outcome {
+	case OutcomeApproved:
+		nextState = ActionStateApproved
+		message = "Action approved. Execution remains pending a separate execution contract."
+	case OutcomeRejected:
+		nextState = ActionStateRejected
+		message = "Action rejected before execution."
+	default:
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ErrInvalidApprovalOutcome
+	}
+	if record.State != ActionStatePending {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ErrActionNotPending
+	}
+	if !record.Plan.ExpiresAt.IsZero() && !now.Before(record.Plan.ExpiresAt) {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ErrActionPlanExpired
+	}
+
+	record.State = nextState
+	record.UpdatedAt = approval.Timestamp
+	record.Approvals = append(record.Approvals, approval)
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	event := ActionLifecycleEvent{
+		ActionID:  normalized.ID,
+		Timestamp: approval.Timestamp,
+		State:     nextState,
+		Actor:     approval.Actor,
+		Message:   message,
+	}
+	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	return normalized, normalizedEvent, nil
 }
 
 // NormalizeActionAuditRecord applies the canonical action-governance floor

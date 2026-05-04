@@ -16,8 +16,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 )
 
-// validAuditEventID matches alphanumeric IDs with hyphens (UUID format)
-var validAuditEventID = regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
+// validAuditEventID matches canonical action IDs plus UUID-style audit IDs.
+var validAuditEventID = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 var resolveWebhookIPs = net.DefaultResolver.LookupIPAddr
 

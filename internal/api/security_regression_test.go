@@ -1184,6 +1184,8 @@ func TestAIExecuteEndpointsRequireAIExecuteScope(t *testing.T) {
 	paths := []string{
 		"/api/ai/execute",
 		"/api/ai/execute/stream",
+		"/api/actions/plan",
+		"/api/actions/act_test/decision",
 	}
 
 	for _, path := range paths {

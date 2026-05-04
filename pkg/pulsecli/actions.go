@@ -41,6 +41,14 @@ type actionCapabilitiesOptions struct {
 	ResourceID string
 }
 
+type actionDecisionOptions struct {
+	APIURL   string
+	Token    string
+	ActionID string
+	Outcome  string
+	Reason   string
+}
+
 type actionAuditOptions struct {
 	APIURL     string
 	Token      string
@@ -80,6 +88,13 @@ type actionLifecycleEventsResponse struct {
 	Count    int                            `json:"count"`
 }
 
+type actionDecisionResponse struct {
+	ActionID string                       `json:"actionId"`
+	State    unified.ActionState          `json:"state"`
+	Approval unified.ActionApprovalRecord `json:"approval"`
+	Audit    unified.ActionAuditRecord    `json:"audit"`
+}
+
 func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	actionsCmd := &cobra.Command{
 		Use:   "actions",
@@ -115,6 +130,7 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 
 	actionsCmd.AddCommand(planCmd)
 	actionsCmd.AddCommand(newActionCapabilitiesCmd(deps))
+	actionsCmd.AddCommand(newActionDecisionCmd(deps))
 	actionsCmd.AddCommand(newActionAuditCmd(deps))
 	actionsCmd.AddCommand(newActionEventsCmd(deps))
 	return actionsCmd
@@ -139,6 +155,30 @@ func newActionCapabilitiesCmd(deps *ActionsDeps) *cobra.Command {
 	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
 	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
 	cmd.Flags().StringVar(&opts.ResourceID, "resource-id", "", "canonical unified resource id")
+	return cmd
+}
+
+func newActionDecisionCmd(deps *ActionsDeps) *cobra.Command {
+	opts := actionDecisionOptions{
+		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
+		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
+	}
+	if opts.APIURL == "" {
+		opts.APIURL = defaultPulseAPIURL
+	}
+
+	cmd := &cobra.Command{
+		Use:   "decide",
+		Short: "Approve or reject a governed action plan without execution",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runActionDecision(cmd, deps, opts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.ActionID, "action-id", "", "governed action id")
+	cmd.Flags().StringVar(&opts.Outcome, "outcome", "", "decision outcome: approved or rejected")
+	cmd.Flags().StringVar(&opts.Reason, "reason", "", "audit reason for the decision")
 	return cmd
 }
 
@@ -244,6 +284,72 @@ func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(plan); err != nil {
 		return fmt.Errorf("failed to write action plan response: %w", err)
+	}
+	return nil
+}
+
+func runActionDecision(cmd *cobra.Command, deps *ActionsDeps, opts actionDecisionOptions) error {
+	token := strings.TrimSpace(opts.Token)
+	if token == "" {
+		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	}
+
+	actionID := strings.TrimSpace(opts.ActionID)
+	if actionID == "" {
+		return fmt.Errorf("actionId is required (use --action-id)")
+	}
+	outcome := unified.ApprovalOutcome(strings.TrimSpace(opts.Outcome))
+	if outcome != unified.OutcomeApproved && outcome != unified.OutcomeRejected {
+		return fmt.Errorf("outcome must be approved or rejected (use --outcome)")
+	}
+
+	endpoint, err := pulseAPIEndpoint(opts.APIURL, "/actions/"+url.PathEscape(actionID)+"/decision")
+	if err != nil {
+		return err
+	}
+
+	body, err := json.Marshal(struct {
+		Outcome unified.ApprovalOutcome `json:"outcome"`
+		Reason  string                  `json:"reason,omitempty"`
+	}{
+		Outcome: outcome,
+		Reason:  strings.TrimSpace(opts.Reason),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to encode action decision: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(cmd.Context(), http.MethodPost, endpoint.String(), bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to build action decision request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := actionHTTPClient(deps).Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("action decision request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxPulseAPIResponseBytes, "action decision response")
+	if err != nil {
+		return fmt.Errorf("failed to read action decision response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return apiStatusError("action decision request", resp.Status, respBody)
+	}
+
+	var decision actionDecisionResponse
+	if err := decodeJSONBytes(respBody, &decision); err != nil {
+		return fmt.Errorf("failed to decode action decision response: %w", err)
+	}
+
+	encoder := json.NewEncoder(cmd.OutOrStdout())
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(decision); err != nil {
+		return fmt.Errorf("failed to write action decision response: %w", err)
 	}
 	return nil
 }

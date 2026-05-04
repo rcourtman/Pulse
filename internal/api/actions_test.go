@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestHandlePlanActionReturnsCanonicalPlan(t *testing.T) {
@@ -195,6 +196,122 @@ func TestHandlePlanActionPersistsAuditAndLifecycle(t *testing.T) {
 	}
 	if len(events) != 2 {
 		t.Fatalf("retry duplicated lifecycle events: %#v", events)
+	}
+}
+
+func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
+	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "vm:42",
+				Type:      unified.ResourceTypeVM,
+				Name:      "web-42",
+				Status:    unified.StatusWarning,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceProxmox},
+				Capabilities: []unified.ResourceCapability{
+					{
+						Name:                 "restart",
+						Type:                 unified.CapabilityTypeCommon,
+						Description:          "Restart the VM",
+						MinimumApprovalLevel: unified.ApprovalAdmin,
+						InternalHandler:      "proxmox.vm.restart",
+						Params: []unified.CapabilityParam{
+							{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	planRec := httptest.NewRecorder()
+	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"agent-run-approve",
+		"resourceId":"vm:42",
+		"capabilityName":"restart",
+		"params":{"mode":"graceful"},
+		"reason":"Recover after confirmed outage",
+		"requestedBy":"agent:oncall-helper"
+	}`))
+	h.HandlePlanAction(planRec, planReq)
+	if planRec.Code != http.StatusOK {
+		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
+	}
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(planRec.Body.Bytes(), &plan); err != nil {
+		t.Fatalf("decode plan response: %v", err)
+	}
+
+	decisionRec := httptest.NewRecorder()
+	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{
+		"outcome":"approved",
+		"reason":"inside maintenance window"
+	}`))
+	decisionReq.SetPathValue("id", plan.ActionID)
+	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
+	h.HandleDecideAction(decisionRec, decisionReq)
+	if decisionRec.Code != http.StatusOK {
+		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
+	}
+
+	var decision actionDecisionResponse
+	if err := json.Unmarshal(decisionRec.Body.Bytes(), &decision); err != nil {
+		t.Fatalf("decode decision response: %v", err)
+	}
+	if decision.ActionID != plan.ActionID || decision.State != unified.ActionStateApproved {
+		t.Fatalf("decision identity/state = %q/%q, want %q/%q", decision.ActionID, decision.State, plan.ActionID, unified.ActionStateApproved)
+	}
+	if decision.Approval.Actor != "operator@example.com" || decision.Approval.Method != unified.MethodAPI || decision.Approval.Outcome != unified.OutcomeApproved {
+		t.Fatalf("decision approval = %#v", decision.Approval)
+	}
+	if decision.Audit.Result != nil {
+		t.Fatalf("approval must not execute the action, got result %#v", decision.Audit.Result)
+	}
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	audit, ok, err := store.GetActionAudit(plan.ActionID)
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || audit.State != unified.ActionStateApproved || len(audit.Approvals) != 1 || audit.Result != nil {
+		t.Fatalf("persisted audit = %#v, ok=%v", audit, ok)
+	}
+	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	seen := map[unified.ActionState]bool{}
+	for _, event := range events {
+		seen[event.State] = true
+		if event.State == unified.ActionStateExecuting || event.State == unified.ActionStateCompleted {
+			t.Fatalf("approval must not create execution event: %#v", event)
+		}
+	}
+	if len(events) != 3 || !seen[unified.ActionStatePlanned] || !seen[unified.ActionStatePending] || !seen[unified.ActionStateApproved] {
+		t.Fatalf("events = %#v, want planned, pending_approval, approved", events)
+	}
+
+	retryRec := httptest.NewRecorder()
+	retryReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{
+		"outcome":"rejected",
+		"reason":"late conflicting decision"
+	}`))
+	retryReq.SetPathValue("id", plan.ActionID)
+	retryReq = retryReq.WithContext(auth.WithUser(retryReq.Context(), "second-operator@example.com"))
+	h.HandleDecideAction(retryRec, retryReq)
+	if retryRec.Code != http.StatusConflict {
+		t.Fatalf("retry decision status = %d, body=%s", retryRec.Code, retryRec.Body.String())
+	}
+	if !strings.Contains(retryRec.Body.String(), `"code":"action_not_pending"`) {
+		t.Fatalf("retry decision body = %s", retryRec.Body.String())
 	}
 }
 

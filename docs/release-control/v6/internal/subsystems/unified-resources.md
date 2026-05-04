@@ -471,6 +471,11 @@ verification steps through `preflight`, and `RecordActionAudit` plus
 `RecordActionLifecycleEvent` must normalize action id, request id, resource,
 capability, approval policy, timestamps, lifecycle state, and requester before
 records reach durable audit history.
+Action approval decisions belong to the same resource-owned state machine:
+`ApplyActionDecision` may transition only a persisted `pending_approval`
+record to `approved` or `rejected`, while `RecordActionDecision` must update
+the current audit record and append the lifecycle event atomically without
+creating execution results or accepting stale second decisions.
 `ResourceActionHistory.tsx` now surfaces that same normalized action audit
 trail inside the resource-detail workflow through the canonical
 `frontend-modern/src/api/actionAudit.ts` client and shared
@@ -1462,6 +1467,9 @@ memory-only models.
 The in-memory store mirrors the durable audit contract by upserting action
 audits on action ID, so tests and runtime callers observe the same current
 record state that SQLite persists for the control-plane execution trail.
+It also mirrors the durable decision contract: approval/rejection writes must
+target an existing pending action and must fail rather than creating a
+decision-only record or overwriting an already decided action.
 The enterprise audit API now reads those same unified-resource action and
 export records back out, so the durable store is not just a write sink but the
 canonical history surface for the control-plane verbs.
