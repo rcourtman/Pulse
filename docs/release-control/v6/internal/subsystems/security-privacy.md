@@ -437,7 +437,10 @@ control surfaces even though the decision endpoint does not execute the
 capability. `POST /api/actions/plan` and
 `POST /api/actions/{id}/decision` must both require the governed `ai:execute`
 scope so API tokens cannot create or approve executable action intent through a
-read-only or mobile-only grant.
+read-only or mobile-only grant. `POST /api/actions/{id}/execute` is governed by
+the same `ai:execute` scope because it is the only API-owned handoff from
+approved intent into capability execution; missing executors must fail closed
+without creating execution lifecycle evidence.
 That same token-scope boundary now also governs Pulse Mobile relay runtime
 credentials: `internal/api/security_tokens.go` must mint only the dedicated
 backend-owned `relay:mobile:access` scope for new mobile relay tokens, and the

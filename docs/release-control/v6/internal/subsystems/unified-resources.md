@@ -476,6 +476,14 @@ Action approval decisions belong to the same resource-owned state machine:
 record to `approved` or `rejected`, while `RecordActionDecision` must update
 the current audit record and append the lifecycle event atomically without
 creating execution results or accepting stale second decisions.
+Action execution now follows that same resource-owned state machine:
+`BeginActionExecution` may transition only an approved action, or an
+approval-free allowed plan, into `executing`; `CompleteActionExecution` may
+transition only an executing record into `completed` or `failed` with an
+explicit `ExecutionResult`. `RecordActionExecutionStart` and
+`RecordActionExecutionResult` must perform the audit update and lifecycle
+append atomically against the current persisted state, reject stale duplicate
+starts or terminal writes, and preserve approval as separate from execution.
 `ResourceActionHistory.tsx` now surfaces that same normalized action audit
 trail inside the resource-detail workflow through the canonical
 `frontend-modern/src/api/actionAudit.ts` client and shared

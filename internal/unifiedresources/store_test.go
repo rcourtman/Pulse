@@ -1430,6 +1430,96 @@ func TestRecordActionDecision_UpdatesAuditAndAppendsLifecycle(t *testing.T) {
 	}
 }
 
+func TestRecordActionExecutionStartAndResult_UpdatesAuditAndAppendsLifecycle(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 5, 4, 14, 30, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act_execution",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-30 * time.Second),
+		State:     ActionStateApproved,
+		Request: ActionRequest{
+			RequestID:      "req-execution",
+			ResourceID:     "vm:304",
+			CapabilityName: "restart",
+			Reason:         "execution proof",
+			RequestedBy:    "agent:test",
+		},
+		Plan: ActionPlan{
+			ActionID:         "act_execution",
+			RequestID:        "req-execution",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   ApprovalAdmin,
+			PlannedAt:        now.Add(-time.Minute),
+			ExpiresAt:        now.Add(5 * time.Minute),
+			ResourceVersion:  "resource:sha256:test",
+			PolicyVersion:    "policy:sha256:test",
+			PlanHash:         "sha256:test",
+		},
+		Approvals: []ActionApprovalRecord{
+			{
+				Actor:     "operator@example.com",
+				Method:    MethodAPI,
+				Timestamp: now.Add(-30 * time.Second),
+				Outcome:   OutcomeApproved,
+				Reason:    "approved for proof",
+			},
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	started, startEvent, err := BeginActionExecution(record, "operator@example.com", now)
+	if err != nil {
+		t.Fatalf("BeginActionExecution: %v", err)
+	}
+	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
+		t.Fatalf("RecordActionExecutionStart: %v", err)
+	}
+	got, ok, err := store.GetActionAudit("act_execution")
+	if err != nil {
+		t.Fatalf("GetActionAudit after start: %v", err)
+	}
+	if !ok || got.State != ActionStateExecuting || got.Result != nil {
+		t.Fatalf("started audit = %#v, %v", got, ok)
+	}
+	if err := store.RecordActionExecutionStart(started, startEvent); !errors.Is(err, ErrActionAlreadyExecuting) {
+		t.Fatalf("stale RecordActionExecutionStart error = %v, want %v", err, ErrActionAlreadyExecuting)
+	}
+
+	completed, doneEvent, err := CompleteActionExecution(started, &ExecutionResult{Success: true, Output: "done"}, "operator@example.com", now.Add(time.Second))
+	if err != nil {
+		t.Fatalf("CompleteActionExecution: %v", err)
+	}
+	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
+		t.Fatalf("RecordActionExecutionResult: %v", err)
+	}
+	got, ok, err = store.GetActionAudit("act_execution")
+	if err != nil {
+		t.Fatalf("GetActionAudit after result: %v", err)
+	}
+	if !ok || got.State != ActionStateCompleted || got.Result == nil || got.Result.Output != "done" {
+		t.Fatalf("completed audit = %#v, %v", got, ok)
+	}
+	if err := store.RecordActionExecutionResult(completed, doneEvent); !errors.Is(err, ErrActionNotExecuting) {
+		t.Fatalf("stale RecordActionExecutionResult error = %v, want %v", err, ErrActionNotExecuting)
+	}
+
+	events, err := store.GetActionLifecycleEvents("act_execution", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	seen := map[ActionState]bool{}
+	for _, event := range events {
+		seen[event.State] = true
+	}
+	if len(events) != 2 || !seen[ActionStateExecuting] || !seen[ActionStateCompleted] {
+		t.Fatalf("execution events = %#v", events)
+	}
+}
+
 func TestRecordActionAudit_NormalizesGovernedPlan(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 4, 25, 22, 40, 0, 0, time.UTC)

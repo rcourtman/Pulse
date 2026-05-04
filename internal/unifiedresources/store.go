@@ -39,6 +39,8 @@ type ResourceStore interface {
 	GetActionAudit(actionID string) (ActionAuditRecord, bool, error)
 	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
 	RecordActionDecision(record ActionAuditRecord, event ActionLifecycleEvent) error
+	RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error
+	RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
 	GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]ActionLifecycleEvent, error)
 	RecordExportAudit(record ExportAuditRecord) error
@@ -1107,6 +1109,115 @@ func (s *SQLiteResourceStore) RecordActionDecision(record ActionAuditRecord, eve
 	return nil
 }
 
+func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error {
+	normalizedRecord, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return err
+	}
+	if normalizedRecord.State != ActionStateExecuting || normalizedEvent.State != ActionStateExecuting {
+		return fmt.Errorf("action execution start must persist executing state")
+	}
+	if normalizedEvent.ActionID != normalizedRecord.ID {
+		return fmt.Errorf("action execution start event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	current, ok, err := s.getActionAudit(normalizedRecord.ID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("action audit %q not found", normalizedRecord.ID)
+	}
+	if err := ValidateActionExecutionStart(current, normalizedEvent.Timestamp); err != nil {
+		return err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin action execution start transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	if err := recordActionAuditSQL(tx, normalizedRecord); err != nil {
+		return err
+	}
+	if err := recordActionLifecycleEventSQL(tx, normalizedEvent); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit action execution start transaction: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error {
+	normalizedRecord, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return err
+	}
+	if normalizedRecord.State != ActionStateCompleted && normalizedRecord.State != ActionStateFailed {
+		return fmt.Errorf("action execution result must persist terminal execution state")
+	}
+	if normalizedEvent.State != normalizedRecord.State {
+		return fmt.Errorf("action execution result event state %q does not match audit state %q", normalizedEvent.State, normalizedRecord.State)
+	}
+	if normalizedEvent.ActionID != normalizedRecord.ID {
+		return fmt.Errorf("action execution result event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	current, ok, err := s.getActionAudit(normalizedRecord.ID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("action audit %q not found", normalizedRecord.ID)
+	}
+	if current.State != ActionStateExecuting {
+		return ErrActionNotExecuting
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin action execution result transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	if err := recordActionAuditSQL(tx, normalizedRecord); err != nil {
+		return err
+	}
+	if err := recordActionLifecycleEventSQL(tx, normalizedEvent); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit action execution result transaction: %w", err)
+	}
+	committed = true
+	return nil
+}
+
 func (s *SQLiteResourceStore) getActionAudit(actionID string) (ActionAuditRecord, bool, error) {
 	actionID = strings.TrimSpace(actionID)
 	if actionID == "" {
@@ -1568,6 +1679,81 @@ func (m *MemoryStore) RecordActionDecision(record ActionAuditRecord, event Actio
 		if m.actionAudits[i].ID == normalizedRecord.ID {
 			if m.actionAudits[i].State != ActionStatePending {
 				return ErrActionNotPending
+			}
+			m.actionAudits[i] = normalizedRecord
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		return fmt.Errorf("action audit %q not found", normalizedRecord.ID)
+	}
+	m.actionLifecycleEvents = append(m.actionLifecycleEvents, normalizedEvent)
+	return nil
+}
+
+func (m *MemoryStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error {
+	normalizedRecord, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return err
+	}
+	if normalizedRecord.State != ActionStateExecuting || normalizedEvent.State != ActionStateExecuting {
+		return fmt.Errorf("action execution start must persist executing state")
+	}
+	if normalizedEvent.ActionID != normalizedRecord.ID {
+		return fmt.Errorf("action execution start event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	replaced := false
+	for i := range m.actionAudits {
+		if m.actionAudits[i].ID == normalizedRecord.ID {
+			if err := ValidateActionExecutionStart(m.actionAudits[i], normalizedEvent.Timestamp); err != nil {
+				return err
+			}
+			m.actionAudits[i] = normalizedRecord
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		return fmt.Errorf("action audit %q not found", normalizedRecord.ID)
+	}
+	m.actionLifecycleEvents = append(m.actionLifecycleEvents, normalizedEvent)
+	return nil
+}
+
+func (m *MemoryStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error {
+	normalizedRecord, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return err
+	}
+	if normalizedRecord.State != ActionStateCompleted && normalizedRecord.State != ActionStateFailed {
+		return fmt.Errorf("action execution result must persist terminal execution state")
+	}
+	if normalizedEvent.State != normalizedRecord.State {
+		return fmt.Errorf("action execution result event state %q does not match audit state %q", normalizedEvent.State, normalizedRecord.State)
+	}
+	if normalizedEvent.ActionID != normalizedRecord.ID {
+		return fmt.Errorf("action execution result event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	replaced := false
+	for i := range m.actionAudits {
+		if m.actionAudits[i].ID == normalizedRecord.ID {
+			if m.actionAudits[i].State != ActionStateExecuting {
+				return ErrActionNotExecuting
 			}
 			m.actionAudits[i] = normalizedRecord
 			replaced = true

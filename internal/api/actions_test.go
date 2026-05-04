@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,19 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+type stubActionExecutor struct {
+	result   *unified.ExecutionResult
+	err      error
+	received unified.ActionAuditRecord
+	calls    int
+}
+
+func (s *stubActionExecutor) ExecuteAction(_ context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	s.calls++
+	s.received = record
+	return s.result, s.err
+}
 
 func TestHandlePlanActionReturnsCanonicalPlan(t *testing.T) {
 	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
@@ -312,6 +326,195 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	}
 	if !strings.Contains(retryRec.Body.String(), `"code":"action_not_pending"`) {
 		t.Fatalf("retry decision body = %s", retryRec.Body.String())
+	}
+}
+
+func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
+	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "vm:42",
+				Type:      unified.ResourceTypeVM,
+				Name:      "web-42",
+				Status:    unified.StatusWarning,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceProxmox},
+				Capabilities: []unified.ResourceCapability{
+					{
+						Name:                 "restart",
+						Type:                 unified.CapabilityTypeCommon,
+						Description:          "Restart the VM",
+						MinimumApprovalLevel: unified.ApprovalAdmin,
+						InternalHandler:      "proxmox.vm.restart",
+						Params: []unified.CapabilityParam{
+							{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
+						},
+					},
+				},
+			},
+		},
+	})
+	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "restart dispatched"}}
+	h.SetActionExecutor(executor)
+
+	planRec := httptest.NewRecorder()
+	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"agent-run-execute",
+		"resourceId":"vm:42",
+		"capabilityName":"restart",
+		"params":{"mode":"graceful"},
+		"reason":"Recover after confirmed outage",
+		"requestedBy":"agent:oncall-helper"
+	}`))
+	h.HandlePlanAction(planRec, planReq)
+	if planRec.Code != http.StatusOK {
+		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
+	}
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(planRec.Body.Bytes(), &plan); err != nil {
+		t.Fatalf("decode plan response: %v", err)
+	}
+
+	decisionRec := httptest.NewRecorder()
+	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{
+		"outcome":"approved",
+		"reason":"inside maintenance window"
+	}`))
+	decisionReq.SetPathValue("id", plan.ActionID)
+	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
+	h.HandleDecideAction(decisionRec, decisionReq)
+	if decisionRec.Code != http.StatusOK {
+		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
+	}
+
+	executeRec := httptest.NewRecorder()
+	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{
+		"reason":"execute during approved maintenance window"
+	}`))
+	executeReq.SetPathValue("id", plan.ActionID)
+	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
+	h.HandleExecuteAction(executeRec, executeReq)
+	if executeRec.Code != http.StatusOK {
+		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
+	}
+
+	var execution actionExecutionResponse
+	if err := json.Unmarshal(executeRec.Body.Bytes(), &execution); err != nil {
+		t.Fatalf("decode execution response: %v", err)
+	}
+	if execution.ActionID != plan.ActionID || execution.State != unified.ActionStateCompleted {
+		t.Fatalf("execution identity/state = %q/%q, want %q/%q", execution.ActionID, execution.State, plan.ActionID, unified.ActionStateCompleted)
+	}
+	if execution.Result == nil || !execution.Result.Success || execution.Result.Output != "restart dispatched" {
+		t.Fatalf("execution result = %#v", execution.Result)
+	}
+	if executor.calls != 1 || executor.received.State != unified.ActionStateExecuting || executor.received.Result != nil {
+		t.Fatalf("executor received = %#v after %d calls", executor.received, executor.calls)
+	}
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	audit, ok, err := store.GetActionAudit(plan.ActionID)
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || audit.State != unified.ActionStateCompleted || audit.Result == nil || audit.Result.Output != "restart dispatched" {
+		t.Fatalf("persisted execution audit = %#v, ok=%v", audit, ok)
+	}
+	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	seen := map[unified.ActionState]bool{}
+	for _, event := range events {
+		seen[event.State] = true
+	}
+	if len(events) != 5 ||
+		!seen[unified.ActionStatePlanned] ||
+		!seen[unified.ActionStatePending] ||
+		!seen[unified.ActionStateApproved] ||
+		!seen[unified.ActionStateExecuting] ||
+		!seen[unified.ActionStateCompleted] {
+		t.Fatalf("events = %#v, want full planned-to-completed lifecycle", events)
+	}
+}
+
+func TestHandleExecuteActionWithoutExecutorLeavesApprovedAuditUnchanged(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	record := unified.ActionAuditRecord{
+		ID:        "act_no_executor",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now,
+		State:     unified.ActionStateApproved,
+		Request: unified.ActionRequest{
+			RequestID:      "req-no-executor",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "Recover after confirmed outage",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:         "act_no_executor",
+			RequestID:        "req-no-executor",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   unified.ApprovalAdmin,
+			PlannedAt:        now.Add(-time.Minute),
+			ExpiresAt:        now.Add(5 * time.Minute),
+			ResourceVersion:  "resource:sha256:test",
+			PolicyVersion:    "policy:sha256:test",
+			PlanHash:         "sha256:test",
+		},
+		Approvals: []unified.ActionApprovalRecord{
+			{
+				Actor:     "operator@example.com",
+				Method:    unified.MethodAPI,
+				Timestamp: now,
+				Outcome:   unified.OutcomeApproved,
+				Reason:    "approved for proof",
+			},
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	executeRec := httptest.NewRecorder()
+	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/act_no_executor/execute", bytes.NewBufferString(`{}`))
+	executeReq.SetPathValue("id", "act_no_executor")
+	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
+	h.HandleExecuteAction(executeRec, executeReq)
+	if executeRec.Code != http.StatusNotImplemented {
+		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
+	}
+	if !strings.Contains(executeRec.Body.String(), `"code":"action_executor_unavailable"`) {
+		t.Fatalf("execute body = %s", executeRec.Body.String())
+	}
+
+	got, ok, err := store.GetActionAudit("act_no_executor")
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || got.State != unified.ActionStateApproved || got.Result != nil {
+		t.Fatalf("audit changed despite missing executor = %#v, ok=%v", got, ok)
+	}
+	events, err := store.GetActionLifecycleEvents("act_no_executor", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("missing executor must not append lifecycle events: %#v", events)
 	}
 }
 

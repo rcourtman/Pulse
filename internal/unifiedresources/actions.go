@@ -128,6 +128,10 @@ type ActionEngine interface {
 
 var (
 	ErrActionNotPending       = errors.New("action is not pending approval")
+	ErrActionNotApproved      = errors.New("action is not approved for execution")
+	ErrActionNotExecuting     = errors.New("action is not executing")
+	ErrActionAlreadyExecuting = errors.New("action is already executing")
+	ErrActionExecutionFinal   = errors.New("action execution is already final")
 	ErrActionPlanExpired      = errors.New("action plan expired")
 	ErrInvalidApprovalOutcome = errors.New("invalid approval outcome")
 )
@@ -190,6 +194,126 @@ func ApplyActionDecision(record ActionAuditRecord, approval ActionApprovalRecord
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
 	}
 	return normalized, normalizedEvent, nil
+}
+
+// BeginActionExecution moves an explicitly executable action into executing.
+// Approval remains separate from execution: approval-required plans must be
+// approved first, while approval-free plans may start from planned only through
+// this explicit execution contract.
+func BeginActionExecution(record ActionAuditRecord, actor string, now time.Time) (ActionAuditRecord, ActionLifecycleEvent, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	if err := ValidateActionExecutionStart(record, now); err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		actor = "api:authenticated"
+	}
+
+	record.State = ActionStateExecuting
+	record.UpdatedAt = now
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	event := ActionLifecycleEvent{
+		ActionID:  normalized.ID,
+		Timestamp: now,
+		State:     ActionStateExecuting,
+		Actor:     actor,
+		Message:   "Action execution started.",
+	}
+	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	return normalized, normalizedEvent, nil
+}
+
+// CompleteActionExecution records the terminal result for an action that has
+// already entered executing state.
+func CompleteActionExecution(record ActionAuditRecord, result *ExecutionResult, actor string, now time.Time) (ActionAuditRecord, ActionLifecycleEvent, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	if record.State != ActionStateExecuting {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ErrActionNotExecuting
+	}
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		actor = "api:authenticated"
+	}
+	if result == nil {
+		result = &ExecutionResult{Success: true}
+	}
+	result.Output = strings.TrimSpace(result.Output)
+	result.ErrorMessage = strings.TrimSpace(result.ErrorMessage)
+
+	nextState := ActionStateCompleted
+	message := "Action execution completed."
+	if !result.Success {
+		nextState = ActionStateFailed
+		message = result.ErrorMessage
+		if message == "" {
+			message = "Action execution failed."
+		}
+	}
+
+	record.State = nextState
+	record.UpdatedAt = now
+	record.Result = result
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	event := ActionLifecycleEvent{
+		ActionID:  normalized.ID,
+		Timestamp: now,
+		State:     nextState,
+		Actor:     actor,
+		Message:   message,
+	}
+	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	return normalized, normalizedEvent, nil
+}
+
+// ValidateActionExecutionStart checks whether the current persisted state may
+// enter execution without mutating the record.
+func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	if !record.Plan.ExpiresAt.IsZero() && !now.Before(record.Plan.ExpiresAt) {
+		return ErrActionPlanExpired
+	}
+	switch record.State {
+	case ActionStateApproved:
+		return nil
+	case ActionStatePlanned:
+		if record.Plan.Allowed && !record.Plan.RequiresApproval {
+			return nil
+		}
+		return ErrActionNotApproved
+	case ActionStatePending, ActionStateRejected:
+		return ErrActionNotApproved
+	case ActionStateExecuting:
+		return ErrActionAlreadyExecuting
+	case ActionStateCompleted, ActionStateFailed:
+		return ErrActionExecutionFinal
+	default:
+		return fmt.Errorf("unsupported action state %q", record.State)
+	}
 }
 
 // NormalizeActionAuditRecord applies the canonical action-governance floor

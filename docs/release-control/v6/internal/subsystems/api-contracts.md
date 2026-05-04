@@ -307,12 +307,24 @@ the canonical monitored-system blocked payload.
    atomically. It must not invoke the capability driver, create an
    `executing`/`completed` event, or attach an execution result; execution
    requires a later explicit execution contract.
-   The supported CLI adapters for this contract are `pulse actions plan` and
-   `pulse actions decide`, owned by `pkg/pulsecli/actions.go` and registered
-   from `pkg/pulsecli/root.go`. They must remain thin authenticated clients
-   for `POST /api/actions/plan` and `POST /api/actions/{id}/decision`
-   rather than importing planner internals, creating action IDs, or executing
-   capabilities locally. `pulse actions capabilities` may read
+   Action execution is API-owned as the next explicit contract:
+   `POST /api/actions/{id}/execute` may only start execution for an approved
+   action or an approval-free allowed plan, must atomically persist the
+   `executing` lifecycle state before invoking a registered executor, and must
+   atomically persist the terminal `completed` or `failed` result afterward.
+   If no API executor is registered, the endpoint must fail closed without
+   mutating the approved audit record or appending execution lifecycle events.
+   Approval must never imply execution, and local UI, CLI, MCP, agent, or
+   storage/recovery adapters must not bypass this endpoint with a parallel
+   execution transport.
+   The supported CLI adapters for this contract are `pulse actions plan`,
+   `pulse actions decide`, and `pulse actions execute`, owned by
+   `pkg/pulsecli/actions.go` and registered from `pkg/pulsecli/root.go`. They
+   must remain thin authenticated clients for `POST /api/actions/plan`,
+   `POST /api/actions/{id}/decision`, and
+   `POST /api/actions/{id}/execute` rather than importing planner internals,
+   creating action IDs, or executing capabilities locally.
+   `pulse actions capabilities` may read
    the canonical `GET /api/resources/{id}/facets` payload to discover resource
    capability names and parameter schemas before planning, but it must not
    invent a parallel capability inventory or expose internal handler names.

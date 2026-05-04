@@ -133,7 +133,11 @@ lifecycle evidence, and retry/idempotency handling must not create duplicate
 lifecycle events. Approval or rejection decisions for those plans must flow
 through `POST /api/actions/{id}/decision`, which records API-owned audit and
 lifecycle evidence only; lifecycle surfaces must not treat approval as
-implicit command execution or define a parallel execution handoff.
+implicit command execution or define a parallel execution handoff. When a
+planned resource capability is actually executed from an agent-lifecycle
+surface, that handoff must route through `POST /api/actions/{id}/execute` so
+the API-owned action audit records `executing` before dispatch and the
+terminal execution result afterward.
 
 The node setup modal boundary must keep guided setup and manual credential
 submission separate. For new PVE/PBS setup, Agent Install and Direct Connection

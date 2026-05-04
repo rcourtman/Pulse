@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,6 +15,13 @@ import (
 
 const maxActionPlanRequestBytes = 1 << 20
 const maxActionDecisionRequestBytes = 64 << 10
+const maxActionExecutionRequestBytes = 64 << 10
+
+// ActionExecutor runs a previously planned and approved action through the
+// API-owned execution contract.
+type ActionExecutor interface {
+	ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error)
+}
 
 type actionDecisionRequest struct {
 	Outcome unified.ApprovalOutcome `json:"outcome"`
@@ -25,6 +33,17 @@ type actionDecisionResponse struct {
 	State    unified.ActionState          `json:"state"`
 	Approval unified.ActionApprovalRecord `json:"approval"`
 	Audit    unified.ActionAuditRecord    `json:"audit"`
+}
+
+type actionExecutionRequest struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+type actionExecutionResponse struct {
+	ActionID string                    `json:"actionId"`
+	State    unified.ActionState       `json:"state"`
+	Result   *unified.ExecutionResult  `json:"result,omitempty"`
+	Audit    unified.ActionAuditRecord `json:"audit"`
 }
 
 func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Request) {
@@ -273,6 +292,101 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	actionID := strings.TrimSpace(r.PathValue("id"))
+	if actionID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Missing action ID", nil)
+		return
+	}
+	if !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format", nil)
+		return
+	}
+
+	var execution actionExecutionRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionExecutionRequestBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&execution); err != nil {
+		if !errors.Is(err, io.EOF) {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_action_execution", "Invalid action execution request", map[string]string{
+				"body": "request body must be a valid action execution JSON object",
+			})
+			return
+		}
+	} else if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_execution", "Invalid action execution request", map[string]string{
+			"body": "request body must contain one JSON object",
+		})
+		return
+	}
+	execution.Reason = strings.TrimSpace(execution.Reason)
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getStore(orgID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available", nil)
+		return
+	}
+	record, ok, err := store.GetActionAudit(actionID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit", nil)
+		return
+	}
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "action_not_found", "Action not found", map[string]string{
+			"actionId": actionID,
+		})
+		return
+	}
+
+	actor := actionDecisionActor(h, r)
+	started, startEvent, err := unified.BeginActionExecution(record, actor, time.Now().UTC())
+	if err != nil {
+		writeActionExecutionApplyError(w, err)
+		return
+	}
+	if execution.Reason != "" {
+		startEvent.Message = "Action execution started: " + execution.Reason
+	}
+	if h.actionExecutor == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "action_executor_unavailable", "No action executor is configured for this API instance", nil)
+		return
+	}
+	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
+		writeActionExecutionPersistError(w, err)
+		return
+	}
+
+	result, execErr := h.actionExecutor.ExecuteAction(r.Context(), started)
+	if execErr != nil {
+		result = &unified.ExecutionResult{Success: false, ErrorMessage: execErr.Error()}
+	}
+	completed, doneEvent, err := unified.CompleteActionExecution(started, result, actor, time.Now().UTC())
+	if err != nil {
+		writeActionExecutionApplyError(w, err)
+		return
+	}
+	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
+		writeActionExecutionPersistError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(actionExecutionResponse{
+		ActionID: completed.ID,
+		State:    completed.State,
+		Result:   completed.Result,
+		Audit:    completed,
+	}); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "action_execution_encode_failed", "Failed to encode action execution", nil)
+	}
+}
+
 func actionDecisionActor(h *ResourceHandlers, r *http.Request) string {
 	if h != nil {
 		if actor := strings.TrimSpace(getAuthUsername(h.cfg, r)); actor != "" {
@@ -297,5 +411,35 @@ func writeActionDecisionApplyError(w http.ResponseWriter, err error) {
 		writeErrorResponse(w, http.StatusConflict, "action_plan_expired", "Action plan has expired", nil)
 	default:
 		writeErrorResponse(w, http.StatusInternalServerError, "action_decision_failed", sanitizeErrorForClient(err, "Action decision failed"), nil)
+	}
+}
+
+func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, unified.ErrActionNotApproved):
+		writeErrorResponse(w, http.StatusConflict, "action_not_approved", "Action is not approved for execution", nil)
+	case errors.Is(err, unified.ErrActionAlreadyExecuting):
+		writeErrorResponse(w, http.StatusConflict, "action_already_executing", "Action is already executing", nil)
+	case errors.Is(err, unified.ErrActionExecutionFinal):
+		writeErrorResponse(w, http.StatusConflict, "action_execution_final", "Action execution is already final", nil)
+	case errors.Is(err, unified.ErrActionNotExecuting):
+		writeErrorResponse(w, http.StatusConflict, "action_not_executing", "Action is not executing", nil)
+	case errors.Is(err, unified.ErrActionPlanExpired):
+		writeErrorResponse(w, http.StatusConflict, "action_plan_expired", "Action plan has expired", nil)
+	default:
+		writeErrorResponse(w, http.StatusInternalServerError, "action_execution_failed", sanitizeErrorForClient(err, "Action execution failed"), nil)
+	}
+}
+
+func writeActionExecutionPersistError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, unified.ErrActionNotApproved),
+		errors.Is(err, unified.ErrActionAlreadyExecuting),
+		errors.Is(err, unified.ErrActionExecutionFinal),
+		errors.Is(err, unified.ErrActionNotExecuting),
+		errors.Is(err, unified.ErrActionPlanExpired):
+		writeActionExecutionApplyError(w, err)
+	default:
+		writeErrorResponse(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(err, "Failed to persist action execution"), nil)
 	}
 }

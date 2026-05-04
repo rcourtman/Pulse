@@ -49,6 +49,13 @@ type actionDecisionOptions struct {
 	Reason   string
 }
 
+type actionExecutionOptions struct {
+	APIURL   string
+	Token    string
+	ActionID string
+	Reason   string
+}
+
 type actionAuditOptions struct {
 	APIURL     string
 	Token      string
@@ -95,6 +102,13 @@ type actionDecisionResponse struct {
 	Audit    unified.ActionAuditRecord    `json:"audit"`
 }
 
+type actionExecutionResponse struct {
+	ActionID string                    `json:"actionId"`
+	State    unified.ActionState       `json:"state"`
+	Result   *unified.ExecutionResult  `json:"result,omitempty"`
+	Audit    unified.ActionAuditRecord `json:"audit"`
+}
+
 func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	actionsCmd := &cobra.Command{
 		Use:   "actions",
@@ -131,6 +145,7 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	actionsCmd.AddCommand(planCmd)
 	actionsCmd.AddCommand(newActionCapabilitiesCmd(deps))
 	actionsCmd.AddCommand(newActionDecisionCmd(deps))
+	actionsCmd.AddCommand(newActionExecutionCmd(deps))
 	actionsCmd.AddCommand(newActionAuditCmd(deps))
 	actionsCmd.AddCommand(newActionEventsCmd(deps))
 	return actionsCmd
@@ -179,6 +194,29 @@ func newActionDecisionCmd(deps *ActionsDeps) *cobra.Command {
 	cmd.Flags().StringVar(&opts.ActionID, "action-id", "", "governed action id")
 	cmd.Flags().StringVar(&opts.Outcome, "outcome", "", "decision outcome: approved or rejected")
 	cmd.Flags().StringVar(&opts.Reason, "reason", "", "audit reason for the decision")
+	return cmd
+}
+
+func newActionExecutionCmd(deps *ActionsDeps) *cobra.Command {
+	opts := actionExecutionOptions{
+		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
+		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
+	}
+	if opts.APIURL == "" {
+		opts.APIURL = defaultPulseAPIURL
+	}
+
+	cmd := &cobra.Command{
+		Use:   "execute",
+		Short: "Execute a governed action through the API action contract",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runActionExecution(cmd, deps, opts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.ActionID, "action-id", "", "governed action id")
+	cmd.Flags().StringVar(&opts.Reason, "reason", "", "audit reason for starting execution")
 	return cmd
 }
 
@@ -350,6 +388,66 @@ func runActionDecision(cmd *cobra.Command, deps *ActionsDeps, opts actionDecisio
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(decision); err != nil {
 		return fmt.Errorf("failed to write action decision response: %w", err)
+	}
+	return nil
+}
+
+func runActionExecution(cmd *cobra.Command, deps *ActionsDeps, opts actionExecutionOptions) error {
+	token := strings.TrimSpace(opts.Token)
+	if token == "" {
+		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	}
+
+	actionID := strings.TrimSpace(opts.ActionID)
+	if actionID == "" {
+		return fmt.Errorf("actionId is required (use --action-id)")
+	}
+
+	endpoint, err := pulseAPIEndpoint(opts.APIURL, "/actions/"+url.PathEscape(actionID)+"/execute")
+	if err != nil {
+		return err
+	}
+
+	body, err := json.Marshal(struct {
+		Reason string `json:"reason,omitempty"`
+	}{
+		Reason: strings.TrimSpace(opts.Reason),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to encode action execution: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(cmd.Context(), http.MethodPost, endpoint.String(), bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to build action execution request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := actionHTTPClient(deps).Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("action execution request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxPulseAPIResponseBytes, "action execution response")
+	if err != nil {
+		return fmt.Errorf("failed to read action execution response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return apiStatusError("action execution request", resp.Status, respBody)
+	}
+
+	var execution actionExecutionResponse
+	if err := decodeJSONBytes(respBody, &execution); err != nil {
+		return fmt.Errorf("failed to decode action execution response: %w", err)
+	}
+
+	encoder := json.NewEncoder(cmd.OutOrStdout())
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(execution); err != nil {
+		return fmt.Errorf("failed to write action execution response: %w", err)
 	}
 	return nil
 }

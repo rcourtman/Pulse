@@ -11837,6 +11837,188 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
+	startedAt := time.Date(2026, 5, 4, 15, 30, 0, 0, time.UTC)
+	completedAt := startedAt.Add(30 * time.Second)
+	plannedAt := startedAt.Add(-2 * time.Minute)
+	approvedAt := startedAt.Add(-time.Minute)
+	record := unifiedresources.ActionAuditRecord{
+		ID:        "act_execution_contract",
+		CreatedAt: plannedAt,
+		UpdatedAt: approvedAt,
+		State:     unifiedresources.ActionStateApproved,
+		Request: unifiedresources.ActionRequest{
+			RequestID:      "agent-run-execute",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "Recover after confirmed outage",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: unifiedresources.ActionPlan{
+			ActionID:          "act_execution_contract",
+			RequestID:         "agent-run-execute",
+			Allowed:           true,
+			RequiresApproval:  true,
+			ApprovalPolicy:    unifiedresources.ApprovalAdmin,
+			RollbackAvailable: false,
+			PlannedAt:         plannedAt,
+			ExpiresAt:         startedAt.Add(3 * time.Minute),
+			ResourceVersion:   "resource:sha256:contract",
+			PolicyVersion:     "policy:sha256:contract",
+			PlanHash:          "sha256:contract",
+			Preflight: &unifiedresources.ActionPreflight{
+				Target:          "vm:42",
+				CurrentState:    "web-42 is warning",
+				IntendedChange:  "Restart the VM",
+				DryRunAvailable: false,
+				DryRunSummary:   "No provider-supported dry run is advertised for this capability.",
+				SafetyChecks: []string{
+					"Resource was resolved from the unified resource registry.",
+					"Execution must use POST /api/actions/{id}/execute after approval.",
+				},
+				VerificationSteps: []string{
+					"Review /api/audit/actions/act_execution_contract/events for lifecycle evidence.",
+				},
+				GeneratedAt: plannedAt,
+			},
+		},
+		Approvals: []unifiedresources.ActionApprovalRecord{
+			{
+				Actor:     "operator@example.com",
+				Method:    unifiedresources.MethodAPI,
+				Timestamp: approvedAt,
+				Outcome:   unifiedresources.OutcomeApproved,
+				Reason:    "inside maintenance window",
+			},
+		},
+	}
+
+	started, startEvent, err := unifiedresources.BeginActionExecution(record, "operator@example.com", startedAt)
+	if err != nil {
+		t.Fatalf("begin action execution: %v", err)
+	}
+	completed, doneEvent, err := unifiedresources.CompleteActionExecution(started, &unifiedresources.ExecutionResult{
+		Success: true,
+		Output:  "restart dispatched",
+	}, "operator@example.com", completedAt)
+	if err != nil {
+		t.Fatalf("complete action execution: %v", err)
+	}
+	response := actionExecutionResponse{
+		ActionID: completed.ID,
+		State:    completed.State,
+		Result:   completed.Result,
+		Audit:    completed,
+	}
+
+	payload := struct {
+		Response actionExecutionResponse `json:"response"`
+		Events   []struct {
+			ActionID string                       `json:"actionId"`
+			State    unifiedresources.ActionState `json:"state"`
+			Actor    string                       `json:"actor"`
+			Message  string                       `json:"message"`
+		} `json:"events"`
+	}{Response: response}
+	for _, event := range []unifiedresources.ActionLifecycleEvent{startEvent, doneEvent} {
+		payload.Events = append(payload.Events, struct {
+			ActionID string                       `json:"actionId"`
+			State    unifiedresources.ActionState `json:"state"`
+			Actor    string                       `json:"actor"`
+			Message  string                       `json:"message"`
+		}{
+			ActionID: event.ActionID,
+			State:    event.State,
+			Actor:    event.Actor,
+			Message:  event.Message,
+		})
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal action execution contract: %v", err)
+	}
+	const want = `{
+		"response":{
+			"actionId":"act_execution_contract",
+			"state":"completed",
+			"result":{
+				"success":true,
+				"output":"restart dispatched"
+			},
+			"audit":{
+				"id":"act_execution_contract",
+				"createdAt":"2026-05-04T15:28:00Z",
+				"updatedAt":"2026-05-04T15:30:30Z",
+				"state":"completed",
+				"request":{
+					"requestId":"agent-run-execute",
+					"resourceId":"vm:42",
+					"capabilityName":"restart",
+					"reason":"Recover after confirmed outage",
+					"requestedBy":"agent:oncall-helper"
+				},
+				"plan":{
+					"actionId":"act_execution_contract",
+					"requestId":"agent-run-execute",
+					"allowed":true,
+					"requiresApproval":true,
+					"approvalPolicy":"admin",
+					"rollbackAvailable":false,
+					"plannedAt":"2026-05-04T15:28:00Z",
+					"expiresAt":"2026-05-04T15:33:00Z",
+					"resourceVersion":"resource:sha256:contract",
+					"policyVersion":"policy:sha256:contract",
+					"planHash":"sha256:contract",
+					"preflight":{
+						"target":"vm:42",
+						"currentState":"web-42 is warning",
+						"intendedChange":"Restart the VM",
+						"dryRunAvailable":false,
+						"dryRunSummary":"No provider-supported dry run is advertised for this capability.",
+						"safetyChecks":[
+							"Resource was resolved from the unified resource registry.",
+							"Execution must use POST /api/actions/{id}/execute after approval."
+						],
+						"verificationSteps":[
+							"Review /api/audit/actions/act_execution_contract/events for lifecycle evidence."
+						],
+						"generatedAt":"2026-05-04T15:28:00Z"
+					}
+				},
+				"approvals":[
+					{
+						"actor":"operator@example.com",
+						"method":"api",
+						"timestamp":"2026-05-04T15:29:00Z",
+						"outcome":"approved",
+						"reason":"inside maintenance window"
+					}
+				],
+				"result":{
+					"success":true,
+					"output":"restart dispatched"
+				}
+			}
+		},
+		"events":[
+			{
+				"actionId":"act_execution_contract",
+				"state":"executing",
+				"actor":"operator@example.com",
+				"message":"Action execution started."
+			},
+			{
+				"actionId":"act_execution_contract",
+				"state":"completed",
+				"actor":"operator@example.com",
+				"message":"Action execution completed."
+			}
+		]
+	}`
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResourceTimelineEndpointsIncludeRelatedChanges(t *testing.T) {
 	now := time.Date(2026, 4, 25, 22, 15, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})

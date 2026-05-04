@@ -30,6 +30,7 @@ type ResourceHandlers struct {
 	supplementalRecords map[unified.DataSource]SupplementalRecordsProvider
 	stateProvider       SnapshotProvider
 	tenantStateProvider TenantStateProvider
+	actionExecutor      ActionExecutor
 }
 
 type registrySeed struct {
@@ -85,6 +86,11 @@ func (h *ResourceHandlers) SetStateProvider(provider SnapshotProvider) {
 // SetTenantStateProvider sets the tenant-aware provider.
 func (h *ResourceHandlers) SetTenantStateProvider(provider TenantStateProvider) {
 	h.tenantStateProvider = provider
+}
+
+// SetActionExecutor configures the API-owned action execution driver.
+func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor) {
+	h.actionExecutor = executor
 }
 
 // SetSupplementalRecordsProvider configures additional records for a source.

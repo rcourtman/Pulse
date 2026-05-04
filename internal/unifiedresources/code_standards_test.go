@@ -313,6 +313,50 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	}
 }
 
+func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join(".", "actions.go"): {
+			"func BeginActionExecution(record ActionAuditRecord, actor string, now time.Time)",
+			"func CompleteActionExecution(record ActionAuditRecord, result *ExecutionResult, actor string, now time.Time)",
+			"func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error",
+		},
+		filepath.Join(".", "store.go"): {
+			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
+		},
+		filepath.Join("..", "api", "actions.go"): {
+			"type ActionExecutor interface",
+			"func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request)",
+			"store.RecordActionExecutionStart(started, startEvent)",
+			"store.RecordActionExecutionResult(completed, doneEvent)",
+			"action_executor_unavailable",
+		},
+		filepath.Join("..", "api", "resources.go"): {
+			"actionExecutor      ActionExecutor",
+			"func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor)",
+		},
+		filepath.Join("..", "api", "router_routes_monitoring.go"): {
+			`"POST /api/actions/{id}/execute"`,
+			"RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleExecuteAction)",
+		},
+	}
+
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", name, snippet)
+			}
+		}
+	}
+}
+
 func TestResourcePolicySummaryContractOmitsRawSignals(t *testing.T) {
 	policy := ResourcePolicy{
 		Sensitivity: ResourceSensitivityRestricted,

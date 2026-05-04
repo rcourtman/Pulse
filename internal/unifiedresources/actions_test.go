@@ -173,3 +173,151 @@ func TestApplyActionDecisionRejectsUnsafeTransitions(t *testing.T) {
 		t.Fatalf("expired error = %v", err)
 	}
 }
+
+func TestBeginActionExecutionStartsApprovedAction(t *testing.T) {
+	now := time.Date(2026, 5, 4, 12, 30, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act_execute",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-30 * time.Second),
+		State:     ActionStateApproved,
+		Request: ActionRequest{
+			RequestID:      "req-execute",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "recover service",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: ActionPlan{
+			ActionID:         "act_execute",
+			RequestID:        "req-execute",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   ApprovalAdmin,
+			PlannedAt:        now.Add(-time.Minute),
+			ExpiresAt:        now.Add(time.Minute),
+			ResourceVersion:  "resource:sha256:test",
+			PolicyVersion:    "policy:sha256:test",
+			PlanHash:         "sha256:test",
+		},
+		Approvals: []ActionApprovalRecord{
+			{Actor: "operator@example.com", Outcome: OutcomeApproved, Timestamp: now.Add(-30 * time.Second)},
+		},
+	}
+
+	updated, event, err := BeginActionExecution(record, "operator@example.com", now)
+	if err != nil {
+		t.Fatalf("BeginActionExecution: %v", err)
+	}
+	if updated.State != ActionStateExecuting || updated.Result != nil || !updated.UpdatedAt.Equal(now) {
+		t.Fatalf("updated action = %#v, want executing without result", updated)
+	}
+	if event.ActionID != "act_execute" || event.State != ActionStateExecuting || event.Actor != "operator@example.com" {
+		t.Fatalf("lifecycle event = %#v", event)
+	}
+}
+
+func TestBeginActionExecutionRejectsUnsafeStates(t *testing.T) {
+	now := time.Date(2026, 5, 4, 12, 30, 0, 0, time.UTC)
+	base := ActionAuditRecord{
+		ID:        "act_execute",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-time.Minute),
+		State:     ActionStatePending,
+		Request: ActionRequest{
+			RequestID:      "req-execute",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "recover service",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: ActionPlan{
+			ActionID:         "act_execute",
+			RequestID:        "req-execute",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   ApprovalAdmin,
+			PlannedAt:        now.Add(-time.Minute),
+			ExpiresAt:        now.Add(time.Minute),
+			ResourceVersion:  "resource:sha256:test",
+			PolicyVersion:    "policy:sha256:test",
+			PlanHash:         "sha256:test",
+		},
+	}
+	if _, _, err := BeginActionExecution(base, "operator@example.com", now); !errors.Is(err, ErrActionNotApproved) {
+		t.Fatalf("pending error = %v, want %v", err, ErrActionNotApproved)
+	}
+	executing := base
+	executing.State = ActionStateExecuting
+	if _, _, err := BeginActionExecution(executing, "operator@example.com", now); !errors.Is(err, ErrActionAlreadyExecuting) {
+		t.Fatalf("executing error = %v, want %v", err, ErrActionAlreadyExecuting)
+	}
+	completed := base
+	completed.State = ActionStateCompleted
+	if _, _, err := BeginActionExecution(completed, "operator@example.com", now); !errors.Is(err, ErrActionExecutionFinal) {
+		t.Fatalf("completed error = %v, want %v", err, ErrActionExecutionFinal)
+	}
+	expired := base
+	expired.State = ActionStateApproved
+	expired.Plan.ExpiresAt = now.Add(-time.Second)
+	if _, _, err := BeginActionExecution(expired, "operator@example.com", now); !errors.Is(err, ErrActionPlanExpired) {
+		t.Fatalf("expired error = %v, want %v", err, ErrActionPlanExpired)
+	}
+}
+
+func TestCompleteActionExecutionRecordsResult(t *testing.T) {
+	now := time.Date(2026, 5, 4, 12, 45, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act_execute",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-30 * time.Second),
+		State:     ActionStateExecuting,
+		Request: ActionRequest{
+			RequestID:      "req-execute",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "recover service",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: ActionPlan{
+			ActionID:         "act_execute",
+			RequestID:        "req-execute",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   ApprovalAdmin,
+			PlannedAt:        now.Add(-time.Minute),
+			ExpiresAt:        now.Add(time.Minute),
+			ResourceVersion:  "resource:sha256:test",
+			PolicyVersion:    "policy:sha256:test",
+			PlanHash:         "sha256:test",
+		},
+	}
+
+	updated, event, err := CompleteActionExecution(record, &ExecutionResult{Success: true, Output: "done"}, "operator@example.com", now)
+	if err != nil {
+		t.Fatalf("CompleteActionExecution: %v", err)
+	}
+	if updated.State != ActionStateCompleted || updated.Result == nil || updated.Result.Output != "done" {
+		t.Fatalf("completed action = %#v", updated)
+	}
+	if event.State != ActionStateCompleted || event.Message != "Action execution completed." {
+		t.Fatalf("completed event = %#v", event)
+	}
+
+	failed, failedEvent, err := CompleteActionExecution(record, &ExecutionResult{Success: false, ErrorMessage: "provider rejected restart"}, "operator@example.com", now)
+	if err != nil {
+		t.Fatalf("CompleteActionExecution failed result: %v", err)
+	}
+	if failed.State != ActionStateFailed || failed.Result == nil || failed.Result.ErrorMessage != "provider rejected restart" {
+		t.Fatalf("failed action = %#v", failed)
+	}
+	if failedEvent.State != ActionStateFailed || failedEvent.Message != "provider rejected restart" {
+		t.Fatalf("failed event = %#v", failedEvent)
+	}
+
+	notExecuting := record
+	notExecuting.State = ActionStateApproved
+	if _, _, err := CompleteActionExecution(notExecuting, nil, "operator@example.com", now); !errors.Is(err, ErrActionNotExecuting) {
+		t.Fatalf("not executing error = %v, want %v", err, ErrActionNotExecuting)
+	}
+}
