@@ -83,6 +83,7 @@ func TestProvisionTenantSuccess(t *testing.T) {
 
 	provisioner := NewProvisioner(persistence, authProvider)
 	provisioner.newOrgID = func() string { return "org-success" }
+	provisioner.newUserID = func() (string, error) { return "u_owner_success", nil }
 	provisioner.now = func() time.Time { return time.Unix(1700000000, 0).UTC() }
 
 	result, err := provisioner.ProvisionTenant(context.Background(), ProvisionRequest{
@@ -102,8 +103,11 @@ func TestProvisionTenantSuccess(t *testing.T) {
 	if result.OrgID != "org-success" {
 		t.Fatalf("expected org ID org-success, got %q", result.OrgID)
 	}
-	if result.UserID != "owner@example.com" {
-		t.Fatalf("expected user ID owner@example.com, got %q", result.UserID)
+	if result.UserID != "u_owner_success" {
+		t.Fatalf("expected stable user ID u_owner_success, got %q", result.UserID)
+	}
+	if result.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", result.OwnerEmail)
 	}
 
 	org, err := persistence.LoadOrganization("org-success")
@@ -113,14 +117,20 @@ func TestProvisionTenantSuccess(t *testing.T) {
 	if org.DisplayName != "My Organization" {
 		t.Fatalf("expected org display name My Organization, got %q", org.DisplayName)
 	}
-	if org.OwnerUserID != "owner@example.com" {
-		t.Fatalf("expected owner owner@example.com, got %q", org.OwnerUserID)
+	if org.OwnerUserID != "u_owner_success" {
+		t.Fatalf("expected owner u_owner_success, got %q", org.OwnerUserID)
+	}
+	if org.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", org.OwnerEmail)
 	}
 	if len(org.Members) != 1 {
 		t.Fatalf("expected 1 member, got %d", len(org.Members))
 	}
-	if org.Members[0].UserID != "owner@example.com" {
-		t.Fatalf("expected member user ID owner@example.com, got %q", org.Members[0].UserID)
+	if org.Members[0].UserID != "u_owner_success" {
+		t.Fatalf("expected member user ID u_owner_success, got %q", org.Members[0].UserID)
+	}
+	if org.Members[0].Email != "owner@example.com" {
+		t.Fatalf("expected member email owner@example.com, got %q", org.Members[0].Email)
 	}
 	if org.Members[0].Role != models.OrgRoleOwner {
 		t.Fatalf("expected owner role, got %q", org.Members[0].Role)
@@ -135,8 +145,8 @@ func TestProvisionTenantSuccess(t *testing.T) {
 	if authManager.calls != 1 {
 		t.Fatalf("expected UpdateUserRoles to be called once, got %d", authManager.calls)
 	}
-	if authManager.lastUser != "owner@example.com" {
-		t.Fatalf("expected UpdateUserRoles for owner@example.com, got %q", authManager.lastUser)
+	if authManager.lastUser != "u_owner_success" {
+		t.Fatalf("expected UpdateUserRoles for u_owner_success, got %q", authManager.lastUser)
 	}
 	if len(authManager.lastRoles) != 1 || authManager.lastRoles[0] != auth.RoleAdmin {
 		t.Fatalf("expected roles [%s], got %v", auth.RoleAdmin, authManager.lastRoles)
@@ -154,13 +164,15 @@ func TestProvisionTenantIdempotentDuplicateEmail(t *testing.T) {
 		ID:          "existing-org",
 		DisplayName: "Existing Org",
 		CreatedAt:   time.Now().UTC(),
-		OwnerUserID: "owner@example.com",
+		OwnerUserID: "u_existing_owner",
+		OwnerEmail:  "owner@example.com",
 		Members: []models.OrganizationMember{
 			{
-				UserID:  "owner@example.com",
+				UserID:  "u_existing_owner",
+				Email:   "owner@example.com",
 				Role:    models.OrgRoleOwner,
 				AddedAt: time.Now().UTC(),
-				AddedBy: "owner@example.com",
+				AddedBy: "u_existing_owner",
 			},
 		},
 	}
@@ -185,8 +197,11 @@ func TestProvisionTenantIdempotentDuplicateEmail(t *testing.T) {
 	if result.OrgID != "existing-org" {
 		t.Fatalf("expected org ID existing-org, got %q", result.OrgID)
 	}
-	if result.UserID != "owner@example.com" {
-		t.Fatalf("expected user ID owner@example.com, got %q", result.UserID)
+	if result.UserID != "u_existing_owner" {
+		t.Fatalf("expected stable user ID u_existing_owner, got %q", result.UserID)
+	}
+	if result.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", result.OwnerEmail)
 	}
 	if authProvider.calls != 0 {
 		t.Fatalf("expected GetManager to not be called for idempotent path, got %d", authProvider.calls)
@@ -207,13 +222,15 @@ func TestProvisionTenantIdempotentDuplicateEmailCaseInsensitive(t *testing.T) {
 		ID:          "existing-org",
 		DisplayName: "Existing Org",
 		CreatedAt:   time.Now().UTC(),
-		OwnerUserID: "owner@example.com",
+		OwnerUserID: "u_existing_owner",
+		OwnerEmail:  "owner@example.com",
 		Members: []models.OrganizationMember{
 			{
-				UserID:  "owner@example.com",
+				UserID:  "u_existing_owner",
+				Email:   "owner@example.com",
 				Role:    models.OrgRoleOwner,
 				AddedAt: time.Now().UTC(),
-				AddedBy: "owner@example.com",
+				AddedBy: "u_existing_owner",
 			},
 		},
 	}
@@ -238,8 +255,11 @@ func TestProvisionTenantIdempotentDuplicateEmailCaseInsensitive(t *testing.T) {
 	if result.OrgID != "existing-org" {
 		t.Fatalf("expected org ID existing-org, got %q", result.OrgID)
 	}
-	if result.UserID != "owner@example.com" {
-		t.Fatalf("expected normalized user ID owner@example.com, got %q", result.UserID)
+	if result.UserID != "u_existing_owner" {
+		t.Fatalf("expected stable user ID u_existing_owner, got %q", result.UserID)
+	}
+	if result.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", result.OwnerEmail)
 	}
 	if authProvider.calls != 0 {
 		t.Fatalf("expected GetManager to not be called for idempotent path, got %d", authProvider.calls)
@@ -365,6 +385,7 @@ func TestProvisionHostedSignupSuccess(t *testing.T) {
 
 	provisioner := NewProvisioner(persistence, authProvider)
 	provisioner.newOrgID = func() string { return "org-hosted-signup" }
+	provisioner.newUserID = func() (string, error) { return "u_hosted_signup_owner", nil }
 	provisioner.now = func() time.Time { return time.Unix(1700000100, 0).UTC() }
 
 	result, err := provisioner.ProvisionHostedSignup(context.Background(), HostedSignupRequest{
@@ -383,8 +404,11 @@ func TestProvisionHostedSignupSuccess(t *testing.T) {
 	if result.OrgID != "org-hosted-signup" {
 		t.Fatalf("expected org ID org-hosted-signup, got %q", result.OrgID)
 	}
-	if result.UserID != "owner@example.com" {
-		t.Fatalf("expected normalized user ID owner@example.com, got %q", result.UserID)
+	if result.UserID != "u_hosted_signup_owner" {
+		t.Fatalf("expected stable user ID u_hosted_signup_owner, got %q", result.UserID)
+	}
+	if result.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", result.OwnerEmail)
 	}
 
 	org, err := persistence.LoadOrganization("org-hosted-signup")
@@ -394,14 +418,17 @@ func TestProvisionHostedSignupSuccess(t *testing.T) {
 	if org.DisplayName != "My Organization" {
 		t.Fatalf("expected org display name My Organization, got %q", org.DisplayName)
 	}
-	if org.OwnerUserID != "owner@example.com" {
-		t.Fatalf("expected owner owner@example.com, got %q", org.OwnerUserID)
+	if org.OwnerUserID != "u_hosted_signup_owner" {
+		t.Fatalf("expected owner u_hosted_signup_owner, got %q", org.OwnerUserID)
+	}
+	if org.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", org.OwnerEmail)
 	}
 	if authProvider.calls != 1 || authProvider.lastOrgID != "org-hosted-signup" {
 		t.Fatalf("expected auth manager lookup for org-hosted-signup, got calls=%d org=%q", authProvider.calls, authProvider.lastOrgID)
 	}
-	if authManager.calls != 1 || authManager.lastUser != "owner@example.com" {
-		t.Fatalf("expected admin role assignment for owner@example.com, got calls=%d user=%q", authManager.calls, authManager.lastUser)
+	if authManager.calls != 1 || authManager.lastUser != "u_hosted_signup_owner" {
+		t.Fatalf("expected admin role assignment for u_hosted_signup_owner, got calls=%d user=%q", authManager.calls, authManager.lastUser)
 	}
 }
 
@@ -416,13 +443,15 @@ func TestProvisionHostedSignupIdempotentDuplicateEmailCaseInsensitive(t *testing
 		ID:          "existing-org",
 		DisplayName: "Existing Org",
 		CreatedAt:   time.Now().UTC(),
-		OwnerUserID: "owner@example.com",
+		OwnerUserID: "u_existing_owner",
+		OwnerEmail:  "owner@example.com",
 		Members: []models.OrganizationMember{
 			{
-				UserID:  "owner@example.com",
+				UserID:  "u_existing_owner",
+				Email:   "owner@example.com",
 				Role:    models.OrgRoleOwner,
 				AddedAt: time.Now().UTC(),
-				AddedBy: "owner@example.com",
+				AddedBy: "u_existing_owner",
 			},
 		},
 	}
@@ -446,8 +475,11 @@ func TestProvisionHostedSignupIdempotentDuplicateEmailCaseInsensitive(t *testing
 	if result.OrgID != "existing-org" {
 		t.Fatalf("expected org ID existing-org, got %q", result.OrgID)
 	}
-	if result.UserID != "owner@example.com" {
-		t.Fatalf("expected normalized user ID owner@example.com, got %q", result.UserID)
+	if result.UserID != "u_existing_owner" {
+		t.Fatalf("expected stable user ID u_existing_owner, got %q", result.UserID)
+	}
+	if result.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", result.OwnerEmail)
 	}
 	if authProvider.calls != 0 {
 		t.Fatalf("expected GetManager to not be called for idempotent hosted signup, got %d", authProvider.calls)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -54,6 +55,7 @@ type Provisioner struct {
 	persistence  OrgPersistence
 	authProvider AuthProvider
 	newOrgID     func() string
+	newUserID    func() (string, error)
 	now          func() time.Time
 }
 
@@ -69,9 +71,10 @@ type HostedSignupRequest struct {
 }
 
 type ProvisionResult struct {
-	OrgID  string
-	UserID string
-	Status ProvisionStatus
+	OrgID      string
+	UserID     string
+	OwnerEmail string
+	Status     ProvisionStatus
 }
 
 type ValidationError struct {
@@ -114,6 +117,7 @@ func NewProvisioner(persistence OrgPersistence, authProvider AuthProvider) *Prov
 		persistence:  persistence,
 		authProvider: authProvider,
 		newOrgID:     uuid.NewString,
+		newUserID:    registry.GenerateUserID,
 		now:          time.Now,
 	}
 }
@@ -173,10 +177,19 @@ func (p *Provisioner) findExistingOrganizationByOwnerEmail(email string) (*Provi
 			continue
 		}
 		if strings.EqualFold(strings.TrimSpace(org.OwnerEmail), email) || strings.EqualFold(strings.TrimSpace(org.OwnerUserID), email) {
+			userID, _, ok := org.ResolvePrincipalByEmail(email)
+			if !ok {
+				userID = strings.TrimSpace(org.OwnerUserID)
+			}
+			ownerEmail := strings.ToLower(strings.TrimSpace(org.OwnerEmail))
+			if ownerEmail == "" {
+				ownerEmail = strings.ToLower(strings.TrimSpace(email))
+			}
 			return &ProvisionResult{
-				OrgID:  org.ID,
-				UserID: strings.TrimSpace(org.OwnerUserID),
-				Status: ProvisionStatusExisting,
+				OrgID:      org.ID,
+				UserID:     userID,
+				OwnerEmail: ownerEmail,
+				Status:     ProvisionStatusExisting,
 			}, nil
 		}
 	}
@@ -227,7 +240,7 @@ func (p *Provisioner) ensureReady() error {
 	return nil
 }
 
-func (p *Provisioner) createOrganization(ctx context.Context, orgID, userID, orgName string) (*ProvisionResult, error) {
+func (p *Provisioner) createOrganization(ctx context.Context, orgID, ownerEmail, orgName string) (*ProvisionResult, error) {
 	tenantPersistence, err := p.persistence.GetPersistence(orgID)
 	if err != nil {
 		return nil, &SystemError{Op: "initialize_tenant_directory", Err: err}
@@ -239,18 +252,24 @@ func (p *Provisioner) createOrganization(ctx context.Context, orgID, userID, org
 		p.RollbackProvisioning(orgID)
 		return nil, err
 	}
+	userID, err := p.generateOwnerUserID()
+	if err != nil {
+		p.RollbackProvisioning(orgID)
+		return nil, &SystemError{Op: "generate_owner_user_id", Err: err}
+	}
 
 	now := p.now().UTC()
+	ownerEmail = strings.ToLower(strings.TrimSpace(ownerEmail))
 	org := &models.Organization{
 		ID:          orgID,
 		DisplayName: orgName,
 		CreatedAt:   now,
 		OwnerUserID: userID,
-		OwnerEmail:  contactEmailForLegacyUserID(userID),
+		OwnerEmail:  ownerEmail,
 		Members: []models.OrganizationMember{
 			{
 				UserID:  userID,
-				Email:   contactEmailForLegacyUserID(userID),
+				Email:   ownerEmail,
 				Role:    models.OrgRoleOwner,
 				AddedAt: now,
 				AddedBy: userID,
@@ -281,18 +300,29 @@ func (p *Provisioner) createOrganization(ctx context.Context, orgID, userID, org
 	}
 
 	return &ProvisionResult{
-		OrgID:  orgID,
-		UserID: userID,
-		Status: ProvisionStatusCreated,
+		OrgID:      orgID,
+		UserID:     userID,
+		OwnerEmail: ownerEmail,
+		Status:     ProvisionStatusCreated,
 	}, nil
 }
 
-func contactEmailForLegacyUserID(userID string) string {
-	userID = strings.ToLower(strings.TrimSpace(userID))
-	if strings.Contains(userID, "@") {
-		return userID
+func (p *Provisioner) generateOwnerUserID() (string, error) {
+	if p == nil || p.newUserID == nil {
+		return "", errors.New("user id generator is nil")
 	}
-	return ""
+	userID, err := p.newUserID()
+	if err != nil {
+		return "", err
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return "", errors.New("generated user id is empty")
+	}
+	if strings.Contains(userID, "@") {
+		return "", errors.New("generated user id must not be an email")
+	}
+	return userID, nil
 }
 
 func (p *Provisioner) cleanupOrgDirectory(orgID, dataDir string) {

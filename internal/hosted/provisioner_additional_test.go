@@ -402,6 +402,42 @@ func TestProvisionTenantAuthManagerFailuresCleanup(t *testing.T) {
 	}
 }
 
+func TestProvisionTenantRejectsEmailShapedGeneratedOwnerUserID(t *testing.T) {
+	baseDir := t.TempDir()
+	authManager := &mockAuthManager{}
+	authProvider := &mockAuthProvider{manager: authManager}
+	p := NewProvisioner(config.NewMultiTenantPersistence(baseDir), authProvider)
+	p.newOrgID = func() string { return "org-email-shaped-owner" }
+	p.newUserID = func() (string, error) { return "owner@example.com", nil }
+
+	_, err := p.ProvisionTenant(context.Background(), ProvisionRequest{
+		Email:    "owner@example.com",
+		Password: "securepass123",
+		OrgName:  "Valid Org",
+	})
+	if err == nil {
+		t.Fatal("expected generated owner user id error, got nil")
+	}
+	var systemErr *SystemError
+	if !errors.As(err, &systemErr) {
+		t.Fatalf("expected SystemError, got %T (%v)", err, err)
+	}
+	if systemErr.Op != "generate_owner_user_id" {
+		t.Fatalf("expected op generate_owner_user_id, got %q", systemErr.Op)
+	}
+	if systemErr.Err == nil || systemErr.Err.Error() != "generated user id must not be an email" {
+		t.Fatalf("unexpected underlying error: %v", systemErr.Err)
+	}
+	if authProvider.calls != 0 || authManager.calls != 0 {
+		t.Fatalf("expected no RBAC calls, got provider=%d manager=%d", authProvider.calls, authManager.calls)
+	}
+
+	orgDir := filepath.Join(baseDir, "orgs", "org-email-shaped-owner")
+	if _, statErr := os.Stat(orgDir); !os.IsNotExist(statErr) {
+		t.Fatalf("expected org dir to be removed on rollback, stat error: %v", statErr)
+	}
+}
+
 func TestValidationHelpersAdditionalBranches(t *testing.T) {
 	if isValidSignupEmail("user@bad@domain.com") {
 		t.Fatal("expected second @ in domain to be invalid")

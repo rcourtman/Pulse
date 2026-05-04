@@ -139,7 +139,10 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 	}
 
 	orgID := result.OrgID
-	userID := result.UserID
+	ownerEmail := strings.ToLower(strings.TrimSpace(result.OwnerEmail))
+	if ownerEmail == "" {
+		ownerEmail = strings.ToLower(strings.TrimSpace(req.Email))
+	}
 
 	var cleanupOnce sync.Once
 	cleanupProvisioning := func() {
@@ -167,13 +170,13 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 	}
 
 	// Issue a magic link for passwordless sign-in.
-	token, err := h.magicLinks.GenerateToken(userID, orgID)
+	token, err := h.magicLinks.GenerateToken(ownerEmail, orgID)
 	if err != nil {
 		cleanupProvisioning()
 		writeErrorResponse(w, http.StatusInternalServerError, "magic_link_failed", "Failed to generate magic link", nil)
 		return
 	}
-	if err := h.magicLinks.SendMagicLink(userID, orgID, token, baseURL); err != nil {
+	if err := h.magicLinks.SendMagicLink(ownerEmail, orgID, token, baseURL); err != nil {
 		cleanupProvisioning()
 		writeErrorResponse(w, http.StatusInternalServerError, "magic_link_failed", "Failed to send magic link", nil)
 		return

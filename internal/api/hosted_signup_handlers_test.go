@@ -45,15 +45,18 @@ func TestHostedSignupSuccess(t *testing.T) {
 	if org.DisplayName != "My Organization" {
 		t.Fatalf("expected org display name My Organization, got %q", org.DisplayName)
 	}
-	if org.OwnerUserID != "owner@example.com" {
-		t.Fatalf("expected owner owner@example.com, got %q", org.OwnerUserID)
+	if org.OwnerUserID == "" || strings.Contains(org.OwnerUserID, "@") {
+		t.Fatalf("expected stable owner user id, got %q", org.OwnerUserID)
+	}
+	if org.OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner email owner@example.com, got %q", org.OwnerEmail)
 	}
 
 	manager, err := rbacProvider.GetManager(orgID)
 	if err != nil {
 		t.Fatalf("get rbac manager: %v", err)
 	}
-	assignment, ok := manager.GetUserAssignment("owner@example.com")
+	assignment, ok := manager.GetUserAssignment(org.OwnerUserID)
 	if !ok {
 		t.Fatal("expected user role assignment to exist")
 	}
@@ -359,7 +362,7 @@ func requireHostedSignupProvisionedOrgID(t *testing.T, persistence *config.Multi
 		if org == nil || org.ID == "default" {
 			continue
 		}
-		if strings.EqualFold(org.OwnerUserID, ownerEmail) {
+		if strings.EqualFold(org.OwnerEmail, ownerEmail) {
 			return org.ID
 		}
 	}

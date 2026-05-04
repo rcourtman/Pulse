@@ -290,9 +290,10 @@ runtime gating as separate unlinked claims.
     the existing tenant record instead of creating parallel orgs for one
     account identity.
     The idempotency key remains the contact email only at the provisioning
-    edge. Once a stable control-plane user exists, hosted org `OwnerUserID` and
-    member `UserID` values must carry that durable user ID while owner/member
-    email fields preserve delivery and display contact metadata.
+    edge. New public hosted signup orgs must generate an opaque stable owner
+    user ID, and registry-backed hosted paths must resolve a registry user ID,
+    before writing hosted org `OwnerUserID` or member `UserID`; owner/member
+    email fields preserve delivery and display contact metadata only.
 13. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
@@ -1789,6 +1790,12 @@ handler owns request validation, trial billing initialization, and magic-link
 issuance, while `internal/hosted/provisioner.go` owns the shared org
 bootstrap/admin-role assignment, duplicate-owner-email idempotency, and
 rollback path for hosted signup failures.
+The same boundary is identity-stable: `internal/hosted/provisioner.go` must
+generate a stable opaque owner user ID for new hosted signup organizations,
+store the signup email only as `OwnerEmail`/member contact metadata, assign
+RBAC against the stable owner ID, and return contact email separately so the
+public signup handler can issue magic links without turning email into the
+tenant principal.
 That duplicate-owner-email rule is fail-closed and server-owned. Repeated
 hosted signup attempts for an email that already owns a tenant must resolve to
 the existing org identity instead of minting a second tenant and relying on

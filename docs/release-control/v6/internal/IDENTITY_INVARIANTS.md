@@ -78,10 +78,11 @@ principal once a stable user ID exists.
 2. Magic-link sessions bind to the stored organization principal resolved from
    contact email at verification time, not to the email embedded in the token.
 3. Hosted checkout and tenant provisioning seed organization membership from
-   registry user IDs. Contact email is copied separately.
-   Provisioning with an owner contact email must create or resolve a stable
+   stable Pulse user IDs. Registry-backed paths must create or resolve the
    registry user before writing hosted tenant `OwnerUserID` or member `UserID`;
-   it must not synthesize those durable IDs from email.
+   legacy public hosted signup must generate an opaque `u_...` owner principal
+   and copy email only into contact metadata and magic-link delivery. No hosted
+   provisioning path may synthesize durable owner/member IDs from email.
 4. Webhook payloads must never create organizations or memberships from email.
    They may update billing only after server-owned org/customer linkage exists.
 5. Legacy email-keyed records may be accepted only at migration boundaries and

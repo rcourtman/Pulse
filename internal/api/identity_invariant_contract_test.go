@@ -30,7 +30,9 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		"deploy_handlers.go":               readIdentityContractFile(t, "deploy_handlers.go"),
 		"router.go":                        readIdentityContractFile(t, "router.go"),
 		"security_setup_fix.go":            readIdentityContractFile(t, "security_setup_fix.go"),
+		"public_signup_handlers.go":        readIdentityContractFile(t, "public_signup_handlers.go"),
 		"../cloudcp/stripe/provisioner.go": readIdentityContractFile(t, "../cloudcp/stripe/provisioner.go"),
+		"../hosted/provisioner.go":         readIdentityContractFile(t, "../hosted/provisioner.go"),
 		"../models/organization.go":        readIdentityContractFile(t, "../models/organization.go"),
 		"../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md": readIdentityContractFile(t, "../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md"),
 	}
@@ -87,11 +89,22 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"setAPITokenOwnerUserID(tokenRecord, setupRequest.Username)",
 			"setAPITokenOwnerUserID(tokenRecord, apiTokenOwnerUserIDForRequest(r.config, rq))",
 		},
+		"public_signup_handlers.go": {
+			"ownerEmail := strings.ToLower(strings.TrimSpace(result.OwnerEmail))",
+			"GenerateToken(ownerEmail, orgID)",
+			"SendMagicLink(ownerEmail, orgID, token, baseURL)",
+		},
 		"../cloudcp/stripe/provisioner.go": {
 			"ownerUserID = strings.TrimSpace(user.ID)",
 			"org.OwnerEmail = ownerEmail",
 			"UserID:  seed.userID",
 			"Email:   seed.email",
+		},
+		"../hosted/provisioner.go": {
+			"newUserID:    registry.GenerateUserID",
+			"OwnerEmail:  ownerEmail",
+			"UpdateUserRoles(userID, []string{auth.RoleAdmin})",
+			"generated user id must not be an email",
 		},
 		"../models/organization.go": {
 			"OwnerEmail string",
@@ -143,6 +156,15 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"org.OwnerUserID = ownerEmail",
 			"UserID:  seed.email",
 			"memberSeeds[ownerEmail]",
+		},
+		"public_signup_handlers.go": {
+			"GenerateToken(userID, orgID)",
+			"SendMagicLink(userID, orgID, token, baseURL)",
+		},
+		"../hosted/provisioner.go": {
+			"OwnerUserID: ownerEmail",
+			"UserID:  ownerEmail",
+			"contactEmailForLegacyUserID",
 		},
 	}
 	for file, needles := range forbidden {

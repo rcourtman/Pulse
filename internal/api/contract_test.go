@@ -2414,6 +2414,9 @@ func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal hosted signup response: %v", err)
 	}
+	if strings.Contains(string(got), "user_id") || strings.Contains(string(got), "org_id") {
+		t.Fatalf("hosted signup accepted response must not expose identity fields: %s", got)
+	}
 
 	const want = `{
 		"message":"If that email can finish signup, you'll receive a Pulse Account sign-in link shortly."

@@ -943,6 +943,10 @@ membership and derive the bounded effective role before it lands in protected
 hosted routes. Direct opens must fail closed on missing membership, blank-owner
 orgs, or owner/admin role escalation attempts instead of diverging from the
 newer portal exchange path by repairing org metadata on arrival.
+Lifecycle-adjacent entry surfaces must also treat public hosted signup as a
+server-side identity bootstrap: the signup response cannot expose or define the
+owner principal, and follow-on lifecycle access must rely on the stored
+organization membership reached through magic-link verification.
 That same shared `internal/api/` organization boundary also now assumes
 self-hosted org membership is consent-backed rather than manager-written for a
 target user ID. Lifecycle-adjacent setup, install, or hosted-entry surfaces
