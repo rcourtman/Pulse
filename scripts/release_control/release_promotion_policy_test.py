@@ -430,7 +430,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('pulse_release_write_checksums_and_signatures "${RELEASE_DIR}" "${checksum_files[@]}"', build_script)
         self.assertIn(': "${PULSE_SCRIPTS_DIR:=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"', release_asset_helper)
         self.assertIn(': "${PULSE_REPO_ROOT:=$(cd "${PULSE_SCRIPTS_DIR}/.." && pwd)}"', release_asset_helper)
-        self.assertIn('go -C "${PULSE_REPO_ROOT}" run "${PULSE_SCRIPTS_DIR}/release_update_key.go" "$@"', release_asset_helper)
+        self.assertIn('go -C "${PULSE_REPO_ROOT}" run ./scripts/release_update_key.go "$@"', release_asset_helper)
         self.assertIn('pulse_release_go_run_update_key public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"', release_asset_helper)
         self.assertIn(
             'pulse_release_go_run_update_key fingerprint --public-key "${PULSE_RELEASE_UPDATE_PUBLIC_KEY}"',

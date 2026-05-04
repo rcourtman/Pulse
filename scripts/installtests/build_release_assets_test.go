@@ -74,7 +74,7 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	helperRequired := []string{
 		`: "${PULSE_SCRIPTS_DIR:=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"`,
 		`: "${PULSE_REPO_ROOT:=$(cd "${PULSE_SCRIPTS_DIR}/.." && pwd)}"`,
-		`go -C "${PULSE_REPO_ROOT}" run "${PULSE_SCRIPTS_DIR}/release_update_key.go" "$@"`,
+		`go -C "${PULSE_REPO_ROOT}" run ./scripts/release_update_key.go "$@"`,
 		`pulse_release_go_run_update_key public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
 		`pulse_release_go_run_update_key fingerprint --public-key "${PULSE_RELEASE_UPDATE_PUBLIC_KEY}"`,
 		`pulse_release_go_run_update_key public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
@@ -653,6 +653,29 @@ func TestReleaseUpdateKeyFingerprintUsesCanonicalRawPublicKeyHash(t *testing.T) 
 	expected := "SHA256:" + base64.StdEncoding.EncodeToString(sum[:])
 	if got := strings.TrimSpace(string(output)); got != expected {
 		t.Fatalf("fingerprint mismatch: got %q want %q", got, expected)
+	}
+}
+
+func TestReleaseAssetCommonRunsUpdateKeyThroughModulePath(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not installed")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not installed")
+	}
+
+	cmd := exec.Command("bash", "-lc", "source ./scripts/release_asset_common.sh; pulse_release_go_run_update_key")
+	cmd.Dir = repoFile()
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected release_update_key.go usage failure, got success:\n%s", output)
+	}
+	text := string(output)
+	if !strings.Contains(text, "release_update_key.go public-key") {
+		t.Fatalf("expected release_update_key.go usage output, got:\n%s", output)
+	}
+	if strings.Contains(text, "use of internal package") {
+		t.Fatalf("release helper invoked update key outside module import boundary:\n%s", output)
 	}
 }
 

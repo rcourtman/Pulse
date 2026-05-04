@@ -6,7 +6,7 @@
 : "${PULSE_REPO_ROOT:=$(cd "${PULSE_SCRIPTS_DIR}/.." && pwd)}"
 
 pulse_release_go_run_update_key() {
-    go -C "${PULSE_REPO_ROOT}" run "${PULSE_SCRIPTS_DIR}/release_update_key.go" "$@"
+    go -C "${PULSE_REPO_ROOT}" run ./scripts/release_update_key.go "$@"
 }
 
 pulse_release_prepare_signing_state() {

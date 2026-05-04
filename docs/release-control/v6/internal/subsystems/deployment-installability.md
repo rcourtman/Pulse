@@ -1245,8 +1245,10 @@ installer signatures. `scripts/build-release.sh`,
 `.github/workflows/create-release.yml`, `.github/workflows/publish-docker.yml`,
 `scripts/validate-release.sh`, and `scripts/validate-published-release.sh`
 must derive the embedded update trust root and installer SSH trust root from
-the governed release signing key, render release installers with that pinned
-SSH verifier, emit both `.sig` and `.sshsig` sidecars for shipped agent
+the governed release signing key, invoke release signing helpers from the
+module-root package path so Go `internal/` boundaries stay valid in local and
+CI release builds, render release installers with that pinned SSH verifier,
+emit both `.sig` and `.sshsig` sidecars for shipped agent
 binaries and installer assets, emit a standalone SPDX JSON SBOM for the
 assembled release packet, upload those security artifacts with the matching
 release packet, and fail validation if any published artifact or
