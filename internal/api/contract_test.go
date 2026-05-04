@@ -11407,6 +11407,127 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ActionPlanAuditLifecycleSnapshot(t *testing.T) {
+	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
+	resource := unifiedresources.Resource{
+		ID:        "vm:42",
+		Type:      unifiedresources.ResourceTypeVM,
+		Name:      "web-42",
+		Status:    unifiedresources.StatusWarning,
+		LastSeen:  now,
+		UpdatedAt: now,
+		Sources:   []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+		Capabilities: []unifiedresources.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unifiedresources.CapabilityTypeCommon,
+				Description:          "Restart the VM",
+				MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+				InternalHandler:      "proxmox.vm.restart",
+				Params: []unifiedresources.CapabilityParam{
+					{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
+				},
+			},
+		},
+	}
+	req := unifiedresources.ActionRequest{
+		RequestID:      "agent-run-123",
+		ResourceID:     "vm:42",
+		CapabilityName: "restart",
+		Params:         map[string]any{"mode": "graceful"},
+		Reason:         "Recover after confirmed outage",
+		RequestedBy:    "agent:oncall-helper",
+	}
+	plan, err := (actionplanner.Planner{Now: func() time.Time { return now }}).Plan(req, resource)
+	if err != nil {
+		t.Fatalf("plan action: %v", err)
+	}
+
+	store := unifiedresources.NewMemoryStore()
+	if err := persistActionPlanAudit(store, req, plan); err != nil {
+		t.Fatalf("persist action plan audit: %v", err)
+	}
+	audits, err := store.GetActionAudits("vm:42", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	payload := struct {
+		Audit struct {
+			ID               string                               `json:"id"`
+			State            unifiedresources.ActionState         `json:"state"`
+			ResourceID       string                               `json:"resourceId"`
+			RequestID        string                               `json:"requestId"`
+			RequestedBy      string                               `json:"requestedBy"`
+			ApprovalPolicy   unifiedresources.ActionApprovalLevel `json:"approvalPolicy"`
+			PlanHash         string                               `json:"planHash"`
+			PreflightSummary string                               `json:"preflightSummary"`
+		} `json:"audit"`
+		Events []struct {
+			State   unifiedresources.ActionState `json:"state"`
+			Actor   string                       `json:"actor"`
+			Message string                       `json:"message"`
+		} `json:"events"`
+	}{}
+	if len(audits) != 1 {
+		t.Fatalf("audits len = %d, want 1", len(audits))
+	}
+	payload.Audit.ID = audits[0].ID
+	payload.Audit.State = audits[0].State
+	payload.Audit.ResourceID = audits[0].Request.ResourceID
+	payload.Audit.RequestID = audits[0].Request.RequestID
+	payload.Audit.RequestedBy = audits[0].Request.RequestedBy
+	payload.Audit.ApprovalPolicy = audits[0].Plan.ApprovalPolicy
+	payload.Audit.PlanHash = audits[0].Plan.PlanHash
+	if audits[0].Plan.Preflight != nil {
+		payload.Audit.PreflightSummary = audits[0].Plan.Preflight.DryRunSummary
+	}
+	for _, event := range events {
+		payload.Events = append(payload.Events, struct {
+			State   unifiedresources.ActionState `json:"state"`
+			Actor   string                       `json:"actor"`
+			Message string                       `json:"message"`
+		}{
+			State:   event.State,
+			Actor:   event.Actor,
+			Message: event.Message,
+		})
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal persisted action audit contract: %v", err)
+	}
+	const want = `{
+		"audit":{
+			"id":"act_f464b1a69ce73d27a986b445104ad708",
+			"state":"pending_approval",
+			"resourceId":"vm:42",
+			"requestId":"agent-run-123",
+			"requestedBy":"agent:oncall-helper",
+			"approvalPolicy":"admin",
+			"planHash":"sha256:e2998e7fe1b9b97c8180102bd474ece7411146db70bbb6299cdc47582de7bd1d",
+			"preflightSummary":"No provider-supported dry run is advertised for this capability."
+		},
+		"events":[
+			{
+				"state":"pending_approval",
+				"actor":"agent:oncall-helper",
+				"message":"Action is waiting for approval before execution."
+			},
+			{
+				"state":"planned",
+				"actor":"agent:oncall-helper",
+				"message":"Action plan created."
+			}
+		]
+	}`
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResourceTimelineEndpointsIncludeRelatedChanges(t *testing.T) {
 	now := time.Date(2026, 4, 25, 22, 15, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})

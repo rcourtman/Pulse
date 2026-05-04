@@ -126,7 +126,11 @@ Agent lifecycle and fleet-operation surfaces may consume
 contract remains API-owned through `internal/api/actions.go` and
 `internal/actionplanner/planner.go`. Agent lifecycle work must not define a
 parallel approval policy, blast-radius model, stale-plan hash, or execution
-contract for those resource actions.
+contract for those resource actions. Successful action plans also belong to
+the API-owned action-audit trail before any lifecycle surface consumes them:
+approval-required plans must be visible as `pending_approval` with initial
+lifecycle evidence, and retry/idempotency handling must not create duplicate
+lifecycle events.
 
 The node setup modal boundary must keep guided setup and manual credential
 submission separate. For new PVE/PBS setup, Agent Install and Direct Connection

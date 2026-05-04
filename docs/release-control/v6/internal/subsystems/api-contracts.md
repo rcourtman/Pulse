@@ -293,8 +293,13 @@ the canonical monitored-system blocked payload.
    `internal/api/contract_test.go` together, returning deterministic
    `ActionPlan` identity, approval policy, blast radius, resource/policy
    versions, plan hash, and preflight checks without approving or executing the
-   capability. MCP, CLI, and UI consumers may adapt this payload, but they must
-   not become the source of truth for action planning semantics.
+   capability. A successful plan must also be durably recorded in the unified
+   action-audit store with initial lifecycle evidence before the API returns:
+   approval-required plans land as `pending_approval`, retries with the same
+   deterministic action identity may upsert the audit record, and retries must
+   not duplicate the initial lifecycle events. MCP, CLI, and UI consumers may
+   adapt this payload, but they must not become the source of truth for action
+   planning semantics.
    The supported CLI adapter for this contract is `pulse actions plan`, owned
    by `pkg/pulsecli/actions.go` and registered from `pkg/pulsecli/root.go`.
    It must remain a thin authenticated client for `POST /api/actions/plan`

@@ -85,6 +85,10 @@ Storage/recovery remediation or restore-adjacent workflows may consume
 contract. This subsystem must not create a storage-local approval policy,
 stale-plan hash, blast-radius model, or execution protocol outside
 `internal/api/actions.go` and `internal/actionplanner/planner.go`.
+Successful action plans also remain API-owned audit facts before
+storage/recovery surfaces consume them: approval-required plans must persist
+as `pending_approval` with initial lifecycle evidence, and retry/idempotency
+handling must not duplicate those lifecycle events.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`

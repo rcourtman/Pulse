@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -78,8 +80,86 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	req = normalizeActionRequestForAudit(req)
+	store, err := h.getStore(orgID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available", nil)
+		return
+	}
+	if err := persistActionPlanAudit(store, req, plan); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "action_audit_persist_failed", sanitizeErrorForClient(err, "Failed to persist action audit"), nil)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(plan); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "action_plan_encode_failed", "Failed to encode action plan", nil)
 	}
+}
+
+func normalizeActionRequestForAudit(req unified.ActionRequest) unified.ActionRequest {
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	req.ResourceID = unified.CanonicalResourceID(req.ResourceID)
+	req.CapabilityName = strings.TrimSpace(req.CapabilityName)
+	req.Reason = strings.TrimSpace(req.Reason)
+	req.RequestedBy = strings.TrimSpace(req.RequestedBy)
+	if req.Params == nil {
+		req.Params = map[string]any{}
+	}
+	return req
+}
+
+func persistActionPlanAudit(store unified.ResourceStore, req unified.ActionRequest, plan unified.ActionPlan) error {
+	state := plannedActionState(plan)
+	record := unified.ActionAuditRecord{
+		ID:        plan.ActionID,
+		CreatedAt: plan.PlannedAt,
+		UpdatedAt: plan.PlannedAt,
+		State:     state,
+		Request:   req,
+		Plan:      plan,
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		return err
+	}
+
+	existingEvents, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 100)
+	if err != nil {
+		return err
+	}
+	seenStates := map[unified.ActionState]bool{}
+	for _, event := range existingEvents {
+		seenStates[event.State] = true
+	}
+
+	if !seenStates[unified.ActionStatePlanned] {
+		if err := store.RecordActionLifecycleEvent(unified.ActionLifecycleEvent{
+			ActionID:  plan.ActionID,
+			Timestamp: plan.PlannedAt,
+			State:     unified.ActionStatePlanned,
+			Actor:     req.RequestedBy,
+			Message:   "Action plan created.",
+		}); err != nil {
+			return err
+		}
+	}
+	if state != unified.ActionStatePlanned && !seenStates[state] {
+		if err := store.RecordActionLifecycleEvent(unified.ActionLifecycleEvent{
+			ActionID:  plan.ActionID,
+			Timestamp: plan.PlannedAt,
+			State:     state,
+			Actor:     req.RequestedBy,
+			Message:   "Action is waiting for approval before execution.",
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func plannedActionState(plan unified.ActionPlan) unified.ActionState {
+	if plan.RequiresApproval {
+		return unified.ActionStatePending
+	}
+	return unified.ActionStatePlanned
 }
