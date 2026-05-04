@@ -82,6 +82,11 @@ Hosted public magic-link sessions follow the same dependent-auth contract:
 storage/recovery-adjacent routes may consume the resulting browser session, but
 shared auth must reject blank owner/member principals rather than minting an
 email-keyed session from delivery metadata.
+Checkout webhook magic-link delivery is part of that same dependent-auth
+boundary: storage/recovery may observe billing activation for a server-linked
+org, but Stripe contact email must not become recovery or storage authority
+unless the shared API organization resolver maps it to a stored owner/member
+principal first.
 The canonical actor vocabulary for those shared sessions is
 `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; recovery and storage
 work may consume accepted org access, but must not mint or widen access from a

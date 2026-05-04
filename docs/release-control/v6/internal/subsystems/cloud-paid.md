@@ -244,6 +244,11 @@ runtime gating as separate unlinked claims.
    verification must re-read the tenant organization and session as the stored
    stable owner/member principal, so an old token cannot keep email as the
    runtime identity or survive removal from tenant membership.
+   Stripe checkout webhook magic-link delivery must use that same organization
+   resolver before sending the best-effort sign-in link; a webhook may activate
+   billing for a server-linked org, but it must not send a sign-in link merely
+   because Stripe `customer_email` matches contact metadata with no stored
+   principal.
    Tenant-targeted hosted magic-link handoff must fail closed when the
    control-plane registry cannot resolve a stable account `User.ID`; it must
    not sign a tenant handoff with a blank subject and let the tenant runtime

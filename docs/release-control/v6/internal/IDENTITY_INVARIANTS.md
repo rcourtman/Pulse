@@ -93,6 +93,10 @@ principal once a stable user ID exists.
    returning the existing org for magic-link delivery.
 4. Webhook payloads must never create organizations or memberships from email.
    They may update billing only after server-owned org/customer linkage exists.
+   Post-checkout magic-link delivery from a webhook must also resolve the
+   Stripe contact email through current server-side org membership first;
+   matching contact metadata with a blank owner/member principal is not enough
+   to send a sign-in link.
 5. Legacy email-keyed records may be accepted only at migration boundaries and
    should be canonicalized to stable user IDs when the stable ID is known.
 6. Self-hosted OIDC and SAML sessions bind to an opaque principal derived from

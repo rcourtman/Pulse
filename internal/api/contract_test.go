@@ -117,6 +117,42 @@ func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	}
 }
 
+func TestContract_CheckoutMagicLinkDeliveryRequiresStoredPrincipalProof(t *testing.T) {
+	source, err := os.ReadFile(filepath.Clean("payments_webhook_handlers.go"))
+	if err != nil {
+		t.Fatalf("read payments_webhook_handlers.go: %v", err)
+	}
+	text := string(source)
+	for _, required := range []string{
+		"ResolvePrincipalByEmail(email)",
+		"models.IsValidOrganizationRole(role)",
+		"GenerateToken(email, orgID)",
+		"SendMagicLink(email, orgID, token, baseURL)",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("payments_webhook_handlers.go must contain %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"strings.EqualFold(org.OwnerEmail, email)",
+		"strings.EqualFold(org.OwnerUserID, email)",
+		"strings.EqualFold(m.Email, email)",
+		"strings.EqualFold(m.UserID, email)",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("payments_webhook_handlers.go must not contain legacy contact-email membership pattern %q", forbidden)
+		}
+	}
+
+	identityDoc, err := os.ReadFile(filepath.Clean("../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md"))
+	if err != nil {
+		t.Fatalf("read identity invariant contract: %v", err)
+	}
+	if !strings.Contains(string(identityDoc), "Post-checkout magic-link delivery") {
+		t.Fatal("identity invariant contract must cover checkout magic-link delivery")
+	}
+}
+
 func TestContract_HostedHandoffRequiresStableSubjectProof(t *testing.T) {
 	directSource, err := os.ReadFile(filepath.Clean("cloud_handoff.go"))
 	if err != nil {

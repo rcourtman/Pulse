@@ -523,6 +523,83 @@ func TestStripeWebhook_CheckoutCompleted_UsesContactEmailForStableOwnerIdentity(
 	}
 }
 
+func TestStripeWebhook_CheckoutCompleted_DoesNotSendMagicLinkForBlankOrganizationPrincipal(t *testing.T) {
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_blank_owner_contact")
+
+	tmp := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(tmp)
+	rbacProvider := NewTenantRBACProvider(tmp)
+	billingStore := config.NewFileBillingStore(tmp)
+
+	emailer := &captureEmailer{}
+	magicLinks := NewMagicLinkServiceWithKey([]byte("01234567890123456789012345678901"), nil, emailer, nil)
+	t.Cleanup(magicLinks.Stop)
+
+	publicURL := func(_ *http.Request) string { return "https://pulse.example.test" }
+	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, magicLinks, publicURL, true, tmp)
+
+	orgID := "org_blank_owner_contact"
+	if _, err := persistence.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s): %v", orgID, err)
+	}
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          orgID,
+		DisplayName: "Blank Owner Contact",
+		CreatedAt:   time.Now().UTC(),
+		OwnerEmail:  "owner@example.com",
+	}); err != nil {
+		t.Fatalf("SaveOrganization(%s): %v", orgID, err)
+	}
+
+	event := map[string]any{
+		"id":   "evt_checkout_blank_owner_contact",
+		"type": "checkout.session.completed",
+		"data": map[string]any{
+			"object": map[string]any{
+				"id":             "cs_blank_owner_contact",
+				"mode":           "subscription",
+				"customer":       "cus_blank_owner_contact",
+				"customer_email": "owner@example.com",
+				"subscription":   "sub_blank_owner_contact",
+				"metadata": map[string]any{
+					"org_id":       orgID,
+					"org_name":     "Blank Owner Contact",
+					"plan_version": "cloud-v1",
+				},
+			},
+		},
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
+	signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+		Payload:   payload,
+		Secret:    "whsec_test_blank_owner_contact",
+		Timestamp: time.Now(),
+		Scheme:    "v1",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(payload))
+	req.Header.Set("Stripe-Signature", signed.Header)
+	rr := httptest.NewRecorder()
+	h.HandleStripeWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if emailer.Count() != 0 {
+		t.Fatalf("magic link send count=%d, want none for blank stored principal", emailer.Count())
+	}
+
+	state, err := billingStore.GetBillingState(orgID)
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if state == nil || state.SubscriptionState != entitlements.SubStateActive {
+		t.Fatalf("billing state=%v, want active checkout billing despite skipped magic link", state)
+	}
+}
+
 func TestStripeWebhook_DoesNotSendMagicLinkWithoutPublicURL(t *testing.T) {
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_no_url")
 

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
@@ -312,27 +313,17 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 	// (In dev/staging this is log-only; production should swap in a real emailer.)
 	if h.magicLinks != nil && email != "" {
 		// Only send a link to an existing org member/owner. Stripe customer email is user-controlled.
-		sendTo := ""
-		if strings.EqualFold(org.OwnerEmail, email) || strings.EqualFold(org.OwnerUserID, email) {
-			sendTo = email
-		} else {
-			for _, m := range org.Members {
-				if strings.EqualFold(m.Email, email) || strings.EqualFold(m.UserID, email) {
-					sendTo = email
-					break
-				}
-			}
-		}
-		if sendTo != "" && h.magicLinks.AllowRequest(sendTo) {
-			token, genErr := h.magicLinks.GenerateToken(sendTo, orgID)
+		userID, role, ok := org.ResolvePrincipalByEmail(email)
+		if ok && strings.TrimSpace(userID) != "" && models.IsValidOrganizationRole(role) && h.magicLinks.AllowRequest(email) {
+			token, genErr := h.magicLinks.GenerateToken(email, orgID)
 			if genErr == nil {
 				baseURL := ""
 				if h.publicURL != nil && r != nil {
 					baseURL = h.publicURL(r)
 				}
 				if baseURL != "" {
-					if sendErr := h.magicLinks.SendMagicLink(sendTo, orgID, token, baseURL); sendErr != nil {
-						log.Warn().Err(sendErr).Str("email", sendTo).Str("org_id", orgID).Msg("Stripe checkout: failed to send magic link")
+					if sendErr := h.magicLinks.SendMagicLink(email, orgID, token, baseURL); sendErr != nil {
+						log.Warn().Err(sendErr).Str("email", email).Str("org_id", orgID).Msg("Stripe checkout: failed to send magic link")
 					}
 				}
 			}

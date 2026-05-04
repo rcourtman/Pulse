@@ -406,6 +406,11 @@ the canonical monitored-system blocked payload.
     Magic-link request and verify paths must fail closed when contact email
     matches a blank owner/member principal instead of sending or accepting a
     token that would turn email into the session identity.
+    Checkout webhook post-payment magic-link delivery follows the same
+    resolver-owned rule: Stripe `customer_email` can drive only best-effort
+    delivery after server-owned org linkage is validated, and it must not send
+    when the linked org row has matching contact metadata but no stored
+    owner/member principal.
     Public hosted signup must therefore keep the generated owner user ID
     server-side for org metadata and RBAC assignment while using returned
     contact email only for `GenerateToken`/`SendMagicLink`; the accepted signup

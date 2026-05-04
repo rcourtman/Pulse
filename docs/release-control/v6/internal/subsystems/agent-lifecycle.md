@@ -200,6 +200,11 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle-adjacent routes: shared auth must mint a browser session only for
    a stored organization principal, not for a contact email on a blank
    owner/member row.
+   Checkout webhook magic-link delivery follows that same shared-auth
+   dependency: lifecycle-adjacent consumers may observe billing activation
+   after server-owned org linkage, but they must not treat Stripe contact email
+   as fleet authority unless the API-owned organization resolver maps it to a
+   stored owner/member principal first.
    API-token owner metadata follows the same rule: lifecycle-adjacent setup or
    mobile-pairing token flows may consume the shared token helper, but they
    must not pass extension metadata that authors or overwrites `owner_user_id`.
