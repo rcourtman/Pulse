@@ -61,9 +61,9 @@ describe('resourceStoragePresentation', () => {
       ),
     ).toBe('Datastore');
     expect(getResourceStorageTopologyLabel(makeResource(), 'rbd')).toBe('Cluster Storage');
-    expect(
-      getResourceStorageTopologyLabel(makeResource(), 'ignored', 'rebuild target'),
-    ).toBe('Rebuild Target');
+    expect(getResourceStorageTopologyLabel(makeResource(), 'ignored', 'rebuild target')).toBe(
+      'Rebuild Target',
+    );
   });
 
   it('derives canonical issue, impact, action, and protection summaries', () => {
@@ -107,6 +107,67 @@ describe('resourceStoragePresentation', () => {
     expect(getResourceStorageImpactSummary(resource)).toBe('No dependent resources');
     expect(getResourceStorageActionSummary(resource)).toBe('Monitor');
     expect(getResourceStorageProtectionLabel(resource)).toBe('Mirrored Cache');
+  });
+
+  it('keeps dependent impact out of primary issue copy for healthy storage', () => {
+    const impact = 'Affects 2 dependent resources: pulse, tailscale-pve3';
+    const resource = makeResource({
+      status: 'online',
+      storage: {
+        consumerCount: 2,
+        consumerImpactSummary: impact,
+        postureSummary: impact,
+      },
+    });
+
+    expect(getResourceStorageIssueLabel(resource)).toBe('Healthy');
+    expect(getResourceStorageIssueSummary(resource)).toBe('');
+    expect(getResourceStorageImpactSummary(resource)).toBe(impact);
+  });
+
+  it('uses canonical risk copy as the primary issue when posture also carries impact', () => {
+    const resource = makeResource({
+      status: 'degraded',
+      storage: {
+        riskSummary: 'ZFS pool tank is DEGRADED',
+        consumerImpactSummary: 'Affects 2 dependent resources: app01, media01',
+        postureSummary: 'ZFS pool tank is DEGRADED. Affects 2 dependent resources: app01, media01',
+      },
+    });
+
+    expect(getResourceStorageIssueLabel(resource)).toBe('ZFS pool tank is DEGRADED');
+    expect(getResourceStorageIssueSummary(resource)).toBe('ZFS pool tank is DEGRADED');
+    expect(getResourceStorageImpactSummary(resource)).toBe(
+      'Affects 2 dependent resources: app01, media01',
+    );
+  });
+
+  it('falls back to PBS storage-risk reasons without treating backup impact as an issue', () => {
+    const resource = makeResource({
+      type: 'pbs',
+      status: 'degraded',
+      pbs: {
+        postureSummary: 'Puts backups for 3 protected workloads at risk: app01, db01, media01',
+        protectedWorkloadSummary:
+          'Puts backups for 3 protected workloads at risk: app01, db01, media01',
+        storageRisk: {
+          level: 'warning',
+          reasons: [
+            {
+              code: 'pbs_datastore_state',
+              severity: 'warning',
+              summary: 'Backup datastore archive is degraded',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(getResourceStorageIssueLabel(resource)).toBe('Backup datastore archive is degraded');
+    expect(getResourceStorageIssueSummary(resource)).toBe('Backup datastore archive is degraded');
+    expect(getResourceStorageImpactSummary(resource)).toBe(
+      'Puts backups for 3 protected workloads at risk: app01, db01, media01',
+    );
   });
 
   it('keeps VMware datastore protection copy neutral on the shared storage path', () => {

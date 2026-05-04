@@ -167,6 +167,13 @@ handling must not duplicate those lifecycle events.
    must pass resolved thresholds from the alerts activation boundary into the
    shared metric-color helper instead of carrying storage-local usage color
    bands.
+   Storage primary-issue presentation must stay incident/risk-owned. Composite
+   posture summaries from unified resources may include dependency or protected
+   workload impact, so `frontend-modern/src/features/storageBackups/` must not
+   use `storage.postureSummary` or `pbs.postureSummary` as primary issue copy
+   for healthy resources. Dependency impact belongs to impact summaries and
+   detail context, while `Primary Issue` must derive from explicit incidents,
+   storage risk summaries, or storage-risk reasons.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity

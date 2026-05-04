@@ -3,12 +3,64 @@ import { getSourcePlatformLabel, normalizeSourcePlatformKey } from '@/utils/sour
 import type { StorageBackupPlatform } from './models';
 import { isBackupRepositoryStorageResource } from './resourceStorageMapping';
 
+type StorageRiskLike = {
+  level?: string;
+  reasons?: { summary?: string }[];
+};
+
 const titleize = (value: string | undefined | null): string =>
   (value || '')
     .split(/[\s_-]+/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+
+const trimSummary = (value: string | undefined | null): string => (value || '').trim();
+
+const firstRiskReasonSummary = (risk: StorageRiskLike | undefined): string => {
+  if (!risk?.reasons?.length) return '';
+  return risk.reasons.map((reason) => trimSummary(reason.summary)).find(Boolean) || '';
+};
+
+const getResourceStorageRiskIssue = (resource: Resource): string =>
+  trimSummary(resource.storage?.riskSummary) ||
+  firstRiskReasonSummary(resource.storage?.risk) ||
+  firstRiskReasonSummary(resource.pbs?.storageRisk);
+
+const isAttentionStatus = (value: string | undefined): boolean => {
+  const normalized = (value || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized === 'warning' ||
+    normalized === 'warn' ||
+    normalized === 'degraded' ||
+    normalized === 'critical' ||
+    normalized === 'faulted' ||
+    normalized === 'failed' ||
+    normalized === 'error' ||
+    normalized === 'unhealthy' ||
+    normalized === 'offline' ||
+    normalized === 'down' ||
+    normalized === 'unavailable'
+  );
+};
+
+const getCompositePostureIssue = (resource: Resource): string => {
+  const posture =
+    trimSummary(resource.storage?.postureSummary) || trimSummary(resource.pbs?.postureSummary);
+  if (!posture || !isAttentionStatus(resource.status)) return '';
+
+  const impactSummaries = [
+    resource.storage?.consumerImpactSummary,
+    resource.pbs?.protectedWorkloadSummary,
+    resource.pbs?.affectedDatastoreSummary,
+  ]
+    .map(trimSummary)
+    .filter(Boolean);
+
+  if (impactSummaries.some((summary) => summary === posture)) return '';
+  return posture;
+};
 
 export const getCanonicalStoragePlatformKey = (
   resource: Resource,
@@ -90,17 +142,19 @@ export const getResourceStorageTopologyLabel = (
 
 export const getResourceStorageIssueLabel = (resource: Resource): string => {
   if (resource.incidentLabel?.trim()) return resource.incidentLabel.trim();
-  if (resource.storage?.postureSummary?.trim()) return resource.storage.postureSummary.trim();
-  if (resource.storage?.riskSummary?.trim()) return resource.storage.riskSummary.trim();
-  if (resource.pbs?.postureSummary?.trim()) return resource.pbs.postureSummary.trim();
+  const riskIssue = getResourceStorageRiskIssue(resource);
+  if (riskIssue) return riskIssue;
+  const postureIssue = getCompositePostureIssue(resource);
+  if (postureIssue) return postureIssue;
   return 'Healthy';
 };
 
 export const getResourceStorageIssueSummary = (resource: Resource): string => {
   if (resource.incidentSummary?.trim()) return resource.incidentSummary.trim();
-  if (resource.storage?.riskSummary?.trim()) return resource.storage.riskSummary.trim();
-  if (resource.storage?.postureSummary?.trim()) return resource.storage.postureSummary.trim();
-  if (resource.pbs?.postureSummary?.trim()) return resource.pbs.postureSummary.trim();
+  const riskIssue = getResourceStorageRiskIssue(resource);
+  if (riskIssue) return riskIssue;
+  const postureIssue = getCompositePostureIssue(resource);
+  if (postureIssue) return postureIssue;
   return '';
 };
 

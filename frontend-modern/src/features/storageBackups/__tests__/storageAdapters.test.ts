@@ -345,6 +345,33 @@ describe('storageAdapters', () => {
     expect(records[0].details?.protectionReduced).toBe(true);
   });
 
+  it('keeps dependency impact separate from healthy storage primary issues', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'storage-with-consumers',
+          name: 'storage1',
+          status: 'online',
+          storage: {
+            type: 'zfspool',
+            platform: 'proxmox-pve',
+            topology: 'pool',
+            consumerCount: 2,
+            consumerImpactSummary: 'Affects 2 dependent resources: pulse, tailscale-pve3',
+            postureSummary: 'Affects 2 dependent resources: pulse, tailscale-pve3',
+          },
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].health).toBe('healthy');
+    expect(records[0].issueLabel).toBe('Healthy');
+    expect(records[0].issueSummary).toBe('');
+    expect(records[0].impactSummary).toBe('Affects 2 dependent resources: pulse, tailscale-pve3');
+  });
+
   it('maps VMware datastores as shared storage inventory instead of backup repositories', () => {
     const records = buildStorageRecords({
       state: baseState(),
