@@ -137,6 +137,18 @@ Report an incorrect merge (creates exclusions).
 { "sources": ["proxmox", "agent"], "notes": "optional note" }
 ```
 
+### Fleet Connections
+`GET /api/connections`
+Returns the canonical fleet connections ledger with per-row fleet-governance state. Requires admin access with `settings:read`.
+
+The payload is the source of truth for enrollment, liveness, version drift, adapter health, config rollout, credential posture, update posture, and remote-control posture. Consumers must not rebuild those states from provider-specific config stores or display labels.
+
+CLI adapter:
+```bash
+PULSE_API_TOKEN=your-token pulse fleet connections \
+  --api-url http://localhost:7655
+```
+
 ### Unified Action Planning
 `POST /api/actions/plan`
 Returns the deterministic pre-execution plan for a capability advertised on a unified resource. Requires `ai:execute`.

@@ -1565,6 +1565,8 @@
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "internal/websocket/hub.go",
         "pkg/pulsecli/actions.go",
+        "pkg/pulsecli/api_client.go",
+        "pkg/pulsecli/fleet.go",
         "pkg/pulsecli/root.go"
       ],
       "verification": {
@@ -1688,16 +1690,20 @@
           },
           {
             "id": "pulse-cli-action-planning-contract",
-            "label": "Pulse CLI action planning API adapter proof",
+            "label": "Pulse CLI API adapter proof",
             "match_prefixes": [],
             "match_files": [
               "pkg/pulsecli/actions.go",
+              "pkg/pulsecli/api_client.go",
+              "pkg/pulsecli/fleet.go",
               "pkg/pulsecli/root.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "pkg/pulsecli/actions_test.go"
+              "pkg/pulsecli/actions_test.go",
+              "pkg/pulsecli/fleet_test.go",
+              "pkg/pulsecli/root_test.go"
             ]
           },
           {

@@ -31,8 +31,10 @@ product API routes free of maintainer commercial analytics.
 4. `internal/api/activity_audit_handlers.go`
 5. `internal/api/actions.go`
 6. `internal/actionplanner/planner.go`
-7. `pkg/pulsecli/actions.go`
-8. `pkg/pulsecli/root.go`
+7. `pkg/pulsecli/api_client.go`
+8. `pkg/pulsecli/actions.go`
+9. `pkg/pulsecli/fleet.go`
+10. `pkg/pulsecli/root.go`
 5. `frontend-modern/src/types/api.ts`
 6. `frontend-modern/src/types/actionAudit.ts`
 7. `frontend-modern/src/api/actionAudit.ts`
@@ -595,6 +597,10 @@ the canonical monitored-system blocked payload.
     kernel, architecture, and command capability, so settings surfaces can
     render recognizable standalone-host identity without a second inventory
     fetch or frontend-local host reconciliation rules.
+    `pulse fleet connections` may read that same `GET /api/connections`
+    payload as a deterministic CLI adapter for agent-ready operations, but it
+    must remain a read-only view over the canonical connections ledger rather
+    than re-deriving fleet governance state in CLI-local code.
 
 ## Forbidden Paths
 

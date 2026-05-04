@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -16,15 +14,8 @@ import (
 )
 
 const (
-	defaultActionsAPIURL       = "http://127.0.0.1:7655"
-	maxActionRequestBytes      = 1 << 20
-	maxActionPlanResponseBytes = 1 << 20
-	maxActionErrorBodyChars    = 4096
+	maxActionRequestBytes = 1 << 20
 )
-
-type HTTPDoer interface {
-	Do(*http.Request) (*http.Response, error)
-}
 
 type ActionsDeps struct {
 	HTTPClient HTTPDoer
@@ -100,7 +91,7 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
 	}
 	if opts.APIURL == "" {
-		opts.APIURL = defaultActionsAPIURL
+		opts.APIURL = defaultPulseAPIURL
 	}
 
 	planCmd := &cobra.Command{
@@ -135,7 +126,7 @@ func newActionCapabilitiesCmd(deps *ActionsDeps) *cobra.Command {
 		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
 	}
 	if opts.APIURL == "" {
-		opts.APIURL = defaultActionsAPIURL
+		opts.APIURL = defaultPulseAPIURL
 	}
 
 	cmd := &cobra.Command{
@@ -158,7 +149,7 @@ func newActionAuditCmd(deps *ActionsDeps) *cobra.Command {
 		Limit:  100,
 	}
 	if opts.APIURL == "" {
-		opts.APIURL = defaultActionsAPIURL
+		opts.APIURL = defaultPulseAPIURL
 	}
 
 	cmd := &cobra.Command{
@@ -183,7 +174,7 @@ func newActionEventsCmd(deps *ActionsDeps) *cobra.Command {
 		Limit:  100,
 	}
 	if opts.APIURL == "" {
-		opts.APIURL = defaultActionsAPIURL
+		opts.APIURL = defaultPulseAPIURL
 	}
 
 	cmd := &cobra.Command{
@@ -236,12 +227,12 @@ func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxActionPlanResponseBytes, "action plan response")
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxPulseAPIResponseBytes, "action plan response")
 	if err != nil {
 		return fmt.Errorf("failed to read action plan response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return actionStatusError("action plan request", resp.Status, respBody)
+		return apiStatusError("action plan request", resp.Status, respBody)
 	}
 
 	var plan unified.ActionPlan
@@ -286,12 +277,12 @@ func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCap
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxActionPlanResponseBytes, "action capabilities response")
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxPulseAPIResponseBytes, "action capabilities response")
 	if err != nil {
 		return fmt.Errorf("failed to read action capabilities response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return actionStatusError("action capabilities request", resp.Status, respBody)
+		return apiStatusError("action capabilities request", resp.Status, respBody)
 	}
 
 	var facets actionResourceFacetsResponse
@@ -330,7 +321,7 @@ func runActionAudit(cmd *cobra.Command, deps *ActionsDeps, opts actionAuditOptio
 	if err != nil {
 		return err
 	}
-	endpoint, err := actionAPIEndpoint(opts.APIURL, "/audit/actions")
+	endpoint, err := pulseAPIEndpoint(opts.APIURL, "/audit/actions")
 	if err != nil {
 		return err
 	}
@@ -349,12 +340,12 @@ func runActionAudit(cmd *cobra.Command, deps *ActionsDeps, opts actionAuditOptio
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxActionPlanResponseBytes, "action audit response")
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxPulseAPIResponseBytes, "action audit response")
 	if err != nil {
 		return fmt.Errorf("failed to read action audit response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return actionStatusError("action audit request", resp.Status, respBody)
+		return apiStatusError("action audit request", resp.Status, respBody)
 	}
 
 	var audits actionAuditListResponse
@@ -389,7 +380,7 @@ func runActionEvents(cmd *cobra.Command, deps *ActionsDeps, opts actionEventsOpt
 	if err != nil {
 		return err
 	}
-	endpoint, err := actionAPIEndpoint(opts.APIURL, "/audit/actions/"+url.PathEscape(actionID)+"/events")
+	endpoint, err := pulseAPIEndpoint(opts.APIURL, "/audit/actions/"+url.PathEscape(actionID)+"/events")
 	if err != nil {
 		return err
 	}
@@ -408,12 +399,12 @@ func runActionEvents(cmd *cobra.Command, deps *ActionsDeps, opts actionEventsOpt
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxActionPlanResponseBytes, "action lifecycle response")
+	respBody, err := ReadBoundedHTTPBody(resp.Body, resp.ContentLength, maxPulseAPIResponseBytes, "action lifecycle response")
 	if err != nil {
 		return fmt.Errorf("failed to read action lifecycle response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return actionStatusError("action lifecycle request", resp.Status, respBody)
+		return apiStatusError("action lifecycle request", resp.Status, respBody)
 	}
 
 	var events actionLifecycleEventsResponse
@@ -640,44 +631,6 @@ func actionResourceFacetsEndpoint(raw, resourceID string) (string, error) {
 	return parsed.String(), nil
 }
 
-func actionAPIEndpoint(raw, apiPath string) (*url.URL, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil, fmt.Errorf("api url is required (use --api-url or PULSE_API_URL)")
-	}
-	if !strings.HasPrefix(apiPath, "/") {
-		return nil, fmt.Errorf("api path must start with /")
-	}
-
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return nil, fmt.Errorf("invalid api url: %w", err)
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, fmt.Errorf("invalid api url: scheme must be http or https")
-	}
-	if parsed.Host == "" {
-		return nil, fmt.Errorf("invalid api url: host is required")
-	}
-
-	apiPath = strings.TrimRight(apiPath, "/")
-	fullPath := "/api" + apiPath
-	path := strings.TrimRight(parsed.Path, "/")
-	switch {
-	case path == "":
-		parsed.Path = fullPath
-	case path == fullPath || strings.HasSuffix(path, fullPath):
-		parsed.Path = path
-	case path == "/api" || strings.HasSuffix(path, "/api"):
-		parsed.Path = path + apiPath
-	default:
-		parsed.Path = path + fullPath
-	}
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed, nil
-}
-
 func actionAuditQuery(resourceID, since string, limit int) (url.Values, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("limit must be greater than zero")
@@ -699,59 +652,15 @@ func actionAuditQuery(resourceID, since string, limit int) (url.Values, error) {
 }
 
 func actionHTTPClient(deps *ActionsDeps) HTTPDoer {
-	if deps != nil && deps.HTTPClient != nil {
-		return deps.HTTPClient
+	if deps != nil {
+		return cliHTTPClient(deps.HTTPClient)
 	}
-	return http.DefaultClient
+	return cliHTTPClient(nil)
 }
 
 func actionGetenv(deps *ActionsDeps, key string) string {
-	if deps != nil && deps.Getenv != nil {
-		return deps.Getenv(key)
+	if deps != nil {
+		return cliGetenv(deps.Getenv, key)
 	}
-	return os.Getenv(key)
-}
-
-func actionStatusError(operation, status string, body []byte) error {
-	if strings.TrimSpace(operation) == "" {
-		operation = "request"
-	}
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		return fmt.Errorf("%s failed: %s", operation, status)
-	}
-	if len(message) > maxActionErrorBodyChars {
-		message = message[:maxActionErrorBodyChars] + "..."
-	}
-	return fmt.Errorf("%s failed: %s: %s", operation, status, message)
-}
-
-func decodeJSONBytes(data []byte, out any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	if err := decoder.Decode(out); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("invalid trailing JSON content")
-		}
-		return err
-	}
-	return nil
-}
-
-func decodeJSONString(data string, out any) error {
-	decoder := json.NewDecoder(strings.NewReader(data))
-	decoder.UseNumber()
-	if err := decoder.Decode(out); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("invalid trailing JSON content")
-		}
-		return err
-	}
-	return nil
+	return cliGetenv(nil, key)
 }

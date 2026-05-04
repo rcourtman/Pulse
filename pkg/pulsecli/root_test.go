@@ -61,3 +61,19 @@ func TestNewRootCommandConfigInfoSkipsRunE(t *testing.T) {
 		t.Fatalf("config info output = %q", got)
 	}
 }
+
+func TestNewRootCommandIncludesFleetConnections(t *testing.T) {
+	cmd := NewRootCommand(CommandSpec{
+		Use:   "pulse",
+		Short: "Pulse",
+		Long:  "Pulse",
+	}, RuntimeSpec{}, CommandDeps{})
+
+	found, _, err := cmd.Find([]string{"fleet", "connections"})
+	if err != nil {
+		t.Fatalf("find fleet connections: %v", err)
+	}
+	if found == nil || found.Use != "connections" {
+		t.Fatalf("fleet connections command not registered: %#v", found)
+	}
+}
