@@ -138,7 +138,7 @@ func TestCreateWorkspace(t *testing.T) {
 	}
 }
 
-func TestCreateWorkspace_SeedsOwnerFromAuthenticatedUserEmail(t *testing.T) {
+func TestCreateWorkspace_SeedsStableOwnerFromAuthenticatedUserEmail(t *testing.T) {
 	reg := newTestRegistry(t)
 	tenantsDir := t.TempDir()
 	mux, _ := newTestTenantMux(t, reg, tenantsDir)
@@ -186,14 +186,30 @@ func TestCreateWorkspace_SeedsOwnerFromAuthenticatedUserEmail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadOrganizationStrict(%s): %v", got.ID, err)
 	}
-	if org.OwnerUserID != "operator@example.com" {
-		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "operator@example.com")
+	operatorUser, err := reg.GetUserByEmail("operator@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail(operator@example.com): %v", err)
 	}
-	if org.GetMemberRole("operator@example.com") != models.OrgRoleOwner {
-		t.Fatalf("org role for operator@example.com = %q, want %q", org.GetMemberRole("operator@example.com"), models.OrgRoleOwner)
+	if operatorUser == nil {
+		t.Fatal("expected workspace creator to be materialized as a registry user")
 	}
-	if org.GetMemberRole("legacy-owner@example.com") != models.OrgRoleOwner {
-		t.Fatalf("org role for legacy-owner@example.com = %q, want %q", org.GetMemberRole("legacy-owner@example.com"), models.OrgRoleOwner)
+	if org.OwnerUserID != operatorUser.ID {
+		t.Fatalf("org.OwnerUserID = %q, want stable operator id %q", org.OwnerUserID, operatorUser.ID)
+	}
+	if org.OwnerUserID == "operator@example.com" {
+		t.Fatal("org.OwnerUserID must not fall back to owner email")
+	}
+	if org.OwnerEmail != "operator@example.com" {
+		t.Fatalf("org.OwnerEmail = %q, want operator@example.com", org.OwnerEmail)
+	}
+	if org.GetMemberRoleByUserID(operatorUser.ID) != models.OrgRoleOwner {
+		t.Fatalf("org role for stable operator id = %q, want %q", org.GetMemberRoleByUserID(operatorUser.ID), models.OrgRoleOwner)
+	}
+	if org.GetMemberRoleByUserID("operator@example.com") != "" {
+		t.Fatalf("strict org role for operator email = %q, want empty", org.GetMemberRoleByUserID("operator@example.com"))
+	}
+	if org.GetMemberRoleByUserID(existingOwnerID) != models.OrgRoleOwner {
+		t.Fatalf("org role for legacy owner id = %q, want %q", org.GetMemberRoleByUserID(existingOwnerID), models.OrgRoleOwner)
 	}
 }
 
