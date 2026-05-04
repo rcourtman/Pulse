@@ -440,6 +440,88 @@ func TestBuildSeededTenantOrganization_PrefersExplicitFallbackOwner(t *testing.T
 	}
 }
 
+func TestBuildSeededTenantOrganizationRejectsOwnerEmailWithoutStableUser(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	org, err := p.buildSeededTenantOrganization(accountID, "t-example", "Example", "missing-owner@example.com")
+	if err == nil {
+		t.Fatalf("expected owner email without stable registry user to fail, got org %+v", org)
+	}
+	if !strings.Contains(err.Error(), "stable registry user id") {
+		t.Fatalf("expected stable user id error, got %v", err)
+	}
+}
+
+func TestProvisionWorkspaceForOwnerCreatesStableOwnerMembership(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+	tenant, err := p.ProvisionWorkspaceForOwner(context.Background(), accountID, "Client One", "Owner@Example.com")
+	if err != nil {
+		t.Fatalf("ProvisionWorkspaceForOwner: %v", err)
+	}
+
+	user, err := reg.GetUserByEmail("owner@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	if user == nil {
+		t.Fatal("expected owner registry user")
+	}
+	membership, err := reg.GetMembership(accountID, user.ID)
+	if err != nil {
+		t.Fatalf("GetMembership: %v", err)
+	}
+	if membership == nil || membership.Role != registry.MemberRoleOwner {
+		t.Fatalf("owner membership = %+v, want owner role", membership)
+	}
+
+	mtp := config.NewMultiTenantPersistence(p.tenantDataDir(tenant.ID))
+	org, err := mtp.LoadOrganizationStrict(tenant.ID)
+	if err != nil {
+		t.Fatalf("LoadOrganizationStrict(%s): %v", tenant.ID, err)
+	}
+	if org.OwnerUserID != user.ID {
+		t.Fatalf("org.OwnerUserID = %q, want stable user id %q", org.OwnerUserID, user.ID)
+	}
+	if org.OwnerUserID == "owner@example.com" {
+		t.Fatal("org.OwnerUserID must not fall back to owner email")
+	}
+	if org.OwnerEmail != "owner@example.com" {
+		t.Fatalf("org.OwnerEmail = %q, want owner@example.com", org.OwnerEmail)
+	}
+	if got := org.GetMemberRole(user.ID); got != models.OrgRoleOwner {
+		t.Fatalf("org role for stable owner %q = %q, want owner", user.ID, got)
+	}
+}
+
 func TestProvisionWorkspaceSeedsOrganizationMembershipsFromAccountMembers(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()

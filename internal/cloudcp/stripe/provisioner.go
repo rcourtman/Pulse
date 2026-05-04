@@ -271,7 +271,7 @@ func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, display
 			}
 		}
 		if ownerUserID == "" {
-			ownerUserID = ownerEmail
+			return nil, fmt.Errorf("owner contact email %s has no stable registry user id", ownerEmail)
 		}
 		memberSeeds[ownerUserID] = memberSeed{userID: ownerUserID, email: ownerEmail, role: models.OrgRoleOwner}
 		org.OwnerUserID = ownerUserID
@@ -513,6 +513,9 @@ func (p *Provisioner) ensureAccountOwnerMembership(accountID, email string) erro
 	email = strings.ToLower(strings.TrimSpace(email))
 	if accountID == "" || email == "" {
 		return nil
+	}
+	if p.registry == nil {
+		return fmt.Errorf("registry is required")
 	}
 
 	user, err := p.registry.GetUserByEmail(email)
@@ -900,6 +903,10 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 	}
 	if displayName == "" {
 		return nil, fmt.Errorf("missing display name")
+	}
+	ownerEmail = strings.ToLower(strings.TrimSpace(ownerEmail))
+	if err := p.ensureAccountOwnerMembership(accountID, ownerEmail); err != nil {
+		return nil, fmt.Errorf("ensure account owner membership: %w", err)
 	}
 	if err := p.enforceAdmission(ctx, "hosted workspace provisioning"); err != nil {
 		return nil, err

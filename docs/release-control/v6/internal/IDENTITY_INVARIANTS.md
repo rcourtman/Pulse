@@ -79,6 +79,9 @@ principal once a stable user ID exists.
    contact email at verification time, not to the email embedded in the token.
 3. Hosted checkout and tenant provisioning seed organization membership from
    registry user IDs. Contact email is copied separately.
+   Provisioning with an owner contact email must create or resolve a stable
+   registry user before writing hosted tenant `OwnerUserID` or member `UserID`;
+   it must not synthesize those durable IDs from email.
 4. Webhook payloads must never create organizations or memberships from email.
    They may update billing only after server-owned org/customer linkage exists.
 5. Legacy email-keyed records may be accepted only at migration boundaries and

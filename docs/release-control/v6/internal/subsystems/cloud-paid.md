@@ -231,6 +231,10 @@ runtime gating as separate unlinked claims.
    delivery metadata only; they may be used for idempotent lookup or legacy
    fallback, but they must not become the primary hosted tenant user key when a
    stable account user ID exists.
+   Hosted workspace provisioning with an owner email must create or resolve
+   the account owner registry user before tenant org seeding. The Stripe
+   provisioner must fail closed instead of synthesizing `OwnerUserID` or member
+   `UserID` from an email when no stable registry user exists.
    Hosted magic links are a delivery mechanism inside that same boundary:
    verification must re-read the tenant organization and session as the stored
    stable owner/member principal, so an old token cannot keep email as the

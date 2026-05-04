@@ -618,17 +618,27 @@ func TestMSPLifecycle_CreateWorkspaceViaAPISeedsCreatorAsOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadOrganizationStrict(%s): %v", tenant.ID, err)
 	}
-	if org.OwnerUserID != "operator@acmemsp.com" {
-		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "operator@acmemsp.com")
+	operator, err := reg.GetUserByEmail("operator@acmemsp.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail(operator): %v", err)
 	}
-	if org.GetMemberRole("operator@acmemsp.com") != "owner" {
-		t.Fatalf("operator role = %q, want owner", org.GetMemberRole("operator@acmemsp.com"))
+	if operator == nil {
+		t.Fatal("expected operator registry user")
 	}
-	if org.GetMemberRole("legacy-owner@acmemsp.com") != "owner" {
-		t.Fatalf("legacy owner role = %q, want owner", org.GetMemberRole("legacy-owner@acmemsp.com"))
+	if org.OwnerUserID != operator.ID {
+		t.Fatalf("org.OwnerUserID = %q, want stable operator id %q", org.OwnerUserID, operator.ID)
 	}
-	if org.GetMemberRole("admin@acmemsp.com") != models.OrganizationRoleFromAccountRole(string(registry.MemberRoleAdmin)) {
-		t.Fatalf("admin role = %q, want %q", org.GetMemberRole("admin@acmemsp.com"), models.OrganizationRoleFromAccountRole(string(registry.MemberRoleAdmin)))
+	if org.OwnerUserID == "operator@acmemsp.com" {
+		t.Fatal("org.OwnerUserID must not fall back to operator email")
+	}
+	if org.GetMemberRole(operator.ID) != "owner" {
+		t.Fatalf("operator role = %q, want owner", org.GetMemberRole(operator.ID))
+	}
+	if org.GetMemberRole(legacyOwnerID) != "owner" {
+		t.Fatalf("legacy owner role = %q, want owner", org.GetMemberRole(legacyOwnerID))
+	}
+	if org.GetMemberRole(adminID) != models.OrganizationRoleFromAccountRole(string(registry.MemberRoleAdmin)) {
+		t.Fatalf("admin role = %q, want %q", org.GetMemberRole(adminID), models.OrganizationRoleFromAccountRole(string(registry.MemberRoleAdmin)))
 	}
 }
 
