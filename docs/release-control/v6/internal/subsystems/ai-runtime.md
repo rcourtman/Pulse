@@ -795,8 +795,11 @@ registered executor and records the terminal `completed` or `failed` result
 afterward; missing executors must fail closed without mutating the approved
 audit record. Existing write-action tool paths under `internal/ai/tools/`
 must keep their persisted lifecycle and result records aligned with that same
-unified-resource action state machine rather than inventing AI-local execution
-states.
+unified-resource action state machine: approval decisions must use the
+canonical action decision transition, execution starts must use
+`BeginActionExecution` plus `RecordActionExecutionStart`, and terminal tool
+results must use `CompleteActionExecution` plus
+`RecordActionExecutionResult` rather than inventing AI-local execution states.
 AI incident handling must now also write durable resource-history facts
 through the canonical unified-resource change store when a concrete resource
 target is known. Command executions and runbook executions triggered during an
