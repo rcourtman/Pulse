@@ -1036,7 +1036,10 @@ specific `pve` or `pbs` type.
 That same installer-owned bootstrap step against `/api/setup-script-url` must
 also validate the returned canonical `type`, normalized `host`, and live
 `expires` metadata before using the one-time setup token, so install-time
-registration cannot drift onto a stale or mismatched bootstrap response. A
+registration cannot drift onto a stale or mismatched bootstrap response.
+Install-time PVE auto-registration must also create privilege-separated
+Pulse-managed monitor tokens and mirror effective ACLs to the concrete token id
+rather than relying on user-only grants or shared-token inheritance. A
 non-empty `expires` field alone is not sufficient; the installer must reject
 bootstrap responses whose expiry is already in the past. That same bootstrap
 consumer must also fail closed unless the runtime-owned setup metadata is

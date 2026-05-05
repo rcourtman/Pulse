@@ -304,6 +304,11 @@ profile and assignment columns, but embedded table framing must route through
 2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
    Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.
+   Runtime-side PVE token setup must also keep the same permission shape as the
+   generated setup script: Pulse-managed PVE monitor tokens are
+   privilege-separated, and `PVEAuditor`, optional `PulseMonitor`, plus
+   `/storage` `PVEDatastoreAdmin` grants must be mirrored to both
+   `pulse-monitor@pve` and the concrete `pulse-monitor@pve!pulse-*` token id.
    Runtime startup must preserve the token-optional path for already-installed
    non-enrollment agents; only enrollment mode may fail CLI configuration
    loading solely because no API token was supplied.

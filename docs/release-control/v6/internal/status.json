@@ -2485,6 +2485,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-lifecycle-proxmox-runtime-token-permission-proof-2026-05-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-installer-bundle-fallback-2026-05-01.md",
           "kind": "file"
         },
@@ -2496,6 +2501,16 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "install.sh",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/installtests/root_install_sh_test.go",
           "kind": "file"
         }
       ]
@@ -3382,6 +3397,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-lifecycle-proxmox-runtime-token-permission-proof-2026-05-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/agent-lifecycle-proxmox-setup-permission-proof-2026-05-05.md",
           "kind": "file"
         },
@@ -3503,6 +3523,16 @@
         {
           "repo": "pulse",
           "path": "internal/hostagent/agent.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/proxmox_setup.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/proxmox_setup_test.go",
           "kind": "file"
         },
         {

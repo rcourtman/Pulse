@@ -16,6 +16,38 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type commandCall struct {
+	name string
+	args []string
+}
+
+func newCommandCall(name string, args ...string) commandCall {
+	return commandCall{name: name, args: append([]string(nil), args...)}
+}
+
+func commandCallIndex(calls []commandCall, name string, args ...string) int {
+	for i, call := range calls {
+		if call.name != name || len(call.args) != len(args) {
+			continue
+		}
+		matches := true
+		for j := range args {
+			if call.args[j] != args[j] {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return i
+		}
+	}
+	return -1
+}
+
+func hasCommandCall(calls []commandCall, name string, args ...string) bool {
+	return commandCallIndex(calls, name, args...) >= 0
+}
+
 func canonicalSetupScriptCommand(expectedScriptURL string, setupToken string) string {
 	return fmt.Sprintf(
 		`curl -fsSL '%s' | { if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN='%s' bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN='%s' bash; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`,
@@ -559,7 +591,7 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	t.Run("performs registration successfully", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
-			// pveum user token add pulse-monitor@pve ... --privsep 0
+			// pveum user token add pulse-monitor@pve ... --privsep 1
 			// arg[0]=user, arg[1]=token, arg[2]=add
 			if name == "pveum" && len(arg) > 2 && arg[1] == "token" && arg[2] == "add" {
 				return "│ value │ my-token │", nil
@@ -580,6 +612,66 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 			t.Errorf("got %s", res.TokenValue)
 		}
 	})
+}
+
+func TestProxmoxSetup_SetupPVETokenUsesPrivilegeSeparatedTokenACLs(t *testing.T) {
+	mc := &mockCollector{}
+	calls := make([]commandCall, 0)
+	tokenName := "pulse-node-1"
+	tokenID := fmt.Sprintf("%s!%s", proxmoxUserPVE, tokenName)
+
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		calls = append(calls, newCommandCall(name, arg...))
+		if name == "pveum" && len(arg) > 2 && arg[1] == "token" && arg[2] == "add" {
+			return "│ value │ pve-token-value │", nil
+		}
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+
+	gotTokenID, gotTokenValue, err := p.setupPVEToken(context.Background(), tokenName)
+	if err != nil {
+		t.Fatalf("setupPVEToken() error = %v", err)
+	}
+	if gotTokenID != tokenID {
+		t.Fatalf("tokenID = %q, want %q", gotTokenID, tokenID)
+	}
+	if gotTokenValue != "pve-token-value" {
+		t.Fatalf("tokenValue = %q, want pve-token-value", gotTokenValue)
+	}
+
+	tokenAddIndex := commandCallIndex(calls, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "1")
+	if tokenAddIndex < 0 {
+		t.Fatalf("missing privilege-separated PVE token creation command; calls=%#v", calls)
+	}
+	if hasCommandCall(calls, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0") {
+		t.Fatalf("PVE setup still creates an unprivileged shared token")
+	}
+
+	requiredACLs := []struct {
+		name string
+		args []string
+	}{
+		{name: "pveum", args: []string{"aclmod", "/", "-user", proxmoxUserPVE, "-role", "PVEAuditor"}},
+		{name: "pveum", args: []string{"aclmod", "/", "-token", tokenID, "-role", "PVEAuditor"}},
+		{name: "pveum", args: []string{"aclmod", "/", "-user", proxmoxUserPVE, "-role", proxmoxMonitorRole}},
+		{name: "pveum", args: []string{"aclmod", "/", "-token", tokenID, "-role", proxmoxMonitorRole}},
+		{name: "pveum", args: []string{"aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin"}},
+		{name: "pveum", args: []string{"aclmod", "/storage", "-token", tokenID, "-role", "PVEDatastoreAdmin"}},
+	}
+	for _, required := range requiredACLs {
+		idx := commandCallIndex(calls, required.name, required.args...)
+		if idx < 0 {
+			t.Fatalf("missing PVE ACL command %s %#v; calls=%#v", required.name, required.args, calls)
+		}
+		if idx < tokenAddIndex {
+			t.Fatalf("PVE token ACL %s %#v was applied before token creation", required.name, required.args)
+		}
+	}
 }
 
 func TestPrivProbeRoleName_Sanitizes(t *testing.T) {
@@ -656,8 +748,11 @@ func TestProxmoxSetup_ProbePVEPrivilege_ReturnsFalseOnAddError(t *testing.T) {
 func TestProxmoxSetup_ConfigurePVEPermissions_FallsBackToGuestAgentAudit(t *testing.T) {
 	mc := &mockCollector{}
 	var pulseMonitorPrivs string
+	var calls []commandCall
+	tokenID := fmt.Sprintf("%s!%s", proxmoxUserPVE, "pulse-node-1")
 
 	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		calls = append(calls, newCommandCall(name, arg...))
 		if name != "pveum" {
 			return "", nil
 		}
@@ -693,7 +788,7 @@ func TestProxmoxSetup_ConfigurePVEPermissions_FallsBackToGuestAgentAudit(t *test
 		collector: mc,
 	}
 
-	p.configurePVEPermissions(context.Background())
+	p.configurePVEPermissions(context.Background(), tokenID)
 
 	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.Audit") {
 		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.Audit, got %q", pulseMonitorPrivs)
@@ -703,6 +798,9 @@ func TestProxmoxSetup_ConfigurePVEPermissions_FallsBackToGuestAgentAudit(t *test
 	}
 	if strings.Contains(pulseMonitorPrivs, " ") {
 		t.Fatalf("expected comma-separated privileges, got %q", pulseMonitorPrivs)
+	}
+	if !hasCommandCall(calls, "pveum", "aclmod", "/", "-token", tokenID, "-role", proxmoxMonitorRole) {
+		t.Fatalf("expected PulseMonitor role to be applied to the privilege-separated token; calls=%#v", calls)
 	}
 }
 

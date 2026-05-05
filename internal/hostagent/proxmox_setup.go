@@ -229,10 +229,17 @@ func (p *ProxmoxSetup) probePVEPrivilege(ctx context.Context, privilege string) 
 	return true
 }
 
-func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
+func (p *ProxmoxSetup) applyPVEACL(ctx context.Context, path string, principalFlag string, principal string, role string) {
+	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", path, principalFlag, principal, "-role", role); err != nil {
+		p.logger.Warn().Err(err).Str("path", path).Str("principal", principal).Str("role", role).Msg("Failed to apply PVE role")
+	}
+}
+
+func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context, tokenID string) {
 	// Baseline: read-only access.
-	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", "PVEAuditor"); err != nil {
-		p.logger.Warn().Err(err).Msg("Failed to add PVEAuditor role (may already exist)")
+	p.applyPVEACL(ctx, "/", "-user", proxmoxUserPVE, "PVEAuditor")
+	if tokenID != "" {
+		p.applyPVEACL(ctx, "/", "-token", tokenID, "PVEAuditor")
 	}
 
 	// Extra privileges are optional, but enable additional features:
@@ -266,14 +273,16 @@ func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
 			}
 		}
 
-		if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/", "-user", proxmoxUserPVE, "-role", proxmoxMonitorRole); err != nil {
-			p.logger.Warn().Err(err).Msg("Failed to apply PulseMonitor role")
+		p.applyPVEACL(ctx, "/", "-user", proxmoxUserPVE, proxmoxMonitorRole)
+		if tokenID != "" {
+			p.applyPVEACL(ctx, "/", "-token", tokenID, proxmoxMonitorRole)
 		}
 	}
 
 	// Add PVEDatastoreAdmin on /storage for backup visibility (issue #1139)
-	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin"); err != nil {
-		p.logger.Warn().Err(err).Msg("Failed to apply PVEDatastoreAdmin role on /storage")
+	p.applyPVEACL(ctx, "/storage", "-user", proxmoxUserPVE, "PVEDatastoreAdmin")
+	if tokenID != "" {
+		p.applyPVEACL(ctx, "/storage", "-token", tokenID, "PVEDatastoreAdmin")
 	}
 }
 
@@ -736,18 +745,15 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 		}
 	}
 
-	// Apply baseline + optional enhanced permissions (Sys.Audit, guest agent access).
-	p.configurePVEPermissions(ctx)
-
-	// Create token with privilege separation disabled
-	output, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0")
+	// Create token with privilege separation enabled, then mirror ACLs onto the token.
+	output, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "1")
 	if err != nil {
 		if tokenAlreadyExists(err, output) {
 			p.logger.Info().Str("token", tokenName).Msg("PVE monitoring token already exists; rotating token in place")
 			if _, deleteErr := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "remove", proxmoxUserPVE, tokenName); deleteErr != nil {
 				return "", "", fmt.Errorf("failed to delete existing token before rotation: %w", deleteErr)
 			}
-			output, err = p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "0")
+			output, err = p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "1")
 		}
 		if err != nil {
 			return "", "", fmt.Errorf("failed to create token: %w", err)
@@ -761,6 +767,8 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 	}
 
 	tokenID := fmt.Sprintf("%s!%s", proxmoxUserPVE, tokenName)
+	p.configurePVEPermissions(ctx, tokenID)
+
 	return tokenID, tokenValue, nil
 }
 
@@ -818,7 +826,7 @@ func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (str
 // ╞══════════════╪══════════════════════════════════════╡
 // │ full-tokenid │ pulse-monitor@pve!pulse-token        │
 // ├──────────────┼──────────────────────────────────────┤
-// │ info         │ {"privsep":"0"}                      │
+// │ info         │ {"privsep":"1"}                      │
 // ├──────────────┼──────────────────────────────────────┤
 // │ value        │ xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx │
 // └──────────────┴──────────────────────────────────────┘

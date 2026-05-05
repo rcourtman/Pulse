@@ -229,6 +229,12 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`AUTO_NODE_REGISTERED_NAME="$register_node_name"`,
 		`curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"`,
 		`curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d "$register_payload"`,
+		`token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)`,
+		`pveum aclmod / -token "$token_id" -role PVEAuditor`,
+		`pveum aclmod / -token "$token_id" -role PulseMonitor`,
+		`pveum aclmod /storage -token "$token_id" -role PVEDatastoreAdmin`,
+		`priv_string="$(IFS=,; echo "${extra_privs[*]}")"`,
+		`pveum role modify PulseMonitor -privs "$priv_string"`,
 		`slug = re.sub(r"[^a-z0-9]+", "-", host)`,
 		`print(f"pulse-{slug}")`,
 	}
@@ -244,6 +250,8 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`local bootstrap_token=""`,
 		`X-Setup-Token: $bootstrap_token`,
 		`Discovered bootstrap token from container`,
+		`--privsep 0`,
+		`pveum role delete PulseMonitor`,
 	}
 	for _, needle := range forbidden {
 		if strings.Contains(script, needle) {
