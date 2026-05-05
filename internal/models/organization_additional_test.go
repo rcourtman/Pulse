@@ -169,6 +169,34 @@ func TestOrganizationResolvePrincipalByEmail(t *testing.T) {
 	}
 }
 
+func TestOrganizationResolvePrincipalByEmailRejectsAmbiguousStoredPrincipals(t *testing.T) {
+	ownerCollision := &Organization{
+		ID:          "org-owner-collision",
+		OwnerUserID: "u_owner",
+		OwnerEmail:  "shared@example.com",
+		Members: []OrganizationMember{
+			{UserID: "u_owner", Email: "shared@example.com", Role: OrgRoleOwner},
+			{UserID: "u_admin", Email: "shared@example.com", Role: OrgRoleAdmin},
+		},
+	}
+	userID, role, ok := ownerCollision.ResolvePrincipalByEmail("shared@example.com")
+	if ok || userID != "" || role != "" {
+		t.Fatalf("owner collision principal = (%q, %q, %v), want rejection", userID, role, ok)
+	}
+
+	memberCollision := &Organization{
+		ID: "org-member-collision",
+		Members: []OrganizationMember{
+			{UserID: "u_admin", Email: "shared@example.com", Role: OrgRoleAdmin},
+			{UserID: "u_viewer", Email: "shared@example.com", Role: OrgRoleViewer},
+		},
+	}
+	userID, role, ok = memberCollision.ResolvePrincipalByEmail("shared@example.com")
+	if ok || userID != "" || role != "" {
+		t.Fatalf("member collision principal = (%q, %q, %v), want rejection", userID, role, ok)
+	}
+}
+
 func TestOrganizationResolvePrincipalByEmailRejectsBlankStoredPrincipal(t *testing.T) {
 	ownerOnlyEmail := &Organization{
 		ID:         "org-blank-owner",

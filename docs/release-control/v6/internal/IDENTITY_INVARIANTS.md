@@ -83,7 +83,9 @@ principal once a stable user ID exists.
    contact email at verification time, not to the email embedded in the token.
    If the matching organization owner/member has no stored principal, the
    magic-link flow must fail closed instead of synthesizing a principal from
-   contact email.
+   contact email. If one contact email maps to multiple distinct stored
+   principals, email-based resolution must also fail closed instead of choosing
+   a principal by row order.
 3. Hosted checkout and tenant provisioning seed organization membership from
    stable Pulse user IDs. Registry-backed paths must create or resolve the
    registry user before writing hosted tenant `OwnerUserID` or member `UserID`;

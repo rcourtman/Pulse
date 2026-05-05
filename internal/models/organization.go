@@ -330,6 +330,26 @@ func memberMatchesLegacyEmailPrincipal(member OrganizationMember, email string) 
 	return normalizeOrganizationEmail(userID) == normalizeOrganizationEmail(email)
 }
 
+func mergePrincipalEmailCandidate(resolvedUserID *string, resolvedRole *OrganizationRole, userID string, role OrganizationRole) bool {
+	userID = normalizeOrganizationIdentityValue(userID)
+	if userID == "" {
+		return false
+	}
+	role = NormalizeOrganizationRole(role)
+	if *resolvedUserID == "" {
+		*resolvedUserID = userID
+		*resolvedRole = role
+		return true
+	}
+	if *resolvedUserID != userID {
+		return false
+	}
+	if OrganizationRoleAtLeast(role, *resolvedRole) {
+		*resolvedRole = role
+	}
+	return true
+}
+
 // HasMember checks if a user is a member of the organization.
 func (o *Organization) HasMember(userID string) bool {
 	for _, member := range o.Members {
@@ -443,24 +463,25 @@ func (o *Organization) ResolvePrincipalByEmail(email string) (string, Organizati
 	if email == "" {
 		return "", "", false
 	}
+	userID := ""
+	role := OrganizationRole("")
 	if ownerMatchesEmail(o, email) {
-		userID := normalizeOrganizationIdentityValue(o.OwnerUserID)
-		if userID == "" {
+		if !mergePrincipalEmailCandidate(&userID, &role, o.OwnerUserID, OrgRoleOwner) {
 			return "", "", false
 		}
-		return userID, OrgRoleOwner, true
 	}
 	for _, member := range o.Members {
 		if !memberMatchesEmail(member, email) {
 			continue
 		}
-		userID := normalizeOrganizationIdentityValue(member.UserID)
-		if userID == "" {
+		if !mergePrincipalEmailCandidate(&userID, &role, member.UserID, member.Role) {
 			return "", "", false
 		}
-		return userID, NormalizeOrganizationRole(member.Role), true
 	}
-	return "", "", false
+	if userID == "" {
+		return "", "", false
+	}
+	return userID, role, true
 }
 
 // CanonicalizePrincipalIdentity upgrades legacy email-keyed membership records

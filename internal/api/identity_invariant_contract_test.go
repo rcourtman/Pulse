@@ -139,6 +139,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"CanonicalizePrincipalIdentity",
 			"ownerMatchesLegacyEmailPrincipal",
 			"memberMatchesLegacyEmailPrincipal",
+			"mergePrincipalEmailCandidate",
 			"return \"\", \"\", false",
 		},
 		"../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md": {
@@ -147,6 +148,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"SSO provider subject",
 			"reject caller-supplied metadata",
 			"contact email attached to an already-stable owner/member principal must not",
+			"maps to multiple distinct stored",
 			"Self-hosted SSO sessions now use provider-scoped",
 		},
 	}

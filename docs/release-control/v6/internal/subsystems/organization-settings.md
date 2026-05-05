@@ -184,6 +184,9 @@ helper so handlers do not duplicate membership lookup or accidentally bind
 sessions to email. A matching owner/member contact email without a stored
 `OwnerUserID` or member `UserID` is not a principal; the helper must fail
 closed instead of manufacturing a session key from email.
+If one contact email matches multiple distinct stored principals, the model
+must also fail closed instead of selecting a principal by owner/member row
+order.
 Organization-principal canonicalization may use email only when the stored
 owner/member principal is itself legacy email-keyed. A contact email on an
 already-stable owner/member must not authorize, replace, or migrate a different
