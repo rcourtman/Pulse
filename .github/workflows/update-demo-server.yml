@@ -188,6 +188,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
       - name: Wait for release assets
         run: |
           set -euo pipefail
@@ -223,10 +228,19 @@ jobs:
           exit 1
 
       - name: Materialize tagged installer
+        env:
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
         run: |
           set -euo pipefail
           TAG="${{ needs.resolve.outputs.tag }}"
+          TRUSTED_SSH_PUBLIC_KEY="$(
+            go run ./scripts/release_update_key.go public-key-ssh \
+              --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" \
+              --comment pulse-installer
+          )"
           git show "refs/tags/${TAG}:install.sh" > /tmp/pulse-install.sh
+          sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh
+          grep -F "PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"" /tmp/pulse-install.sh
           chmod +x /tmp/pulse-install.sh
 
       - name: Tailscale

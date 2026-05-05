@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
@@ -418,6 +420,10 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
 		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
 		`PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
+		`Validate installer signing key pins`,
+		`go run ./scripts/release_update_key.go public-key-ssh`,
+		`install.sh scripts/pulse-auto-update.sh release/pulse-auto-update.sh`,
+		`does not trust the configured release signing key.`,
 		`DOCKER_BUILDKIT: 1`,
 		`--secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY`,
 		`--secret id=pulse_update_signing_key,env=PULSE_UPDATE_SIGNING_KEY`,
@@ -564,6 +570,9 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`- name: Tailscale`,
 		`uses: tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2`,
 		`authkey: ${{ secrets.TS_AUTHKEY }}`,
+		`uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5`,
+		`go run ./scripts/release_update_key.go public-key-ssh`,
+		`sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh`,
 		`Verify target host identity`,
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
 		`Verify public browser smoke`,
@@ -653,6 +662,29 @@ func TestReleaseUpdateKeyFingerprintUsesCanonicalRawPublicKeyHash(t *testing.T) 
 	expected := "SHA256:" + base64.StdEncoding.EncodeToString(sum[:])
 	if got := strings.TrimSpace(string(output)); got != expected {
 		t.Fatalf("fingerprint mismatch: got %q want %q", got, expected)
+	}
+}
+
+func TestReleaseUpdateKeyPublicKeySSHAcceptsPublicKey(t *testing.T) {
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate signing key: %v", err)
+	}
+
+	cmd := exec.Command("go", "run", "./scripts/release_update_key.go", "public-key-ssh", "--public-key", base64.StdEncoding.EncodeToString(publicKey), "--comment", "pulse-installer")
+	cmd.Dir = repoFile()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("release_update_key.go public-key-ssh failed: %v\n%s", err, output)
+	}
+
+	sshPublicKey, err := ssh.NewPublicKey(publicKey)
+	if err != nil {
+		t.Fatalf("derive SSH public key: %v", err)
+	}
+	expected := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPublicKey))) + " pulse-installer"
+	if got := strings.TrimSpace(string(output)); got != expected {
+		t.Fatalf("SSH public key mismatch: got %q want %q", got, expected)
 	}
 }
 

@@ -63,7 +63,20 @@ func AuthorizedPublicKeyString(privateKey ed25519.PrivateKey, comment string) (s
 	if len(privateKey) != ed25519.PrivateKeySize {
 		return "", errors.New("invalid signing key")
 	}
-	publicKey, err := ssh.NewPublicKey(privateKey.Public())
+	ed25519PublicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return "", errors.New("failed to derive public key")
+	}
+	return AuthorizedPublicKeyStringFromPublicKey(ed25519PublicKey, comment)
+}
+
+// AuthorizedPublicKeyStringFromPublicKey returns the OpenSSH authorized_keys
+// line for a raw Ed25519 public key.
+func AuthorizedPublicKeyStringFromPublicKey(key ed25519.PublicKey, comment string) (string, error) {
+	if len(key) != ed25519.PublicKeySize {
+		return "", errors.New("invalid public key")
+	}
+	publicKey, err := ssh.NewPublicKey(key)
 	if err != nil {
 		return "", fmt.Errorf("derive ssh public key: %w", err)
 	}

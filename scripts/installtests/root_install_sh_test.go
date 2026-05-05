@@ -376,7 +376,7 @@ func TestRootInstallScriptRequiresSignedReleaseDownloads(t *testing.T) {
 
 	script := string(content)
 	required := []string{
-		`PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer"`,
+		`PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"`,
 		`require_release_signature_verifier() {`,
 		`verify_release_signature() {`,
 		`local signature_url="${download_url}.sshsig"`,
@@ -427,7 +427,7 @@ func TestPulseAutoUpdateScriptRequiresSignedInstallerDownloads(t *testing.T) {
 
 	script := string(content)
 	required := []string{
-		`PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer"`,
+		`PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"`,
 		`require_release_signature_verifier() {`,
 		`verify_release_signature() {`,
 		`local install_signature_url="${install_script_url}.sshsig"`,

@@ -17,7 +17,7 @@ import (
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  release_update_key.go public-key --private-key <base64-ed25519-key-or-seed>")
-	fmt.Fprintln(os.Stderr, "  release_update_key.go public-key-ssh --private-key <base64-ed25519-key-or-seed> [--comment <comment>]")
+	fmt.Fprintln(os.Stderr, "  release_update_key.go public-key-ssh (--private-key <base64-ed25519-key-or-seed> | --public-key <base64-ed25519-public-key>) [--comment <comment>]")
 	fmt.Fprintln(os.Stderr, "  release_update_key.go openssh-private-key --private-key <base64-ed25519-key-or-seed> [--comment <comment>]")
 	fmt.Fprintln(os.Stderr, "  release_update_key.go fingerprint (--private-key <base64-ed25519-key-or-seed> | --public-key <base64-ed25519-public-key>)")
 	fmt.Fprintln(os.Stderr, "  release_update_key.go sign --private-key <base64-ed25519-key-or-seed> --file <path>")
@@ -47,14 +47,36 @@ func main() {
 	case "public-key-ssh":
 		publicKeyCmd := flag.NewFlagSet("public-key-ssh", flag.ExitOnError)
 		privateKey := publicKeyCmd.String("private-key", "", "base64-encoded Ed25519 private key or seed")
+		publicKey := publicKeyCmd.String("public-key", "", "base64-encoded Ed25519 public key or PKIX public key")
 		comment := publicKeyCmd.String("comment", "", "optional SSH key comment")
 		_ = publicKeyCmd.Parse(os.Args[2:])
 
-		key, err := updatesignature.DecodePrivateKey(*privateKey)
-		if err != nil {
-			fail(err)
+		if (*privateKey == "") == (*publicKey == "") {
+			usage()
 		}
-		encoded, err := updatesignature.AuthorizedPublicKeyString(key, *comment)
+
+		var (
+			derivedPublicKey ed25519.PublicKey
+			err              error
+		)
+		if *privateKey != "" {
+			key, decodeErr := updatesignature.DecodePrivateKey(*privateKey)
+			if decodeErr != nil {
+				fail(decodeErr)
+			}
+			var ok bool
+			derivedPublicKey, ok = key.Public().(ed25519.PublicKey)
+			if !ok {
+				fail(fmt.Errorf("failed to derive Ed25519 public key"))
+			}
+		} else {
+			derivedPublicKey, err = decodePublicKey(*publicKey)
+			if err != nil {
+				fail(err)
+			}
+		}
+
+		encoded, err := updatesignature.AuthorizedPublicKeyStringFromPublicKey(derivedPublicKey, *comment)
 		if err != nil {
 			fail(err)
 		}

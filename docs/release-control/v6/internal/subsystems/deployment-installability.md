@@ -193,6 +193,13 @@ server-side update execution surfaces.
    guard fixes discovered by the release workflow itself, must still be named
    in the audit record and reflected in the candidate commit hash, commit
    count, and changed-scope summary before the workflow is restarted.
+   Release workflows and demo-update workflows must derive the OpenSSH
+   installer trust key from `PULSE_UPDATE_SIGNING_PUBLIC_KEY`, not from a
+   duplicated hand-copied key. The release workflow must fail before
+   publication if the repo-root server installer or auto-update script does
+   not trust that configured signing key, and the demo-update workflow may
+   patch the derived trust key into an immutable historical tagged installer
+   copy before executing that installer for an already-published RC.
    A metadata-only packet refresh may identify the last validation commit that
    introduced release risk separately from the packet-refresh commit itself,
    but it must make that distinction explicit in the release notes and audit

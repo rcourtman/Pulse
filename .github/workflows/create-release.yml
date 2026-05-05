@@ -629,6 +629,24 @@ jobs:
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
 
+      - name: Validate installer signing key pins
+        env:
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          TRUSTED_SSH_PUBLIC_KEY="$(
+            go run ./scripts/release_update_key.go public-key-ssh \
+              --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" \
+              --comment pulse-installer
+          )"
+
+          for installer in install.sh scripts/pulse-auto-update.sh release/pulse-auto-update.sh; do
+            grep -F "PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"" "${installer}" >/dev/null || {
+              echo "::error::${installer} does not trust the configured release signing key."
+              exit 1
+            }
+          done
+
       - name: Post-build health check
         run: |
           if [ -x ./pulse ]; then

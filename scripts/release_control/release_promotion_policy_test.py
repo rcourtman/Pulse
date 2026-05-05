@@ -337,6 +337,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_release_workflow_enforces_rc_lineage_soak_and_v5_notice(self) -> None:
         content = read(".github/workflows/create-release.yml")
+        update_demo_workflow = read(".github/workflows/update-demo-server.yml")
         validation_workflow = read(".github/workflows/validate-release-assets.yml")
         helper = read("scripts/trigger-release.sh")
         renderer = read("scripts/release_control/render_release_body.py")
@@ -410,6 +411,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", content)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
+        self.assertIn("Validate installer signing key pins", content)
+        self.assertIn("go run ./scripts/release_update_key.go public-key-ssh", content)
+        self.assertIn("does not trust the configured release signing key", content)
+        self.assertIn("TRUSTED_SSH_PUBLIC_KEY", update_demo_workflow)
+        self.assertIn('sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\\"${TRUSTED_SSH_PUBLIC_KEY}\\"|" /tmp/pulse-install.sh', update_demo_workflow)
+        self.assertIn("derive the OpenSSH installer trust key from `PULSE_UPDATE_SIGNING_PUBLIC_KEY`", normalize_ws(contract))
         self.assertIn('SYFT_VERSION="1.42.4"', content)
         self.assertIn('SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"', content)
         self.assertIn('SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"', content)
