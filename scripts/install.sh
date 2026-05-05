@@ -692,6 +692,7 @@ render_freebsd_rc_agent_script() {
 name="pulse_agent"
 rcvar="pulse_agent_enable"
 pidfile="/var/run/\${name}.pid"
+child_pidfile="/var/run/\${name}.child.pid"
 
 command="${exec_path}"
 command_args="${exec_args}"
@@ -700,34 +701,144 @@ start_cmd="\${name}_start"
 stop_cmd="\${name}_stop"
 status_cmd="\${name}_status"
 
+pulse_agent_pid_command()
+{
+    ps -o command= -p "\$1" 2>/dev/null | sed 's/^[[:space:]]*//'
+}
+
+pulse_agent_supervisor_pid()
+{
+    agent_pid="\$1"
+    agent_command=\$(pulse_agent_pid_command "\${agent_pid}")
+    case "\${agent_command}" in
+        daemon:*)
+            echo "\${agent_pid}"
+            return 0
+            ;;
+    esac
+
+    parent_pid=\$(ps -o ppid= -p "\${agent_pid}" 2>/dev/null | tr -d '[:space:]')
+    if [ -z "\${parent_pid}" ] || [ "\${parent_pid}" = "1" ]; then
+        return 1
+    fi
+
+    parent_command=\$(pulse_agent_pid_command "\${parent_pid}")
+    case "\${parent_command}" in
+        daemon:*)
+            echo "\${parent_pid}"
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
 pulse_agent_start()
 {
     if checkyesno \${rcvar}; then
+        if [ -f \${pidfile} ]; then
+            existing_pid=\$(cat \${pidfile} 2>/dev/null)
+            if [ -n "\${existing_pid}" ] && kill -0 "\${existing_pid}" 2>/dev/null; then
+                echo "\${name} is already running as pid \${existing_pid}."
+                return 0
+            fi
+        fi
+
+        rm -f \${pidfile} \${child_pidfile}
         echo "Starting \${name}."
         ${ssl_cert_line}
-        /usr/sbin/daemon -r -p \${pidfile} -f \${command} \${command_args}
+        /usr/sbin/daemon -r -P \${pidfile} -p \${child_pidfile} -f "\${command}" \${command_args}
     fi
 }
 
 pulse_agent_stop()
 {
+    supervisor_pid=""
+    child_pid=""
+    stopped=0
+
+    if [ -f \${child_pidfile} ]; then
+        child_pid=\$(cat \${child_pidfile} 2>/dev/null)
+    fi
+
     if [ -f \${pidfile} ]; then
-        echo "Stopping \${name}."
-        kill \$(cat \${pidfile}) 2>/dev/null
-        rm -f \${pidfile}
-    else
+        primary_pid=\$(cat \${pidfile} 2>/dev/null)
+        if [ -n "\${primary_pid}" ] && kill -0 "\${primary_pid}" 2>/dev/null; then
+            detected_supervisor=\$(pulse_agent_supervisor_pid "\${primary_pid}" 2>/dev/null || true)
+            if [ -n "\${detected_supervisor}" ]; then
+                supervisor_pid="\${detected_supervisor}"
+                if [ "\${detected_supervisor}" != "\${primary_pid}" ] && [ -z "\${child_pid}" ]; then
+                    child_pid="\${primary_pid}"
+                fi
+            else
+                supervisor_pid="\${primary_pid}"
+            fi
+        fi
+    fi
+
+    if [ -n "\${supervisor_pid}" ] && kill -0 "\${supervisor_pid}" 2>/dev/null; then
+        echo "Stopping \${name} supervisor."
+        kill "\${supervisor_pid}" 2>/dev/null || true
+        sleep 1
+        if kill -0 "\${supervisor_pid}" 2>/dev/null; then
+            kill -KILL "\${supervisor_pid}" 2>/dev/null || true
+        fi
+        stopped=1
+    fi
+
+    if [ -n "\${child_pid}" ] && kill -0 "\${child_pid}" 2>/dev/null; then
+        echo "Stopping \${name} child."
+        kill "\${child_pid}" 2>/dev/null || true
+        sleep 1
+        if kill -0 "\${child_pid}" 2>/dev/null; then
+            kill -KILL "\${child_pid}" 2>/dev/null || true
+        fi
+        stopped=1
+    fi
+
+    rm -f \${pidfile} \${child_pidfile}
+
+    if [ "\${stopped}" -eq 0 ]; then
         echo "\${name} is not running."
     fi
 }
 
 pulse_agent_status()
 {
-    if [ -f \${pidfile} ] && kill -0 \$(cat \${pidfile}) 2>/dev/null; then
-        echo "\${name} is running as pid \$(cat \${pidfile})."
-    else
-        echo "\${name} is not running."
-        return 1
+    if [ -f \${pidfile} ]; then
+        primary_pid=\$(cat \${pidfile} 2>/dev/null)
+        if [ -n "\${primary_pid}" ] && kill -0 "\${primary_pid}" 2>/dev/null; then
+            child_status=""
+            if [ -f \${child_pidfile} ]; then
+                child_pid=\$(cat \${child_pidfile} 2>/dev/null)
+                if [ -n "\${child_pid}" ] && kill -0 "\${child_pid}" 2>/dev/null; then
+                    child_status=" with child pid \${child_pid}"
+                fi
+            fi
+            echo "\${name} is running as supervisor pid \${primary_pid}\${child_status}."
+            return 0
+        fi
     fi
+
+    if [ -f \${child_pidfile} ]; then
+        child_pid=\$(cat \${child_pidfile} 2>/dev/null)
+        if [ -n "\${child_pid}" ] && kill -0 "\${child_pid}" 2>/dev/null; then
+            echo "\${name} is running as child pid \${child_pid}."
+            return 0
+        fi
+    fi
+
+    if [ -f \${pidfile} ]; then
+        legacy_pid=\$(cat \${pidfile} 2>/dev/null)
+        legacy_supervisor=\$(pulse_agent_supervisor_pid "\${legacy_pid}" 2>/dev/null || true)
+        if [ -n "\${legacy_supervisor}" ] && kill -0 "\${legacy_supervisor}" 2>/dev/null; then
+            echo "\${name} is running as legacy child pid \${legacy_pid} supervised by pid \${legacy_supervisor}."
+            return 0
+        fi
+    fi
+
+    echo "\${name} is not running."
+    return 1
 }
 
 load_rc_config \$name

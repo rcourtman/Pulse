@@ -334,6 +334,11 @@ server-side update execution surfaces.
 
 ## Current State
 
+Generated TrueNAS CORE rc.d services must use `/usr/sbin/daemon -r` with a
+supervisor pidfile (`-P`) separate from the child pidfile (`-p`) and must stop
+older child-pidfile installs by killing the daemon supervisor before the child
+so installer upgrades do not leave the old agent process running.
+
 This subsystem now makes deployment planning, updater orchestration, and the
 non-shell installer/update scripts explicit inside the current self-hosted
 release-confidence lane instead of leaving them as implied behavior around the

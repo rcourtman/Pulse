@@ -765,6 +765,11 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+Generated TrueNAS CORE rc.d service scripts must give `/usr/sbin/daemon -r` a
+supervisor pidfile with `-P`, keep the child pid in a separate diagnostic
+pidfile, and stop legacy child-pidfile installs by resolving the child back to
+its daemon supervisor before replacing or restarting the agent binary.
+
 Deploy selection and retry capacity feedback now follows the API/cloud-paid
 workspace-capacity terminology boundary. Lifecycle-owned deploy surfaces keep
 stable backend compatibility identifiers, but the user-facing confirmation,

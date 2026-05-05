@@ -519,6 +519,34 @@ func TestInstallSHUsesSharedServiceRenderers(t *testing.T) {
 	}
 }
 
+func TestInstallSHFreeBSDRendererUsesDaemonSupervisorPidfile(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`child_pidfile="/var/run/\${name}.child.pid"`,
+		`pulse_agent_supervisor_pid()`,
+		`parent_pid=\$(ps -o ppid= -p "\${agent_pid}" 2>/dev/null | tr -d '[:space:]')`,
+		`daemon:*)`,
+		`/usr/sbin/daemon -r -P \${pidfile} -p \${child_pidfile} -f "\${command}" \${command_args}`,
+		`kill -KILL "\${supervisor_pid}" 2>/dev/null || true`,
+		`rm -f \${pidfile} \${child_pidfile}`,
+		`legacy child pid \${legacy_pid} supervised by pid \${legacy_supervisor}`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing FreeBSD daemon supervisor contract: %s", needle)
+		}
+	}
+
+	if strings.Contains(script, `/usr/sbin/daemon -r -p \${pidfile}`) {
+		t.Fatal("install.sh still writes the child pid to the service pidfile under daemon -r")
+	}
+}
+
 func TestInstallSHUsesCanonicalCompletionHelper(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
