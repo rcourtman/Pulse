@@ -70,6 +70,36 @@ func TestInstallSHAutoDetectProxmoxKeepsRuntimeTypeUnpinned(t *testing.T) {
 	}
 }
 
+func TestInstallSHAgentServiceSecurityDefaults(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`HEALTH_ADDR="${PULSE_HEALTH_ADDR:-}"`,
+		`if [[ -n "${PULSE_HEALTH_ADDR+x}" ]]; then`,
+		`--health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)`,
+		`if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi`,
+		`--health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;`,
+		`UMask=0077`,
+		`NoNewPrivileges=true`,
+		`PrivateTmp=true`,
+		`ProtectKernelTunables=true`,
+		`ProtectKernelModules=true`,
+		`ProtectControlGroups=true`,
+		`LockPersonality=true`,
+		`RestrictSUIDSGID=true`,
+		`SystemCallArchitectures=native`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing agent service security default: %s", needle)
+		}
+	}
+}
+
 // TestConnectionEnvRecovery verifies the canonical helper logic that parses
 // connection.env without using shell source (to prevent injection).
 func TestConnectionEnvRecovery(t *testing.T) {

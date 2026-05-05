@@ -1660,6 +1660,30 @@ func TestLoadConfig_Comprehensive(t *testing.T) {
 				if cfg.EnableDocker {
 					t.Error("EnableDocker should be false by default")
 				}
+				if cfg.HealthAddr != "127.0.0.1:9191" {
+					t.Errorf("HealthAddr: got %q, want loopback default", cfg.HealthAddr)
+				}
+			},
+		},
+		{
+			name: "health addr can be opened explicitly",
+			args: []string{"-token", "T", "-health-addr", ":9191"},
+			validate: func(t *testing.T, cfg Config) {
+				if cfg.HealthAddr != ":9191" {
+					t.Errorf("HealthAddr: got %q, want :9191", cfg.HealthAddr)
+				}
+			},
+		},
+		{
+			name: "health addr can be disabled by env",
+			args: []string{"-token", "T"},
+			env: map[string]string{
+				"PULSE_HEALTH_ADDR": "off",
+			},
+			validate: func(t *testing.T, cfg Config) {
+				if cfg.HealthAddr != "" {
+					t.Errorf("HealthAddr: got %q, want disabled", cfg.HealthAddr)
+				}
 			},
 		},
 	}

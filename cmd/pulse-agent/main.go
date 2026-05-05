@@ -778,9 +778,15 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		defaultEnableProxmox = utils.ParseBool(envEnableProxmox)
 	}
 
+	healthAddrDisabledByEnv := false
 	defaultHealthAddr := envHealthAddr
-	if defaultHealthAddr == "" {
-		defaultHealthAddr = ":9191"
+	switch strings.ToLower(defaultHealthAddr) {
+	case "off", "none", "disabled":
+		defaultHealthAddr = ""
+		healthAddrDisabledByEnv = true
+	}
+	if defaultHealthAddr == "" && !healthAddrDisabledByEnv {
+		defaultHealthAddr = "127.0.0.1:9191"
 	}
 
 	// Flags

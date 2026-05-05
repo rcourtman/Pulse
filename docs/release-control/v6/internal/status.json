@@ -3362,6 +3362,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-lifecycle-root-agent-hardening-2026-05-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/unified-agent-v5-upgrade-continuity-2026-03-12.md",
           "kind": "file"
         },
@@ -5052,21 +5057,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "codex-lane-l16",
-      "agent_id": "codex",
-      "summary": "Harden Linux agent service defaults from Proxmox root-agent trust signal",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-05-05T11:53:57Z",
-      "heartbeat_at": "2026-05-05T11:53:57Z",
-      "expires_at": "2026-05-05T13:53:57Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L16"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

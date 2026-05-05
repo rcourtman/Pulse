@@ -98,10 +98,11 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
 | `--log-level` | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
-| `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `:9191` |
+| `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `127.0.0.1:9191` |
 
-Use `--health-addr 127.0.0.1:9191` when only local Prometheus scraping needs
-the health/metrics endpoint, or `--health-addr ""` to disable that listener.
+Use `--health-addr :9191` only when another host must scrape the
+health/metrics endpoint over the network. Use `--health-addr ""` or
+`PULSE_HEALTH_ADDR=off` to disable that listener.
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
 
@@ -301,7 +302,7 @@ readinessProbe:
 
 ### Disable Health Server
 
-Set `--health-addr=""` or `PULSE_HEALTH_ADDR=""` to disable the health/metrics server.
+Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics server. Set `--health-addr :9191` when network Prometheus scraping is intentional.
 
 ## Troubleshooting
 

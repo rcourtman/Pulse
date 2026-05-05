@@ -22,9 +22,18 @@ root read access:
 - update from signed release assets rather than arbitrary branch snapshots.
 
 The agent is primarily an outbound reporter to your Pulse server. By default it
-also exposes local health and Prometheus endpoints on `:9191`; set
-`--health-addr 127.0.0.1:9191` to bind that surface to loopback, or
-`--health-addr ""` to disable it when you do not scrape agent-local metrics.
+binds the health and Prometheus endpoints to `127.0.0.1:9191`, so a root agent
+does not expose that HTTP surface to the network unless you explicitly opt in.
+Set `--health-addr :9191` only when you intentionally scrape the agent from
+another host. Use `--health-addr ""` or `PULSE_HEALTH_ADDR=off` to disable the
+listener.
+
+Generated Linux/systemd units also include conservative sandboxing such as
+`NoNewPrivileges=true`, `PrivateTmp=true`, kernel/control-group write
+protection, a private umask, and setuid/personality restrictions. Those
+directives reduce service blast radius while keeping the filesystem and device
+access needed for full host telemetry, Proxmox token setup, SMART, Docker, and
+NAS integrations.
 
 Command execution is disabled by default. It can be enabled with
 `--enable-commands`, `PULSE_ENABLE_COMMANDS=true`, or the centralized agent

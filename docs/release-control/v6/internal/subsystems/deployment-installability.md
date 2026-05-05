@@ -334,6 +334,13 @@ server-side update execution surfaces.
 
 ## Current State
 
+The shell-installer boundary carries root-agent service hardening for Linux
+installs. Installer-rendered agent units must keep the health/metrics listener
+loopback by default, allow explicit disablement or network-scrape opt-in
+through `--health-addr` / `PULSE_HEALTH_ADDR`, and preserve conservative
+systemd sandboxing alongside the root full-telemetry service model instead of
+silently reopening an all-interface root HTTP listener.
+
 Generated TrueNAS CORE rc.d services must use `/usr/sbin/daemon -r` with a
 supervisor pidfile (`-P`) separate from the child pidfile (`-p`) and must stop
 older child-pidfile installs by killing the daemon supervisor before the child

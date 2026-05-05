@@ -765,6 +765,14 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+Linux agent privilege hardening is now part of the installer/runtime contract.
+The supported full-telemetry systemd agent may still run as `root`, but
+`cmd/pulse-agent/main.go` must bind health/metrics to loopback by default,
+`scripts/install.sh` must preserve explicit health-address disable/open choices
+in the rendered service, and generated systemd units must keep conservative
+sandboxing in place unless a future telemetry requirement records a narrower
+exception.
+
 Generated TrueNAS CORE rc.d service scripts must give `/usr/sbin/daemon -r` a
 supervisor pidfile with `-P`, keep the child pid in a separate diagnostic
 pidfile, and stop legacy child-pidfile installs by resolving the child back to

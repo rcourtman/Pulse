@@ -22,6 +22,7 @@
 #   --disk-exclude <pattern>  Exclude mount points matching pattern (repeatable)
 #   --insecure          Skip TLS certificate verification
 #   --enable-commands   Enable AI command execution on agent (disabled by default)
+#   --health-addr <addr> Health/metrics listener address (default: 127.0.0.1:9191, use "" to disable)
 #   --uninstall         Remove the agent
 #
 # Auto-Detection:
@@ -76,6 +77,11 @@ INSECURE="false"
 AGENT_ID=""
 HOSTNAME_OVERRIDE=""
 ENABLE_COMMANDS="false"
+HEALTH_ADDR="${PULSE_HEALTH_ADDR:-}"
+HEALTH_ADDR_SET="false"
+if [[ -n "${PULSE_HEALTH_ADDR+x}" ]]; then
+    HEALTH_ADDR_SET="true"
+fi
 ENROLL="false"
 KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
@@ -278,6 +284,7 @@ Options:
   --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --enable-commands       Enable AI command execution
+  --health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
   --uninstall             Remove the agent
   --non-interactive       Skip TTY prompts (for automated/scripted installs)
@@ -319,7 +326,8 @@ restore_selinux_contexts() {
 
 # --- Post-Start Health Verification ---
 # After starting the agent service, poll its readiness endpoint to verify it
-# actually started. The agent exposes /readyz on :9191 once modules are initialized.
+# actually started. The agent exposes /readyz on the configured health address
+# once modules are initialized. The default is 127.0.0.1:9191.
 verify_agent_server_registration() {
     local lookup_hostname="${HOSTNAME_OVERRIDE}"
     local lookup_resp=""
@@ -346,8 +354,48 @@ verify_agent_server_registration() {
     return 1
 }
 
+resolve_agent_health_url() {
+    if [[ "$HEALTH_ADDR_SET" == "true" && -z "$HEALTH_ADDR" ]]; then
+        return 1
+    fi
+
+    local addr="${HEALTH_ADDR:-127.0.0.1:9191}"
+    local ipv6_any_prefix="[::]:"
+    case "$addr" in
+        :*) addr="127.0.0.1${addr}" ;;
+        0.0.0.0:*) addr="127.0.0.1:${addr#0.0.0.0:}" ;;
+    esac
+    if [[ "$addr" == "$ipv6_any_prefix"* ]]; then
+        addr="[::1]:${addr#$ipv6_any_prefix}"
+    fi
+
+    printf 'http://%s/readyz\n' "$addr"
+}
+
+agent_process_running() {
+    if command -v pgrep >/dev/null 2>&1; then
+        # Use -x (exact match) if supported, otherwise fall back to -f.
+        pgrep -x "${BINARY_NAME}" >/dev/null 2>&1
+        local pgrep_rc=$?
+        if [ $pgrep_rc -eq 0 ]; then
+            return 0
+        elif [ $pgrep_rc -ge 2 ]; then
+            pgrep -f "${BINARY_NAME}" >/dev/null 2>&1 && return 0
+        fi
+    else
+        # shellcheck disable=SC2009
+        # Use bracket trick ([p]ulse-agent) to prevent grep from matching itself.
+        local grep_pattern="[${BINARY_NAME:0:1}]${BINARY_NAME:1}"
+        if ps -e -o comm= 2>/dev/null | grep -q "$grep_pattern" || ps aux 2>/dev/null | grep -q "$grep_pattern"; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 verify_agent_started() {
-    local health_url="http://127.0.0.1:9191/readyz"
+    local health_url=""
     local max_iterations=8
     local interval=2
     local iteration=0
@@ -357,6 +405,29 @@ verify_agent_started() {
 
     # Brief pause to let the agent process spawn (especially for background starts like Unraid)
     sleep 2
+
+    health_url="$(resolve_agent_health_url || true)"
+    if [[ -z "$health_url" ]]; then
+        while [ $iteration -lt $max_iterations ]; do
+            if agent_process_running; then
+                if verify_agent_server_registration; then
+                    log_info "Agent process is running and registered with Pulse."
+                else
+                    log_warn "Agent process is running, but server registration was not confirmed yet."
+                fi
+                return 0
+            fi
+            sleep $interval
+            iteration=$((iteration + 1))
+        done
+
+        log_warn "Agent process is not running!"
+        if [ -f "$log_file" ]; then
+            log_warn "Last log lines:"
+            tail -5 "$log_file" 2>/dev/null | while IFS= read -r line; do log_warn "  $line"; done
+        fi
+        return 1
+    fi
 
     while [ $iteration -lt $max_iterations ]; do
         # Check the readiness endpoint first — this is the definitive signal
@@ -372,23 +443,8 @@ verify_agent_started() {
         # If curl failed, check whether the process is still alive.
         # Use pgrep where available, fall back to ps + grep.
         local agent_running=false
-        if command -v pgrep >/dev/null 2>&1; then
-            # Use -x (exact match) if supported, otherwise fall back to -f
-            pgrep -x "${BINARY_NAME}" >/dev/null 2>&1
-            local pgrep_rc=$?
-            if [ $pgrep_rc -eq 0 ]; then
-                agent_running=true
-            elif [ $pgrep_rc -ge 2 ]; then
-                # Exit code >= 2 means bad option — -x not supported, try -f
-                pgrep -f "${BINARY_NAME}" >/dev/null 2>&1 && agent_running=true
-            fi
-        else
-            # shellcheck disable=SC2009
-            # Use bracket trick ([p]ulse-agent) to prevent grep from matching itself
-            local grep_pattern="[${BINARY_NAME:0:1}]${BINARY_NAME:1}"
-            if ps -e -o comm= 2>/dev/null | grep -q "$grep_pattern" || ps aux 2>/dev/null | grep -q "$grep_pattern"; then
-                agent_running=true
-            fi
+        if agent_process_running; then
+            agent_running=true
         fi
 
         if [ "$agent_running" = "false" ] && [ $iteration -ge 3 ]; then
@@ -664,6 +720,15 @@ Type=simple
 ExecStart=${exec_path} ${exec_args}${env_line}
 Restart=always
 RestartSec=5s${user_line}${log_lines}
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target
@@ -1165,6 +1230,7 @@ build_exec_arg_items() {
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARG_ITEMS+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARG_ITEMS+=(--insecure); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-commands); fi
+    if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi
     if [[ "$ENROLL" == "true" ]]; then EXEC_ARG_ITEMS+=(--enroll); fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARG_ITEMS+=(--kube-include-all-pods); fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARG_ITEMS+=(--kube-include-all-deployments); fi
@@ -1398,6 +1464,7 @@ while [[ $# -gt 0 ]]; do
         --insecure) INSECURE="true"; shift ;;
         --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
+        --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
         --enroll) ENROLL="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
