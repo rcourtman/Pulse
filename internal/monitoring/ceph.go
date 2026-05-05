@@ -60,6 +60,33 @@ func (m *Monitor) pollCephCluster(ctx context.Context, instanceName string, clie
 	}
 
 	m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{cluster})
+	m.checkCephPoolStorage(cluster)
+}
+
+func (m *Monitor) checkCephPoolStorage(cluster models.CephCluster) {
+	storagePools := models.CephPoolStorage(cluster)
+	if len(storagePools) == 0 {
+		return
+	}
+
+	timestamp := time.Now()
+	for _, storage := range storagePools {
+		if m.metricsHistory != nil && !shouldSkipNativeMockStateMetricWrites() {
+			m.metricsHistory.AddStorageMetric(storage.ID, "usage", storage.Usage, timestamp)
+			m.metricsHistory.AddStorageMetric(storage.ID, "used", float64(storage.Used), timestamp)
+			m.metricsHistory.AddStorageMetric(storage.ID, "total", float64(storage.Total), timestamp)
+			m.metricsHistory.AddStorageMetric(storage.ID, "avail", float64(storage.Free), timestamp)
+			if m.metricsStore != nil {
+				m.metricsStore.Write("storage", storage.ID, "usage", storage.Usage, timestamp)
+				m.metricsStore.Write("storage", storage.ID, "used", float64(storage.Used), timestamp)
+				m.metricsStore.Write("storage", storage.ID, "total", float64(storage.Total), timestamp)
+				m.metricsStore.Write("storage", storage.ID, "avail", float64(storage.Free), timestamp)
+			}
+		}
+		if m.alertManager != nil {
+			m.alertManager.CheckStorage(storage)
+		}
+	}
 }
 
 // buildCephClusterModel converts the proxmox Ceph responses into the shared model representation.

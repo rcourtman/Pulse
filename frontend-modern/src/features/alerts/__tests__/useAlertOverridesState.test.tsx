@@ -128,11 +128,15 @@ describe('useAlertOverridesState', () => {
     const [overviewOverrides, setOverviewOverrides] = createSignal([]);
     const resources = [
       makeResource({
-        id: 'Main-cluster-ceph-pool',
+        id: 'storage-4a40f1c6',
         name: 'ceph-pool',
         displayName: 'ceph-pool',
         type: 'storage',
         platformId: 'Main',
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'Main-cluster-ceph-pool',
+        },
         proxmox: {
           instance: 'Main',
           node: 'cluster',

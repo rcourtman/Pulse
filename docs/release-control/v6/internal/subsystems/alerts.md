@@ -638,10 +638,11 @@ config normalization, factory defaults, docker-gap validation, and save-payload
 serialization,
 `frontend-modern/src/features/alerts/alertOverridesModel.ts` for raw override
 normalization plus resource-backed override projection. That override owner
-must canonicalize legacy per-node shared-storage keys onto the current
-cluster-scoped storage resource id before the thresholds surface rebuilds,
-so old Ceph/shared-datastore overrides still surface on the live v6 editor
-instead of disappearing after the feature-shell migration, and
+must canonicalize legacy per-node shared-storage keys and hashed storage
+resource ids onto the storage metrics target id before the thresholds surface
+rebuilds, so old Ceph/shared-datastore overrides and newly projected Ceph pool
+overrides still surface on the live v6 editor instead of disappearing after
+the feature-shell migration, and
 `frontend-modern/src/features/alerts/useAlertOverridesState.ts` for reactive
 override state, derived resource lists, and overview handoff, and
 `frontend-modern/src/features/alerts/alertDestinationsModel.ts` for email and

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/stretchr/testify/assert"
@@ -111,6 +112,61 @@ func TestPollCephCluster(t *testing.T) {
 		assert.Equal(t, int64(1000), clusters[0].TotalBytes)
 		assert.Equal(t, int64(200), clusters[0].UsedBytes)
 	})
+}
+
+func TestPollCephClusterChecksPoolStorageThresholds(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	manager.UpdateConfig(alerts.AlertConfig{
+		Enabled:         true,
+		ActivationState: alerts.ActivationActive,
+		StorageDefault:  alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
+		TimeThresholds:  map[string]int{"storage": 0},
+		Overrides: map[string]alerts.ThresholdConfig{
+			models.CephPoolStorageID("pve1", "data_replication"): {
+				Usage: &alerts.HysteresisThreshold{Trigger: 50, Clear: 45},
+			},
+		},
+	})
+
+	m := &Monitor{
+		state:        models.NewState(),
+		alertManager: manager,
+	}
+	client := &mockCephPVEClient{}
+	status := &proxmox.CephStatus{
+		FSID:   "fsid123",
+		Health: proxmox.CephHealth{Status: "HEALTH_OK"},
+	}
+	df := &proxmox.CephDF{
+		Data: proxmox.CephDFData{
+			Pools: []proxmox.CephDFPool{
+				{
+					ID:   1,
+					Name: "data_replication",
+					Stats: proxmox.CephDFPoolStat{
+						BytesUsed:   70,
+						MaxAvail:    30,
+						PercentUsed: 70,
+					},
+				},
+			},
+		},
+	}
+	client.On("GetCephStatus", mock.Anything).Return(status, nil)
+	client.On("GetCephDF", mock.Anything).Return(df, nil)
+
+	m.pollCephCluster(context.Background(), "pve1", client, true)
+
+	active := manager.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("active alerts = %+v, want one Ceph pool usage alert", active)
+	}
+	if active[0].ResourceID != models.CephPoolStorageID("pve1", "data_replication") {
+		t.Fatalf("ResourceID = %q, want %q", active[0].ResourceID, models.CephPoolStorageID("pve1", "data_replication"))
+	}
+	if active[0].Threshold != 50 {
+		t.Fatalf("Threshold = %v, want override threshold 50", active[0].Threshold)
+	}
 }
 
 func TestIsCephStorageType(t *testing.T) {

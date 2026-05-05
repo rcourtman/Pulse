@@ -1422,7 +1422,7 @@ func TestVMAgentFieldUnmarshalJSON(t *testing.T) {
 		{
 			name:  "object format with enabled > 0 but available=0",
 			input: `{"enabled":1,"available":0}`,
-			want:  1,
+			want:  0,
 		},
 		{
 			name:  "object format with both 0",
@@ -1492,7 +1492,7 @@ func TestVMAgentFieldUnmarshalJSON_InVMStatus(t *testing.T) {
 		{
 			name:    "VMStatus with object agent enabled but not available",
 			payload: `{"status":"stopped","cpu":0,"cpus":1,"mem":0,"maxmem":1073741824,"agent":{"enabled":1,"available":0}}`,
-			want:    1,
+			want:    0,
 		},
 		{
 			name:    "VMStatus with object agent both zero",
@@ -1516,6 +1516,48 @@ func TestVMAgentFieldUnmarshalJSON_InVMStatus(t *testing.T) {
 				t.Errorf("VMStatus.Agent.Value = %d, want %d", status.Agent.Value, tc.want)
 			}
 		})
+	}
+}
+
+func TestVMAgentFieldTracksEnabledAndAvailableSeparately(t *testing.T) {
+	var agent VMAgentField
+	if err := agent.UnmarshalJSON([]byte(`{"enabled":1,"available":0}`)); err != nil {
+		t.Fatalf("UnmarshalJSON returned error: %v", err)
+	}
+	if !agent.IsEnabled() {
+		t.Fatal("expected IsEnabled to preserve VM config state")
+	}
+	if agent.IsAvailable() {
+		t.Fatal("expected IsAvailable to reflect current guest-agent availability")
+	}
+}
+
+func TestVMStatusUnmarshalJSON_BalloonInfo(t *testing.T) {
+	payload := []byte(`{
+		"status":"running",
+		"mem":8589934592,
+		"maxmem":8589934592,
+		"agent":1,
+		"ballooninfo":{
+			"actual":8589934592,
+			"free_mem":5368709120,
+			"max_mem":8589934592,
+			"total_mem":8200802304
+		}
+	}`)
+
+	var status VMStatus
+	if err := json.Unmarshal(payload, &status); err != nil {
+		t.Fatalf("unexpected error unmarshalling VMStatus: %v", err)
+	}
+	if status.BalloonInfo == nil {
+		t.Fatal("expected ballooninfo to be parsed")
+	}
+	if status.BalloonInfo.FreeMem != 5368709120 {
+		t.Fatalf("BalloonInfo.FreeMem = %d, want 5368709120", status.BalloonInfo.FreeMem)
+	}
+	if status.BalloonInfo.TotalMem != 8200802304 {
+		t.Fatalf("BalloonInfo.TotalMem = %d, want 8200802304", status.BalloonInfo.TotalMem)
 	}
 }
 

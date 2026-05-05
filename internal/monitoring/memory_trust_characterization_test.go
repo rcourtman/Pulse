@@ -316,6 +316,20 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			wantSource: "status-freemem",
 			wantUsed:   3 * gib,
 		},
+		{
+			name: "saturated VM derives freemem fallback from ballooninfo",
+			status: &proxmox.VMStatus{
+				Status: "running",
+				MaxMem: 8 * gib,
+				Mem:    8 * gib,
+				BalloonInfo: &proxmox.VMBalloonInfo{
+					FreeMem:  5 * gib,
+					TotalMem: 8 * gib,
+				},
+			},
+			wantSource: "status-freemem",
+			wantUsed:   3 * gib,
+		},
 	}
 
 	for _, tt := range tests {

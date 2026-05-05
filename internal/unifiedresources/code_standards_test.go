@@ -286,6 +286,40 @@ func TestCanonicalStorageMetadataPreservesBackingPoolField(t *testing.T) {
 	}
 }
 
+func TestCephPoolsProjectThroughCanonicalStoragePath(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join("..", "models", "models.go"): {
+			"func CephPoolStorageID(instanceName, poolName string) string",
+			"func StorageFromCephPool(cluster CephCluster, pool CephPool) Storage",
+			`Type:     "ceph",`,
+			"ID:       CephPoolStorageID(cluster.Instance, name),",
+		},
+		"registry.go": {
+			"models.CephPoolStorage(cluster)",
+			"rr.ingestStorage(storage)",
+		},
+		filepath.Join("..", "monitoring", "ceph.go"): {
+			"m.checkCephPoolStorage(cluster)",
+			"models.CephPoolStorage(cluster)",
+			`m.metricsStore.Write("storage", storage.ID, "usage", storage.Usage, timestamp)`,
+			"m.alertManager.CheckStorage(storage)",
+		},
+	}
+
+	for path, snippets := range requiredSnippets {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", path, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must keep Ceph pool storage on canonical storage identity via %q", path, snippet)
+			}
+		}
+	}
+}
+
 func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
 	if err != nil {

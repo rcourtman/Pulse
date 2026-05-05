@@ -56,7 +56,7 @@ func guestAgentSignalsHealthy(
 	networkInterfaces []models.GuestNetworkInterface,
 	osName, osVersion, agentVersion string,
 ) bool {
-	if detailedStatus != nil && detailedStatus.Agent.Value > 0 {
+	if detailedStatus != nil && detailedStatus.Agent.IsAvailable() {
 		return true
 	}
 	return diskFromAgent ||

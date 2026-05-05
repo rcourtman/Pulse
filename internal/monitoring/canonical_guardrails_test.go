@@ -302,7 +302,9 @@ func TestGuestMemoryFallbackUsesCanonicalLowTrustSelector(t *testing.T) {
 
 	for _, snippet := range []string{
 		"func effectiveGuestFreeMemTotal(memTotal uint64, status *proxmox.VMStatus) uint64 {",
-		"if status.Balloon > 0 && status.Balloon <= memTotal && status.FreeMem <= status.Balloon {",
+		"func guestStatusFreeMem(status *proxmox.VMStatus) uint64 {",
+		"if status.BalloonInfo != nil {",
+		"if status.Balloon > 0 && status.Balloon <= memTotal && freeMem <= status.Balloon {",
 		"func selectGuestLowTrustUsedMemory(memTotal uint64, status *proxmox.VMStatus) (uint64, string) {",
 		"if statusMemPlusFree > freeMemTotal+guestStatusMemoryMismatchTolerance {",
 	} {

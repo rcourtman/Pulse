@@ -638,6 +638,12 @@ selection, `/api/storage-charts`, and `/api/charts/storage-summary` all see
 the same canonical history
 identity instead of splitting between view-cache resource IDs and API
 serialization-time metric IDs.
+Proxmox Ceph pools are canonical storage resources when present in
+`CephCluster.Pools`. `internal/models.CephPoolStorageID` owns the stable
+source and metrics identity, and `internal/unifiedresources/registry.go` must
+project each pool through normal storage ingest so API resources expose a
+storage metrics target whose resource id is the storage runtime metric id
+rather than the hashed unified-resource id.
 That same VMware contract now also includes the identity rule. VMware managed
 object identifiers are phase-1 provider identities, but they must be scoped by
 the owning `vCenter` connection or discovered vCenter identity so bare object

@@ -95,11 +95,41 @@ func saturatingAddUint64(lhs, rhs uint64) uint64 {
 	return lhs + rhs
 }
 
+func guestStatusFreeMem(status *proxmox.VMStatus) uint64 {
+	if status == nil {
+		return 0
+	}
+	if status.FreeMem > 0 {
+		return status.FreeMem
+	}
+	if status.BalloonInfo != nil {
+		return status.BalloonInfo.FreeMem
+	}
+	return 0
+}
+
 func effectiveGuestFreeMemTotal(memTotal uint64, status *proxmox.VMStatus) uint64 {
 	if status == nil {
 		return memTotal
 	}
-	if status.Balloon > 0 && status.Balloon <= memTotal && status.FreeMem <= status.Balloon {
+
+	freeMem := guestStatusFreeMem(status)
+	if status.BalloonInfo != nil {
+		if status.BalloonInfo.TotalMem > 0 && freeMem <= status.BalloonInfo.TotalMem {
+			if memTotal > 0 && status.BalloonInfo.TotalMem > memTotal {
+				return memTotal
+			}
+			return status.BalloonInfo.TotalMem
+		}
+		if status.BalloonInfo.Actual > 0 && freeMem <= status.BalloonInfo.Actual {
+			if memTotal > 0 && status.BalloonInfo.Actual > memTotal {
+				return memTotal
+			}
+			return status.BalloonInfo.Actual
+		}
+	}
+
+	if status.Balloon > 0 && status.Balloon <= memTotal && freeMem <= status.Balloon {
 		return status.Balloon
 	}
 	return memTotal
@@ -111,15 +141,16 @@ func selectGuestLowTrustUsedMemory(memTotal uint64, status *proxmox.VMStatus) (u
 	}
 
 	freeMemTotal := effectiveGuestFreeMemTotal(memTotal, status)
-	hasFreeFallback := status.FreeMem > 0 && freeMemTotal >= status.FreeMem
+	freeMem := guestStatusFreeMem(status)
+	hasFreeFallback := freeMem > 0 && freeMemTotal >= freeMem
 	freeDerivedUsed := uint64(0)
 	if hasFreeFallback {
-		freeDerivedUsed = freeMemTotal - status.FreeMem
+		freeDerivedUsed = freeMemTotal - freeMem
 	}
 
 	if status.Mem > 0 {
 		if hasFreeFallback && freeDerivedUsed < status.Mem {
-			statusMemPlusFree := saturatingAddUint64(status.Mem, status.FreeMem)
+			statusMemPlusFree := saturatingAddUint64(status.Mem, freeMem)
 			if status.Mem >= freeMemTotal && freeDerivedUsed < freeMemTotal {
 				return freeDerivedUsed, "status-freemem"
 			}
@@ -162,10 +193,15 @@ func (m *Monitor) resolveGuestStatusMemory(
 	if guestRaw != nil {
 		guestRaw.StatusMaxMem = status.MaxMem
 		guestRaw.StatusMem = status.Mem
-		guestRaw.StatusFreeMem = status.FreeMem
+		guestRaw.StatusFreeMem = guestStatusFreeMem(status)
 		guestRaw.Balloon = status.Balloon
 		guestRaw.BalloonMin = status.BalloonMin
 		guestRaw.Agent = status.Agent.Value
+		if status.BalloonInfo != nil {
+			guestRaw.BalloonInfoFreeMem = status.BalloonInfo.FreeMem
+			guestRaw.BalloonInfoTotalMem = status.BalloonInfo.TotalMem
+			guestRaw.BalloonInfoActual = status.BalloonInfo.Actual
+		}
 	}
 
 	memAvailable := uint64(0)
@@ -207,7 +243,7 @@ func (m *Monitor) resolveGuestStatusMemory(
 		}
 	}
 
-	if memAvailable == 0 && status.Agent.Value > 0 {
+	if memAvailable == 0 && status.Agent.IsAvailable() {
 		if agentAvailable, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, node, vmid); agentErr == nil && agentAvailable > 0 {
 			memAvailable = agentAvailable
 			memorySource = "guest-agent-meminfo"

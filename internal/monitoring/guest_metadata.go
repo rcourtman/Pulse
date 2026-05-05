@@ -228,7 +228,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	cached, ok := m.guestMetadataCache[key]
 	m.guestMetadataMu.RUnlock()
 
-	agentAvailable := client != nil && ((vmStatus != nil && vmStatus.Agent.Value > 0) || allowWithoutStatus)
+	agentAvailable := client != nil && ((vmStatus != nil && vmStatus.Agent.IsAvailable()) || allowWithoutStatus)
 	if !agentAvailable {
 		if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheEntryTTL(cached) {
 			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion

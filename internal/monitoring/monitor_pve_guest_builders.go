@@ -92,7 +92,7 @@ func (m *Monitor) applyVMStatusDetails(
 
 	// Always try to get filesystem info if agent is enabled
 	// Prefer guest agent data over cluster/resources data for accuracy
-	if status.Agent.Value > 0 {
+	if status.Agent.IsAvailable() {
 		var fsDisks []models.Disk
 		state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
 			ctx,
@@ -111,13 +111,18 @@ func (m *Monitor) applyVMStatusDetails(
 		if state.diskTotal > 0 {
 			state.diskUsage = -1 // Show as allocated size
 		}
-		state.diskStatusReason = "agent-disabled"
+		if status.Agent.IsEnabled() {
+			state.diskStatusReason = "agent-not-running"
+		} else {
+			state.diskStatusReason = "agent-disabled"
+		}
 		log.Debug().
 			Str("instance", instanceName).
 			Str("vm", res.Name).
 			Int("vmid", res.VMID).
 			Int("agent", status.Agent.Value).
-			Msg("VM does not have guest agent enabled in config")
+			Bool("agentEnabled", status.Agent.IsEnabled()).
+			Msg("VM guest agent is not currently queryable")
 	}
 
 }

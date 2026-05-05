@@ -254,13 +254,18 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					}
 
 					// Check if agent is enabled
-					if vmStatus != nil && vmStatus.Agent.Value == 0 {
-						diskStatusReason = "agent-disabled"
+					if vmStatus != nil && !vmStatus.Agent.IsAvailable() {
+						if vmStatus.Agent.IsEnabled() {
+							diskStatusReason = "agent-not-running"
+						} else {
+							diskStatusReason = "agent-disabled"
+						}
 						if logging.IsLevelEnabled(zerolog.DebugLevel) {
 							log.Debug().
 								Str("instance", instanceName).
 								Str("vm", vm.Name).
-								Msg("Guest agent disabled in VM config")
+								Bool("agentEnabled", vmStatus.Agent.IsEnabled()).
+								Msg("Guest agent is not currently queryable")
 						}
 					} else {
 						if logging.IsLevelEnabled(zerolog.DebugLevel) {

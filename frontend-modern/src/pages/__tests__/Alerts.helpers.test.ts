@@ -202,7 +202,7 @@ describe('alert resource display labels', () => {
 describe('shared storage override migration', () => {
   it('keeps legacy Ceph override ids visible on the v6 thresholds surface', () => {
     const storage = {
-      id: 'Main-cluster-ceph-pool',
+      id: 'storage-4a40f1c6',
       name: 'ceph-pool',
       displayName: 'ceph-pool',
       type: 'storage',
@@ -211,6 +211,10 @@ describe('shared storage override migration', () => {
       sourceType: 'api',
       status: 'online',
       lastSeen: Date.now(),
+      metricsTarget: {
+        resourceType: 'storage',
+        resourceId: 'Main-cluster-ceph-pool',
+      },
       proxmox: {
         instance: 'Main',
         node: 'cluster',

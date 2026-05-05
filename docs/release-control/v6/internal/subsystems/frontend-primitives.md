@@ -1046,9 +1046,11 @@ That same shared alerts feature boundary now also owns legacy shared-storage
 override migration. `frontend-modern/src/features/alerts/alertOverridesModel.ts`
 and `frontend-modern/src/features/alerts/useAlertOverridesState.ts` must
 canonicalize per-node shared-storage override keys such as
-`Main-pve1-ceph-pool` onto the current cluster-scoped storage resource id
-before the thresholds table derives rows, so old Ceph override records survive
-the v6 feature-shell path instead of silently disappearing from the live editor.
+`Main-pve1-ceph-pool`, hashed `/api/resources` storage ids, and Ceph pool
+storage rows onto the storage metrics target id before the thresholds table
+derives rows, so old Ceph override records and newly projected Ceph pool
+overrides survive the v6 feature-shell path instead of silently disappearing
+from the live editor.
 
 The frontend already has several guardrail tests. The next step is to keep
 turning repeated local patterns into explicit shared primitives with hard usage
@@ -2435,9 +2437,10 @@ normalization, factory defaults, docker-gap validation, and payload
 serialization, `frontend-modern/src/features/alerts/alertOverridesModel.ts`
 for override normalization and resource-backed projection. That shared
 feature-model boundary must also canonicalize legacy shared-storage override
-keys onto the current storage resource id before thresholds rows are derived,
-so migrated Ceph/shared-datastore overrides survive the feature-shell path
-instead of dropping out of the live editor, and
+keys and hashed storage resource ids onto the storage metrics target id before
+thresholds rows are derived, so migrated Ceph/shared-datastore overrides and
+Ceph pool overrides survive the feature-shell path instead of dropping out of
+the live editor, and
 `frontend-modern/src/features/alerts/useAlertOverridesState.ts`
 for reactive override state and thresholds-facing resource selectors, and
 `frontend-modern/src/features/alerts/alertDestinationsModel.ts` for

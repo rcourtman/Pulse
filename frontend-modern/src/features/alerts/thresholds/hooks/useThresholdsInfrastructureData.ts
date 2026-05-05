@@ -8,10 +8,15 @@ import type { Resource as TableResource } from '../tableTypes';
 import { ThresholdsDataInputs } from '../thresholdsResourceModel';
 import {
   createOverridesMap,
+  findOverrideByCandidates,
   hasThresholdDiff,
   normalizeStorageStatus,
   storageCoords,
 } from '../thresholdsResourceModel';
+import {
+  storageOverrideActionId as getStorageOverrideActionId,
+  storageOverrideIdCandidates as getStorageOverrideIdCandidates,
+} from '@/features/alerts/alertOverridesModel';
 
 export function useThresholdsInfrastructureData(inputs: ThresholdsDataInputs) {
   const { props, editingId, searchTerm } = inputs;
@@ -130,12 +135,16 @@ export function useThresholdsInfrastructureData(inputs: ThresholdsDataInputs) {
     const overridesMap = createOverridesMap(props.overrides());
 
     const storageDevices = (props.storage ?? []).map((storage) => {
-      const override = overridesMap.get(storage.id);
+      const storageActionId = getStorageOverrideActionId(storage);
+      const override = findOverrideByCandidates(
+        overridesMap,
+        getStorageOverrideIdCandidates(storage),
+      );
       const coords = storageCoords(storage);
       const hasCustomThresholds = hasThresholdDiff(override, { usage: props.storageDefault() });
 
       return {
-        id: storage.id,
+        id: storageActionId,
         name: getAlertResourceDisplayLabel(storage),
         displayName: getAlertResourceDisplayLabel(storage),
         rawName: storage.name,

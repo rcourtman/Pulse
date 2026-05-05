@@ -33,10 +33,14 @@ describe('alertOverridesModel', () => {
 
   it('normalizes legacy shared-storage override ids into canonical storage resource ids', () => {
     const storage = makeResource({
-      id: 'Main-cluster-ceph-pool',
+      id: 'storage-4a40f1c6',
       name: 'ceph-pool',
       type: 'storage',
       platformId: 'Main',
+      metricsTarget: {
+        resourceType: 'storage',
+        resourceId: 'Main-cluster-ceph-pool',
+      },
       proxmox: {
         instance: 'Main',
         node: 'cluster',
@@ -61,6 +65,38 @@ describe('alertOverridesModel', () => {
     ).toEqual({
       'Main-cluster-ceph-pool': {
         usage: { trigger: 92, clear: 82 },
+      },
+    });
+  });
+
+  it('normalizes hashed storage resource ids into storage metrics target ids', () => {
+    const storage = makeResource({
+      id: 'storage-4a40f1c6',
+      name: 'data_replication',
+      type: 'storage',
+      metricsTarget: {
+        resourceType: 'storage',
+        resourceId: 'Main-ceph-pool-data_replication',
+      },
+      storage: {
+        shared: true,
+        isCeph: true,
+        type: 'ceph',
+      },
+    });
+
+    expect(
+      normalizeRawOverridesConfig(
+        {
+          'storage-4a40f1c6': {
+            usage: { trigger: 70, clear: 65 },
+          } as any,
+        },
+        [storage],
+      ),
+    ).toEqual({
+      'Main-ceph-pool-data_replication': {
+        usage: { trigger: 70, clear: 65 },
       },
     });
   });
@@ -209,11 +245,15 @@ describe('alertOverridesModel', () => {
 
   it('projects shared-storage overrides through the canonical storage resource id', () => {
     const storage = makeResource({
-      id: 'Main-cluster-ceph-pool',
+      id: 'storage-4a40f1c6',
       name: 'ceph-pool',
       displayName: 'ceph-pool',
       type: 'storage',
       platformId: 'Main',
+      metricsTarget: {
+        resourceType: 'storage',
+        resourceId: 'Main-cluster-ceph-pool',
+      },
       proxmox: {
         instance: 'Main',
         node: 'cluster',

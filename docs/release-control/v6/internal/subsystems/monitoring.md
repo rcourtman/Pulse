@@ -359,6 +359,11 @@ through the resolved unified-resource metrics target, so seeded history,
 runtime writes, storage summary hover selection, and detail charts all extend
 one series instead of splitting between canonical resource IDs and
 source-native metric IDs.
+Proxmox Ceph pools are part of that same storage-series contract. When Ceph DF
+exposes pools, monitoring must project each pool through the shared
+`models.CephPoolStorage` helper, write storage history under that pool storage
+id, and evaluate alerts through `CheckStorage` so per-pool thresholds, active
+alerts, and charts all use the same storage series identity.
 That same chart boundary also owns provider-backed workload bridging.
 Workload-chart consumers may query VM and system-container history through the
 resolved unified-resource metrics target, but the emitted series identity must

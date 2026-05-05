@@ -120,7 +120,7 @@ test.describe('Ceph alert thresholds', () => {
               },
             },
             {
-              id: 'Main-cluster-ceph-pool',
+              id: 'storage-4a40f1c6',
               type: 'storage',
               name: 'ceph-pool',
               displayName: 'ceph-pool',
@@ -133,10 +133,49 @@ test.describe('Ceph alert thresholds', () => {
                 displayName: 'ceph-pool',
                 platformId: 'Main-cluster-ceph-pool',
               },
+              metricsTarget: {
+                resourceType: 'storage',
+                resourceId: 'Main-cluster-ceph-pool',
+              },
               storage: {
                 type: 'rbd',
                 shared: true,
                 isCeph: true,
+                nodes: ['pve1', 'pve2'],
+              },
+              proxmox: {
+                node: 'cluster',
+                instance: 'Main',
+              },
+              platformData: {
+                node: 'cluster',
+                instance: 'Main',
+                sources: ['proxmox'],
+              },
+            },
+            {
+              id: 'storage-5f3b87d1',
+              type: 'storage',
+              name: 'data_replication',
+              displayName: 'data_replication',
+              platformId: 'Main',
+              platformType: 'proxmox-pve',
+              sourceType: 'api',
+              sources: ['proxmox'],
+              status: 'available',
+              canonicalIdentity: {
+                displayName: 'data_replication',
+                platformId: 'Main-ceph-pool-data_replication',
+              },
+              metricsTarget: {
+                resourceType: 'storage',
+                resourceId: 'Main-ceph-pool-data_replication',
+              },
+              storage: {
+                type: 'ceph',
+                shared: true,
+                isCeph: true,
+                pool: 'data_replication',
                 nodes: ['pve1', 'pve2'],
               },
               proxmox: {
@@ -176,6 +215,12 @@ test.describe('Ceph alert thresholds', () => {
               usage: {
                 trigger: 92,
                 clear: 82,
+              },
+            },
+            'Main-ceph-pool-data_replication': {
+              usage: {
+                trigger: 70,
+                clear: 65,
               },
             },
           },
@@ -228,7 +273,10 @@ test.describe('Ceph alert thresholds', () => {
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Storage Devices' })).toBeVisible();
     await expect(page.getByText('ceph-pool', { exact: true })).toBeVisible();
+    await expect(page.getByText('data_replication', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Revert to defaults for ceph-pool' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit thresholds for ceph-pool' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Revert to defaults for data_replication' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit thresholds for data_replication' })).toBeVisible();
   });
 });

@@ -165,6 +165,9 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	}
 	for _, cluster := range snapshot.CephClusters {
 		rr.ingestCephCluster(cluster)
+		for _, storage := range models.CephPoolStorage(cluster) {
+			rr.ingestStorage(storage)
+		}
 	}
 	for _, dh := range snapshot.DockerHosts {
 		for _, dc := range dh.Containers {

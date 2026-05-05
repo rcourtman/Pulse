@@ -66,9 +66,6 @@ func stabilizeGuestLowTrustDisk(
 	if prev == nil || prev.Type != "qemu" || !hasRecentGuestAgentEvidence(prev, now) {
 		return diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason
 	}
-	if strings.HasPrefix(prev.DiskStatusReason, "prev-") {
-		return diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason
-	}
 	if prev.Disk.Total <= 0 || prev.Disk.Used < 0 || prev.Disk.Used > prev.Disk.Total || prev.Disk.Usage < 0 {
 		return diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason
 	}

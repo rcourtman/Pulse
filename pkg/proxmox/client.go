@@ -2324,11 +2324,44 @@ type VMMemInfo struct {
 	Shared    uint64 `json:"shared,omitempty"`
 }
 
+// VMBalloonInfo describes guest memory details returned by status/current when
+// the virtio balloon driver can report guest-side memory state.
+type VMBalloonInfo struct {
+	Actual          uint64 `json:"actual,omitempty"`
+	FreeMem         uint64 `json:"free_mem,omitempty"`
+	LastUpdate      uint64 `json:"last_update,omitempty"`
+	MajorPageFaults uint64 `json:"major_page_faults,omitempty"`
+	MaxMem          uint64 `json:"max_mem,omitempty"`
+	MemSwappedIn    uint64 `json:"mem_swapped_in,omitempty"`
+	MemSwappedOut   uint64 `json:"mem_swapped_out,omitempty"`
+	MinorPageFaults uint64 `json:"minor_page_faults,omitempty"`
+	TotalMem        uint64 `json:"total_mem,omitempty"`
+}
+
 // VMAgentField handles the polymorphic agent field that changed in Proxmox 8.3+.
 // Older versions: integer (0 or 1)
 // Proxmox 8.3+: object {"enabled":1,"available":1} or similar
 type VMAgentField struct {
-	Value int
+	Value             int
+	Enabled           int
+	Available         int
+	AvailabilityKnown bool
+}
+
+// IsAvailable reports whether status/current says guest-agent commands are
+// currently queryable. Legacy integer payloads only expose one bit, so they are
+// treated as available when non-zero.
+func (a VMAgentField) IsAvailable() bool {
+	return a.Value > 0
+}
+
+// IsEnabled reports whether the VM config has the guest agent enabled even if
+// the current status says the in-guest service is unavailable.
+func (a VMAgentField) IsEnabled() bool {
+	if a.Enabled > 0 {
+		return true
+	}
+	return !a.AvailabilityKnown && a.Value > 0
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to handle both int and object formats
@@ -2337,51 +2370,64 @@ func (a *VMAgentField) UnmarshalJSON(data []byte) error {
 	var intValue int
 	if err := json.Unmarshal(data, &intValue); err == nil {
 		a.Value = intValue
+		a.Enabled = intValue
+		a.Available = intValue
+		a.AvailabilityKnown = false
 		return nil
 	}
 
 	// Try parsing as object (Proxmox 8.3+)
 	var objValue struct {
-		Enabled   int `json:"enabled"`
-		Available int `json:"available"`
+		Enabled   *int `json:"enabled"`
+		Available *int `json:"available"`
 	}
 	if err := json.Unmarshal(data, &objValue); err == nil {
-		// Agent is considered enabled if either field is > 0
-		// Typically we want to check "available" for actual functionality
-		if objValue.Available > 0 {
-			a.Value = objValue.Available
-		} else if objValue.Enabled > 0 {
-			a.Value = objValue.Enabled
-		} else {
-			a.Value = 0
+		a.Value = 0
+		a.Enabled = 0
+		a.Available = 0
+		a.AvailabilityKnown = objValue.Available != nil
+		if objValue.Enabled != nil {
+			a.Enabled = *objValue.Enabled
+		}
+		if objValue.Available != nil {
+			a.Available = *objValue.Available
+			if a.Available > 0 {
+				a.Value = a.Available
+			}
+		} else if a.Enabled > 0 {
+			a.Value = a.Enabled
 		}
 		return nil
 	}
 
 	// If neither worked, default to 0 (agent disabled)
 	a.Value = 0
+	a.Enabled = 0
+	a.Available = 0
+	a.AvailabilityKnown = false
 	return nil
 }
 
 // VMStatus represents detailed VM status returned by Proxmox.
 type VMStatus struct {
-	Status     string       `json:"status"`
-	CPU        float64      `json:"cpu"`
-	CPUs       int          `json:"cpus"`
-	Mem        uint64       `json:"mem"`
-	MaxMem     uint64       `json:"maxmem"`
-	Balloon    uint64       `json:"balloon"`
-	BalloonMin uint64       `json:"balloon_min"`
-	FreeMem    uint64       `json:"freemem"`
-	MemInfo    *VMMemInfo   `json:"meminfo,omitempty"`
-	Disk       uint64       `json:"disk"`
-	MaxDisk    uint64       `json:"maxdisk"`
-	DiskRead   uint64       `json:"diskread"`
-	DiskWrite  uint64       `json:"diskwrite"`
-	NetIn      uint64       `json:"netin"`
-	NetOut     uint64       `json:"netout"`
-	Uptime     uint64       `json:"uptime"`
-	Agent      VMAgentField `json:"agent"`
+	Status      string         `json:"status"`
+	CPU         float64        `json:"cpu"`
+	CPUs        int            `json:"cpus"`
+	Mem         uint64         `json:"mem"`
+	MaxMem      uint64         `json:"maxmem"`
+	Balloon     uint64         `json:"balloon"`
+	BalloonMin  uint64         `json:"balloon_min"`
+	BalloonInfo *VMBalloonInfo `json:"ballooninfo,omitempty"`
+	FreeMem     uint64         `json:"freemem"`
+	MemInfo     *VMMemInfo     `json:"meminfo,omitempty"`
+	Disk        uint64         `json:"disk"`
+	MaxDisk     uint64         `json:"maxdisk"`
+	DiskRead    uint64         `json:"diskread"`
+	DiskWrite   uint64         `json:"diskwrite"`
+	NetIn       uint64         `json:"netin"`
+	NetOut      uint64         `json:"netout"`
+	Uptime      uint64         `json:"uptime"`
+	Agent       VMAgentField   `json:"agent"`
 }
 
 // GetZFSPoolStatus gets the status of ZFS pools on a node

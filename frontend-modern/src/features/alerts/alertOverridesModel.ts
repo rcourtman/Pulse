@@ -46,7 +46,7 @@ const buildSharedStorageLegacyKeyMap = (storageResources: Resource[]): Map<strin
     const resourceName = asString(resource.name);
     const proxmox = resource.proxmox;
     const instance = asString(proxmox?.instance) || asString(resource.platformId);
-    const canonicalID = asString(resource.id);
+    const canonicalID = storageOverrideActionId(resource);
 
     if (!storageMeta?.shared || !resourceName || !canonicalID) {
       return;
@@ -70,13 +70,45 @@ const buildSharedStorageLegacyKeyMap = (storageResources: Resource[]): Map<strin
   return legacyToCanonical;
 };
 
+export const storageOverrideIdCandidates = (resource: Resource): string[] =>
+  uniqueIds(
+    resource.metricsTarget?.resourceType === 'storage'
+      ? resource.metricsTarget.resourceId
+      : undefined,
+    resource.id,
+  );
+
+export const storageOverrideActionId = (resource: Resource): string =>
+  storageOverrideIdCandidates(resource)[0] || resource.id;
+
+const buildStorageOverrideKeyMap = (storageResources: Resource[]): Map<string, string> => {
+  const keyMap = new Map<string, string>();
+
+  storageResources.forEach((resource) => {
+    const canonicalID = storageOverrideActionId(resource);
+    if (!canonicalID) return;
+
+    storageOverrideIdCandidates(resource).forEach((candidate) => {
+      if (candidate !== canonicalID) {
+        keyMap.set(candidate, canonicalID);
+      }
+    });
+  });
+
+  buildSharedStorageLegacyKeyMap(storageResources).forEach((canonicalID, legacyID) => {
+    keyMap.set(legacyID, canonicalID);
+  });
+
+  return keyMap;
+};
+
 export const normalizeRawOverridesConfig = (
   rawOverrides: Record<string, RawOverrideConfig>,
   storageResources: Resource[] = [],
 ): Record<string, RawOverrideConfig> => {
   const cleanedOverrides: Record<string, RawOverrideConfig> = {};
   const priorityByKey = new Map<string, number>();
-  const sharedStorageLegacyKeyMap = buildSharedStorageLegacyKeyMap(storageResources);
+  const storageOverrideKeyMap = buildStorageOverrideKeyMap(storageResources);
 
   for (const [key, value] of Object.entries(rawOverrides)) {
     const normalizedGuestKey = normalizeGuestOverrideKey(key);
@@ -91,9 +123,9 @@ export const normalizeRawOverridesConfig = (
           .replace(/^-|-$/g, '') || 'unknown';
       normalizedKey = diskMatch[1] + normalized;
     }
-    const sharedStorageKey = sharedStorageLegacyKeyMap.get(normalizedKey);
-    if (sharedStorageKey) {
-      normalizedKey = sharedStorageKey;
+    const storageOverrideKey = storageOverrideKeyMap.get(normalizedKey);
+    if (storageOverrideKey) {
+      normalizedKey = storageOverrideKey;
     }
 
     const priority = normalizedKey === key ? 1 : 0;
@@ -255,10 +287,13 @@ export const buildProjectedOverrides = ({
   });
 
   storageResources.forEach((storageResource) => {
-    const canonicalID = asString(storageResource.id);
+    const canonicalID = storageOverrideActionId(storageResource);
     if (canonicalID) {
       storageMap.set(canonicalID, storageResource);
     }
+    storageOverrideIdCandidates(storageResource).forEach((candidate) => {
+      storageMap.set(candidate, storageResource);
+    });
   });
 
   buildSharedStorageLegacyKeyMap(storageResources).forEach((canonicalID, legacyID) => {
@@ -418,7 +453,7 @@ export const buildProjectedOverrides = ({
     if (storage) {
       const coords = storageCoords(storage);
       upsertProjectedOverride({
-        id: storage.id,
+        id: storageOverrideActionId(storage),
         name: getAlertResourceDisplayLabel(storage),
         type: 'storage',
         resourceType: 'Storage',

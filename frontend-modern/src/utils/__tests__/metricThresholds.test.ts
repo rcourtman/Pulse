@@ -198,7 +198,7 @@ describe('metricThresholds', () => {
       });
     });
 
-    it('treats disabled thresholds as normal display coloring', () => {
+    it('uses default display coloring when alert thresholds are disabled', () => {
       const config = {
         enabled: true,
         guestDefaults: {},
@@ -214,7 +214,7 @@ describe('metricThresholds', () => {
       expect(
         resolveMetricDisplayThresholds(config, 'guest', 'disk', 'guest:cluster-a:100'),
       ).toBeNull();
-      expect(getMetricColorClass(99, 'disk', null)).toContain('bg-metric-normal-bg');
+      expect(getMetricColorClass(99, 'disk', null)).toContain('bg-metric-critical-bg');
     });
 
     it('honors disabled docker defaults and storage usage aliases', () => {

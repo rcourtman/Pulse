@@ -33,5 +33,8 @@ describe('workloadGuestPresentation', () => {
     expect(getWorkloadGuestDiskStatusMessage()).toBe(
       'Disk stats unavailable. Guest agent may not be installed.',
     );
+    expect(getWorkloadGuestDiskStatusMessage('prev-no-filesystems')).toBe(
+      'Using last known disk stats. No filesystems found. VM may be booting or using a Live ISO.',
+    );
   });
 });

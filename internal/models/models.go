@@ -1111,6 +1111,69 @@ type Storage struct {
 	ZFSPool   *ZFSPool `json:"zfsPool,omitempty"` // ZFS pool details if this is ZFS storage
 }
 
+func CephPoolStorageID(instanceName, poolName string) string {
+	instance := strings.TrimSpace(instanceName)
+	if instance == "" {
+		instance = "ceph"
+	}
+	name := strings.TrimSpace(poolName)
+	if name == "" {
+		name = "pool"
+	}
+	return fmt.Sprintf("%s-ceph-pool-%s", instance, name)
+}
+
+func StorageFromCephPool(cluster CephCluster, pool CephPool) Storage {
+	name := strings.TrimSpace(pool.Name)
+	if name == "" {
+		name = fmt.Sprintf("pool-%d", pool.ID)
+	}
+	total := pool.StoredBytes + pool.AvailableBytes
+	free := pool.AvailableBytes
+	if free < 0 {
+		free = 0
+	}
+	usage := pool.PercentUsed
+	if usage == 0 && total > 0 && pool.StoredBytes > 0 {
+		usage = (float64(pool.StoredBytes) / float64(total)) * 100
+	}
+
+	status := "available"
+	switch strings.ToUpper(strings.TrimSpace(cluster.Health)) {
+	case "HEALTH_ERR", "ERR", "ERROR":
+		status = "unavailable"
+	}
+
+	return Storage{
+		ID:       CephPoolStorageID(cluster.Instance, name),
+		Name:     name,
+		Node:     "cluster",
+		Instance: cluster.Instance,
+		Type:     "ceph",
+		Status:   status,
+		Pool:     name,
+		Total:    total,
+		Used:     pool.StoredBytes,
+		Free:     free,
+		Usage:    usage,
+		Content:  "ceph",
+		Shared:   true,
+		Enabled:  true,
+		Active:   status == "available",
+	}
+}
+
+func CephPoolStorage(cluster CephCluster) []Storage {
+	if len(cluster.Pools) == 0 {
+		return nil
+	}
+	out := make([]Storage, 0, len(cluster.Pools))
+	for _, pool := range cluster.Pools {
+		out = append(out, StorageFromCephPool(cluster, pool))
+	}
+	return out
+}
+
 func (s Storage) NormalizeCollections() Storage {
 	if s.Nodes == nil {
 		s.Nodes = []string{}

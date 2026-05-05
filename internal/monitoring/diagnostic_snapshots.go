@@ -52,6 +52,9 @@ type VMMemoryRaw struct {
 	StatusMaxMem           uint64 `json:"statusMaxmem,omitempty"`
 	Balloon                uint64 `json:"balloon,omitempty"`
 	BalloonMin             uint64 `json:"balloonMin,omitempty"`
+	BalloonInfoFreeMem     uint64 `json:"balloonInfoFreeMem,omitempty"`
+	BalloonInfoTotalMem    uint64 `json:"balloonInfoTotalMem,omitempty"`
+	BalloonInfoActual      uint64 `json:"balloonInfoActual,omitempty"`
 	MemInfoUsed            uint64 `json:"meminfoUsed,omitempty"`
 	MemInfoFree            uint64 `json:"meminfoFree,omitempty"`
 	MemInfoTotal           uint64 `json:"meminfoTotal,omitempty"`
@@ -240,6 +243,12 @@ func (m *Monitor) logGuestMemorySource(instance, guestType, node string, vmid in
 	}
 	if snapshot.Raw.StatusMaxMem > 0 {
 		evt = evt.Uint64("statusMaxMem", snapshot.Raw.StatusMaxMem)
+	}
+	if snapshot.Raw.BalloonInfoFreeMem > 0 {
+		evt = evt.Uint64("balloonInfoFreeMem", snapshot.Raw.BalloonInfoFreeMem)
+	}
+	if snapshot.Raw.BalloonInfoTotalMem > 0 {
+		evt = evt.Uint64("balloonInfoTotalMem", snapshot.Raw.BalloonInfoTotalMem)
 	}
 	if snapshot.Raw.MemInfoAvailable > 0 {
 		evt = evt.Uint64("memInfoAvailable", snapshot.Raw.MemInfoAvailable)

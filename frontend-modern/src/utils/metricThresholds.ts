@@ -242,10 +242,7 @@ export function getMetricSeverity(
   metric: MetricType,
   thresholds?: MetricDisplayThresholds | null,
 ): MetricSeverity {
-  const t = thresholds === undefined ? METRIC_THRESHOLDS[metric] : thresholds;
-  if (!t) {
-    return 'normal';
-  }
+  const t = thresholds ?? METRIC_THRESHOLDS[metric];
   if (value >= t.critical) return 'critical';
   if (value >= t.warning) return 'warning';
   return 'normal';

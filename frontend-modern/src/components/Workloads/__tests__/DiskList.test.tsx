@@ -1,10 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@solidjs/testing-library';
 import { DiskList } from '../DiskList';
-import {
-  buildWorkloadsDiskPresentation,
-  getWorkloadsDiskUsagePercent,
-} from '../diskListModel';
+import { buildWorkloadsDiskPresentation, getWorkloadsDiskUsagePercent } from '../diskListModel';
 import type { Disk } from '@/types/api';
 
 function makeDisk(overrides: Partial<Disk> = {}): Disk {
@@ -62,6 +59,10 @@ describe('DiskList', () => {
       ],
       ['agent-error', 'Error communicating with guest agent.'],
       ['no-data', 'No disk data available from Proxmox API.'],
+      [
+        'prev-no-filesystems',
+        'Using last known disk stats. No filesystems found. VM may be booting or using a Live ISO.',
+      ],
     ] as const)('shows correct tooltip for diskStatusReason="%s"', (reason, expected) => {
       render(() => <DiskList disks={[]} diskStatusReason={reason} />);
       expect(screen.getByText('-')).toHaveAttribute('title', expected);

@@ -1637,6 +1637,54 @@ func TestResourceRegistry_IngestSnapshotDerivesStorageConsumers(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotProjectsCephPoolsAsStorage(t *testing.T) {
+	now := time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC)
+	rr := NewRegistry(nil)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		CephClusters: []models.CephCluster{
+			{
+				ID:          "Main-fsid123",
+				Instance:    "Main",
+				Name:        "Main Ceph",
+				FSID:        "fsid123",
+				Health:      "HEALTH_OK",
+				LastUpdated: now,
+				Pools: []models.CephPool{
+					{
+						ID:             1,
+						Name:           "data_replication",
+						StoredBytes:    70,
+						AvailableBytes: 30,
+						PercentUsed:    70,
+					},
+				},
+			},
+		},
+	})
+
+	storageResources := rr.ListByType(ResourceTypeStorage)
+	pool := findStorageResource(storageResources, "data_replication", "cluster")
+	if pool.Storage == nil {
+		t.Fatalf("expected Ceph pool storage metadata, got %+v", pool)
+	}
+	if !pool.Storage.IsCeph || !pool.Storage.Shared || pool.Storage.Type != "ceph" {
+		t.Fatalf("unexpected Ceph pool storage metadata: %+v", pool.Storage)
+	}
+	if pool.Metrics == nil || pool.Metrics.Disk == nil || pool.Metrics.Disk.Percent != 70 {
+		t.Fatalf("expected Ceph pool disk metrics, got %+v", pool.Metrics)
+	}
+
+	target := BuildMetricsTargetForRegistry(rr, pool.ID)
+	if target == nil {
+		t.Fatalf("expected metrics target for Ceph pool storage")
+	}
+	wantID := models.CephPoolStorageID("Main", "data_replication")
+	if target.ResourceType != "storage" || target.ResourceID != wantID {
+		t.Fatalf("metrics target = %+v, want storage/%s", target, wantID)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotDerivesPBSDatastoreConsumers(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC)
