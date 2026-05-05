@@ -128,7 +128,10 @@ func TestTrueNASPollerEnableDisableCycle(t *testing.T) {
 	t.Cleanup(poller.Stop)
 
 	waitForCondition(t, 2*time.Second, func() bool {
-		return pollerProviderCount(poller) == 1 && pollerHasProvider(poller, connection.ID) && mock.RequestCount() >= 5
+		return pollerProviderCount(poller) == 1 &&
+			pollerHasProvider(poller, connection.ID) &&
+			mock.RequestCount() >= 5 &&
+			hasTrueNASHostForOrg(poller, "default", "nas-enable-disable")
 	}, "expected enabled poller to start and poll configured TrueNAS connection")
 
 	poller.Stop()

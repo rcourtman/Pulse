@@ -134,6 +134,13 @@ plain nil interface and still dereferenced a typed nil `*websocket.Hub`. The
 monitor broadcast contract now treats typed nil broadcasters as absent, and the
 regression proof covers the tenant-scoped broadcast path.
 
+The third draft release workflow then exposed a race in
+`TestTrueNASPollerEnableDisableCycle`: the proof stopped the poller after a
+request-count threshold, before the asynchronous refresh was guaranteed to have
+committed the canonical TrueNAS host record. The test now waits for the actual
+ingested TrueNAS host before stopping the poller, so the release gate proves the
+canonical record instead of transport activity alone.
+
 No public issue comment, retitle, closure, or customer-facing message was made
 as part of this packet update.
 
@@ -153,5 +160,10 @@ as part of this packet update.
   - `prepare`, `frontend_checks`, `helm_smoke`, and `docker_build` passed
   - `backend_tests` failed on a tenant monitor typed-nil WebSocket hub panic in
     `internal/api`
+- Draft release workflow `25385764666`:
+  - `prepare`, `frontend_checks`, `helm_smoke`, and `docker_build` passed
+  - `backend_tests` failed on `TestTrueNASPollerEnableDisableCycle` stopping
+    before canonical TrueNAS host ingest was proved
 - `go test -race ./internal/config ./tests/migration ./scripts/installtests`
 - `go test -race ./internal/monitoring ./internal/api`
+- `go test -race ./internal/monitoring -run TestTrueNASPollerEnableDisableCycle -count=20`
