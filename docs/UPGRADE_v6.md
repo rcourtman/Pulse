@@ -9,9 +9,9 @@ For current stable release notes and rollout references, see:
 
 For the current v6 prerelease packet, see:
 
-- `docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md`
-- `docs/releases/V6_CHANGELOG_RC3_DRAFT.md`
-- `docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md`
+- `docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md`
+- `docs/releases/V6_CHANGELOG_RC4_DRAFT.md`
+- `docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md`
 
 ## Before You Upgrade
 

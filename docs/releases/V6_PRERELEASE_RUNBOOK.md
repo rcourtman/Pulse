@@ -63,7 +63,7 @@ artifacts, or to an explicitly verified paid container image, rather than the pu
 ## Versioning Rules
 
 - v5 stable examples: `5.1.14`
-- v6 prerelease examples: `6.0.0-rc.1`, `6.0.0-rc.2`, `6.0.0-rc.3`
+- v6 prerelease examples: `6.0.0-rc.1`, `6.0.0-rc.2`, `6.0.0-rc.3`, `6.0.0-rc.4`
 - v6 GA example: `6.0.0`
 
 The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
@@ -93,7 +93,7 @@ The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
 1. Update version on `pulse/v6-release`:
 
 ```bash
-export RC_VERSION="6.0.0-rc.3"
+export RC_VERSION="6.0.0-rc.4"
 
 git checkout pulse/v6-release
 git pull --ff-only
@@ -139,7 +139,7 @@ git push origin pulse/v6-release
 
 6. Canary rollout:
    - Upgrade a small user subset first.
-   - Collect regressions, fix on `pulse/v6-release`, then cut `rc.2`/`rc.3` as needed.
+   - Collect regressions, fix on `pulse/v6-release`, then cut later RCs as needed.
 
 ## Keep v5 Stable During v6 RC
 

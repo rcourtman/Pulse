@@ -99,6 +99,9 @@ Old metadata section.
             "docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md",
             "docs/releases/V6_CHANGELOG_RC3_DRAFT.md",
             "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md",
+            "docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md",
+            "docs/releases/V6_CHANGELOG_RC4_DRAFT.md",
+            "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md",
         )
 
         for relative_path in packet_paths:
@@ -130,6 +133,25 @@ Old metadata section.
             "release artifact validation, draft metadata preservation, upload retries",
             support_pack,
         )
+
+    def test_rc4_packet_records_commit_coverage_and_identity_hardening(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        release_notes = (repo_root / "docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md").read_text(
+            encoding="utf-8"
+        )
+        changelog = (repo_root / "docs/releases/V6_CHANGELOG_RC4_DRAFT.md").read_text(
+            encoding="utf-8"
+        )
+        support_pack = (
+            repo_root / "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("3f16d7845a92d6bf0c5700728bd70e1f4fe32966", release_notes)
+        self.assertIn("commit count: `51`", changelog)
+        self.assertIn("stable identity principals", support_pack)
+        self.assertIn("API-first action planning", changelog)
+        self.assertIn("monitored-system and child-resource volume unmetered", release_notes)
+        self.assertIn("Pulse Mobile pairing for handoff", support_pack)
 
 
 if __name__ == "__main__":

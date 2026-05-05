@@ -173,7 +173,7 @@ def build_blocked_record(*, record_date: str) -> str:
     active_target_id = str(control_plane["active_target_id"])
     accidental_tags = excluded_accidental_rc_tags(status, stable_version)
     rc_tag = latest_matching_rc_tag(stable_version, excluded_tags=accidental_tags)
-    rc_commit = _run_git("rev-parse", rc_tag) if rc_tag else ""
+    rc_commit = _run_git("rev-list", "-n1", rc_tag) if rc_tag else ""
     ga_date, v5_eos_date = parse_release_dates()
     target_is_ga_promotion = active_target_id == "v6-ga-promotion"
     remote_stable_branch_release_dry_run = branch_release_dry_run_workflow(stable_branch)

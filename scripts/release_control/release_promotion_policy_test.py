@@ -136,12 +136,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("docs/releases/RELEASE_NOTES_v6_RC3_DRAFT.md", release_index)
         self.assertIn("docs/releases/V6_CHANGELOG_RC3_DRAFT.md", release_index)
         self.assertIn("docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
+        self.assertIn("docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md", release_index)
+        self.assertIn("docs/releases/V6_CHANGELOG_RC4_DRAFT.md", release_index)
+        self.assertIn("docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
 
     def test_operator_support_packs_keep_free_first_paid_continuity_wording(self) -> None:
         for rel in (
             "docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md",
             "docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md",
             "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md",
+            "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md",
         ):
             with self.subTest(rel=rel):
                 support_pack = read(rel)
@@ -217,6 +221,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                     "docs/releases/V6_CHANGELOG_RC3_DRAFT.md",
                     "docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md",
                 ),
+                "6.0.0-rc.4": (
+                    "docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md",
+                    "docs/releases/V6_CHANGELOG_RC4_DRAFT.md",
+                    "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md",
+                ),
             }
             self.assertIn(current_version, packets)
 
@@ -254,8 +263,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             self.assertIn("docs/releases/V6_CHANGELOG.md", upgrade_guide)
             self.assertNotIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
         else:
-            self.assertEqual(current_version, "6.0.0-rc.3")
-            self.assertIn("docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
+            self.assertEqual(current_version, "6.0.0-rc.4")
+            self.assertIn("docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
+            self.assertNotIn("docs/releases/V6_RC3_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
             self.assertNotIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
             self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
 
@@ -507,7 +517,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("operators know the update signer changed", normalize_ws(runbook))
         self.assertIn("manual reinstall or other explicit trust-migration path", normalize_ws(runbook))
         self.assertIn("points at the current in-repo draft packet", runbook)
-        self.assertIn('export RC_VERSION="6.0.0-rc.3"', runbook)
+        self.assertIn('export RC_VERSION="6.0.0-rc.4"', runbook)
         self.assertIn("printf '%s\\n' \"$RC_VERSION\" > VERSION", runbook)
         self.assertIn("markdown text from the current release-notes packet", runbook)
         self.assertIn("Keep the current release-notes, changelog, and operator-support packet in", runbook)
