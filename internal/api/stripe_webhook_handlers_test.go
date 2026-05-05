@@ -57,17 +57,20 @@ func createTestOrg(t *testing.T, persistence *config.MultiTenantPersistence, org
 	}
 
 	now := time.Now().UTC()
+	ownerUserID := "u_" + orgID + "_owner"
 	org := &models.Organization{
 		ID:          orgID,
 		DisplayName: orgID,
 		CreatedAt:   now,
-		OwnerUserID: ownerEmail,
+		OwnerUserID: ownerUserID,
+		OwnerEmail:  ownerEmail,
 		Members: []models.OrganizationMember{
 			{
-				UserID:  ownerEmail,
+				UserID:  ownerUserID,
+				Email:   ownerEmail,
 				Role:    models.OrgRoleOwner,
 				AddedAt: now,
-				AddedBy: ownerEmail,
+				AddedBy: ownerUserID,
 			},
 		},
 	}
