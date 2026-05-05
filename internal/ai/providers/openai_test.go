@@ -232,6 +232,76 @@ func TestOpenAIClient_ChatStream_EOFWithoutDoneFinalizesToolCalls(t *testing.T) 
 	assert.Equal(t, map[string]interface{}{"host": "nas01"}, doneEvent.ToolCalls[0].Input)
 }
 
+func TestOpenAIClient_ChatStream_EOFWithoutDoneRejectsIncompleteToolCall(t *testing.T) {
+	payload := strings.Join([]string{
+		`data: {"id":"chatcmpl-4","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_incomplete","type":"function","function":{"name":"lookup_host","arguments":"{\"host\""}}]}}]}`,
+		``,
+	}, "\n")
+
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body:       &readOnceEOFBody{payload: []byte(payload)},
+			}, nil
+		}),
+	}
+
+	var doneCalled bool
+
+	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "Hi"}}}, func(event StreamEvent) {
+		if event.Type == "done" {
+			doneCalled = true
+		}
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream ended before tool call completion")
+	assert.False(t, doneCalled)
+}
+
+func TestOpenAIClient_ChatStream_EOFWithoutDoneFinalizesStopResponse(t *testing.T) {
+	payload := strings.Join([]string{
+		`data: {"id":"chatcmpl-5","choices":[{"delta":{"content":"Done"}}]}`,
+		``,
+		`data: {"id":"chatcmpl-5","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":3}}`,
+		``,
+	}, "\n")
+
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body:       &readOnceEOFBody{payload: []byte(payload)},
+			}, nil
+		}),
+	}
+
+	var content string
+	var doneEvent DoneEvent
+	var doneCalled bool
+
+	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "Hi"}}}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			content += event.Data.(ContentEvent).Text
+		case "done":
+			doneCalled = true
+			doneEvent = event.Data.(DoneEvent)
+		}
+	})
+	require.NoError(t, err)
+	require.True(t, doneCalled)
+	assert.Equal(t, "Done", content)
+	assert.Equal(t, "end_turn", doneEvent.StopReason)
+	assert.Equal(t, 7, doneEvent.InputTokens)
+	assert.Equal(t, 3, doneEvent.OutputTokens)
+	assert.Empty(t, doneEvent.ToolCalls)
+}
+
 func TestOpenAIClient_Chat_ToolChoiceNone_DropsTools(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}

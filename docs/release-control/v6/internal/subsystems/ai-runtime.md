@@ -162,6 +162,11 @@ runtime cost control, and shared AI transport surfaces.
     shape covered by the agent-exec auto-approval policy. It must not compose
     shell loops, accept hostnames, interpolate unvalidated targets, or bypass
     approval requirements for compound commands.
+15. Keep OpenAI-compatible streaming finalization fail-closed. `ChatStream` may
+    flush buffered final SSE lines when EOF arrives with unread bytes and may
+    accept providers that omit `[DONE]` only after a terminal `finish_reason`,
+    but it must not emit `done` or executable tool calls from partial tool-call
+    builders when the stream closes before that terminal provider state.
 
 ## Current State
 

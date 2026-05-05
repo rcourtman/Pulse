@@ -920,6 +920,16 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		}
 	}
 
+	if finishReason == "" {
+		if len(toolCallBuilders) > 0 {
+			return fmt.Errorf("stream ended before tool call completion")
+		}
+		return fmt.Errorf("stream ended before completion marker")
+	}
+	if len(toolCallBuilders) > 0 && finishReason != "tool_calls" {
+		return fmt.Errorf("stream ended with finish_reason %q before completing tool calls", finishReason)
+	}
+
 	emitDone()
 	return nil
 }
