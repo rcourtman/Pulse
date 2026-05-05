@@ -316,6 +316,11 @@ profile and assignment columns, but embedded table framing must route through
    or no-data results, and partial or plain-text smartctl output must still
    preserve model, serial, health, and temperature data through the same
    host-agent runtime boundary instead of leaving monitoring to guess.
+   Runtime RAID collection uses `/proc/mdstat` as the canonical discovery
+   baseline for Linux md arrays. `mdadm --detail` may enrich level, state,
+   member, UUID, and rebuild fields when available, but missing or failing
+   mdadm detail probes must not hide a kernel-reported md array from the
+   unified agent report.
    Server-side lifecycle admission must preserve that same continuity across
    Pulse restart and upgrade. When a standalone host comes back with the same
    durable machine/report identity and token continuity, the shared admission

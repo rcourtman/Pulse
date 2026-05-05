@@ -151,6 +151,44 @@ func TestBuildReport(t *testing.T) {
 		mc.raidArraysFn = nil
 	})
 
+	t.Run("RAID collection preserves mdstat fallback topology", func(t *testing.T) {
+		mc.raidArraysFn = func(ctx context.Context) ([]agentshost.RAIDArray, error) {
+			return []agentshost.RAIDArray{
+				{
+					Device:         "/dev/md0",
+					Level:          "raid10",
+					State:          "active",
+					TotalDevices:   4,
+					ActiveDevices:  4,
+					WorkingDevices: 4,
+					Devices: []agentshost.RAIDDevice{
+						{Device: "/dev/sda1", State: "active sync", Slot: 0},
+						{Device: "/dev/sdb1", State: "active sync", Slot: 1},
+						{Device: "/dev/sdc1", State: "active sync", Slot: 2},
+						{Device: "/dev/sdd1", State: "active sync", Slot: 3},
+					},
+				},
+			}, nil
+		}
+
+		report, err := agent.buildReport(context.Background())
+		if err != nil {
+			t.Fatalf("buildReport failed: %v", err)
+		}
+
+		if len(report.RAID) != 1 {
+			t.Fatalf("expected 1 RAID array, got %d", len(report.RAID))
+		}
+		array := report.RAID[0]
+		if array.Device != "/dev/md0" || array.Level != "raid10" || array.State != "active" {
+			t.Fatalf("unexpected RAID array summary: %+v", array)
+		}
+		if array.TotalDevices != 4 || array.ActiveDevices != 4 || len(array.Devices) != 4 {
+			t.Fatalf("unexpected RAID array topology: %+v", array)
+		}
+		mc.raidArraysFn = nil
+	})
+
 	// Test case 4: Ceph collection
 	t.Run("Ceph collection", func(t *testing.T) {
 		mc.cephStatusFn = func(ctx context.Context) (*CephClusterStatus, error) {

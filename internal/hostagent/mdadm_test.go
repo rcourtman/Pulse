@@ -640,7 +640,7 @@ func TestIsMdadmAvailable(t *testing.T) {
 func TestListArrayDevices(t *testing.T) {
 	mdstat := `Personalities : [raid1] [raid6]
 md0 : active raid1 sdb1[1] sda1[0]
-md1 : active raid6 sdc1[2] sdb1[1] sda1[0]
+  md1 : active raid6 sdc1[2] sdb1[1] sda1[0]
 unused devices: <none>`
 	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte(mdstat), nil
@@ -651,6 +651,49 @@ unused devices: <none>`
 	}
 	if len(devices) != 2 || devices[0] != "/dev/md0" || devices[1] != "/dev/md1" {
 		t.Fatalf("unexpected devices: %v", devices)
+	}
+}
+
+func TestParseMDStatArraysDebianRAID10(t *testing.T) {
+	mdstat := `Personalities : [raid10]
+md0 : active raid10 sda1[0] sdb1[1] sdc1[2] sdd1[3]
+      1953258496 blocks super 1.2 512K chunks 2 near-copies [4/4] [UUUU]
+      bitmap: 0/15 pages [0KB], 65536KB chunk
+unused devices: <none>`
+
+	arrays := parseMDStatArrays(mdstat)
+	if len(arrays) != 1 {
+		t.Fatalf("array count = %d, want 1", len(arrays))
+	}
+	array := arrays[0]
+	if array.Device != "/dev/md0" || array.Level != "raid10" || array.State != "active" {
+		t.Fatalf("unexpected mdstat array summary: %+v", array)
+	}
+	if array.TotalDevices != 4 || array.ActiveDevices != 4 || array.WorkingDevices != 4 || array.FailedDevices != 0 {
+		t.Fatalf("unexpected mdstat device counts: %+v", array)
+	}
+	if len(array.Devices) != 4 || array.Devices[0].Device != "/dev/sda1" || array.Devices[3].Slot != 3 {
+		t.Fatalf("unexpected mdstat member devices: %+v", array.Devices)
+	}
+}
+
+func TestParseMDStatArraysDegradedRecovery(t *testing.T) {
+	mdstat := `Personalities : [raid5]
+md2 : active raid5 sdb1[0] sdc1[1] sdd1[2]
+      5860268032 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/3] [UUU_]
+      [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=33440K/sec
+unused devices: <none>`
+
+	arrays := parseMDStatArrays(mdstat)
+	if len(arrays) != 1 {
+		t.Fatalf("array count = %d, want 1", len(arrays))
+	}
+	array := arrays[0]
+	if array.State != "active, degraded" || array.FailedDevices != 1 {
+		t.Fatalf("expected degraded state/counts, got %+v", array)
+	}
+	if array.Operation != "recovery" || array.RebuildPercent != 12.6 || array.RebuildSpeed != "33440K/sec" {
+		t.Fatalf("unexpected recovery details: %+v", array)
 	}
 }
 
@@ -694,6 +737,9 @@ func TestCollectArraysNotAvailable(t *testing.T) {
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("missing")
 	})
+	withReadProcMDStat(t, func() ([]byte, error) {
+		return []byte("unused devices: <none>"), nil
+	})
 
 	arrays, err := CollectRAIDArrays(context.Background())
 	if err != nil {
@@ -701,6 +747,31 @@ func TestCollectArraysNotAvailable(t *testing.T) {
 	}
 	if arrays != nil {
 		t.Fatalf("expected nil arrays, got %v", arrays)
+	}
+}
+
+func TestCollectArraysFallsBackToMDStatWhenMdadmUnavailable(t *testing.T) {
+	withResolveMdadmBinary(t, func() (string, error) { return "", errors.New("missing binary") })
+	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		t.Fatal("runCommandOutput should not be called when mdadm path resolution fails")
+		return nil, nil
+	})
+	withReadProcMDStat(t, func() ([]byte, error) {
+		return []byte(`Personalities : [raid10]
+md0 : active raid10 sda1[0] sdb1[1] sdc1[2] sdd1[3]
+      1953258496 blocks super 1.2 512K chunks 2 near-copies [4/4] [UUUU]
+unused devices: <none>`), nil
+	})
+
+	arrays, err := CollectRAIDArrays(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(arrays) != 1 {
+		t.Fatalf("array count = %d, want 1: %+v", len(arrays), arrays)
+	}
+	if arrays[0].Device != "/dev/md0" || arrays[0].Level != "raid10" || arrays[0].ActiveDevices != 4 {
+		t.Fatalf("unexpected fallback array: %+v", arrays[0])
 	}
 }
 
@@ -739,7 +810,8 @@ func TestCollectArraysNoDevices(t *testing.T) {
 func TestCollectArraysSkipsDetailError(t *testing.T) {
 	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 	withReadProcMDStat(t, func() ([]byte, error) {
-		return []byte("md0 : active raid1 sda1[0]"), nil
+		return []byte(`md0 : active raid1 sda1[0]
+      102400000 blocks super 1.2 [2/1] [U_]`), nil
 	})
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if len(args) > 0 && args[0] == "--version" {
@@ -749,12 +821,14 @@ func TestCollectArraysSkipsDetailError(t *testing.T) {
 	})
 
 	arrays, err := CollectRAIDArrays(context.Background())
-	if err == nil {
-		// All detail probes failed, so error is expected
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	_ = err
-	if arrays != nil {
-		t.Fatalf("expected nil arrays, got %v", arrays)
+	if len(arrays) != 1 {
+		t.Fatalf("array count = %d, want 1: %+v", len(arrays), arrays)
+	}
+	if arrays[0].Device != "/dev/md0" || arrays[0].Level != "raid1" || arrays[0].FailedDevices != 1 {
+		t.Fatalf("unexpected fallback array: %+v", arrays[0])
 	}
 }
 
@@ -825,8 +899,14 @@ func TestCollectArraysPartialSuccessIgnoresDetailErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(arrays) != 1 || arrays[0].Device != "/dev/md1" {
+	if len(arrays) != 2 {
 		t.Fatalf("unexpected arrays: %v", arrays)
+	}
+	if arrays[0].Device != "/dev/md0" || arrays[0].Level != "raid1" || arrays[0].State != "active" {
+		t.Fatalf("unexpected mdstat fallback array: %+v", arrays[0])
+	}
+	if arrays[1].Device != "/dev/md1" || arrays[1].State != "clean" {
+		t.Fatalf("unexpected mdadm detail array: %+v", arrays[1])
 	}
 }
 
