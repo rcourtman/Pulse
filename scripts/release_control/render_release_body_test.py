@@ -155,6 +155,8 @@ Old metadata section.
         self.assertIn("pin Docker install defaults to `6.0.0-rc.4`", changelog)
         self.assertIn("Docker Compose and turnkey Docker installer defaults", release_notes)
         self.assertIn("release-validation commits", changelog)
+        self.assertIn("Tenant monitor state broadcasts", release_notes)
+        self.assertIn("tenant monitor broadcast guard", changelog)
 
 
 if __name__ == "__main__":

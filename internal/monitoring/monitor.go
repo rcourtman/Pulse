@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -3762,7 +3763,7 @@ type stateBroadcaster interface {
 // Monitors with an explicit org ID (including "default") are tenant-scoped.
 // Legacy monitors without an org ID broadcast globally.
 func (m *Monitor) broadcastState(hub stateBroadcaster, frontendState interface{}) {
-	if hub == nil {
+	if isNilStateBroadcaster(hub) {
 		return
 	}
 
@@ -3771,6 +3772,20 @@ func (m *Monitor) broadcastState(hub stateBroadcaster, frontendState interface{}
 		hub.BroadcastStateToTenant(orgID, frontendState)
 	} else {
 		hub.BroadcastState(frontendState)
+	}
+}
+
+func isNilStateBroadcaster(hub stateBroadcaster) bool {
+	if hub == nil {
+		return true
+	}
+
+	value := reflect.ValueOf(hub)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
 	}
 }
 

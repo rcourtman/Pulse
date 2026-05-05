@@ -1,6 +1,10 @@
 package monitoring
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+)
 
 type fakeStateBroadcaster struct {
 	globalBroadcasts int
@@ -42,6 +46,14 @@ func TestMonitorBroadcastStateUsesGlobalChannelForLegacyMonitor(t *testing.T) {
 	if len(broadcaster.tenantBroadcasts) != 0 {
 		t.Fatalf("expected no tenant broadcasts, got %+v", broadcaster.tenantBroadcasts)
 	}
+}
+
+func TestMonitorBroadcastStateIgnoresTypedNilHub(t *testing.T) {
+	m := &Monitor{}
+	m.SetOrgID("default")
+
+	var hub *websocket.Hub
+	m.broadcastState(hub, map[string]string{"kind": "state"})
 }
 
 func TestMonitorSetOrgIDTrimsWhitespace(t *testing.T) {

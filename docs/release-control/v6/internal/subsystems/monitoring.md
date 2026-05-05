@@ -217,6 +217,11 @@ publish those resources from the same canonical unified snapshot that
 raw store-only inventory for broadcast. Otherwise cold hydrate and later
 registry-backed refreshes can swap the operator-visible infrastructure set
 under one running session.
+That websocket publication boundary must also treat an absent hub as an absent
+broadcast channel in both direct nil and typed-nil forms. Tenant-scoped
+background monitors can start in headless test or maintenance runtimes before a
+hub is wired, and state publication must no-op safely instead of dereferencing
+a nil `*websocket.Hub` during ticker refresh.
 That same Docker/Podman monitoring boundary now also owns Docker
 authorization-plugin posture. `internal/dockeragent/collect.go` must project
 `system.Info().Plugins.Authorization` into the canonical agent report,

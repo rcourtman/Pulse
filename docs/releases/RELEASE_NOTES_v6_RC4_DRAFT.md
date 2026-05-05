@@ -30,7 +30,9 @@ exact `rc.3` to `rc.4` candidate range, from the published `v6.0.0-rc.3` tag com
 `3f16d7845a92d6bf0c5700728bd70e1f4fe32966`. The final prerelease target also
 includes RC4 packet and release-validation commits that set the governed
 version, pin Docker install defaults to `6.0.0-rc.4`, and align migration tests
-with the canonical self-hosted licensing contract.
+with the canonical self-hosted licensing contract. The final validation slice
+also makes tenant monitor state broadcasts no-op safely when a headless or test
+runtime has no WebSocket hub wired.
 
 ## Support Stance
 
@@ -91,6 +93,8 @@ with the canonical self-hosted licensing contract.
   correct alert attribution.
 - Metrics rollup writes are less noisy after duplicate or repeated rollup
   opportunities.
+- Tenant monitor state broadcasts now tolerate runtimes without a WebSocket hub
+  instead of panicking during background state refresh.
 
 ### Product Surface And Operator Guidance
 

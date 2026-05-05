@@ -126,6 +126,26 @@ func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	}
 }
 
+func TestStateBroadcastTreatsTypedNilHubAsAbsent(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"func isNilStateBroadcaster(hub stateBroadcaster) bool {",
+		"if isNilStateBroadcaster(hub) {",
+		"value := reflect.ValueOf(hub)",
+		"case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:",
+		"return value.IsNil()",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

@@ -38,7 +38,8 @@ setup hardening, TrueNAS/RAID/Ceph/storage correctness, Workloads empty-state
 handling, Patrol mobile controls, mock-mode cleanup, and release-control
 evidence. The final RC4 prerelease target also includes packet and
 release-validation commits that pin Docker install defaults to `6.0.0-rc.4` and
-remove stale migration-test expectations for retired monitored-system caps.
+remove stale migration-test expectations for retired monitored-system caps, plus
+a tenant monitor broadcast guard for runtimes without a WebSocket hub.
 
 ## Major Changes
 
@@ -115,6 +116,7 @@ The range also includes:
 - Ceph pool threshold resource identity preservation
 - Workloads empty-state source detection
 - mock-mode legacy sidecar cleanup
+- tenant monitor state broadcasts no-op safely when no WebSocket hub is wired
 
 ### 6. Patrol and docs are aligned with the current RC
 

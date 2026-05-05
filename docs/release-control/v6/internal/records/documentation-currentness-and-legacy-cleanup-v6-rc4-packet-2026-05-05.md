@@ -124,6 +124,13 @@ canonical root contract: self-hosted v6 plans preserve paid continuity without
 monitored-system volume caps, and `max_monitored_systems` remains only as
 legacy metadata to scrub.
 
+The second draft release workflow exposed one more backend release-validation
+blocker before publication: tenant monitor startup can run in headless test
+contexts without a WebSocket hub, but the state broadcast helper only checked a
+plain nil interface and still dereferenced a typed nil `*websocket.Hub`. The
+monitor broadcast contract now treats typed nil broadcasters as absent, and the
+regression proof covers the tenant-scoped broadcast path.
+
 No public issue comment, retitle, closure, or customer-facing message was made
 as part of this packet update.
 
@@ -139,4 +146,9 @@ as part of this packet update.
   - `prepare`, `frontend_checks`, `helm_smoke`, and `docker_build` passed
   - `backend_tests` failed on stale RC3 Docker defaults and stale retired
     monitored-system cap expectations
+- Draft release workflow `25384246365`:
+  - `prepare`, `frontend_checks`, `helm_smoke`, and `docker_build` passed
+  - `backend_tests` failed on a tenant monitor typed-nil WebSocket hub panic in
+    `internal/api`
 - `go test -race ./internal/config ./tests/migration ./scripts/installtests`
+- `go test -race ./internal/monitoring ./internal/api`
