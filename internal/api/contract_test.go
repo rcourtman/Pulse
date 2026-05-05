@@ -44,7 +44,6 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -3690,7 +3689,6 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 			},
 		},
 		Total: 1,
-		Limit: 5,
 	}
 
 	got, err := json.Marshal(payload)
@@ -3744,21 +3742,18 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 				}
 			}
 		],
-		"total":1,
-		"limit":5
-	}`
+			"total":1
+		}`
 
 	assertJSONSnapshot(t, got, want)
 }
 
 func TestContract_MonitoredSystemLedgerPreviewJSONSnapshot(t *testing.T) {
 	payload := MonitoredSystemLedgerPreviewResponse{
-		CurrentCount:     1,
-		ProjectedCount:   1,
-		AdditionalCount:  0,
-		Limit:            5,
-		WouldExceedLimit: false,
-		Effect:           "attaches_existing",
+		CurrentCount:    1,
+		ProjectedCount:  1,
+		AdditionalCount: 0,
+		Effect:          "attaches_existing",
 		CurrentSystems: []MonitoredSystemLedgerEntry{
 			{
 				Name:   "Tower",
@@ -3889,11 +3884,9 @@ func TestContract_MonitoredSystemLedgerPreviewJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"current_count":1,
-		"projected_count":1,
-		"additional_count":0,
-		"limit":5,
-		"would_exceed_limit":false,
+			"current_count":1,
+			"projected_count":1,
+			"additional_count":0,
 		"effect":"attaches_existing",
 		"current_systems":[
 			{
@@ -4073,7 +4066,6 @@ func TestContract_MonitoredSystemLedgerDoesNotEmitCompatibilityAliases(t *testin
 	payload := MonitoredSystemLedgerResponse{
 		Systems: []MonitoredSystemLedgerEntry{entry},
 		Total:   1,
-		Limit:   5,
 	}
 
 	got, err := json.Marshal(payload)
@@ -4104,10 +4096,9 @@ func TestContract_MonitoredSystemLedgerDoesNotEmitCompatibilityAliases(t *testin
 					"surfaces":[]
 				}
 			}
-		],
-		"total":1,
-		"limit":5
-	}`
+			],
+			"total":1
+		}`
 
 	assertJSONSnapshot(t, got, want)
 }
@@ -5505,17 +5496,10 @@ func TestContract_HostedTenantEntitlementsFallbackToDefaultBillingState(t *testi
 	if !sliceContainsString(payload.Capabilities, pkglicensing.FeatureRelay) {
 		t.Fatalf("expected hosted tenant payload to include %q from default hosted billing state", pkglicensing.FeatureRelay)
 	}
-	foundMonitoredSystemLimit := false
 	for _, limit := range payload.Limits {
 		if limit.Key == pkglicensing.MaxMonitoredSystemsLicenseGateKey {
-			foundMonitoredSystemLimit = true
-			if limit.Limit != 50 {
-				t.Fatalf("max_monitored_systems limit=%d, want 50", limit.Limit)
-			}
+			t.Fatalf("expected retired max_monitored_systems limit to be omitted, got %+v", payload.Limits)
 		}
-	}
-	if !foundMonitoredSystemLimit {
-		t.Fatalf("expected max_monitored_systems limit in payload, got %+v", payload.Limits)
 	}
 }
 
@@ -5650,10 +5634,9 @@ func TestContract_HostedEntitlementVerifierBridgeUsesCompatibilityEnvAlias(t *te
 
 func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
-		Valid:               true,
-		Tier:                pkglicensing.TierPro,
-		Features:            append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
-		MaxMonitoredSystems: 0,
+		Valid:    true,
+		Tier:     pkglicensing.TierPro,
+		Features: append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
 	}, string(pkglicensing.SubStateActive), entitlementUsageSnapshot{
 		MonitoredSystems:          7,
 		MonitoredSystemsAvailable: true,
@@ -5681,10 +5664,9 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 		"days_remaining":0,
 		"trial_eligible":false,
 		"max_history_days":90,
-		"legacy_connections":{"proxmox_nodes":2,"docker_hosts":1,"kubernetes_clusters":1},
-		"has_migration_gap":false,
-		"monitored_system_capacity":{"mode":"unlimited","urgency":"ok","current":7,"limit":0,"current_available":true,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":true}
-	}`
+			"legacy_connections":{"proxmox_nodes":2,"docker_hosts":1,"kubernetes_clusters":1},
+			"has_migration_gap":false
+		}`
 
 	assertJSONSnapshot(t, got, want)
 }
@@ -5737,10 +5719,9 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 		"trial_eligible":false,
 		"max_history_days":7,
 		"overflow_days_remaining":14,
-		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
-		"has_migration_gap":false,
-		"monitored_system_capacity":{"mode":"usage_unavailable","urgency":"ok","current":0,"limit":0,"current_available":false,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":false}
-	}`
+			"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
+			"has_migration_gap":false
+		}`
 
 	assertJSONSnapshot(t, got, want)
 }
@@ -5776,27 +5757,20 @@ func TestContract_SelfHostedCommunityRuntimeCapabilitiesJSONSnapshot(t *testing.
 
 	const want = `{
 		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol"],
-		"limits":[],
-		"hosted_mode":false,
-		"max_history_days":7,
-		"monitored_system_capacity":{"mode":"usage_unavailable","urgency":"ok","current":0,"limit":0,"current_available":false,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":false}
-	}`
+			"limits":[],
+			"hosted_mode":false,
+			"max_history_days":7
+		}`
 
 	assertJSONSnapshot(t, got, want)
 }
 
 func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
-		Valid:               true,
-		Tier:                pkglicensing.TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
-		MaxMonitoredSystems: 15,
-		MonitoredSystemContinuity: &pkglicensing.MonitoredSystemContinuityStatus{
-			PlanLimit:      15,
-			EffectiveLimit: 15,
-			CapturePending: true,
-		},
+		Valid:       true,
+		Tier:        pkglicensing.TierCloud,
+		PlanVersion: "cloud_starter",
+		Features:    append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
 	}, string(pkglicensing.SubStateActive), entitlementUsageSnapshot{
 		MonitoredSystemsUnavailableReason: "supplemental_inventory_unsettled",
 	}, nil)
@@ -5808,7 +5782,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 
 	const want = `{
 		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting"],
-		"limits":[{"key":"max_monitored_systems","limit":15,"current":0,"current_available":false,"current_unavailable_reason":"supplemental_inventory_unsettled","state":"ok"}],
+		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
 		"plan_version":"cloud_starter",
@@ -5820,9 +5794,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 		"trial_eligible":false,
 		"max_history_days":90,
 		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
-		"has_migration_gap":false,
-		"monitored_system_continuity":{"plan_limit":15,"effective_limit":15,"capture_pending":true},
-		"monitored_system_capacity":{"mode":"usage_unavailable","urgency":"ok","current":0,"limit":15,"current_available":false,"current_unavailable_reason":"supplemental_inventory_unsettled","available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":false}
+		"has_migration_gap":false
 	}`
 
 	assertJSONSnapshot(t, got, want)
@@ -5830,13 +5802,12 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 
 func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
-		Valid:               true,
-		Tier:                pkglicensing.TierLifetime,
-		PlanVersion:         "v5_lifetime_grandfathered",
-		IsLifetime:          true,
-		Features:            append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierLifetime]...),
-		MaxMonitoredSystems: 0,
-		MaxGuests:           0,
+		Valid:       true,
+		Tier:        pkglicensing.TierLifetime,
+		PlanVersion: "v5_lifetime_grandfathered",
+		IsLifetime:  true,
+		Features:    append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierLifetime]...),
+		MaxGuests:   0,
 	}, string(pkglicensing.SubStateActive), entitlementUsageSnapshot{
 		MonitoredSystems:          15,
 		MonitoredSystemsAvailable: true,
@@ -5864,10 +5835,9 @@ func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 		"days_remaining":0,
 		"trial_eligible":false,
 		"max_history_days":90,
-		"legacy_connections":{"proxmox_nodes":1,"docker_hosts":1,"kubernetes_clusters":0},
-		"has_migration_gap":false,
-		"monitored_system_capacity":{"mode":"unlimited","urgency":"ok","current":15,"limit":0,"current_available":true,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":true}
-	}`
+			"legacy_connections":{"proxmox_nodes":1,"docker_hosts":1,"kubernetes_clusters":0},
+			"has_migration_gap":false
+		}`
 
 	assertJSONSnapshot(t, got, want)
 }
@@ -5906,15 +5876,14 @@ func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T)
 	const expectedClientVersion = "6.0.0-rc.1"
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_contract_floor",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "contract-floor@example.com",
+		LicenseID: "lic_contract_floor",
+		Tier:      "pro",
+		PlanKey:   "legacy_migration_fallback",
+		State:     "active",
+		Features:  []string{"relay"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "contract-floor@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -5936,11 +5905,10 @@ func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T)
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
 			License: pkglicensing.ActivateResponseLicense{
-				LicenseID:           "lic_contract_floor",
-				State:               "active",
-				Tier:                "pro",
-				Features:            []string{"relay"},
-				MaxMonitoredSystems: 10,
+				LicenseID: "lic_contract_floor",
+				State:     "active",
+				Tier:      "pro",
+				Features:  []string{"relay"},
 			},
 			Installation: pkglicensing.ActivateResponseInstallation{
 				InstallationID:    "inst_contract_floor",
@@ -6004,67 +5972,38 @@ func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T)
 	if err := json.Unmarshal(entRec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode entitlements: %v", err)
 	}
-	statusContinuity := status.MonitoredSystemContinuity
-	if statusContinuity != nil {
-		copied := *statusContinuity
-		if copied.CapturedAt > 0 {
-			copied.CapturedAt = 123
-		}
-		statusContinuity = &copied
-	}
-	payloadContinuity := payload.MonitoredSystemContinuity
-	if payloadContinuity != nil {
-		copied := *payloadContinuity
-		if copied.CapturedAt > 0 {
-			copied.CapturedAt = 123
-		}
-		payloadContinuity = &copied
-	}
-
 	got, err := json.Marshal(struct {
 		Status struct {
-			Tier                      pkglicensing.Tier                             `json:"tier"`
-			PlanVersion               string                                        `json:"plan_version"`
-			MaxMonitoredSystems       int                                           `json:"max_monitored_systems"`
-			Valid                     bool                                          `json:"valid"`
-			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
+			Tier        pkglicensing.Tier `json:"tier"`
+			PlanVersion string            `json:"plan_version"`
+			Valid       bool              `json:"valid"`
 		} `json:"status"`
 		Entitlements struct {
-			Tier                      string                                        `json:"tier"`
-			PlanVersion               string                                        `json:"plan_version"`
-			SubscriptionState         string                                        `json:"subscription_state"`
-			Limits                    []pkglicensing.LimitStatus                    `json:"limits"`
-			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
-			MonitoredSystemCapacity   *pkglicensing.MonitoredSystemCapacityStatus   `json:"monitored_system_capacity,omitempty"`
+			Tier              string                     `json:"tier"`
+			PlanVersion       string                     `json:"plan_version"`
+			SubscriptionState string                     `json:"subscription_state"`
+			Limits            []pkglicensing.LimitStatus `json:"limits"`
 		} `json:"entitlements"`
 	}{
 		Status: struct {
-			Tier                      pkglicensing.Tier                             `json:"tier"`
-			PlanVersion               string                                        `json:"plan_version"`
-			MaxMonitoredSystems       int                                           `json:"max_monitored_systems"`
-			Valid                     bool                                          `json:"valid"`
-			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
+			Tier        pkglicensing.Tier `json:"tier"`
+			PlanVersion string            `json:"plan_version"`
+			Valid       bool              `json:"valid"`
 		}{
-			Tier:                      status.Tier,
-			PlanVersion:               status.PlanVersion,
-			MaxMonitoredSystems:       status.MaxMonitoredSystems,
-			Valid:                     status.Valid,
-			MonitoredSystemContinuity: statusContinuity,
+			Tier:        status.Tier,
+			PlanVersion: status.PlanVersion,
+			Valid:       status.Valid,
 		},
 		Entitlements: struct {
-			Tier                      string                                        `json:"tier"`
-			PlanVersion               string                                        `json:"plan_version"`
-			SubscriptionState         string                                        `json:"subscription_state"`
-			Limits                    []pkglicensing.LimitStatus                    `json:"limits"`
-			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
-			MonitoredSystemCapacity   *pkglicensing.MonitoredSystemCapacityStatus   `json:"monitored_system_capacity,omitempty"`
+			Tier              string                     `json:"tier"`
+			PlanVersion       string                     `json:"plan_version"`
+			SubscriptionState string                     `json:"subscription_state"`
+			Limits            []pkglicensing.LimitStatus `json:"limits"`
 		}{
-			Tier:                      payload.Tier,
-			PlanVersion:               payload.PlanVersion,
-			SubscriptionState:         payload.SubscriptionState,
-			Limits:                    payload.Limits,
-			MonitoredSystemContinuity: payloadContinuity,
-			MonitoredSystemCapacity:   payload.MonitoredSystemCapacity,
+			Tier:              payload.Tier,
+			PlanVersion:       payload.PlanVersion,
+			SubscriptionState: payload.SubscriptionState,
+			Limits:            payload.Limits,
 		},
 	})
 	if err != nil {
@@ -6075,15 +6014,13 @@ func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T)
 		"status":{
 			"tier":"pro",
 			"plan_version":"legacy_migration_fallback",
-			"max_monitored_systems":0,
 			"valid":true
 		},
 		"entitlements":{
 			"tier":"pro",
 			"plan_version":"legacy_migration_fallback",
 			"subscription_state":"active",
-			"limits":[],
-			"monitored_system_capacity":{"mode":"unlimited","urgency":"ok","current":23,"limit":0,"current_available":true,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":true}
+			"limits":[]
 		}
 	}`
 
@@ -6118,7 +6055,7 @@ func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 
 	const want = `{
 		"capabilities":["relay","rbac"],
-		"limits":{"max_monitored_systems":50},
+			"limits":{},
 		"meters_enabled":[],
 		"plan_version":"msp_starter",
 		"subscription_state":"active",
@@ -6218,72 +6155,13 @@ func TestContract_HostReportAdmissionPreservesRestartContinuityAtLimit(t *testin
 		},
 		Timestamp: report.Timestamp.Add(time.Minute),
 	}
-	blockedRec := postReport(t, restartedHandler, newHostReport)
-	if blockedRec.Code != http.StatusPaymentRequired {
-		t.Fatalf("new host should remain blocked at limit, got %d: %s", blockedRec.Code, blockedRec.Body.String())
-	}
-
-	payload := decodeMonitoredSystemLimitBlockedPayload(t, blockedRec.Body.Bytes())
-	if payload.Feature != maxMonitoredSystemsLicenseGateKey {
-		t.Fatalf("feature=%q, want %q", payload.Feature, maxMonitoredSystemsLicenseGateKey)
-	}
-	if !payload.MonitoredSystemPreview.WouldExceedLimit {
-		t.Fatalf("expected monitored_system_preview.would_exceed_limit=true, got %+v", payload.MonitoredSystemPreview)
+	newHostRec := postReport(t, restartedHandler, newHostReport)
+	if newHostRec.Code != http.StatusOK {
+		t.Fatalf("new host should be admitted because monitored-system caps are retired, got %d: %s", newHostRec.Code, newHostRec.Body.String())
 	}
 }
 
-func TestContract_ResolveMonitoredSystemAdmissionPolicyHookUsesCanonicalInput(t *testing.T) {
-	SetResolveMonitoredSystemAdmissionPolicy(nil)
-	t.Cleanup(func() { SetResolveMonitoredSystemAdmissionPolicy(nil) })
-
-	if hook := getResolveMonitoredSystemAdmissionPolicy(); hook != nil {
-		t.Fatalf("expected no monitored-system admission hook by default, got %v", hook)
-	}
-
-	SetResolveMonitoredSystemAdmissionPolicy(func(_ context.Context, input extensions.MonitoredSystemAdmissionInput) extensions.MonitoredSystemAdmissionDecision {
-		return extensions.MonitoredSystemAdmissionDecision{
-			Current:                input.Current,
-			Additional:             input.Additional,
-			Limit:                  input.Limit,
-			UsageAvailable:         input.UsageAvailable,
-			UsageUnavailableReason: input.UsageUnavailableReason,
-			Exceeded: input.CandidateCountsTowardCap &&
-				input.UsageAvailable &&
-				input.Additional > 0 &&
-				input.Limit > 0 &&
-				input.Current+input.Additional > input.Limit,
-		}
-	})
-
-	hook := getResolveMonitoredSystemAdmissionPolicy()
-	if hook == nil {
-		t.Fatal("expected monitored-system admission hook to round-trip through the shared API boundary")
-	}
-
-	decision := hook(context.Background(), extensions.MonitoredSystemAdmissionInput{
-		Current:                  5,
-		Additional:               1,
-		Limit:                    5,
-		UsageAvailable:           true,
-		CandidateCountsTowardCap: true,
-	})
-	if !decision.Exceeded {
-		t.Fatalf("expected canonical counted-system input to preserve the exceeded verdict, got %+v", decision)
-	}
-
-	decision = hook(context.Background(), extensions.MonitoredSystemAdmissionInput{
-		Current:                  5,
-		Additional:               1,
-		Limit:                    5,
-		UsageAvailable:           true,
-		CandidateCountsTowardCap: false,
-	})
-	if decision.Exceeded {
-		t.Fatalf("expected non-counted candidate to stay outside the exceeded verdict, got %+v", decision)
-	}
-}
-
-func TestContract_PlatformConnectionWritesFailClosedWhenUsageUnavailable(t *testing.T) {
+func TestContract_PlatformConnectionWritesIgnoreUsageUnavailableWithCapsRetired(t *testing.T) {
 	t.Run("truenas add", func(t *testing.T) {
 		setTrueNASFeatureForTest(t, true)
 		setMockModeForTrueNASTest(t, false)
@@ -6306,11 +6184,9 @@ func TestContract_PlatformConnectionWritesFailClosedWhenUsageUnavailable(t *test
 		rec := httptest.NewRecorder()
 		handler.HandleAdd(rec, req)
 
-		assertMonitoredSystemUsageUnavailableReason(
-			t,
-			rec,
-			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
-		)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected 201 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
+		}
 	})
 
 	t.Run("vmware add", func(t *testing.T) {
@@ -6346,13 +6222,11 @@ func TestContract_PlatformConnectionWritesFailClosedWhenUsageUnavailable(t *test
 		rec := httptest.NewRecorder()
 		handler.HandleAdd(rec, req)
 
-		assertMonitoredSystemUsageUnavailableReason(
-			t,
-			rec,
-			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
-		)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected 201 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
+		}
 		if previewRecordsCalled {
-			t.Fatal("expected VMware write admission to fail before external inventory preview")
+			t.Fatal("expected VMware write not to preview external inventory when monitored-system caps are retired")
 		}
 	})
 }
@@ -6632,143 +6506,6 @@ func TestContract_PlatformConnectionPreviewPreservesCanonicalEnabledDefaults(t *
 			t.Fatal("expected saved VMware preview with omitted enabled to stay on the active preview path")
 		}
 	})
-}
-
-func TestContract_ConfiguredNodeReplacementsUseCanonicalSelectors(t *testing.T) {
-	testCases := []struct {
-		name        string
-		current     any
-		updated     any
-		source      unifiedresources.DataSource
-		currentRoot unifiedresources.Resource
-		replacement func(any) unifiedresources.MonitoredSystemReplacement
-		candidate   func(any) unifiedresources.MonitoredSystemCandidate
-	}{
-		{
-			name: "proxmox",
-			current: config.PVEInstance{
-				Name: " pve-a ",
-				Host: " https://pve-a.lab.local:8006 ",
-			},
-			updated: config.PVEInstance{
-				Name: "pve-b",
-				Host: "https://pve-b.lab.local:8006",
-			},
-			source: unifiedresources.SourceProxmox,
-			currentRoot: unifiedresources.Resource{
-				ID:     "pve-a",
-				Type:   unifiedresources.ResourceTypeAgent,
-				Name:   "pve-a",
-				Status: unifiedresources.StatusOnline,
-				Proxmox: &unifiedresources.ProxmoxData{
-					Instance: "pve-a",
-					NodeName: "pve-a-node",
-					HostURL:  "https://pve-a.lab.local:8006",
-				},
-			},
-			replacement: func(value any) unifiedresources.MonitoredSystemReplacement {
-				return proxmoxMonitoredSystemReplacement(value.(config.PVEInstance))
-			},
-			candidate: func(value any) unifiedresources.MonitoredSystemCandidate {
-				return proxmoxMonitoredSystemCandidate(value.(config.PVEInstance))
-			},
-		},
-		{
-			name: "pbs",
-			current: config.PBSInstance{
-				Name: " backup-a ",
-				Host: " https://backup-a.lab.local:8007 ",
-			},
-			updated: config.PBSInstance{
-				Name: "backup-b",
-				Host: "https://backup-b.lab.local:8007",
-			},
-			source: unifiedresources.SourcePBS,
-			currentRoot: unifiedresources.Resource{
-				ID:     "pbs-a",
-				Type:   unifiedresources.ResourceTypePBS,
-				Name:   "backup-a",
-				Status: unifiedresources.StatusOnline,
-				PBS: &unifiedresources.PBSData{
-					InstanceID: "backup-a",
-					Hostname:   "backup-a.lab.local",
-					HostURL:    "https://backup-a.lab.local:8007",
-				},
-			},
-			replacement: func(value any) unifiedresources.MonitoredSystemReplacement {
-				return pbsMonitoredSystemReplacement(value.(config.PBSInstance))
-			},
-			candidate: func(value any) unifiedresources.MonitoredSystemCandidate {
-				return pbsMonitoredSystemCandidate(value.(config.PBSInstance))
-			},
-		},
-		{
-			name: "pmg",
-			current: config.PMGInstance{
-				Name: " mail-a ",
-				Host: " https://mail-a.lab.local:8006 ",
-			},
-			updated: config.PMGInstance{
-				Name: "mail-b",
-				Host: "https://mail-b.lab.local:8006",
-			},
-			source: unifiedresources.SourcePMG,
-			currentRoot: unifiedresources.Resource{
-				ID:     "pmg-a",
-				Type:   unifiedresources.ResourceTypePMG,
-				Name:   "mail-a",
-				Status: unifiedresources.StatusOnline,
-				PMG: &unifiedresources.PMGData{
-					InstanceID: "mail-a",
-					Hostname:   "mail-a.lab.local",
-				},
-			},
-			replacement: func(value any) unifiedresources.MonitoredSystemReplacement {
-				return pmgMonitoredSystemReplacement(value.(config.PMGInstance))
-			},
-			candidate: func(value any) unifiedresources.MonitoredSystemCandidate {
-				return pmgMonitoredSystemCandidate(value.(config.PMGInstance))
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			replacement := tc.replacement(tc.current)
-			if replacement.Source != tc.source {
-				t.Fatalf("replacement source = %q, want %q", replacement.Source, tc.source)
-			}
-			if replacement.Matches != nil {
-				t.Fatal("configured node replacement must use the canonical selector contract, not a handler-local matcher")
-			}
-			if !replacement.MatchesResource(tc.currentRoot) {
-				t.Fatalf("replacement selector did not match current %s root", tc.name)
-			}
-
-			registry := unifiedresources.NewRegistry(nil)
-			registry.IngestRecords(tc.source, []unifiedresources.IngestRecord{
-				{
-					SourceID: tc.currentRoot.ID,
-					Resource: tc.currentRoot,
-				},
-			})
-
-			projection := unifiedresources.ProjectMonitoredSystemCandidateReplacement(
-				registry,
-				replacement,
-				tc.candidate(tc.updated),
-			)
-			if projection.CurrentCount != 1 {
-				t.Fatalf("CurrentCount = %d, want 1", projection.CurrentCount)
-			}
-			if projection.ProjectedCount != 1 {
-				t.Fatalf("ProjectedCount = %d, want 1", projection.ProjectedCount)
-			}
-			if projection.AdditionalCount != 0 {
-				t.Fatalf("AdditionalCount = %d, want 0", projection.AdditionalCount)
-			}
-		})
-	}
 }
 
 func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
@@ -12845,17 +12582,17 @@ func TestContract_BootstrapTokenValidationRateLimitsPerClient(t *testing.T) {
 	}
 }
 
-func TestContract_DeployCapacityDenialUsesWorkspaceCapacityCopy(t *testing.T) {
+func TestContract_DeployHandlersDoNotSurfaceLicenseSlotCapacityCopy(t *testing.T) {
 	source, err := os.ReadFile("deploy_handlers.go")
 	if err != nil {
 		t.Fatalf("read deploy handlers: %v", err)
 	}
 	text := string(source)
-	if !strings.Contains(text, `"No workspace capacity available for retry"`) {
-		t.Fatal("deploy retry capacity denial must use workspace-capacity copy")
-	}
 	if strings.Contains(text, "No license slots available") {
 		t.Fatal("deploy retry capacity denial must not surface legacy license-slot copy")
+	}
+	if strings.Contains(text, "reservedLicenseSlots") {
+		t.Fatal("deploy response must not expose retired reservedLicenseSlots field")
 	}
 }
 

@@ -23,10 +23,9 @@ import (
 
 // DeployHandlers provides HTTP handlers for cluster agent deployment.
 type DeployHandlers struct {
-	store       *deploy.Store
-	monitor     *monitoring.Monitor
-	execServer  *agentexec.Server
-	reservation *deploy.ReservationManager
+	store      *deploy.Store
+	monitor    *monitoring.Monitor
+	execServer *agentexec.Server
 
 	// resolvePublicURL derives the Pulse URL for agent reachability checks.
 	resolvePublicURL func(req *http.Request) string
@@ -51,7 +50,6 @@ func NewDeployHandlers(
 	store *deploy.Store,
 	monitor *monitoring.Monitor,
 	execServer *agentexec.Server,
-	reservation *deploy.ReservationManager,
 	resolvePublicURL func(req *http.Request) string,
 	cfg *config.Config,
 	persistence *config.ConfigPersistence,
@@ -60,7 +58,6 @@ func NewDeployHandlers(
 		store:            store,
 		monitor:          monitor,
 		execServer:       execServer,
-		reservation:      reservation,
 		resolvePublicURL: resolvePublicURL,
 		config:           cfg,
 		persistence:      persistence,
@@ -968,11 +965,10 @@ type createJobSkip struct {
 }
 
 type createJobResponse struct {
-	JobID                string          `json:"jobId"`
-	AcceptedTargets      []string        `json:"acceptedTargets"`
-	SkippedTargets       []createJobSkip `json:"skippedTargets"`
-	ReservedLicenseSlots int             `json:"reservedLicenseSlots"`
-	EventsURL            string          `json:"eventsUrl"`
+	JobID           string          `json:"jobId"`
+	AcceptedTargets []string        `json:"acceptedTargets"`
+	SkippedTargets  []createJobSkip `json:"skippedTargets"`
+	EventsURL       string          `json:"eventsUrl"`
 }
 
 // HandleCreateJob creates a deploy install job from preflight results.
@@ -1094,30 +1090,6 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 		acceptedPfTargets = append(acceptedPfTargets, pfTgt)
 	}
 
-	// Workspace capacity check.
-	maxLimit := maxMonitoredSystemsLimitForContext(ctx)
-	if maxLimit > 0 {
-		decision := monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)
-		if !decision.usageAvailable {
-			writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
-			return
-		}
-		available := decision.limit - decision.current
-		if available < 0 {
-			available = 0
-		}
-		if available < len(acceptedPfTargets) {
-			// Accept only what fits; skip the rest.
-			for i := available; i < len(acceptedPfTargets); i++ {
-				skipped = append(skipped, createJobSkip{
-					NodeID: acceptedPfTargets[i].NodeID,
-					Reason: "skipped_license",
-				})
-			}
-			acceptedPfTargets = acceptedPfTargets[:available]
-		}
-	}
-
 	if len(acceptedPfTargets) == 0 {
 		writeErrorResponse(w, http.StatusConflict, "no_eligible_targets",
 			"No targets are eligible for deployment", nil)
@@ -1226,12 +1198,6 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Reserve workspace capacity based on actual dispatched target count.
-	if err := h.reservation.Reserve(jobID, orgID, len(installTargets), 1*time.Hour); err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to reserve workspace capacity")
-		// Non-fatal — continue. The reservation is for proactive capacity tracking.
-	}
-
 	// Transition to running.
 	_ = h.store.UpdateJobStatus(ctx, jobID, deploy.JobRunning)
 
@@ -1261,7 +1227,6 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 	if err := h.execServer.SendDeployInstall(ctx, req.SourceAgentID, payload); err != nil {
 		h.execServer.UnsubscribeDeployProgress(req.SourceAgentID, jobID)
 		_ = h.store.UpdateJobStatus(ctx, jobID, deploy.JobFailed)
-		h.reservation.Release(jobID)
 		// Mark pending targets as failed so they're eligible for retry.
 		for _, it := range installTargets {
 			_ = h.store.UpdateTargetStatus(ctx, it.TargetID, deploy.TargetFailedRetryable, "dispatch failed")
@@ -1276,11 +1241,10 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 	go h.processInstallProgress(jobID, req.SourceAgentID, job.RetryMax, progressCh)
 
 	resp := createJobResponse{
-		JobID:                jobID,
-		AcceptedTargets:      acceptedNodeIDs,
-		SkippedTargets:       skipped,
-		ReservedLicenseSlots: len(installTargets),
-		EventsURL:            fmt.Sprintf("/api/agent-deploy/jobs/%s/events", jobID),
+		JobID:           jobID,
+		AcceptedTargets: acceptedNodeIDs,
+		SkippedTargets:  skipped,
+		EventsURL:       fmt.Sprintf("/api/agent-deploy/jobs/%s/events", jobID),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1594,28 +1558,6 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Workspace capacity re-check.
-	maxLimit := maxMonitoredSystemsLimitForContext(ctx)
-	if maxLimit > 0 {
-		decision := monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)
-		if !decision.usageAvailable {
-			writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
-			return
-		}
-		available := decision.limit - decision.current
-		if available < 0 {
-			available = 0
-		}
-		if available < len(retryTargets) {
-			retryTargets = retryTargets[:available]
-		}
-		if len(retryTargets) == 0 {
-			writeErrorResponse(w, http.StatusConflict, "license_limit",
-				"No workspace capacity available for retry", nil)
-			return
-		}
-	}
-
 	// Reset targets to pending.
 	retryIDs := make([]string, len(retryTargets))
 	for i, t := range retryTargets {
@@ -1644,7 +1586,6 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 		for _, id := range retryIDs {
 			_ = h.store.UpdateTargetStatus(ctx, id, deploy.TargetFailedRetryable, "dispatch failed: no Pulse URL")
 		}
-		h.reservation.Release(jobID + "-retry")
 		writeErrorResponse(w, http.StatusInternalServerError, "no_pulse_url",
 			"Cannot determine Pulse URL for agent installation", nil)
 		return
@@ -1689,11 +1630,6 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Reserve workspace capacity based on actual dispatch count (after token minting).
-	if err := h.reservation.Reserve(jobID+"-retry", orgID, len(installTargets), 1*time.Hour); err != nil {
-		log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to reserve workspace capacity for retry")
-	}
-
 	// Append retry event.
 	_ = h.store.AppendEvent(ctx, &deploy.Event{
 		ID:        generateID("evt"),
@@ -1718,7 +1654,6 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 	if err := h.execServer.SendDeployInstall(ctx, job.SourceAgentID, payload); err != nil {
 		h.execServer.UnsubscribeDeployProgress(job.SourceAgentID, jobID)
 		_ = h.store.UpdateJobStatus(ctx, jobID, deploy.JobFailed)
-		h.reservation.Release(jobID + "-retry")
 		// Mark retried targets back to failed so they can be retried again.
 		for _, it := range installTargets {
 			_ = h.store.UpdateTargetStatus(ctx, it.TargetID, deploy.TargetFailedRetryable, "dispatch failed")
@@ -1796,10 +1731,6 @@ func (h *DeployHandlers) processInstallProgress(jobID, agentID string, retryMax 
 				h.broadcastSSE(jobID, finalEvt)
 			}
 
-			// Release license reservation.
-			h.reservation.Release(jobID)
-			h.reservation.Release(jobID + "-retry") // in case of retry
-
 			// Close SSE channels.
 			h.closeSSESub(jobID)
 			return
@@ -1808,8 +1739,6 @@ func (h *DeployHandlers) processInstallProgress(jobID, agentID string, retryMax 
 
 	// Channel closed without final — agent disconnected.
 	_ = h.store.UpdateJobStatus(ctx, jobID, deploy.JobFailed)
-	h.reservation.Release(jobID)
-	h.reservation.Release(jobID + "-retry")
 
 	finalEvt := &deploy.Event{
 		ID:        generateID("evt"),
@@ -1999,7 +1928,7 @@ func deriveInstallJobStatus(targets []deploy.Target) deploy.JobStatus {
 			// enrolling = install completed, enrollment is async and expected to succeed
 			succeeded++
 		case deploy.TargetFailedPermanent, deploy.TargetFailedRetryable,
-			deploy.TargetSkippedAgent, deploy.TargetSkippedLicense, deploy.TargetCanceled:
+			deploy.TargetSkippedAgent, deploy.TargetCanceled:
 			failed++
 		// pending/installing — shouldn't happen at Final but treat as incomplete
 		default:

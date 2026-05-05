@@ -28,7 +28,7 @@ func (t *TokenSource) Capabilities() []string {
 	return t.claims.EffectiveCapabilities()
 }
 
-// Limits returns effective limits (explicit or derived from MaxMonitoredSystems/MaxGuests).
+// Limits returns effective limits from explicit claims and derived guest policy.
 func (t *TokenSource) Limits() map[string]int64 {
 	if t == nil || t.claims == nil {
 		return nil

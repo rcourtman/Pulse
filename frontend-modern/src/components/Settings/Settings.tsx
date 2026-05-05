@@ -18,10 +18,7 @@ import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 
-import {
-  getRuntimeLimit,
-  loadRuntimeCapabilities,
-} from '@/stores/license';
+import { getRuntimeLimit, loadRuntimeCapabilities } from '@/stores/license';
 import { isPro } from '@/stores/licenseCommercial';
 
 interface SettingsProps {
@@ -50,9 +47,7 @@ const Settings: Component<SettingsProps> = (props) => {
     searchQuery,
     setSearchQuery,
   } = useSettingsShellState({ activeTab });
-  const organizationMonitoredSystemUsage = createMemo(
-    () => getRuntimeLimit('max_monitored_systems')?.current ?? 0,
-  );
+  const organizationMonitoredSystemUsage = createMemo(() => 0);
   const organizationGuestUsage = createMemo(() => getRuntimeLimit('max_guests')?.current ?? 0);
   const discoverySettings = useDiscoverySettingsState();
 

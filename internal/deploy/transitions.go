@@ -15,7 +15,7 @@ var validJobTransitions = map[JobStatus][]JobStatus{
 
 // validTargetTransitions defines allowed state transitions for a Target.
 var validTargetTransitions = map[TargetStatus][]TargetStatus{
-	TargetPending:         {TargetPreflighting, TargetSkippedAgent, TargetSkippedLicense, TargetCanceled},
+	TargetPending:         {TargetPreflighting, TargetSkippedAgent, TargetCanceled},
 	TargetPreflighting:    {TargetReady, TargetFailedRetryable, TargetFailedPermanent, TargetCanceled},
 	TargetReady:           {TargetInstalling, TargetCanceled},
 	TargetInstalling:      {TargetEnrolling, TargetFailedRetryable, TargetFailedPermanent, TargetCanceled},
@@ -72,7 +72,7 @@ func (j *Job) DeriveStatus(targets []Target) JobStatus {
 		case TargetSucceeded:
 			succeeded++
 			terminal++
-		case TargetFailedPermanent, TargetSkippedAgent, TargetSkippedLicense, TargetCanceled:
+		case TargetFailedPermanent, TargetSkippedAgent, TargetCanceled:
 			terminal++
 		case TargetPending, TargetPreflighting, TargetReady, TargetInstalling,
 			TargetEnrolling, TargetVerifying, TargetFailedRetryable:

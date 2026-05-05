@@ -9,30 +9,17 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
 func TestBusinessHooks(t *testing.T) {
 	called := false
-	resolveCalled := false
 	hook := func(store *metrics.Store) {
 		called = true
 	}
 
 	SetBusinessHooks(BusinessHooks{
 		OnMetricsStoreReady: hook,
-		ResolveMonitoredSystemAdmissionPolicy: func(_ context.Context, input extensions.MonitoredSystemAdmissionInput) extensions.MonitoredSystemAdmissionDecision {
-			resolveCalled = true
-			return extensions.MonitoredSystemAdmissionDecision{
-				Current:                input.Current,
-				Additional:             input.Additional,
-				Limit:                  input.Limit,
-				UsageAvailable:         input.UsageAvailable,
-				UsageUnavailableReason: input.UsageUnavailableReason,
-				Exceeded:               input.UsageAvailable && input.Additional > 0 && input.Limit > 0 && input.Current+input.Additional > input.Limit,
-			}
-		},
 	})
 
 	globalHooksMu.Lock()
@@ -48,22 +35,6 @@ func TestBusinessHooks(t *testing.T) {
 		t.Error("expected hook to be called")
 	}
 
-	if globalHooks.ResolveMonitoredSystemAdmissionPolicy == nil {
-		t.Error("expected ResolveMonitoredSystemAdmissionPolicy to be set")
-	}
-
-	decision := globalHooks.ResolveMonitoredSystemAdmissionPolicy(context.Background(), extensions.MonitoredSystemAdmissionInput{
-		Current:        5,
-		Additional:     1,
-		Limit:          5,
-		UsageAvailable: true,
-	})
-	if !resolveCalled {
-		t.Error("expected monitored-system admission policy hook to be called")
-	}
-	if !decision.Exceeded {
-		t.Fatalf("expected exceeded decision from hook, got %+v", decision)
-	}
 }
 
 func TestPerformAutoImport_Success(t *testing.T) {

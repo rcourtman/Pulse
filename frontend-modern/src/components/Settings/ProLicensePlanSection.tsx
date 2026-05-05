@@ -21,17 +21,6 @@ interface ActionNotice extends Notice {
   actionDestination: UpgradeDestination;
 }
 
-interface MonitoredSystemCapacitySection {
-  stats: Array<{ label: string; value: string }>;
-  statusMessage: string;
-  detailMessage?: string;
-  explanation?: {
-    label: string;
-    body: string;
-  };
-  reviewUsageDestination: UpgradeDestination;
-}
-
 interface ProLicensePlanSectionProps {
   activationSuccessSummary: {
     title: string;
@@ -74,8 +63,6 @@ interface ProLicensePlanSectionProps {
   grandfatheredPriceNotice: Notice | null;
   hasLicenseDetails: boolean;
   loading: boolean;
-  monitoredSystemCapacitySection: MonitoredSystemCapacitySection | null;
-  monitoredSystemContinuityNotice: Notice | null;
   onReload: () => void;
   planComparisonSummary: {
     cards: Array<{
@@ -311,51 +298,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
             <p class="font-medium">{notice().title}</p>
             <p class="mt-1 text-xs opacity-90">{notice().body}</p>
-          </div>
-        )}
-      </Show>
-      <Show when={props.monitoredSystemContinuityNotice}>
-        {(notice) => (
-          <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
-            <p class="font-medium">{notice().title}</p>
-            <p class="mt-1 text-xs opacity-90">{notice().body}</p>
-          </div>
-        )}
-      </Show>
-      <Show when={props.monitoredSystemCapacitySection}>
-        {(section) => (
-          <div class="mb-4 rounded-md border border-border bg-surface-alt p-4">
-            <div class="space-y-2">
-              <p class="text-sm font-medium text-base-content">Monitored-system policy</p>
-              <p class="text-xs text-base-content">{section().statusMessage}</p>
-              <Show when={section().detailMessage}>
-                {(detail) => <p class="text-xs text-muted">{detail()}</p>}
-              </Show>
-            </div>
-
-            <div class="mt-4">
-              <CommercialStatGrid items={section().stats} />
-            </div>
-
-            <Show when={section().explanation}>
-              {(explanation) => (
-                <details class="mt-4 rounded-md border border-border bg-surface px-3 py-2">
-                  <summary class="cursor-pointer text-xs font-medium text-base-content">
-                    {explanation().label}
-                  </summary>
-                  <p class="mt-2 text-xs text-muted">{explanation().body}</p>
-                </details>
-              )}
-            </Show>
-
-            <div class="mt-4 flex flex-wrap items-center gap-3">
-              <UpgradeLink
-                class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                destination={section().reviewUsageDestination}
-              >
-                Review monitored systems
-              </UpgradeLink>
-            </div>
           </div>
         )}
       </Show>

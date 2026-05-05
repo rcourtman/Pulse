@@ -83,16 +83,6 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	}
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
-	if enforceMonitoredSystemLimitForHostReport(
-		w,
-		r.Context(),
-		h.getMonitor(r.Context()),
-		report,
-		tokenRecord,
-	) {
-		return
-	}
-
 	host, err := h.getMonitor(r.Context()).ApplyHostReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)

@@ -73,7 +73,6 @@ function createMockWizard(
     retryableTargets: (() => []) as Accessor<unknown[]>,
     skippedTargets: (() => []) as Accessor<unknown[]>,
     canceledTargets: (() => []) as Accessor<unknown[]>,
-    maxAgentSlots: (() => 0) as Accessor<number>,
     startingPreflight: (() => false) as Accessor<boolean>,
     startingDeploy: (() => false) as Accessor<boolean>,
     retrying: (() => false) as Accessor<boolean>,
@@ -178,17 +177,6 @@ describe('DeployingStep', () => {
     it('counts skipped_already_agent as completed', () => {
       const targets = [
         makeTarget({ id: 't1', status: 'skipped_already_agent' }),
-        makeTarget({ id: 't2', status: 'pending' }),
-      ];
-      const wizard = createMockWizard({ jobTargets: targets });
-      render(() => <DeployingStep wizard={wizard} />);
-
-      expect(getProgressSummary()).toHaveTextContent('Installing 1 of 2 nodes...');
-    });
-
-    it('counts skipped_license as completed', () => {
-      const targets = [
-        makeTarget({ id: 't1', status: 'skipped_license' }),
         makeTarget({ id: 't2', status: 'pending' }),
       ];
       const wizard = createMockWizard({ jobTargets: targets });
@@ -329,21 +317,20 @@ describe('DeployingStep', () => {
         makeTarget({ id: 't2', status: 'failed_retryable' }),
         makeTarget({ id: 't3', status: 'failed_permanent' }),
         makeTarget({ id: 't4', status: 'skipped_already_agent' }),
-        makeTarget({ id: 't5', status: 'skipped_license' }),
-        makeTarget({ id: 't6', status: 'canceled' }),
-        makeTarget({ id: 't7', status: 'installing' }),
-        makeTarget({ id: 't8', status: 'enrolling' }),
-        makeTarget({ id: 't9', status: 'verifying' }),
-        makeTarget({ id: 't10', status: 'pending' }),
+        makeTarget({ id: 't5', status: 'canceled' }),
+        makeTarget({ id: 't6', status: 'installing' }),
+        makeTarget({ id: 't7', status: 'enrolling' }),
+        makeTarget({ id: 't8', status: 'verifying' }),
+        makeTarget({ id: 't9', status: 'pending' }),
       ];
       const wizard = createMockWizard({ jobTargets: targets });
       render(() => <DeployingStep wizard={wizard} />);
 
-      // 6 completed (succeeded, failed_retryable, failed_permanent, skipped_already_agent, skipped_license, canceled)
+      // 5 completed (succeeded, failed_retryable, failed_permanent, skipped_already_agent, canceled)
       // 3 in progress (installing, enrolling, verifying)
       // 1 pending
       const summary = getProgressSummary();
-      expect(summary).toHaveTextContent('Installing 6 of 10 nodes...');
+      expect(summary).toHaveTextContent('Installing 5 of 9 nodes...');
       expect(summary).toHaveTextContent('(3 in progress)');
     });
 

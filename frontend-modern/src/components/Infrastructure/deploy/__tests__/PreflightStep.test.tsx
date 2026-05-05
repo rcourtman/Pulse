@@ -83,7 +83,6 @@ function createMockWizard(
     retryableTargets: (() => []) as Accessor<unknown[]>,
     skippedTargets: (() => []) as Accessor<unknown[]>,
     canceledTargets: (() => []) as Accessor<unknown[]>,
-    maxAgentSlots: (() => 0) as Accessor<number>,
     startingPreflight: (() => false) as Accessor<boolean>,
     startingDeploy: (() => false) as Accessor<boolean>,
     retrying: (() => false) as Accessor<boolean>,
@@ -196,7 +195,6 @@ describe('PreflightStep', () => {
       'failed_retryable',
       'failed_permanent',
       'skipped_already_agent',
-      'skipped_license',
       'canceled',
       'succeeded',
       'installing',
@@ -370,14 +368,6 @@ describe('PreflightStep', () => {
       expect(screen.getByText('Already monitored')).toBeInTheDocument();
     });
 
-    it('shows "Workspace capacity" badge for skipped_license targets', () => {
-      const wizard = createMockWizard({
-        preflightTargets: [makeTarget({ status: 'skipped_license' })],
-      });
-      render(() => <PreflightStep wizard={wizard} />);
-
-      expect(screen.getByText('Workspace capacity')).toBeInTheDocument();
-    });
   });
 
   /* ── Error details ───────────────────────────────────────────── */

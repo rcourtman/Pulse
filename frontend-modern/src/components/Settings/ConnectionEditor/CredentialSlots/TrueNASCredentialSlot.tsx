@@ -8,7 +8,7 @@ import {
 } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
-import { MonitoredSystemAdmissionPreview } from '../../MonitoredSystemAdmissionPreview';
+import { MonitoredSystemImpactPreview } from '../../MonitoredSystemImpactPreview';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { TrueNASSettingsPanelState } from '../../useTrueNASSettingsPanelState';
 
@@ -287,7 +287,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           </div>
         </div>
 
-        <MonitoredSystemAdmissionPreview
+        <MonitoredSystemImpactPreview
           preview={props.state.monitoredSystemPreview()}
           loading={props.state.previewing()}
           error={props.state.monitoredSystemPreviewError()}
@@ -400,8 +400,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               props.state.testing() ||
               props.state.previewing() ||
               props.togglePending ||
-              props.deletePending ||
-              props.state.monitoredSystemAdmissionSaveBlocked()
+              props.deletePending
             }
           >
             {props.state.saving()

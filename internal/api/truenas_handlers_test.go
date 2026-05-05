@@ -159,35 +159,16 @@ func TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleAdd(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402 once monitored-system cap is full, got %d: %s", rec.Code, rec.Body.String())
-	}
-	payload := decodeMonitoredSystemLimitBlockedPayload(t, rec.Body.Bytes())
-	if payload.Error != "license_required" {
-		t.Fatalf("error=%q, want license_required", payload.Error)
-	}
-	if payload.Feature != maxMonitoredSystemsLicenseGateKey {
-		t.Fatalf("feature=%q, want %q", payload.Feature, maxMonitoredSystemsLicenseGateKey)
-	}
-	if !payload.MonitoredSystemPreview.WouldExceedLimit {
-		t.Fatalf("expected monitored_system_preview.would_exceed_limit=true, got %+v", payload.MonitoredSystemPreview)
-	}
-	if payload.MonitoredSystemPreview.Effect != "creates_new" {
-		t.Fatalf("effect=%q, want creates_new", payload.MonitoredSystemPreview.Effect)
-	}
-	if payload.MonitoredSystemPreview.AdditionalCount != 1 {
-		t.Fatalf("additional_count=%d, want 1", payload.MonitoredSystemPreview.AdditionalCount)
-	}
-	if len(payload.MonitoredSystemPreview.ProjectedSystems) != 1 {
-		t.Fatalf("len(projected_systems)=%d, want 1", len(payload.MonitoredSystemPreview.ProjectedSystems))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	stored, err := persistence.LoadTrueNASConfig()
 	if err != nil {
 		t.Fatalf("load persisted config: %v", err)
 	}
-	if len(stored) != 1 {
-		t.Fatalf("expected blocked TrueNAS add not to persist, got %d instances", len(stored))
+	if len(stored) != 2 {
+		t.Fatalf("expected TrueNAS add to persist with monitored-system caps retired, got %d instances", len(stored))
 	}
 }
 
@@ -222,14 +203,16 @@ func TestTrueNASHandlers_HandleAdd_ReturnsUnavailableWhenSupplementalInventoryNo
 			rec := httptest.NewRecorder()
 			handler.HandleAdd(rec, req)
 
-			assertMonitoredSystemUsageUnavailableReason(t, rec, tc.reason)
+			if rec.Code != http.StatusCreated {
+				t.Fatalf("expected 201 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
+			}
 
 			stored, err := persistence.LoadTrueNASConfig()
 			if err != nil {
 				t.Fatalf("load truenas config: %v", err)
 			}
-			if len(stored) != 0 {
-				t.Fatalf("expected unavailable monitored-system usage not to persist add, got %d connections", len(stored))
+			if len(stored) != 1 {
+				t.Fatalf("expected add to persist with monitored-system caps retired, got %d connections", len(stored))
 			}
 		})
 	}
@@ -716,32 +699,16 @@ func TestTrueNASHandlers_HandleUpdate_BlocksProjectedNetNewSystemAtLimit(t *test
 	rec := httptest.NewRecorder()
 	handler.HandleUpdate(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402 when update would add a new monitored system, got %d: %s", rec.Code, rec.Body.String())
-	}
-	payload := decodeMonitoredSystemLimitBlockedPayload(t, rec.Body.Bytes())
-	if !payload.MonitoredSystemPreview.WouldExceedLimit {
-		t.Fatalf("expected monitored_system_preview.would_exceed_limit=true, got %+v", payload.MonitoredSystemPreview)
-	}
-	if payload.MonitoredSystemPreview.Effect != "splits_existing" {
-		t.Fatalf("effect=%q, want splits_existing", payload.MonitoredSystemPreview.Effect)
-	}
-	if payload.MonitoredSystemPreview.AdditionalCount != 1 {
-		t.Fatalf("additional_count=%d, want 1", payload.MonitoredSystemPreview.AdditionalCount)
-	}
-	if len(payload.MonitoredSystemPreview.CurrentSystems) != 1 {
-		t.Fatalf("len(current_systems)=%d, want 1", len(payload.MonitoredSystemPreview.CurrentSystems))
-	}
-	if len(payload.MonitoredSystemPreview.ProjectedSystems) != 1 {
-		t.Fatalf("len(projected_systems)=%d, want 1", len(payload.MonitoredSystemPreview.ProjectedSystems))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	stored, err := persistence.LoadTrueNASConfig()
 	if err != nil {
 		t.Fatalf("load persisted config: %v", err)
 	}
-	if stored[0].Host != "archive.local" {
-		t.Fatalf("expected blocked update to preserve original host, got %+v", stored[0])
+	if stored[0].Host != "backup.local" {
+		t.Fatalf("expected update to persist with monitored-system caps retired, got %+v", stored[0])
 	}
 }
 
@@ -790,14 +757,16 @@ func TestTrueNASHandlers_HandleUpdate_ReturnsUnavailableWhenSupplementalInventor
 			rec := httptest.NewRecorder()
 			handler.HandleUpdate(rec, req)
 
-			assertMonitoredSystemUsageUnavailableReason(t, rec, tc.reason)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
+			}
 
 			stored, err := persistence.LoadTrueNASConfig()
 			if err != nil {
 				t.Fatalf("load truenas config: %v", err)
 			}
-			if len(stored) != 1 || stored[0].Host != "archive.local" {
-				t.Fatalf("expected unavailable monitored-system usage to preserve stored connection, got %+v", stored)
+			if len(stored) != 1 || stored[0].Host != "backup.local" {
+				t.Fatalf("expected update to persist with monitored-system caps retired, got %+v", stored)
 			}
 		})
 	}

@@ -16,7 +16,6 @@ describe('MonitoredSystemLedgerAPI', () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       systems: [],
       total: 0,
-      limit: 5,
     });
 
     const result = await MonitoredSystemLedgerAPI.getLedger();
@@ -25,7 +24,6 @@ describe('MonitoredSystemLedgerAPI', () => {
     expect(result).toEqual({
       systems: [],
       total: 0,
-      limit: 5,
     });
   });
 
@@ -34,8 +32,6 @@ describe('MonitoredSystemLedgerAPI', () => {
       current_count: 1,
       projected_count: 1,
       additional_count: 0,
-      limit: 5,
-      would_exceed_limit: false,
       effect: 'attaches_existing',
       current_systems: [
         {
@@ -92,8 +88,6 @@ describe('MonitoredSystemLedgerAPI', () => {
       current_count: 4,
       projected_count: 3,
       additional_count: 0,
-      limit: 10,
-      would_exceed_limit: false,
       effect: 'removes_existing',
       current_systems: [
         {
@@ -143,14 +137,11 @@ describe('MonitoredSystemLedgerAPI', () => {
           },
         ],
         total: 1,
-        limit: 5,
       },
       preview: {
         current_count: 1,
         projected_count: 1,
         additional_count: 0,
-        limit: 5,
-        would_exceed_limit: false,
         effect: 'attaches_existing',
         current_systems: [
           {

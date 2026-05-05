@@ -23,23 +23,25 @@ func TestCloudClaimPlanVersionNormalizationContract(t *testing.T) {
 		PlanVersion: "cloud_v1",
 		Limits: map[string]int64{
 			"max_monitored_systems": 999,
+			"max_guests":            7,
 		},
 	}
 
 	if got := claims.EntitlementPlanVersion(); got != "cloud_starter" {
 		t.Fatalf("EntitlementPlanVersion() = %q, want %q", got, "cloud_starter")
 	}
-	if got := claims.EffectiveLimits()["max_monitored_systems"]; got != 10 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d, want %d", got, 10)
+	limits := claims.EffectiveLimits()
+	if _, ok := limits["max_monitored_systems"]; ok {
+		t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", limits)
+	}
+	if got := limits["max_guests"]; got != 7 {
+		t.Fatalf("EffectiveLimits()[max_guests] = %d, want %d", got, 7)
 	}
 }
 
 func TestMSPPlanAliasCanonicalizationContract(t *testing.T) {
 	if got := CanonicalizePlanVersion("msp_hosted_v1"); got != "msp_starter" {
 		t.Fatalf("CanonicalizePlanVersion(msp_hosted_v1) = %q, want %q", got, "msp_starter")
-	}
-	if limits, known := LimitsForCloudPlan("msp_hosted_v1"); !known || limits["max_monitored_systems"] != 50 {
-		t.Fatalf("LimitsForCloudPlan(msp_hosted_v1) = (%v, %v), want max_monitored_systems=50 and known=true", limits, known)
 	}
 	if limit, known := WorkspaceLimitForPlan("msp_hosted_v1"); !known || limit != 10 {
 		t.Fatalf("WorkspaceLimitForPlan(msp_hosted_v1) = (%d, %v), want (10, true)", limit, known)
@@ -51,7 +53,7 @@ func TestDatabaseSourceCanonicalBoundaryContract(t *testing.T) {
 		store := &mockBillingStore{
 			state: &BillingState{
 				PlanVersion:       "cloud_v1",
-				Limits:            map[string]int64{"max_nodes": 999},
+				Limits:            map[string]int64{"max_nodes": 999, "max_guests": 7},
 				SubscriptionState: SubscriptionState(" ACTIVE "),
 			},
 		}
@@ -64,11 +66,15 @@ func TestDatabaseSourceCanonicalBoundaryContract(t *testing.T) {
 		if got := source.SubscriptionState(); got != SubStateActive {
 			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateActive)
 		}
-		if got := source.Limits()["max_monitored_systems"]; got != 10 {
-			t.Fatalf("Limits()[max_monitored_systems] = %d, want %d", got, 10)
+		limits := source.Limits()
+		if _, ok := limits["max_monitored_systems"]; ok {
+			t.Fatalf("Limits() retained retired max_monitored_systems: %v", limits)
 		}
-		if _, hasLegacy := source.Limits()["max_nodes"]; hasLegacy {
+		if _, hasLegacy := limits["max_nodes"]; hasLegacy {
 			t.Fatal("Limits() preserved legacy max_nodes key")
+		}
+		if got := limits["max_guests"]; got != 7 {
+			t.Fatalf("Limits()[max_guests] = %d, want %d", got, 7)
 		}
 	})
 
@@ -76,7 +82,7 @@ func TestDatabaseSourceCanonicalBoundaryContract(t *testing.T) {
 		store := &mockBillingStore{
 			state: &BillingState{
 				PlanVersion:       " ",
-				Limits:            map[string]int64{"max_monitored_systems": 42},
+				Limits:            map[string]int64{"max_monitored_systems": 42, "max_guests": 7},
 				SubscriptionState: SubscriptionState(" ACTIVE "),
 			},
 		}
@@ -86,8 +92,12 @@ func TestDatabaseSourceCanonicalBoundaryContract(t *testing.T) {
 		if got := source.PlanVersion(); got != "" {
 			t.Fatalf("PlanVersion() = %q, want empty", got)
 		}
-		if got := source.Limits()["max_monitored_systems"]; got != 42 {
-			t.Fatalf("Limits()[max_monitored_systems] = %d, want %d", got, 42)
+		limits := source.Limits()
+		if _, ok := limits["max_monitored_systems"]; ok {
+			t.Fatalf("Limits() retained retired max_monitored_systems: %v", limits)
+		}
+		if got := limits["max_guests"]; got != 7 {
+			t.Fatalf("Limits()[max_guests] = %d, want %d", got, 7)
 		}
 	})
 
@@ -142,9 +152,7 @@ func TestDatabaseSourceCanonicalBoundaryContract(t *testing.T) {
 //
 // The license server issues grants with these fields, the pulse client parses
 // them, and the relay server validates them. Any JSON tag drift means the
-// receiving side silently drops the field value — a real bug (for example, a
-// legacy alias instead of max_monitored_systems would break monitored-system
-// enforcement on the relay).
+// receiving side silently drops the field value.
 //
 // We compare by JSON tag (the wire contract) rather than Go field name because
 // the two repos may use different Go naming conventions (e.g. JTI vs JWTID)
@@ -164,7 +172,6 @@ var grantContractJSONTags = []string{
 	"tier",
 	"plan",
 	"feat",
-	"max_monitored_systems",
 	"max_guests",
 	"grace_until",
 	"email",

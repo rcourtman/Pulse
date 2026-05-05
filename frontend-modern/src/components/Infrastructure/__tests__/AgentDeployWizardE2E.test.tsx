@@ -314,7 +314,6 @@ describe('Agent Deploy Wizard E2E', () => {
       jobId: 'j1',
       acceptedTargets: ['n2', 'n3'],
       skippedTargets: [],
-      reservedLicenseSlots: 2,
       eventsUrl: '/api/agent-deploy/jobs/j1/events',
     });
 
@@ -464,7 +463,6 @@ describe('Agent Deploy Wizard E2E', () => {
       jobId: 'j1',
       acceptedTargets: ['n2', 'n3'],
       skippedTargets: [],
-      reservedLicenseSlots: 2,
       eventsUrl: '/api/agent-deploy/jobs/j1/events',
     });
     agentDeployAPIMock.getJob.mockResolvedValue(
@@ -677,7 +675,6 @@ describe('Agent Deploy Wizard E2E', () => {
       jobId: 'j1',
       acceptedTargets: ['n2'],
       skippedTargets: [],
-      reservedLicenseSlots: 1,
       eventsUrl: '/api/agent-deploy/jobs/j1/events',
     });
     agentDeployAPIMock.getJob.mockResolvedValue(
@@ -804,7 +801,6 @@ describe('Agent Deploy Wizard E2E', () => {
       jobId: 'j1',
       acceptedTargets: ['n2'],
       skippedTargets: [],
-      reservedLicenseSlots: 1,
       eventsUrl: '/api/agent-deploy/jobs/j1/events',
     });
     agentDeployAPIMock.getJob.mockResolvedValue(
@@ -980,7 +976,6 @@ describe('Agent Deploy Wizard E2E', () => {
       jobId: 'j1',
       acceptedTargets: ['n2'],
       skippedTargets: [],
-      reservedLicenseSlots: 1,
       eventsUrl: '/api/agent-deploy/jobs/j1/events',
     });
     agentDeployAPIMock.getJob.mockResolvedValue(

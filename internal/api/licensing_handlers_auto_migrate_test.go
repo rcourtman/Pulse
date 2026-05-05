@@ -48,14 +48,13 @@ func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_migrated",
-		Tier:                "pro",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "user@example.com",
+		LicenseID: "lic_migrated",
+		Tier:      "pro",
+		State:     "active",
+		Features:  []string{"relay"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "user@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -81,11 +80,10 @@ func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
 			License: pkglicensing.ActivateResponseLicense{
-				LicenseID:           "lic_migrated",
-				State:               "active",
-				Tier:                "pro",
-				Features:            []string{"relay"},
-				MaxMonitoredSystems: 10,
+				LicenseID: "lic_migrated",
+				State:     "active",
+				Tier:      "pro",
+				Features:  []string{"relay"},
 			},
 			Installation: pkglicensing.ActivateResponseInstallation{
 				InstallationID:    "inst_migrated",
@@ -327,15 +325,14 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_floor_auto",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "floor-auto@example.com",
+		LicenseID: "lic_floor_auto",
+		Tier:      "pro",
+		PlanKey:   "legacy_migration_fallback",
+		State:     "active",
+		Features:  []string{"relay"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "floor-auto@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -350,11 +347,10 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
 			License: pkglicensing.ActivateResponseLicense{
-				LicenseID:           "lic_floor_auto",
-				State:               "active",
-				Tier:                "pro",
-				Features:            []string{"relay"},
-				MaxMonitoredSystems: 10,
+				LicenseID: "lic_floor_auto",
+				State:     "active",
+				Tier:      "pro",
+				Features:  []string{"relay"},
 			},
 			Installation: pkglicensing.ActivateResponseInstallation{
 				InstallationID:    "inst_floor_auto",
@@ -400,9 +396,6 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 	if !svc.IsActivated() {
 		t.Fatal("expected persisted legacy JWT to auto-exchange into activation state")
 	}
-	if got := svc.Status().MaxMonitoredSystems; got != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped self-hosted continuity", got)
-	}
 
 	entReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
 	entRec := httptest.NewRecorder()
@@ -446,14 +439,10 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 			t.Fatalf("migrated v5 Pro entitlements missing capability %q in %v", capability, payload.Capabilities)
 		}
 	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected monitored-system capacity payload")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "unlimited" || payload.MonitoredSystemCapacity.Limit != 0 {
-		t.Fatalf(
-			"expected uncapped monitored-system capacity for migrated v5 Pro, got %+v",
-			payload.MonitoredSystemCapacity,
-		)
+	for _, limit := range payload.Limits {
+		if limit.Key == pkglicensing.MaxMonitoredSystemsLicenseGateKey {
+			t.Fatalf("migrated v5 Pro entitlements still expose retired monitored-system limit: %+v", payload.Limits)
+		}
 	}
 	if activationState, err := persistence.LoadActivationState(); err != nil {
 		t.Fatalf("load activation state: %v", err)
@@ -462,12 +451,6 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 	} else {
 		if !activationState.Continuity.LegacyMigration {
 			t.Fatal("expected legacy migration continuity flag")
-		}
-		if activationState.Continuity.GrandfatheredMaxMonitoredSystems != 0 {
-			t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMaxMonitoredSystems)
-		}
-		if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
-			t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
 		}
 	}
 
@@ -478,15 +461,14 @@ func TestGetTenantComponents_DoesNotBackfillGrandfatherFloorForUncappedSelfHoste
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_floor_restore",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "floor-restore@example.com",
+		LicenseID: "lic_floor_restore",
+		Tier:      "pro",
+		PlanKey:   "legacy_migration_fallback",
+		State:     "active",
+		Features:  []string{"relay"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "floor-restore@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -528,9 +510,6 @@ func TestGetTenantComponents_DoesNotBackfillGrandfatherFloorForUncappedSelfHoste
 	if svc == nil {
 		t.Fatal("expected non-nil service")
 	}
-	if got := svc.Status().MaxMonitoredSystems; got != 0 {
-		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 0 before floor capture for uncapped self-hosted continuity", got)
-	}
 
 	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
 	time.Sleep(100 * time.Millisecond)
@@ -542,120 +521,25 @@ func TestGetTenantComponents_DoesNotBackfillGrandfatherFloorForUncappedSelfHoste
 	if loaded == nil {
 		t.Fatal("expected activation state")
 	}
-	if loaded.Continuity.GrandfatheredMaxMonitoredSystems != 0 {
-		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 0 for uncapped self-hosted restore", loaded.Continuity.GrandfatheredMaxMonitoredSystems)
-	}
-	if loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
-		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 for uncapped self-hosted restore", loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
-	}
-	if got := svc.Status().MaxMonitoredSystems; got != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped self-hosted restore", got)
-	}
-	if svc.Status().MonitoredSystemContinuity != nil {
-		t.Fatalf("expected no monitored-system continuity for uncapped self-hosted restore, got %+v", svc.Status().MonitoredSystemContinuity)
+	if !loaded.Continuity.LegacyMigration {
+		t.Fatal("expected legacy migration continuity flag to survive restore")
 	}
 
 	handlers.StopAllBackgroundLoops()
-}
-
-func TestBillingReads_DoNotRestartLegacyGrandfatherReconcileLoop(t *testing.T) {
-	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
-
-	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_floor_read_only",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "floor-read-only@example.com",
-	})
-	if err != nil {
-		t.Fatalf("generate grant jwt: %v", err)
-	}
-	pkglicensing.SetPublicKey(grantPublicKey)
-	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
-
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-	cp, err := mtp.GetPersistence("default")
-	if err != nil {
-		t.Fatalf("init default persistence: %v", err)
-	}
-	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
-	if err != nil {
-		t.Fatalf("new persistence: %v", err)
-	}
-	if err := persistence.SaveActivationState(&pkglicensing.ActivationState{
-		InstallationID:      "inst_floor_read_only",
-		InstallationToken:   "pit_live_floor_read_only",
-		LicenseID:           "lic_floor_read_only",
-		GrantJWT:            grantJWT,
-		GrantJTI:            "grant_floor_read_only",
-		GrantExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
-		InstanceFingerprint: "fp-floor-read-only",
-		LicenseServerURL:    "https://license.pulserelay.pro",
-		ActivatedAt:         time.Now().Add(-time.Hour).Unix(),
-		LastRefreshedAt:     time.Now().Add(-time.Hour).Unix(),
-		Continuity: pkglicensing.ActivationContinuity{
-			LegacyMigration: true,
-		},
-	}); err != nil {
-		t.Fatalf("save activation state: %v", err)
-	}
-
-	handlers := NewLicenseHandlers(mtp, false)
-	t.Cleanup(handlers.StopAllBackgroundLoops)
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-	svc := handlers.Service(ctx)
-	if svc == nil {
-		t.Fatal("expected non-nil service")
-	}
-
-	time.Sleep(100 * time.Millisecond)
-	if _, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
-		t.Fatal("uncapped self-hosted restore started grandfather reconcile loop")
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
-	rec := httptest.NewRecorder()
-	handlers.HandleLicenseStatus(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("license status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	time.Sleep(100 * time.Millisecond)
-	if _, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
-		t.Fatal("license status read restarted grandfather reconcile loop")
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
-	rec = httptest.NewRecorder()
-	handlers.HandleEntitlements(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("license entitlements=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	time.Sleep(100 * time.Millisecond)
-	if _, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
-		t.Fatal("license entitlements read restarted grandfather reconcile loop")
-	}
 }
 
 func TestActivateLicenseKey_KeepsLegacySelfHostedMigrationUncapped(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_floor_manual",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "floor-manual@example.com",
+		LicenseID: "lic_floor_manual",
+		Tier:      "pro",
+		PlanKey:   "legacy_migration_fallback",
+		State:     "active",
+		Features:  []string{"relay"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "floor-manual@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -670,11 +554,10 @@ func TestActivateLicenseKey_KeepsLegacySelfHostedMigrationUncapped(t *testing.T)
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
 			License: pkglicensing.ActivateResponseLicense{
-				LicenseID:           "lic_floor_manual",
-				State:               "active",
-				Tier:                "pro",
-				Features:            []string{"relay"},
-				MaxMonitoredSystems: 10,
+				LicenseID: "lic_floor_manual",
+				State:     "active",
+				Tier:      "pro",
+				Features:  []string{"relay"},
 			},
 			Installation: pkglicensing.ActivateResponseInstallation{
 				InstallationID:    "inst_floor_manual",
@@ -713,24 +596,20 @@ func TestActivateLicenseKey_KeepsLegacySelfHostedMigrationUncapped(t *testing.T)
 	if svc == nil {
 		t.Fatal("expected non-nil service")
 	}
-	if got := svc.Status().MaxMonitoredSystems; got != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped self-hosted continuity", got)
-	}
 }
 
 func TestGetTenantComponents_DoesNotCaptureGrandfatherFloorWhenSupplementalInventorySettlesForUncappedSelfHosted(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_floor_supplemental",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "floor-supplemental@example.com",
+		LicenseID: "lic_floor_supplemental",
+		Tier:      "pro",
+		PlanKey:   "legacy_migration_fallback",
+		State:     "active",
+		Features:  []string{"relay"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "floor-supplemental@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -745,11 +624,10 @@ func TestGetTenantComponents_DoesNotCaptureGrandfatherFloorWhenSupplementalInven
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
 			License: pkglicensing.ActivateResponseLicense{
-				LicenseID:           "lic_floor_supplemental",
-				State:               "active",
-				Tier:                "pro",
-				Features:            []string{"relay"},
-				MaxMonitoredSystems: 10,
+				LicenseID: "lic_floor_supplemental",
+				State:     "active",
+				Tier:      "pro",
+				Features:  []string{"relay"},
 			},
 			Installation: pkglicensing.ActivateResponseInstallation{
 				InstallationID:    "inst_floor_supplemental",
@@ -821,34 +699,13 @@ func TestGetTenantComponents_DoesNotCaptureGrandfatherFloorWhenSupplementalInven
 	}
 
 	status := readStatus()
-	if got := status.MaxMonitoredSystems; got != 0 {
-		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 0 while supplemental inventory is unsettled for uncapped self-hosted continuity", got)
-	}
-	if status.MonitoredSystemContinuity != nil {
-		t.Fatalf("expected no continuity in status payload for uncapped self-hosted migration, got %+v", status.MonitoredSystemContinuity)
+	if !status.Valid {
+		t.Fatal("expected migrated self-hosted license status to remain valid")
 	}
 
 	payload := readEntitlements()
-	if payload.MonitoredSystemContinuity != nil {
-		t.Fatalf("expected no continuity in entitlements payload for uncapped self-hosted migration, got %+v", payload.MonitoredSystemContinuity)
-	}
 	if len(payload.Limits) != 0 {
 		t.Fatalf("expected no enforced monitored-system limit for uncapped continuity, got %+v", payload.Limits)
-	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected monitored-system capacity payload")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "usage_unavailable" {
-		t.Fatalf("expected usage_unavailable monitored-system capacity while supplemental inventory is unsettled, got %+v", payload.MonitoredSystemCapacity)
-	}
-	if payload.MonitoredSystemCapacity.Limit != 0 {
-		t.Fatalf("monitored_system_capacity.limit=%d, want 0 for uncapped continuity", payload.MonitoredSystemCapacity.Limit)
-	}
-	if payload.MonitoredSystemCapacity.CurrentAvailable {
-		t.Fatalf("expected unavailable monitored-system usage while supplemental inventory is unsettled, got %+v", payload.MonitoredSystemCapacity)
-	}
-	if payload.MonitoredSystemCapacity.CurrentUnavailableReason != "supplemental_inventory_unsettled" {
-		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.MonitoredSystemCapacity.CurrentUnavailableReason, "supplemental_inventory_unsettled")
 	}
 
 	activationState, err := persistence.LoadActivationState()
@@ -858,20 +715,20 @@ func TestGetTenantComponents_DoesNotCaptureGrandfatherFloorWhenSupplementalInven
 	if activationState == nil {
 		t.Fatal("expected activation state after legacy exchange")
 	}
-	if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
-		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
+	if !activationState.Continuity.LegacyMigration {
+		t.Fatal("expected legacy migration continuity flag")
 	}
 
 	provider.settle(23)
 	status = readStatus()
-	if got := status.MaxMonitoredSystems; got != 0 {
-		t.Fatalf("stale supplemental store should keep uncapped self-hosted status, got %d", got)
+	if !status.Valid {
+		t.Fatal("stale supplemental store should keep migrated self-hosted status valid")
 	}
 
 	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
 	status = readStatus()
-	if got := status.MaxMonitoredSystems; got != 0 {
-		t.Fatalf("status read should not reintroduce a monitored-system cap directly after canonical store rebuild, got %d", got)
+	if !status.Valid {
+		t.Fatal("status read should keep migrated self-hosted status valid after canonical store rebuild")
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -882,33 +739,18 @@ func TestGetTenantComponents_DoesNotCaptureGrandfatherFloorWhenSupplementalInven
 	if activationState == nil {
 		t.Fatal("expected activation state after canonical store rebuild")
 	}
-	if activationState.Continuity.GrandfatheredMaxMonitoredSystems != 0 {
-		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMaxMonitoredSystems)
-	}
-	if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
-		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 for uncapped self-hosted migration", activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
+	if !activationState.Continuity.LegacyMigration {
+		t.Fatal("expected legacy migration continuity flag after canonical store rebuild")
 	}
 
 	status = readStatus()
-	if got := status.MaxMonitoredSystems; got != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 after canonical store rebuild for uncapped self-hosted continuity", got)
-	}
-	if status.MonitoredSystemContinuity != nil {
-		t.Fatalf("expected no continuity in status payload after canonical store rebuild, got %+v", status.MonitoredSystemContinuity)
+	if !status.Valid {
+		t.Fatal("expected migrated self-hosted license status to remain valid after canonical store rebuild")
 	}
 
 	payload = readEntitlements()
-	if payload.MonitoredSystemContinuity != nil {
-		t.Fatalf("expected no continuity in entitlements payload after canonical store rebuild, got %+v", payload.MonitoredSystemContinuity)
-	}
 	if len(payload.Limits) != 0 {
 		t.Fatalf("expected no enforced monitored-system limit in entitlements payload after async capture, got %+v", payload.Limits)
-	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected monitored-system capacity payload after async capture")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "unlimited" || payload.MonitoredSystemCapacity.Current != 23 {
-		t.Fatalf("expected unlimited monitored-system capacity with current=23 after canonical store rebuild, got %+v", payload.MonitoredSystemCapacity)
 	}
 }
 

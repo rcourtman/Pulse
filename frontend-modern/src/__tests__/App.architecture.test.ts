@@ -99,6 +99,8 @@ describe('App architecture', () => {
     expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
     expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
     expect(appSource).not.toContain('TrialBanner');
+    expect(appSource).not.toContain('MonitoredSystemLimitWarningBanner');
+    expect(appSource).not.toContain('monitoredSystemLimitWarningBanner');
   });
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {

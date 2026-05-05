@@ -1,9 +1,5 @@
 import { createSignal } from 'solid-js';
-import {
-  LicenseAPI,
-  type LicenseRuntimeCapabilities,
-  type MonitoredSystemCapacityStatus,
-} from '@/api/license';
+import { LicenseAPI, type LicenseRuntimeCapabilities } from '@/api/license';
 import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
 
@@ -68,10 +64,6 @@ export function getRuntimeLimit(key: string) {
   const current = runtimeCapabilities();
   if (!current?.limits?.length) return undefined;
   return current.limits.find((limit) => limit.key === key);
-}
-
-export function getRuntimeMonitoredSystemCapacity(): MonitoredSystemCapacityStatus | undefined {
-  return runtimeCapabilities()?.monitored_system_capacity;
 }
 
 /** Default max history days when runtime capabilities aren't loaded yet. */

@@ -72,32 +72,21 @@ type EntitlementPayload struct {
 	// Indicates the number of days remaining in the 14-day overflow window.
 	OverflowDaysRemaining *int `json:"overflow_days_remaining,omitempty"`
 
-	// LegacyConnections is retained for response compatibility. Monitored-system
-	// enforcement now counts API-backed and agent-backed top-level systems
-	// together, so this field is informational only.
+	// LegacyConnections is retained for response compatibility and informational
+	// estate review only.
 	LegacyConnections LegacyConnectionCounts `json:"legacy_connections"`
 
-	// HasMigrationGap is retained for response compatibility. API-backed systems
-	// now count toward the same monitored-system cap as agent-backed systems.
+	// HasMigrationGap is retained for response compatibility. It no longer
+	// describes a commercial volume limit.
 	HasMigrationGap bool `json:"has_migration_gap"`
 
 	// CommercialMigration reports unresolved paid-license migration work entering
 	// from v5-era commercial state.
 	CommercialMigration *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
-
-	// MonitoredSystemContinuity exposes migrated monitored-system continuity
-	// state for billing and support-grade plan-limit presentation.
-	MonitoredSystemContinuity *MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
-
-	// MonitoredSystemCapacity exposes the canonical monitored-system
-	// admission posture so the frontend can distinguish between a hard cap,
-	// an admission freeze, and uncapped continuity without inferring that
-	// behavior from raw current/limit math.
-	MonitoredSystemCapacity *MonitoredSystemCapacityStatus `json:"monitored_system_capacity,omitempty"`
 }
 
 // CommercialPosturePayload is the canonical non-billing commercial contract
-// for upgrade messaging and monitored-system migration copy.
+// for upgrade messaging and paid migration copy.
 // It intentionally excludes billing identity, grandfathered plan terms, and
 // other full-entitlement details that belong only to billing surfaces.
 type CommercialPosturePayload struct {
@@ -125,22 +114,17 @@ type CommercialPosturePayload struct {
 	// OverflowDaysRemaining is set when the onboarding overflow (+1 host) is active.
 	OverflowDaysRemaining *int `json:"overflow_days_remaining,omitempty"`
 
-	// LegacyConnections is retained for response compatibility. Monitored-system
-	// enforcement now counts API-backed and agent-backed top-level systems
-	// together, so this field is informational only.
+	// LegacyConnections is retained for response compatibility and informational
+	// estate review only.
 	LegacyConnections LegacyConnectionCounts `json:"legacy_connections"`
 
-	// HasMigrationGap is retained for response compatibility. API-backed systems
-	// now count toward the same monitored-system cap as agent-backed systems.
+	// HasMigrationGap is retained for response compatibility. It no longer
+	// describes a commercial volume limit.
 	HasMigrationGap bool `json:"has_migration_gap"`
 
 	// CommercialMigration reports unresolved paid-license migration work entering
 	// from v5-era commercial state.
 	CommercialMigration *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
-
-	// MonitoredSystemCapacity exposes the canonical monitored-system admission
-	// posture without exposing billing identity or plan-term internals.
-	MonitoredSystemCapacity *MonitoredSystemCapacityStatus `json:"monitored_system_capacity,omitempty"`
 }
 
 // RuntimeCapabilitiesPayload is the canonical non-commercial license contract
@@ -157,15 +141,11 @@ type RuntimeCapabilitiesPayload struct {
 
 	// MaxHistoryDays is the maximum metrics history retention in days for the current tier.
 	MaxHistoryDays int `json:"max_history_days"`
-
-	// MonitoredSystemCapacity exposes the canonical monitored-system runtime
-	// posture for warning banners and admission-freeze UX.
-	MonitoredSystemCapacity *MonitoredSystemCapacityStatus `json:"monitored_system_capacity,omitempty"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.
 type LimitStatus struct {
-	// Key is the limit identifier (e.g., "max_monitored_systems").
+	// Key is the limit identifier (e.g., "max_guests").
 	Key string `json:"key"`
 
 	// Limit is the maximum allowed value (0 = unlimited).
@@ -174,67 +154,9 @@ type LimitStatus struct {
 	// Current is the observed current usage.
 	Current int64 `json:"current"`
 
-	// CurrentAvailable reports whether Current reflects a resolved runtime
-	// usage value rather than an unavailable best-effort fallback.
-	CurrentAvailable *bool `json:"current_available,omitempty"`
-
-	// CurrentUnavailableReason explains why Current is unavailable when
-	// CurrentAvailable is false.
-	CurrentUnavailableReason string `json:"current_unavailable_reason,omitempty"`
-
 	// State describes the over-limit UX state.
 	// Values: "ok", "warning", "enforced"
 	State string `json:"state"`
-}
-
-// MonitoredSystemCapacityStatus describes the canonical monitored-system
-// admission posture. It makes explicit that Pulse blocks net-new monitored
-// systems at or above the plan limit while keeping already-counted systems
-// visible and reporting.
-type MonitoredSystemCapacityStatus struct {
-	// Mode is the canonical monitored-system capacity posture.
-	// Values: "usage_unavailable", "unlimited", "within_limit",
-	// "at_limit_blocking_new", "over_limit_frozen"
-	Mode string `json:"mode"`
-
-	// Urgency mirrors the user-facing severity of the current posture.
-	// Values: "ok", "warning", "enforced"
-	Urgency string `json:"urgency"`
-
-	// Current is the observed current monitored-system usage.
-	Current int64 `json:"current"`
-
-	// Limit is the plan limit for monitored systems (0 = unlimited).
-	Limit int64 `json:"limit"`
-
-	// CurrentAvailable reports whether Current reflects a resolved runtime
-	// usage value rather than an unavailable best-effort fallback.
-	CurrentAvailable bool `json:"current_available"`
-
-	// CurrentUnavailableReason explains why Current is unavailable when
-	// CurrentAvailable is false.
-	CurrentUnavailableReason string `json:"current_unavailable_reason,omitempty"`
-
-	// AvailableSlots reports how many net-new monitored systems can be added
-	// before the plan blocks additional admissions.
-	AvailableSlots int64 `json:"available_slots"`
-
-	// Overage reports how far above the current plan limit this installation
-	// is while existing monitoring continues.
-	Overage int64 `json:"overage"`
-
-	// Reason explains why the current monitored-system posture is legitimate.
-	// Values: "limit_reached", "preexisting_usage",
-	// "legacy_migration_capture_pending"
-	Reason string `json:"reason,omitempty"`
-
-	// BlocksNewSystems indicates that Pulse will reject net-new monitored
-	// systems until capacity is freed or the plan changes.
-	BlocksNewSystems bool `json:"blocks_new_systems"`
-
-	// ExistingMonitoringContinues indicates that already-counted monitored
-	// systems remain visible and reporting under the current posture.
-	ExistingMonitoringContinues bool `json:"existing_monitoring_continues"`
 }
 
 // UpgradeReason provides context for why a user should upgrade.
@@ -284,21 +206,6 @@ type EntitlementUsageSnapshot struct {
 	LegacyConnections LegacyConnectionCounts
 }
 
-func (s EntitlementUsageSnapshot) monitoredSystemCount() int64 {
-	if !s.MonitoredSystemsAvailable || s.MonitoredSystems < 0 {
-		return 0
-	}
-	return s.MonitoredSystems
-}
-
-func (s EntitlementUsageSnapshot) monitoredSystemCountAvailable() bool {
-	return s.MonitoredSystemsAvailable
-}
-
-func (s EntitlementUsageSnapshot) monitoredSystemCountUnavailableReason() string {
-	return s.MonitoredSystemsUnavailableReason
-}
-
 // BuildEntitlementPayload constructs the normalized payload from LicenseStatus.
 func BuildEntitlementPayload(status *LicenseStatus, subscriptionState string) EntitlementPayload {
 	return BuildEntitlementPayloadWithUsage(status, subscriptionState, EntitlementUsageSnapshot{}, nil)
@@ -344,9 +251,6 @@ func BuildRuntimeCapabilitiesPayloadWithUsage(
 		Limits:         cloneLimitStatuses(entitlementPayload.Limits),
 		HostedMode:     entitlementPayload.HostedMode,
 		MaxHistoryDays: entitlementPayload.MaxHistoryDays,
-		MonitoredSystemCapacity: cloneMonitoredSystemCapacityStatus(
-			entitlementPayload.MonitoredSystemCapacity,
-		),
 	}
 }
 
@@ -383,25 +287,10 @@ func CommercialPosturePayloadFromEntitlementPayload(
 	if payload.CommercialMigration != nil {
 		sanitized.CommercialMigration = CloneCommercialMigrationStatus(payload.CommercialMigration)
 	}
-	if payload.MonitoredSystemCapacity != nil {
-		sanitized.MonitoredSystemCapacity = cloneMonitoredSystemCapacityStatus(
-			payload.MonitoredSystemCapacity,
-		)
-	}
 	if sanitized.UpgradeReasons == nil {
 		sanitized.UpgradeReasons = []UpgradeReason{}
 	}
 	return sanitized
-}
-
-func licenseStatusUsesUncappedCoreMonitoring(status *LicenseStatus) bool {
-	if status == nil {
-		return false
-	}
-	if status.PlanVersion != "" {
-		return IsSelfHostedCoreMonitoringUncappedPlanVersion(status.PlanVersion)
-	}
-	return IsSelfHostedCoreMonitoringUncappedTier(status.Tier)
 }
 
 // BuildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
@@ -444,24 +333,6 @@ func BuildEntitlementPayloadWithUsage(
 		LegacyConnections: usage.LegacyConnections,
 		HasMigrationGap:   false,
 	}
-	uncappedCoreMonitoring := licenseStatusUsesUncappedCoreMonitoring(status)
-	if status.MonitoredSystemContinuity != nil {
-		continuity := *status.MonitoredSystemContinuity
-		payload.MonitoredSystemContinuity = &continuity
-	}
-	monitoredSystemLimit := int64(status.MaxMonitoredSystems)
-	capacityContinuity := status.MonitoredSystemContinuity
-	if uncappedCoreMonitoring {
-		monitoredSystemLimit = 0
-		payload.MonitoredSystemContinuity = nil
-		capacityContinuity = nil
-	}
-	payload.MonitoredSystemCapacity = buildMonitoredSystemCapacityStatus(
-		monitoredSystemLimit,
-		usage,
-		capacityContinuity,
-	)
-
 	if payload.Capabilities == nil {
 		payload.Capabilities = []string{}
 	}
@@ -487,22 +358,8 @@ func BuildEntitlementPayloadWithUsage(
 		payload.MaxHistoryDays = TierHistoryDays[TierFree]
 	}
 
-	// Build limits.
-	if status.MaxMonitoredSystems > 0 && !uncappedCoreMonitoring {
-		currentSystems := usage.monitoredSystemCount()
-		limit := LimitStatus{
-			Key:              MaxMonitoredSystemsLicenseGateKey,
-			Limit:            int64(status.MaxMonitoredSystems),
-			Current:          currentSystems,
-			CurrentAvailable: boolPointer(usage.monitoredSystemCountAvailable()),
-			State:            LimitState(currentSystems, int64(status.MaxMonitoredSystems)),
-		}
-		if !usage.monitoredSystemCountAvailable() {
-			limit.CurrentUnavailableReason = usage.monitoredSystemCountUnavailableReason()
-		}
-		payload.Limits = append(payload.Limits, limit)
-	}
-	if status.MaxGuests > 0 && !uncappedCoreMonitoring {
+	// Build hosted-only runtime limits. Self-hosted commercial volume caps are retired.
+	if status.Tier == TierCloud && status.MaxGuests > 0 {
 		payload.Limits = append(payload.Limits, LimitStatus{
 			Key:     "max_guests",
 			Limit:   int64(status.MaxGuests),
@@ -555,92 +412,6 @@ func remainingTrialDays(expiresAtUnix, nowUnix int64) int {
 		daysRemaining = 0
 	}
 	return daysRemaining
-}
-
-func boolPointer(value bool) *bool {
-	v := value
-	return &v
-}
-
-func buildMonitoredSystemCapacityStatus(
-	limit int64,
-	usage EntitlementUsageSnapshot,
-	continuity *MonitoredSystemContinuityStatus,
-) *MonitoredSystemCapacityStatus {
-	currentAvailable := usage.monitoredSystemCountAvailable()
-	if !currentAvailable {
-		return &MonitoredSystemCapacityStatus{
-			Mode:                        "usage_unavailable",
-			Urgency:                     "ok",
-			Current:                     0,
-			Limit:                       limit,
-			CurrentAvailable:            false,
-			CurrentUnavailableReason:    usage.monitoredSystemCountUnavailableReason(),
-			AvailableSlots:              0,
-			Overage:                     0,
-			BlocksNewSystems:            false,
-			ExistingMonitoringContinues: false,
-		}
-	}
-
-	current := usage.monitoredSystemCount()
-	if limit <= 0 {
-		return &MonitoredSystemCapacityStatus{
-			Mode:                        "unlimited",
-			Urgency:                     "ok",
-			Current:                     current,
-			Limit:                       0,
-			CurrentAvailable:            true,
-			AvailableSlots:              0,
-			Overage:                     0,
-			BlocksNewSystems:            false,
-			ExistingMonitoringContinues: true,
-		}
-	}
-
-	status := &MonitoredSystemCapacityStatus{
-		Current:                     current,
-		Limit:                       limit,
-		CurrentAvailable:            true,
-		AvailableSlots:              0,
-		Overage:                     0,
-		BlocksNewSystems:            false,
-		ExistingMonitoringContinues: true,
-		Urgency:                     LimitState(current, limit),
-	}
-
-	switch {
-	case current < limit:
-		status.Mode = "within_limit"
-		status.AvailableSlots = limit - current
-	case current == limit:
-		status.Mode = "at_limit_blocking_new"
-		status.Reason = "limit_reached"
-		status.BlocksNewSystems = true
-	case current > limit:
-		status.Mode = "over_limit_frozen"
-		status.BlocksNewSystems = true
-		status.Overage = current - limit
-		if continuity != nil && continuity.CapturePending {
-			status.Reason = "legacy_migration_capture_pending"
-		} else {
-			status.Reason = "preexisting_usage"
-		}
-	default:
-		status.Mode = "within_limit"
-	}
-
-	return status
-}
-
-func cloneMonitoredSystemCapacityStatus(
-	status *MonitoredSystemCapacityStatus,
-) *MonitoredSystemCapacityStatus {
-	if status == nil {
-		return nil
-	}
-	cloned := *status
-	return &cloned
 }
 
 // LimitState returns the over-limit UX state string.

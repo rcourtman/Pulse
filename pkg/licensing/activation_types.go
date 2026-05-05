@@ -37,64 +37,14 @@ type ActivationContinuity struct {
 	// LegacyMigration marks installations activated from a supported v5 license
 	// exchange rather than a native v6 activation key.
 	LegacyMigration bool `json:"legacy_migration,omitempty"`
-
-	// GrandfatheredMaxMonitoredSystems stores the deduped monitored-system floor
-	// captured for a migrated v5 installation when its existing estate exceeds
-	// the exchanged plan limit.
-	GrandfatheredMaxMonitoredSystems int `json:"grandfathered_max_monitored_systems,omitempty"`
-
-	// GrandfatheredMonitoredSystemsCapturedAt marks that the migration floor was
-	// resolved exactly once from canonical runtime usage, even when no override
-	// was needed because the observed estate was already within the exchanged
-	// plan limit.
-	GrandfatheredMonitoredSystemsCapturedAt int64 `json:"grandfathered_monitored_systems_captured_at,omitempty"`
 }
 
 func normalizeActivationContinuity(continuity ActivationContinuity) ActivationContinuity {
-	if continuity.GrandfatheredMaxMonitoredSystems < 0 {
-		continuity.GrandfatheredMaxMonitoredSystems = 0
-	}
-	if continuity.GrandfatheredMonitoredSystemsCapturedAt < 0 {
-		continuity.GrandfatheredMonitoredSystemsCapturedAt = 0
-	}
 	return continuity
 }
 
 func (c ActivationContinuity) needsLegacyMonitoredSystemCapture() bool {
-	c = normalizeActivationContinuity(c)
-	return c.LegacyMigration && c.GrandfatheredMonitoredSystemsCapturedAt == 0
-}
-
-func applyActivationContinuityToClaims(claims *Claims, continuity ActivationContinuity) {
-	if claims == nil {
-		return
-	}
-
-	continuity = normalizeActivationContinuity(continuity)
-	if continuity.GrandfatheredMaxMonitoredSystems <= 0 {
-		return
-	}
-	if claims.shouldScrubLegacyCommercialCaps() {
-		return
-	}
-
-	currentLimit := int64(0)
-	if existing, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
-		currentLimit = existing
-	}
-	if currentLimit >= int64(continuity.GrandfatheredMaxMonitoredSystems) {
-		return
-	}
-
-	if claims.Limits == nil {
-		claims.Limits = map[string]int64{}
-	} else {
-		claims.Limits = NormalizeMonitoredSystemLimits(claims.Limits)
-	}
-	claims.Limits[MaxMonitoredSystemsLicenseGateKey] = int64(continuity.GrandfatheredMaxMonitoredSystems)
-	if claims.MaxMonitoredSystems < continuity.GrandfatheredMaxMonitoredSystems {
-		claims.MaxMonitoredSystems = continuity.GrandfatheredMaxMonitoredSystems
-	}
+	return false
 }
 
 func grantClaimsUseUncappedCoreMonitoring(gc *GrantClaims) bool {
@@ -108,22 +58,21 @@ func grantClaimsUseUncappedCoreMonitoring(gc *GrantClaims) bool {
 // GrantClaims are the claims parsed from a relay grant JWT payload.
 // The grant is a short-lived JWT (72h TTL) issued by the license server.
 type GrantClaims struct {
-	Issuer              string   `json:"iss"`
-	Audience            string   `json:"aud"`
-	LicenseID           string   `json:"lid"`
-	InstallationID      string   `json:"iid"`
-	LicenseVersion      int64    `json:"lv"`
-	State               string   `json:"st"`   // active|past_due|grace
-	Tier                string   `json:"tier"` // matches Tier constants: "relay", "pro", "pro_plus", etc.
-	PlanKey             string   `json:"plan"`
-	Features            []string `json:"feat"`
-	MaxMonitoredSystems int      `json:"max_monitored_systems"`
-	MaxGuests           int      `json:"max_guests"`
-	IssuedAt            int64    `json:"iat"`
-	ExpiresAt           int64    `json:"exp"`
-	GraceUntil          int64    `json:"grace_until"`
-	JTI                 string   `json:"jti"`   // unique grant ID
-	Email               string   `json:"email"` // license owner email
+	Issuer         string   `json:"iss"`
+	Audience       string   `json:"aud"`
+	LicenseID      string   `json:"lid"`
+	InstallationID string   `json:"iid"`
+	LicenseVersion int64    `json:"lv"`
+	State          string   `json:"st"`   // active|past_due|grace
+	Tier           string   `json:"tier"` // matches Tier constants: "relay", "pro", "pro_plus", etc.
+	PlanKey        string   `json:"plan"`
+	Features       []string `json:"feat"`
+	MaxGuests      int      `json:"max_guests"`
+	IssuedAt       int64    `json:"iat"`
+	ExpiresAt      int64    `json:"exp"`
+	GraceUntil     int64    `json:"grace_until"`
+	JTI            string   `json:"jti"`   // unique grant ID
+	Email          string   `json:"email"` // license owner email
 }
 
 func (g *GrantClaims) UnmarshalJSON(data []byte) error {
@@ -132,19 +81,16 @@ func (g *GrantClaims) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if legacy, ok, err := decodeLegacyV5MonitoredSystemLimitFromJSON(data); err == nil && ok {
-		g.MaxMonitoredSystems = legacy
-	}
 	return nil
 }
 
-// grantClaimsToClaims maps grant claims to the existing Claims struct
-// so that all feature gating and monitored-system limits work unchanged.
+// grantClaimsToClaims maps grant claims to the existing Claims struct so that
+// feature gating works unchanged.
 func grantClaimsToClaims(gc *GrantClaims) Claims {
 	return grantClaimsToClaimsWithContinuity(gc, ActivationContinuity{})
 }
 
-func grantClaimsToClaimsWithContinuity(gc *GrantClaims, continuity ActivationContinuity) Claims {
+func grantClaimsToClaimsWithContinuity(gc *GrantClaims, _ ActivationContinuity) Claims {
 	c := Claims{
 		LicenseID:              gc.LicenseID,
 		Email:                  gc.Email,
@@ -152,7 +98,6 @@ func grantClaimsToClaimsWithContinuity(gc *GrantClaims, continuity ActivationCon
 		IssuedAt:               gc.IssuedAt,
 		ExpiresAt:              gc.ExpiresAt,
 		Features:               gc.Features,
-		MaxMonitoredSystems:    gc.MaxMonitoredSystems,
 		MaxGuests:              gc.MaxGuests,
 		PlanVersion:            gc.PlanKey,
 		CoreMonitoringUncapped: grantClaimsUseUncappedCoreMonitoring(gc),
@@ -170,8 +115,6 @@ func grantClaimsToClaimsWithContinuity(gc *GrantClaims, continuity ActivationCon
 	default:
 		c.SubState = SubStateSuspended
 	}
-
-	applyActivationContinuityToClaims(&c, continuity)
 
 	return c
 }
@@ -271,13 +214,12 @@ type ActivateInstallationResponse struct {
 
 // ActivateResponseLicense is the license portion of the activation response.
 type ActivateResponseLicense struct {
-	LicenseID           string   `json:"license_id"`
-	State               string   `json:"state"`
-	Tier                string   `json:"tier"`
-	MaxMonitoredSystems int      `json:"max_monitored_systems"`
-	MaxGuests           int      `json:"max_guests"`
-	Features            []string `json:"features"`
-	LicenseVersion      int64    `json:"license_version"`
+	LicenseID      string   `json:"license_id"`
+	State          string   `json:"state"`
+	Tier           string   `json:"tier"`
+	MaxGuests      int      `json:"max_guests"`
+	Features       []string `json:"features"`
+	LicenseVersion int64    `json:"license_version"`
 }
 
 func (l *ActivateResponseLicense) UnmarshalJSON(data []byte) error {
@@ -286,9 +228,6 @@ func (l *ActivateResponseLicense) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if legacy, ok, err := decodeLegacyV5MonitoredSystemLimitFromJSON(data); err == nil && ok {
-		l.MaxMonitoredSystems = legacy
-	}
 	return nil
 }
 

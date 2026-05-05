@@ -215,7 +215,7 @@ export const INFRASTRUCTURE_ONBOARDING_PATHS: Record<
     title: 'Connect a supported platform',
     description:
       'Use a management API when the platform exposes one. Pulse validates the endpoint, requests credentials, and then starts collecting platform inventory and health.',
-    bestFor: 'TrueNAS, Proxmox, and the current VMware vCenter admission path',
+    bestFor: 'TrueNAS, Proxmox, and the current VMware vCenter integration path',
     coverage: 'Platform inventory, workloads, storage, backups, and health',
   },
   agent: {

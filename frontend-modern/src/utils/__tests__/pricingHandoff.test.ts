@@ -34,9 +34,9 @@ import {
 } from '@/utils/pricingHandoff';
 
 describe('pricingHandoff', () => {
-  it('retires legacy monitored-system pricing links onto the neutral plan surface', () => {
+  it('does not keep a special in-product monitored-system pricing route', () => {
     expect(getUpgradeFallbackDestination('max_monitored_systems')).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+      getSelfHostedPurchaseStartUrl('max_monitored_systems'),
     );
   });
 
@@ -118,9 +118,9 @@ describe('pricingHandoff', () => {
     );
   });
 
-  it('keeps retired monitored-system pricing handoffs on the neutral Plans surface', () => {
+  it('treats legacy monitored-system pricing links as external purchase-start compatibility', () => {
     expect(getPricingRouteDestination('?feature=max_monitored_systems')).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+      getSelfHostedPurchaseStartUrl('max_monitored_systems'),
     );
   });
 

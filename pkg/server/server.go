@@ -97,11 +97,6 @@ type BusinessHooks struct {
 	// CreateAlertAnalyzer creates the premium alert-triggered analyzer.
 	// Returns nil in OSS. Enterprise provides a concrete implementation.
 	CreateAlertAnalyzer func(deps aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer
-
-	// ResolveMonitoredSystemAdmissionPolicy allows private builds to own the
-	// commercial monitored-system admission decision without importing internal
-	// API packages. Public runtime still owns counted-system projection.
-	ResolveMonitoredSystemAdmissionPolicy extensions.ResolveMonitoredSystemAdmissionPolicyFunc
 }
 
 var (
@@ -272,7 +267,6 @@ func Run(ctx context.Context, version string) error {
 	createInvestigationStore := globalHooks.CreateInvestigationStore
 	createInvestigationOrchestrator := globalHooks.CreateInvestigationOrchestrator
 	createAlertAnalyzer := globalHooks.CreateAlertAnalyzer
-	resolveMonitoredSystemAdmissionPolicy := globalHooks.ResolveMonitoredSystemAdmissionPolicy
 	globalHooksMu.Unlock()
 
 	api.SetAIInvestigationEnabled(aiInvestigationEnabled)
@@ -280,7 +274,6 @@ func Run(ctx context.Context, version string) error {
 	api.SetCreateInvestigationStore(createInvestigationStore)
 	api.SetCreateInvestigationOrchestrator(createInvestigationOrchestrator)
 	api.SetCreateAlertAnalyzer(createAlertAnalyzer)
-	api.SetResolveMonitoredSystemAdmissionPolicy(resolveMonitoredSystemAdmissionPolicy)
 	api.SetRBACAdminEndpointsBinder(bindRBACAdminEndpoints)
 	api.SetAuditAdminEndpointsBinder(bindAuditAdminEndpoints)
 	api.SetSSOAdminEndpointsBinder(bindSSOAdminEndpoints)

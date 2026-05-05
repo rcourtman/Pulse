@@ -15,7 +15,6 @@ describe('deployStatusPresentation', () => {
       ['failed_retryable', 'Failed'],
       ['failed_permanent', 'Failed'],
       ['skipped_already_agent', 'Already monitored'],
-      ['skipped_license', 'Workspace capacity'],
       ['canceled', 'Canceled'],
     ];
 

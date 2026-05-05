@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /* ── hoisted mocks ──────────────────────────────────────────── */
 
-const { apiMock, loggerMock, getLimitMock } = vi.hoisted(() => ({
+const { apiMock, loggerMock } = vi.hoisted(() => ({
   apiMock: {
     getCandidates: vi.fn(),
     createPreflight: vi.fn(),
@@ -14,12 +14,10 @@ const { apiMock, loggerMock, getLimitMock } = vi.hoisted(() => ({
     retryJob: vi.fn(),
   },
   loggerMock: { info: vi.fn(), warn: vi.fn() },
-  getLimitMock: vi.fn(),
 }));
 
 vi.mock('@/api/agentDeploy', () => ({ AgentDeployAPI: apiMock }));
 vi.mock('@/utils/logger', () => ({ logger: loggerMock }));
-vi.mock('@/stores/license', () => ({ getRuntimeLimit: getLimitMock }));
 
 // Stub useDeployStream — wizard only needs the returned state, not real SSE.
 vi.mock('@/hooks/useDeployStream', () => ({
@@ -49,7 +47,6 @@ const defaultOpts = { clusterId: 'cluster-1', clusterName: 'My Cluster' };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getLimitMock.mockReturnValue(null);
   // Default: getCandidates returns empty (called immediately on creation).
   apiMock.getCandidates.mockResolvedValue({ nodes: [], sourceAgents: [] });
 });
@@ -490,26 +487,5 @@ describe('useDeployWizard', () => {
       dispose();
     });
 
-    it('maxAgentSlots returns monitored-system capacity from runtime limits', async () => {
-      getLimitMock.mockReturnValue({ limit: 10 });
-      apiMock.getCandidates.mockResolvedValue({ nodes: [], sourceAgents: [] });
-
-      const { wizard, dispose } = withRoot(() => useDeployWizard(defaultOpts));
-      await vi.waitFor(() => expect(wizard.candidatesLoading()).toBe(false));
-
-      expect(wizard.maxAgentSlots()).toBe(10);
-      dispose();
-    });
-
-    it('maxAgentSlots returns 0 when no monitored-system capacity limit exists', async () => {
-      getLimitMock.mockReturnValue(null);
-      apiMock.getCandidates.mockResolvedValue({ nodes: [], sourceAgents: [] });
-
-      const { wizard, dispose } = withRoot(() => useDeployWizard(defaultOpts));
-      await vi.waitFor(() => expect(wizard.candidatesLoading()).toBe(false));
-
-      expect(wizard.maxAgentSlots()).toBe(0);
-      dispose();
-    });
   });
 });

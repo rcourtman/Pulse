@@ -5,10 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
-	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
-	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -52,23 +48,22 @@ type checkoutPortalHandoffRequestModel = pkglicensing.CheckoutPortalHandoffReque
 type checkoutPortalHandoffResponseModel = pkglicensing.CheckoutPortalHandoffResponse
 
 const (
-	featureMultiTenantKey             = pkglicensing.FeatureMultiTenant
-	featureAgentProfilesValue         = pkglicensing.FeatureAgentProfiles
-	featureAIPatrolValue              = pkglicensing.FeatureAIPatrol
-	featureAIAutoFixValue             = pkglicensing.FeatureAIAutoFix
-	featureAuditLoggingValue          = pkglicensing.FeatureAuditLogging
-	featureRBACValue                  = pkglicensing.FeatureRBAC
-	featureAdvancedReportingValue     = pkglicensing.FeatureAdvancedReporting
-	featureLongTermMetricsValue       = pkglicensing.FeatureLongTermMetrics
-	featureDemoFixturesValue          = pkglicensing.FeatureDemoFixtures
-	maxMonitoredSystemsLicenseGateKey = pkglicensing.MaxMonitoredSystemsLicenseGateKey
-	maxUsersLicenseGateKey            = pkglicensing.MaxUsersLicenseGateKey
-	subscriptionStateActiveValue      = pkglicensing.SubStateActive
-	subscriptionStateExpiredValue     = pkglicensing.SubStateExpired
-	subscriptionStateGraceValue       = pkglicensing.SubStateGrace
-	subscriptionStateCanceledValue    = pkglicensing.SubStateCanceled
-	subscriptionStateTrialValue       = pkglicensing.SubStateTrial
-	activationKeyPrefixValue          = pkglicensing.ActivationKeyPrefix
+	featureMultiTenantKey          = pkglicensing.FeatureMultiTenant
+	featureAgentProfilesValue      = pkglicensing.FeatureAgentProfiles
+	featureAIPatrolValue           = pkglicensing.FeatureAIPatrol
+	featureAIAutoFixValue          = pkglicensing.FeatureAIAutoFix
+	featureAuditLoggingValue       = pkglicensing.FeatureAuditLogging
+	featureRBACValue               = pkglicensing.FeatureRBAC
+	featureAdvancedReportingValue  = pkglicensing.FeatureAdvancedReporting
+	featureLongTermMetricsValue    = pkglicensing.FeatureLongTermMetrics
+	featureDemoFixturesValue       = pkglicensing.FeatureDemoFixtures
+	maxUsersLicenseGateKey         = pkglicensing.MaxUsersLicenseGateKey
+	subscriptionStateActiveValue   = pkglicensing.SubStateActive
+	subscriptionStateExpiredValue  = pkglicensing.SubStateExpired
+	subscriptionStateGraceValue    = pkglicensing.SubStateGrace
+	subscriptionStateCanceledValue = pkglicensing.SubStateCanceled
+	subscriptionStateTrialValue    = pkglicensing.SubStateTrial
+	activationKeyPrefixValue       = pkglicensing.ActivationKeyPrefix
 )
 
 func newLicenseService() *licenseService {
@@ -153,30 +148,6 @@ func userLimitExceededMessageFromLicensing(current, limit int) string {
 	return pkglicensing.UserLimitExceededMessage(current, limit)
 }
 
-func monitoredSystemLimitExceededMessageFromLicensing(current, limit int) string {
-	return pkglicensing.MonitoredSystemLimitExceededMessage(current, limit)
-}
-
-func hostReportTargetsExistingHostFromLicensing(snapshot models.StateSnapshot, report agentshost.Report, tokenID string) bool {
-	return pkglicensing.HostReportTargetsExistingHost(snapshot, report, tokenID)
-}
-
-func dockerReportTargetsExistingHostFromLicensing(snapshot models.StateSnapshot, report agentsdocker.Report, tokenID string) bool {
-	return pkglicensing.DockerReportTargetsExistingHost(snapshot, report, tokenID)
-}
-
-func kubernetesReportTargetsExistingClusterFromLicensing(snapshot models.StateSnapshot, report agentsk8s.Report, tokenID string) bool {
-	return pkglicensing.KubernetesReportTargetsExistingCluster(snapshot, report, tokenID)
-}
-
-func kubernetesReportIdentifierFromLicensing(report agentsk8s.Report) string {
-	return pkglicensing.KubernetesReportIdentifier(report)
-}
-
-func hostReportTargetsExistingHostsFromLicensing(hosts []models.Host, report agentshost.Report, tokenID string) bool {
-	return pkglicensing.HostReportTargetsExistingHosts(hosts, report, tokenID)
-}
-
 func mapStripeSubscriptionStatusToStateFromLicensing(status string) subscriptionState {
 	return pkglicensing.MapStripeSubscriptionStatusToState(status)
 }
@@ -187,10 +158,6 @@ func shouldGrantPaidCapabilitiesFromLicensing(state subscriptionState) bool {
 
 func deriveStripePlanVersionFromLicensing(metadata map[string]string, priceID string) string {
 	return pkglicensing.DeriveStripePlanVersion(metadata, priceID)
-}
-
-func limitsForCloudPlanFromLicensing(planVersion string) (map[string]int64, bool) {
-	return pkglicensing.LimitsForCloudPlan(planVersion)
 }
 
 func buildEntitlementPayloadFromLicensing(status *licenseStatus, subscriptionState string) entitlementPayloadModel {

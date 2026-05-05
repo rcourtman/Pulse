@@ -268,7 +268,6 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText(/trial/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/monitoring room/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/monitoring capacity/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/monitored-system capacity/i)).not.toBeInTheDocument();
   });
 
   it('does not surface a trial-ended banner for retired self-hosted trial state', async () => {
@@ -327,24 +326,6 @@ describe('ProLicensePanel', () => {
       licensed_email: 'owner@example.com',
       is_lifetime: false,
       trial_eligible: false,
-      monitored_system_continuity: {
-        plan_limit: 12,
-        grandfathered_floor: 23,
-        effective_limit: 23,
-        capture_pending: false,
-      },
-      monitored_system_capacity: {
-        mode: 'at_limit_blocking_new',
-        urgency: 'enforced',
-        current: 23,
-        limit: 23,
-        current_available: true,
-        available_slots: 0,
-        overage: 0,
-        reason: 'limit_reached',
-        blocks_new_systems: true,
-        existing_monitoring_continues: true,
-      },
     };
 
     renderPanel();
@@ -579,8 +560,6 @@ describe('ProLicensePanel', () => {
           key: 'max_monitored_systems',
           limit: 10,
           current: 0,
-          current_available: false,
-          current_unavailable_reason: 'supplemental_inventory_unsettled',
           state: 'ok',
         },
       ],
@@ -590,24 +569,6 @@ describe('ProLicensePanel', () => {
       plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
-      monitored_system_continuity: {
-        plan_limit: 10,
-        effective_limit: 10,
-        capture_pending: true,
-      },
-      monitored_system_capacity: {
-        mode: 'usage_unavailable',
-        urgency: 'ok',
-        current: 0,
-        limit: 10,
-        current_available: false,
-        current_unavailable_reason: 'supplemental_inventory_unsettled',
-        available_slots: 0,
-        overage: 0,
-        reason: 'legacy_migration_capture_pending',
-        blocks_new_systems: false,
-        existing_monitoring_continues: false,
-      },
     };
 
     renderPanel();
@@ -641,7 +602,6 @@ describe('ProLicensePanel', () => {
           key: 'max_monitored_systems',
           limit: 10,
           current: 23,
-          current_available: true,
           state: 'enforced',
         },
       ],
@@ -651,23 +611,6 @@ describe('ProLicensePanel', () => {
       plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
-      monitored_system_continuity: {
-        plan_limit: 10,
-        effective_limit: 10,
-        capture_pending: true,
-      },
-      monitored_system_capacity: {
-        mode: 'over_limit_frozen',
-        urgency: 'enforced',
-        current: 23,
-        limit: 10,
-        current_available: true,
-        available_slots: 0,
-        overage: 13,
-        reason: 'legacy_migration_capture_pending',
-        blocks_new_systems: true,
-        existing_monitoring_continues: true,
-      },
     };
 
     renderPanel();
@@ -702,7 +645,6 @@ describe('ProLicensePanel', () => {
           key: 'max_monitored_systems',
           limit: 23,
           current: 23,
-          current_available: true,
           state: 'enforced',
         },
       ],
@@ -712,25 +654,6 @@ describe('ProLicensePanel', () => {
       plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
-      monitored_system_continuity: {
-        plan_limit: 10,
-        grandfathered_floor: 23,
-        effective_limit: 23,
-        capture_pending: false,
-        captured_at: 1_768_000_000,
-      },
-      monitored_system_capacity: {
-        mode: 'at_limit_blocking_new',
-        urgency: 'enforced',
-        current: 23,
-        limit: 23,
-        current_available: true,
-        available_slots: 0,
-        overage: 0,
-        reason: 'limit_reached',
-        blocks_new_systems: true,
-        existing_monitoring_continues: true,
-      },
     };
 
     renderPanel();
@@ -1177,7 +1100,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('useLocation');
     expect(proLicensePanelStateSource).toContain('resolveSelfHostedBillingSection');
     expect(proLicensePanelStateSource).toContain('getSelfHostedBillingPlanIntent');
-    expect(proLicensePanelStateSource).toContain('getSelfHostedBillingUsageDetail');
+    expect(proLicensePanelStateSource).not.toContain('getSelfHostedBillingUsageDetail');
     expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: string) => {');
     expect(proLicensePanelStateSource).toContain('loadLicenseEntitlements(true)');
     expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
@@ -1229,6 +1152,6 @@ describe('ProLicensePanel', () => {
     expect(selfHostedCommercialRecoverySectionSource).not.toContain('Start 14-day Pro Trial');
     expect(selfHostedCommercialRecoverySectionSource).not.toContain('Legacy v5 license detected');
     expect(proLicensePanelSource).toContain('id={SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}');
-    expect(proLicensePanelSource).toContain('id={SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}');
+    expect(proLicensePanelSource).not.toContain('SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID');
   });
 });

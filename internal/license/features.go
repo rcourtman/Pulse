@@ -46,9 +46,6 @@ const (
 // TierFeatures maps each tier to its included features.
 var TierFeatures = licensing.TierFeatures
 
-// TierMonitoredSystemLimits defines the maximum agent count per tier.
-var TierMonitoredSystemLimits = licensing.TierMonitoredSystemLimits
-
 // TierHistoryDays defines the maximum metrics history retention per tier.
 var TierHistoryDays = licensing.TierHistoryDays
 

@@ -9,7 +9,7 @@ import {
   formLabel,
 } from '@/components/shared/Form';
 import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
-import { MonitoredSystemAdmissionPreview } from '../../MonitoredSystemAdmissionPreview';
+import { MonitoredSystemImpactPreview } from '../../MonitoredSystemImpactPreview';
 import type { VMwareConnection } from '@/api/vmware';
 import type { VMwareSettingsPanelState } from '../../useVMwareSettingsPanelState';
 
@@ -234,7 +234,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
           </div>
         </div>
 
-        <MonitoredSystemAdmissionPreview
+        <MonitoredSystemImpactPreview
           preview={props.state.monitoredSystemPreview()}
           loading={props.state.previewing()}
           error={props.state.monitoredSystemPreviewError()}
@@ -349,8 +349,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
               props.state.testing() ||
               props.state.previewing() ||
               props.togglePending ||
-              props.deletePending ||
-              props.state.monitoredSystemAdmissionSaveBlocked()
+              props.deletePending
             }
           >
             {props.state.saving()

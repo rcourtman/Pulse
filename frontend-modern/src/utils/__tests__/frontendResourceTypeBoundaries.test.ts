@@ -55,8 +55,6 @@ import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverM
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
-import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
-import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
 import monitoredSystemLedgerPanelSource from '@/components/Settings/MonitoredSystemLedgerPanel.tsx?raw';
 import monitoredSystemDefinitionDisclosureSource from '@/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
@@ -90,7 +88,6 @@ import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopov
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
-import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
@@ -192,7 +189,6 @@ import workloadUrlSyncModelSource from '@/components/Workloads/workloadUrlSyncMo
 import workloadsWorkloadRouteStateSource from '@/components/Workloads/useWorkloadRouteState.ts?raw';
 import workloadsWorkloadUrlSyncSource from '@/components/Workloads/useWorkloadUrlSync.ts?raw';
 import workloadsStateSource from '@/components/Workloads/useWorkloadsState.ts?raw';
-import workloadsFilterStateSource from '@/components/Workloads/useWorkloadsFilterState.ts?raw';
 import workloadTopologySource from '@/components/Workloads/workloadTopology.ts?raw';
 import groupedTableWindowingSource from '@/components/Workloads/useGroupedTableWindowing.ts?raw';
 import thresholdSliderModelSource from '@/components/Workloads/thresholdSliderModel.ts?raw';
@@ -252,11 +248,7 @@ import storageDetailKeyValueRowSource from '@/components/Storage/StorageDetailKe
 import storageDetailMetricCardSource from '@/components/Storage/StorageDetailMetricCard.tsx?raw';
 import diskLiveMetricSource from '@/components/Storage/DiskLiveMetric.tsx?raw';
 import useDiskLiveMetricModelSource from '@/components/Storage/useDiskLiveMetricModel.ts?raw';
-import storageControlsSource from '@/components/Storage/StorageControls.tsx?raw';
-import useStorageControlsModelSource from '@/components/Storage/useStorageControlsModel.ts?raw';
-import storageFilterSource from '@/components/Storage/StorageFilter.tsx?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
-import useStoragePageControlsModelSource from '@/components/Storage/useStoragePageControlsModel.ts?raw';
 import storageCephSectionSource from '@/components/Storage/StorageCephSection.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePageSource from '@/components/Storage/Storage.tsx?raw';
@@ -284,7 +276,6 @@ import useDiskDetailModelSource from '@/components/Storage/useDiskDetailModel.ts
 import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import storageExpansionStateSource from '@/components/Storage/useStorageExpansionState.ts?raw';
 import storageFilterStateSource from '@/components/Storage/useStorageFilterState.ts?raw';
-import useStorageFilterToolbarModelSource from '@/components/Storage/useStorageFilterToolbarModel.ts?raw';
 import storagePageFiltersSource from '@/components/Storage/useStoragePageFilters.ts?raw';
 import storagePageDataSource from '@/components/Storage/useStoragePageData.ts?raw';
 import storagePageModelSource from '@/components/Storage/useStoragePageModel.ts?raw';
@@ -838,14 +829,12 @@ describe('frontend resource type boundaries', () => {
     expect(workloadSelectionModelSource).toContain('resolveWorkloadResourceSelection');
     expect(workloadSelectionModelSource).toContain('workloadsHasHoveredWorkload');
     expect(workloadsStateSource).not.toContain('const guestId = () => {');
-    expect(workloadsFilterSource).toContain('useWorkloadsFilterState');
+    expect(workloadsFilterSource).not.toContain('useWorkloadsFilterState');
     expect(workloadsFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
-    expect(workloadsFilterSource).not.toContain('useBreakpoint');
+    expect(workloadsFilterSource).toContain('useBreakpoint');
     expect(workloadsFilterSource).not.toContain("props.setSortKey('name')");
-    expect(workloadsFilterStateSource).toContain('countActiveWorkloadsFilters');
-    expect(workloadsFilterStateSource).not.toContain('props.containerRuntimeFilter?.onChange');
-    expect(workloadsFilterStateSource).toContain('useBreakpoint');
-    expect(workloadsFilterStateSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
+    expect(workloadsFilterSource).toContain('hasActiveWorkloadsFilters');
+    expect(workloadsFilterSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
     expect(workloadsFilterModelSource).toContain('export const countActiveWorkloadsFilters');
     expect(workloadsFilterModelSource).toContain('export const hasActiveWorkloadsFilters');
     expect(workloadsFilterModelSource).toContain(
@@ -1139,9 +1128,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).not.toContain(
       "chartRangeDays() === range\n                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'",
     );
-    expect(recoverySource).toContain('getRecoveryTimelineColumnButtonClass');
-    expect(recoverySource).toContain('getRecoveryArtifactColumnHeaderClass');
-    expect(recoverySource).toContain('getRecoveryArtifactRowClass');
+    expect(recoveryActivitySectionSource).toContain('getRecoveryTimelineColumnButtonClass');
+    expect(recoveryHistoryTableSource).toContain('getRecoveryArtifactColumnHeaderClass');
+    expect(recoveryHistoryTableSource).toContain('getRecoveryArtifactRowClass');
     expect(recoverySource).toContain('recoveryDateKeyFromTimestamp');
     expect(recoverySource).toContain('parseRecoveryDateKey');
     expect(recoverySource).toContain('getRecoveryPrettyDateLabel');
@@ -1152,10 +1141,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryProtectedInventorySectionSource).toContain(
       'getRecoveryRollupInventoryStatusTextClass',
     );
-    expect(recoverySource).toContain('getRecoverySpecialOutcomeTextClass');
-    expect(recoverySource).toContain('getRecoveryBreadcrumbLinkClass');
-    expect(recoverySource).toContain('getRecoveryFilterPanelClearClass');
-    expect(recoverySource).toContain('getRecoveryEmptyStateActionClass');
+    expect(recoveryProtectedInventorySectionSource).toContain('getRecoverySpecialOutcomeTextClass');
+    expect(recoveryHistorySectionSource).toContain('getRecoveryBreadcrumbLinkClass');
+    expect(recoveryHistoryTableSource).toContain('getRecoveryEmptyStateActionClass');
     expect(recoverySource).toContain('getRecoveryProtectedItemsLoadingState');
     expect(recoverySource).toContain('getRecoveryProtectedItemsFailureState');
     expect(recoverySource).toContain('getRecoveryActivityLoadingState');
@@ -1164,31 +1152,29 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).toContain('getRecoveryPointsFailureState');
     expect(recoverySource).toContain('getRecoveryProtectedItemsEmptyState');
     expect(recoverySource).toContain('getRecoveryHistoryEmptyState');
-    expect(recoverySource).toContain('getRecoveryDrawerCloseButtonClass');
+    expect(recoveryHistoryTableSource).toContain('getRecoveryDrawerCloseButtonClass');
     expect(recoverySource).toContain('getRecoveryRollupItemLabel');
     expect(recoverySource).toContain('getRecoveryPointItemLabel');
     expect(recoverySource).toContain('getRecoveryPointRepositoryLabel');
     expect(recoverySource).toContain('getRecoveryPointDetailsSummary');
     expect(recoverySource).toContain('getRecoveryPointTimestampMs');
     expect(recoverySource).toContain('normalizeRecoveryModeQueryValue');
-    expect(recoverySource).toContain('getRecoveryTimelineAxisLabelClass');
+    expect(recoveryActivitySectionSource).toContain('getRecoveryTimelineAxisLabelClass');
     expect(recoverySource).toContain('getRecoveryTimelineLabelEvery');
     expect(recoverySource).toContain('getRecoveryGroupNoTimestampLabel');
-    expect(recoverySource).toContain('getRecoveryProtectedSearchPlaceholder');
-    expect(recoverySource).toContain('getRecoveryHistorySearchPlaceholder');
+    expect(recoveryProtectedInventorySectionSource).toContain('getRecoveryProtectedSearchPlaceholder');
+    expect(recoveryHistorySectionSource).toContain('getRecoveryHistorySearchPlaceholder');
     expect(recoverySource).toContain('getRecoverySearchHistoryEmptyMessage');
     expect(recoverySource).not.toContain('Search protected items...');
     expect(recoverySource).not.toContain('Search recovery history...');
     expect(recoverySource).not.toContain('Recent searches appear here.');
-    expect(recoverySource).toContain('RECOVERY_TIMELINE_LEGEND_ITEM_CLASS');
-    expect(recoverySource).toContain('getRecoveryEventTimeTextClass');
+    expect(recoveryActivitySectionSource).toContain('RECOVERY_TIMELINE_LEGEND_ITEM_CLASS');
+    expect(recoveryHistoryTableSource).toContain('getRecoveryEventTimeTextClass');
     expect(recoverySource).not.toContain('getRecoverySubjectTypeBadgeClass');
     expect(recoverySource).not.toContain('getRecoverySubjectTypeLabel');
-    expect(recoverySource).toContain('getRecoveryRollupAgeTextClass');
-    expect(recoverySource).toContain('RECOVERY_ADVANCED_FILTER_LABEL_CLASS');
-    expect(recoverySource).toContain('RECOVERY_ADVANCED_FILTER_FIELD_CLASS');
-    expect(recoverySource).toContain('RECOVERY_GROUP_HEADER_ROW_CLASS');
-    expect(recoverySource).toContain('RECOVERY_GROUP_HEADER_TEXT_CLASS');
+    expect(recoveryProtectedInventorySectionSource).toContain('getRecoveryRollupAgeTextClass');
+    expect(recoveryHistoryTableSource).toContain('RECOVERY_GROUP_HEADER_ROW_CLASS');
+    expect(recoveryHistoryTableSource).toContain('RECOVERY_GROUP_HEADER_TEXT_CLASS');
     expect(recoverySource).not.toContain(
       "isSelected\n                                    ? 'bg-blue-100 dark:bg-blue-900'\n                                    : 'hover:bg-surface-hover'",
     );
@@ -1493,7 +1479,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(auditLogPanelSource).toContain('@/utils/upgradePresentation');
     expect(auditWebhookPanelSource).toContain('@/utils/upgradePresentation');
-    expect(ssoProvidersPanelSource).toContain('@/utils/upgradePresentation');
+    expect(ssoProvidersPanelSource).not.toContain('@/utils/upgradePresentation');
     expect(upgradePresentationSource).toContain('export const UPGRADE_ACTION_LABEL');
     expect(upgradePresentationSource).not.toContain('UPGRADE_TRIAL_LABEL');
     expect(upgradePresentationSource).not.toContain('UPGRADE_TRIAL_LINK_CLASS');
@@ -1920,39 +1906,17 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageSource).toContain('StorageContentCard');
     expect(storagePageSource).toContain('StoragePageBanners');
     expect(storagePageSource).toContain('StoragePageSummary');
-    expect(storageControlsSource).toContain('export const StorageControls');
-    expect(storageControlsSource).toContain('StorageFilter');
-    expect(storageControlsSource).toContain('Subtabs');
-    expect(storageControlsSource).toContain('useStorageControlsModel');
-    expect(storageControlsSource).toContain('STORAGE_CONTROLS_NODE_SELECT_CLASS');
-    expect(storageControlsSource).toContain('STORAGE_CONTROLS_NODE_DIVIDER_CLASS');
-    expect(storageControlsSource).toContain('DEFAULT_STORAGE_SORT_OPTIONS');
-    expect(storageControlsSource).not.toContain('STORAGE_VIEW_OPTIONS');
-    expect(storageControlsSource).not.toContain(
-      'props.setSelectedNodeId(event.currentTarget.value)',
-    );
-    expect(storageControlsSource).not.toContain('focus:ring-blue-500');
-    expect(useStorageControlsModelSource).toContain('STORAGE_VIEW_OPTIONS');
-    expect(useStorageControlsModelSource).toContain('handleNodeFilterChange');
-    expect(useStorageControlsModelSource).toContain('handleViewChange');
-    expect(storageFilterSource).toContain('useStorageFilterToolbarModel');
-    expect(storageFilterSource).toContain('STORAGE_FILTER_SORT_SELECT_CLASS');
-    expect(storageFilterSource).toContain('STORAGE_FILTER_SORT_DIRECTION_BUTTON_CLASS');
-    expect(storageFilterSource).not.toContain('const activeFilterCount = createMemo(() => {');
-    expect(storageFilterSource).not.toContain('const sourceOptions = (): StorageSourceOption[] =>');
-    expect(storageFilterSource).not.toContain('props.setSortKey(DEFAULT_STORAGE_SORT_KEY)');
-    expect(storageFilterSource).not.toContain("props.sortDirection() === 'asc' ? 'desc' : 'asc'");
-    expect(storageFilterSource).not.toContain(
-      "props.sortDirection() === 'asc' ? 'rotate-180' : ''",
-    );
-    expect(storageFilterSource).not.toContain('focus:ring-blue-500');
-    expect(useStorageFilterToolbarModelSource).toContain('countActiveStorageFilters');
-    expect(useStorageFilterToolbarModelSource).toContain('hasActiveStorageFilters');
-    expect(useStorageFilterToolbarModelSource).toContain('DEFAULT_STORAGE_SORT_KEY');
-    expect(useStorageFilterToolbarModelSource).toContain('DEFAULT_STORAGE_SOURCE_FILTER');
-    expect(useStorageFilterToolbarModelSource).toContain('getStorageSortDirectionTitle');
-    expect(useStorageFilterToolbarModelSource).toContain('getStorageSortDirectionIconClass');
-    expect(useStorageFilterToolbarModelSource).toContain('getNextStorageSortDirection');
+    expect(storagePageControlsSource).toContain('FilterBar');
+    expect(storagePageControlsSource).toContain('Subtabs');
+    expect(storagePageControlsSource).toContain('STORAGE_VIEW_OPTIONS');
+    expect(storagePageControlsSource).toContain('hasActiveStorageFilters');
+    expect(storagePageControlsSource).toContain('DEFAULT_STORAGE_SORT_OPTIONS');
+    expect(storagePageControlsSource).toContain('getNextStorageSortDirection');
+    expect(storagePageControlsSource).toContain('STORAGE_FILTER_SORT_SELECT_CLASS');
+    expect(storagePageControlsSource).toContain('STORAGE_FILTER_SORT_DIRECTION_BUTTON_CLASS');
+    expect(storagePageControlsSource).not.toContain('StorageControls');
+    expect(storagePageControlsSource).not.toContain('useStoragePageControlsModel');
+    expect(storagePageControlsSource).not.toContain('focus:ring-blue-500');
     expect(storageFilterPresentationSource).toContain('export const getStorageSortDirectionTitle');
     expect(storageFilterPresentationSource).toContain(
       'export const getStorageSortDirectionIconClass',
@@ -1964,15 +1928,11 @@ describe('frontend resource type boundaries', () => {
       'export const STORAGE_FILTER_SORT_DIRECTION_BUTTON_CLASS',
     );
     expect(storagePageControlsSource).toContain('export const StoragePageControls');
-    expect(storagePageControlsSource).toContain('StorageControls');
-    expect(storagePageControlsSource).toContain('useStoragePageControlsModel');
-    expect(storagePageControlsSource).not.toContain('normalizeStorageSortKey');
+    expect(storagePageControlsSource).toContain('normalizeStorageSortKey');
     expect(storagePageControlsSource).not.toContain(
       "props.view() === 'pools' ? props.storageFilterGroupBy : undefined",
     );
-    expect(storagePageControlsSource).not.toContain("props.view() !== 'pools'");
-    expect(useStoragePageControlsModelSource).toContain('normalizeStorageSortKey');
-    expect(useStoragePageControlsModelSource).toContain("options.view() === 'pools'");
+    expect(storagePageControlsSource).toContain('const sortDisabled = () => !isPoolsView()');
     expect(storageCephSectionSource).toContain('export const StorageCephSection');
     expect(storageCephSectionSource).toContain('useStorageCephSectionModel');
     expect(storageCephSectionSource).toContain('StorageCephSummaryCard');
@@ -2927,33 +2887,6 @@ describe('frontend resource type boundaries', () => {
     expect(selectionCardGroupModelSource).toContain('resolveSelectionCardTone');
     expect(selectionCardGroupModelSource).toContain('getSelectionCardButtonClass');
     expect(selectionCardGroupModelSource).toContain("compact: 'grid grid-cols-2 gap-2'");
-    expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'useMonitoredSystemLimitWarningBannerState',
-    );
-    expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_LABEL',
-    );
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadRuntimeCapabilities');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('trackUpgradeMetricEvent');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('legacyConnections()');
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('createEffect');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('trackUpgradeMetricEvent');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('reviewPolicyDestination');
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'getMonitoredSystemBannerToneClass',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
-      'MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL',
-    );
     expect(monitoredSystemLedgerPanelSource).toContain('@/utils/monitoredSystemPresentation');
     expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerPresentation');
     expect(monitoredSystemLedgerPanelSource).toContain(

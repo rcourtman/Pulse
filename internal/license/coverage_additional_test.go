@@ -121,9 +121,6 @@ func TestStatusHostedEvaluatorClampsNegativeLimits(t *testing.T) {
 	if !status.Valid {
 		t.Fatalf("Status().Valid = %v, want true", status.Valid)
 	}
-	if status.MaxMonitoredSystems != 0 {
-		t.Fatalf("Status().MaxMonitoredSystems = %d, want 0", status.MaxMonitoredSystems)
-	}
 	if status.MaxGuests != 0 {
 		t.Fatalf("Status().MaxGuests = %d, want 0", status.MaxGuests)
 	}

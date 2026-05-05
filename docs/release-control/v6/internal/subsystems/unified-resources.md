@@ -1778,11 +1778,10 @@ remaining grouped monitored-system evidence.
 Source-native record-set preview is required for provider-backed onboarding
 that can discover multiple top-level systems from one saved connection, so
 TrueNAS, VMware, and future multi-record providers stay on the same canonical
-projection boundary for both explanation and enforcement.
+projection boundary for explanation.
 VMware host previews are part of that same contract: canonical host identity
 must honor VMware host UUID plus normalized hostnames so a vCenter add or
-update cannot bypass the monitored-system cap by discovering host-backed
-systems only after persistence.
+update explains host-backed systems consistently before and after persistence.
 
 Canonical source-owned identifiers must also normalize surrounding whitespace
 before they become by-source map keys or source-specific hash IDs. The same
@@ -1946,12 +1945,12 @@ through transport-local counters or child-resource totals.
 When one counted group is being updated in place, the prospective projection
 must remove only the replaced source from that grouped root and preserve any
 remaining canonical source ownership that still keeps the monitored system
-counted, so replacement-aware admission stays aligned with final runtime
+counted, so replacement-aware preview stays aligned with final runtime
 counting.
 When support or onboarding needs to explain that same change, unified
 resources must be able to return both the current grouped monitored system and
 the projected grouped monitored system for the candidate being evaluated, not
-just the numeric count delta, so explainability and enforcement stay on one
+just the numeric count delta, so explanation stays on one
 canonical projection boundary.
 
 Canonical unified resources now also own first-class policy metadata for the

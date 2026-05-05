@@ -1021,7 +1021,7 @@ func (p *TrueNASPoller) SnapshotOwnedSourcesForOrg(string) []unifiedresources.Da
 
 // SupplementalInventoryReadyAt reports when the current org-scoped TrueNAS
 // inventory has reached a settled initial baseline that has to be reflected in
-// the canonical monitor store before billing can consume monitored-system
+// the canonical monitor store before support surfaces consume monitored-system
 // counts.
 func (p *TrueNASPoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {
 	if p == nil {

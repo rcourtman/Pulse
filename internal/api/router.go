@@ -433,8 +433,6 @@ func (r *Router) setupRoutes() {
 	})
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
-	// Wire base data dir for overflow enforcement (reads OverflowGrantedAt from billing state).
-	SetOverflowBaseDataDir(r.config.DataPath)
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, recoveryManager)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
@@ -531,30 +529,7 @@ func (r *Router) setupRoutes() {
 	if deployStore != nil {
 		r.deployStore = deployStore
 		if r.monitor != nil {
-			reservation := deploy.NewReservationManager()
-			r.deployHandlers = NewDeployHandlers(deployStore, r.monitor, r.agentExecServer, reservation, r.resolvePublicURL, r.config, r.persistence)
-
-			SetDeployReservationCounter(func(ctx context.Context) int {
-				orgID := GetOrgID(ctx)
-				if orgID == "" {
-					orgID = "default"
-				}
-				return reservation.ReservedForOrg(orgID)
-			})
-
-			// Periodic cleanup of expired reservations.
-			go func() {
-				ticker := time.NewTicker(5 * time.Minute)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-r.lifecycleCtx.Done():
-						return
-					case <-ticker.C:
-						reservation.CleanExpired()
-					}
-				}
-			}()
+			r.deployHandlers = NewDeployHandlers(deployStore, r.monitor, r.agentExecServer, r.resolvePublicURL, r.config, r.persistence)
 		}
 	}
 

@@ -15,21 +15,13 @@ import type {
   MonitoredSystemLedgerEntry,
   MonitoredSystemLedgerExplanationSurface,
 } from '@/api/monitoredSystemLedger';
-import type {
-  EntitlementLimitStatus,
-  MonitoredSystemCapacityStatus,
-  MonitoredSystemContinuityStatus,
-} from '@/api/license';
 import { apiErrorCode, apiErrorDetailField } from '@/api/responseUtils';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   formatMonitoredSystemGroupedSourcesLabel,
   formatMonitoredSystemLedgerUnavailableMessage,
-  getMonitoredSystemLimitContextSummary,
   formatMonitoredSystemLatestIncludedSignalSentence,
   formatMonitoredSystemSurfaceAttribution,
-  getMonitoredSystemLimitUsageSummary,
-  getMonitoredSystemLimitUnavailableReason,
   getMonitoredSystemLedgerErrorState,
   getMonitoredSystemLedgerDescription,
   getMonitoredSystemLedgerHiddenState,
@@ -38,8 +30,6 @@ import {
   getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemLedgerPresentation,
-  isMonitoredSystemLimitUsageAvailable,
-  resolveMonitoredSystemCapacityStatus,
 } from '@/utils/monitoredSystemPresentation';
 import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
 import {
@@ -49,15 +39,7 @@ import {
 
 interface MonitoredSystemLedgerPanelProps {
   embedded?: boolean;
-  monitoredSystemCapacity?: MonitoredSystemCapacityStatus | null;
-  monitoredSystemContinuity?: MonitoredSystemContinuityStatus | null;
-  monitoredSystemLimit?: EntitlementLimitStatus | null;
   showCountingRulesByDefault?: boolean;
-}
-
-function usagePercent(total: number, limit: number): number {
-  if (limit <= 0) return 0;
-  return Math.min(100, Math.round((total / limit) * 100));
 }
 
 function latestIncludedSignalSummary(system: MonitoredSystemLedgerEntry): {
@@ -89,24 +71,6 @@ function includedSurfaces(
   ];
 }
 
-function formatLimitValue(value: number | undefined): string {
-  if (typeof value !== 'number' || value <= 0) {
-    return getMonitoredSystemLedgerPresentation().unlimitedLimitLabel;
-  }
-  return String(value);
-}
-
-function formatCapturedAt(value: number | undefined): string | null {
-  if (typeof value !== 'number' || value <= 0) {
-    return null;
-  }
-  const date = new Date(value * 1000);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toLocaleDateString();
-}
-
 export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProps = {}) {
   const ledgerRequestKey = () =>
     sessionPresentationPolicyResolved() && !presentationPolicyHidesCommercialSurfaces()
@@ -122,65 +86,17 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
     explanation.state === 'errored' ? undefined : explanation()?.ledger,
   );
   const total = () => ledger()?.total ?? 0;
-  const limit = () => ledger()?.limit ?? props.monitoredSystemLimit?.limit ?? 0;
   const systems = () => ledger()?.systems ?? [];
-  const hasLimit = () => limit() > 0;
-  const overLimit = () => hasLimit() && total() > limit();
-  const pct = () => usagePercent(total(), limit());
-  const displayLimit = createMemo<EntitlementLimitStatus | null>(() => {
-    if (ledger()) {
-      return {
-        key: 'max_monitored_systems',
-        limit: limit(),
-        current: total(),
-        current_available: true,
-        state: props.monitoredSystemCapacity?.urgency ?? props.monitoredSystemLimit?.state ?? '',
-      };
-    }
-    return props.monitoredSystemLimit ?? null;
-  });
-  const displayCapacity = createMemo(() =>
-    ledger()
-      ? resolveMonitoredSystemCapacityStatus(undefined, displayLimit())
-      : resolveMonitoredSystemCapacityStatus(props.monitoredSystemCapacity, displayLimit()),
-  );
-  const capacitySummary = createMemo(() =>
-    getMonitoredSystemLimitUsageSummary(displayLimit(), displayCapacity()),
-  );
-  const capacityContext = createMemo(() =>
-    getMonitoredSystemLimitContextSummary(displayLimit(), displayCapacity()),
-  );
+  const totalSummary = () => `${total()} monitored ${total() === 1 ? 'system' : 'systems'}`;
   const usageUnavailableReason = () => {
     if (apiErrorCode(explanation.error) === 'monitored_system_usage_unavailable') {
       return apiErrorDetailField(explanation.error, 'reason') ?? undefined;
     }
-    if (!ledger()) {
-      return getMonitoredSystemLimitUnavailableReason(
-        props.monitoredSystemLimit,
-        props.monitoredSystemCapacity,
-      );
-    }
     return undefined;
   };
   const usageUnavailable = () =>
-    !ledger() &&
-    (apiErrorCode(explanation.error) === 'monitored_system_usage_unavailable' ||
-      !isMonitoredSystemLimitUsageAvailable(props.monitoredSystemLimit) ||
-      displayCapacity()?.current_available === false);
+    !ledger() && apiErrorCode(explanation.error) === 'monitored_system_usage_unavailable';
   const genericError = () => Boolean(explanation.error) && !usageUnavailable();
-  const continuity = () => props.monitoredSystemContinuity ?? null;
-  const hasContinuityContext = () => {
-    const current = continuity();
-    if (!current) {
-      return false;
-    }
-    return (
-      current.capture_pending ||
-      current.effective_limit !== current.plan_limit ||
-      (typeof current.grandfathered_floor === 'number' && current.grandfathered_floor > 0)
-    );
-  };
-  const continuityForDisplay = createMemo(() => (hasContinuityContext() ? continuity() : null));
   const systemKey = (system: MonitoredSystemLedgerEntry, index: number) =>
     `${system.name}:${system.type}:${index}`;
   const toggleSystemExplanation = (key: string) => {
@@ -219,77 +135,16 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
           </div>
           <Show when={ledger()}>
             <div class="text-right">
-              <p
-                class="text-sm font-medium"
-                classList={{
-                  'text-base-content':
-                    displayCapacity()?.urgency !== 'warning' &&
-                    displayCapacity()?.mode !== 'over_limit_frozen',
-                  'text-amber-700 dark:text-amber-300':
-                    displayCapacity()?.urgency === 'warning' ||
-                    displayCapacity()?.mode === 'at_limit_blocking_new',
-                  'text-red-600 dark:text-red-400': displayCapacity()?.mode === 'over_limit_frozen',
-                }}
-              >
-                {capacitySummary()}
-              </p>
-              <Show when={capacityContext()}>
-                <p class="max-w-xs text-xs text-muted">{capacityContext()}</p>
-              </Show>
+              <p class="text-sm font-medium text-base-content">{totalSummary()}</p>
             </div>
           </Show>
           <Show when={!ledger() && usageUnavailable()}>
             <span class="text-sm font-medium text-amber-700 dark:text-amber-300">
-              {presentation.usageVerifyingLabel}
+              Verifying
             </span>
           </Show>
         </div>
       </div>
-
-      <Show when={continuityForDisplay()}>
-        {(current) => (
-          <div
-            class="rounded-lg border px-3 py-3 text-xs"
-            classList={{
-              'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100':
-                current().capture_pending,
-              'border-green-200 bg-green-50 text-green-900 dark:border-green-900 dark:bg-green-950/40 dark:text-green-100':
-                !current().capture_pending,
-            }}
-          >
-            <p class="font-semibold">{presentation.continuityHeading}</p>
-            <dl class="mt-2 grid gap-2 sm:grid-cols-4">
-              <div>
-                <dt class="text-[11px] opacity-75">{presentation.continuityPlanLimitLabel}</dt>
-                <dd class="font-medium">{formatLimitValue(current().plan_limit)}</dd>
-              </div>
-              <div>
-                <dt class="text-[11px] opacity-75">{presentation.continuityEffectiveLimitLabel}</dt>
-                <dd class="font-medium">{formatLimitValue(current().effective_limit)}</dd>
-              </div>
-              <Show when={current().grandfathered_floor}>
-                {(floor) => (
-                  <div>
-                    <dt class="text-[11px] opacity-75">
-                      {presentation.continuityGrandfatheredFloorLabel}
-                    </dt>
-                    <dd class="font-medium">{floor()}</dd>
-                  </div>
-                )}
-              </Show>
-              <div>
-                <dt class="text-[11px] opacity-75">{presentation.continuityCaptureLabel}</dt>
-                <dd class="font-medium">
-                  {current().capture_pending
-                    ? presentation.continuityCapturePendingLabel
-                    : (formatCapturedAt(current().captured_at) ??
-                      presentation.continuityCaptureCapturedLabel)}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        )}
-      </Show>
 
       {/* Loading state */}
       <Show when={explanation.loading && !usageUnavailable()}>
@@ -337,19 +192,6 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
 
       {/* Loaded content */}
       <Show when={!explanation.loading && !genericError() && ledger()}>
-        <Show when={hasLimit()}>
-          <div class="h-2 w-full rounded-full bg-surface-alt overflow-hidden">
-            <div
-              class="h-full rounded-full transition-all duration-300"
-              classList={{
-                'bg-blue-500': !overLimit(),
-                'bg-red-500': overLimit(),
-              }}
-              style={{ width: `${pct()}%` }}
-            />
-          </div>
-        </Show>
-
         <Show
           when={systems().length > 0}
           fallback={<p class="text-sm text-muted py-4 text-center">{presentation.emptyState}</p>}

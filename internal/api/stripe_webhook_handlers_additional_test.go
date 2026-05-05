@@ -109,8 +109,8 @@ func TestStripeWebhook_SubscriptionUpdated_BackfillsIndexAndAppliesState(t *test
 	if state.PlanVersion != "stripe_price:price_gold" {
 		t.Fatalf("plan_version=%q, want %q", state.PlanVersion, "stripe_price:price_gold")
 	}
-	if got := state.Limits["max_monitored_systems"]; got != 10 {
-		t.Fatalf("limits[max_monitored_systems]=%d, want %d", got, 10)
+	if _, ok := state.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected retired max_monitored_systems limit to be omitted, got %+v", state.Limits)
 	}
 	if state.StripeSubscriptionID != "sub_new" {
 		t.Fatalf("stripe_subscription_id=%q, want %q", state.StripeSubscriptionID, "sub_new")

@@ -98,7 +98,7 @@ func TestUnifiedAgentHandlers_HandleReport(t *testing.T) {
 	}
 }
 
-func TestUnifiedAgentHandlers_HandleReport_EnforcesMaxMonitoredSystemsForNewHostsOnly(t *testing.T) {
+func TestUnifiedAgentHandlers_HandleReport_AllowsNewHostsWithCapsRetired(t *testing.T) {
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, monitor := newUnifiedAgentHandlers(t, nil)
@@ -107,7 +107,7 @@ func TestUnifiedAgentHandlers_HandleReport_EnforcesMaxMonitoredSystemsForNewHost
 		t.Fatalf("expected seeded host ID")
 	}
 
-	// Existing host should continue to report at the limit.
+	// Existing host should continue to report with monitored-system caps retired.
 	existingReport := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:      "agent-1",
@@ -128,7 +128,7 @@ func TestUnifiedAgentHandlers_HandleReport_EnforcesMaxMonitoredSystemsForNewHost
 		t.Fatalf("existing host report should pass at limit, got %d: %s", existingRec.Code, existingRec.Body.String())
 	}
 
-	// New host should be blocked.
+	// New host should also be accepted because monitored-system caps are retired.
 	newReport := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:      "agent-2",
@@ -145,12 +145,12 @@ func TestUnifiedAgentHandlers_HandleReport_EnforcesMaxMonitoredSystemsForNewHost
 	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(newBody))
 	newRec := httptest.NewRecorder()
 	handler.HandleReport(newRec, newReq)
-	if newRec.Code != http.StatusPaymentRequired {
-		t.Fatalf("new host should be blocked at limit, got %d: %s", newRec.Code, newRec.Body.String())
+	if newRec.Code != http.StatusOK {
+		t.Fatalf("new host should be accepted with monitored-system caps retired, got %d: %s", newRec.Code, newRec.Body.String())
 	}
 }
 
-func TestUnifiedAgentHandlers_HandleReport_PreservesExistingHostLimitContinuityAcrossRestart(t *testing.T) {
+func TestUnifiedAgentHandlers_HandleReport_AcceptsNewHostAcrossRestartWithCapsRetired(t *testing.T) {
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	cfg := &config.Config{DataPath: t.TempDir()}
@@ -191,7 +191,7 @@ func TestUnifiedAgentHandlers_HandleReport_PreservesExistingHostLimitContinuityA
 	restartReport.Timestamp = report.Timestamp.Add(30 * time.Second)
 	restartRec := postReport(t, restartedHandler, restartReport)
 	if restartRec.Code != http.StatusOK {
-		t.Fatalf("existing host should still report after restart at limit, got %d: %s", restartRec.Code, restartRec.Body.String())
+		t.Fatalf("existing host should still report after restart with monitored-system caps retired, got %d: %s", restartRec.Code, restartRec.Body.String())
 	}
 
 	newReport := agentshost.Report{
@@ -208,8 +208,8 @@ func TestUnifiedAgentHandlers_HandleReport_PreservesExistingHostLimitContinuityA
 		Timestamp: time.Now().UTC(),
 	}
 	newRec := postReport(t, restartedHandler, newReport)
-	if newRec.Code != http.StatusPaymentRequired {
-		t.Fatalf("new host should still be blocked at limit after restart, got %d: %s", newRec.Code, newRec.Body.String())
+	if newRec.Code != http.StatusOK {
+		t.Fatalf("new host should still be accepted after restart with monitored-system caps retired, got %d: %s", newRec.Code, newRec.Body.String())
 	}
 }
 

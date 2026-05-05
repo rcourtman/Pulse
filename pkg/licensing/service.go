@@ -445,134 +445,6 @@ func (s *Service) RestoreActivation(state *ActivationState) error {
 	return nil
 }
 
-// CaptureLegacyMonitoredSystemGrandfatherFloor resolves the one-time
-// monitored-system floor for a migrated legacy activation using the canonical
-// deduped monitored-system count observed at runtime.
-func (s *Service) CaptureLegacyMonitoredSystemGrandfatherFloor(count int) error {
-	if count < 0 {
-		count = 0
-	}
-
-	s.mu.Lock()
-	if s.activationState == nil {
-		s.mu.Unlock()
-		return nil
-	}
-
-	continuity := normalizeActivationContinuity(s.activationState.Continuity)
-	if !continuity.needsLegacyMonitoredSystemCapture() {
-		s.mu.Unlock()
-		return nil
-	}
-	if s.legacyMigrationUsesUncappedCoreMonitoringLocked() {
-		s.mu.Unlock()
-		return nil
-	}
-
-	currentLimit := 0
-	if s.license != nil {
-		currentLimit = monitoredSystemLimitFromClaims(s.license.Claims)
-	}
-	continuity.GrandfatheredMonitoredSystemsCapturedAt = time.Now().Unix()
-	if count > currentLimit {
-		continuity.GrandfatheredMaxMonitoredSystems = count
-	}
-	s.activationState.Continuity = continuity
-
-	shouldNotify := false
-	if s.license != nil {
-		claims := cloneClaims(s.license.Claims)
-		applyActivationContinuityToClaims(&claims, continuity)
-		updatedLimit := monitoredSystemLimitFromClaims(claims)
-		shouldNotify = updatedLimit != currentLimit
-		s.license.Claims = claims
-		source := NewTokenSource(&s.license.Claims)
-		s.evaluator = NewEvaluator(source)
-	}
-
-	stateCopy := *s.activationState
-	persistence := s.persistence
-	cb := s.onLicenseChange
-	activationCB := s.onActivationStateChange
-	snapshot := cloneLicense(s.license)
-	stateSnapshot := cloneActivationState(s.activationState)
-	s.mu.Unlock()
-
-	if persistence != nil {
-		if err := persistence.SaveActivationState(&stateCopy); err != nil {
-			return fmt.Errorf("persist activation continuity: %w", err)
-		}
-	}
-
-	if shouldNotify && cb != nil {
-		cb(snapshot)
-	}
-	if activationCB != nil {
-		activationCB(stateSnapshot)
-	}
-
-	return nil
-}
-
-func (s *Service) needsLegacyMonitoredSystemCaptureLocked() bool {
-	if s == nil || s.activationState == nil {
-		return false
-	}
-	if s.legacyMigrationUsesUncappedCoreMonitoringLocked() {
-		return false
-	}
-	return normalizeActivationContinuity(s.activationState.Continuity).needsLegacyMonitoredSystemCapture()
-}
-
-// NeedsLegacyMonitoredSystemCapture reports whether a migrated activation is
-// still waiting for its one-time monitored-system continuity capture.
-func (s *Service) NeedsLegacyMonitoredSystemCapture() bool {
-	if s == nil {
-		return false
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.needsLegacyMonitoredSystemCaptureLocked()
-}
-
-func (s *Service) monitoredSystemContinuityStatusLocked() *MonitoredSystemContinuityStatus {
-	if s == nil || s.activationState == nil {
-		return nil
-	}
-
-	continuity := normalizeActivationContinuity(s.activationState.Continuity)
-	if !continuity.LegacyMigration {
-		return nil
-	}
-	if s.legacyMigrationUsesUncappedCoreMonitoringLocked() {
-		return nil
-	}
-
-	planLimit := 0
-	if gc, err := verifyAndParseGrantJWT(s.activationState.GrantJWT); err == nil && gc != nil {
-		planLimit = gc.MaxMonitoredSystems
-	}
-
-	effectiveLimit := planLimit
-	if s.license != nil {
-		// When a license is present, trust its claims. Self-hosted uncapped
-		// tiers return 0 here as a first-class "unlimited" signal, not a
-		// missing-data sentinel — do not fall back to the grant's plan limit.
-		effectiveLimit = monitoredSystemLimitFromClaims(s.license.Claims)
-	}
-
-	status := &MonitoredSystemContinuityStatus{
-		PlanLimit:      planLimit,
-		EffectiveLimit: effectiveLimit,
-		CapturePending: continuity.needsLegacyMonitoredSystemCapture(),
-		CapturedAt:     continuity.GrandfatheredMonitoredSystemsCapturedAt,
-	}
-	if continuity.GrandfatheredMaxMonitoredSystems > 0 {
-		status.GrandfatheredFloor = continuity.GrandfatheredMaxMonitoredSystems
-	}
-	return status
-}
-
 // Clear removes the current license.
 // If an activation-key license is present, it also stops the refresh loop and clears the state.
 func (s *Service) Clear() {
@@ -787,9 +659,6 @@ func (s *Service) Status() *LicenseStatus {
 				}
 				status.Features = unionFeatures(TierFeatures[TierFree], evaluatorFeatures(s.evaluator))
 
-				if maxSystems, ok := s.evaluator.GetLimit(MaxMonitoredSystemsLicenseGateKey); ok {
-					status.MaxMonitoredSystems = safeIntFromInt64(maxSystems)
-				}
 				if maxGuests, ok := s.evaluator.GetLimit("max_guests"); ok {
 					status.MaxGuests = safeIntFromInt64(maxGuests)
 				}
@@ -798,18 +667,11 @@ func (s *Service) Status() *LicenseStatus {
 				status.Valid = false
 				// Keep effective capabilities free-tier only when subscription is not entitled.
 				status.Features = append([]string(nil), TierFeatures[TierFree]...)
-				if defaultSystems := TierMonitoredSystemLimits[TierFree]; defaultSystems > 0 {
-					status.MaxMonitoredSystems = defaultSystems
-				}
 				status.MaxGuests = 0
 			}
 		} else {
-			// No license, no evaluator — apply the free-tier monitored-system limit.
-			if defaultSystems := TierMonitoredSystemLimits[TierFree]; defaultSystems > 0 {
-				status.MaxMonitoredSystems = defaultSystems
-			}
+			// No license, no evaluator: Community remains active for core monitoring.
 		}
-		status.MonitoredSystemContinuity = s.monitoredSystemContinuityStatusLocked()
 		return status
 	}
 
@@ -820,23 +682,8 @@ func (s *Service) Status() *LicenseStatus {
 	status.DaysRemaining = s.license.DaysRemaining()
 	status.Features = s.license.AllFeatures()
 
-	if maxSystems, ok := s.license.Claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
-		status.MaxMonitoredSystems = safeIntFromInt64(maxSystems)
-	}
 	if maxGuests, ok := s.license.Claims.EffectiveLimits()["max_guests"]; ok {
 		status.MaxGuests = safeIntFromInt64(maxGuests)
-	}
-	status.MonitoredSystemContinuity = s.monitoredSystemContinuityStatusLocked()
-
-	// Apply the tier default monitored-system limit when claims don't specify one.
-	// For recognized tiers, use their defined limit (0 = unlimited for Cloud/MSP/Enterprise).
-	// For unrecognized tiers, fall back to free tier limit to prevent unlimited access.
-	if status.MaxMonitoredSystems == 0 && !IsGrandfatheredRecurringV5PlanVersion(status.PlanVersion) {
-		if defaultSystems, ok := TierMonitoredSystemLimits[status.Tier]; ok {
-			status.MaxMonitoredSystems = defaultSystems
-		} else {
-			status.MaxMonitoredSystems = TierMonitoredSystemLimits[TierFree]
-		}
 	}
 
 	if s.license.ExpiresAt() != nil {
@@ -857,12 +704,6 @@ func (s *Service) Status() *LicenseStatus {
 	default:
 		status.Valid = false
 		status.Features = append([]string(nil), TierFeatures[TierFree]...)
-		// Downgrade limits to the free tier when subscription is not entitled.
-		if defaultSystems := TierMonitoredSystemLimits[TierFree]; defaultSystems > 0 {
-			status.MaxMonitoredSystems = defaultSystems
-		} else {
-			status.MaxMonitoredSystems = 0
-		}
 		status.MaxGuests = 0
 	}
 
@@ -965,28 +806,6 @@ func safeIntFromInt64(v int64) int {
 		return 0
 	}
 	return int(v)
-}
-
-func monitoredSystemLimitFromClaims(claims Claims) int {
-	if limit, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
-		return safeIntFromInt64(limit)
-	}
-	return 0
-}
-
-func (s *Service) legacyMigrationUsesUncappedCoreMonitoringLocked() bool {
-	if s == nil || s.activationState == nil {
-		return false
-	}
-	if s.license != nil && s.license.Claims.shouldScrubLegacyCommercialCaps() {
-		return true
-	}
-	gc, err := verifyAndParseGrantJWT(s.activationState.GrantJWT)
-	if err != nil || gc == nil {
-		return false
-	}
-	return IsSelfHostedCoreMonitoringUncappedTier(Tier(gc.Tier)) ||
-		IsSelfHostedCoreMonitoringUncappedPlanVersion(gc.PlanKey)
 }
 
 func remainingDaysCeil(expiresAtUnix, nowUnix int64) int {

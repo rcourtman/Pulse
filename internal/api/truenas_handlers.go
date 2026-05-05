@@ -73,10 +73,6 @@ func (h *TrueNASHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.enforceMonitoredSystemLimit(w, r, instance) {
-		return
-	}
-
 	existing, err := persistence.LoadTrueNASConfig()
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "truenas_load_failed", "Failed to load TrueNAS configuration", map[string]string{"error": err.Error()})
@@ -241,10 +237,6 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
-	if h.enforceMonitoredSystemLimitReplacement(w, r, instances[index], instance) {
-		return
-	}
-
 	instances[index] = instance
 	if err := persistence.SaveTrueNASConfig(instances); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "truenas_save_failed", "Failed to save TrueNAS configuration", map[string]string{"error": err.Error()})
@@ -286,7 +278,7 @@ func (h *TrueNASHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http
 		return
 	}
 
-	writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), false, preview).NormalizeCollections())
+	writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(false, preview).NormalizeCollections())
 }
 
 // HandlePreviewSavedConnection projects the monitored-system impact of an edit
@@ -360,7 +352,7 @@ func (h *TrueNASHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), true, preview).NormalizeCollections())
+		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(true, preview).NormalizeCollections())
 		return
 	}
 
@@ -590,59 +582,6 @@ func (h *TrueNASHandlers) persistenceForRequest(w http.ResponseWriter, ctx conte
 		return nil
 	}
 	return persistence
-}
-
-func (h *TrueNASHandlers) enforceMonitoredSystemLimit(
-	w http.ResponseWriter,
-	r *http.Request,
-	instance config.TrueNASInstance,
-) bool {
-	var monitor *monitoring.Monitor
-	if h != nil && h.getMonitor != nil {
-		monitor = h.getMonitor(r.Context())
-	}
-
-	decision := monitoredSystemLimitDecisionForCandidate(r.Context(), monitor, trueNASMonitoredSystemCandidate(instance))
-	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
-		return true
-	}
-	if !decision.exceeded {
-		return false
-	}
-
-	writeMaxMonitoredSystemsLimitExceeded(w, decision)
-	return true
-}
-
-func (h *TrueNASHandlers) enforceMonitoredSystemLimitReplacement(
-	w http.ResponseWriter,
-	r *http.Request,
-	current config.TrueNASInstance,
-	next config.TrueNASInstance,
-) bool {
-	var monitor *monitoring.Monitor
-	if h != nil && h.getMonitor != nil {
-		monitor = h.getMonitor(r.Context())
-	}
-
-	replacementHost := pulseTokenHostCandidate(current.Host)
-	decision := monitoredSystemLimitDecisionForCandidateReplacement(r.Context(), monitor, unifiedresources.MonitoredSystemReplacement{
-		Source: unifiedresources.SourceTrueNAS,
-		Selector: unifiedresources.MonitoredSystemReplacementSelector{
-			Hostname: replacementHost,
-		},
-	}, trueNASMonitoredSystemCandidate(next))
-	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
-		return true
-	}
-	if !decision.exceeded {
-		return false
-	}
-
-	writeMaxMonitoredSystemsLimitExceeded(w, decision)
-	return true
 }
 
 func trueNASMonitoredSystemCandidate(instance config.TrueNASInstance) unifiedresources.MonitoredSystemCandidate {

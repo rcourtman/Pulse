@@ -279,8 +279,10 @@ func TestEvaluatorMeterEnabled(t *testing.T) {
 func TestTokenSourceLegacyDerivation(t *testing.T) {
 	t.Run("legacy self-hosted claims keep capabilities but scrub monitored-system caps", func(t *testing.T) {
 		claims := &license.Claims{
-			Tier:                license.TierPro,
-			MaxMonitoredSystems: 25,
+			Tier: license.TierPro,
+			Limits: map[string]int64{
+				"max_monitored_systems": 25,
+			},
 		}
 		source := NewTokenSource(claims)
 

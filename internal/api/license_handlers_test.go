@@ -66,14 +66,13 @@ func issueCheckoutActivationGrant(t *testing.T) string {
 	t.Helper()
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_checkout_success",
-		Tier:                "pro_plus",
-		State:               "active",
-		Features:            []string{"relay", "ai_alerts"},
-		MaxMonitoredSystems: 50,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "buyer@example.com",
+		LicenseID: "lic_checkout_success",
+		Tier:      "pro_plus",
+		State:     "active",
+		Features:  []string{"relay", "ai_alerts"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "buyer@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -318,9 +317,6 @@ func TestHandleLicenseStatus_ExpiredBillingBackedTrialFallsBackToFreeDisplay(t *
 	if resp.Tier != license.TierFree {
 		t.Fatalf("expected tier %q, got %q", license.TierFree, resp.Tier)
 	}
-	if resp.MaxMonitoredSystems != license.TierMonitoredSystemLimits[license.TierFree] {
-		t.Fatalf("expected max_monitored_systems %d, got %d", license.TierMonitoredSystemLimits[license.TierFree], resp.MaxMonitoredSystems)
-	}
 	if resp.MaxGuests != 0 {
 		t.Fatalf("expected max_guests 0, got %d", resp.MaxGuests)
 	}
@@ -405,15 +401,14 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-				LicenseID:           "lic_exchanged",
-				Tier:                "pro",
-				PlanKey:             tc.planKey,
-				State:               "active",
-				Features:            []string{"relay"},
-				MaxMonitoredSystems: 10,
-				IssuedAt:            time.Now().Unix(),
-				ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-				Email:               "legacy-jwt@example.com",
+				LicenseID: "lic_exchanged",
+				Tier:      "pro",
+				PlanKey:   tc.planKey,
+				State:     "active",
+				Features:  []string{"relay"},
+				IssuedAt:  time.Now().Unix(),
+				ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+				Email:     "legacy-jwt@example.com",
 			})
 			if err != nil {
 				t.Fatalf("generate grant jwt: %v", err)
@@ -504,14 +499,13 @@ func TestHandleActivateLicense_ClearsCommercialMigrationStateOnNativeActivation(
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_v6_native",
-		Tier:                "pro",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "native-v6@example.com",
+		LicenseID: "lic_v6_native",
+		Tier:      "pro",
+		State:     "active",
+		Features:  []string{"relay"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "native-v6@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -590,14 +584,13 @@ func TestHandleActivateLicense_ActivationKeyClearsStaleLegacyPersistence(t *test
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_v6_native",
-		Tier:                "pro",
-		State:               "active",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "native-v6@example.com",
+		LicenseID: "lic_v6_native",
+		Tier:      "pro",
+		State:     "active",
+		Features:  []string{"relay"},
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "native-v6@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)

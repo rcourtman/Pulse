@@ -250,12 +250,13 @@ candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
 test, add, and update payloads must serialize through the shared ledger client
 as `active:false`, and preview responses may legitimately return `no_change`,
 `removes_existing`, or `removes_multiple` with empty projected-system lists
-when the disabled candidate no longer counts toward monitored-system capacity.
-That same monitored-system admission contract now also owns restart-safe host
-report continuity at the API boundary. `internal/api/monitored_system_limit_enforcement.go`
-must treat a returning standalone host report as existing capacity when
-monitoring can match it to recent persisted host continuity, so a server
-restart or v6 upgrade does not emit a false over-limit `402` before the live
+when the disabled candidate no longer contributes to a monitored-system group.
+That same monitored-system grouping contract now also owns restart-safe host
+report continuity at the API boundary. The removed monitored-system limit
+enforcement path must not return; the API should treat a returning standalone
+host report as existing grouping context when monitoring can match it to recent
+persisted host continuity, so a server restart or v6 upgrade does not change
+the explanatory grouping model before the live
 inventory rebuild catches up. Genuinely new host identities must still return
 the canonical monitored-system blocked payload.
 
@@ -877,10 +878,11 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
-Deploy-job monitored-system denials now keep compatibility wire identifiers
-such as `skipped_license` and `license_limit`, while user-visible retry errors
-and frontend deploy labels must describe the state as monitored-system or
-workspace capacity rather than license slots or plan-upgrade pressure.
+Deploy-job monitored-system volume denials are retired. API routes may still
+accept historical payloads that mention old license-slot terminology for
+migration or diagnostics, but runtime deploy responses must not emit
+`skipped_license`, `license_limit`, workspace-slot reservations, or
+plan-upgrade retry labels for monitored infrastructure volume.
 
 `useInfrastructureDiscoveryRuntimeState.ts` no longer gates `/api/discover`
 polling on a settings tab name; polling is mount-scoped. The tab guard was
@@ -916,22 +918,22 @@ normalized version identity fields (`version`, `version_raw`, `version_channel`,
 `version_build`, `version_is_development`, and
 `version_is_published_release`) instead of leaving browser callers to infer
 published-release truth from raw build strings.
-That same browser-transport contract now tolerates sparse admission-preview
+That same browser-transport contract now tolerates sparse preview
 payloads without changing the runtime truth. Patrol transport may omit
 `finding_ids`, and infrastructure removal previews may stage optimistic rows
 only after canonical IDs have been resolved or a safe row-name fallback has
 been chosen. API-adjacent browser callers must not reinterpret missing IDs or
 preview arrays as authoritative empty success.
-Monitored-system commercial admission is now also part of that owned live
-contract only when a hosted, MSP, or private policy installs an active cap.
-Self-hosted Community/Relay/Pro core monitoring remains uncapped; any active
-cap path must still project prospective candidates or previewed source records
-through the canonical monitored-system resolver before persistence, and
-`/api/license/entitlements` must expose `current_available` when that cap
-cannot resolve current usage so callers can fail closed without misreading
-unavailable usage as a real zero.
-That same `current_available` truth now includes supplemental-provider startup
-readiness. API contracts must not serialize a live monitored-system count from
+Monitored-system commercial admission is retired from that owned live contract.
+Community, Relay, Pro, hosted, MSP, and private-policy monitoring routes must
+not gate persistence on monitored-system volume. Preview routes may still
+project prospective candidates or previewed source records through the
+canonical monitored-system resolver for inventory explanation, but they must
+not expose cap verdicts, `current_available`, or save-blocking entitlement
+state.
+Supplemental-provider startup readiness now belongs to the monitored-system
+ledger and impact-preview availability states, not to active entitlement limit
+fields. API contracts must not serialize a live monitored-system count from
 the first store-backed read-state when provider-owned inventories such as
 TrueNAS or VMware have not yet completed an initial baseline and been rebuilt
 into the canonical monitor store.
@@ -1527,13 +1529,13 @@ must update the canonical TrueNAS poll summary owner so subsequent
 `/api/truenas/connections` reads reflect refreshed last-success or last-error
 state instead of leaving settings health disconnected from manual operator
 tests.
-That same route family now also owns pre-save monitored-system admission
+That same route family now also owns pre-save monitored-system grouping
 preview. `POST /api/truenas/connections/preview` and
 `POST /api/truenas/connections/{id}/preview` must return the shared
 monitored-system ledger preview contract sourced from canonical
-unified-resource projection, including current/projected grouped systems and
-enforced limit verdicts, rather than page-local settings estimates or
-provider-local counters.
+unified-resource projection, including current/projected grouped systems rather
+than page-local settings estimates, cap verdicts, or provider-local
+counters.
 That same `/api/truenas/connections` list boundary now also owns the
 operator-facing runtime summary for those configured connections. The list
 response must carry the canonical redacted config together with poll health
@@ -1598,13 +1600,12 @@ remains the saved connection retest surface. The explicit disabled path also
 stays on this boundary: `404 vmware_disabled` means the operator or runtime has
 opted out of the default-on VMware candidate, not that the platform requires a
 different onboarding contract.
-That same route family now also owns source-native monitored-system admission
+That same route family now also owns source-native monitored-system grouping
 preview. `POST /api/vmware/connections/preview` and
 `POST /api/vmware/connections/{id}/preview` must project the discovered
 provider-backed record set through the shared monitored-system ledger preview
-contract before persistence, including current/projected grouped systems and
-enforced limit verdicts, rather than collapsing a vCenter add or edit to one
-handler-local candidate estimate.
+contract before persistence, including current/projected grouped systems rather
+than cap verdicts or a handler-local vCenter candidate estimate.
 That same TrueNAS and VMware platform-connections contract now also owns
 runtime mock continuity. When `/api/system/mock-mode` flips on a running
 server, `/api/truenas/connections` and `/api/vmware/connections` must
@@ -1718,17 +1719,18 @@ The canonical nested status-reason timestamp is `reported_at`, and the
 normalized client contract must expose only that field.
 That same monitored-system ledger contract now also owns prospective
 explanation. `POST /api/license/monitored-system-ledger/preview` must accept
-one canonical candidate plus an optional structured replacement selector, fail
-closed when monitored-system usage is unavailable, and return the canonical
-current/projected count delta, enforced limit verdict, effect label, and
+one canonical candidate plus an optional structured replacement selector and
+return the canonical current/projected count delta, effect label, and
 current/projected ledger entries produced by the shared monitored-system
-projection layer instead of by handler-local heuristics.
+projection layer instead of by handler-local heuristics. It must not return an
+enforced-limit verdict or make persistence depend on a commercial volume
+decision.
 Configured Proxmox, PBS, and PMG update handlers in
-internal/api/config_node_handlers.go must use that same structured
-replacement-selector contract when they enforce monitored-system admission:
+internal/api/config_node_handlers.go may use that same structured
+replacement-selector contract when they explain monitored-system grouping:
 source-owned names, host URLs, hostnames, and resource identifiers may cross
 the API boundary, but handler-local matcher closures must not become the
-source of truth for replacement identity.
+source of truth for replacement identity or save-time admission.
 Provider-backed preview routes such as `/api/truenas/connections/preview`,
 `/api/truenas/connections/{id}/preview`, `/api/vmware/connections/preview`,
 and `/api/vmware/connections/{id}/preview` must serialize that same canonical
@@ -1994,94 +1996,31 @@ Proxmox auto-register requests must use the canonical `authToken` request
 field for one-time setup-token auth instead of any API-token auth header path,
 so the canonical API surface does not preserve parallel auth transports or a
 second auth meaning for the same field.
-The self-hosted commercial entitlement payload now also uses one canonical
-counted-unit contract: `max_monitored_systems` is the live runtime and
-frontend term, and older `max_agents` or `max_nodes` aliases may be decoded
-only at explicit legacy import boundaries. Limit `current` values, add-node
-enforcement, auto-register enforcement, deploy-slot enforcement, the
-monitored-system ledger endpoint, and TrueNAS/API-backed registration must all
-reflect deduped top-level monitored systems rather than agent-only
-installation count, and `legacy_connections` / `has_migration_gap` may not
-imply that API-backed monitoring sits outside the commercial cap.
-Deploy-job compatibility enums such as `skipped_license` and `license_limit`
-may remain stable wire identifiers, but human-readable retry errors and
-frontend deploy labels must describe the condition as monitored-system or
-workspace capacity rather than as license slots or a plan upgrade prompt.
-That same contract now also owns prospective admission and replacement
-projection. Config-backed PVE/PBS/PMG, TrueNAS, VMware, and other API-backed
-registration or update routes must project candidates or preview records
-through the canonical monitored-system resolver before persistence, including
-replacement of one existing source-owned surface, instead of rebuilding
-handler-local priority tables or platform-specific counters.
-That same admission contract now also owns replacement identity. Shared API
-handlers may keep source-local request decoding, but the replacement they pass
-into monitored-system projection must travel as one canonical structured
-selector contract rather than as per-handler opaque match logic, so support
-preview, limit enforcement, and final runtime grouping stay aligned.
-When an active monitored-system cap is present and current usage cannot be
-resolved, those API contracts must fail closed for net-new admissions rather
-than serializing a fake zero. `/api/license/entitlements` therefore carries
-limit-level `current_available` truth so clients can distinguish unavailable
-monitored-system usage from a real `current: 0`.
-That same entitlement family now also owns the canonical monitored-system
-capacity posture. `/api/license/runtime-capabilities`,
-`/api/license/commercial-posture`, and `/api/license/entitlements` must expose
-`monitored_system_capacity` with one shared admission model:
-`usage_unavailable`, `unlimited`, `within_limit`, `at_limit_blocking_new`, or
-`over_limit_frozen`. That contract must state whether new monitored systems are
-blocked and whether existing monitoring continues, so browser surfaces stop
-guessing from raw `current / limit` math or inventing a hard-cap model that
-the backend does not enforce.
-That same contract must also make over-limit legitimacy explicit. When
-`monitored_system_capacity` is at or above a capped plan boundary, the payload
-must expose `reason` as `limit_reached`, `preexisting_usage`, or
-`legacy_migration_capture_pending` so browser surfaces can distinguish a full
-plan boundary from a frozen above-plan carry-forward and from migrated legacy
-continuity that is still being verified.
-That same admission family also owns the private monitored-system policy hook
-boundary. `internal/api/enterprise_extension_monitored_system_admission.go`
-may register one private `ResolveMonitoredSystemAdmissionPolicy` hook through
-`pkg/extensions/monitored_system_admission.go`, but that hook must consume the
-canonical counted-system input already resolved by shared API admission
-helpers. Private builds may not use that extension point to invent
-provider-local counters, replacement semantics, or usage-availability fallbacks
-that diverge from the shared monitored-system resolver. `pkg/server/server.go`
-may wire the hook during startup, but public runtime still owns counted-system
-projection unless and until a later governed enforcement slice actually routes
-live admission through that private decision boundary.
-That same contract now also owns migrated legacy continuity. When a supported
-v5 license auto-exchanges or is activated manually in v6, `/api/license/status`
-and `/api/license/entitlements` must surface `max_monitored_systems` from the
-greater of the exchanged plan limit and the one-time deduped monitored-system
-floor captured from canonical runtime usage, and restored grant activations
-must backfill that floor once canonical usage becomes available instead of
-falling back to the raw exchanged grant limit after restart.
-That migration capture must wait for settled canonical usage, not merely the
-first non-nil read-state. If provider-owned supplemental inventories are still
-between initial wiring and the first canonical store rebuild, the API must
-keep the grandfather floor uncaptured and expose usage as unavailable rather
-than sealing continuity against a partial startup graph.
-That continuity capture is owned by the shared licensing reconciler rather
-than ordinary read handlers. `/api/license/status` and
-`/api/license/entitlements` may expose `monitored_system_continuity`
-(`plan_limit`, `effective_limit`, optional `grandfathered_floor`,
-`capture_pending`, `captured_at`) and limit-level
-`current_unavailable_reason`, but those request paths must not seal the
-grandfather floor synchronously just because a billing read happened to arrive
-after the canonical usage view became available. Those same read handlers must
-also stay side-effect free with respect to the reconciler lifecycle itself:
-they may observe pending continuity state, but only activation-state
-transitions such as activate, restore, grant refresh, and clear/revocation may
-bootstrap or tear down the pending-floor reconcile loop.
-Continuity capture is itself an activation-state mutation: after the reconciler
-persists the one-time floor, the service callback must publish the updated
-activation state so ownership can cancel the pending loop without making
-ordinary billing reads restart or stop it.
-When save-time monitored-system admission fails with a commercial denial, the
-structured API error must preserve the canonical `monitored_system_preview`
-object through `frontend-modern/src/utils/apiClient.ts` and
-`frontend-modern/src/api/responseUtils.ts` so platform settings can render the
-same current/projected verdict instead of falling back to generic license copy.
+The self-hosted commercial entitlement payload now has no monitored-system
+counted-unit contract. `max_monitored_systems`, `max_agents`, and `max_nodes`
+may be decoded only at explicit legacy import, purchase-return, or scrubbing
+boundaries, and must not be re-emitted as active runtime limits. Add-node,
+auto-register, deploy, TrueNAS, VMware, Kubernetes, Docker, and other platform
+registration routes must accept net-new monitored systems without commercial
+volume admission, while the monitored-system ledger remains an explanatory
+inventory/debug surface only.
+That same retired-cap contract owns prospective grouping and replacement
+projection without admission enforcement. Config-backed PVE/PBS/PMG, TrueNAS,
+VMware, and other API-backed registration or update routes may preview
+current/projected monitored-system grouping through the canonical resolver, but
+the preview cannot carry `limit`, `would_exceed_limit`, commercial-denial
+state, or any save-time cap override. Save-time errors should be ordinary
+platform, auth, validation, or readiness failures; the shared frontend API
+error path must not preserve a monitored-system cap preview from old 402
+payloads.
+Legacy v5/v6 continuity metadata is now scrub-only. `/api/license/status`,
+`/api/license/runtime-capabilities`, `/api/license/commercial-posture`, and
+`/api/license/entitlements` must not expose monitored-system capacity posture,
+grandfathered floors, current/unavailable limit fields, or admission-freeze
+copy. Historical `max_monitored_systems` values can remain in tests and
+migration fixtures only to prove they are deleted before runtime
+entitlements, claims, billing-state responses, or frontend presentation see
+them.
 That same configured-path contract now also has an explicit shared owner for
 manual auth env files: `internal/api/auth_env_path.go` must remain the only
 place that derives `.env` from configured runtime paths, and neighboring
@@ -3110,9 +3049,10 @@ explicit empty state rather than leaking paid history totals through a partial
 payload.
 Hosted billing-state payloads now also treat Stripe webhook-backed commercial
 state as canonical API contract data: when checkout and subscription webhooks
-persist paid state, `plan_version`, `stripe_price_id`, and `limits.max_monitored_systems`
-must stay aligned instead of emitting paid-state payloads with an empty limits
-map or stale canceled-state carryover.
+persist paid state, `plan_version`, `stripe_price_id`, and active paid-feature
+limits must stay aligned while retired monitored-system volume keys are
+scrubbed instead of being restored from stale checkout or canceled-state
+carryover.
 That same hosted billing API boundary also owns runtime base-path resolution:
 `internal/api/payments_webhook_handlers.go` must derive webhook dedupe and
 customer-index storage from the shared runtime data-dir helper in
@@ -3473,17 +3413,14 @@ The adjacent public-demo admin-operations policy also hides `GET`/`HEAD`
 probes for `/api/admin/users` and `/api/discover` with the same generic `404`
 posture, while non-read attempts still fall through to the demo read-only
 mutation block so write probes retain the canonical `403`.
-That same monitored-system admission contract now also owns direct write-path
-failure semantics for platform connections. `internal/api/truenas_handlers.go`,
-`internal/api/vmware_handlers.go`,
-`internal/api/monitored_system_limit_enforcement.go`, and
-`internal/api/contract_test.go` must keep TrueNAS and VMware connection
-creates/updates fail-closed with `monitored_system_usage_unavailable` whenever
-the canonical monitored-system usage view is unsettled or rebuilding. VMware
-write admission must check that canonical usage state before collecting
-external vCenter inventory, so direct API callers cannot receive provider
-connection errors or persist connections while capacity accounting is unsafe.
-That same browser-transport contract now tolerates sparse admission-preview
+That same monitored-system inventory contract now also owns direct write-path
+semantics for platform connections. `internal/api/truenas_handlers.go`,
+`internal/api/vmware_handlers.go`, and `internal/api/contract_test.go` must
+allow TrueNAS and VMware connection creates/updates without monitored-system
+volume admission, even when the explanatory monitored-system view is unsettled
+or rebuilding. VMware writes should report provider validation failures from
+the provider path itself rather than masking them behind capacity accounting.
+That same browser-transport contract now tolerates sparse preview
 payloads without changing the runtime truth. Patrol transport may omit
 `finding_ids`, and infrastructure removal previews may stage optimistic rows
 only after canonical IDs have been resolved or a safe row-name fallback has

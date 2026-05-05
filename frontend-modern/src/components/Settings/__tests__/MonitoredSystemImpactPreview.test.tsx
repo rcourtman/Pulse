@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { MonitoredSystemAdmissionPreview } from '../MonitoredSystemAdmissionPreview';
+import { MonitoredSystemImpactPreview } from '../MonitoredSystemImpactPreview';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
 
 const buildPreview = (
@@ -10,8 +10,6 @@ const buildPreview = (
   current_count: 4,
   projected_count: 4,
   additional_count: 0,
-  limit: 10,
-  would_exceed_limit: false,
   effect: 'no_change',
   current_systems: [],
   projected_systems: [],
@@ -20,13 +18,13 @@ const buildPreview = (
   ...overrides,
 });
 
-describe('MonitoredSystemAdmissionPreview', () => {
+describe('MonitoredSystemImpactPreview', () => {
   afterEach(() => {
     cleanup();
   });
 
   it('describes unchanged usage when a preview has no count impact', () => {
-    render(() => <MonitoredSystemAdmissionPreview preview={buildPreview()} />);
+    render(() => <MonitoredSystemImpactPreview preview={buildPreview()} />);
 
     expect(
       screen.getByText('This change keeps monitored-system count unchanged'),
@@ -40,7 +38,7 @@ describe('MonitoredSystemAdmissionPreview', () => {
 
   it('describes removed systems when a preview reduces monitored-system usage', () => {
     render(() => (
-      <MonitoredSystemAdmissionPreview
+      <MonitoredSystemImpactPreview
         preview={buildPreview({
           current_count: 1,
           projected_count: 0,
@@ -57,25 +55,22 @@ describe('MonitoredSystemAdmissionPreview', () => {
     ).toBeInTheDocument();
   });
 
-  it('describes continuity review failures without slash quota copy', () => {
+  it('describes added systems without capacity review copy', () => {
     render(() => (
-      <MonitoredSystemAdmissionPreview
+      <MonitoredSystemImpactPreview
         preview={buildPreview({
           current_count: 9,
           projected_count: 11,
           additional_count: 2,
-          would_exceed_limit: true,
           effect: 'creates_multiple',
         })}
       />
     ));
 
-    expect(
-      screen.getByText('This change needs continuity review before saving'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('This change adds monitored systems')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse currently counts 9 monitored systems. Saving this change would bring the count to 11 monitored systems (+2), above the current verified baseline of 10 monitored systems.',
+        'Pulse currently counts 9 monitored systems. Saving this change would bring the count to 11 monitored systems (+2).',
       ),
     ).toBeInTheDocument();
   });

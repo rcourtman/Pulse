@@ -27,7 +27,6 @@ function makeTarget(overrides: Partial<MockTarget> = {}): MockTarget {
 
 interface WizardOverrides {
   confirmSelectedNodeIds?: Set<string>;
-  maxAgentSlots?: number;
   readyNodes?: MockTarget[];
   failedPreflightNodes?: MockTarget[];
   toggleConfirmNode?: ReturnType<typeof vi.fn>;
@@ -35,18 +34,15 @@ interface WizardOverrides {
 
 function createMockWizard(overrides: WizardOverrides = {}) {
   const selectedIds = overrides.confirmSelectedNodeIds ?? new Set<string>();
-  const slots = overrides.maxAgentSlots ?? 0;
   const ready = overrides.readyNodes ?? [];
   const failed = overrides.failedPreflightNodes ?? [];
 
   const [confirmSelectedNodeIds] = createSignal(selectedIds);
-  const [maxAgentSlots] = createSignal(slots);
   const [readyNodes] = createSignal(ready);
   const [failedPreflightNodes] = createSignal(failed);
 
   return {
     confirmSelectedNodeIds,
-    maxAgentSlots,
     readyNodes,
     failedPreflightNodes,
     toggleConfirmNode: overrides.toggleConfirmNode ?? vi.fn(),
@@ -64,92 +60,6 @@ function renderConfirm(overrides: WizardOverrides = {}) {
 describe('ConfirmStep', () => {
   afterEach(() => {
     cleanup();
-  });
-
-  // --- Workspace capacity summary ---
-
-  describe('workspace capacity summary', () => {
-    it('does not show capacity info when maxAgentSlots is 0', () => {
-      renderConfirm({ maxAgentSlots: 0, readyNodes: [makeTarget()] });
-      expect(screen.queryByText(/Workspace capacity/)).not.toBeInTheDocument();
-    });
-
-    it('shows slot count and selected count when maxSlots > 0', () => {
-      renderConfirm({
-        maxAgentSlots: 5,
-        confirmSelectedNodeIds: new Set(['a', 'b']),
-        readyNodes: [makeTarget({ nodeId: 'a' }), makeTarget({ nodeId: 'b' })],
-      });
-      expect(
-        screen.getByText(/Workspace capacity: 5 monitored systems, 2 nodes selected/),
-      ).toBeInTheDocument();
-    });
-
-    it('shows warning when selection exceeds workspace capacity', () => {
-      renderConfirm({
-        maxAgentSlots: 2,
-        confirmSelectedNodeIds: new Set(['a', 'b', 'c']),
-        readyNodes: [
-          makeTarget({ nodeId: 'a' }),
-          makeTarget({ nodeId: 'b' }),
-          makeTarget({ nodeId: 'c' }),
-        ],
-      });
-      expect(
-        screen.getByText(/This workspace can deploy 2 nodes at its current capacity/),
-      ).toBeInTheDocument();
-      expect(screen.getByText(/Remove 1 node before continuing/)).toBeInTheDocument();
-    });
-
-    it('does not show exceeds warning when selection is within limit', () => {
-      renderConfirm({
-        maxAgentSlots: 5,
-        confirmSelectedNodeIds: new Set(['a', 'b']),
-        readyNodes: [makeTarget({ nodeId: 'a' }), makeTarget({ nodeId: 'b' })],
-      });
-      expect(screen.queryByText(/current capacity/)).not.toBeInTheDocument();
-    });
-
-    it('does not show exceeds warning when selection equals limit exactly', () => {
-      renderConfirm({
-        maxAgentSlots: 2,
-        confirmSelectedNodeIds: new Set(['a', 'b']),
-        readyNodes: [makeTarget({ nodeId: 'a' }), makeTarget({ nodeId: 'b' })],
-      });
-      expect(screen.queryByText(/current capacity/)).not.toBeInTheDocument();
-    });
-
-    it('shows capacity banner with 0 selected when maxSlots > 0 and nothing selected', () => {
-      renderConfirm({
-        maxAgentSlots: 10,
-        confirmSelectedNodeIds: new Set(),
-        readyNodes: [],
-      });
-      expect(
-        screen.getByText(/Workspace capacity: 10 monitored systems, 0 nodes selected/),
-      ).toBeInTheDocument();
-      expect(screen.queryByText(/current capacity/)).not.toBeInTheDocument();
-    });
-
-    it('applies amber styling when exceeding workspace capacity', () => {
-      const { container } = renderConfirm({
-        maxAgentSlots: 1,
-        confirmSelectedNodeIds: new Set(['a', 'b']),
-        readyNodes: [makeTarget({ nodeId: 'a' }), makeTarget({ nodeId: 'b' })],
-      });
-      const banner = container.querySelector('.bg-amber-50');
-      expect(banner).toBeInTheDocument();
-    });
-
-    it('applies blue styling when within workspace capacity', () => {
-      const { container } = renderConfirm({
-        maxAgentSlots: 5,
-        confirmSelectedNodeIds: new Set(['a']),
-        readyNodes: [makeTarget({ nodeId: 'a' })],
-      });
-      const banner = container.querySelector('.bg-blue-50');
-      expect(banner).toBeInTheDocument();
-    });
   });
 
   // --- Ready nodes table ---
@@ -340,16 +250,14 @@ describe('ConfirmStep', () => {
       expect(screen.getByText('bad-host')).toBeInTheDocument();
     });
 
-    it('renders nothing when both lists are empty and no license', () => {
+    it('renders nothing when both lists are empty', () => {
       renderConfirm({
         readyNodes: [],
         failedPreflightNodes: [],
-        maxAgentSlots: 0,
       });
       // Only the outer wrapper div exists, with no visible child content
       expect(screen.queryByText(/Ready to deploy/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Cannot deploy/)).not.toBeInTheDocument();
-      expect(screen.queryByText(/Workspace capacity/)).not.toBeInTheDocument();
     });
   });
 

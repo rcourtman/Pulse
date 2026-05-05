@@ -84,16 +84,7 @@ describe('MonitoredSystemLedgerPanel', () => {
   it('hides monitored-system usage in demo mode without requesting the ledger', () => {
     presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
 
-    render(() => (
-      <MonitoredSystemLedgerPanel
-        monitoredSystemLimit={{
-          key: 'max_monitored_systems',
-          limit: 5,
-          current: 16,
-          state: 'enforced',
-        }}
-      />
-    ));
+    render(() => <MonitoredSystemLedgerPanel />);
 
     expect(explainMock).not.toHaveBeenCalled();
     expect(screen.getByText('Monitored-system usage is hidden in demo mode')).toBeInTheDocument();
@@ -168,7 +159,6 @@ describe('MonitoredSystemLedgerPanel', () => {
           },
         ],
         total: 1,
-        limit: 5,
       }),
     );
 
@@ -216,24 +206,13 @@ describe('MonitoredSystemLedgerPanel', () => {
       }),
     );
 
-    render(() => (
-      <MonitoredSystemLedgerPanel
-        monitoredSystemLimit={{
-          key: 'max_monitored_systems',
-          limit: 5,
-          current: 16,
-          current_available: false,
-          current_unavailable_reason: 'supplemental_inventory_unsettled',
-          state: 'enforced',
-        }}
-      />
-    ));
+    render(() => <MonitoredSystemLedgerPanel />);
 
     await waitFor(() => {
       expect(screen.getByText('Verifying monitored-system inventory')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Verifying…')).toBeInTheDocument();
+    expect(screen.getByText('Verifying')).toBeInTheDocument();
     expect(
       screen.getByText(
         'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
@@ -243,40 +222,6 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(
       screen.queryByText('Monitored system usage is temporarily unavailable.'),
     ).not.toBeInTheDocument();
-  });
-
-  it('surfaces monitored-system continuity context from entitlements', async () => {
-    explainMock.mockResolvedValue(
-      explainResponse({
-        systems: [],
-        total: 7,
-        limit: 12,
-      }),
-    );
-
-    render(() => (
-      <MonitoredSystemLedgerPanel
-        monitoredSystemContinuity={{
-          plan_limit: 5,
-          grandfathered_floor: 12,
-          effective_limit: 12,
-          capture_pending: true,
-        }}
-      />
-    ));
-
-    await waitFor(() => {
-      expect(screen.getByText('7 monitored systems')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('Legacy continuity')).toBeInTheDocument();
-    expect(screen.getByText('Plan baseline')).toBeInTheDocument();
-    expect(screen.getByText('Current baseline')).toBeInTheDocument();
-    expect(screen.getByText('Observed legacy estate')).toBeInTheDocument();
-    expect(screen.getByText('Verification')).toBeInTheDocument();
-    expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.getAllByText('12')).toHaveLength(2);
-    expect(screen.getByText('Pending')).toBeInTheDocument();
   });
 
   it('renders ledger data on successful load', async () => {
@@ -356,7 +301,6 @@ describe('MonitoredSystemLedgerPanel', () => {
           },
         ],
         total: 2,
-        limit: 10,
       }),
     );
 
@@ -372,7 +316,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(screen.getAllByText('server-b (PBS Server via PBS)').length).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        'Review the top-level monitored systems Pulse has identified for reporting, migration continuity, and support context.',
+        'Review the top-level monitored systems Pulse has identified for reporting and support context.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
@@ -452,7 +396,6 @@ describe('MonitoredSystemLedgerPanel', () => {
           },
         ],
         total: 1,
-        limit: 10,
       }),
     );
 
@@ -501,7 +444,6 @@ describe('MonitoredSystemLedgerPanel', () => {
           },
         ],
         total: 1,
-        limit: 10,
       }),
     );
 
@@ -542,7 +484,6 @@ describe('MonitoredSystemLedgerPanel', () => {
           },
         ],
         total: 1,
-        limit: 10,
       }),
     );
 
@@ -566,7 +507,6 @@ describe('MonitoredSystemLedgerPanel', () => {
       explainResponse({
         systems: [],
         total: 2,
-        limit: 5,
       }),
     );
 

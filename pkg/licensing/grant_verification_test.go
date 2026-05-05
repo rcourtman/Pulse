@@ -15,14 +15,13 @@ func TestVerifyAndParseGrantJWT_ValidSignature(t *testing.T) {
 	setupTestPublicKey(t)
 
 	jwt := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_test",
-		InstallationID:      "inst_abc",
-		State:               "active",
-		Tier:                "pro",
-		Features:            []string{"relay"},
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID:      "lic_test",
+		InstallationID: "inst_abc",
+		State:          "active",
+		Tier:           "pro",
+		Features:       []string{"relay"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
 	})
 
 	gc, err := verifyAndParseGrantJWT(jwt)
@@ -34,9 +33,6 @@ func TestVerifyAndParseGrantJWT_ValidSignature(t *testing.T) {
 	}
 	if gc.Tier != "pro" {
 		t.Errorf("Tier = %q, want %q", gc.Tier, "pro")
-	}
-	if gc.MaxMonitoredSystems != 10 {
-		t.Errorf("MaxMonitoredSystems = %d, want 10", gc.MaxMonitoredSystems)
 	}
 }
 

@@ -150,7 +150,7 @@ type MonitorSupplementalChangesProvider interface {
 
 // MonitorSupplementalInventoryReadinessProvider optionally reports when a
 // supplemental provider's current org-scoped inventory is settled enough to be
-// consumed by billing and monitored-system admission boundaries.
+// consumed by monitored-system grouping and support boundaries.
 //
 // Providers that suppress snapshot-owned sources must implement this contract
 // so the monitor can fail closed until the canonical store has been rebuilt

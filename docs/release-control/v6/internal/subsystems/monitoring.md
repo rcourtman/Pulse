@@ -119,20 +119,21 @@ canonical escalation state to websocket consumers, but notification fan-out
 must defer quiet-hours and resolved-notification suppression policy to the
 alerts manager instead of bypassing that shared routing contract when monitor
 plumbs escalations outward.
-That same monitoring owner now also governs monitored-system usage readiness
-for commercial boundaries. A non-nil unified read-state is not sufficient when
-provider-owned supplemental inventories such as TrueNAS or VMware are still
-settling: monitoring must fail closed until every active connection in that
-provider has reached an initial baseline and the canonical monitor store has
-rebuilt at or after that provider watermark, otherwise billing and upgrade
-continuity can freeze against a transient startup undercount.
+That same monitoring owner now also governs monitored-system grouping readiness
+for settings and support boundaries. A non-nil unified read-state is not
+sufficient when provider-owned supplemental inventories such as TrueNAS or
+VMware are still settling: monitoring must report the grouping view as
+unavailable until every active connection in that provider has reached an
+initial baseline and the canonical monitor store has rebuilt at or after that
+provider watermark, otherwise previews and support ledgers can freeze against
+a transient startup undercount.
 That same monitoring boundary also owns the machine-readable unavailable-state
 contract for monitored-system usage. `internal/monitoring/monitored_system_usage.go`
 must emit canonical reason codes such as
 `monitor_state_unavailable`, `supplemental_inventory_unsettled`, and
 `supplemental_inventory_rebuild_pending` when usage cannot yet be resolved, so
-commercial surfaces can show verification or recovery state without inventing
-their own readiness heuristics or falling back to a fake `0 / limit`.
+settings and support surfaces can show verification or recovery state without
+inventing their own readiness heuristics or falling back to a fake count.
 That same monitoring owner also governs collector payload compatibility at the
 shared boundary. Podman container stats must honor Podman's compat payload when
 it exposes a direct CPU percentage and otherwise fall back to Podman's
@@ -232,7 +233,7 @@ implementation routes through maintained `github.com/moby/moby/api` and
 `github.com/moby/moby/client` modules, so monitoring runtime collection does
 not drift back onto the legacy `github.com/docker/docker` Go module line.
 That same monitoring owner now also governs restart-safe standalone host
-continuity for monitored-system usage and admission. `internal/monitoring/monitor_agents.go`
+continuity for monitored-system grouping. `internal/monitoring/monitor_agents.go`
 must persist recent host identity at report time, and
 `internal/monitoring/monitored_system_usage.go` must project that continuity
 back into the canonical read state through the unified-resources-owned overlay

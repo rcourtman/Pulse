@@ -243,22 +243,13 @@ func normalizeDatabaseSourceState(state BillingState) BillingState {
 	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
 
 	normalized.Limits = NormalizeMonitoredSystemLimits(normalized.Limits)
-	if IsSelfHostedCoreMonitoringUncappedPlanVersion(normalized.PlanVersion) {
-		stripLegacyCommercialCaps(normalized.Limits)
-	}
+	stripSelfHostedCommercialVolumeCaps(normalized.Limits, normalized.PlanVersion, "", false)
 
 	switch normalized.SubscriptionState {
 	case SubStateExpired, SubStateSuspended, SubStateCanceled:
 		normalized.Capabilities = nil
 		normalized.Limits = nil
 		normalized.MetersEnabled = nil
-	default:
-		if limit, known := CloudPlanMonitoredSystemLimits[normalized.PlanVersion]; known && limit > 0 {
-			if normalized.Limits == nil {
-				normalized.Limits = map[string]int64{}
-			}
-			normalized.Limits[MaxMonitoredSystemsLicenseGateKey] = int64(limit)
-		}
 	}
 
 	return normalized

@@ -12,7 +12,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
-	"github.com/rs/zerolog/log"
 )
 
 const defaultCloudPlanVersion = "cloud_starter"
@@ -344,15 +343,6 @@ func tenantSubscriptionState(tenant *registry.Tenant) pkglicensing.SubscriptionS
 }
 
 func buildPaidEntitlementLeaseClaims(ctx *tenantLeaseContext, instanceHost string, now time.Time) pkglicensing.EntitlementLeaseClaims {
-	limits, known := pkglicensing.LimitsForCloudPlan(ctx.planVersion)
-	if !known && ctx.tenant != nil {
-		log.Warn().
-			Str("tenant_id", ctx.tenant.ID).
-			Str("plan_version", ctx.planVersion).
-			Int64("default_max_monitored_systems", limits["max_monitored_systems"]).
-			Msg("Unknown plan version during hosted entitlement lease build; applying safe default monitored-system limit")
-	}
-
 	var capabilities []string
 	if pkglicensing.ShouldGrantPaidCapabilities(ctx.subscriptionState) {
 		capabilities = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
@@ -364,7 +354,7 @@ func buildPaidEntitlementLeaseClaims(ctx *tenantLeaseContext, instanceHost strin
 		PlanVersion:       strings.TrimSpace(ctx.planVersion),
 		SubscriptionState: ctx.subscriptionState,
 		Capabilities:      capabilities,
-		Limits:            limits,
+		Limits:            map[string]int64{},
 		MetersEnabled:     []string{},
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now.UTC()),
@@ -383,7 +373,7 @@ func buildTrialLeaseClaims(ctx trialEntitlementContext, now time.Time) pkglicens
 	trialCapabilities, trialLimits := pkglicensing.DeriveEntitlements(
 		pkglicensing.TierPro,
 		nil,
-		pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro],
+		0,
 		0,
 	)
 	trialState := pkglicensing.BuildTrialBillingState(ctx.trialStartedAt.UTC(), trialCapabilities)

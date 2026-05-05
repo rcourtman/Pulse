@@ -214,15 +214,13 @@ func TestMonitoredSystemLedgerResponseEmptyState(t *testing.T) {
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if decoded.Total != 0 || decoded.Limit != 0 || len(decoded.Systems) != 0 {
+	if decoded.Total != 0 || len(decoded.Systems) != 0 {
 		t.Errorf("unexpected response: %+v", decoded)
 	}
 }
 
 func TestMonitoredSystemLedgerNilSystemsBecomesEmptyArray(t *testing.T) {
-	resp := MonitoredSystemLedgerResponse{
-		Limit: 5,
-	}.NormalizeCollections()
+	resp := MonitoredSystemLedgerResponse{}.NormalizeCollections()
 
 	data, err := json.Marshal(resp)
 	if err != nil {
@@ -294,7 +292,6 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 			},
 		},
 		Total: 1,
-		Limit: 5,
 	}
 
 	rec.Header().Set("Content-Type", "application/json")
@@ -310,7 +307,7 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if decoded.Total != 1 || decoded.Limit != 5 {
+	if decoded.Total != 1 {
 		t.Errorf("unexpected response: %+v", decoded)
 	}
 	if decoded.Systems[0].Name != "test-host" || decoded.Systems[0].Type != "host" {
@@ -371,12 +368,6 @@ func TestHandleMonitoredSystemLedgerPreviewHTTP(t *testing.T) {
 	}
 	if decoded.CurrentCount != 1 || decoded.ProjectedCount != 1 || decoded.AdditionalCount != 0 {
 		t.Fatalf("unexpected counts: %+v", decoded)
-	}
-	if decoded.Limit != 1 {
-		t.Fatalf("Limit = %d, want 1", decoded.Limit)
-	}
-	if decoded.WouldExceedLimit {
-		t.Fatalf("expected attach preview to stay within limit, got %+v", decoded)
 	}
 	if decoded.Effect != "attaches_existing" {
 		t.Fatalf("Effect = %q, want attaches_existing", decoded.Effect)
@@ -552,9 +543,6 @@ func TestHandleMonitoredSystemLedgerExplainCurrentAndPreview(t *testing.T) {
 	if decoded.Ledger.Total != 1 {
 		t.Fatalf("Ledger.Total = %d, want 1", decoded.Ledger.Total)
 	}
-	if decoded.Ledger.Limit != 1 {
-		t.Fatalf("Ledger.Limit = %d, want 1", decoded.Ledger.Limit)
-	}
 	if len(decoded.Ledger.Systems) != 1 {
 		t.Fatalf("len(Ledger.Systems) = %d, want 1", len(decoded.Ledger.Systems))
 	}
@@ -603,7 +591,7 @@ func TestHandleMonitoredSystemLedgerExplainCurrentOnly(t *testing.T) {
 	if decoded.Preview != nil {
 		t.Fatalf("expected nil preview, got %+v", decoded.Preview)
 	}
-	if decoded.Ledger.Total != 1 || decoded.Ledger.Limit != 2 {
+	if decoded.Ledger.Total != 1 {
 		t.Fatalf("unexpected ledger payload: %+v", decoded.Ledger)
 	}
 }

@@ -9,15 +9,13 @@ import {
 import {
   apiErrorCode,
   apiErrorDetailField,
-  apiErrorMonitoredSystemPreview,
   apiErrorStatus,
 } from '@/api/responseUtils';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
-  buildMonitoredSystemAdmissionPreviewUnavailableState,
-  getMonitoredSystemAdmissionPreviewSaveBlockedMessage,
-  type MonitoredSystemAdmissionPreviewUnavailableState,
+  buildMonitoredSystemImpactPreviewUnavailableState,
+  type MonitoredSystemImpactPreviewUnavailableState,
 } from '@/utils/monitoredSystemPresentation';
 import {
   buildVMwareConnectionFailurePresentation,
@@ -99,8 +97,8 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 const getVMwareErrorMessage = (error: unknown, fallback: string): string =>
   apiErrorDetailField(error, 'error') ?? getErrorMessage(error, fallback);
 
-const monitoredSystemAdmissionPreviewUnavailableStateFromError = (error: unknown) => {
-  return buildMonitoredSystemAdmissionPreviewUnavailableState({
+const monitoredSystemImpactPreviewUnavailableStateFromError = (error: unknown) => {
+  return buildMonitoredSystemImpactPreviewUnavailableState({
     code: apiErrorCode(error),
     reason: apiErrorDetailField(error, 'reason'),
   });
@@ -147,7 +145,7 @@ export function useVMwareSettingsPanelState() {
   const [monitoredSystemPreview, setMonitoredSystemPreview] =
     createSignal<MonitoredSystemLedgerPreviewResponse | null>(null);
   const [monitoredSystemPreviewUnavailableState, setMonitoredSystemPreviewUnavailableState] =
-    createSignal<MonitoredSystemAdmissionPreviewUnavailableState | null>(null);
+    createSignal<MonitoredSystemImpactPreviewUnavailableState | null>(null);
   const [monitoredSystemPreviewGenericError, setMonitoredSystemPreviewGenericError] = createSignal<
     string | null
   >(null);
@@ -157,18 +155,6 @@ export function useVMwareSettingsPanelState() {
   const monitoredSystemPreviewError = createMemo(
     () => monitoredSystemPreviewUnavailableState()?.message ?? monitoredSystemPreviewGenericError(),
   );
-  const monitoredSystemAdmissionSaveBlockedMessage = createMemo(() =>
-    getMonitoredSystemAdmissionPreviewSaveBlockedMessage({
-      preview: monitoredSystemPreview(),
-      unavailableState: monitoredSystemPreviewUnavailableState(),
-      error: monitoredSystemPreviewGenericError(),
-      loading: previewing(),
-    }),
-  );
-  const monitoredSystemAdmissionSaveBlocked = createMemo(
-    () => monitoredSystemAdmissionSaveBlockedMessage() !== null,
-  );
-
   const editingConnection = createMemo(
     () => connections().find((connection) => connection.id === editingConnectionId()) ?? null,
   );
@@ -328,7 +314,7 @@ export function useVMwareSettingsPanelState() {
       setMonitoredSystemPreviewGenericError(null);
       return preview;
     } catch (error) {
-      const unavailableState = monitoredSystemAdmissionPreviewUnavailableStateFromError(error);
+      const unavailableState = monitoredSystemImpactPreviewUnavailableStateFromError(error);
       if (unavailableState) {
         setMonitoredSystemPreview(null);
         setMonitoredSystemPreviewUnavailableState(unavailableState);
@@ -359,11 +345,6 @@ export function useVMwareSettingsPanelState() {
   };
 
   const saveCurrentForm = async () => {
-    const blockedMessage = monitoredSystemAdmissionSaveBlockedMessage();
-    if (blockedMessage) {
-      notificationStore.error(blockedMessage);
-      return;
-    }
     setSaving(true);
     try {
       const payload = buildConnectionInput(form());
@@ -377,22 +358,8 @@ export function useVMwareSettingsPanelState() {
       resetDialogState();
       await loadConnections();
     } catch (error) {
-      const unavailableState = monitoredSystemAdmissionPreviewUnavailableStateFromError(error);
-      const preview = apiErrorMonitoredSystemPreview(error);
-      if (preview) {
-        setMonitoredSystemPreview(preview);
-        setMonitoredSystemPreviewUnavailableState(null);
-        setMonitoredSystemPreviewGenericError(null);
-      } else if (unavailableState) {
-        setMonitoredSystemPreview(null);
-        setMonitoredSystemPreviewUnavailableState(unavailableState);
-        setMonitoredSystemPreviewGenericError(null);
-      } else {
-        setMonitoredSystemPreviewUnavailableState(null);
-      }
-      const message = unavailableState
-        ? unavailableState.message
-        : getErrorMessage(error, 'Failed to save VMware connection');
+      setMonitoredSystemPreviewUnavailableState(null);
+      const message = getErrorMessage(error, 'Failed to save VMware connection');
       notificationStore.error(message);
       logger.error('[VMware Settings] Save failed', error);
     } finally {
@@ -439,7 +406,6 @@ export function useVMwareSettingsPanelState() {
     openEditDialog,
     pendingDeleteConnection,
     previewCurrentForm,
-    monitoredSystemAdmissionSaveBlocked,
     monitoredSystemPreview,
     monitoredSystemPreviewError,
     monitoredSystemPreviewErrorTitle,

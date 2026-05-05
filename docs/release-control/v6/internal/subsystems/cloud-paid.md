@@ -65,7 +65,7 @@ cloud-specific enforcement rules.
 42. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
 43. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
 44. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-45. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
+45. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`
 46. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
 47. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
 48. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
@@ -113,7 +113,7 @@ cloud-specific enforcement rules.
 
 ## Shared Boundaries
 
-1. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx` shared with `agent-lifecycle`: the monitored-system admission preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
+1. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx` shared with `agent-lifecycle`: the monitored-system impact preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
 2. `frontend-modern/src/useAppRuntimeState.ts` shared with `performance-and-scalability`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
 3. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 4. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
@@ -321,7 +321,7 @@ or other self-hosted uncapped continuity plans.
     show active historical `subscription_state=trial` entitlement state, but
     they must not turn `trial_eligible`, `trial_eligibility_reason`, or an
     expired trial marker into a default Pro CTA or banner.
-17. Add or change monitored-system ledger, disclosure, or admission-preview presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+17. Add or change monitored-system ledger, disclosure, or impact-preview presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The retired Dashboard shell must not be restored to carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
     Public demo and other read-only presentation policy states must suppress
     relay setup and upsell onboarding instead of inviting pairing or commercial
@@ -376,38 +376,18 @@ or other self-hosted uncapped continuity plans.
     the section, but that summary treatment must stay inside the same task
     surface instead of reviving a separate overview panel, summary strip, or
     metric deck ahead of the real workspace list.
-23. Keep self-hosted monitored-system capacity review informational and
-    non-commercial. Recognized self-hosted v6 tiers must treat legacy
-    monitored-system limit, continuity, or `max_monitored_systems` metadata
-    as support/audit context rather than as the customer-facing plan model:
-    Community, Relay, Pro, Pro+, lifetime, and eligible grandfathered recurring
-    plan labels render through the normal plan surface as core monitoring plus
-    tier-specific extras, with no standing Usage subtab, finite
-    policy banner, monitored-system limit row, or pause-new-admissions copy from
-    stale volume metadata. Retired `max_monitored_systems` pricing handoffs
-    must land on the neutral self-hosted plan surface, not the usage ledger.
-    Any genuinely bounded monitored-system support context outside those
-    recognized plan labels may still land on the explicit usage-focused billing
-    state (`/settings/system/billing/usage?details=counting-rules`) so the
-    operator can inspect counting rules and any support/audit policy context
-    without being pushed toward a purchase. Monitored-system warnings must not surface
-    `Upgrade to add more`, `Compare self-hosted plans`, or the
-    `intent=self_hosted_plan` plan-selection arrival. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`,
-    `frontend-modern/src/components/Settings/useProLicensePanelState.ts`, and
-    `frontend-modern/src/utils/pricingHandoff.ts` therefore own a two-state
-    billing focus model where stale monitored-system pricing aliases resolve
-    to `plan`, explicit usage routes remain available only for displayable
-    bounded support context after recognized self-hosted plans have been
-    normalized, and plan selection is reserved for explicit self-hosted
-    Pro/commercial-extra arrivals. That same self-hosted
-    commercial boundary also owns legacy
-    migration continuity semantics: `legacy_migration_fallback` may preserve
-    `plan_limit` and `grandfathered_floor` for support/audit context, but
-    self-hosted v6 monitoring remains uncapped. The canonical contract is
-    therefore `status.max_monitored_systems = 0`, no enforced
-    `max_monitored_systems` entitlement row, and
-    `monitored_system_capacity.mode = unlimited` once runtime usage is
-    available.
+23. Keep monitored-system volume out of the commercial product model.
+    Recognized self-hosted and hosted v6 tiers must treat legacy
+    monitored-system limit, continuity, or `max_monitored_systems` metadata as
+    scrub-only compatibility input rather than as support/audit policy or a
+    customer-facing plan model. Community, Relay, Pro, Pro+, lifetime,
+    grandfathered recurring, Cloud, and MSP plan labels render through their
+    normal plan surfaces with no Usage subtab, finite policy banner,
+    monitored-system limit row, grandfathered-floor summary, or
+    pause-new-admissions copy from stale volume metadata. Retired
+    `max_monitored_systems` pricing handoffs must land on the neutral
+    self-hosted plan surface and be normalized to plan selection rather than a
+    monitored-system usage ledger.
     That same self-hosted commercial boundary also owns the operator-value
     narrative across the in-app billing shell, Pulse Account handoff, public
     pricing contract, and owned upgrade reasons. Customer-facing self-hosted
@@ -515,28 +495,17 @@ or other self-hosted uncapped continuity plans.
 7. Keep Pro+ app presentation continuity-only: customer-facing tier, plan, and
    plan-version labels for `pro_plus` must include legacy framing while still
    mapping the entitlement to the Pro runtime feature set.
-8. Keep persisted billing baselines and live recurring continuity distinct:
-   `pkg/licensing/billing_state_normalization.go` must store the canonical
-   monitored-system billing baseline for recognized grandfathered recurring
-   v5/v1 Stripe plans so webhook persistence and admin-visible hosted billing
-   state stay deterministic, while `pkg/licensing/database_source.go`,
-   `pkg/licensing/models.go`, and downstream runtime entitlement evaluation
-   must strip that stored cap before enforcement so active recurring
-   grandfathered continuity remains uncapped until cancellation.
-9. Keep legacy migration fallback continuity audit-only on self-hosted v6:
-   `legacy_migration_fallback` may preserve `plan_limit`,
-   `grandfathered_floor`, and related support telemetry, but runtime status
-   and entitlement enforcement must keep self-hosted monitoring uncapped.
-   The canonical contract is `status.max_monitored_systems = 0`, no enforced
-   `max_monitored_systems` entitlement row, and
-   `monitored_system_capacity.mode = unlimited` once runtime usage is
-   available. The in-app self-hosted Plans surface must apply the same rule:
-   recognized Community, Relay, Pro, Pro+, lifetime, and eligible grandfathered
-   recurring plans must ignore stale legacy volume metadata for customer-facing
-   plan presentation, must render the current plan ladder, and must not show a
-   Usage tab, monitored-system policy banner, `Plan Monitored System Limit`,
-   `Effective Monitored System Limit`, grandfathered-floor summary, or
-   pause-new-admissions copy from that metadata.
+8. Keep persisted billing baselines and live recurring continuity scrubbed:
+   `pkg/licensing/billing_state_normalization.go`,
+   `pkg/licensing/database_source.go`, `pkg/licensing/models.go`, and
+   downstream runtime entitlement evaluation must delete retired
+   monitored-system volume keys before runtime status, grants, leases, or
+   frontend billing payloads are built.
+9. Keep legacy migration fallback continuity compatibility-only on v6:
+   `legacy_migration_fallback` may be parsed so old activation files and
+   billing records load, but `plan_limit`, `grandfathered_floor`, and related
+   volume telemetry must not become runtime status, entitlement enforcement,
+   customer-facing support context, or self-hosted Plans presentation.
 10. Keep Stripe webhook idempotency state bounded in the control-plane
    registry: `internal/cloudcp/registry/registry.go` may retain `stripe_events`
    rows long enough to suppress duplicate deliveries and reclaim stale
@@ -547,20 +516,20 @@ or other self-hosted uncapped continuity plans.
    frontend hash or emitted manifest must rebuild
    `internal/cloudcp/portal/dist/build_manifest.json` and keep
    `internal/cloudcp/portal/frontend_sync_test.go` green in the same change.
-12. Before GA, treat self-hosted core monitoring as free for homelab use:
-   monitored systems remain the canonical counted unit, but self-hosted paid
+12. Before GA, treat infrastructure monitoring volume as unmetered:
+   monitored systems remain the canonical inventory grouping unit, but paid
    value must come from optional extras, hosted convenience, business
    workflow, support, or similar non-core surfaces rather than using
-   monitored-system volume itself as the primary paid gate.
+   monitored-system volume itself as a paid gate.
    Child-resource volume, including guest capacity, must follow the same
    self-hosted rule instead of becoming a replacement paid gate for core
    monitoring.
-   Monitored-system admission-preview copy must follow the same rule: ordinary
-   connection previews may describe count impact and active policy checks, but
+   Monitored-system impact-preview copy must follow the same rule: ordinary
+   connection previews may describe count impact and grouping changes, but
    they must not use capacity-style titles or slash-style quota summaries that
    imply self-hosted monitoring volume is the product being sold.
-13. Keep self-hosted v6 billing state uncapped even when persisted state still
-   carries legacy v5 commercial volume-limit keys:
+13. Keep v6 billing state uncapped even when persisted state still carries
+   legacy commercial volume-limit keys:
    `pkg/licensing/models.go`,
    `pkg/licensing/service.go`,
    `pkg/licensing/entitlement_payload.go`,
@@ -568,12 +537,10 @@ or other self-hosted uncapped continuity plans.
    `pkg/licensing/database_source.go`,
    `pulse-pro:license-server/v6_store.go`, and
    `pulse-pro:license-server/v6_schema.go` must scrub stale
-   `max_monitored_systems` and `max_guests` values for self-hosted
-   Community/free, Relay, Pro, Pro+, Pro Annual, lifetime, and eligible
-   grandfathered recurring plan labels before runtime-capability,
-   entitlement, grant, or warning-banner payloads are built, while leaving
-   bounded hosted Cloud/MSP contracts available for top-level hosted
-   monitored-system ceilings.
+   `max_monitored_systems` values for Community/free, Relay, Pro, Pro+, Pro
+   Annual, lifetime, eligible grandfathered recurring, Cloud, and MSP plan
+   labels before runtime-capability, entitlement, grant, lease, billing, or
+   browser-facing payloads are built.
    The same boundary must merge sparse legacy, configured-plan, or manually
    supplied feature lists with canonical recognized-tier defaults before
    storage, API response, or grant signing so Lifetime, Pro, Pro+, and
@@ -826,8 +793,8 @@ drawer state, and org-context route updates do not present as a full-page
 refresh.
 Persisted billing state is now also part of that canonical boundary: when a
 recognized Cloud/MSP plan version is loaded or saved, the stored `plan_version`
-must canonicalize and `limits.max_monitored_systems` must reconcile to the authoritative
-per-plan contract rather than preserving stale ad hoc values.
+must canonicalize and retired monitored-system volume limit keys must be
+scrubbed rather than reconciled back into runtime state.
 That same persisted billing boundary now also applies to hosted entitlement
 lease secrets: `internal/config/billing_state.go` may keep `EntitlementJWT`
 and `EntitlementRefreshToken` in runtime billing state, but `billing.json` may
@@ -895,21 +862,21 @@ That prelaunch gate must not disable `/api/public/magic-link/request`, because
 existing hosted commercial accounts still depend on the public portal sign-in
 flow before v6 public Cloud checkout is opened.
 Signed hosted entitlement leases are part of the same boundary: lease signing
-and verification must canonicalize recognized Cloud plan aliases and reconcile
-lease `limits.max_monitored_systems` to the authoritative per-plan contract instead of
-trusting stale embedded values. They also must not fabricate `plan_version`
-from bare `subscription_state` when the signed lease claim label is absent.
+and verification must canonicalize recognized Cloud plan aliases and delete
+retired monitored-system volume keys instead of trusting stale embedded values.
+They also must not fabricate `plan_version` from bare `subscription_state`
+when the signed lease claim label is absent.
 The control-plane registry is also canonical: tenant and Stripe-account
 `plan_version` rows must canonicalize recognized Cloud aliases on read and
 write so stored legacy values cannot re-enter provisioning, entitlement, or
 limit-enforcement fallbacks.
 JWT-backed entitlement claims are also canonical: when runtime evaluation uses
 claim `plan_version` and `limits`, recognized Cloud plan aliases must
-canonicalize and `max_monitored_systems` must reconcile to the authoritative per-plan
-contract instead of trusting stale embedded claim values. When a Cloud/MSP
-claim arrives without a recognized plan label, runtime must preserve the
-missing/unknown `plan_version` metadata but still fail closed on `max_monitored_systems`
-instead of drifting to an unlimited tier default.
+canonicalize and retired monitored-system volume keys must be removed instead
+of trusting stale embedded claim values. When a Cloud/MSP claim arrives without
+a recognized plan label, runtime must preserve the missing/unknown
+`plan_version` metadata while still treating monitored-system volume as
+unmetered.
 Activation-grant translation is part of the same boundary: when relay/license
 server grants enter the local claims model, Cloud plan keys and lifecycle state
 must still resolve through the canonical entitlement claim accessors rather
@@ -930,36 +897,26 @@ Pulse runtime must not call `POST /v1/quickstart/bootstrap`, must not persist
 quickstart-backed AI config, and must not mint hosted-model tokens from hosted
 or self-hosted billing state. Historical quickstart credit fields may remain
 parseable in billing state only so old HMAC-protected files can still load.
-The self-hosted commercial counted unit is now also locked to monitored
-systems rather than agent installs. `max_monitored_systems` is the live
-runtime and UI contract, while legacy `max_agents` / `max_nodes` aliases are
-decode-only compatibility inputs at the storage or grant boundary. Runtime
-enforcement, entitlement payload `current` usage, checkout/activation flows,
-and upgrade messaging must all treat the cap as deduped top-level monitored
-systems across agent, API, and Kubernetes views.
-That same counted-unit contract also owns the Pulse Account monitored-system
-upgrade copy. Portal shell copy, pricing explainers, and monitored-system
-upgrade helper text must describe top-level monitored systems and included
-child resources directly, with concrete monitored roots such as Docker hosts,
-Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems,
-rather than drifting back to device-style language or generic allowance-only
-copy that hides what the counted unit actually is.
-That same counted-unit contract now also owns prospective API-backed
-admission. Proxmox/PBS/PMG config adds, TrueNAS adds, VMware inventory
-previews, and equivalent updates must ask the canonical monitored-system
-projection whether they increase counted systems before the runtime persists
-them, including replacement-aware projections for source swaps on an existing
-grouped host.
-Under an active monitored-system cap, inability to resolve current usage is
-not a free pass. Runtime enforcement and entitlement payloads must fail closed
-for net-new monitored-system admissions and surface usage availability
-explicitly through the governed limit payload instead of treating unavailable
-usage as `current: 0`.
-The monitored-system ledger settings surface now also has to explain those
-count decisions. Commercial usage UI may show grouped monitored systems, but
-it must render the canonical backend explanation for why one or more
-top-level views counted as a single monitored system instead of inventing
-support copy or merge heuristics in the frontend.
+The self-hosted commercial counted-unit contract is retired. Monitored systems
+remain a canonical inventory grouping and support-debugging concept, but
+`max_monitored_systems`, legacy `max_agents`, and legacy `max_nodes` are
+decode-only compatibility inputs at the storage, grant, or purchase boundary.
+Runtime enforcement, entitlement payload current usage, checkout/activation
+flows, and upgrade messaging must not treat monitored-system volume as a cap.
+Portal shell copy, pricing explainers, and upgrade helper text must focus on
+paid feature value rather than monitored-system expansion.
+That same retired counted-unit contract still owns prospective grouping
+preview. Proxmox/PBS/PMG config adds, TrueNAS adds, VMware inventory previews,
+and equivalent updates may ask the canonical monitored-system projection how a
+connection groups into top-level systems before persistence, including
+replacement-aware projections for source swaps on an existing grouped host,
+but those previews are informational and cannot block a save for commercial
+volume reasons.
+The monitored-system ledger settings surface now also explains those grouping
+decisions. Support UI may show grouped monitored systems, but it must render
+the canonical backend explanation for why one or more top-level views group as
+a single monitored system instead of inventing support copy or merge heuristics
+in the frontend.
 That billing support surface must also remain readable while mixed-version
 clients and servers roll forward: missing explanation payloads may degrade to a
 safe generic explanation, but the monitored-system ledger must never fail the
@@ -999,9 +956,9 @@ GitHub `main`, so the recovery trust surface stays version-matched and
 available on restricted installs.
 Already-issued legacy hosted trial leases are also part of that same
 compatibility contract. If such a lease is refreshed, it must carry the
-canonical Pro capability set and the authoritative
-`limits.max_monitored_systems` cap inside the signed lease rather than relying
-on downstream runtime fallback to infer a limit from trial state alone.
+canonical Pro capability set while scrubbing retired monitored-system volume
+limits rather than relying on downstream runtime fallback to infer commercial
+state from trial metadata.
 The top-level authenticated shell is part of that same customer-facing
 boundary: cloud-paid trial prompts may appear in owned commercial surfaces, but
 the app shell must not force a global, persistent Pro trial nudge that
@@ -1224,22 +1181,21 @@ presentation helper. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 is the canonical owner for monitored-system brief/disclosure copy, ledger
 labels, safe fallback summaries, source/type attribution wording, and the
 customer-facing monitored-system usage/migration strings reused by the shared
-limit-warning banner, so the settings panel, Pro usage section, counting-rules
-disclosure, and shared warning-banner model must consume that helper instead
-of redefining customer-facing monitored-system copy inline or keeping a
-parallel copy in generic self-hosted plan utilities.
+settings and support ledger surfaces, so those surfaces must consume that
+helper instead of redefining customer-facing monitored-system copy inline or
+keeping a parallel copy in generic self-hosted plan utilities.
 That same helper also owns preview-impact copy and current/projected
-source-label wording for pre-save monitored-system admission UI, so the
+source-label wording for optional monitored-system impact previews, so the
 TrueNAS and VMware settings panels do not drift into provider-local billing
-phrasing when they surface canonical preview results before save.
-Admission preview summaries must also come from that helper and describe
-current/projected count impact without raw `current / limit` quota math.
-That same helper-owned admission-preview contract now also owns required-
-preview, unavailable-capacity, and save-blocking messages. Provider settings
+phrasing when they surface canonical preview results. Impact preview summaries
+must also come from that helper and describe current/projected count impact
+without raw `current / limit` quota math.
+That same helper-owned impact-preview contract now also owns unavailable
+verification messages. Provider settings
 panels must map `monitored_system_usage_unavailable` plus backend
 `details.reason` through `frontend-modern/src/utils/monitoredSystemPresentation.ts`,
-render helper-owned required-preview guidance before the first safe preview,
-and keep save disabled until the shared preview state resolves safely.
+but those preview failures are explanatory only and must not disable or block
+connection saves.
 That same disclosure surface must not accept arbitrary caller-supplied
 monitored-system summary strings as its primary API. When the disclosure needs
 to show brief summary copy, it should render the canonical helper-owned brief
@@ -1255,24 +1211,21 @@ systems. Rows must expose backend-authored `explanation.summary`, reasons, and
 grouped source surfaces through helper-owned labels so customers can see why a
 system counts once without the panel inventing a second counting model.
 When canonical usage is not safe to read yet and the backend returns
-`monitored_system_usage_unavailable` or entitlements mark the monitored-system
-current count unavailable, the usage surface must render helper-owned
-verification copy instead of a synthetic `0 / limit` ledger total. The
-canonical `current_available` interpretation, unavailable reason mapping,
-plan-section usage summary, remaining-capacity copy, and upgrade-pressure
-urgency decision all belong to
-`frontend-modern/src/utils/monitoredSystemPresentation.ts`; Pro license panels,
-ledger panels, and shared warning-banner plumbing must consume that helper
-instead of rechecking entitlement availability or hard-coding `Verifying…`,
-`Unavailable`, or `0 / limit` formatting locally.
+`monitored_system_usage_unavailable`, the support ledger must render
+helper-owned verification copy instead of a synthetic count. The canonical
+unavailable reason mapping belongs to
+`frontend-modern/src/utils/monitoredSystemPresentation.ts`; Pro license panels
+and ledger panels must consume that helper instead of rechecking availability
+or hard-coding `Verifying...` / `Unavailable` formatting locally.
 The entitlement payload builder must only mark monitored-system usage available
 from an explicit canonical `MonitoredSystemsAvailable` signal supplied by the
 runtime usage boundary. Deprecated compatibility aliases such as `Nodes`, or a
 non-zero raw monitored-system count without that availability signal, must not
 drive current usage, limit state, or customer-facing cap warnings.
-The same usage view must also render monitored-system continuity context from
-the entitlement payload, including the base plan limit, effective limit,
-grandfathered floor, and capture state, so migration protection is visible
+The same usage view must not render monitored-system continuity context from
+the entitlement payload as a live commercial cap. Base plan limits, effective
+limits, grandfathered floors, and capture state are retired compatibility
+metadata, not customer-facing self-hosted capacity controls.
 beside the canonical count explanation.
 That same settings owner split now also requires
 `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx` to
@@ -1487,7 +1440,7 @@ commercial surface differently.
 That same shared presentation owner also carries the canonical cross-surface
 referral copy used outside the billing shell itself. When infrastructure or
 other adjacent settings surfaces need to point operators toward Plans & Billing
-for billing, monitored-system limits, or license status, they must consume the
+for billing, license status, or paid feature activation, they must consume the
 settings-owned referral strings from
 `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 instead of drafting route-local commercial guidance or reaching directly into
@@ -1512,24 +1465,14 @@ carry local-only legacy-migration continuity metadata as a defensive fallback
 for any bounded legacy grant that survives outside the canonical v5 recurring
 contracts, but active recurring v5/v1 customers must not rely on a captured
 floor to stay admissible in v6.
-That fallback continuity path is reconciler-owned rather than read-owned.
-Ordinary status or entitlement reads may expose pending continuity state for a
-bounded legacy fallback, but they must not persist the grandfather floor
-directly from the request path once a migrated installation is running. The
-owning licensing reconciler may backfill the floor asynchronously after
-canonical monitored-system usage becomes settled. The reconcile loop itself is
-activation-state-owned as well: activation, restore, grant refresh, and
-revocation/clear transitions may start or stop continuity reconciliation, but
-ordinary billing reads must stay observer-only and must not bootstrap that
-background work on demand.
-That fallback continuity path must notify through that same activation-state
-ownership boundary after it persists the grandfather floor, so the reconciler
-can stop because state changed rather than because a later status or
-entitlements read happened to observe the captured floor.
-Save-time monitored-system commercial denials must carry the canonical
-`monitored_system_preview` object through the shared frontend API error path,
-so TrueNAS and VMware settings render the same helper-owned projected-usage
-explanation after a rejected save that they render after an explicit preview.
+That fallback continuity path is scrub-owned rather than read-owned. Ordinary
+status or entitlement reads may tolerate old continuity fields while loading
+legacy records, but they must not persist grandfather floors, start capacity
+reconciliation, or expose monitored-system continuity as live commercial state.
+Save-time monitored-system commercial denials are retired. TrueNAS and VMware
+settings may render explicit preview results for grouping impact, but rejected
+saves must flow through ordinary API error handling rather than a preserved
+monitored-system cap preview.
 That continuity rule cannot depend on webhook metadata being perfect. The
 canonical Stripe price-to-plan lookup in `pkg/licensing/features.go` and
 `pkg/licensing/stripe_subscription.go` must recognize the still-renewing
@@ -1573,20 +1516,17 @@ reported 14-day history entitlement. Pro proof adds the reported 90-day history
 entitlement plus root-cause/remediation and team/admin capability groups.
 Frontend presentation and component tests must cover active, partial, and
 Community-suppressed proof states whenever this panel changes.
-That same settings-owned presentation must distinguish between active
-grandfathered recurring v5 continuity and stale bounded legacy fallback
-metadata. Active grandfathered recurring v5 plans must render the existing
-recurring price continuity directly and must not show a pending or captured
-floor banner or any finite self-hosted volume cap. Recognized self-hosted v6
-plan labels must follow the same customer-facing no-cap rule even if a
-`legacy_migration_fallback` entitlement still carries `plan_limit`,
-`effective_limit`, `grandfathered_floor`, or capture-pending telemetry:
-`useProLicensePanelState.ts` must suppress the Usage tab, monitored-system
-policy section, continuity notice, plan-limit detail rows, and
-pause-new-admissions copy, while `licensePresentation.ts` must keep current
-plan summaries focused on core monitoring plus the actual tier
-extras. Bounded fallback continuity may only be displayed for a support context
-that is not already normalized to a recognized self-hosted v6 package.
+That same settings-owned presentation must distinguish active commercial
+features from stale bounded legacy fallback metadata. Active grandfathered
+recurring v5 plans must render the existing recurring price continuity
+directly and must not show a pending or captured floor banner or any finite
+monitored-system volume cap. Recognized v6 plan labels must follow the same
+customer-facing no-cap rule even if a legacy entitlement still carries
+`plan_limit`, `effective_limit`, `grandfathered_floor`, or capture-pending
+telemetry: `useProLicensePanelState.ts` must suppress Usage tabs,
+monitored-system policy sections, continuity notices, plan-limit detail rows,
+and pause-new-admissions copy, while `licensePresentation.ts` must keep current
+plan summaries focused on core monitoring plus the actual tier extras.
 When billing or support presentation still needs a capacity-free self-hosted
 summary value, the customer-facing label is `Not metered`, not `Unlimited`;
 lifetime commercial continuity duration may use `Permanent`, but no normal
@@ -1626,7 +1566,7 @@ it as a current public Pulse Pro+ package. When direct plan-selection intent
 opens the explicit self-hosted comparison surface, the shared presentation
 helpers must show Pro's operations, admin, and reporting extras together while
 still framing Community, Relay, and Pro as core monitoring included in every
-self-hosted tier rather than monitored-system capacity tiers. Relay copy in
+self-hosted tier rather than monitored-system allowance tiers. Relay copy in
 that shared owner must describe the current v6 GA product as standard Relay
 remote access, supported Pulse Mobile pairing for handoff, push notifications, and 14-day
 history, and it must not market a customer-specific Relay URL until that
@@ -1689,26 +1629,22 @@ remediation, safe remediation execution, and higher autonomy remain paid
 AI-operations features.
 Those docs should describe moving between available modes, not tell readers to
 "upgrade" as part of an ordinary safety progression.
-That same counted-unit boundary also owns the disclosure rule for retail copy:
-default billing and pricing surfaces should use concise monitored-system copy,
-while the full counted-unit definition appears only behind explicit disclosure
-such as `View counting rules` on the usage-owned monitored-system surfaces
-instead of sitting as persistent plan-tab chrome.
+That same retired counted-unit boundary also owns the disclosure rule for
+retail copy: default billing and pricing surfaces should not use
+monitored-system allowance copy. Monitored-system grouping definitions belong
+only behind explicit support/ledger disclosures rather than persistent
+plan-tab chrome.
 The same boundary also owns where monitored-system continuity truth lives. A
 dedicated self-hosted Pro plan-surface continuity section is only canonical when
-Pulse is reconciling bounded legacy migration continuity or other explicit
-carry-forward support context. Normal self-hosted plans should not keep a
-`Monitoring capacity` section alive just to restate that monitoring is included
-without a monitored-system volume gate; those plan surfaces should reserve
-counted-unit explanation plus current usage inspection for the legacy
-ledger/disclosure path. When a carried-forward baseline needs review, the
-section must explain that existing monitoring remains visible while new
-top-level additions wait for continuity review or verification, not that the
-customer has hit a current self-hosted plan quota.
-The app-shell monitored-system warning entry point must also use that same
-shape: urgent legacy-continuity states review the usage-owned ledger, not the
-plan-selection surface, and the CTA must not revive "View capacity" copy as an
-upsell-shaped monitored-system prompt.
+Pulse is reconciling explicit carry-forward support context outside normal
+self-hosted monitoring. Normal self-hosted plans must not keep a `Monitoring
+capacity` section alive just to restate that monitoring is included without a
+monitored-system volume gate; counted-unit explanation plus current usage
+inspection belongs to the ledger/disclosure path, not to plan-capacity UI.
+The app shell must not expose a monitored-system warning entry point for
+self-hosted plan volume. Support review states can link to the usage-owned
+ledger, but the CTA must not revive "View capacity" copy as an upsell-shaped
+monitored-system prompt.
 Community overflow/setup-slot messaging must still explain the current
 top-level monitored systems plus any temporary setup slot in customer terms
 rather than compressing the contract into slash-style quota strings that imply
@@ -1987,10 +1923,10 @@ health, config, ingestion, or funnel reads. Maintainer commercial reporting
 must live outside the self-hosted customer product runtime instead of reusing
 the Pulse settings or diagnostics surface.
 Stripe checkout and subscription webhook persistence now also follows the
-canonical Cloud/MSP limit rule: when paid state is granted, billing-state
-writes must persist authoritative `limits.max_monitored_systems` derived from canonical
-plan resolution, and when paid state is revoked they must clear those stored
-limits instead of preserving stale paid capacity.
+retired monitored-system-volume rule: when paid state is granted, billing-state
+writes must persist canonical plan and feature state while scrubbing retired
+`max_monitored_systems` limits, and when paid state is revoked they must not
+preserve stale paid capacity.
 Grandfathered recurring v5/v1 continuity is the explicit stored-state
 exception inside that same boundary. `pkg/licensing/billing_state_normalization.go`
 must persist the canonical billing baseline for recognized grandfathered
@@ -1999,12 +1935,13 @@ so webhook persistence, hosted billing state, and admin inspection stay
 deterministic instead of leaking an internal `0 == unlimited` convention into
 saved billing records. `pkg/licensing/database_source.go`,
 `pkg/licensing/models.go`, and downstream entitlement evaluation must then
-strip that stored monitored-system cap back out before runtime enforcement, so
-continuous grandfathered recurring customers stay uncapped until cancellation.
-That same monitored-system entitlement boundary also owns the shared operator
-warning copy: the limit banner and migration guidance must present the counted
-surface as monitored systems, not drift back into agent-install language while
-describing non-counted legacy/API-connected resources.
+strip that stored monitored-system cap back out before any runtime entitlement
+payload, so continuous grandfathered recurring customers stay uncapped until
+cancellation.
+That same monitored-system entitlement boundary also owns the retired-warning
+copy rule: customer-facing surfaces must not revive the old limit banner,
+migration freeze guidance, or agent-install quota language while describing
+non-counted legacy/API-connected resources.
 That same webhook boundary now also owns request-lifetime decoupling for
 checkout provisioning: long-running `checkout.session.completed` tenant
 provisioning must complete under an explicit background timeout instead of

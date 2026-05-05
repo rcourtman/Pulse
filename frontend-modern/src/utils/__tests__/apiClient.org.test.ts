@@ -69,32 +69,13 @@ describe('apiClient org context', () => {
     expect(headers['X-Pulse-Org-ID']).toBe('tenant-ledger');
   });
 
-  it('preserves hosted org context and preview payloads on monitored-system denials', async () => {
+  it('preserves hosted org context on structured commercial errors', async () => {
     mockFetch.mockResolvedValue(
       new Response(
         JSON.stringify({
           error: 'license_required',
-          message: 'Monitored-system capacity reached (6/5)',
-          feature: 'max_monitored_systems',
-          monitored_system_preview: {
-            current_count: 5,
-            projected_count: 6,
-            additional_count: 1,
-            limit: 5,
-            would_exceed_limit: true,
-            effect: 'creates_new',
-            current_systems: [],
-            projected_systems: [
-              {
-                name: 'backup',
-                type: 'truenas-system',
-                status: 'online',
-                source: 'truenas',
-              },
-            ],
-            current_system: null,
-            projected_system: null,
-          },
+          message: 'Relay access requires a paid feature',
+          feature: 'relay',
         }),
         {
           status: 402,
@@ -107,14 +88,9 @@ describe('apiClient org context', () => {
     await expect(
       apiFetchJSON('/api/truenas/connections', { method: 'POST', body: '{}' }),
     ).rejects.toMatchObject({
-      message: 'Monitored-system capacity reached (6/5)',
+      message: 'Relay access requires a paid feature',
       status: 402,
-      feature: 'max_monitored_systems',
-      monitored_system_preview: {
-        current_count: 5,
-        projected_count: 6,
-        would_exceed_limit: true,
-      },
+      feature: 'relay',
     });
 
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];

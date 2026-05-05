@@ -22,6 +22,7 @@ func (p *staticLicenseProvider) Service(context.Context) *pkglicensing.Service {
 
 func setMaxMonitoredSystemsLicenseForTests(t *testing.T, maxMonitoredSystems int) {
 	t.Helper()
+	_ = maxMonitoredSystems
 
 	testLicenseProviderMu.Lock()
 
@@ -33,11 +34,9 @@ func setMaxMonitoredSystemsLicenseForTests(t *testing.T, maxMonitoredSystems int
 		t.Fatalf("failed to generate test license: %v", err)
 	}
 
-	lic, err := service.Activate(licenseKey)
-	if err != nil {
+	if _, err := service.Activate(licenseKey); err != nil {
 		t.Fatalf("failed to activate test license: %v", err)
 	}
-	lic.Claims.MaxMonitoredSystems = maxMonitoredSystems
 
 	SetLicenseServiceProvider(&staticLicenseProvider{service: service})
 	t.Cleanup(func() {

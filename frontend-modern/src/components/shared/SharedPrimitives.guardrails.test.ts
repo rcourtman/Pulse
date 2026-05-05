@@ -81,8 +81,6 @@ import infrastructureSummaryTableRowSource from '@/components/shared/Infrastruct
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
 import infrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
-import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
-import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?raw';
@@ -115,7 +113,6 @@ import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopov
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
-import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
 import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
@@ -864,105 +861,6 @@ describe('shared primitive guardrails', () => {
     expect(tlsVerificationWarningBannerSource).toContain('controlled lab environments');
     expect(tlsVerificationWarningBannerSource).toContain('Install a trusted certificate');
     expect(tlsVerificationWarningBannerSource).not.toContain('CalloutCard');
-  });
-
-  it('keeps shared fleet limit banner copy on the monitored-system commercial term', () => {
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      '@/utils/monitoredSystemPresentation',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'formatMonitoredSystemLimitSummary',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'formatMonitoredSystemMigrationMessage',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'getMonitoredSystemLimitInstallCollectorsLabel',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Monitored systems:');
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('monitored-system cap');
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Install v6 collectors');
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('v6 Unified Agents:');
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
-      'do not count toward Unified Agents.',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Install v6 Unified Agents');
-  });
-
-  it('keeps monitored system limit warning banner on shell, runtime, and model owners', () => {
-    expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'useMonitoredSystemLimitWarningBannerState',
-    );
-    expect(monitoredSystemLimitWarningBannerSource).toContain('UpgradeLink');
-    expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_LABEL',
-    );
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadRuntimeCapabilities');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('trackUpgradeMetricEvent');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('legacyConnections()');
-
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'export function useMonitoredSystemLimitWarningBannerState',
-    );
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('createEffect');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'getRuntimeMonitoredSystemCapacity',
-    );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('isHostedModeEnabled');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'presentationPolicyHidesCommercialSurfaces',
-    );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'presentationPolicyHidesUpgradePrompts',
-    );
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('trackUpgradeMetricEvent');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
-      'scopeSelfHostedBillingDestination',
-    );
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
-      'SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT',
-    );
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
-      'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
-    );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('reviewPolicyDestination');
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain("fetch('/api/health'");
-
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'getMonitoredSystemBannerToneClass',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
-      'getMonitoredSystemLimitUpgradeLabel',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'getMonitoredSystemLimitInstallCollectorsLabel',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'type MonitoredSystemCapacityStatus',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'isMonitoredSystemLimitUsageAvailable',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'formatMonitoredSystemLimitSummary',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
-      'current_available !== false',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('current / limit');
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('0 remaining');
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'SELF_HOSTED_PRO_BILLING_USAGE_HREF',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
-      'SELF_HOSTED_PRO_BILLING_PLAN_HREF',
-    );
   });
 
   it('keeps shared tag badges in the shared primitive boundary', () => {

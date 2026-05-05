@@ -41,13 +41,12 @@ func newTestDeployHandlers(t *testing.T, nodes []models.Node, hosts []models.Hos
 	}
 
 	execServer := agentexec.NewServer(func(string, string, string) bool { return true })
-	reservation := deploy.NewReservationManager()
 
 	cfg := &config.Config{
 		DataPath: t.TempDir(),
 	}
 
-	return NewDeployHandlers(store, monitor, execServer, reservation, func(_ *http.Request) string {
+	return NewDeployHandlers(store, monitor, execServer, func(_ *http.Request) string {
 		return "http://10.0.0.1:7655"
 	}, cfg, nil)
 }
@@ -1055,9 +1054,6 @@ func TestHandleCreateJob_Success(t *testing.T) {
 	if len(resp.SkippedTargets) != 0 {
 		t.Fatalf("expected 0 skipped targets, got %d", len(resp.SkippedTargets))
 	}
-	if resp.ReservedLicenseSlots != 2 {
-		t.Fatalf("expected 2 reserved workspace capacity slots, got %d", resp.ReservedLicenseSlots)
-	}
 	if resp.EventsURL == "" {
 		t.Fatal("expected non-empty eventsUrl")
 	}
@@ -1179,7 +1175,7 @@ func TestHandleCreateJob_TargetsNotReady(t *testing.T) {
 	}
 }
 
-func TestHandleCreateJob_TruncatesTargetsToAvailableLicenseSlots(t *testing.T) {
+func TestHandleCreateJob_AcceptsAllTargetsWithMonitoredSystemCapsRetired(t *testing.T) {
 	setMaxMonitoredSystemsLicenseForTests(t, 4)
 
 	nodes := []models.Node{
@@ -1238,20 +1234,14 @@ func TestHandleCreateJob_TruncatesTargetsToAvailableLicenseSlots(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp.AcceptedTargets) != 1 {
-		t.Fatalf("expected 1 accepted target, got %d", len(resp.AcceptedTargets))
+	if len(resp.AcceptedTargets) != 2 {
+		t.Fatalf("expected 2 accepted targets with monitored-system caps retired, got %d", len(resp.AcceptedTargets))
 	}
-	if resp.AcceptedTargets[0] != "node_pve-b" {
-		t.Fatalf("expected deterministic accepted node_pve-b, got %q", resp.AcceptedTargets[0])
+	if resp.AcceptedTargets[0] != "node_pve-b" || resp.AcceptedTargets[1] != "node_pve-c" {
+		t.Fatalf("unexpected accepted targets: %+v", resp.AcceptedTargets)
 	}
-	if resp.ReservedLicenseSlots != 1 {
-		t.Fatalf("expected 1 reserved workspace capacity slot, got %d", resp.ReservedLicenseSlots)
-	}
-	if len(resp.SkippedTargets) != 1 {
-		t.Fatalf("expected 1 skipped target, got %d", len(resp.SkippedTargets))
-	}
-	if resp.SkippedTargets[0].NodeID != "node_pve-c" || resp.SkippedTargets[0].Reason != "skipped_license" {
-		t.Fatalf("unexpected skipped target: %+v", resp.SkippedTargets[0])
+	if len(resp.SkippedTargets) != 0 {
+		t.Fatalf("expected no skipped targets with monitored-system caps retired, got %+v", resp.SkippedTargets)
 	}
 }
 
@@ -1424,7 +1414,7 @@ func TestHandleRetryJob_Success(t *testing.T) {
 	}
 }
 
-func TestHandleRetryJob_BlocksWhenNoLicenseSlotsAvailable(t *testing.T) {
+func TestHandleRetryJob_AllowsRetryWithMonitoredSystemCapsRetired(t *testing.T) {
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	h := newTestDeployHandlers(t, nil, []models.Host{{ID: "host-existing", Hostname: "existing"}})
@@ -1455,19 +1445,16 @@ func TestHandleRetryJob_BlocksWhenNoLicenseSlotsAvailable(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.HandleRetryJob(rec, req)
 
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "license_limit") {
-		t.Fatalf("expected license_limit response, got %s", rec.Body.String())
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	targets, err := h.store.GetTargetsForJob(ctx, "dep_retry_license")
 	if err != nil {
 		t.Fatalf("get targets: %v", err)
 	}
-	if len(targets) != 1 || targets[0].Status != deploy.TargetFailedRetryable {
-		t.Fatalf("expected retry target to remain failed_retryable, got %+v", targets)
+	if len(targets) != 1 || targets[0].Status != deploy.TargetPending {
+		t.Fatalf("expected retry target to be queued, got %+v", targets)
 	}
 }
 
@@ -1629,9 +1616,6 @@ func TestProcessInstallProgress_AgentDisconnect(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create job: %v", err)
 	}
-
-	// Reserve so we can verify release.
-	_ = h.reservation.Reserve("dep_disc", "default", 1, 1*time.Hour)
 
 	// Close the channel immediately to simulate disconnect.
 	ch := make(chan agentexec.DeployProgressPayload, 1)

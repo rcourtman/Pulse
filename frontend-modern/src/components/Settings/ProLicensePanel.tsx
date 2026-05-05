@@ -1,13 +1,11 @@
 import { Show, type Component } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
-import { MonitoredSystemLedgerPanel } from './MonitoredSystemLedgerPanel';
 import { CommercialBillingShell, CommercialSection } from './CommercialBillingSections';
 import { ProLicensePlanSection } from './ProLicensePlanSection';
 import { SelfHostedCommercialRecoverySection } from './SelfHostedCommercialRecoverySection';
 import { useProLicensePanelState } from './useProLicensePanelState';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import { Subtabs } from '@/components/shared/Subtabs';
-import { getMonitoredSystemBriefSummary } from '@/utils/monitoredSystemPresentation';
 import {
   presentationPolicyHidesCommercialSurfaces,
   sessionPresentationPolicyResolved,
@@ -15,7 +13,6 @@ import {
 import {
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID,
-  SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
 } from '@/utils/pricingHandoff';
 
 const ProLicensePolicyLoadingPanel: Component = () => (
@@ -78,14 +75,6 @@ const ProLicensePanelContent: Component = () => {
                 value: 'plan',
                 label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planTabLabel,
               },
-              ...(state.showUsageSection()
-                ? [
-                    {
-                      value: 'usage',
-                      label: SELF_HOSTED_PRO_BILLING_PRESENTATION.usageTabLabel,
-                    },
-                  ]
-                : []),
             ]}
           />
 
@@ -106,8 +95,6 @@ const ProLicensePanelContent: Component = () => {
                   grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
                   hasLicenseDetails={state.hasLicenseDetails()}
                   loading={state.loading()}
-                  monitoredSystemCapacitySection={state.monitoredSystemCapacitySection()}
-                  monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}
                   onReload={() => void state.loadPanelData()}
                   planSelectionPrompt={state.planSelectionPrompt()}
                   planComparisonSummary={state.planComparisonSummary()}
@@ -129,22 +116,6 @@ const ProLicensePanelContent: Component = () => {
                   onClear={state.handleClear}
                 />
               </div>
-            </CommercialSection>
-          </Show>
-
-          <Show when={state.showUsageSection() && state.activeSection() === 'usage'}>
-            <CommercialSection
-              id={SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}
-              title={SELF_HOSTED_PRO_BILLING_PRESENTATION.usageSectionTitle}
-              description={getMonitoredSystemBriefSummary()}
-            >
-              <MonitoredSystemLedgerPanel
-                embedded
-                monitoredSystemCapacity={state.monitoredSystemCapacity()}
-                monitoredSystemContinuity={state.displayableMonitoredSystemContinuity()}
-                monitoredSystemLimit={state.monitoredSystemLimitStatus() ?? null}
-                showCountingRulesByDefault={state.showCountingRulesByDefault()}
-              />
             </CommercialSection>
           </Show>
         </div>

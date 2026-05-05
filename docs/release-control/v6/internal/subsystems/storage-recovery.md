@@ -258,20 +258,13 @@ bypass the API fail-closed execution gate.
    must stay API/security and Relay-entitlement owned, require the paid `relay`
    feature before minting, and must not be reused as a recovery session,
    export/import bypass, or storage-local credential transport.
-   That same adjacent API boundary also owns monitored-system admission preview
+   That same adjacent API boundary also owns monitored-system impact preview
    transport for provider-backed setup context. `/api/truenas/connections/preview`,
    `/api/truenas/connections/{id}/preview`, `/api/vmware/connections/preview`,
    and `/api/vmware/connections/{id}/preview` may surface canonical
-   current/projected grouped systems plus enforced limit verdicts for setup and
-   support clarity, but storage and recovery must not reinterpret those routes
-   as recovery-local onboarding or restore APIs.
-   That same adjacent API boundary also owns any private monitored-system
-   policy hook wired through `pkg/server/server.go`. Storage- or
-   recovery-adjacent writes may observe the shared verdict returned by
-   `ResolveMonitoredSystemAdmissionPolicy`, but they must not inject
-   provider-specific policy, infer a different over-cap rule, or bypass the
-   canonical monitored-system preview/resolver contract when the private hook
-   is absent.
+   current/projected grouped systems for setup and support clarity, but
+   storage and recovery must not reinterpret those routes as recovery-local
+   onboarding, restore APIs, or commercial limit verdicts.
    That same adjacent monitored-system boundary also depends on restart-safe
    standalone host continuity. Storage- and recovery-adjacent setup or support
    flows may observe a returning host after server restart, but they must not
@@ -560,19 +553,11 @@ bypass the API fail-closed execution gate.
     query state as a recovery-local contract once uncapped self-hosted
     monitoring is canonical.
     That same adjacent commercial
-    boundary now also owns migrated-v5 monitored-system grandfathering:
-    storage and recovery may read the resulting entitlement limits as context,
-    but they must not infer a second capacity floor from protected inventory,
-    backup counts, or recovery-point presence when commercial continuity is
-    already defined by the canonical monitored-system resolver and activation
-    persistence. They also must not rely on billing-status reads to finalize a
-    pending grandfather floor, use those reads to restart continuity
-    reconciliation, or collapse continuity-verification payloads into a real
-    `0 / limit` monitored-system reading.
-    When the commercial reconciler captures the floor, storage and recovery
-    must treat the resulting activation-state callback as commercial ownership
-    cleanup only, not as protected-inventory proof or recovery entitlement
-    state.
+    boundary treats migrated-v5 monitored-system grandfathering as retired
+    compatibility metadata: storage and recovery may tolerate resulting legacy
+    entitlement fields while loading old records, but they must not infer a
+    capacity floor from protected inventory, backup counts, recovery-point
+    presence, billing-status reads, or continuity-verification payloads.
     That same adjacent commercial boundary also owns authenticated
     install-version attribution: storage and recovery may read the resulting
     licensed build context as commercial metadata, but they must not cache a
@@ -881,12 +866,12 @@ local-only upgrade-event toggles, telemetry preview payloads, or normalized
 release-classification fields as storage freshness, recovery evidence, or
 operator-facing protection state.
 That same shared `internal/api/` dependency now also expects replacement-aware
-monitored-system admission and fail-closed usage availability. Storage- or
+monitored-system grouping and fail-closed preview availability. Storage- or
 recovery-adjacent setup, deploy, and API-backed update helpers may reuse the
-canonical monitored-system capacity boundary, but they must preserve remaining
-grouped sources on a counted host, must not reinterpret unavailable usage as
-an empty estate, and must not surface that adjacent boundary as license-slot or
-upgrade-plan copy inside storage or recovery-adjacent flows.
+canonical monitored-system grouping boundary, but they must preserve remaining
+grouped sources on a monitored host, must not reinterpret unavailable usage as
+an empty estate, and must not surface that adjacent boundary as license-slot,
+capacity, or upgrade-plan copy inside storage or recovery-adjacent flows.
 Configured Proxmox, PBS, and PMG node replacements on that adjacent API
 boundary must identify the replaced source-owned surface through the shared
 monitored-system replacement selector, not storage- or recovery-local matching
@@ -925,11 +910,11 @@ reads for capability and history-retention truth, but
 licensed identity, upgrade prompts, trial urgency or eligibility reasons,
 checkout handoff state, or observed usage counts to remain present once the
 public-demo contract is applied.
-That same runtime-safe exception now also redacts monitored-system capacity
-posture. Storage/recovery surfaces may keep demo-safe capability and retention
-truth from `/api/license/runtime-capabilities`, but they must not expect
-`monitored_system_capacity`, admission-freeze copy, or observed plan overage
-to survive the public-demo API boundary.
+That same runtime-safe exception now also keeps monitored-system capacity
+posture absent. Storage/recovery surfaces may keep demo-safe capability and
+retention truth from `/api/license/runtime-capabilities`, but they must not
+expect `monitored_system_capacity`, admission-freeze copy, or observed plan
+overage to exist.
 Storage detail surfaces with page-local history selectors must also treat that
 runtime retention truth as the selector contract: pool and disk detail ranges
 must filter and clamp through the storage-owned range access helper so ordinary
@@ -2072,9 +2057,8 @@ commercial reporting or fallback state.
 That same shared `internal/api/` dependency now also assumes adjacent
 commercial helper surfaces speak in monitored-system terms: recovery- or
 storage-adjacent API wiring may consume the canonical monitored-system ledger
-and monitored-system cap helpers, but it must not revive deleted agent-era
-helper names or imply that API-backed infrastructure sits outside the counted
-system model.
+helpers, but it must not revive deleted agent-era helper names, cap helpers,
+or imply that API-backed infrastructure sits outside the counted system model.
 That same shared `internal/api/` dependency now also assumes monitored-system
 ledger status details stay canonical and source-aware: storage- or recovery-
 adjacent consumers may read the ledger’s nested status explanation, but they
@@ -2102,8 +2086,8 @@ as agent or sibling API ownership, rather than briefly freeing a slot or
 double-counting the same monitored system.
 When storage- or recovery-adjacent settings or support flows need to explain
 that result, they must rely on the shared monitored-system ledger preview
-contract for current/projected grouped systems and enforced limit verdicts
-instead of reconstructing preview copy from page-local recovery inventory or
+contract for current/projected grouped systems instead of reconstructing
+preview copy, limit verdicts, or cap copy from page-local recovery inventory or
 provider-local connection details.
 That same adjacent preview contract also treats disabled provider connections
 as non-counting candidates. Storage- or recovery-adjacent flows may use the
@@ -2115,8 +2099,9 @@ readiness. Storage- or recovery-adjacent transport flows may not interpret the
 first store-backed monitor view as commercial truth when provider-owned
 supplemental platforms such as TrueNAS or VMware are still between initial
 connection wiring and the first rebuilt canonical store; until that baseline
-settles, adjacent surfaces must preserve `current_available=false` and avoid
-sealing any migration or admission decision against a transient undercount.
+settles, adjacent surfaces must use the canonical ledger/preview unavailable
+state and avoid sealing any migration or support decision against a transient
+undercount.
 That same shared `internal/api/` dependency also assumes session-carried OIDC
 refresh tokens stay fail-closed at rest: `session_store.go` may only persist
 or recover those tokens through encrypted-at-rest session payloads, and any
@@ -2702,9 +2687,9 @@ platform-connections surface, but storage and recovery must treat that data as
 setup/runtime context only, not as proof that VMware has joined the canonical
 recovery artifact or restore plane.
 The same rule applies to `/api/truenas/connections*/preview` and
-`/api/vmware/connections*/preview`: monitored-system admission previews may
-surface current/projected grouped systems and enforced limit verdicts for setup
-and support clarity, but they do not imply recovery-local onboarding, recovery
+`/api/vmware/connections*/preview`: monitored-system previews may surface
+current/projected grouped systems for setup and support clarity, but they do
+not imply commercial limit verdicts, recovery-local onboarding, recovery
 artifact ownership, or restore support.
 That same bounded phase-1 slice now also includes the shared unified-resource
 adapter floor. `frontend-modern/src/hooks/useUnifiedResources.ts`,
@@ -2774,8 +2759,8 @@ That same adjacent platform-connections boundary now also assumes direct
 TrueNAS and VMware connection writes fail closed while canonical
 monitored-system usage is unavailable. Storage and recovery may depend on the
 resulting provider setup state only after `internal/api/truenas_handlers.go`,
-`internal/api/vmware_handlers.go`, and the shared monitored-system admission
-helpers have returned a safe capacity verdict; VMware write admission must not
+`internal/api/vmware_handlers.go`, and the shared monitored-system grouping
+helpers have returned a safe preview verdict; VMware write handling must not
 collect external vCenter inventory before that canonical usage state is safe.
 Storage and recovery browser helpers now also keep one transport-tolerant
 normalization edge. Recovery display models must accept legacy subject-label

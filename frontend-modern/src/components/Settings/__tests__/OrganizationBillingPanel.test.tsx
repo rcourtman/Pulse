@@ -79,7 +79,6 @@ describe('OrganizationBillingPanel', () => {
       is_lifetime: false,
       days_remaining: 30,
       features: [],
-      max_monitored_systems: 12,
       max_guests: 5,
       email: 'owner@example.com',
       expires_at: '2026-04-01T00:00:00Z',
@@ -92,18 +91,18 @@ describe('OrganizationBillingPanel', () => {
     cleanup();
   });
 
-  it('renders organization usage from the canonical max_monitored_systems limit only', async () => {
+  it('renders monitored-system usage as not metered', async () => {
     render(() => <OrganizationBillingPanel nodeUsage={5} guestUsage={2} />);
 
     await waitFor(() => {
-      expect(screen.getByText('5 / 12')).toBeInTheDocument();
+      expect(screen.getByText('5 / Not metered')).toBeInTheDocument();
     });
 
     expect(getStatusMock).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Plan')).toBeInTheDocument();
-    expect(screen.getByText('Usage')).toBeInTheDocument();
+    expect(screen.getAllByText('Usage')).toHaveLength(2);
     expect(screen.getByText('Cloud')).toBeInTheDocument();
-    expect(screen.getByText('5 / 12')).toBeInTheDocument();
+    expect(screen.getByText('5 / Not metered')).toBeInTheDocument();
     expect(screen.getByText('2 / 5')).toBeInTheDocument();
     expect(errorMock).not.toHaveBeenCalled();
   });

@@ -741,22 +741,21 @@ func TestMSPLifecycle_TenantIsolation(t *testing.T) {
 
 // TestMSPLifecycle_PlanVersionFromAccount verifies that ProvisionWorkspace
 // uses the account's actual Stripe plan version instead of a hardcoded default.
-// MSP Growth accounts should get msp_growth limits (150 monitored systems), not msp_hosted_v1 (50).
+// MSP Growth accounts should keep the msp_growth plan version while monitored-system caps stay retired.
 func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
 	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
 
 	tests := []struct {
-		name                 string
-		planVersion          string
-		wantMonitoredSystems int64
+		name        string
+		planVersion string
 	}{
-		{"msp_starter", "msp_starter", 50},
-		{"msp_growth", "msp_growth", 150},
-		{"msp_scale", "msp_scale", 400},
-		{"legacy_msp_hosted_v1", "msp_hosted_v1", 50},
-		{"canonicalized_cloud_alias", "cloud_v1", 10},
+		{"msp_starter", "msp_starter"},
+		{"msp_growth", "msp_growth"},
+		{"msp_scale", "msp_scale"},
+		{"legacy_msp_hosted_v1", "msp_hosted_v1"},
+		{"canonicalized_cloud_alias", "cloud_v1"},
 	}
 
 	for _, tc := range tests {
@@ -800,14 +799,7 @@ func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 			if bs.PlanVersion != wantPlanVersion {
 				t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, wantPlanVersion)
 			}
-			if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != tc.wantMonitoredSystems {
-				t.Fatalf(
-					"billing.Limits[%s] = %d, want %d",
-					pkglicensing.MaxMonitoredSystemsLicenseGateKey,
-					bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey],
-					tc.wantMonitoredSystems,
-				)
-			}
+			assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 		})
 	}
 }
@@ -851,13 +843,7 @@ func TestMSPLifecycle_PlanVersionFallback(t *testing.T) {
 	if bs.PlanVersion != "msp_starter" {
 		t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, "msp_starter")
 	}
-	if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != 50 {
-		t.Fatalf(
-			"billing.Limits[%s] = %d, want 50 (msp_starter default)",
-			pkglicensing.MaxMonitoredSystemsLicenseGateKey,
-			bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey],
-		)
-	}
+	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 }
 
 // ─── Test helpers ──────────────────────────────────────────────────────────

@@ -3,7 +3,6 @@ package licensing
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -12,23 +11,13 @@ import (
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 )
 
+// MaxMonitoredSystemsLicenseGateKey is retained only to identify and scrub
+// retired v5/v6 monitored-system volume-limit metadata from old licenses,
+// billing records, purchase-return state, and entitlement leases.
 const MaxMonitoredSystemsLicenseGateKey = "max_monitored_systems"
 
-func ExceedsMonitoredSystemLimit(current, additions, limit int) bool {
-	if limit <= 0 || additions <= 0 {
-		return false
-	}
-	return current+additions > limit
-}
-
-func MonitoredSystemLimitExceededMessage(current, limit int) string {
-	return fmt.Sprintf("Monitored-system capacity reached (%d/%d). Remove a monitored system before adding more.", current, limit)
-}
-
 // InstalledUnifiedAgentCount returns the number of installed Pulse Unified
-// Agents. This is inventory-only metadata and is not the commercial counted
-// unit; monitored-system enforcement is derived from canonical unified
-// resources instead.
+// Agents. This is inventory-only metadata and is not a commercial counted unit.
 func InstalledUnifiedAgentCount(state models.StateSnapshot) int {
 	return len(state.Hosts)
 }
@@ -50,30 +39,11 @@ func NormalizeMonitoredSystemLimits(limits map[string]int64) map[string]int64 {
 		return nil
 	}
 	normalized := cloneInt64Map(limits)
-	if value, ok := MonitoredSystemLimitValue(normalized); ok {
-		normalized[MaxMonitoredSystemsLicenseGateKey] = value
-	}
+	delete(normalized, MaxMonitoredSystemsLicenseGateKey)
 	for _, key := range legacyV5MonitoredSystemLimitAliasKeys {
 		delete(normalized, key)
 	}
 	return normalized
-}
-
-func MonitoredSystemLimitValue(limits map[string]int64) (int64, bool) {
-	if limits == nil {
-		return 0, false
-	}
-	for _, key := range []string{MaxMonitoredSystemsLicenseGateKey} {
-		if value, ok := limits[key]; ok {
-			return value, true
-		}
-	}
-	for _, key := range legacyV5MonitoredSystemLimitAliasKeys {
-		if value, ok := limits[key]; ok {
-			return value, true
-		}
-	}
-	return 0, false
 }
 
 func HostReportTargetsExistingHost(

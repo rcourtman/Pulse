@@ -465,17 +465,16 @@ func TestRefreshGrantOnce_PersistsState(t *testing.T) {
 	}
 }
 
-func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
+func TestRefreshGrantOnce_PreservesLegacyMigrationContinuity(t *testing.T) {
 	setupTestPublicKey(t)
 
 	newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_refreshed_floor",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID: "lic_refreshed_floor",
+		Tier:      "pro",
+		PlanKey:   "legacy_migration_fallback",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -501,13 +500,12 @@ func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
 	}
 
 	initialGrantJWT := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_initial_floor",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID: "lic_initial_floor",
+		Tier:      "pro",
+		PlanKey:   "legacy_migration_fallback",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 	})
 
 	svc := NewService()
@@ -522,9 +520,7 @@ func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
 		GrantJTI:            "grant_old_floor",
 		InstanceFingerprint: "fp-refresh-floor",
 		Continuity: ActivationContinuity{
-			LegacyMigration:                         true,
-			GrandfatheredMaxMonitoredSystems:        23,
-			GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
+			LegacyMigration: true,
 		},
 	}
 	if err := svc.RestoreActivation(state); err != nil {
@@ -536,10 +532,8 @@ func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
 	}
 
 	status := svc.Status()
-	// Self-hosted Pro is uncapped, so status reports 0 regardless of the
-	// captured continuity floor. The floor is still persisted for audit.
-	if status.MaxMonitoredSystems != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 (uncapped self-hosted)", status.MaxMonitoredSystems)
+	if status == nil || !status.Valid {
+		t.Fatalf("expected valid status after refresh, got %+v", status)
 	}
 
 	loaded, err := p.LoadActivationState()
@@ -549,8 +543,8 @@ func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
 	if loaded == nil {
 		t.Fatal("expected persisted activation state")
 	}
-	if loaded.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
-		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", loaded.Continuity.GrandfatheredMaxMonitoredSystems)
+	if !loaded.Continuity.LegacyMigration {
+		t.Fatalf("LegacyMigration=%v, want true", loaded.Continuity.LegacyMigration)
 	}
 }
 
@@ -612,16 +606,13 @@ func TestRefreshGrantOnce_MissingCloudPlanFailsClosed(t *testing.T) {
 	if got := lic.Claims.EntitlementPlanVersion(); got != "" {
 		t.Fatalf("EntitlementPlanVersion()=%q, want empty", got)
 	}
-	if got := lic.Claims.EffectiveLimits()["max_monitored_systems"]; got != int64(UnknownPlanDefaultMonitoredSystemLimit) {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d, want %d", got, UnknownPlanDefaultMonitoredSystemLimit)
+	if _, ok := lic.Claims.EffectiveLimits()["max_monitored_systems"]; ok {
+		t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", lic.Claims.EffectiveLimits())
 	}
 
 	status := svc.Status()
 	if status.PlanVersion != "" {
 		t.Fatalf("status.PlanVersion=%q, want empty", status.PlanVersion)
-	}
-	if status.MaxMonitoredSystems != UnknownPlanDefaultMonitoredSystemLimit {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, UnknownPlanDefaultMonitoredSystemLimit)
 	}
 }
 

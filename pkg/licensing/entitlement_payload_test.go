@@ -17,13 +17,21 @@ func containsString(values []string, want string) bool {
 	return false
 }
 
-func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
+func hasLimit(payload EntitlementPayload, key string) bool {
+	for _, limit := range payload.Limits {
+		if limit.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBuildEntitlementPayload_ActiveLicenseOmitsRetiredMonitoredSystemLimit(t *testing.T) {
 	status := &LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), TierFeatures[TierPro]...),
-		MaxMonitoredSystems: 50,
+		Valid:       true,
+		Tier:        TierCloud,
+		PlanVersion: "cloud_starter",
+		Features:    append([]string(nil), TierFeatures[TierPro]...),
 	}
 
 	payload := BuildEntitlementPayload(status, "")
@@ -34,19 +42,8 @@ func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 	if !reflect.DeepEqual(payload.Capabilities, status.Features) {
 		t.Fatalf("expected capabilities to match status features")
 	}
-
-	var agentLimit *LimitStatus
-	for i := range payload.Limits {
-		if payload.Limits[i].Key == MaxMonitoredSystemsLicenseGateKey {
-			agentLimit = &payload.Limits[i]
-			break
-		}
-	}
-	if agentLimit == nil {
-		t.Fatalf("expected max_monitored_systems limit in payload")
-	}
-	if agentLimit.Limit != 50 {
-		t.Fatalf("expected max_monitored_systems limit 50, got %d", agentLimit.Limit)
+	if hasLimit(payload, MaxMonitoredSystemsLicenseGateKey) {
+		t.Fatalf("payload exposed retired monitored-system limit: %+v", payload.Limits)
 	}
 	if len(payload.UpgradeReasons) != 0 {
 		t.Fatalf("expected no upgrade reasons for pro tier, got %d", len(payload.UpgradeReasons))
@@ -102,12 +99,11 @@ func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
 
 func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	status := &LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), TierFeatures[TierPro]...),
-		MaxMonitoredSystems: 50,
-		MaxGuests:           100,
+		Valid:       true,
+		Tier:        TierCloud,
+		PlanVersion: "cloud_starter",
+		Features:    append([]string(nil), TierFeatures[TierPro]...),
+		MaxGuests:   100,
 	}
 
 	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
@@ -121,28 +117,17 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 		},
 	}, nil)
 
-	var agentLimit *LimitStatus
+	if hasLimit(payload, MaxMonitoredSystemsLicenseGateKey) {
+		t.Fatalf("payload exposed retired monitored-system limit: %+v", payload.Limits)
+	}
 	var guestLimit *LimitStatus
 	for i := range payload.Limits {
-		if payload.Limits[i].Key == MaxMonitoredSystemsLicenseGateKey {
-			agentLimit = &payload.Limits[i]
-		}
 		if payload.Limits[i].Key == "max_guests" {
 			guestLimit = &payload.Limits[i]
 		}
 	}
-
-	if agentLimit == nil {
-		t.Fatalf("expected max_monitored_systems limit")
-	}
 	if guestLimit == nil {
 		t.Fatalf("expected max_guests limit")
-	}
-	if agentLimit.Current != 12 {
-		t.Fatalf("expected agent current 12, got %d", agentLimit.Current)
-	}
-	if agentLimit.CurrentAvailable == nil || !*agentLimit.CurrentAvailable {
-		t.Fatalf("expected agent current availability to be true, got %+v", agentLimit.CurrentAvailable)
 	}
 	if guestLimit.Current != 44 {
 		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
@@ -160,16 +145,7 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 		)
 	}
 	if payload.HasMigrationGap {
-		t.Fatal("expected has_migration_gap=false under monitored-system counting")
-	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected monitored-system capacity posture")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "within_limit" {
-		t.Fatalf("Mode=%q, want within_limit", payload.MonitoredSystemCapacity.Mode)
-	}
-	if payload.MonitoredSystemCapacity.AvailableSlots != 38 {
-		t.Fatalf("AvailableSlots=%d, want 38", payload.MonitoredSystemCapacity.AvailableSlots)
+		t.Fatal("expected has_migration_gap=false")
 	}
 }
 
@@ -195,120 +171,6 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 	}
 	if *payload.TrialDaysRemaining != 2 {
 		t.Fatalf("expected trial_days_remaining 2, got %d", *payload.TrialDaysRemaining)
-	}
-}
-
-func TestBuildEntitlementPayloadWithUsage_RequiresCanonicalMonitoredSystemAvailability(t *testing.T) {
-	status := &LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), TierFeatures[TierPro]...),
-		MaxMonitoredSystems: 50,
-	}
-
-	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
-		MonitoredSystems:                  12,
-		Nodes:                             99,
-		MonitoredSystemsUnavailableReason: "canonical_usage_unavailable",
-	}, nil)
-
-	if len(payload.Limits) != 1 {
-		t.Fatalf("expected one limit, got %d", len(payload.Limits))
-	}
-	if payload.Limits[0].Current != 0 {
-		t.Fatalf("expected unavailable canonical usage to remain 0, got %d", payload.Limits[0].Current)
-	}
-	if payload.Limits[0].CurrentAvailable == nil || *payload.Limits[0].CurrentAvailable {
-		t.Fatalf("expected canonical usage availability to be false, got %+v", payload.Limits[0].CurrentAvailable)
-	}
-	if payload.Limits[0].CurrentUnavailableReason != "canonical_usage_unavailable" {
-		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.Limits[0].CurrentUnavailableReason, "canonical_usage_unavailable")
-	}
-}
-
-func TestBuildEntitlementPayloadWithUsage_MonitoredSystemUsageUnavailable(t *testing.T) {
-	status := &LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), TierFeatures[TierPro]...),
-		MaxMonitoredSystems: 50,
-	}
-
-	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
-		MonitoredSystemsUnavailableReason: "supplemental_inventory_unsettled",
-	}, nil)
-	if len(payload.Limits) != 1 {
-		t.Fatalf("expected one limit, got %d", len(payload.Limits))
-	}
-	if payload.Limits[0].Current != 0 {
-		t.Fatalf("expected unresolved current to fall back to 0, got %d", payload.Limits[0].Current)
-	}
-	if payload.Limits[0].CurrentAvailable == nil || *payload.Limits[0].CurrentAvailable {
-		t.Fatalf("expected unresolved current availability to be false, got %+v", payload.Limits[0].CurrentAvailable)
-	}
-	if payload.Limits[0].CurrentUnavailableReason != "supplemental_inventory_unsettled" {
-		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.Limits[0].CurrentUnavailableReason, "supplemental_inventory_unsettled")
-	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected monitored-system capacity posture")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "usage_unavailable" {
-		t.Fatalf("Mode=%q, want usage_unavailable", payload.MonitoredSystemCapacity.Mode)
-	}
-	if payload.MonitoredSystemCapacity.CurrentAvailable {
-		t.Fatalf("CurrentAvailable=%v, want false", payload.MonitoredSystemCapacity.CurrentAvailable)
-	}
-}
-
-func TestBuildEntitlementPayloadWithUsage_CopiesMonitoredSystemContinuity(t *testing.T) {
-	status := &LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), TierFeatures[TierPro]...),
-		MaxMonitoredSystems: 23,
-		MonitoredSystemContinuity: &MonitoredSystemContinuityStatus{
-			PlanLimit:          10,
-			GrandfatheredFloor: 23,
-			EffectiveLimit:     23,
-			CapturePending:     false,
-			CapturedAt:         123,
-		},
-	}
-
-	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
-		MonitoredSystems:          23,
-		MonitoredSystemsAvailable: true,
-	}, nil)
-
-	if payload.MonitoredSystemContinuity == nil {
-		t.Fatal("expected monitored-system continuity to be copied")
-	}
-	if payload.MonitoredSystemContinuity.PlanLimit != 10 {
-		t.Fatalf("PlanLimit=%d, want %d", payload.MonitoredSystemContinuity.PlanLimit, 10)
-	}
-	if payload.MonitoredSystemContinuity.EffectiveLimit != 23 {
-		t.Fatalf("EffectiveLimit=%d, want %d", payload.MonitoredSystemContinuity.EffectiveLimit, 23)
-	}
-	if payload.MonitoredSystemContinuity.GrandfatheredFloor != 23 {
-		t.Fatalf("GrandfatheredFloor=%d, want %d", payload.MonitoredSystemContinuity.GrandfatheredFloor, 23)
-	}
-	if payload.MonitoredSystemContinuity.CapturePending {
-		t.Fatal("expected continuity capture to be settled")
-	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected monitored-system capacity posture")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "at_limit_blocking_new" {
-		t.Fatalf("Mode=%q, want at_limit_blocking_new", payload.MonitoredSystemCapacity.Mode)
-	}
-	if payload.MonitoredSystemCapacity.Reason != "limit_reached" {
-		t.Fatalf("Reason=%q, want limit_reached", payload.MonitoredSystemCapacity.Reason)
-	}
-	if !payload.MonitoredSystemCapacity.BlocksNewSystems {
-		t.Fatal("expected at-limit posture to block new monitored systems")
 	}
 }
 
@@ -368,13 +230,12 @@ func TestBuildEntitlementPayload_CopiesStatusDisplayFields(t *testing.T) {
 
 func TestBuildEntitlementPayload_LifetimeOmitsCommercialCaps(t *testing.T) {
 	payload := BuildEntitlementPayloadWithUsage(&LicenseStatus{
-		Valid:               true,
-		Tier:                TierLifetime,
-		PlanVersion:         "v5_lifetime_grandfathered",
-		IsLifetime:          true,
-		Features:            append([]string(nil), TierFeatures[TierLifetime]...),
-		MaxMonitoredSystems: 0,
-		MaxGuests:           0,
+		Valid:       true,
+		Tier:        TierLifetime,
+		PlanVersion: "v5_lifetime_grandfathered",
+		IsLifetime:  true,
+		Features:    append([]string(nil), TierFeatures[TierLifetime]...),
+		MaxGuests:   0,
 	}, string(SubStateActive), EntitlementUsageSnapshot{
 		MonitoredSystems:          15,
 		MonitoredSystemsAvailable: true,
@@ -383,12 +244,6 @@ func TestBuildEntitlementPayload_LifetimeOmitsCommercialCaps(t *testing.T) {
 
 	if len(payload.Limits) != 0 {
 		t.Fatalf("expected lifetime entitlements to omit commercial caps, got %+v", payload.Limits)
-	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected lifetime payload to include monitored-system capacity posture")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "unlimited" {
-		t.Fatalf("Mode=%q, want unlimited", payload.MonitoredSystemCapacity.Mode)
 	}
 }
 
@@ -437,11 +292,10 @@ func TestBuildEntitlementPayload_NilStatus_MaxHistoryDays(t *testing.T) {
 
 func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 	status := &LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), TierFeatures[TierPro]...),
-		MaxMonitoredSystems: 5,
+		Valid:       true,
+		Tier:        TierCloud,
+		PlanVersion: "cloud_starter",
+		Features:    append([]string(nil), TierFeatures[TierPro]...),
 	}
 
 	payload := BuildCommercialPosturePayloadWithUsage(status, "", EntitlementUsageSnapshot{
@@ -466,65 +320,21 @@ func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 		t.Fatalf("expected legacy connection counts to be preserved, got %+v", payload.LegacyConnections)
 	}
 	if payload.HasMigrationGap {
-		t.Fatal("expected has_migration_gap=false under canonical monitored-system counting")
-	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected commercial posture to preserve monitored-system capacity")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "over_limit_frozen" {
-		t.Fatalf("Mode=%q, want over_limit_frozen", payload.MonitoredSystemCapacity.Mode)
-	}
-	if payload.MonitoredSystemCapacity.Overage != 2 {
-		t.Fatalf("Overage=%d, want 2", payload.MonitoredSystemCapacity.Overage)
-	}
-	if payload.MonitoredSystemCapacity.Reason != "preexisting_usage" {
-		t.Fatalf("Reason=%q, want preexisting_usage", payload.MonitoredSystemCapacity.Reason)
-	}
-}
-
-func TestBuildEntitlementPayloadWithUsage_MarksLegacyContinuityCapturePendingOverage(t *testing.T) {
-	payload := BuildEntitlementPayloadWithUsage(&LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), TierFeatures[TierPro]...),
-		MaxMonitoredSystems: 10,
-		MonitoredSystemContinuity: &MonitoredSystemContinuityStatus{
-			PlanLimit:      10,
-			EffectiveLimit: 10,
-			CapturePending: true,
-		},
-	}, string(SubStateActive), EntitlementUsageSnapshot{
-		MonitoredSystems:          23,
-		MonitoredSystemsAvailable: true,
-	}, nil)
-
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected monitored-system capacity posture")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "over_limit_frozen" {
-		t.Fatalf("Mode=%q, want over_limit_frozen", payload.MonitoredSystemCapacity.Mode)
-	}
-	if payload.MonitoredSystemCapacity.Reason != "legacy_migration_capture_pending" {
-		t.Fatalf(
-			"Reason=%q, want legacy_migration_capture_pending",
-			payload.MonitoredSystemCapacity.Reason,
-		)
+		t.Fatal("expected has_migration_gap=false")
 	}
 }
 
 func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFields(t *testing.T) {
 	expiresAt := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
 	payload := BuildEntitlementPayloadWithUsage(&LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Email:               "owner@example.com",
-		ExpiresAt:           &expiresAt,
-		IsLifetime:          false,
-		DaysRemaining:       2,
-		Features:            append([]string(nil), TierFeatures[TierPro]...),
-		MaxMonitoredSystems: 50,
+		Valid:         true,
+		Tier:          TierCloud,
+		PlanVersion:   "cloud_starter",
+		Email:         "owner@example.com",
+		ExpiresAt:     &expiresAt,
+		IsLifetime:    false,
+		DaysRemaining: 2,
+		Features:      append([]string(nil), TierFeatures[TierPro]...),
 	}, string(SubStateActive), EntitlementUsageSnapshot{
 		MonitoredSystems:          12,
 		MonitoredSystemsAvailable: true,
@@ -543,12 +353,6 @@ func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFie
 	}
 	if posture.LegacyConnections.ProxmoxNodes != 1 {
 		t.Fatalf("expected proxmox_nodes=1, got %+v", posture.LegacyConnections)
-	}
-	if posture.MonitoredSystemCapacity == nil {
-		t.Fatal("expected commercial posture to preserve monitored-system capacity posture")
-	}
-	if posture.MonitoredSystemCapacity.Mode != "within_limit" {
-		t.Fatalf("Mode=%q, want within_limit", posture.MonitoredSystemCapacity.Mode)
 	}
 
 	body, err := json.Marshal(posture)
@@ -573,16 +377,15 @@ func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFie
 
 func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	status := &LicenseStatus{
-		Valid:               true,
-		Tier:                TierCloud,
-		PlanVersion:         "cloud_starter",
-		Features:            append([]string(nil), TierFeatures[TierRelay]...),
-		MaxMonitoredSystems: 12,
+		Valid:       true,
+		Tier:        TierCloud,
+		PlanVersion: "cloud_starter",
+		Features:    append([]string(nil), TierFeatures[TierRelay]...),
+		MaxGuests:   12,
 	}
 
 	payload := BuildRuntimeCapabilitiesPayloadWithUsage(status, "", EntitlementUsageSnapshot{
-		MonitoredSystems:          5,
-		MonitoredSystemsAvailable: true,
+		Guests: 5,
 	})
 
 	if !reflect.DeepEqual(payload.Capabilities, status.Features) {
@@ -594,20 +397,11 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	if len(payload.Limits) != 1 {
 		t.Fatalf("expected one runtime limit, got %d", len(payload.Limits))
 	}
-	if payload.Limits[0].Key != MaxMonitoredSystemsLicenseGateKey {
-		t.Fatalf("expected runtime limit key %q, got %q", MaxMonitoredSystemsLicenseGateKey, payload.Limits[0].Key)
+	if payload.Limits[0].Key != "max_guests" {
+		t.Fatalf("expected runtime limit key max_guests, got %q", payload.Limits[0].Key)
 	}
 	if payload.Limits[0].Current != 5 {
 		t.Fatalf("expected runtime current 5, got %d", payload.Limits[0].Current)
-	}
-	if payload.Limits[0].CurrentAvailable == nil || !*payload.Limits[0].CurrentAvailable {
-		t.Fatalf("expected runtime current availability true, got %+v", payload.Limits[0].CurrentAvailable)
-	}
-	if payload.MonitoredSystemCapacity == nil {
-		t.Fatal("expected runtime capabilities to include monitored-system capacity posture")
-	}
-	if payload.MonitoredSystemCapacity.Mode != "within_limit" {
-		t.Fatalf("Mode=%q, want within_limit", payload.MonitoredSystemCapacity.Mode)
 	}
 }
 
@@ -619,7 +413,6 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_StripsInternalOnlyCapabilities
 			FeatureRelay,
 			FeatureDemoFixtures,
 		},
-		MaxMonitoredSystems: 12,
 	}
 
 	payload := BuildRuntimeCapabilitiesPayloadWithUsage(status, "", EntitlementUsageSnapshot{})
@@ -679,7 +472,6 @@ func TestLimitState(t *testing.T) {
 		{name: "enforced_at_limit", current: 100, limit: 100, want: "enforced"},
 		{name: "enforced_above_limit", current: 110, limit: 100, want: "enforced"},
 		{name: "ok_unlimited", current: 50, limit: 0, want: "ok"},
-		// Small-limit behavior: warn at N-1
 		{name: "small_limit_ok", current: 3, limit: 5, want: "ok"},
 		{name: "small_limit_warning_at_n_minus_1", current: 4, limit: 5, want: "warning"},
 		{name: "small_limit_enforced_at_limit", current: 5, limit: 5, want: "enforced"},
@@ -692,7 +484,6 @@ func TestLimitState(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			got := LimitState(tc.current, tc.limit)
 			if got != tc.want {

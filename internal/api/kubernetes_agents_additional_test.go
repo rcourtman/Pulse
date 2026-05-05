@@ -116,9 +116,9 @@ func TestKubernetesAgentHandlers_HandleReport(t *testing.T) {
 	}
 }
 
-// TestKubernetesAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit
-// verifies that a new Kubernetes cluster counts as a monitored system.
-func TestKubernetesAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit(t *testing.T) {
+// TestKubernetesAgentHandlers_HandleReport_AllowsNewMonitoredSystemWithCapsRetired
+// verifies that a new Kubernetes cluster is accepted without monitored-system caps.
+func TestKubernetesAgentHandlers_HandleReport_AllowsNewMonitoredSystemWithCapsRetired(t *testing.T) {
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, monitor := newKubernetesAgentHandlers(t, nil)
@@ -127,7 +127,7 @@ func TestKubernetesAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit(t 
 		t.Fatalf("expected seeded cluster ID")
 	}
 
-	// New cluster should be blocked because it is a distinct monitored system.
+	// New cluster should be accepted because monitored-system caps are retired.
 	newReport := agentsk8s.Report{
 		Agent: agentsk8s.AgentInfo{
 			ID:              "agent-2",
@@ -145,8 +145,8 @@ func TestKubernetesAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit(t 
 	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/kubernetes/report", bytes.NewReader(newBody))
 	newRec := httptest.NewRecorder()
 	handler.HandleReport(newRec, newReq)
-	if newRec.Code != http.StatusPaymentRequired {
-		t.Fatalf("status = %d, want 402: %s", newRec.Code, newRec.Body.String())
+	if newRec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", newRec.Code, newRec.Body.String())
 	}
 }
 

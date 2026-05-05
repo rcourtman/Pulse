@@ -18,53 +18,48 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
-// TestCloudLifecycle_CheckoutToBillingToMonitoredSystemLimits exercises the full Cloud
+// TestCloudLifecycle_CheckoutToBillingWithoutMonitoredSystemVolumeKeys exercises the full Cloud
 // individual tier lifecycle:
 //
 //	checkout.session.completed with plan_version metadata →
 //	tenant provisioning with correct plan version →
-//	billing state written with correct monitored-system limits →
-//	subscription update propagates new tier limits →
+//	billing state written without retired monitored-system volume keys →
+//	subscription update preserves the uncapped runtime contract →
 //	subscription cancellation revokes capabilities.
 //
 // This is an integration test that wires together the registry, provisioner,
 // and entitlements service to verify that Cloud tier assignment is end-to-end
-// correct for Starter (10 monitored systems), Power (30), and Max (75).
-func TestCloudLifecycle_CheckoutToBillingToMonitoredSystemLimits(t *testing.T) {
+// correct for Starter, Power, Max, and Founding plans.
+func TestCloudLifecycle_CheckoutToBillingWithoutMonitoredSystemLimits(t *testing.T) {
 	tests := []struct {
-		name                 string
-		planVersion          string
-		wantMonitoredSystems int64
-		wantCaps             []string // subset of expected capabilities
-		wantSubState         pkglicensing.SubscriptionState
+		name         string
+		planVersion  string
+		wantCaps     []string // subset of expected capabilities
+		wantSubState pkglicensing.SubscriptionState
 	}{
 		{
-			name:                 "cloud_starter_via_metadata",
-			planVersion:          "cloud_starter",
-			wantMonitoredSystems: 10,
-			wantCaps:             []string{"ai_autofix", "relay", "mobile_app", "rbac"},
-			wantSubState:         pkglicensing.SubStateActive,
+			name:         "cloud_starter_via_metadata",
+			planVersion:  "cloud_starter",
+			wantCaps:     []string{"ai_autofix", "relay", "mobile_app", "rbac"},
+			wantSubState: pkglicensing.SubStateActive,
 		},
 		{
-			name:                 "cloud_power_via_metadata",
-			planVersion:          "cloud_power",
-			wantMonitoredSystems: 30,
-			wantCaps:             []string{"ai_autofix", "relay", "mobile_app", "rbac"},
-			wantSubState:         pkglicensing.SubStateActive,
+			name:         "cloud_power_via_metadata",
+			planVersion:  "cloud_power",
+			wantCaps:     []string{"ai_autofix", "relay", "mobile_app", "rbac"},
+			wantSubState: pkglicensing.SubStateActive,
 		},
 		{
-			name:                 "cloud_max_via_metadata",
-			planVersion:          "cloud_max",
-			wantMonitoredSystems: 75,
-			wantCaps:             []string{"ai_autofix", "relay", "mobile_app", "rbac"},
-			wantSubState:         pkglicensing.SubStateActive,
+			name:         "cloud_max_via_metadata",
+			planVersion:  "cloud_max",
+			wantCaps:     []string{"ai_autofix", "relay", "mobile_app", "rbac"},
+			wantSubState: pkglicensing.SubStateActive,
 		},
 		{
-			name:                 "cloud_founding_via_metadata",
-			planVersion:          "cloud_founding",
-			wantMonitoredSystems: 10, // Founding rate = Starter limits
-			wantCaps:             []string{"ai_autofix", "relay"},
-			wantSubState:         pkglicensing.SubStateActive,
+			name:         "cloud_founding_via_metadata",
+			planVersion:  "cloud_founding",
+			wantCaps:     []string{"ai_autofix", "relay"},
+			wantSubState: pkglicensing.SubStateActive,
 		},
 	}
 
@@ -174,7 +169,7 @@ func TestCloudLifecycle_CheckoutToBillingToMonitoredSystemLimits(t *testing.T) {
 				t.Fatalf("StripeAccount.StripeSubscriptionID = %q, want %q", sa.StripeSubscriptionID, session.Subscription)
 			}
 
-			// ── Verify billing state and monitored-system limits ────────
+			// ── Verify billing state and retired monitored-system volume keys ─
 			store := config.NewFileBillingStore(provisioner.tenantDataDir(tenant.ID))
 			bs, err := store.GetBillingState("default")
 			if err != nil {
@@ -187,16 +182,7 @@ func TestCloudLifecycle_CheckoutToBillingToMonitoredSystemLimits(t *testing.T) {
 				t.Fatalf("billing.SubscriptionState = %q, want %q", bs.SubscriptionState, tc.wantSubState)
 			}
 
-			// This is the critical assertion the runtime reads to enforce
-			// monitored-system caps for Cloud tenants.
-			if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != tc.wantMonitoredSystems {
-				t.Fatalf(
-					"billing.Limits[%s] = %d, want %d",
-					pkglicensing.MaxMonitoredSystemsLicenseGateKey,
-					bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey],
-					tc.wantMonitoredSystems,
-				)
-			}
+			assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 
 			// Verify capabilities include Pro-level features.
 			capSet := make(map[string]struct{}, len(bs.Capabilities))
@@ -285,11 +271,11 @@ func TestCloudLifecycle_AdmissionFailureBlocksCheckoutBeforeTenantOrAccountMutat
 	}
 }
 
-// TestCloudLifecycle_SubscriptionUpdateChangesLimits verifies that when a
+// TestCloudLifecycle_SubscriptionUpdateChangesPlans verifies that when a
 // Cloud tenant upgrades (e.g., Starter → Power), the subscription.updated
 // webhook correctly updates both the tenant record and billing state with
-// the new plan's monitored-system limits.
-func TestCloudLifecycle_SubscriptionUpdateChangesLimits(t *testing.T) {
+// the new plan while keeping retired monitored-system volume keys scrubbed.
+func TestCloudLifecycle_SubscriptionUpdateChangesPlans(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
 	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
@@ -310,17 +296,15 @@ func TestCloudLifecycle_SubscriptionUpdateChangesLimits(t *testing.T) {
 		t.Fatalf("lookup tenant: %v (tenant=%v)", err, tenant)
 	}
 
-	// Verify initial state: Starter = 10 monitored systems.
+	// Verify initial state: Starter has no monitored-system cap.
 	store := config.NewFileBillingStore(provisioner.tenantDataDir(tenant.ID))
 	bs, err := store.GetBillingState("default")
 	if err != nil || bs == nil {
 		t.Fatalf("initial GetBillingState: %v", err)
 	}
-	if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != 10 {
-		t.Fatalf("initial %s = %d, want 10", pkglicensing.MaxMonitoredSystemsLicenseGateKey, bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey])
-	}
+	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 
-	// Phase 2: Simulate subscription.updated → upgrade to Cloud Power (30 monitored systems).
+	// Phase 2: Simulate subscription.updated → upgrade to Cloud Power.
 	sub := Subscription{
 		ID:       "sub_upgrade_test",
 		Customer: "cus_upgrade_test",
@@ -343,19 +327,17 @@ func TestCloudLifecycle_SubscriptionUpdateChangesLimits(t *testing.T) {
 		t.Fatalf("tenant.State after upgrade = %q, want %q", tenant.State, registry.TenantStateActive)
 	}
 
-	// Verify billing state has new limits.
+	// Verify billing state keeps monitored-system caps retired.
 	bs, err = store.GetBillingState("default")
 	if err != nil || bs == nil {
 		t.Fatalf("GetBillingState after upgrade: %v", err)
 	}
-	if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != 30 {
-		t.Fatalf("max_monitored_systems after upgrade = %d, want 30", bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey])
-	}
+	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 	if bs.SubscriptionState != pkglicensing.SubStateActive {
 		t.Fatalf("SubscriptionState after upgrade = %q, want %q", bs.SubscriptionState, pkglicensing.SubStateActive)
 	}
 
-	// Phase 3: Upgrade again to Cloud Max (75 monitored systems).
+	// Phase 3: Upgrade again to Cloud Max.
 	sub.Metadata = map[string]string{"plan_version": "cloud_max"}
 	if err := provisioner.HandleSubscriptionUpdated(context.Background(), sub); err != nil {
 		t.Fatalf("HandleSubscriptionUpdated (upgrade to max): %v", err)
@@ -365,9 +347,7 @@ func TestCloudLifecycle_SubscriptionUpdateChangesLimits(t *testing.T) {
 	if err != nil || bs == nil {
 		t.Fatalf("GetBillingState after max upgrade: %v", err)
 	}
-	if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != 75 {
-		t.Fatalf("max_monitored_systems after max upgrade = %d, want 75", bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey])
-	}
+	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 }
 
 // TestCloudLifecycle_CancellationRevokesCapabilities proves that
@@ -403,9 +383,7 @@ func TestCloudLifecycle_CancellationRevokesCapabilities(t *testing.T) {
 	if len(bs.Capabilities) == 0 {
 		t.Fatal("expected capabilities before cancellation, got empty")
 	}
-	if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != 10 {
-		t.Fatalf("max_monitored_systems before cancel = %d, want 10", bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey])
-	}
+	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 
 	// Simulate subscription.deleted.
 	delSub := Subscription{
@@ -518,9 +496,7 @@ func TestCloudLifecycle_GracePeriodPreservesAccess(t *testing.T) {
 	if len(bs.Capabilities) == 0 {
 		t.Fatal("expected capabilities during grace, got empty")
 	}
-	if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != 30 {
-		t.Fatalf("max_monitored_systems during grace = %d, want 30 (Cloud Power)", bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey])
-	}
+	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 
 	// Stripe account should have grace window started.
 	sa, err := reg.GetStripeAccountByCustomerID("cus_grace_test")
@@ -542,18 +518,17 @@ func TestCloudLifecycle_GracePeriodPreservesAccess(t *testing.T) {
 // outside the control plane (e.g., directly in Stripe Dashboard).
 func TestCloudLifecycle_PriceIDResolution(t *testing.T) {
 	tests := []struct {
-		name                 string
-		priceID              string
-		wantPlan             string
-		wantMonitoredSystems int64
+		name     string
+		priceID  string
+		wantPlan string
 	}{
-		{"starter_monthly", "price_1T5kflBrHBocJIGHUqPv1dzV", "cloud_starter", 10},
-		{"starter_annual", "price_1T5kfmBrHBocJIGHTS3ymKxM", "cloud_starter", 10},
-		{"founding_monthly", "price_1T5kfnBrHBocJIGHATQJr79D", "cloud_founding", 10},
-		{"power_monthly", "price_1T5kg2BrHBocJIGHmkoF0zXY", "cloud_power", 30},
-		{"power_annual", "price_1T5kg3BrHBocJIGH2EtzKofV", "cloud_power", 30},
-		{"max_monthly", "price_1T5kg4BrHBocJIGHHa8Ecqho", "cloud_max", 75},
-		{"max_annual", "price_1T5kg5BrHBocJIGH5AIJ4nVc", "cloud_max", 75},
+		{"starter_monthly", "price_1T5kflBrHBocJIGHUqPv1dzV", "cloud_starter"},
+		{"starter_annual", "price_1T5kfmBrHBocJIGHTS3ymKxM", "cloud_starter"},
+		{"founding_monthly", "price_1T5kfnBrHBocJIGHATQJr79D", "cloud_founding"},
+		{"power_monthly", "price_1T5kg2BrHBocJIGHmkoF0zXY", "cloud_power"},
+		{"power_annual", "price_1T5kg3BrHBocJIGH2EtzKofV", "cloud_power"},
+		{"max_monthly", "price_1T5kg4BrHBocJIGHHa8Ecqho", "cloud_max"},
+		{"max_annual", "price_1T5kg5BrHBocJIGH5AIJ4nVc", "cloud_max"},
 	}
 
 	for _, tc := range tests {
@@ -615,13 +590,7 @@ func TestCloudLifecycle_PriceIDResolution(t *testing.T) {
 			if err != nil || bs == nil {
 				t.Fatalf("GetBillingState: %v", err)
 			}
-			if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != tc.wantMonitoredSystems {
-				t.Fatalf(
-					"max_monitored_systems = %d, want %d",
-					bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey],
-					tc.wantMonitoredSystems,
-				)
-			}
+			assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 		})
 	}
 }
@@ -705,12 +674,13 @@ func TestCloudLifecycle_SubscriptionUpdateCanonicalizesStoredFallbackPlan(t *tes
 	if bs.PlanVersion != "cloud_starter" {
 		t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, "cloud_starter")
 	}
-	if bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey] != 10 {
-		t.Fatalf(
-			"billing.Limits[%s] = %d, want 10",
-			pkglicensing.MaxMonitoredSystemsLicenseGateKey,
-			bs.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey],
-		)
+	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
+}
+
+func assertNoRetiredMonitoredSystemLimit(t *testing.T, limits map[string]int64) {
+	t.Helper()
+	if _, ok := limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey]; ok {
+		t.Fatalf("expected retired %s limit to be omitted, got %+v", pkglicensing.MaxMonitoredSystemsLicenseGateKey, limits)
 	}
 }
 

@@ -132,15 +132,13 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 		name                     string
 		tier                     Tier
 		wantHistoryDays          int
-		wantCoreMonitoringLimit  int
 		wantIncludedCapabilities []string
 		wantExcludedCapabilities []string
 	}{
 		{
-			name:                    "community keeps core monitoring free and does not claim paid extras",
-			tier:                    TierFree,
-			wantHistoryDays:         7,
-			wantCoreMonitoringLimit: 0,
+			name:            "community keeps core monitoring free and does not claim paid extras",
+			tier:            TierFree,
+			wantHistoryDays: 7,
 			wantIncludedCapabilities: []string{
 				FeatureUpdateAlerts,
 				FeatureSSO,
@@ -159,10 +157,9 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:                    "relay sells remote access mobile handoff push and fourteen day history",
-			tier:                    TierRelay,
-			wantHistoryDays:         14,
-			wantCoreMonitoringLimit: 0,
+			name:            "relay sells remote access mobile handoff push and fourteen day history",
+			tier:            TierRelay,
+			wantHistoryDays: 14,
 			wantIncludedCapabilities: []string{
 				FeatureUpdateAlerts,
 				FeatureSSO,
@@ -182,10 +179,9 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:                    "pro sells operator extras and preserves relay capabilities",
-			tier:                    TierPro,
-			wantHistoryDays:         90,
-			wantCoreMonitoringLimit: 0,
+			name:            "pro sells operator extras and preserves relay capabilities",
+			tier:            TierPro,
+			wantHistoryDays: 90,
 			wantIncludedCapabilities: []string{
 				FeatureRelay,
 				FeatureMobileApp,
@@ -221,19 +217,6 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 				)
 			}
 
-			gotMonitoringLimit, ok := TierMonitoredSystemLimits[tt.tier]
-			if !ok {
-				t.Fatalf("TierMonitoredSystemLimits missing entry for tier %q", tt.tier)
-			}
-			if gotMonitoringLimit != tt.wantCoreMonitoringLimit {
-				t.Fatalf(
-					"TierMonitoredSystemLimits[%q] = %d, want %d",
-					tt.tier,
-					gotMonitoringLimit,
-					tt.wantCoreMonitoringLimit,
-				)
-			}
-
 			capabilities := make(map[string]struct{})
 			for _, capability := range TierFeatures[tt.tier] {
 				capabilities[capability] = struct{}{}
@@ -259,8 +242,8 @@ func TestDeriveEntitlements(t *testing.T) {
 		t.Error("DeriveEntitlements() returned no capabilities")
 	}
 
-	if limits["max_monitored_systems"] != 50 {
-		t.Errorf("max_monitored_systems limit = %d, want 50", limits["max_monitored_systems"])
+	if _, ok := limits["max_monitored_systems"]; ok {
+		t.Errorf("DeriveEntitlements() exposed retired max_monitored_systems limit: %v", limits)
 	}
 	if limits["max_guests"] != 100 {
 		t.Errorf("max_guests limit = %d, want 100", limits["max_guests"])
@@ -474,33 +457,6 @@ func sortedFeatureSet(features []string) []string {
 	return out
 }
 
-func TestTierMonitoredSystemLimits(t *testing.T) {
-	tests := []struct {
-		tier Tier
-		want int
-	}{
-		{TierFree, 0},
-		{TierRelay, 0},
-		{TierPro, 0},
-		{TierProPlus, 0},
-		{TierProAnnual, 0},
-		{TierLifetime, 0},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(string(tt.tier), func(t *testing.T) {
-			got, ok := TierMonitoredSystemLimits[tt.tier]
-			if !ok {
-				t.Fatalf("TierMonitoredSystemLimits missing entry for tier %q", tt.tier)
-			}
-			if got != tt.want {
-				t.Errorf("TierMonitoredSystemLimits[%q] = %d, want %d", tt.tier, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestTierHistoryDays(t *testing.T) {
 	tests := []struct {
 		tier Tier
@@ -609,85 +565,10 @@ func TestFilterPublicCapabilitiesStripsInternalOnlyFeatures(t *testing.T) {
 	}
 }
 
-func TestLimitsForCloudPlan_KnownPlans(t *testing.T) {
-	tests := []struct {
-		plan      string
-		wantLimit int64
-	}{
-		{"cloud_starter", 10},
-		{"cloud_power", 30},
-		{"cloud_max", 75},
-		{"cloud_founding", 10},
-		{"msp_starter", 50},
-		{"msp_hosted_v1", 50},
-		{"msp_growth", 150},
-		{"msp_scale", 400},
-		{"v5_pro_monthly_grandfathered", 0},
-		{"v5_pro_annual_grandfathered", 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.plan, func(t *testing.T) {
-			limits, known := LimitsForCloudPlan(tt.plan)
-			if !known {
-				t.Errorf("LimitsForCloudPlan(%q): known = false, want true", tt.plan)
-			}
-			got, ok := limits["max_monitored_systems"]
-			if !ok {
-				t.Fatalf("LimitsForCloudPlan(%q): missing max_monitored_systems key", tt.plan)
-			}
-			if got != tt.wantLimit {
-				t.Errorf("LimitsForCloudPlan(%q): max_monitored_systems = %d, want %d", tt.plan, got, tt.wantLimit)
-			}
-		})
-	}
-}
-
-func TestLimitsForCloudPlan_UnknownPlanFailsClosed(t *testing.T) {
-	unknownPlans := []string{
-		"stripe",
-		"stripe_price:price_123",
-		"",
-		"unknown_plan",
-		"cloud_unknown",
-	}
-
-	for _, plan := range unknownPlans {
-		t.Run(plan, func(t *testing.T) {
-			limits, known := LimitsForCloudPlan(plan)
-			if known {
-				t.Errorf("LimitsForCloudPlan(%q): known = true, want false", plan)
-			}
-			got, ok := limits["max_monitored_systems"]
-			if !ok {
-				t.Fatalf("LimitsForCloudPlan(%q): missing max_monitored_systems key (fail-open!)", plan)
-			}
-			if got != int64(UnknownPlanDefaultMonitoredSystemLimit) {
-				t.Errorf("LimitsForCloudPlan(%q): max_monitored_systems = %d, want default %d", plan, got, UnknownPlanDefaultMonitoredSystemLimit)
-			}
-		})
-	}
-}
-
-func TestLimitsForCloudPlan_NeverReturnsEmptyMap(t *testing.T) {
-	// This test ensures the fail-closed invariant: LimitsForCloudPlan must
-	// ALWAYS return a map with "max_monitored_systems" set, regardless of input.
-	inputs := []string{"cloud_starter", "stripe", "", "garbage", "msp_starter", "msp_hosted_v1"}
-	for _, plan := range inputs {
-		limits, _ := LimitsForCloudPlan(plan)
-		if _, ok := limits["max_monitored_systems"]; !ok {
-			t.Errorf("LimitsForCloudPlan(%q) returned map without max_monitored_systems — fail-open vulnerability", plan)
-		}
-	}
-}
-
-// TestAllTiersHaveHostLimitsAndHistoryDays ensures every tier in TierFeatures
-// also has entries in TierMonitoredSystemLimits and TierHistoryDays.
-func TestAllTiersHaveHostLimitsAndHistoryDays(t *testing.T) {
+// TestAllTiersHaveHistoryDays ensures every tier in TierFeatures also has a
+// metrics-retention entry. Core monitoring volume limits are retired.
+func TestAllTiersHaveHistoryDays(t *testing.T) {
 	for tier := range TierFeatures {
-		if _, ok := TierMonitoredSystemLimits[tier]; !ok {
-			t.Errorf("TierMonitoredSystemLimits missing entry for tier %q", tier)
-		}
 		if _, ok := TierHistoryDays[tier]; !ok {
 			t.Errorf("TierHistoryDays missing entry for tier %q", tier)
 		}
@@ -738,15 +619,12 @@ func TestWorkspaceLimitForPlan_UnknownPlanFailsClosed(t *testing.T) {
 	}
 }
 
-// TestCloudWorkspacePlansHaveWorkspaceLimits ensures only hosted plans that
-// actually support workspaces also carry a workspace limit entry.
+// TestCloudWorkspacePlansHaveWorkspaceLimits ensures hosted workspace plans
+// still carry a workspace limit entry after monitored-system caps were retired.
 func TestCloudWorkspacePlansHaveWorkspaceLimits(t *testing.T) {
-	for plan := range CloudPlanMonitoredSystemLimits {
+	for plan := range CloudPlanWorkspaceLimits {
 		if !strings.HasPrefix(plan, "cloud_") && !strings.HasPrefix(plan, "msp_") {
-			continue
-		}
-		if _, ok := CloudPlanWorkspaceLimits[plan]; !ok {
-			t.Errorf("CloudPlanWorkspaceLimits missing entry for plan %q (present in CloudPlanMonitoredSystemLimits)", plan)
+			t.Errorf("CloudPlanWorkspaceLimits includes non-hosted plan %q", plan)
 		}
 	}
 }
@@ -915,14 +793,16 @@ func TestIsSelfHostedCoreMonitoringUncappedTier(t *testing.T) {
 	}
 }
 
-// TestPriceIDToPlanVersion_AllMapToKnownPlans ensures every plan version in the
-// price→plan map is recognized by LimitsForCloudPlan (fail-closed safety net).
+// TestPriceIDToPlanVersion_HostedPlansHaveWorkspaceLimits ensures hosted plans
+// in the price map retain workspace policy after monitored-system caps retire.
 func TestPriceIDToPlanVersion_AllMapToKnownPlans(t *testing.T) {
 	for priceID, plan := range PriceIDToPlanVersion {
 		t.Run(priceID, func(t *testing.T) {
-			_, known := LimitsForCloudPlan(plan)
-			if !known {
-				t.Errorf("PriceIDToPlanVersion[%q] = %q, but LimitsForCloudPlan does not recognize it", priceID, plan)
+			if !strings.HasPrefix(plan, "cloud_") && !strings.HasPrefix(plan, "msp_") {
+				return
+			}
+			if _, known := WorkspaceLimitForPlan(plan); !known {
+				t.Errorf("PriceIDToPlanVersion[%q] = %q, but WorkspaceLimitForPlan does not recognize it", priceID, plan)
 			}
 		})
 	}

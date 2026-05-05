@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -84,6 +85,28 @@ func TestTrueNASPollerFeatureFlagGate(t *testing.T) {
 	}, "expected no TrueNAS polling requests when feature flag is disabled")
 
 	poller.Stop()
+}
+
+func TestTrueNASPollerStaysMonitoringOnly(t *testing.T) {
+	source, err := os.ReadFile("truenas_poller.go")
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	for _, retired := range []string{
+		"max_monitored_systems",
+		"plan_limit",
+		"would_exceed_limit",
+		"grandfather",
+		"admission",
+		"billing",
+		"capacity",
+		"limit",
+	} {
+		if strings.Contains(string(source), retired) {
+			t.Fatalf("TrueNAS poller must stay inventory-only and must not reference retired monitor-count cap token %q", retired)
+		}
+	}
 }
 
 func TestTrueNASPollerEnableDisableCycle(t *testing.T) {

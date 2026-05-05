@@ -292,6 +292,11 @@ prerelease-shell treatment is the compact `Preview` badge on rc-channel
 builds; `frontend-modern/src/AppLayout.tsx` must not revive a standalone
 release-candidate banner, release-notes CTA, or feedback CTA that starts
 participating in assistant-shell state or modal ownership.
+The retired monitored-system capacity banner follows the same shell rule:
+`frontend-modern/src/App.tsx` must not reintroduce app-shell commercial
+volume warnings just because settings or support surfaces still expose
+monitored-system grouping data. Assistant state and shell notices stay
+independent from retired infrastructure-volume commerce.
 That same shared shell boundary must respect blocking modal ownership.
 `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` may use
 the shared dialog runtime to hide the closed assistant launcher and close the

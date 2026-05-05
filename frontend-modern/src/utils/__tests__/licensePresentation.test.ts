@@ -18,14 +18,11 @@ import {
   getLicenseSubscriptionStatusPresentation,
   getSelfHostedPlanLabel,
   getLicenseTierLabel,
-  getDisplayableMonitoredSystemContinuity,
-  getMonitoredSystemContinuityNotice,
   getNoActiveSelfHostedActivationState,
   getOrganizationBillingLicenseStatusLabel,
   getPurchaseActivationNotice,
   isDisplayableLicenseFeature,
   isGrandfatheredRecurringV5PlanVersion,
-  isUncappedGrandfatheredPlanVersion,
   SELF_HOSTED_RECOVERY_PRESENTATION,
 } from '@/utils/licensePresentation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/components/Settings/selfHostedBillingPresentation';
@@ -186,10 +183,6 @@ describe('licensePresentation', () => {
     expect(isGrandfatheredRecurringV5PlanVersion('v5_pro_monthly_grandfathered')).toBe(true);
     expect(isGrandfatheredRecurringV5PlanVersion('v5_pro_annual_grandfathered')).toBe(true);
     expect(isGrandfatheredRecurringV5PlanVersion('v5_lifetime_grandfathered')).toBe(false);
-    expect(isUncappedGrandfatheredPlanVersion('v5_pro_monthly_grandfathered', false)).toBe(true);
-    expect(isUncappedGrandfatheredPlanVersion('v5_pro_annual_grandfathered', false)).toBe(true);
-    expect(isUncappedGrandfatheredPlanVersion(undefined, true)).toBe(true);
-    expect(isUncappedGrandfatheredPlanVersion('pro', false)).toBe(false);
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'active'),
     ).toMatchObject({
@@ -211,21 +204,6 @@ describe('licensePresentation', () => {
     expect(getGrandfatheredPriceContinuityNotice('v5_lifetime_grandfathered', 'active')).toBeNull();
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'expired'),
-    ).toBeNull();
-  });
-
-  it('hides monitored-system continuity when self-hosted effective capacity is uncapped', () => {
-    expect(
-      getDisplayableMonitoredSystemContinuity({
-        continuity: {
-          plan_limit: 10,
-          effective_limit: 0,
-          capture_pending: true,
-        },
-        planVersion: 'legacy_migration_fallback',
-        isLifetime: false,
-        subscriptionState: 'active',
-      }),
     ).toBeNull();
   });
 
@@ -265,12 +243,6 @@ describe('licensePresentation', () => {
           capabilities: ['relay', 'ai_autofix'],
           limits: [{ key: 'max_monitored_systems', limit: 10, current: 23, state: 'enforced' }],
           upgrade_reasons: [],
-          monitored_system_continuity: {
-            plan_limit: 10,
-            grandfathered_floor: 23,
-            effective_limit: 23,
-            capture_pending: false,
-          },
         },
         displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
       }),
@@ -347,12 +319,6 @@ describe('licensePresentation', () => {
           capabilities: ['relay'],
           limits: [],
           upgrade_reasons: [],
-          monitored_system_continuity: {
-            plan_limit: 10,
-            grandfathered_floor: 23,
-            effective_limit: 23,
-            capture_pending: false,
-          },
         },
         displayableCapabilities: ['Pulse Relay (Remote Access)'],
       }),
@@ -668,129 +634,6 @@ describe('licensePresentation', () => {
         source: 'purchase',
       }),
     ).toBeNull();
-  });
-
-  it('returns monitored-system continuity notices for pending verification and captured grandfathering', () => {
-    expect(
-      getMonitoredSystemContinuityNotice(
-        {
-          plan_limit: 10,
-          effective_limit: 10,
-          capture_pending: true,
-        },
-        {
-          current_available: false,
-          current_unavailable_reason: 'supplemental_inventory_unsettled',
-        },
-        {
-          mode: 'usage_unavailable',
-          urgency: 'ok',
-          current: 0,
-          limit: 10,
-          current_available: false,
-          current_unavailable_reason: 'supplemental_inventory_unsettled',
-          available_slots: 0,
-          overage: 0,
-          blocks_new_systems: false,
-          existing_monitoring_continues: false,
-        },
-      ),
-    ).toMatchObject({
-      title: 'Legacy continuity verification pending',
-      body: expect.stringContaining('legacy v5 monitoring continuity'),
-      tone: expect.stringContaining('amber'),
-    });
-    expect(
-      getMonitoredSystemContinuityNotice(
-        {
-          plan_limit: 10,
-          effective_limit: 10,
-          capture_pending: true,
-        },
-        {
-          current: 23,
-          limit: 10,
-          current_available: true,
-          state: 'enforced',
-        },
-        {
-          mode: 'over_limit_frozen',
-          urgency: 'enforced',
-          current: 23,
-          limit: 10,
-          current_available: true,
-          available_slots: 0,
-          overage: 13,
-          reason: 'legacy_migration_capture_pending',
-          blocks_new_systems: true,
-          existing_monitoring_continues: true,
-        },
-      ),
-    ).toMatchObject({
-      title: 'Legacy continuity verification pending',
-      body: expect.stringContaining('identified 23 monitored systems'),
-      tone: expect.stringContaining('amber'),
-    });
-    expect(
-      getMonitoredSystemContinuityNotice(
-        {
-          plan_limit: 10,
-          grandfathered_floor: 23,
-          effective_limit: 23,
-          capture_pending: false,
-          captured_at: 123,
-        },
-        {
-          current_available: true,
-        },
-        {
-          mode: 'at_limit_blocking_new',
-          urgency: 'enforced',
-          current: 23,
-          limit: 23,
-          current_available: true,
-          available_slots: 0,
-          overage: 0,
-          reason: 'limit_reached',
-          blocks_new_systems: true,
-          existing_monitoring_continues: true,
-        },
-        {
-          planVersion: 'v5_pro_monthly_grandfathered',
-          isLifetime: false,
-          subscriptionState: 'active',
-        },
-      ),
-    ).toBeNull();
-    expect(
-      getMonitoredSystemContinuityNotice(
-        {
-          plan_limit: 10,
-          grandfathered_floor: 23,
-          effective_limit: 23,
-          capture_pending: false,
-          captured_at: 123,
-        },
-        {
-          current_available: true,
-        },
-        {
-          mode: 'at_limit_blocking_new',
-          urgency: 'enforced',
-          current: 23,
-          limit: 23,
-          current_available: true,
-          available_slots: 0,
-          overage: 0,
-          reason: 'limit_reached',
-          blocks_new_systems: true,
-          existing_monitoring_continues: true,
-        },
-      ),
-    ).toMatchObject({
-      title: 'Legacy monitoring continuity',
-      tone: expect.stringContaining('green'),
-    });
   });
 
   it('returns canonical purchase activation notices', () => {

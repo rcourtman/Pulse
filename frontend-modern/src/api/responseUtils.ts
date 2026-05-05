@@ -1,9 +1,3 @@
-import {
-  normalizeMonitoredSystemLedgerPreviewResponse,
-  type MonitoredSystemLedgerPreviewResponse,
-  type MonitoredSystemLedgerRawPreviewResponse,
-} from './monitoredSystemLedger';
-
 type APIErrorPayload = {
   error?: unknown;
   message?: unknown;
@@ -14,7 +8,6 @@ type APIErrorLike = {
   code?: unknown;
   detail?: unknown;
   details?: unknown;
-  monitored_system_preview?: unknown;
 };
 
 type APIResponseLike = {
@@ -248,23 +241,6 @@ export function apiErrorDetailField(error: unknown, field: string): string | nul
   }
 
   return details[field] ?? null;
-}
-
-export function apiErrorMonitoredSystemPreview(
-  error: unknown,
-): MonitoredSystemLedgerPreviewResponse | null {
-  if (!error || typeof error !== 'object') {
-    return null;
-  }
-
-  const rawPreview = (error as APIErrorLike).monitored_system_preview;
-  if (!rawPreview || typeof rawPreview !== 'object') {
-    return null;
-  }
-
-  return normalizeMonitoredSystemLedgerPreviewResponse(
-    rawPreview as MonitoredSystemLedgerRawPreviewResponse,
-  );
 }
 
 export function isAPIErrorStatus(error: unknown, expectedStatus: number): boolean {

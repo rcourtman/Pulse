@@ -30,7 +30,6 @@ const (
 	TargetFailedRetryable TargetStatus = "failed_retryable"
 	TargetFailedPermanent TargetStatus = "failed_permanent"
 	TargetSkippedAgent    TargetStatus = "skipped_already_agent"
-	TargetSkippedLicense  TargetStatus = "skipped_license"
 	TargetCanceled        TargetStatus = "canceled"
 )
 

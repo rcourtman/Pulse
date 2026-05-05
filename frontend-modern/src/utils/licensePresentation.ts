@@ -3,17 +3,8 @@ import type {
   CommercialMigrationStatus,
   LicenseCommercialEntitlements,
   LicenseStatus,
-  MonitoredSystemContinuityStatus,
 } from '@/api/license';
 import { CLOUD_PLAN_LABELS } from '@/utils/cloudPlans';
-import {
-  formatMonitoredSystemUsageUnavailableMessage,
-  getMonitoredSystemLimitUnavailableReason,
-  isMonitoredSystemLimitUsageAvailable,
-  resolveMonitoredSystemCapacityStatus,
-  type MonitoredSystemCapacityStatus,
-  type MonitoredSystemLimitUsageStatus,
-} from '@/utils/monitoredSystemPresentation';
 import {
   getSelfHostedPlanDefinitionForBillingTier,
   getSelfHostedPlanEntitlementSummary,
@@ -152,60 +143,9 @@ export const isGrandfatheredRecurringV5PlanVersion = (planVersion?: string | nul
   );
 };
 
-export const isUncappedGrandfatheredPlanVersion = (
-  planVersion?: string | null,
-  isLifetime?: boolean | null,
-): boolean => {
-  if (isLifetime) {
-    return true;
-  }
-  return isGrandfatheredRecurringV5PlanVersion(planVersion);
-};
-
 const isActiveOrGraceSubscription = (subscriptionState?: string | null): boolean => {
   const normalized = (subscriptionState || '').trim().toLowerCase();
   return normalized === 'active' || normalized === 'grace';
-};
-
-export const hasActiveUncappedSelfHostedContinuity = ({
-  planVersion,
-  isLifetime,
-  subscriptionState,
-}: {
-  planVersion?: string | null;
-  isLifetime?: boolean | null;
-  subscriptionState?: string | null;
-}): boolean => {
-  if (isLifetime) {
-    return true;
-  }
-  return (
-    isActiveOrGraceSubscription(subscriptionState) &&
-    isGrandfatheredRecurringV5PlanVersion(planVersion)
-  );
-};
-
-export const getDisplayableMonitoredSystemContinuity = ({
-  continuity,
-  planVersion,
-  isLifetime,
-  subscriptionState,
-}: {
-  continuity?: MonitoredSystemContinuityStatus | null;
-  planVersion?: string | null;
-  isLifetime?: boolean | null;
-  subscriptionState?: string | null;
-}): MonitoredSystemContinuityStatus | null => {
-  if (!continuity) {
-    return null;
-  }
-  if (hasActiveUncappedSelfHostedContinuity({ planVersion, isLifetime, subscriptionState })) {
-    return null;
-  }
-  if (typeof continuity.effective_limit === 'number' && continuity.effective_limit <= 0) {
-    return null;
-  }
-  return continuity;
 };
 
 export const getLicenseTierLabel = (tier?: string | null): string => {
@@ -269,78 +209,6 @@ export const getGrandfatheredPriceContinuityNotice = (
     title: 'Grandfathered v5 pricing',
     body: 'This migrated v5 Pro subscription keeps its existing recurring price until you cancel. Self-hosted monitoring and child-resource volume are not metered in current v6 self-hosted packaging. If you cancel and return later, current v6 pricing applies for paid features.',
   };
-};
-
-export const getMonitoredSystemContinuityNotice = (
-  continuity?: MonitoredSystemContinuityStatus | null,
-  limit?: MonitoredSystemLimitUsageStatus | null,
-  capacity?: MonitoredSystemCapacityStatus | null,
-  context?: {
-    planVersion?: string | null;
-    isLifetime?: boolean | null;
-    subscriptionState?: string | null;
-  },
-): LicenseInlineNotice | null => {
-  const displayContinuity = getDisplayableMonitoredSystemContinuity({
-    continuity,
-    planVersion: context?.planVersion,
-    isLifetime: context?.isLifetime,
-    subscriptionState: context?.subscriptionState,
-  });
-  if (!displayContinuity) {
-    return null;
-  }
-  const resolvedCapacity = resolveMonitoredSystemCapacityStatus(capacity, limit);
-
-  if (displayContinuity.capture_pending) {
-    if (!resolvedCapacity?.current_available) {
-      return {
-        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-        title: 'Legacy continuity verification pending',
-        body: `Pulse is still verifying legacy v5 monitoring continuity for this installation. ${formatMonitoredSystemUsageUnavailableMessage(
-          getMonitoredSystemLimitUnavailableReason(limit, capacity),
-        )}`,
-      };
-    }
-
-    if (resolvedCapacity.mode === 'over_limit_frozen') {
-      return {
-        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-        title: 'Legacy continuity verification pending',
-        body: `Pulse is still verifying legacy v5 monitoring continuity for this installation. Pulse has already identified ${resolvedCapacity.current} monitored systems for continuity reporting, and existing monitoring remains visible while new top-level additions wait for verification to finish.`,
-      };
-    }
-
-    return {
-      tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-      title: 'Legacy continuity verification pending',
-      body: 'Pulse is still verifying legacy v5 monitoring continuity for this installation. Existing monitoring remains visible while Pulse finalizes the continuity baseline.',
-    };
-  }
-
-  if (!isMonitoredSystemLimitUsageAvailable(limit)) {
-    return {
-      tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-      title: 'Monitored-system usage unavailable',
-      body: formatMonitoredSystemUsageUnavailableMessage(
-        getMonitoredSystemLimitUnavailableReason(limit, capacity),
-      ),
-    };
-  }
-
-  if (
-    typeof displayContinuity.grandfathered_floor === 'number' &&
-    displayContinuity.grandfathered_floor > 0 &&
-    displayContinuity.effective_limit > displayContinuity.plan_limit
-  ) {
-    return {
-      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
-      title: 'Legacy monitoring continuity',
-      body: `This migrated v5 installation keeps its observed legacy estate available for continuity reporting on this instance. Pulse recorded ${displayContinuity.grandfathered_floor} monitored systems during migration.`,
-    };
-  }
-
-  return null;
 };
 
 const getSelfHostedUnlockedFeatures = ({
@@ -492,11 +360,6 @@ export const getSelfHostedCurrentPlanPresentation = ({
   const normalizedTier = (current.tier || '').trim().toLowerCase();
   const planLabel = getSelfHostedPlanLabel(current.tier);
   const planDefinition = getSelfHostedPlanDefinitionForBillingTier(current.tier);
-  const hasUncappedContinuity = hasActiveUncappedSelfHostedContinuity({
-    planVersion: current.plan_version,
-    isLifetime: current.is_lifetime,
-    subscriptionState: current.subscription_state,
-  });
   const unlockedFeatures = getSelfHostedUnlockedFeatures({
     entitlements: current,
     displayableCapabilities,
@@ -518,35 +381,10 @@ export const getSelfHostedCurrentPlanPresentation = ({
     supplementalDetails.push(
       'This migrated v5 subscription keeps its existing recurring price until cancellation. Self-hosted monitoring and child-resource volume are not metered in current v6 self-hosted packaging.',
     );
-  } else if (hasUncappedContinuity && current.is_lifetime) {
+  } else if (current.is_lifetime) {
     supplementalBadges.push('Grandfathered lifetime');
     supplementalDetails.push(
       'This migrated lifetime install remains valid permanently, and self-hosted monitoring plus child-resource volume are not metered in current v6 self-hosted packaging.',
-    );
-  }
-
-  const continuity = planDefinition
-    ? null
-    : getDisplayableMonitoredSystemContinuity({
-        continuity: current.monitored_system_continuity,
-        planVersion: current.plan_version,
-        isLifetime: current.is_lifetime,
-        subscriptionState: current.subscription_state,
-      });
-  if (continuity?.capture_pending) {
-    supplementalBadges.push('Continuity pending');
-    supplementalDetails.push(
-      'Pulse is still verifying legacy v5 monitoring continuity for this migrated installation.',
-    );
-  } else if (
-    continuity &&
-    typeof continuity.grandfathered_floor === 'number' &&
-    continuity.grandfathered_floor > 0 &&
-    continuity.effective_limit > continuity.plan_limit
-  ) {
-    supplementalBadges.push('Legacy continuity');
-    supplementalDetails.push(
-      'This migrated installation keeps the observed legacy estate available for continuity reporting on this instance.',
     );
   }
 

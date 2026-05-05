@@ -1,7 +1,6 @@
 package licensing
 
 import (
-	"encoding/json"
 	"sort"
 	"time"
 )
@@ -26,9 +25,6 @@ type Claims struct {
 	// Features explicitly granted (optional, tier implies features)
 	Features []string `json:"features,omitempty"`
 
-	// Max agents (0 = unlimited)
-	MaxMonitoredSystems int `json:"max_monitored_systems,omitempty"`
-
 	// Max guests (0 = unlimited)
 	MaxGuests int `json:"max_guests,omitempty"`
 
@@ -47,25 +43,6 @@ type Claims struct {
 	CoreMonitoringUncapped bool `json:"-"`
 }
 
-// UnmarshalJSON implements custom JSON unmarshaling for Claims to handle the
-// migration from legacy monitored-system aliases to "max_monitored_systems".
-// Existing JWTs and billing.json files may still contain older keys; this shim
-// reads them all and prefers the canonical monitored-system field when present.
-func (c *Claims) UnmarshalJSON(data []byte) error {
-	// Unmarshal into the base type (avoids infinite recursion).
-	type Alias Claims
-	if err := json.Unmarshal(data, (*Alias)(c)); err != nil {
-		return err
-	}
-
-	// Migration shim: if the canonical field was absent, adopt the legacy v5
-	// monitored-system alias that may still exist in older JWTs or billing.json.
-	if legacy, ok, err := decodeLegacyV5MonitoredSystemLimitFromJSON(data); err == nil && ok {
-		c.MaxMonitoredSystems = legacy
-	}
-	return nil
-}
-
 // EffectiveCapabilities returns explicit capabilities when present; otherwise tier-derived capabilities.
 func (c Claims) EffectiveCapabilities() []string {
 	if c.Capabilities != nil && len(c.Capabilities) > 0 {
@@ -74,45 +51,16 @@ func (c Claims) EffectiveCapabilities() []string {
 	return DeriveCapabilitiesFromTier(c.Tier, c.Features)
 }
 
-func (c Claims) shouldScrubLegacyCommercialCaps() bool {
-	if c.CoreMonitoringUncapped {
-		return true
-	}
-	if IsSelfHostedCoreMonitoringUncappedTier(c.Tier) {
-		return true
-	}
-	if IsSelfHostedCoreMonitoringUncappedPlanVersion(c.PlanVersion) {
-		return true
-	}
-	return false
-}
-
 // EffectiveLimits returns explicit limits when present; otherwise limits derived from legacy fields.
 func (c Claims) EffectiveLimits() map[string]int64 {
 	limits := NormalizeMonitoredSystemLimits(c.Limits)
+	stripSelfHostedCommercialVolumeCaps(limits, c.EntitlementPlanVersion(), c.Tier, c.CoreMonitoringUncapped)
 	if len(limits) == 0 {
 		limits = make(map[string]int64)
-		if c.MaxMonitoredSystems > 0 {
-			limits[MaxMonitoredSystemsLicenseGateKey] = int64(c.MaxMonitoredSystems)
-		}
 		if c.MaxGuests > 0 {
 			limits["max_guests"] = int64(c.MaxGuests)
 		}
-	}
-	if c.shouldScrubLegacyCommercialCaps() {
-		// Local activation migrations and grandfathered continuity may still
-		// carry legacy monitored-system caps in stale claim fields. Scrub those
-		// caps only when the canonical contract says core monitoring is uncapped.
-		delete(limits, MaxMonitoredSystemsLicenseGateKey)
-		delete(limits, "max_guests")
-	}
-	if c.Tier == TierCloud || c.Tier == TierMSP {
-		if limit, known := CloudPlanMonitoredSystemLimits[CanonicalizePlanVersion(c.PlanVersion)]; known {
-			limits[MaxMonitoredSystemsLicenseGateKey] = int64(limit)
-		}
-		if _, hasSystems := limits[MaxMonitoredSystemsLicenseGateKey]; !hasSystems {
-			limits[MaxMonitoredSystemsLicenseGateKey] = int64(UnknownPlanDefaultMonitoredSystemLimit)
-		}
+		stripSelfHostedCommercialVolumeCaps(limits, c.EntitlementPlanVersion(), c.Tier, c.CoreMonitoringUncapped)
 	}
 	return limits
 }
@@ -220,27 +168,15 @@ const (
 
 // LicenseStatus is the JSON response for license status API.
 type LicenseStatus struct {
-	Valid                     bool                             `json:"valid"`
-	Tier                      Tier                             `json:"tier"`
-	PlanVersion               string                           `json:"plan_version,omitempty"`
-	Email                     string                           `json:"email,omitempty"`
-	ExpiresAt                 *string                          `json:"expires_at,omitempty"`
-	IsLifetime                bool                             `json:"is_lifetime"`
-	DaysRemaining             int                              `json:"days_remaining"`
-	Features                  []string                         `json:"features"`
-	MaxMonitoredSystems       int                              `json:"max_monitored_systems,omitempty"`
-	MaxGuests                 int                              `json:"max_guests,omitempty"`
-	InGracePeriod             bool                             `json:"in_grace_period,omitempty"`
-	GracePeriodEnd            *string                          `json:"grace_period_end,omitempty"`
-	MonitoredSystemContinuity *MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
-}
-
-// MonitoredSystemContinuityStatus describes the effective monitored-system
-// limit continuity applied to a migrated legacy installation.
-type MonitoredSystemContinuityStatus struct {
-	PlanLimit          int   `json:"plan_limit"`
-	GrandfatheredFloor int   `json:"grandfathered_floor,omitempty"`
-	EffectiveLimit     int   `json:"effective_limit"`
-	CapturePending     bool  `json:"capture_pending"`
-	CapturedAt         int64 `json:"captured_at,omitempty"`
+	Valid          bool     `json:"valid"`
+	Tier           Tier     `json:"tier"`
+	PlanVersion    string   `json:"plan_version,omitempty"`
+	Email          string   `json:"email,omitempty"`
+	ExpiresAt      *string  `json:"expires_at,omitempty"`
+	IsLifetime     bool     `json:"is_lifetime"`
+	DaysRemaining  int      `json:"days_remaining"`
+	Features       []string `json:"features"`
+	MaxGuests      int      `json:"max_guests,omitempty"`
+	InGracePeriod  bool     `json:"in_grace_period,omitempty"`
+	GracePeriodEnd *string  `json:"grace_period_end,omitempty"`
 }

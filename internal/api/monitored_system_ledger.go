@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -67,7 +66,6 @@ type MonitoredSystemLedgerExplanationSurface struct {
 type MonitoredSystemLedgerResponse struct {
 	Systems []MonitoredSystemLedgerEntry `json:"systems"`
 	Total   int                          `json:"total"`
-	Limit   int                          `json:"limit"` // 0 = unlimited
 }
 
 // MonitoredSystemLedgerExplainRequest describes an optional monitored-system
@@ -119,8 +117,6 @@ type MonitoredSystemLedgerPreviewResponse struct {
 	CurrentCount     int                          `json:"current_count"`
 	ProjectedCount   int                          `json:"projected_count"`
 	AdditionalCount  int                          `json:"additional_count"`
-	Limit            int                          `json:"limit"`
-	WouldExceedLimit bool                         `json:"would_exceed_limit"`
 	Effect           string                       `json:"effect"`
 	CurrentSystems   []MonitoredSystemLedgerEntry `json:"current_systems"`
 	ProjectedSystems []MonitoredSystemLedgerEntry `json:"projected_systems"`
@@ -177,7 +173,7 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	resp := monitoredSystemLedgerResponseFromReadState(req.Context(), usage.readState)
+	resp := monitoredSystemLedgerResponseFromReadState(usage.readState)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp.NormalizeCollections())
@@ -221,7 +217,7 @@ func (r *Router) handleMonitoredSystemLedgerPreview(w http.ResponseWriter, req *
 		return
 	}
 
-	resp := monitoredSystemLedgerPreviewResponse(req.Context(), previewReq.Replacement != nil, preview)
+	resp := monitoredSystemLedgerPreviewResponse(previewReq.Replacement != nil, preview)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp.NormalizeCollections())
@@ -246,7 +242,7 @@ func (r *Router) handleMonitoredSystemLedgerExplain(w http.ResponseWriter, req *
 	}
 
 	resp := MonitoredSystemLedgerExplainResponse{
-		Ledger: monitoredSystemLedgerResponseFromReadState(req.Context(), usage.readState),
+		Ledger: monitoredSystemLedgerResponseFromReadState(usage.readState),
 	}
 
 	if explainReq.Candidate != nil {
@@ -278,7 +274,6 @@ func (r *Router) handleMonitoredSystemLedgerExplain(w http.ResponseWriter, req *
 		}
 
 		previewResp := monitoredSystemLedgerPreviewResponse(
-			req.Context(),
 			explainReq.Replacement != nil,
 			preview,
 		).NormalizeCollections()
@@ -349,7 +344,6 @@ func monitoredSystemLedgerEntries(
 }
 
 func monitoredSystemLedgerResponseFromReadState(
-	ctx context.Context,
 	rs unifiedresources.ReadState,
 ) MonitoredSystemLedgerResponse {
 	systems := unifiedresources.MonitoredSystems(rs)
@@ -357,17 +351,13 @@ func monitoredSystemLedgerResponseFromReadState(
 	return MonitoredSystemLedgerResponse{
 		Systems: entries,
 		Total:   len(entries),
-		Limit:   maxMonitoredSystemsLimitForContext(ctx),
 	}
 }
 
 func monitoredSystemLedgerPreviewResponse(
-	ctx context.Context,
 	hasReplacement bool,
 	preview unifiedresources.MonitoredSystemProjectionPreview,
 ) MonitoredSystemLedgerPreviewResponse {
-	limit := maxMonitoredSystemsLimitForContext(ctx)
-	decision := monitoredSystemLimitDecisionFromAdditional(ctx, limit, preview.CurrentCount, preview.AdditionalCount)
 	currentSystems := monitoredSystemLedgerEntries(preview.CurrentSystems)
 	projectedSystems := monitoredSystemLedgerEntries(preview.ProjectedSystems)
 
@@ -375,8 +365,6 @@ func monitoredSystemLedgerPreviewResponse(
 		CurrentCount:     preview.CurrentCount,
 		ProjectedCount:   preview.ProjectedCount,
 		AdditionalCount:  preview.AdditionalCount,
-		Limit:            limit,
-		WouldExceedLimit: decision.exceeded,
 		Effect:           monitoredSystemLedgerPreviewEffect(hasReplacement, preview),
 		CurrentSystems:   currentSystems,
 		ProjectedSystems: projectedSystems,

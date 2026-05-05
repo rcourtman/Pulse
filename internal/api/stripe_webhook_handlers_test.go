@@ -266,8 +266,8 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 	if state.PlanVersion != "cloud_starter" {
 		t.Fatalf("plan_version=%q, want %q", state.PlanVersion, "cloud_starter")
 	}
-	if got := state.Limits["max_monitored_systems"]; got != 10 {
-		t.Fatalf("limits[max_monitored_systems]=%d, want %d", got, 10)
+	if _, ok := state.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected retired max_monitored_systems limit to be omitted, got %+v", state.Limits)
 	}
 	if state.StripeCustomerID != "cus_abc" {
 		t.Fatalf("stripe_customer_id=%q, want %q", state.StripeCustomerID, "cus_abc")

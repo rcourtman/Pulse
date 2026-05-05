@@ -17,17 +17,6 @@ describe('LicenseAPI', () => {
       limits: [],
       hosted_mode: false,
       max_history_days: 14,
-      monitored_system_capacity: {
-        mode: 'within_limit',
-        urgency: 'ok',
-        current: 4,
-        limit: 10,
-        current_available: true,
-        available_slots: 6,
-        overage: 0,
-        blocks_new_systems: false,
-        existing_monitoring_continues: true,
-      },
     });
 
     const result = await LicenseAPI.getRuntimeCapabilities();
@@ -36,9 +25,6 @@ describe('LicenseAPI', () => {
     expect(result).toMatchObject({
       capabilities: ['relay'],
       max_history_days: 14,
-      monitored_system_capacity: {
-        mode: 'within_limit',
-      },
     });
   });
 
@@ -71,60 +57,6 @@ describe('LicenseAPI', () => {
     expect(result).toMatchObject({
       tier: 'pro',
       subscription_state: 'active',
-    });
-  });
-
-  it('preserves monitored-system continuity fields from the entitlement payload', async () => {
-    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
-      tier: 'pro',
-      subscription_state: 'active',
-      capabilities: ['relay'],
-      limits: [
-        {
-          key: 'max_monitored_systems',
-          limit: 10,
-          current: 0,
-          current_available: false,
-          current_unavailable_reason: 'supplemental_inventory_unsettled',
-          state: 'ok',
-        },
-      ],
-      upgrade_reasons: [],
-      monitored_system_continuity: {
-        plan_limit: 10,
-        effective_limit: 10,
-        capture_pending: true,
-      },
-      monitored_system_capacity: {
-        mode: 'usage_unavailable',
-        urgency: 'ok',
-        current: 0,
-        limit: 10,
-        current_available: false,
-        current_unavailable_reason: 'supplemental_inventory_unsettled',
-        available_slots: 0,
-        overage: 0,
-        reason: 'legacy_migration_capture_pending',
-        blocks_new_systems: false,
-        existing_monitoring_continues: false,
-      },
-    });
-
-    const result = await LicenseAPI.getCommercialEntitlements();
-
-    expect(result.monitored_system_continuity).toMatchObject({
-      plan_limit: 10,
-      effective_limit: 10,
-      capture_pending: true,
-    });
-    expect(result.monitored_system_capacity).toMatchObject({
-      mode: 'usage_unavailable',
-      reason: 'legacy_migration_capture_pending',
-      current_available: false,
-    });
-    expect(result.limits[0]).toMatchObject({
-      current_available: false,
-      current_unavailable_reason: 'supplemental_inventory_unsettled',
     });
   });
 

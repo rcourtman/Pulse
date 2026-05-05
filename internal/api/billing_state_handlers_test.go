@@ -195,8 +195,8 @@ func TestBillingStateGetHostedNonDefaultFallsBackToDefaultBillingState(t *testin
 	if payload.PlanVersion != "msp_starter" {
 		t.Fatalf("expected plan_version %q, got %q", "msp_starter", payload.PlanVersion)
 	}
-	if !reflect.DeepEqual(payload.Limits, map[string]int64{"max_monitored_systems": 50}) {
-		t.Fatalf("expected limits to inherit default hosted billing state, got %v", payload.Limits)
+	if len(payload.Limits) != 0 {
+		t.Fatalf("expected retired monitored-system volume keys to be scrubbed from inherited hosted billing state, got %v", payload.Limits)
 	}
 }
 

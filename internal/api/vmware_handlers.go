@@ -81,10 +81,6 @@ func (h *VMwareHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 	if persistence == nil {
 		return
 	}
-	if h.enforceMonitoredSystemLimit(w, r, instance) {
-		return
-	}
-
 	instances, err := persistence.LoadVMwareConfig()
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "vmware_load_failed", "Failed to load VMware configuration", map[string]string{"error": err.Error()})
@@ -255,10 +251,6 @@ func (h *VMwareHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
-	if h.enforceMonitoredSystemLimitReplacement(w, r, instances[index], instance) {
-		return
-	}
-
 	instances[index] = instance
 	if err := persistence.SaveVMwareConfig(instances); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "vmware_save_failed", "Failed to save VMware configuration", map[string]string{"error": err.Error()})
@@ -296,7 +288,7 @@ func (h *VMwareHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http.
 	candidate := vmwareMonitoredSystemCandidate(instance)
 	if !candidate.CountsTowardMonitoredSystems() {
 		preview := unifiedresources.PreviewMonitoredSystemCandidate(usage.readState, candidate)
-		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), false, preview).NormalizeCollections())
+		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(false, preview).NormalizeCollections())
 		return
 	}
 
@@ -314,7 +306,7 @@ func (h *VMwareHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http.
 		return
 	}
 
-	writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), false, preview).NormalizeCollections())
+	writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(false, preview).NormalizeCollections())
 }
 
 // HandlePreviewSavedConnection projects the monitored-system impact of editing
@@ -384,7 +376,7 @@ func (h *VMwareHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r *
 				replacement,
 				candidate,
 			)
-			writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), true, preview).NormalizeCollections())
+			writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(true, preview).NormalizeCollections())
 			return
 		}
 
@@ -406,7 +398,7 @@ func (h *VMwareHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r *
 			return
 		}
 
-		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), true, preview).NormalizeCollections())
+		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(true, preview).NormalizeCollections())
 		return
 	}
 
@@ -668,99 +660,6 @@ func (h *VMwareHandlers) monitorForRequest(ctx context.Context) *monitoring.Moni
 		return nil
 	}
 	return h.getMonitor(ctx)
-}
-
-func (h *VMwareHandlers) enforceMonitoredSystemLimit(
-	w http.ResponseWriter,
-	r *http.Request,
-	instance config.VMwareVCenterInstance,
-) bool {
-	candidate := vmwareMonitoredSystemCandidate(instance)
-	if !candidate.CountsTowardMonitoredSystems() {
-		return false
-	}
-
-	limit := maxMonitoredSystemsLimitForContext(r.Context())
-	if limit <= 0 {
-		return false
-	}
-
-	monitor := h.monitorForRequest(r.Context())
-	usage := monitoredSystemUsage(monitor)
-	if !usage.available {
-		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
-		return true
-	}
-
-	records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), instance)
-	if err != nil {
-		h.writeConnectionFailure(w, invalidConfig, err)
-		return true
-	}
-
-	decision := monitoredSystemLimitDecisionForRecordsFromUsage(r.Context(), limit, usage, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
-		unifiedresources.SourceVMware: records,
-	})
-	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
-		return true
-	}
-	if !decision.exceeded {
-		return false
-	}
-
-	writeMaxMonitoredSystemsLimitExceeded(w, decision)
-	return true
-}
-
-func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(
-	w http.ResponseWriter,
-	r *http.Request,
-	current config.VMwareVCenterInstance,
-	next config.VMwareVCenterInstance,
-) bool {
-	candidate := vmwareMonitoredSystemCandidate(next)
-	if !candidate.CountsTowardMonitoredSystems() {
-		return false
-	}
-
-	limit := maxMonitoredSystemsLimitForContext(r.Context())
-	if limit <= 0 {
-		return false
-	}
-
-	monitor := h.monitorForRequest(r.Context())
-	usage := monitoredSystemUsage(monitor)
-	if !usage.available {
-		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
-		return true
-	}
-
-	records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)
-	if err != nil {
-		h.writeConnectionFailure(w, invalidConfig, err)
-		return true
-	}
-
-	replacementID := strings.TrimSpace(current.ID)
-	decision := monitoredSystemLimitDecisionForRecordsReplacementFromUsage(r.Context(), limit, usage, unifiedresources.MonitoredSystemReplacement{
-		Source: unifiedresources.SourceVMware,
-		Selector: unifiedresources.MonitoredSystemReplacementSelector{
-			ResourceID: replacementID,
-		},
-	}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
-		unifiedresources.SourceVMware: records,
-	})
-	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
-		return true
-	}
-	if !decision.exceeded {
-		return false
-	}
-
-	writeMaxMonitoredSystemsLimitExceeded(w, decision)
-	return true
 }
 
 func (h *VMwareHandlers) previewMonitoredSystemRecords(

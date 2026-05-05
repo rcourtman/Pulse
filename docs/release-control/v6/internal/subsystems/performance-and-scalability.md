@@ -498,18 +498,18 @@ sampling work and drift out of sync with the governed history timeline.
 All governed performance-owned runtime files now require explicit registry
 path-policy coverage, so new protected hot paths must be mapped to a concrete
 proof route instead of falling back to subsystem-default verification.
-Monitored-system admission and entitlement usage now also sit on a protected
-backend hot path. `internal/api/monitored_system_limit_enforcement.go` and
-the unified-resource projection helpers must reuse one current monitored-
-system snapshot plus prospective candidate/preview projection for add and
-update checks instead of rescanning platform inventories per handler or
-falling back to zero when monitor state is unavailable.
+Monitored-system grouping preview now also sits on a protected backend hot
+path. The removed monitored-system limit-enforcement path must not return;
+unified-resource projection helpers should reuse one current monitored-system
+snapshot plus prospective candidate/preview projection for settings/support
+explanation instead of rescanning platform inventories per handler or falling
+back to zero when monitor state is unavailable.
 That protected path now also includes supplemental-inventory settlement.
-Performance work may not shortcut monitored-system usage readiness to "store
-exists" once provider-owned platforms such as TrueNAS or VMware suppress
-snapshot-owned sources; the hot path must fail closed until the monitor has
-both observed an initial baseline for every active connection and rebuilt the
-canonical store at or after the latest provider watermark.
+Performance work may not shortcut monitored-system grouping readiness to
+"store exists" once provider-owned platforms such as TrueNAS or VMware suppress
+snapshot-owned sources; the hot path must report preview unavailability until
+the monitor has both observed an initial baseline for every active connection
+and rebuilt the canonical store at or after the latest provider watermark.
 
 The Workloads selector path and the Workloads runtime that consumes it
 are now part of the protected performance surface rather than proof-only

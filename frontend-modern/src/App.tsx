@@ -9,7 +9,6 @@ import { logger } from './utils/logger';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
-import { MonitoredSystemLimitWarningBanner } from './components/shared/MonitoredSystemLimitWarningBanner';
 import { WhatsNewModal } from './components/shared/WhatsNewModal';
 import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
 import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
@@ -379,7 +378,6 @@ function App() {
                         <SecurityWarning />
                         <DemoBanner />
                         <UpdateBanner />
-                        <MonitoredSystemLimitWarningBanner />
                         <GitHubStarBanner />
                         <WhatsNewModal />
                         <GlobalUpdateProgressWatcher />

@@ -252,7 +252,7 @@ func TestHandleAddNode_PBSTurnkeyTokenCreationUsesCanonicalPulseURL(t *testing.T
 	}
 }
 
-func TestHandleAddNode_BlocksNewCountedSystemAtLimit(t *testing.T) {
+func TestHandleAddNode_AllowsNewCountedSystemWithCapsRetired(t *testing.T) {
 	stubAutoRegisterNetworkDeps(t)
 
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
@@ -307,8 +307,8 @@ func TestHandleAddNode_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleAddNode(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402 once monitored-system cap is full, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -363,7 +363,7 @@ func TestHandleAddNode_AllowsCanonicalOverlapAtLimit(t *testing.T) {
 	}
 }
 
-func TestHandleAddNode_FailsClosedWhenUsageUnavailable(t *testing.T) {
+func TestHandleAddNode_AllowsWhenUsageUnavailableWithCapsRetired(t *testing.T) {
 	stubAutoRegisterNetworkDeps(t)
 
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
@@ -386,8 +386,8 @@ func TestHandleAddNode_FailsClosedWhenUsageUnavailable(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleAddNode(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503 when monitored-system usage cannot be resolved, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 when monitored-system usage is unavailable and caps are retired, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

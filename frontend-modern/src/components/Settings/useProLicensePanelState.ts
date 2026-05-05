@@ -18,12 +18,10 @@ import {
   getSelfHostedPlanComparisonPresentation,
   getSelfHostedCurrentPlanPresentation,
   getLicenseFeatureLabel,
-  getMonitoredSystemContinuityNotice,
   getPurchaseActivationNotice,
   getSelfHostedCurrentPlanStatusPresentation,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
-  getDisplayableMonitoredSystemContinuity,
   isDisplayableLicenseFeature,
 } from '@/utils/licensePresentation';
 import {
@@ -31,10 +29,8 @@ import {
   getSelfHostedBillingPlanDetail,
   getSelfHostedBillingPlanIntent,
   getSelfHostedBillingPurchaseArrival,
-  getSelfHostedBillingUsageDetail,
   resolveSelfHostedBillingSection,
   resolveSelfHostedPurchaseStartDestination,
-  SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
   SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
   SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
@@ -47,23 +43,14 @@ import {
   SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
   SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM,
-  SELF_HOSTED_PRO_BILLING_USAGE_HREF,
-  SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,
   type SelfHostedBillingPlanIntent,
   type SelfHostedBillingSection,
 } from '@/utils/pricingHandoff';
 import {
   buildSelfHostedCommercialPlanModel,
   LIFETIME_DAYS_REMAINING_LABEL,
-  SELF_HOSTED_NOT_METERED_LABEL,
 } from '@/utils/commercialBillingModel';
 import { getSelfHostedPlanDefinitionForBillingTier } from '@/utils/selfHostedPlans';
-import {
-  buildMonitoredSystemCapacitySectionModel,
-  getMonitoredSystemLimitCapacityStatusSummary,
-  getMonitoredSystemLimitUsageSummary,
-  resolveMonitoredSystemCapacityStatus,
-} from '@/utils/monitoredSystemPresentation';
 import { resolveUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 
@@ -148,104 +135,30 @@ export function useProLicensePanelState() {
     resolveSelfHostedBillingSection(location.pathname, location.search, location.hash),
   );
 
-  const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
-  const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
   const selfHostedPlanDefinition = createMemo(() =>
     getSelfHostedPlanDefinitionForBillingTier(entitlements()?.tier),
   );
-  const usesCanonicalSelfHostedPlan = createMemo(() => Boolean(selfHostedPlanDefinition()));
-  const monitoredSystemLimitStatus = createMemo(() =>
-    usesCanonicalSelfHostedPlan() ? undefined : limitStatus('max_monitored_systems'),
-  );
-  const monitoredSystemCapacity = createMemo(() =>
-    usesCanonicalSelfHostedPlan() ? undefined : entitlements()?.monitored_system_capacity,
-  );
-  const displayableMonitoredSystemContinuity = createMemo(() => {
-    if (usesCanonicalSelfHostedPlan()) {
-      return null;
-    }
-    return getDisplayableMonitoredSystemContinuity({
-      continuity: monitoredSystemContinuity(),
-      planVersion: entitlements()?.plan_version,
-      isLifetime: entitlements()?.is_lifetime,
-      subscriptionState: entitlements()?.subscription_state,
-    });
-  });
-
-  const showUsageSection = createMemo(() => {
-    if (!panelDataSettled()) {
-      return true;
-    }
-    if (usesCanonicalSelfHostedPlan()) {
-      return false;
-    }
-
-    const continuity = displayableMonitoredSystemContinuity();
-    if (continuity) {
-      if (continuity.capture_pending) {
-        return true;
-      }
-      if (typeof continuity.plan_limit === 'number' && continuity.plan_limit > 0) {
-        return true;
-      }
-      if (typeof continuity.effective_limit === 'number' && continuity.effective_limit > 0) {
-        return true;
-      }
-      if (
-        typeof continuity.grandfathered_floor === 'number' &&
-        continuity.grandfathered_floor > 0
-      ) {
-        return true;
-      }
-    }
-
-    const resolved = resolveMonitoredSystemCapacityStatus(
-      monitoredSystemCapacity(),
-      monitoredSystemLimitStatus(),
-    );
-    return Boolean(resolved && resolved.limit > 0);
-  });
 
   const activeSection = createMemo<SelfHostedBillingSection>(() => {
-    if (!panelDataSettled()) {
-      return requestedSection();
-    }
-    if (requestedSection() === 'usage' && !showUsageSection()) {
-      return 'plan';
-    }
-    return requestedSection();
+    return requestedSection() === 'usage' ? 'plan' : requestedSection();
   });
 
   createEffect(() => {
     if (!panelDataSettled()) {
       return;
     }
-    if (requestedSection() !== 'usage' || showUsageSection()) {
+    if (requestedSection() !== 'usage') {
       return;
     }
     navigate(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, { replace: true, scroll: false });
   });
 
   const setActiveSection = (section: string) => {
-    if (section !== 'plan' && section !== 'usage') {
+    if (section !== 'plan') {
       return;
     }
-    if (section === 'usage' && panelDataSettled() && !showUsageSection()) {
-      navigate(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, { replace: false, scroll: false });
-      return;
-    }
-    const nextPath =
-      section === 'usage'
-        ? SELF_HOSTED_PRO_BILLING_USAGE_ROUTE
-        : SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
-    navigate(nextPath, { replace: false, scroll: false });
+    navigate(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, { replace: false, scroll: false });
   };
-  const showCountingRulesByDefault = createMemo(
-    () =>
-      activeSection() === 'usage' &&
-      getSelfHostedBillingUsageDetail(location.search) ===
-        SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
-  );
   const showRecoveryByDefault = createMemo(
     () =>
       activeSection() === 'plan' &&
@@ -336,58 +249,7 @@ export function useProLicensePanelState() {
     return segments.length === 3 && segments.every((segment) => segment.length > 0);
   });
 
-  const monitoredSystemUsageSummary = createMemo(() => {
-    const limit = monitoredSystemLimitStatus();
-    const capacity = monitoredSystemCapacity();
-    if (!limit && !capacity && usesCanonicalSelfHostedPlan()) {
-      return SELF_HOSTED_NOT_METERED_LABEL;
-    }
-    return getMonitoredSystemLimitUsageSummary(limit, capacity);
-  });
-  const monitoredSystemCapacityStatusSummary = createMemo(() => {
-    const limit = monitoredSystemLimitStatus();
-    const capacity = monitoredSystemCapacity();
-    if (!limit && !capacity && usesCanonicalSelfHostedPlan()) {
-      return SELF_HOSTED_NOT_METERED_LABEL;
-    }
-    return getMonitoredSystemLimitCapacityStatusSummary(limit, capacity);
-  });
   const currentRetailPlanDefinition = createMemo(() => selfHostedPlanDefinition());
-  const monitoredSystemContinuityNotice = createMemo(() => {
-    const continuity = displayableMonitoredSystemContinuity();
-    if (!continuity) {
-      return null;
-    }
-    return getMonitoredSystemContinuityNotice(
-      continuity,
-      monitoredSystemLimitStatus(),
-      monitoredSystemCapacity(),
-      {
-        planVersion: entitlements()?.plan_version,
-        isLifetime: entitlements()?.is_lifetime,
-        subscriptionState: entitlements()?.subscription_state,
-      },
-    );
-  });
-  const monitoredSystemCapacitySection = createMemo(() => {
-    const section = buildMonitoredSystemCapacitySectionModel(
-      monitoredSystemLimitStatus(),
-      monitoredSystemCapacity(),
-    );
-    if (!section) {
-      return null;
-    }
-    return {
-      ...section,
-      reviewUsageDestination: resolveUpgradeDestination(SELF_HOSTED_PRO_BILLING_USAGE_HREF),
-    };
-  });
-  const continuityCapturedAt = createMemo(() => {
-    const capturedAt = displayableMonitoredSystemContinuity()?.captured_at;
-    return typeof capturedAt === 'number' && capturedAt > 0
-      ? formatUnixDate(capturedAt)
-      : undefined;
-  });
 
   const purchaseActivationNotice = createMemo(() => {
     if (purchaseActivationResult().trim().toLowerCase() === 'activated') {
@@ -466,16 +328,7 @@ export function useProLicensePanelState() {
       planTerms: formattedPlanTerms() || undefined,
       expires: displayedExpiry(),
       daysRemaining: displayedDaysRemaining() ?? 'Unknown',
-      monitoredSystemsSummary: monitoredSystemUsageSummary(),
-      capacityStatusSummary: monitoredSystemCapacityStatusSummary(),
-      maxMonitoredSystems:
-        typeof monitoredSystemLimitStatus()?.limit === 'number' &&
-        monitoredSystemLimitStatus()!.limit > 0
-          ? monitoredSystemLimitStatus()!.limit
-          : SELF_HOSTED_NOT_METERED_LABEL,
       retailPlanDefinition: currentRetailPlanDefinition(),
-      monitoredSystemContinuity: displayableMonitoredSystemContinuity() ?? null,
-      continuityCapturedAt: continuityCapturedAt(),
     }),
   );
   const currentPlanSummary = createMemo(() => {
@@ -573,11 +426,6 @@ export function useProLicensePanelState() {
     commercialPlanModel,
     currentPlanSummary,
     planComparisonSummary,
-    monitoredSystemCapacity,
-    monitoredSystemLimitStatus,
-    displayableMonitoredSystemContinuity,
-    monitoredSystemCapacitySection,
-    monitoredSystemContinuityNotice,
     entitlements,
     formattedFeatures,
     grandfatheredPriceNotice,
@@ -593,8 +441,6 @@ export function useProLicensePanelState() {
     purchaseActivationAction,
     setActiveSection,
     setLicenseKey,
-    showUsageSection,
-    showCountingRulesByDefault,
     showRecoveryByDefault,
     statusPresentation,
   };

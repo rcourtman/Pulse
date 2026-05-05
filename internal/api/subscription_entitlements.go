@@ -40,16 +40,8 @@ func (h *LicenseHandlers) buildCommercialEntitlementPayload(
 	usage := h.entitlementUsageSnapshot(ctx)
 	trialEndsAtUnix := trialEndsAtUnixFromService(svc)
 
-	// Onboarding overflow: +1 agent for 14 days on free tier. Only applies
-	// on plans that have an actual cap — adding the bonus to an uncapped
-	// limit (0) would surface as a cap of 1 to the UI.
 	overflowGrantedAt := h.ensureOnboardingOverflow(ctx, status.Tier)
 	now := time.Now()
-	if status.MaxMonitoredSystems > 0 {
-		if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
-			status.MaxMonitoredSystems += bonus
-		}
-	}
 
 	payload := buildEntitlementPayloadWithUsage(
 		status,
@@ -129,14 +121,6 @@ func (h *LicenseHandlers) HandleRuntimeCapabilities(w http.ResponseWriter, r *ht
 	status := svc.Status()
 	usage := h.entitlementUsageSnapshot(r.Context())
 
-	overflowGrantedAt := h.ensureOnboardingOverflow(r.Context(), status.Tier)
-	now := time.Now()
-	if status.MaxMonitoredSystems > 0 {
-		if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
-			status.MaxMonitoredSystems += bonus
-		}
-	}
-
 	payload := buildRuntimeCapabilitiesPayloadWithUsage(
 		status,
 		h.payloadSubscriptionStateForService(svc),
@@ -177,9 +161,8 @@ func trialEndsAtUnixFromService(svc *licenseService) *int64 {
 
 type entitlementUsageSnapshot = entitlementUsageSnapshotModel
 
-// entitlementUsageSnapshot returns best-effort runtime usage counts for limits.
-// The monitored-system cap applies to canonical top-level monitored systems
-// regardless of collection path.
+// entitlementUsageSnapshot returns best-effort runtime usage counts for
+// entitlement payloads and billing/support context.
 func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlementUsageSnapshot {
 	usage := entitlementUsageSnapshot{}
 	if h == nil {

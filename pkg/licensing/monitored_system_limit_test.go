@@ -9,38 +9,6 @@ import (
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 )
 
-func TestExceedsMonitoredSystemLimit(t *testing.T) {
-	tests := []struct {
-		name      string
-		current   int
-		additions int
-		limit     int
-		want      bool
-	}{
-		{name: "unlimited", current: 10, additions: 1, limit: 0, want: false},
-		{name: "no additions", current: 5, additions: 0, limit: 5, want: false},
-		{name: "within limit", current: 4, additions: 1, limit: 5, want: false},
-		{name: "at limit", current: 5, additions: 1, limit: 5, want: true},
-		{name: "over limit", current: 6, additions: 1, limit: 5, want: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ExceedsMonitoredSystemLimit(tt.current, tt.additions, tt.limit); got != tt.want {
-				t.Fatalf("expected %t, got %t", tt.want, got)
-			}
-		})
-	}
-}
-
-func TestMonitoredSystemLimitExceededMessage(t *testing.T) {
-	got := MonitoredSystemLimitExceededMessage(6, 5)
-	want := "Monitored-system capacity reached (6/5). Remove a monitored system before adding more."
-	if got != want {
-		t.Fatalf("expected %q, got %q", want, got)
-	}
-}
-
 func TestInstalledUnifiedAgentCount(t *testing.T) {
 	snapshot := models.StateSnapshot{
 		Hosts:       []models.Host{{ID: "h1"}, {ID: "h2"}, {ID: "h3"}},

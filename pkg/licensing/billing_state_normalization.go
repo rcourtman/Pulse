@@ -48,9 +48,6 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
 
 	normalized.Limits = NormalizeMonitoredSystemLimits(normalized.Limits)
-	if IsSelfHostedCoreMonitoringUncappedPlanVersion(normalized.PlanVersion) {
-		stripLegacyCommercialCaps(normalized.Limits)
-	}
 
 	// Ensure slices/maps are never nil (JSON marshals as [] / {} instead of null).
 	if normalized.Capabilities == nil {
@@ -65,30 +62,15 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	// Preserve absence when the stored hosted billing record has no plan label.
 	// Canonical defaults still come from DefaultBillingState()/call-site defaults.
 	normalized.PlanVersion = CanonicalizePlanVersion(normalized.PlanVersion)
+	stripSelfHostedCommercialVolumeCaps(normalized.Limits, normalized.PlanVersion, "", false)
 	switch normalized.SubscriptionState {
 	case SubStateExpired, SubStateSuspended, SubStateCanceled:
 		normalized.Capabilities = []string{}
 		normalized.Limits = map[string]int64{}
 		normalized.MetersEnabled = []string{}
-	default:
-		if limit, ok := billingStateStoredMonitoredSystemLimit(normalized.PlanVersion); ok {
-			normalized.Limits[MaxMonitoredSystemsLicenseGateKey] = int64(limit)
-		}
 	}
 
 	return normalized
-}
-
-func billingStateStoredMonitoredSystemLimit(planVersion string) (int, bool) {
-	planVersion = CanonicalizePlanVersion(planVersion)
-	if IsSelfHostedCoreMonitoringUncappedPlanVersion(planVersion) {
-		return 0, false
-	}
-	limit, known := CloudPlanMonitoredSystemLimits[planVersion]
-	if !known || limit <= 0 {
-		return 0, false
-	}
-	return limit, true
 }
 
 func IsValidBillingSubscriptionState(state SubscriptionState) bool {

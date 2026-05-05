@@ -8,37 +8,34 @@ import (
 
 func TestGrantClaimsToClaims(t *testing.T) {
 	tests := []struct {
-		name                    string
-		gc                      *GrantClaims
-		wantTier                Tier
-		wantSubState            SubscriptionState
-		wantLicenseID           string
-		wantEmail               string
-		wantFeatures            []string
-		wantMaxMonitoredSystems int
-		wantMaxGuests           int
+		name          string
+		gc            *GrantClaims
+		wantTier      Tier
+		wantSubState  SubscriptionState
+		wantLicenseID string
+		wantEmail     string
+		wantFeatures  []string
+		wantMaxGuests int
 	}{
 		{
 			name: "active state with email",
 			gc: &GrantClaims{
-				LicenseID:           "lic_123",
-				InstallationID:      "inst_abc",
-				State:               "active",
-				Tier:                "pro",
-				Email:               "user@example.com",
-				Features:            []string{"ai_patrol", "relay"},
-				MaxMonitoredSystems: 10,
-				MaxGuests:           5,
-				IssuedAt:            time.Now().Unix(),
-				ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+				LicenseID:      "lic_123",
+				InstallationID: "inst_abc",
+				State:          "active",
+				Tier:           "pro",
+				Email:          "user@example.com",
+				Features:       []string{"ai_patrol", "relay"},
+				MaxGuests:      5,
+				IssuedAt:       time.Now().Unix(),
+				ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
 			},
-			wantTier:                TierPro,
-			wantSubState:            SubStateActive,
-			wantLicenseID:           "lic_123",
-			wantEmail:               "user@example.com",
-			wantFeatures:            []string{"ai_patrol", "relay"},
-			wantMaxMonitoredSystems: 10,
-			wantMaxGuests:           5,
+			wantTier:      TierPro,
+			wantSubState:  SubStateActive,
+			wantLicenseID: "lic_123",
+			wantEmail:     "user@example.com",
+			wantFeatures:  []string{"ai_patrol", "relay"},
+			wantMaxGuests: 5,
 		},
 		{
 			name: "past_due maps to grace",
@@ -118,9 +115,6 @@ func TestGrantClaimsToClaims(t *testing.T) {
 					}
 				}
 			}
-			if c.MaxMonitoredSystems != tt.wantMaxMonitoredSystems {
-				t.Errorf("MaxMonitoredSystems = %d, want %d", c.MaxMonitoredSystems, tt.wantMaxMonitoredSystems)
-			}
 			if c.MaxGuests != tt.wantMaxGuests {
 				t.Errorf("MaxGuests = %d, want %d", c.MaxGuests, tt.wantMaxGuests)
 			}
@@ -131,13 +125,12 @@ func TestGrantClaimsToClaims(t *testing.T) {
 func TestGrantClaimsToLicense(t *testing.T) {
 	t.Run("basic license from grant", func(t *testing.T) {
 		gc := &GrantClaims{
-			LicenseID:           "lic_test",
-			State:               "active",
-			Tier:                "pro",
-			Features:            []string{"relay", "ai_patrol"},
-			MaxMonitoredSystems: 25,
-			IssuedAt:            time.Now().Unix(),
-			ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+			LicenseID: "lic_test",
+			State:     "active",
+			Tier:      "pro",
+			Features:  []string{"relay", "ai_patrol"},
+			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 		}
 
 		lic := grantClaimsToLicense(gc, "fake.jwt.token")
@@ -149,9 +142,6 @@ func TestGrantClaimsToLicense(t *testing.T) {
 		}
 		if lic.Claims.Tier != TierPro {
 			t.Errorf("Tier = %q, want %q", lic.Claims.Tier, TierPro)
-		}
-		if lic.Claims.MaxMonitoredSystems != 25 {
-			t.Errorf("MaxMonitoredSystems = %d, want 25", lic.Claims.MaxMonitoredSystems)
 		}
 		if lic.GracePeriodEnd != nil {
 			t.Error("GracePeriodEnd should be nil when no grace_until")
@@ -179,27 +169,21 @@ func TestGrantClaimsToLicense(t *testing.T) {
 	})
 }
 
-func TestGrantClaimsToClaimsWithContinuityDoesNotWriteRawFloorForUncappedSelfHostedPro(t *testing.T) {
+func TestGrantClaimsToClaimsWithContinuityDoesNotSurfaceRetiredMonitoredSystemLimit(t *testing.T) {
 	gc := &GrantClaims{
-		LicenseID:           "lic_floor",
-		State:               "active",
-		Tier:                "pro",
-		MaxMonitoredSystems: 0,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID: "lic_floor",
+		State:     "active",
+		Tier:      "pro",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 	}
 
 	claims := grantClaimsToClaimsWithContinuity(gc, ActivationContinuity{
-		LegacyMigration:                         true,
-		GrandfatheredMaxMonitoredSystems:        1,
-		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
+		LegacyMigration: true,
 	})
 
 	if !claims.CoreMonitoringUncapped {
 		t.Fatal("expected grant-backed self-hosted continuity claims to carry the uncapped core monitoring marker")
-	}
-	if claims.MaxMonitoredSystems != 0 {
-		t.Fatalf("MaxMonitoredSystems = %d, want 0 for uncapped self-hosted Pro", claims.MaxMonitoredSystems)
 	}
 	if _, ok := claims.Limits[MaxMonitoredSystemsLicenseGateKey]; ok {
 		t.Fatalf("Limits[%q] present, want absent for uncapped self-hosted Pro", MaxMonitoredSystemsLicenseGateKey)
@@ -209,80 +193,20 @@ func TestGrantClaimsToClaimsWithContinuityDoesNotWriteRawFloorForUncappedSelfHos
 	}
 }
 
-func TestGrantClaimsToClaimsWithContinuityAppliesGrandfatherFloorToCappedGrant(t *testing.T) {
-	gc := &GrantClaims{
-		LicenseID:           "lic_floor_capped",
-		State:               "active",
-		Tier:                "legacy_capped",
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-	}
-
-	claims := grantClaimsToClaimsWithContinuity(gc, ActivationContinuity{
-		LegacyMigration:                         true,
-		GrandfatheredMaxMonitoredSystems:        23,
-		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
-	})
-
-	if claims.CoreMonitoringUncapped {
-		t.Fatal("did not expect capped continuity claims to carry the uncapped core monitoring marker")
-	}
-	if claims.MaxMonitoredSystems != 23 {
-		t.Fatalf("MaxMonitoredSystems = %d, want 23", claims.MaxMonitoredSystems)
-	}
-	if got := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; got != 23 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d, want 23", got)
-	}
-}
-
-func TestGrantClaimsToClaimsWithContinuityDoesNotLowerGrantLimit(t *testing.T) {
-	gc := &GrantClaims{
-		LicenseID:           "lic_noop",
-		State:               "active",
-		Tier:                "pro",
-		MaxMonitoredSystems: 15,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-	}
-
-	claims := grantClaimsToClaimsWithContinuity(gc, ActivationContinuity{
-		LegacyMigration:                         true,
-		GrandfatheredMaxMonitoredSystems:        10,
-		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
-	})
-
-	// Floor of 10 is below grant's 15, so the raw field is left at 15. Either
-	// way, self-hosted Pro is uncapped so EffectiveLimits does not surface a cap.
-	if !claims.CoreMonitoringUncapped {
-		t.Fatal("expected grant-backed self-hosted continuity claims to carry the uncapped core monitoring marker")
-	}
-	if claims.MaxMonitoredSystems != 15 {
-		t.Fatalf("MaxMonitoredSystems = %d, want 15", claims.MaxMonitoredSystems)
-	}
-	if got, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d present, want absent (uncapped self-hosted)", got)
-	}
-}
-
 func TestGrantClaimsToClaimsCanonicalizesCloudPlanAtEntitlementBoundary(t *testing.T) {
 	gc := &GrantClaims{
-		LicenseID:           "lic_cloud",
-		State:               "active",
-		Tier:                string(TierCloud),
-		PlanKey:             "cloud_v1",
-		MaxMonitoredSystems: 999,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		GraceUntil:          0,
+		LicenseID:  "lic_cloud",
+		State:      "active",
+		Tier:       string(TierCloud),
+		PlanKey:    "cloud_v1",
+		IssuedAt:   time.Now().Unix(),
+		ExpiresAt:  time.Now().Add(72 * time.Hour).Unix(),
+		GraceUntil: 0,
 	}
 
 	claims := grantClaimsToClaims(gc)
 	if got := claims.EntitlementPlanVersion(); got != "cloud_starter" {
 		t.Fatalf("EntitlementPlanVersion()=%q, want %q", got, "cloud_starter")
-	}
-	if got := claims.EffectiveLimits()["max_monitored_systems"]; got != 10 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d, want %d", got, 10)
 	}
 	if got := claims.EntitlementSubscriptionState(); got != SubStateActive {
 		t.Fatalf("EntitlementSubscriptionState()=%q, want %q", got, SubStateActive)
@@ -387,14 +311,13 @@ func TestParseGrantJWTUnsafe(t *testing.T) {
 		{
 			name: "valid grant",
 			jwt: makeUnsignedTestGrantJWT(t, &GrantClaims{
-				LicenseID:           "lic_test",
-				InstallationID:      "inst_abc",
-				State:               "active",
-				Tier:                "pro",
-				Features:            []string{"relay"},
-				MaxMonitoredSystems: 10,
-				IssuedAt:            1000,
-				ExpiresAt:           2000,
+				LicenseID:      "lic_test",
+				InstallationID: "inst_abc",
+				State:          "active",
+				Tier:           "pro",
+				Features:       []string{"relay"},
+				IssuedAt:       1000,
+				ExpiresAt:      2000,
 			}),
 			check: func(t *testing.T, gc *GrantClaims) {
 				if gc.LicenseID != "lic_test" {
@@ -402,9 +325,6 @@ func TestParseGrantJWTUnsafe(t *testing.T) {
 				}
 				if gc.Tier != "pro" {
 					t.Errorf("Tier = %q, want %q", gc.Tier, "pro")
-				}
-				if gc.MaxMonitoredSystems != 10 {
-					t.Errorf("MaxMonitoredSystems = %d, want 10", gc.MaxMonitoredSystems)
 				}
 				if gc.State != "active" {
 					t.Errorf("State = %q, want %q", gc.State, "active")

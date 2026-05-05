@@ -216,13 +216,12 @@ func TestServiceActivate_ExchangedLegacyJWTMarksLegacyMigrationContinuity(t *tes
 	}
 
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_continuity",
-		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
-		State:               "active",
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID: "lic_continuity",
+		Tier:      "pro",
+		PlanKey:   "v5_pro_monthly_grandfathered",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -232,10 +231,9 @@ func TestServiceActivate_ExchangedLegacyJWTMarksLegacyMigrationContinuity(t *tes
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
 			License: ActivateResponseLicense{
-				LicenseID:           "lic_continuity",
-				State:               "active",
-				Tier:                "pro",
-				MaxMonitoredSystems: 10,
+				LicenseID: "lic_continuity",
+				State:     "active",
+				Tier:      "pro",
 			},
 			Installation: ActivateResponseInstallation{
 				InstallationID:    "inst_continuity",
@@ -264,9 +262,6 @@ func TestServiceActivate_ExchangedLegacyJWTMarksLegacyMigrationContinuity(t *tes
 	if !state.Continuity.LegacyMigration {
 		t.Fatal("expected legacy exchange to mark legacy migration continuity")
 	}
-	if state.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
-		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 before capture", state.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
-	}
 }
 
 func TestServiceActivate_CallsActivationStateChangeCallback(t *testing.T) {
@@ -280,13 +275,12 @@ func TestServiceActivate_CallsActivationStateChangeCallback(t *testing.T) {
 	}
 
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_activation_callback",
-		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
-		State:               "active",
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID: "lic_activation_callback",
+		Tier:      "pro",
+		PlanKey:   "v5_pro_monthly_grandfathered",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -296,10 +290,9 @@ func TestServiceActivate_CallsActivationStateChangeCallback(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
 			License: ActivateResponseLicense{
-				LicenseID:           "lic_activation_callback",
-				State:               "active",
-				Tier:                "pro",
-				MaxMonitoredSystems: 10,
+				LicenseID: "lic_activation_callback",
+				State:     "active",
+				Tier:      "pro",
 			},
 			Installation: ActivateResponseInstallation{
 				InstallationID:    "inst_activation_callback",
@@ -340,13 +333,12 @@ func TestServiceRestoreActivation_CallsActivationStateChangeCallback(t *testing.
 	setupTestPublicKey(t)
 
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_restore_callback",
-		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
-		State:               "active",
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID: "lic_restore_callback",
+		Tier:      "pro",
+		PlanKey:   "v5_pro_monthly_grandfathered",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 	})
 
 	svc := NewService()
@@ -383,109 +375,27 @@ func TestServiceRestoreActivation_CallsActivationStateChangeCallback(t *testing.
 	}
 }
 
-func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorSkipsUncappedSelfHosted(t *testing.T) {
-	setupTestPublicKey(t)
-
-	tmpDir, err := os.MkdirTemp("", "pulse-service-floor-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	p, err := NewPersistence(tmpDir)
-	if err != nil {
-		t.Fatalf("create persistence: %v", err)
-	}
-
-	initialGrantJWT := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_floor",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-	})
-
-	svc := NewService()
-	svc.SetPersistence(p)
-	var callbackState *ActivationState
-	svc.SetActivationStateChangeCallback(func(state *ActivationState) {
-		callbackState = state
-	})
-	state := &ActivationState{
-		InstallationID:      "inst_floor",
-		InstallationToken:   "pit_live_floor",
-		LicenseID:           "lic_floor",
-		GrantJWT:            initialGrantJWT,
-		GrantJTI:            "grant_floor",
-		InstanceFingerprint: "fp-floor",
-		Continuity: ActivationContinuity{
-			LegacyMigration: true,
-		},
-	}
-	if err := svc.RestoreActivation(state); err != nil {
-		t.Fatalf("RestoreActivation: %v", err)
-	}
-
-	callbackState = nil
-	if err := svc.CaptureLegacyMonitoredSystemGrandfatherFloor(23); err != nil {
-		t.Fatalf("CaptureLegacyMonitoredSystemGrandfatherFloor: %v", err)
-	}
-	if callbackState != nil {
-		t.Fatalf("expected no activation-state callback for uncapped self-hosted capture, got %+v", callbackState)
-	}
-
-	status := svc.Status()
-	if status.MaxMonitoredSystems != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 (uncapped self-hosted)", status.MaxMonitoredSystems)
-	}
-	if status.MonitoredSystemContinuity != nil {
-		t.Fatalf("expected no monitored-system continuity banner for uncapped self-hosted migration, got %+v", status.MonitoredSystemContinuity)
-	}
-
-	current := svc.Current()
-	if current == nil {
-		t.Fatal("expected current license")
-	}
-	if got, ok := current.Claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d present, want absent (uncapped self-hosted)", got)
-	}
-}
-
-func TestServiceStatus_HidesMonitoredSystemContinuityForSelfHostedFallbackMigrations(t *testing.T) {
+func TestServiceStatus_RetiredMonitoredSystemContinuityDoesNotSurfaceForSelfHostedFallbackMigrations(t *testing.T) {
 	setupTestPublicKey(t)
 
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_continuity_status",
-		Tier:                "pro",
-		PlanKey:             "legacy_migration_fallback",
-		State:               "active",
-		MaxMonitoredSystems: 10,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID: "lic_continuity_status",
+		Tier:      "pro",
+		PlanKey:   "legacy_migration_fallback",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 	})
 
 	tests := []struct {
-		name           string
-		continuity     ActivationContinuity
-		wantMaxSystems int
+		name       string
+		continuity ActivationContinuity
 	}{
 		{
 			name: "pending capture",
 			continuity: ActivationContinuity{
 				LegacyMigration: true,
 			},
-			wantMaxSystems: 0,
-		},
-		{
-			name: "captured floor",
-			continuity: ActivationContinuity{
-				LegacyMigration:                         true,
-				GrandfatheredMaxMonitoredSystems:        23,
-				GrandfatheredMonitoredSystemsCapturedAt: 123,
-			},
-			wantMaxSystems: 0,
 		},
 	}
 
@@ -505,11 +415,13 @@ func TestServiceStatus_HidesMonitoredSystemContinuityForSelfHostedFallbackMigrat
 			}
 
 			status := svc.Status()
-			if status.MaxMonitoredSystems != tt.wantMaxSystems {
-				t.Fatalf("status.MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, tt.wantMaxSystems)
+			if status == nil || !status.Valid {
+				t.Fatalf("expected valid status, got %+v", status)
 			}
-			if status.MonitoredSystemContinuity != nil {
-				t.Fatalf("expected no monitored-system continuity banner for uncapped self-hosted migration, got %+v", status.MonitoredSystemContinuity)
+			if current := svc.Current(); current == nil {
+				t.Fatal("expected current license")
+			} else if _, ok := current.Claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
+				t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", current.Claims.EffectiveLimits())
 			}
 		})
 	}
@@ -519,14 +431,12 @@ func TestServiceStatus_GrandfatheredRecurringV5IsUncapped(t *testing.T) {
 	setupTestPublicKey(t)
 
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
-		LicenseID:           "lic_recurring_grandfathered",
-		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
-		State:               "active",
-		MaxMonitoredSystems: 10,
-		MaxGuests:           5,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		LicenseID: "lic_recurring_grandfathered",
+		Tier:      "pro",
+		PlanKey:   "v5_pro_monthly_grandfathered",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
 	})
 
 	svc := NewService()
@@ -545,11 +455,8 @@ func TestServiceStatus_GrandfatheredRecurringV5IsUncapped(t *testing.T) {
 	}
 
 	status := svc.Status()
-	if status.MaxMonitoredSystems != 0 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped grandfathered recurring plan", status.MaxMonitoredSystems)
-	}
-	if status.MonitoredSystemContinuity != nil {
-		t.Fatalf("expected no monitored-system continuity banner for uncapped recurring v5 migration, got %+v", status.MonitoredSystemContinuity)
+	if status == nil || !status.Valid {
+		t.Fatalf("expected valid grandfathered status, got %+v", status)
 	}
 
 	current := svc.Current()
@@ -574,7 +481,7 @@ func TestServiceActivate_RejectsMalformedLegacyKeyOutsideDevMode(t *testing.T) {
 	}
 }
 
-func TestServiceStatusCanonicalizesJWTCloudPlanVersionAndLimits(t *testing.T) {
+func TestServiceStatusCanonicalizesJWTCloudPlanVersionAndScrubsRetiredMonitoringLimit(t *testing.T) {
 	svc := NewService()
 	svc.license = &License{
 		Claims: Claims{
@@ -591,9 +498,6 @@ func TestServiceStatusCanonicalizesJWTCloudPlanVersionAndLimits(t *testing.T) {
 	if status.PlanVersion != "cloud_starter" {
 		t.Fatalf("status.PlanVersion=%q, want %q", status.PlanVersion, "cloud_starter")
 	}
-	if status.MaxMonitoredSystems != 10 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, 10)
-	}
 }
 
 func TestServiceStatusMissingJWTCloudPlanFailsClosed(t *testing.T) {
@@ -609,9 +513,6 @@ func TestServiceStatusMissingJWTCloudPlanFailsClosed(t *testing.T) {
 	status := svc.Status()
 	if status.PlanVersion != "" {
 		t.Fatalf("status.PlanVersion=%q, want empty", status.PlanVersion)
-	}
-	if status.MaxMonitoredSystems != UnknownPlanDefaultMonitoredSystemLimit {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, UnknownPlanDefaultMonitoredSystemLimit)
 	}
 }
 

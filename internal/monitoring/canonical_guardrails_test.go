@@ -190,6 +190,26 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 	}
 }
 
+func TestMonitoredSystemUsageStaysInventoryOnly(t *testing.T) {
+	data, err := os.ReadFile("monitored_system_usage.go")
+	if err != nil {
+		t.Fatalf("failed to read monitored_system_usage.go: %v", err)
+	}
+	source := string(data)
+
+	for _, forbidden := range []string{
+		"max_monitored_systems",
+		"license_limit",
+		"would_exceed_limit",
+		"monitored_system_capacity",
+		"admission",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("monitored_system_usage.go must not contain retired cap/admission token %q", forbidden)
+		}
+	}
+}
+
 func TestDockerHostIdentityUsesCanonicalHostnameEquivalence(t *testing.T) {
 	data, err := os.ReadFile("docker_host_identity.go")
 	if err != nil {

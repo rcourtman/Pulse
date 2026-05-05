@@ -133,8 +133,8 @@ func TestIssueTenantBillingStateDefaultsIndividualCloudPlanToStarter(t *testing.
 	if claims.PlanVersion != "cloud_starter" {
 		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_starter")
 	}
-	if got := claims.Limits["max_monitored_systems"]; got != 10 {
-		t.Fatalf("claims.Limits[max_monitored_systems]=%d, want 10", got)
+	if _, ok := claims.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("claims retained retired max_monitored_systems: %v", claims.Limits)
 	}
 }
 
@@ -188,8 +188,8 @@ func TestIssueTenantBillingStateCanonicalizesLegacyStoredPlanVersion(t *testing.
 	if claims.PlanVersion != "cloud_starter" {
 		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_starter")
 	}
-	if got := claims.Limits["max_monitored_systems"]; got != 10 {
-		t.Fatalf("claims.Limits[max_monitored_systems]=%d, want 10", got)
+	if _, ok := claims.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("claims retained retired max_monitored_systems: %v", claims.Limits)
 	}
 }
 
@@ -321,13 +321,8 @@ func TestRefreshLegacyTrialEntitlementReturnsLease(t *testing.T) {
 	if claims.SubscriptionState != pkglicensing.SubStateTrial {
 		t.Fatalf("claims.SubscriptionState=%q, want %q", claims.SubscriptionState, pkglicensing.SubStateTrial)
 	}
-	if got := claims.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey]; got != int64(pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro]) {
-		t.Fatalf(
-			"claims.Limits[%s]=%d, want %d",
-			pkglicensing.MaxMonitoredSystemsLicenseGateKey,
-			got,
-			pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro],
-		)
+	if _, ok := claims.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey]; ok {
+		t.Fatalf("claims retained retired %s: %v", pkglicensing.MaxMonitoredSystemsLicenseGateKey, claims.Limits)
 	}
 }
 

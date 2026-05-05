@@ -8,7 +8,6 @@
 import { createSignal, createMemo, onCleanup } from 'solid-js';
 import { AgentDeployAPI } from '@/api/agentDeploy';
 import { useDeployStream } from '@/hooks/useDeployStream';
-import { getRuntimeLimit } from '@/stores/license';
 import type {
   CandidateNode,
   SourceAgentInfo,
@@ -114,17 +113,10 @@ export function useDeployWizard(opts: UseDeployWizardOptions) {
   );
 
   const skippedTargets = createMemo(() =>
-    jobTargets().filter(
-      (t) => t.status === 'skipped_already_agent' || t.status === 'skipped_license',
-    ),
+    jobTargets().filter((t) => t.status === 'skipped_already_agent'),
   );
 
   const canceledTargets = createMemo(() => jobTargets().filter((t) => t.status === 'canceled'));
-
-  const maxAgentSlots = createMemo(() => {
-    const limit = getRuntimeLimit('max_monitored_systems');
-    return limit?.limit ?? 0;
-  });
 
   const isOperationActive = createMemo(() => step() === 'preflight' || step() === 'deploying');
 
@@ -607,9 +599,6 @@ export function useDeployWizard(opts: UseDeployWizardOptions) {
     retryableTargets,
     skippedTargets,
     canceledTargets,
-
-    // License
-    maxAgentSlots,
 
     // Operation states
     startingPreflight,

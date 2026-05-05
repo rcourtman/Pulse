@@ -29,7 +29,7 @@ func TestNormalizeBillingState(t *testing.T) {
 	trialEnds := int64(200)
 	input := &BillingState{
 		Capabilities:      []string{" a ", "b"},
-		Limits:            map[string]int64{"max_monitored_systems": 10},
+		Limits:            map[string]int64{"max_monitored_systems": 10, "max_guests": 20},
 		MetersEnabled:     []string{"meter_a"},
 		PlanVersion:       "  ",
 		SubscriptionState: SubscriptionState(" ACTIVE "),
@@ -48,20 +48,24 @@ func TestNormalizeBillingState(t *testing.T) {
 	if normalized.StripeCustomerID != "cus_123" {
 		t.Fatalf("stripe_customer_id=%q, want %q", normalized.StripeCustomerID, "cus_123")
 	}
-	if normalized.Limits["max_monitored_systems"] != 10 {
-		t.Fatalf("limits[max_nodes]=%d, want 10", normalized.Limits["max_monitored_systems"])
+	if _, ok := normalized.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected retired max_monitored_systems to be scrubbed, got %v", normalized.Limits)
+	}
+	if normalized.Limits["max_guests"] != 20 {
+		t.Fatalf("limits[max_guests]=%d, want 20", normalized.Limits["max_guests"])
 	}
 
 	input.Capabilities[0] = "changed"
 	input.MetersEnabled[0] = "changed"
 	input.Limits["max_monitored_systems"] = 99
+	input.Limits["max_guests"] = 99
 	if normalized.Capabilities[0] != " a " {
 		t.Fatalf("expected capabilities to be copied")
 	}
 	if normalized.MetersEnabled[0] != "meter_a" {
 		t.Fatalf("expected meters_enabled to be copied")
 	}
-	if normalized.Limits["max_monitored_systems"] != 10 {
+	if normalized.Limits["max_guests"] != 20 {
 		t.Fatalf("expected limits map to be copied")
 	}
 }
@@ -80,7 +84,7 @@ func TestNormalizeBillingState_PreservesAllFields(t *testing.T) {
 
 	input := &BillingState{
 		Capabilities:         []string{"relay", "ai"},
-		Limits:               map[string]int64{"max_monitored_systems": 50},
+		Limits:               map[string]int64{"max_monitored_systems": 50, "max_guests": 100},
 		MetersEnabled:        []string{"active_agents"},
 		PlanVersion:          "pro-v2",
 		SubscriptionState:    SubStateActive,
@@ -99,8 +103,11 @@ func TestNormalizeBillingState_PreservesAllFields(t *testing.T) {
 	if len(normalized.Capabilities) != 2 {
 		t.Fatalf("capabilities: got %v", normalized.Capabilities)
 	}
-	if normalized.Limits["max_monitored_systems"] != 50 {
-		t.Fatalf("limits[max_nodes]: got %d", normalized.Limits["max_monitored_systems"])
+	if _, ok := normalized.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected retired max_monitored_systems to be scrubbed, got %v", normalized.Limits)
+	}
+	if normalized.Limits["max_guests"] != 100 {
+		t.Fatalf("limits[max_guests]: got %d", normalized.Limits["max_guests"])
 	}
 	if normalized.MetersEnabled[0] != "active_agents" {
 		t.Fatalf("meters_enabled: got %v", normalized.MetersEnabled)
@@ -247,40 +254,40 @@ func TestIsValidBillingSubscriptionState(t *testing.T) {
 	}
 }
 
-func TestNormalizeBillingState_MaxNodesToMaxMonitoredSystemsMigration(t *testing.T) {
-	t.Run("legacy_key_migrated", func(t *testing.T) {
+func TestNormalizeBillingState_ScrubsRetiredMonitoredSystemLimitAliases(t *testing.T) {
+	t.Run("legacy_key_removed", func(t *testing.T) {
 		state := &BillingState{
-			Limits: map[string]int64{"max_nodes": 10},
+			Limits: map[string]int64{"max_nodes": 10, "max_reports": 7},
 		}
 		normalized := NormalizeBillingState(state)
-		if normalized.Limits["max_monitored_systems"] != 10 {
-			t.Fatalf("expected max_monitored_systems=10, got %d", normalized.Limits["max_monitored_systems"])
-		}
 		if _, hasOld := normalized.Limits["max_nodes"]; hasOld {
-			t.Fatal("expected max_nodes to be deleted after migration")
+			t.Fatal("expected max_nodes to be deleted")
+		}
+		if got := normalized.Limits["max_reports"]; got != 7 {
+			t.Fatalf("limits[max_reports]=%d, want 7", got)
 		}
 	})
 
-	t.Run("new_key_preserved_legacy_deleted", func(t *testing.T) {
+	t.Run("new_key_and_legacy_deleted", func(t *testing.T) {
 		state := &BillingState{
 			Limits: map[string]int64{"max_monitored_systems": 15, "max_nodes": 5},
 		}
 		normalized := NormalizeBillingState(state)
-		if normalized.Limits["max_monitored_systems"] != 15 {
-			t.Fatalf("expected max_monitored_systems=15, got %d", normalized.Limits["max_monitored_systems"])
+		if _, ok := normalized.Limits["max_monitored_systems"]; ok {
+			t.Fatalf("expected max_monitored_systems to be deleted, got %v", normalized.Limits)
 		}
 		if _, hasOld := normalized.Limits["max_nodes"]; hasOld {
-			t.Fatal("expected max_nodes to be deleted when max_monitored_systems exists")
+			t.Fatal("expected max_nodes to be deleted")
 		}
 	})
 
-	t.Run("no_legacy_key_no_change", func(t *testing.T) {
+	t.Run("retired_new_key_deleted", func(t *testing.T) {
 		state := &BillingState{
 			Limits: map[string]int64{"max_monitored_systems": 20},
 		}
 		normalized := NormalizeBillingState(state)
-		if normalized.Limits["max_monitored_systems"] != 20 {
-			t.Fatalf("expected max_monitored_systems=20, got %d", normalized.Limits["max_monitored_systems"])
+		if _, ok := normalized.Limits["max_monitored_systems"]; ok {
+			t.Fatalf("expected max_monitored_systems to be deleted, got %v", normalized.Limits)
 		}
 	})
 }
@@ -291,6 +298,7 @@ func TestNormalizeBillingState_CanonicalizesCloudPlanVersionAndLimits(t *testing
 		Limits: map[string]int64{
 			"max_monitored_systems": 999,
 			"max_nodes":             5,
+			"max_guests":            7,
 		},
 	}
 
@@ -298,11 +306,14 @@ func TestNormalizeBillingState_CanonicalizesCloudPlanVersionAndLimits(t *testing
 	if normalized.PlanVersion != "cloud_starter" {
 		t.Fatalf("plan_version=%q, want %q", normalized.PlanVersion, "cloud_starter")
 	}
-	if got := normalized.Limits["max_monitored_systems"]; got != 10 {
-		t.Fatalf("limits[max_monitored_systems]=%d, want %d", got, 10)
+	if _, ok := normalized.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected max_monitored_systems to be scrubbed, got %v", normalized.Limits)
 	}
 	if _, hasOld := normalized.Limits["max_nodes"]; hasOld {
 		t.Fatal("expected max_nodes to be deleted during normalization")
+	}
+	if got := normalized.Limits["max_guests"]; got != 7 {
+		t.Fatalf("limits[max_guests]=%d, want 7", got)
 	}
 }
 
@@ -337,6 +348,7 @@ func TestNormalizeBillingState_PreservesUnknownNonCloudPlanLimits(t *testing.T) 
 		PlanVersion: "pro-v2",
 		Limits: map[string]int64{
 			"max_monitored_systems": 50,
+			"max_guests":            7,
 		},
 	}
 
@@ -344,8 +356,11 @@ func TestNormalizeBillingState_PreservesUnknownNonCloudPlanLimits(t *testing.T) 
 	if normalized.PlanVersion != "pro-v2" {
 		t.Fatalf("plan_version=%q, want %q", normalized.PlanVersion, "pro-v2")
 	}
-	if got := normalized.Limits["max_monitored_systems"]; got != 50 {
-		t.Fatalf("limits[max_monitored_systems]=%d, want %d", got, 50)
+	if _, ok := normalized.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected max_monitored_systems to be scrubbed, got %v", normalized.Limits)
+	}
+	if got := normalized.Limits["max_guests"]; got != 7 {
+		t.Fatalf("limits[max_guests]=%d, want 7", got)
 	}
 }
 

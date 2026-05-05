@@ -83,7 +83,6 @@ function createMockWizard(overrides: Record<string, unknown> = {}) {
     // Confirm
     confirmSelectedNodeIds: sig('confirmSelectedNodeIds', new Set<string>()),
     toggleConfirmNode: (overrides.toggleConfirmNode as (id: string) => void) ?? vi.fn(),
-    maxAgentSlots: sig('maxAgentSlots', 0),
     // Deploy
     jobTargets: sig('jobTargets', []),
     deployError: sig('deployError', ''),
@@ -275,30 +274,6 @@ describe('ConfirmStep', () => {
     expect(screen.getByText('bad-node')).toBeInTheDocument();
     expect(screen.getByText('Cannot deploy (1)')).toBeInTheDocument();
     expect(screen.getByText('SSH failed')).toBeInTheDocument();
-  });
-
-  it('shows workspace capacity info when limit exists', () => {
-    const wizard = createMockWizard({
-      maxAgentSlots: 5,
-      confirmSelectedNodeIds: new Set(['n1', 'n2']),
-      readyNodes: [],
-    });
-    render(() => <ConfirmStep wizard={wizard} />);
-    expect(
-      screen.getByText(/Workspace capacity: 5 monitored systems, 2 nodes selected/),
-    ).toBeInTheDocument();
-  });
-
-  it('shows capacity warning when exceeding limit', () => {
-    const wizard = createMockWizard({
-      maxAgentSlots: 2,
-      confirmSelectedNodeIds: new Set(['n1', 'n2', 'n3']),
-      readyNodes: [],
-    });
-    render(() => <ConfirmStep wizard={wizard} />);
-    expect(
-      screen.getByText(/This workspace can deploy 2 nodes at its current capacity/),
-    ).toBeInTheDocument();
   });
 
   it('calls toggleConfirmNode on row click', () => {

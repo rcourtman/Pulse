@@ -90,7 +90,7 @@ management, and fleet control surfaces.
 63. `frontend-modern/src/components/Settings/platformConnectionsModel.ts`
 64. `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`
 65. `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`
-66. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
+66. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`
 67. `internal/hostagent/proxmox_setup.go`
 68. `internal/remoteconfig/client.go`
 69. `internal/agenttls/config.go`
@@ -101,7 +101,7 @@ management, and fleet control surfaces.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `api-contracts`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 4. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `api-contracts`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-5. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx` shared with `cloud-paid`: the monitored-system admission preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
+5. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx` shared with `cloud-paid`: the monitored-system impact preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
 6. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `api-contracts`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 7. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `api-contracts`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 8. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `api-contracts`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
@@ -151,11 +151,11 @@ Install is the recommended API + Agent path, Direct Connection is the advanced
 API inventory path, and Manual Token Setup is an advanced manual API-token
 escape hatch.
 
-That shared monitored-system admission preview boundary also owns the disabled
+That shared monitored-system impact preview boundary also owns the disabled
 platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks
 the connection disabled, lifecycle surfaces must treat a canonical zero-delta
 or removal-only preview as a valid save path instead of holding the dialog in
-an add-only capacity posture.
+an add-only posture.
 The lifecycle-owned onboarding presentation helper must consume the governed
 platform support manifest for readiness stage, primary mode, canonical
 projections, and support-floor posture.
@@ -362,7 +362,7 @@ profile and assignment columns, but embedded table framing must route through
    Approval-gated command execution must expose stable rejection reasons for
    invalid approval grants so fleet operators can distinguish missing, expired,
    mismatched, and signature-invalid grants through agent metrics.
-9. Add or change profile management, the extracted agent profiles runtime owner, the agent profile settings catalog, the infrastructure source-manager landing, the pure unified-agent inventory/install model, the connections-ledger workspace shell, the unified ConnectionEditor and its per-type credential slots, route model, shared install section owner, the shared direct-node/discovery infrastructure settings owners plus their model, shared frontend install-command assembly, Proxmox setup/install API transport, TrueNAS platform-connection management, VMware platform-connection management, the shared monitored-system admission preview shell for those platform connections, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/agentProfileSettings.ts`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/ConnectionsTable.tsx`, `frontend-modern/src/components/Settings/connectionsTableModel.ts`, `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, `frontend-modern/src/components/Settings/useConnectionRowActions.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Settings/platformConnectionsModel.ts`, `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`, `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`, `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`. Phase 9 retired the legacy reporting/inventory surface (InfrastructureOperationsController, InfrastructureInventorySection, InfrastructureActiveRowDetails, InfrastructureIgnoredRowDetails, InfrastructureStopMonitoringDialog, useInfrastructureReportingState) and the per-type shells (PlatformConnectionsWorkspace, ProxmoxSettingsPanel, ProxmoxDirectWorkspace, ProxmoxConfiguredNodesTable, ProxmoxDirectConnectionsCard, ProxmoxDiscoveryResultsCard, ProxmoxDeleteNodeDialog, ProxmoxNodeModalStack, NodeModal shell, TrueNASSettingsPanel, VMwareSettingsPanel, useProxmoxDirectWorkspaceState); lifecycle extensions must route through the unified aggregator ledger, source-manager cards, and ConnectionEditor credential slots rather than reintroducing those retired surfaces.
+9. Add or change profile management, the extracted agent profiles runtime owner, the agent profile settings catalog, the infrastructure source-manager landing, the pure unified-agent inventory/install model, the connections-ledger workspace shell, the unified ConnectionEditor and its per-type credential slots, route model, shared install section owner, the shared direct-node/discovery infrastructure settings owners plus their model, shared frontend install-command assembly, Proxmox setup/install API transport, TrueNAS platform-connection management, VMware platform-connection management, the shared monitored-system impact preview shell for those platform connections, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/agentProfileSettings.ts`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/ConnectionsTable.tsx`, `frontend-modern/src/components/Settings/connectionsTableModel.ts`, `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, `frontend-modern/src/components/Settings/useConnectionRowActions.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`, `frontend-modern/src/components/Settings/platformConnectionsModel.ts`, `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`, `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`, `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`. Phase 9 retired the legacy reporting/inventory surface (InfrastructureOperationsController, InfrastructureInventorySection, InfrastructureActiveRowDetails, InfrastructureIgnoredRowDetails, InfrastructureStopMonitoringDialog, useInfrastructureReportingState) and the per-type shells (PlatformConnectionsWorkspace, ProxmoxSettingsPanel, ProxmoxDirectWorkspace, ProxmoxConfiguredNodesTable, ProxmoxDirectConnectionsCard, ProxmoxDiscoveryResultsCard, ProxmoxDeleteNodeDialog, ProxmoxNodeModalStack, NodeModal shell, TrueNASSettingsPanel, VMwareSettingsPanel, useProxmoxDirectWorkspaceState); lifecycle extensions must route through the unified aggregator ledger, source-manager cards, and ConnectionEditor credential slots rather than reintroducing those retired surfaces.
    Those lifecycle-owned settings hooks may consume websocket state only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx` or recreate root-shell providers.
    Discovery configuration is part of that same lifecycle-owned workspace boundary. `InfrastructureSourceManager.tsx` must open one canonical discovery editor through `InfrastructureDiscoverySettingsDialog.tsx`, `DiscoverySettingsForm.tsx`, and `discoverySettingsModel.ts`, while the System/Network shell stays limited to network-boundary controls instead of reintroducing a second editable discovery surface. That same workspace boundary now owns the infrastructure source-management toolbar too: the landing page exposes `Add infrastructure`, `Run discovery`, and `Discovery settings` as first-viewport toolbar actions inside the source manager, while governed source rows expose per-source add actions such as `Install Pulse Agent` from the shared catalog. `Detect address` remains inside the single add-flow source picker/probe path rather than a duplicate toolbar action. The same landing boundary may surface setup confidence from the unified rows and discovered candidates, including connected-system count, API coverage, agent coverage, sources that still need an agent, and discovery review state, without creating a second inventory model or provider-specific summary fetch. Source groups must stay in the governed source catalog order instead of re-sorting by current row count, row-level lifecycle entry points must use `Manage` language, and locked agent-install states must show a compact command inventory without raw token placeholders or disabled copy commands until a token exists. Network discovery settings remain safety-critical: automatic scanning must surface the shared-network/subnet warning before operators save scan mode changes. Agent command-execution handoff copy belongs to that same install surface: `InfrastructureInstallerSection.tsx` may expose the Pulse command-execution toggle for Patrol, but the label must describe Patrol remediation rather than reviving `Patrol auto-fix` or implying a paid monitoring-volume gate.
    Setup-completion handoff belongs to that same single add-flow boundary. The first-run completion screen must keep credentials as the first surfaced object, then present one compact next-step surface that sends operators to Add infrastructure or directly to the Agent handoff; source-choice explanation may live inside that surface, but lifecycle work must not reintroduce a separate setup-wizard tour, duplicate CTA section, or inline install-command owner before the canonical infrastructure workspace.
@@ -452,20 +452,13 @@ profile and assignment columns, but embedded table framing must route through
     flows may observe `self_hosted_plan`, but they must not keep emitting or
     inferring legacy `max_monitored_systems` intent/query values once the
     uncapped self-hosted model is canonical.
-    The same adjacent
-    commercial boundary now also owns migrated-v5 monitored-system
-    grandfathering: lifecycle surfaces may react to the resulting license or
-    entitlements payloads, but they must not cache their own pre-activation
-    host counts, synthesize a second grandfather floor, or treat install-time
-    fleet inventory as the authority for commercial continuity. They also must
-    not depend on a status or entitlements read to seal pending grandfather
-    continuity, use those billing reads to restart pending continuity
-    reconciliation, or reinterpret continuity-verification payloads as a real
+    The same adjacent commercial boundary treats migrated-v5 monitored-system
+    grandfathering as retired compatibility metadata. Lifecycle surfaces may
+    react to active license or entitlement payloads, but they must not cache
+    their own pre-activation host counts, synthesize a grandfather floor,
+    restart capacity reconciliation from billing reads, or reinterpret
+    continuity payloads as install eligibility, fleet enrollment evidence, or
     `0 / limit` monitored-system state.
-    When the commercial reconciler captures the floor, lifecycle-adjacent
-    code must treat the resulting activation-state callback as commercial
-    ownership cleanup only, not as install inventory proof or fleet enrollment
-    state.
     That same adjacent commercial boundary also owns authenticated
     install-version attribution for migrated installs: lifecycle surfaces may
     observe versioned commercial status, but they must not treat
@@ -480,11 +473,11 @@ profile and assignment columns, but embedded table framing must route through
     heuristics.
     The same lifecycle-adjacent platform-connections boundary also assumes
     direct TrueNAS and VMware connection writes fail closed when canonical
-    monitored-system usage is unavailable. Shared `internal/api/` admission
-    helpers must return `monitored_system_usage_unavailable` before save, and
+    monitored-system grouping is unavailable. Shared `internal/api/` preview
+    helpers may return `monitored_system_usage_unavailable` before save, and
     VMware must not collect external vCenter inventory before that canonical
-    capacity view is safe, so fleet/setup surfaces cannot bypass the
-    monitored-system accounting boundary through direct API writes.
+    grouping view is safe, so fleet/setup surfaces do not fork monitored-system
+    identity through direct API writes.
     The same lifecycle-adjacent platform-connections boundary now also owns
     the unified connections ledger (`GET /api/connections`) and address
     probe (`POST /api/connections/probe`). Lifecycle surfaces may observe
@@ -542,7 +535,7 @@ profile and assignment columns, but embedded table framing must route through
     they extract the inner form bodies from the per-type panels and
     render them inline under the editor while still driving the existing
     `TrueNASSettingsPanelState` and `VMwareSettingsPanelState` APIs for
-    save, test, preview, and admission-preview behavior. The add flow
+    save, test, preview, and impact-preview behavior. The add flow
     must not reintroduce the full per-type workspace (Proxmox discovery
     card, configured nodes table, node-modal stack; TrueNAS/VMware
     connection list with headers and row actions) into the credential
@@ -777,11 +770,10 @@ supervisor pidfile with `-P`, keep the child pid in a separate diagnostic
 pidfile, and stop legacy child-pidfile installs by resolving the child back to
 its daemon supervisor before replacing or restarting the agent binary.
 
-Deploy selection and retry capacity feedback now follows the API/cloud-paid
-workspace-capacity terminology boundary. Lifecycle-owned deploy surfaces keep
-stable backend compatibility identifiers, but the user-facing confirmation,
-preflight, retry, and status labels must not revive license-slot or plan-upgrade
-wording for monitored-system capacity.
+Deploy selection and retry no longer carry monitored-system capacity feedback.
+Lifecycle-owned deploy surfaces must not revive license-slot, workspace-slot,
+plan-upgrade, or monitored-system capacity wording in user-facing
+confirmation, preflight, retry, and status labels.
 
 The infrastructure workspace collapsed to a single `/settings/infrastructure`
 route. `buildInfrastructureWorkspacePath()` always returns the base path;
@@ -793,10 +785,10 @@ customer-facing Settings Infrastructure target label and onboarding source
 strategy copy. Lifecycle and setup guidance must point operators to
 `Settings → Infrastructure` and must not revive removed subpaths such as
 `Settings → Infrastructure → Proxmox`.
-The shared monitored-system admission preview now formats save-impact
+The shared monitored-system impact preview now formats save-impact
 summaries through `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-so infrastructure setup screens describe count impact and active-policy
-failures without raw slash-quota rendering.
+so infrastructure setup screens describe count impact and grouping changes
+without raw slash-quota rendering.
 
 This subsystem now sits under the dedicated agent lifecycle and fleet
 operations lane so install, registration, update continuity, profile
@@ -837,11 +829,11 @@ needs them, but `/api/license/commercial-posture`,
 public demo mode and those lifecycle flows must not depend on licensed
 identity, plan labels, upgrade reasons, checkout handoff state, or observed
 usage counts surviving the public-demo contract.
-That same demo-safe runtime contract now also redacts monitored-system
-capacity posture from public-preview runtime capabilities. Lifecycle-adjacent
-install or reporting surfaces may still depend on demo-safe capability flags,
-but they must not expect `monitored_system_capacity`, admission-freeze copy,
-or observed plan overage posture to survive the public-demo boundary.
+That same demo-safe runtime contract keeps monitored-system capacity posture
+out of public-preview runtime capabilities. Lifecycle-adjacent install or
+reporting surfaces may still depend on demo-safe capability flags, but they
+must not expect `monitored_system_capacity`, admission-freeze copy, or
+observed plan overage posture to exist.
 The same presentation-policy split now governs paid lifecycle extensions in
 ordinary self-hosted v6 installs. Agent profile management may remain an
 entitled lifecycle surface, but default Infrastructure navigation must not
@@ -1360,8 +1352,8 @@ for that landing belongs to DOM-backed settings tests, not raw source-string
 position checks, so lifecycle ownership continues to guard the operator-visible
 order after reasonable component extraction or copy refactors.
 When that infrastructure workspace needs to redirect operators to the plan-
-owned self-hosted commercial surface for billing, monitored-system limits, or
-license status, it must
+owned self-hosted commercial surface for billing, license status, or paid
+feature activation, it must
 consume the settings-owned referral copy from
 `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 instead of carrying workspace-local commercial guidance or reaching back into
@@ -1467,9 +1459,9 @@ surface reported most recently. Retired flat alias fields must not reappear as
 parallel lifecycle signal inputs or contract language.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Plans for billing, but it
-must describe that boundary in monitored-system, plan-limit, license-status,
-and unlocked-capability terms rather than reviving legacy agent-allocation
-language or treating the entire destination as the `Pulse Pro` tier page.
+must describe that boundary in license-status and unlocked-capability terms
+rather than reviving monitored-system plan limits, legacy agent-allocation
+language, or treating the entire destination as the `Pulse Pro` tier page.
 That same direct-workspace boundary now also owns the shared customer-facing
 error copy for discovery and configured-node actions through
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`, so direct
@@ -1603,9 +1595,8 @@ canonical node-type defaults, endpoint/auth placeholders, monitoring coverage
 copy, and test-result styling for PVE, PBS, and PMG setup.
 That presentation layer remains presentation-only for those API-managed
 Proxmox, PBS, and PMG connections. Lifecycle guidance in that settings surface
-may explain monitored-system caps, but commercial enforcement still belongs to
-the canonical add-node and `/api/auto-register` boundaries instead of
-becoming a second modal-local exemption rule.
+may explain monitored-system grouping, but monitored-system volume caps are
+retired and must not reappear as a modal-local rule or exemption path.
 That same deterministic token-identity contract also applies to backend-owned
 turnkey Proxmox token creation: generated setup scripts and the password-based
 PBS add-node path must derive Pulse-managed token names from the canonical
@@ -1646,51 +1637,42 @@ That same canonical request contract must also keep field-validation failures
 specific: mismatched `tokenId`/`tokenValue` input may not collapse into
 generic missing-field output, and other missing canonical fields must return
 explicit `Missing required canonical auto-register fields: ...` guidance.
-That same owned setup and auto-register boundary now also participates in the
-canonical monitored-system commercial cap. A new `/api/auto-register`
-completion may proceed only when it either dedupes onto an already-counted
-top-level monitored system or fits within the deduped monitored-system limit;
-the lifecycle surface may not preserve a special exemption that keeps API-
-backed monitored systems outside the self-hosted commercial cap.
-That admission decision must come from the same canonical prospective
+That same owned setup and auto-register boundary participates in the canonical
+monitored-system grouping model without commercial volume admission. A new
+`/api/auto-register` completion may project whether it dedupes onto an
+existing top-level monitored system or creates a new one, but the lifecycle
+surface must not block API-backed monitoring on a self-hosted or hosted
+monitored-system cap.
+That grouping projection must come from the same canonical prospective
 monitored-system projection the runtime uses for final grouped counting.
 Auto-register may preview its own candidate, but it must not keep a
-lifecycle-local counter, drift on source priority, or treat missing monitored-
-system usage as zero; when an active cap is present and usage cannot be
-resolved, the route must fail closed with retryable unavailable guidance
-instead of silently admitting a net-new monitored system.
-That same lifecycle boundary also assumes any private monitored-system
-admission policy hook stays backend-owned. Even when `pkg/server/server.go`
-wires `ResolveMonitoredSystemAdmissionPolicy` into shared `internal/api/`
-admission helpers, setup and install flows must continue to source candidate
-projection, replacement identity, and usage-availability truth from the
-canonical monitored-system preview/resolver path instead of adding a second
-lifecycle-local policy branch or exemption rule.
+lifecycle-local counter, drift on source priority, or treat missing grouping
+usage as a commercial admission state.
+The retired private monitored-system admission policy hook must not return as
+a lifecycle-local branch or exemption rule.
 When lifecycle-adjacent setup or support surfaces need to explain why a
 candidate would count or dedupe, they must consume the shared monitored-system
 ledger preview contract rather than rebuilding a second preview model from
-setup-local transport fields. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
+setup-local transport fields. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`
 is the shared shell for that explanation inside platform-connections settings,
 so provider-specific panels must not fork their own monitored-system preview
 copy or inline projected-usage rendering.
 That shared shell must use neutral count-impact language for ordinary platform
-connection previews. Finite policy failures may say the active policy would be
-exceeded, but unchanged or removal previews should not describe "capacity" or
-raw `current / limit` quota math as the operator-facing mental model for
-self-hosted monitoring.
-That same commercial readiness boundary now also assumes settled canonical
-usage, not the first non-nil monitor view. Lifecycle-owned setup or first-host
-surfaces may not seal migrated-v5 continuity, display counted-system totals as
-final, or retry admission against a provider-owned supplemental platform such
-as TrueNAS or VMware until the monitor has both seen an initial baseline for
-every active connection and rebuilt the canonical store at or after that
-provider watermark.
-That same lifecycle-owned admission surface must keep provider save actions
-gated on a successful monitored-system preview. TrueNAS and VMware settings
-may not create or update a connection while the admission preview is missing,
-loading, unavailable, errored, or over-limit, and save-time backend races must
-reuse the same canonical preview/unavailable presentation state instead of
-falling back to provider-local billing messages.
+connection previews. Previews must not describe "capacity", finite policy
+failures, or raw `current / limit` quota math as the operator-facing mental
+model for monitoring.
+That same grouping readiness boundary assumes settled canonical usage, not the
+first non-nil monitor view. Lifecycle-owned setup or first-host surfaces may
+not display counted-system totals as final against a provider-owned
+supplemental platform such as TrueNAS or VMware until the monitor has both
+seen an initial baseline for every active connection and rebuilt the canonical
+store at or after that provider watermark.
+That same lifecycle-owned preview surface must keep provider save actions
+gated on a successful monitored-system grouping preview. TrueNAS and VMware
+settings may not create or update a connection while the preview is missing,
+loading, unavailable, or errored, and save-time backend races must reuse the
+same canonical unavailable presentation state instead of falling back to
+provider-local billing messages.
 That same lifecycle-adjacent request contract now also assumes canonical
 enablement defaults. New platform-connection preview/test/add payloads must
 inherit the provider default `enabled=true` when the field is omitted, while
@@ -2396,10 +2378,10 @@ Deploy wizard target tables are lifecycle-owned presentation surfaces:
 `CandidatesStep`, `ConfirmStep`, `PreflightStep`, `DeployingStep`, and
 `ResultsStep` must use the shared frontend `Table` primitive for scroll and
 table semantics instead of raw table markup or step-local scroll frames.
-Deploy selection and retry capacity feedback may consume the monitored-system
-capacity boundary owned by API/cloud-paid, but lifecycle UI must label that
-state as workspace capacity and must not reintroduce legacy license-slot or
-plan-upgrade language in deploy confirmation, preflight, or retry surfaces.
+Deploy selection and retry UI must not consume retired monitored-system
+capacity boundaries. Lifecycle UI must avoid workspace-capacity, legacy
+license-slot, and plan-upgrade language in deploy confirmation, preflight, or
+retry surfaces.
 That same deploy wizard boundary must also stay on the direct
 `deploy-fallback-install-surface` proof path, rather than relying only on the
 shared install helper or downstream deploy tests to catch lifecycle drift in

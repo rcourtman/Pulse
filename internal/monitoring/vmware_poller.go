@@ -583,7 +583,7 @@ func (p *VMwarePoller) SnapshotOwnedSourcesForOrg(string) []unifiedresources.Dat
 
 // SupplementalInventoryReadyAt reports when the current org-scoped VMware
 // inventory has reached a settled initial baseline that has to be reflected in
-// the canonical monitor store before billing can consume monitored-system
+// the canonical monitor store before support surfaces consume monitored-system
 // counts.
 func (p *VMwarePoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {
 	if p == nil {

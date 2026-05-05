@@ -24,7 +24,6 @@ export type DeployTargetStatus =
   | 'failed_retryable'
   | 'failed_permanent'
   | 'skipped_already_agent'
-  | 'skipped_license'
   | 'canceled';
 
 /** Event type classification for deployment audit log entries. */
@@ -138,7 +137,6 @@ export interface CreateJobResponse {
   jobId: string;
   acceptedTargets: string[];
   skippedTargets: SkippedTarget[];
-  reservedLicenseSlots: number;
   eventsUrl: string;
 }
 

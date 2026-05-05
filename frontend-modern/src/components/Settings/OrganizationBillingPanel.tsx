@@ -31,7 +31,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
       <div class="space-y-6">
         <CommercialBillingShell
           title="Billing & Usage"
-          description="Review your organization plan, usage against limits, and available upgrade paths."
+          description="Review your organization plan, current usage, and available upgrade paths."
           loading={loading()}
           loadingFallback={<OrganizationBillingLoadingState />}
         >
@@ -55,9 +55,9 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
 
           <CommercialSection
             title="Usage"
-            description="Compare current agent and guest usage against the active organization allocation."
+            description="Review current organization usage for billing and support context."
           >
-            <CommercialUsageMeters title="Usage vs Plan Limits" items={commercialUsageModel().meters} />
+            <CommercialUsageMeters title="Usage" items={commercialUsageModel().meters} />
           </CommercialSection>
         </CommercialBillingShell>
       </div>

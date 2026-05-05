@@ -35,8 +35,6 @@ const safeVMwarePreview = () => ({
   current_count: 1,
   projected_count: 1,
   additional_count: 0,
-  limit: 10,
-  would_exceed_limit: false,
   effect: 'attaches_existing',
   current_systems: [],
   projected_systems: [
@@ -224,8 +222,11 @@ describe('useVMwareSettingsPanelState', () => {
     expect(notificationStore.success).toHaveBeenCalledWith('VMware connection successful');
   });
 
-  it('requires a successful monitored-system preview before saving', async () => {
-    vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+  it('saves a connection without requiring a monitored-system preview', async () => {
+    vi.mocked(VMwareAPI.listConnections)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([] as never);
+    vi.mocked(VMwareAPI.createConnection).mockResolvedValueOnce({} as never);
 
     const { result } = renderHook(() => useVMwareSettingsPanelState());
     await waitFor(() => expect(result.loading()).toBe(false));
@@ -237,13 +238,16 @@ describe('useVMwareSettingsPanelState', () => {
       password: 'secret',
     });
 
-    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
     await result.saveCurrentForm();
 
-    expect(VMwareAPI.createConnection).not.toHaveBeenCalled();
-    expect(notificationStore.error).toHaveBeenCalledWith(
-      'Pulse must preview the monitored-system impact for this platform connection before it can be saved.',
+    expect(VMwareAPI.createConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: 'vcsa.lab.local',
+        username: 'administrator@vsphere.local',
+        password: 'secret',
+      }),
     );
+    expect(notificationStore.success).toHaveBeenCalledWith('VMware connection added');
   });
 
   it('surfaces categorized draft test guidance from structured backend failures', async () => {
@@ -420,8 +424,6 @@ describe('useVMwareSettingsPanelState', () => {
       current_count: 1,
       projected_count: 3,
       additional_count: 2,
-      limit: 5,
-      would_exceed_limit: false,
       effect: 'creates_multiple',
       current_systems: [],
       projected_systems: [
@@ -461,10 +463,13 @@ describe('useVMwareSettingsPanelState', () => {
     expect(result.monitoredSystemPreview()?.projected_count).toBe(3);
   });
 
-  it('blocks save when monitored-system usage is temporarily unavailable during preview', async () => {
-    vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+  it('allows save when monitored-system impact preview is temporarily unavailable', async () => {
+    vi.mocked(VMwareAPI.listConnections)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([] as never);
+    vi.mocked(VMwareAPI.createConnection).mockResolvedValueOnce({} as never);
     vi.mocked(VMwareAPI.previewConnection).mockRejectedValueOnce(
-      Object.assign(new Error('Unable to verify monitored-system capacity right now'), {
+      Object.assign(new Error('Unable to verify monitored-system grouping right now'), {
         status: 503,
         code: 'monitored_system_usage_unavailable',
         details: {
@@ -488,61 +493,25 @@ describe('useVMwareSettingsPanelState', () => {
     expect(preview).toBeNull();
     expect(result.connectionFailure()).toBeNull();
     expect(result.monitoredSystemPreview()).toBeNull();
-    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
     expect(result.monitoredSystemPreviewErrorTitle()).toBe(
       'Monitored-system verification is temporarily unavailable',
     );
     expect(result.monitoredSystemPreviewError()).toBe(
-      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+      'Pulse is still settling provider-owned inventory for this platform connection. You can still save the connection and review the impact after the first baseline finishes.',
     );
 
     await result.saveCurrentForm();
 
-    expect(VMwareAPI.createConnection).not.toHaveBeenCalled();
-    expect(notificationStore.error).toHaveBeenLastCalledWith(
-      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
-    );
+    expect(VMwareAPI.createConnection).toHaveBeenCalled();
+    expect(notificationStore.success).toHaveBeenCalledWith('VMware connection added');
   });
 
-  it('reuses the canonical monitored-system preview when a save is denied by the backend', async () => {
+  it('surfaces backend save errors without reopening retired cap-preview handling', async () => {
     vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
     vi.mocked(VMwareAPI.previewConnection).mockResolvedValueOnce(safeVMwarePreview() as never);
     vi.mocked(VMwareAPI.createConnection).mockRejectedValueOnce(
-      Object.assign(new Error('Monitored-system capacity reached (7/6)'), {
-        status: 402,
-        feature: 'max_monitored_systems',
-        monitored_system_preview: {
-          current_count: 5,
-          projected_count: 7,
-          additional_count: 2,
-          limit: 6,
-          would_exceed_limit: true,
-          effect: 'mixed_existing_and_new',
-          current_systems: [
-            {
-              name: 'esxi-01',
-              type: 'agent',
-              status: 'online',
-              source: 'agent',
-            },
-          ],
-          projected_systems: [
-            {
-              name: 'esxi-01',
-              type: 'agent',
-              status: 'online',
-              source: 'vmware',
-            },
-            {
-              name: 'esxi-02',
-              type: 'agent',
-              status: 'online',
-              source: 'vmware',
-            },
-          ],
-          current_system: null,
-          projected_system: null,
-        },
+      Object.assign(new Error('VMware connection save failed'), {
+        status: 500,
       }),
     );
 
@@ -558,20 +527,19 @@ describe('useVMwareSettingsPanelState', () => {
     await result.previewCurrentForm();
     await result.saveCurrentForm();
 
-    expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system capacity reached (7/6)');
+    expect(notificationStore.error).toHaveBeenCalledWith('VMware connection save failed');
     expect(result.monitoredSystemPreview()).toMatchObject({
-      would_exceed_limit: true,
-      projected_count: 7,
-      effect: 'mixed_existing_and_new',
+      projected_count: 1,
+      effect: 'attaches_existing',
     });
     expect(result.dialogOpen()).toBe(true);
   });
 
-  it('surfaces monitored-system usage unavailability when save races a stale preview', async () => {
+  it('treats save-time monitored-system usage unavailability as an ordinary save error', async () => {
     vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
     vi.mocked(VMwareAPI.previewConnection).mockResolvedValueOnce(safeVMwarePreview() as never);
     vi.mocked(VMwareAPI.createConnection).mockRejectedValueOnce(
-      Object.assign(new Error('Unable to verify monitored-system capacity right now'), {
+      Object.assign(new Error('Unable to verify monitored-system grouping right now'), {
         status: 503,
         code: 'monitored_system_usage_unavailable',
         details: {
@@ -593,13 +561,13 @@ describe('useVMwareSettingsPanelState', () => {
     await result.saveCurrentForm();
 
     expect(result.connectionFailure()).toBeNull();
-    expect(result.monitoredSystemPreview()).toBeNull();
-    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
-    expect(result.monitoredSystemPreviewError()).toBe(
-      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
-    );
+    expect(result.monitoredSystemPreview()).toMatchObject({
+      projected_count: 1,
+      effect: 'attaches_existing',
+    });
+    expect(result.monitoredSystemPreviewError()).toBeNull();
     expect(notificationStore.error).toHaveBeenCalledWith(
-      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+      'Unable to verify monitored-system grouping right now',
     );
   });
 });

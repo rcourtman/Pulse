@@ -12,7 +12,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -520,15 +519,6 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			pve.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
 		}
 
-		if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
-			Source:   unifiedresources.SourceProxmox,
-			Type:     unifiedresources.ResourceTypeAgent,
-			Name:     displayName,
-			Hostname: pulseTokenHostCandidate(host),
-			HostURL:  host,
-		}) {
-			return
-		}
 		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pve)
 		h.normalizePVEConfigState(r.Context())
 
@@ -653,15 +643,6 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorGarbageJobs:           monitorGarbageJobs,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
-		if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
-			Source:   unifiedresources.SourcePBS,
-			Type:     unifiedresources.ResourceTypePBS,
-			Name:     pbsDisplayName,
-			Hostname: pulseTokenHostCandidate(host),
-			HostURL:  host,
-		}) {
-			return
-		}
 		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbs)
 	} else if req.Type == "pmg" {
 		host := normalizedHost
@@ -744,15 +725,6 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorDomainStats:           monitorDomainStats,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
-		if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
-			Source:   unifiedresources.SourcePMG,
-			Type:     unifiedresources.ResourceTypePMG,
-			Name:     pmgDisplayName,
-			Hostname: pulseTokenHostCandidate(host),
-			HostURL:  host,
-		}) {
-			return
-		}
 		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances, pmgInstance)
 	}
 
@@ -778,76 +750,6 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
-}
-
-func proxmoxMonitoredSystemCandidate(instance config.PVEInstance) unifiedresources.MonitoredSystemCandidate {
-	return unifiedresources.MonitoredSystemCandidate{
-		Source:   unifiedresources.SourceProxmox,
-		Type:     unifiedresources.ResourceTypeAgent,
-		Name:     instance.Name,
-		Hostname: pulseTokenHostCandidate(instance.Host),
-		HostURL:  instance.Host,
-	}
-}
-
-func pbsMonitoredSystemCandidate(instance config.PBSInstance) unifiedresources.MonitoredSystemCandidate {
-	return unifiedresources.MonitoredSystemCandidate{
-		Source:   unifiedresources.SourcePBS,
-		Type:     unifiedresources.ResourceTypePBS,
-		Name:     instance.Name,
-		Hostname: pulseTokenHostCandidate(instance.Host),
-		HostURL:  instance.Host,
-	}
-}
-
-func pmgMonitoredSystemCandidate(instance config.PMGInstance) unifiedresources.MonitoredSystemCandidate {
-	return unifiedresources.MonitoredSystemCandidate{
-		Source:   unifiedresources.SourcePMG,
-		Type:     unifiedresources.ResourceTypePMG,
-		Name:     instance.Name,
-		Hostname: pulseTokenHostCandidate(instance.Host),
-		HostURL:  instance.Host,
-	}
-}
-
-func proxmoxMonitoredSystemReplacement(instance config.PVEInstance) unifiedresources.MonitoredSystemReplacement {
-	name := strings.TrimSpace(instance.Name)
-	host := strings.TrimSpace(instance.Host)
-	hostname := pulseTokenHostCandidate(instance.Host)
-	return unifiedresources.MonitoredSystemReplacement{
-		Source: unifiedresources.SourceProxmox,
-		Selector: unifiedresources.MonitoredSystemReplacementSelector{
-			Name:     name,
-			Hostname: hostname,
-			HostURL:  host,
-		},
-	}
-}
-
-func pbsMonitoredSystemReplacement(instance config.PBSInstance) unifiedresources.MonitoredSystemReplacement {
-	name := strings.TrimSpace(instance.Name)
-	host := strings.TrimSpace(instance.Host)
-	hostname := pulseTokenHostCandidate(instance.Host)
-	return unifiedresources.MonitoredSystemReplacement{
-		Source: unifiedresources.SourcePBS,
-		Selector: unifiedresources.MonitoredSystemReplacementSelector{
-			ResourceID: name,
-			Hostname:   hostname,
-			HostURL:    host,
-		},
-	}
-}
-
-func pmgMonitoredSystemReplacement(instance config.PMGInstance) unifiedresources.MonitoredSystemReplacement {
-	name := strings.TrimSpace(instance.Name)
-	hostname := pulseTokenHostCandidate(instance.Host)
-	return unifiedresources.MonitoredSystemReplacement{
-		Source: unifiedresources.SourcePMG,
-		Selector: unifiedresources.MonitoredSystemReplacementSelector{
-			ResourceID: name,
-			Hostname:   hostname,
-		},
-	}
 }
 
 // HandleTestConnection tests a node connection without saving
@@ -1275,15 +1177,6 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Disabled = !*req.Enabled
 		}
 
-		if enforceMonitoredSystemLimitForConfigReplacement(
-			w,
-			r.Context(),
-			h.getMonitor(r.Context()),
-			proxmoxMonitoredSystemReplacement(current),
-			proxmoxMonitoredSystemCandidate(updated),
-		) {
-			return
-		}
 		*pve = updated
 	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
 		pbs := &h.getConfig(r.Context()).PBSInstances[index]
@@ -1382,15 +1275,6 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Disabled = !*req.Enabled
 		}
 
-		if enforceMonitoredSystemLimitForConfigReplacement(
-			w,
-			r.Context(),
-			h.getMonitor(r.Context()),
-			pbsMonitoredSystemReplacement(current),
-			pbsMonitoredSystemCandidate(updated),
-		) {
-			return
-		}
 		*pbs = updated
 	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
 		pmgInst := &h.getConfig(r.Context()).PMGInstances[index]
@@ -1473,15 +1357,6 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Disabled = !*req.Enabled
 		}
 
-		if enforceMonitoredSystemLimitForConfigReplacement(
-			w,
-			r.Context(),
-			h.getMonitor(r.Context()),
-			pmgMonitoredSystemReplacement(current),
-			pmgMonitoredSystemCandidate(updated),
-		) {
-			return
-		}
 		*pmgInst = updated
 	} else {
 		http.Error(w, "Node not found", http.StatusNotFound)

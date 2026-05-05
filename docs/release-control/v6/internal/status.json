@@ -347,7 +347,6 @@
             "src/components/Infrastructure/deploy/__tests__/ConfirmStep.test.tsx",
             "src/utils/__tests__/deployStatusPresentation.test.ts",
             "src/components/shared/__tests__/HistoryChart.test.tsx",
-            "src/components/shared/__tests__/MonitoredSystemLimitWarningBanner.test.tsx",
             "src/components/shared/__tests__/TrialBanner.test.tsx",
             "src/pages/__tests__/AIIntelligence.test.tsx",
             "src/features/patrol/__tests__/patrolCommercialBoundary.test.ts"
@@ -503,7 +502,7 @@
     },
     {
       "id": "RA7",
-      "summary": "Monitored-system allocation stays coherent across enforcement, entitlements, and UI: counted top-level monitored systems are collection-path agnostic, capped limits stay canonical, and users see the same monitored-system usage that the runtime enforces.",
+      "summary": "Monitored-system volume caps are retired end to end: runtime writes admit infrastructure regardless of stale plan-limit metadata, entitlements scrub retired monitored-system limits, and UI surfaces use monitored-system counts only for informational billing/support context.",
       "kind": "invariant",
       "blocking_level": "rc-ready",
       "proof_type": "hybrid",
@@ -531,7 +530,7 @@
             "test",
             "./internal/api",
             "-run",
-            "TestMonitoredSystemCountNilMonitor|TestLegacyConnectionCountsFromReadState|TestLegacyConnectionCountsUsesSnapshotFallback|TestDeployReservedCount|TestUnifiedAgentHandlers_HandleReport_EnforcesMaxMonitoredSystemsForNewHostsOnly|TestHandleAddNode_BlocksNewCountedSystemAtLimit|TestHandleAutoRegister_BlocksNewCountedSystemAtLimit|TestDockerAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit|TestKubernetesAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit|TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit|TestBuildEntitlementPayloadWithUsage_CurrentValues",
+            "TestHandleAddNode_AllowsNewCountedSystemWithCapsRetired|TestHandleAutoRegister_AllowsNewCountedSystemWithCapsRetired|TestDockerAgentHandlers_HandleReport_AllowsNewMonitoredSystemWithCapsRetired|TestKubernetesAgentHandlers_HandleReport_AllowsNewMonitoredSystemWithCapsRetired|TestUnifiedAgentHandlers_HandleReport_AllowsNewHostsWithCapsRetired|TestHandleCreateJob_AcceptsAllTargetsWithMonitoredSystemCapsRetired|TestContract_DeployHandlersDoNotSurfaceLicenseSlotCapacityCopy|TestBuildEntitlementPayloadWithUsage_CurrentValues",
             "-count=1"
           ]
         },
@@ -544,7 +543,10 @@
             "--",
             "--run",
             "src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
-            "src/components/shared/__tests__/MonitoredSystemLimitWarningBanner.test.tsx"
+            "src/components/Settings/__tests__/ProLicensePanel.test.tsx",
+            "src/components/Settings/__tests__/MonitoredSystemLedgerPanel.test.tsx",
+            "src/components/Infrastructure/deploy/__tests__/ConfirmStep.test.tsx",
+            "src/hooks/__tests__/useDeployWizard.test.ts"
           ]
         },
         {
@@ -554,7 +556,7 @@
             "test",
             "./pkg/licensing",
             "-run",
-            "TestExceedsMonitoredSystemLimit|TestInstalledUnifiedAgentCount|TestLimitsForCloudPlan_KnownPlans|TestLimitsForCloudPlan_UnknownPlanFailsClosed",
+            "TestClaims_EffectiveLimitsScrubsRetiredCloudPlanMonitoringLimit|TestLicenseStatusJSON_OmitsRetiredMonitoredSystemFields|TestBuildEntitlementPayload_ActiveLicenseOmitsRetiredMonitoredSystemLimit|TestNormalizeBillingState_ScrubsRetiredMonitoredSystemLimitAliases",
             "-count=1"
           ]
         }
@@ -562,12 +564,12 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
+          "path": "frontend-modern/src/components/Settings/__tests__/MonitoredSystemLedgerPanel.test.tsx",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/shared/__tests__/MonitoredSystemLimitWarningBanner.test.tsx",
+          "path": "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
           "kind": "file"
         },
         {
@@ -578,6 +580,11 @@
         {
           "repo": "pulse",
           "path": "internal/api/config_handlers_auto_register_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/deploy_handlers_test.go",
           "kind": "file"
         },
         {
@@ -593,11 +600,6 @@
         {
           "repo": "pulse",
           "path": "internal/api/kubernetes_agents_additional_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/api/monitored_system_limit_enforcement_test.go",
           "kind": "file"
         },
         {
@@ -5050,7 +5052,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-l16",
+      "agent_id": "codex",
+      "summary": "Harden Linux agent service defaults from Proxmox root-agent trust signal",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-05-05T11:53:57Z",
+      "heartbeat_at": "2026-05-05T11:53:57Z",
+      "expires_at": "2026-05-05T13:53:57Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L16"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

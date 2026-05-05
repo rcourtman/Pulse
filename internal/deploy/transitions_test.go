@@ -88,7 +88,6 @@ func TestTargetTransitionTo_Valid(t *testing.T) {
 	}{
 		{TargetPending, TargetPreflighting},
 		{TargetPending, TargetSkippedAgent},
-		{TargetPending, TargetSkippedLicense},
 		{TargetPending, TargetCanceled},
 		{TargetPreflighting, TargetReady},
 		{TargetPreflighting, TargetFailedRetryable},
@@ -131,7 +130,6 @@ func TestTargetTransitionTo_Invalid(t *testing.T) {
 		{TargetSucceeded, TargetPending},         // terminal
 		{TargetFailedPermanent, TargetPending},   // terminal
 		{TargetSkippedAgent, TargetPending},      // terminal
-		{TargetSkippedLicense, TargetPending},    // terminal
 		{TargetCanceled, TargetPending},          // terminal
 		{TargetPending, TargetInstalling},        // skip preflighting
 		{TargetPending, TargetSucceeded},         // skip to end
@@ -181,7 +179,7 @@ func TestDeriveStatus(t *testing.T) {
 		},
 		{
 			name:     "all skipped",
-			targets:  targets(TargetSkippedAgent, TargetSkippedLicense),
+			targets:  targets(TargetSkippedAgent, TargetSkippedAgent),
 			expected: JobFailed,
 		},
 		{

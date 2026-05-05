@@ -105,7 +105,6 @@ function createMockWizard(
     deployError: (() => '') as Accessor<string>,
     deployStream: {} as unknown,
     retryableTargets: (() => []) as Accessor<unknown[]>,
-    maxAgentSlots: (() => 0) as Accessor<number>,
     startingPreflight: (() => false) as Accessor<boolean>,
     startingDeploy: (() => false) as Accessor<boolean>,
     retrying: (() => false) as Accessor<boolean>,
@@ -235,12 +234,11 @@ describe('ResultsStep', () => {
       const wizard = createMockWizard({
         skippedTargets: [
           makeTarget({ id: 't1', status: 'skipped_already_agent' }),
-          makeTarget({ id: 't2', status: 'skipped_license' }),
         ],
       });
       render(() => <ResultsStep wizard={wizard} />);
 
-      expect(screen.getByText('Skipped (2)')).toBeInTheDocument();
+      expect(screen.getByText('Skipped (1)')).toBeInTheDocument();
     });
 
     it('renders node names and IPs in the skipped table', () => {

@@ -32,7 +32,6 @@ export const DeployingStep: Component<DeployingStepProps> = (props) => {
             t.status === 'failed_retryable' ||
             t.status === 'failed_permanent' ||
             t.status === 'skipped_already_agent' ||
-            t.status === 'skipped_license' ||
             t.status === 'canceled',
         ).length,
   );

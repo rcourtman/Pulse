@@ -65,31 +65,28 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 		expected map[string]int64
 	}{
 		{
-			name: "explicit_limits_returns_them",
+			name: "explicit_limits_scrub_retired_monitored_system_cap",
 			claims: Claims{
-				Limits:              map[string]int64{"max_monitored_systems": 100, "max_guests": 500},
-				MaxMonitoredSystems: 50,
-				MaxGuests:           200,
+				Limits:    map[string]int64{"max_monitored_systems": 100, "max_guests": 500},
+				MaxGuests: 200,
 			},
-			expected: map[string]int64{"max_monitored_systems": 100, "max_guests": 500},
+			expected: map[string]int64{"max_guests": 500},
 		},
 		{
-			name: "nil_limits_derives_from_legacy_fields",
+			name: "nil_limits_derives_from_guest_field",
 			claims: Claims{
-				Limits:              nil,
-				MaxMonitoredSystems: 25,
-				MaxGuests:           100,
-			},
-			expected: map[string]int64{"max_monitored_systems": 25, "max_guests": 100},
-		},
-		{
-			name: "zero_max_monitored_systems_ignored",
-			claims: Claims{
-				Limits:              nil,
-				MaxMonitoredSystems: 0,
-				MaxGuests:           100,
+				Limits:    nil,
+				MaxGuests: 100,
 			},
 			expected: map[string]int64{"max_guests": 100},
+		},
+		{
+			name: "zero_max_guests_ignored",
+			claims: Claims{
+				Limits:    nil,
+				MaxGuests: 0,
+			},
+			expected: map[string]int64{},
 		},
 		{
 			name:     "no_limits_returns_empty",
@@ -97,66 +94,60 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 			expected: map[string]int64{},
 		},
 		{
-			name: "lifetime_strips_legacy_caps",
+			name: "lifetime_scrubs_retired_monitored_system_cap",
 			claims: Claims{
-				Tier:                TierLifetime,
-				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
-				MaxMonitoredSystems: 15,
-				MaxGuests:           5,
+				Tier:      TierLifetime,
+				Limits:    map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
+				MaxGuests: 5,
 			},
 			expected: map[string]int64{},
 		},
 		{
-			name: "grandfathered_recurring_v5_strips_new_v6_caps",
+			name: "grandfathered_recurring_v5_scrubs_retired_monitored_system_cap",
 			claims: Claims{
-				Tier:                TierPro,
-				PlanVersion:         "v5_pro_annual_grandfathered",
-				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
-				MaxMonitoredSystems: 15,
-				MaxGuests:           5,
+				Tier:        TierPro,
+				PlanVersion: "v5_pro_annual_grandfathered",
+				Limits:      map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
+				MaxGuests:   5,
 			},
 			expected: map[string]int64{},
 		},
 		{
-			name: "grandfathered_monthly_v5_strips_new_v6_caps",
+			name: "grandfathered_monthly_v5_scrubs_retired_monitored_system_cap",
 			claims: Claims{
-				Tier:                TierPro,
-				PlanVersion:         "v5_pro_monthly_grandfathered",
-				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
-				MaxMonitoredSystems: 15,
-				MaxGuests:           5,
+				Tier:        TierPro,
+				PlanVersion: "v5_pro_monthly_grandfathered",
+				Limits:      map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
+				MaxGuests:   5,
 			},
 			expected: map[string]int64{},
 		},
 		{
-			name: "community_plan_strips_legacy_v5_cap_after_upgrade",
+			name: "community_plan_scrubs_retired_monitored_system_cap_after_upgrade",
 			claims: Claims{
-				Tier:                TierFree,
-				PlanVersion:         "community",
-				Limits:              map[string]int64{"max_monitored_systems": 1, "max_guests": 5},
-				MaxMonitoredSystems: 1,
-				MaxGuests:           5,
+				Tier:        TierFree,
+				PlanVersion: "community",
+				Limits:      map[string]int64{"max_monitored_systems": 1, "max_guests": 5},
+				MaxGuests:   5,
 			},
 			expected: map[string]int64{},
 		},
 		{
-			name: "self_hosted_pro_claims_strip_legacy_volume_caps",
+			name: "self_hosted_pro_claims_scrub_retired_monitored_system_cap",
 			claims: Claims{
-				Tier:                TierPro,
-				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
-				MaxMonitoredSystems: 15,
-				MaxGuests:           100,
+				Tier:      TierPro,
+				Limits:    map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
+				MaxGuests: 100,
 			},
 			expected: map[string]int64{},
 		},
 		{
-			name: "generic_non_self_hosted_claims_preserve_explicit_limits_without_uncapped_marker",
+			name: "generic_non_self_hosted_claims_scrub_retired_monitored_system_cap",
 			claims: Claims{
-				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
-				MaxMonitoredSystems: 15,
-				MaxGuests:           100,
+				Limits:    map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
+				MaxGuests: 100,
 			},
-			expected: map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
+			expected: map[string]int64{"max_guests": 100},
 		},
 		{
 			name: "grant_backed_self_hosted_uncapped_marker_strips_legacy_cap",
@@ -164,7 +155,6 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 				Tier:                   TierPro,
 				CoreMonitoringUncapped: true,
 				Limits:                 map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
-				MaxMonitoredSystems:    15,
 				MaxGuests:              100,
 			},
 			expected: map[string]int64{},
@@ -270,7 +260,7 @@ func TestClaims_EntitlementPlanVersion(t *testing.T) {
 	}
 }
 
-func TestClaims_EffectiveLimitsCanonicalizesCloudPlanLimits(t *testing.T) {
+func TestClaims_EffectiveLimitsScrubsRetiredCloudPlanMonitoringLimit(t *testing.T) {
 	claims := Claims{
 		Tier:        TierCloud,
 		PlanVersion: "cloud-v1",
@@ -281,40 +271,36 @@ func TestClaims_EffectiveLimitsCanonicalizesCloudPlanLimits(t *testing.T) {
 	}
 
 	limits := claims.EffectiveLimits()
-	if got := limits["max_monitored_systems"]; got != 10 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d, want %d", got, 10)
+	if _, ok := limits["max_monitored_systems"]; ok {
+		t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", limits)
 	}
 	if got := limits["max_guests"]; got != 5 {
 		t.Fatalf("EffectiveLimits()[max_guests]=%d, want %d", got, 5)
 	}
 }
 
-func TestClaims_EffectiveLimitsPreservesNonCloudPlanLimits(t *testing.T) {
+func TestClaims_EffectiveLimitsScrubsRetiredNonCloudMonitoringLimit(t *testing.T) {
 	claims := Claims{
 		PlanVersion: "pro-v2",
 		Limits: map[string]int64{
 			"max_monitored_systems": 42,
+			"max_guests":            7,
 		},
 	}
 
 	limits := claims.EffectiveLimits()
-	if got := limits["max_monitored_systems"]; got != 42 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d, want %d", got, 42)
+	if _, ok := limits["max_monitored_systems"]; ok {
+		t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", limits)
+	}
+	if got := limits["max_guests"]; got != 7 {
+		t.Fatalf("EffectiveLimits()[max_guests]=%d, want %d", got, 7)
 	}
 }
 
-func TestLicenseStatusJSON_EncodesMonitoredSystemContinuity(t *testing.T) {
+func TestLicenseStatusJSON_OmitsRetiredMonitoredSystemFields(t *testing.T) {
 	status := LicenseStatus{
-		Valid:               true,
-		Tier:                TierPro,
-		MaxMonitoredSystems: 23,
-		MonitoredSystemContinuity: &MonitoredSystemContinuityStatus{
-			PlanLimit:          10,
-			GrandfatheredFloor: 23,
-			EffectiveLimit:     23,
-			CapturePending:     false,
-			CapturedAt:         123,
-		},
+		Valid: true,
+		Tier:  TierPro,
 	}
 
 	data, err := json.Marshal(status)
@@ -327,21 +313,10 @@ func TestLicenseStatusJSON_EncodesMonitoredSystemContinuity(t *testing.T) {
 		t.Fatalf("decode status json: %v", err)
 	}
 
-	continuity, ok := decoded["monitored_system_continuity"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected monitored_system_continuity object, got %#v", decoded["monitored_system_continuity"])
-	}
-	if got := continuity["plan_limit"]; got != float64(10) {
-		t.Fatalf("plan_limit=%v, want %v", got, float64(10))
-	}
-	if got := continuity["effective_limit"]; got != float64(23) {
-		t.Fatalf("effective_limit=%v, want %v", got, float64(23))
-	}
-	if got := continuity["grandfathered_floor"]; got != float64(23) {
-		t.Fatalf("grandfathered_floor=%v, want %v", got, float64(23))
-	}
-	if got := continuity["capture_pending"]; got != false {
-		t.Fatalf("capture_pending=%v, want false", got)
+	for _, key := range []string{"max_monitored_systems", "monitored_system_continuity"} {
+		if _, ok := decoded[key]; ok {
+			t.Fatalf("status JSON retained retired %q field: %v", key, decoded)
+		}
 	}
 }
 
@@ -352,23 +327,27 @@ func TestClaims_EffectiveLimitsMissingCloudPlanFailsClosed(t *testing.T) {
 	}
 
 	limits := claims.EffectiveLimits()
-	if got := limits["max_monitored_systems"]; got != int64(UnknownPlanDefaultMonitoredSystemLimit) {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d, want %d", got, UnknownPlanDefaultMonitoredSystemLimit)
+	if _, ok := limits["max_monitored_systems"]; ok {
+		t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", limits)
 	}
 }
 
-func TestClaims_EffectiveLimitsPreservesExplicitCustomCloudLimit(t *testing.T) {
+func TestClaims_EffectiveLimitsScrubsExplicitCustomCloudMonitoringLimit(t *testing.T) {
 	claims := Claims{
 		Tier:        TierCloud,
 		PlanVersion: "custom_plan",
 		Limits: map[string]int64{
 			"max_monitored_systems": 42,
+			"max_guests":            7,
 		},
 	}
 
 	limits := claims.EffectiveLimits()
-	if got := limits["max_monitored_systems"]; got != 42 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d, want %d", got, 42)
+	if _, ok := limits["max_monitored_systems"]; ok {
+		t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", limits)
+	}
+	if got := limits["max_guests"]; got != 7 {
+		t.Fatalf("EffectiveLimits()[max_guests]=%d, want %d", got, 7)
 	}
 }
 
@@ -655,34 +634,28 @@ func TestLicense_AllFeatures(t *testing.T) {
 
 func TestClaims_UnmarshalJSON_Migration(t *testing.T) {
 	tests := []struct {
-		name    string
-		json    string
-		wantMax int
+		name string
+		json string
 	}{
 		{
-			name:    "new_key_only",
-			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_monitored_systems":10}`,
-			wantMax: 10,
+			name: "new_key_only",
+			json: `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_monitored_systems":10}`,
 		},
 		{
-			name:    "legacy_key_only",
-			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_nodes":5}`,
-			wantMax: 5,
+			name: "legacy_key_only",
+			json: `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_nodes":5}`,
 		},
 		{
-			name:    "both_keys_prefer_new",
-			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_monitored_systems":15,"max_nodes":5}`,
-			wantMax: 15,
+			name: "both_keys_ignored",
+			json: `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_monitored_systems":15,"max_nodes":5}`,
 		},
 		{
-			name:    "new_key_zero_ignores_legacy",
-			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_monitored_systems":0,"max_nodes":5}`,
-			wantMax: 0,
+			name: "new_key_zero_ignored",
+			json: `{"lid":"x","email":"a@b","tier":"pro","iat":1,"max_monitored_systems":0,"max_nodes":5}`,
 		},
 		{
-			name:    "neither_key",
-			json:    `{"lid":"x","email":"a@b","tier":"pro","iat":1}`,
-			wantMax: 0,
+			name: "neither_key",
+			json: `{"lid":"x","email":"a@b","tier":"pro","iat":1}`,
 		},
 	}
 	for _, tt := range tests {
@@ -691,8 +664,8 @@ func TestClaims_UnmarshalJSON_Migration(t *testing.T) {
 			if err := json.Unmarshal([]byte(tt.json), &c); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			if c.MaxMonitoredSystems != tt.wantMax {
-				t.Fatalf("MaxMonitoredSystems = %d, want %d", c.MaxMonitoredSystems, tt.wantMax)
+			if _, ok := c.EffectiveLimits()["max_monitored_systems"]; ok {
+				t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", c.EffectiveLimits())
 			}
 		})
 	}

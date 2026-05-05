@@ -56,7 +56,7 @@ func TestDatabaseSourceHappyPath(t *testing.T) {
 	store := &mockBillingStore{
 		state: &BillingState{
 			Capabilities:      []string{"rbac", "relay"},
-			Limits:            map[string]int64{"max_monitored_systems": 50},
+			Limits:            map[string]int64{"max_monitored_systems": 50, "max_guests": 75},
 			MetersEnabled:     []string{"active_agents"},
 			PlanVersion:       "pro-v2",
 			SubscriptionState: SubStateActive,
@@ -68,8 +68,8 @@ func TestDatabaseSourceHappyPath(t *testing.T) {
 	if got := source.Capabilities(); !reflect.DeepEqual(got, []string{"rbac", "relay"}) {
 		t.Fatalf("expected capabilities %v, got %v", []string{"rbac", "relay"}, got)
 	}
-	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_monitored_systems": 50}) {
-		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_monitored_systems": 50}, got)
+	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_guests": 75}) {
+		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_guests": 75}, got)
 	}
 	if got := source.MetersEnabled(); !reflect.DeepEqual(got, []string{"active_agents"}) {
 		t.Fatalf("expected meters %v, got %v", []string{"active_agents"}, got)
@@ -86,20 +86,23 @@ func TestDatabaseSourceHappyPath(t *testing.T) {
 	}
 }
 
-func TestDatabaseSourceLimits_MaxNodesMigration(t *testing.T) {
+func TestDatabaseSourceLimits_ScrubsRetiredMonitoredSystemAliases(t *testing.T) {
 	store := &mockBillingStore{
 		state: &BillingState{
-			Limits:            map[string]int64{"max_nodes": 25},
+			Limits:            map[string]int64{"max_nodes": 25, "max_reports": 7},
 			SubscriptionState: SubStateActive,
 		},
 	}
 	source := NewDatabaseSource(store, "org-1", time.Hour)
 	got := source.Limits()
-	if got["max_monitored_systems"] != 25 {
-		t.Fatalf("expected max_monitored_systems=25, got %d", got["max_monitored_systems"])
+	if _, ok := got["max_monitored_systems"]; ok {
+		t.Fatalf("expected max_monitored_systems to be absent, got %v", got)
 	}
 	if _, hasOld := got["max_nodes"]; hasOld {
-		t.Fatal("expected max_nodes to be absent after migration")
+		t.Fatal("expected max_nodes to be absent")
+	}
+	if got["max_reports"] != 7 {
+		t.Fatalf("expected max_reports=7, got %d", got["max_reports"])
 	}
 }
 
@@ -107,7 +110,7 @@ func TestDatabaseSourceCanonicalizesCloudPlanVersionAndLimits(t *testing.T) {
 	store := &mockBillingStore{
 		state: &BillingState{
 			PlanVersion:       "cloud_v1",
-			Limits:            map[string]int64{"max_monitored_systems": 999},
+			Limits:            map[string]int64{"max_monitored_systems": 999, "max_guests": 7},
 			SubscriptionState: SubStateActive,
 		},
 	}
@@ -117,8 +120,12 @@ func TestDatabaseSourceCanonicalizesCloudPlanVersionAndLimits(t *testing.T) {
 	if got := source.PlanVersion(); got != "cloud_starter" {
 		t.Fatalf("expected plan_version %q, got %q", "cloud_starter", got)
 	}
-	if got := source.Limits()["max_monitored_systems"]; got != 10 {
-		t.Fatalf("expected max_monitored_systems=%d, got %d", 10, got)
+	limits := source.Limits()
+	if _, ok := limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected max_monitored_systems to be absent, got %v", limits)
+	}
+	if got := limits["max_guests"]; got != 7 {
+		t.Fatalf("expected max_guests=%d, got %d", 7, got)
 	}
 }
 
@@ -182,7 +189,7 @@ func TestDatabaseSourcePreservesMissingPlanVersion(t *testing.T) {
 	store := &mockBillingStore{
 		state: &BillingState{
 			PlanVersion:       "   ",
-			Limits:            map[string]int64{"max_monitored_systems": 42},
+			Limits:            map[string]int64{"max_monitored_systems": 42, "max_guests": 7},
 			SubscriptionState: SubscriptionState(" ACTIVE "),
 		},
 	}
@@ -195,8 +202,12 @@ func TestDatabaseSourcePreservesMissingPlanVersion(t *testing.T) {
 	if got := source.SubscriptionState(); got != SubStateActive {
 		t.Fatalf("expected subscription_state %q, got %q", SubStateActive, got)
 	}
-	if got := source.Limits()["max_monitored_systems"]; got != 42 {
-		t.Fatalf("expected max_monitored_systems=%d, got %d", 42, got)
+	limits := source.Limits()
+	if _, ok := limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected max_monitored_systems to be absent, got %v", limits)
+	}
+	if got := limits["max_guests"]; got != 7 {
+		t.Fatalf("expected max_guests=%d, got %d", 7, got)
 	}
 }
 
@@ -384,7 +395,7 @@ func TestDatabaseSourceLeaseOnlyStateResolvesTrialEntitlement(t *testing.T) {
 		PlanVersion:       trialState.PlanVersion,
 		SubscriptionState: trialState.SubscriptionState,
 		Capabilities:      append([]string(nil), trialState.Capabilities...),
-		Limits:            map[string]int64{"max_monitored_systems": 25},
+		Limits:            map[string]int64{"max_monitored_systems": 25, "max_guests": 7},
 		TrialStartedAt:    trialState.TrialStartedAt,
 		TrialEndsAt:       trialState.TrialEndsAt,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -410,8 +421,8 @@ func TestDatabaseSourceLeaseOnlyStateResolvesTrialEntitlement(t *testing.T) {
 	if got := source.Capabilities(); !reflect.DeepEqual(got, []string{"ai_autofix"}) {
 		t.Fatalf("expected capabilities %v, got %v", []string{"ai_autofix"}, got)
 	}
-	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_monitored_systems": 25}) {
-		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_monitored_systems": 25}, got)
+	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_guests": 7}) {
+		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_guests": 7}, got)
 	}
 	if got := source.TrialStartedAt(); got == nil || *got != *trialState.TrialStartedAt {
 		t.Fatalf("expected trial_started_at %v, got %v", trialState.TrialStartedAt, got)
@@ -434,7 +445,7 @@ func TestDatabaseSourceLeaseOnlyStatePreservesMissingPlanVersion(t *testing.T) {
 		InstanceHost:      "pulse.example.com",
 		PlanVersion:       "   ",
 		SubscriptionState: SubStateActive,
-		Limits:            map[string]int64{"max_monitored_systems": 42},
+		Limits:            map[string]int64{"max_monitored_systems": 42, "max_guests": 7},
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
@@ -457,8 +468,8 @@ func TestDatabaseSourceLeaseOnlyStatePreservesMissingPlanVersion(t *testing.T) {
 	if got := source.SubscriptionState(); got != SubStateActive {
 		t.Fatalf("expected subscription_state %q, got %q", SubStateActive, got)
 	}
-	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_monitored_systems": 42}) {
-		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_monitored_systems": 42}, got)
+	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_guests": 7}) {
+		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_guests": 7}, got)
 	}
 }
 

@@ -8,8 +8,8 @@ import (
 )
 
 // MonitoredSystemUsageSnapshot describes whether the monitor can currently
-// supply a canonical monitored-system count that is safe for billing and
-// admission enforcement to consume.
+// supply a canonical monitored-system count that is safe for settings and
+// support context to consume.
 type MonitoredSystemUsageSnapshot struct {
 	Count             int
 	ReadState         unifiedresources.ReadState
@@ -24,7 +24,7 @@ const (
 )
 
 // MonitoredSystemUsage returns the canonical monitored-system count only when
-// the current unified view is settled enough for billing boundaries. When
+// the current unified view is settled enough for settings/support context. When
 // supplemental provider-owned sources are still settling, the result fails
 // closed with Available=false.
 func (m *Monitor) MonitoredSystemUsage() MonitoredSystemUsageSnapshot {

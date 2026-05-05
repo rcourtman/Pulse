@@ -94,7 +94,6 @@ work extends shared components instead of creating new local variants.
 62. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
 63. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
 64. `frontend-modern/src/components/SetupWizard/__tests__/WelcomeStep.test.tsx`
-65. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 66. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
 67. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
 68. `frontend-modern/src/utils/systemLogsPresentation.ts`
@@ -225,12 +224,10 @@ frontend primitive boundary.
    alert threshold tables, and Infrastructure Settings source-manager tables;
    feature owners may own group content and behavior, but not duplicate the
    subgroup band styling.
-   Shared monitored-system warning primitives under that path must stay compact
-   app-shell pointers into the owned Pulse Pro billing surface. The shared
-   banner may announce posture and route to the relevant billing tab, but
-   durable plan-capacity explanation, over-plan reasoning, and upgrade/review
-   actions belong in the `cloud-paid` plan surface rather than permanent
-   banner-local prose.
+   Shared primitives must not reintroduce app-shell monitored-system capacity
+   banners. Monitored-system grouping and ledger presentation belongs in the
+   owned settings surfaces, while commercial plan explanation belongs in
+   `cloud-paid` plan surfaces.
    Mobile navigation under the same shared boundary owns tab accessible names:
    icon components may keep their standalone labels, but the nav must treat
    those icons as decorative inside tab buttons so names come from the tab
@@ -391,11 +388,9 @@ frontend primitive boundary.
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.
 4. Add guardrail tests when a new shared pattern is introduced.
-   Shared monitored-system warning primitives must prove their admission-freeze
-   posture through the canonical `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-   helper plus runtime `monitored_system_capacity` reads rather than
-   reconstructing raw `current / limit` slash math or `0 remaining` copy in
-   the banner shell, state owner, or shared model.
+   Shared monitored-system primitives must prove they remain informational
+   grouping or ledger surfaces rather than admission-freeze banners, cap
+   summaries, or `current / limit` quota math.
    Shared modal scroll containment follows that same owner split. The dialog
    shell in `frontend-modern/src/components/shared/dialogModel.ts` must keep
    shared panels `min-h-0`, and page-owned modal bodies may use
@@ -615,14 +610,11 @@ frontend primitive boundary.
     When a shared banner renders both explanatory and commercial CTAs, those
     labels must resolve to distinct owned destinations or section anchors
     instead of presenting two different labels that land on the same
-    unscoped billing screen. Monitored-system warning banners must also honor
-    canonical runtime usage availability before treating a limit as urgent:
-    when the backend marks `max_monitored_systems.current_available=false`,
-    the shared banner model must consume the cloud-paid monitored-system
-    presentation helper and suppress usage summaries, upgrade pressure, and
-    upgrade-impression telemetry rather than rendering stale `current/limit`
-    counts or paid-plan CTAs from banner-local availability checks. When the
-    banner does need a review destination, it must scope the operator into the
+    unscoped billing screen. Monitored-system capacity warning banners are
+    retired; shared commercial banners must not render stale `current/limit`
+    counts, paid-plan CTAs, usage summaries, or upgrade-impression telemetry
+    from legacy monitored-system limit payloads. When a banner does need a
+    review destination for a current paid feature, it must scope the operator into the
     usage-owned policy ledger rather than plan-selection intent or CTA copy
     that frames the flow as monitored-system-cap expansion.
 16. Keep assistant availability bootstrap on the shared app-shell boundary.
@@ -1028,13 +1020,10 @@ primitives must not fork that string or revive removed nested route labels.
 `settingsNavCatalog.ts`, `settingsPanelRegistry.ts`, and
 `settingsNavigationModel.ts` replaces both. Panel routing within the
 infrastructure area uses `InfrastructurePanelStep` in-page state.
-The shared monitored-system warning banner now uses a neutral policy-review
-CTA and `reviewPolicyDestination` state, keeping the render shell pointed at
-the usage-owned policy ledger instead of plan-selection or capacity wording.
-It also requires hosted mode and follows the resolved session-presentation
-upgrade policy, so ordinary self-hosted sessions do not render the banner, its
-plan-review link, or its upgrade-impression telemetry even when stale finite
-policy data is present.
+The shared monitored-system warning banner has been retired. Ordinary hosted
+and self-hosted sessions must not render app-shell monitored-system capacity
+warnings, plan-review links, or upgrade-impression telemetry from stale finite
+policy data.
 Shared alert presentation surfaces (`OverviewTab.tsx`, `HistoryTab.tsx`,
 `AlertOverviewActiveAlertsSection.tsx`, `AlertHistoryTableSection.tsx`,
 `AlertHistoryTableAlertRow.tsx`, `AlertOverviewAlertCard.tsx`) no longer accept
@@ -1100,7 +1089,6 @@ commercial suppression. `frontend-modern/src/components/Settings/settingsNavCata
 `frontend-modern/src/stores/license.ts`,
 `frontend-modern/src/stores/licenseCommercial.ts`,
 `frontend-modern/src/useAppRuntimeState.ts`,
-`frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
 `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
 `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
@@ -1137,8 +1125,8 @@ That same shared primitive boundary now also centralizes authenticated-shell
 commercial posture bootstrap. `frontend-modern/src/useAppRuntimeState.ts`
 owns the first shared `loadCommercialPosture()` read after authenticated app
 runtime has mounted, while `frontend-modern/src/AppLayout.tsx`,
-`frontend-modern/src/components/Settings/Settings.tsx`, shared warning-banner
-hooks, Patrol state hooks, and settings-panel state hooks must consume the
+`frontend-modern/src/components/Settings/Settings.tsx`, Patrol state hooks,
+and settings-panel state hooks must consume the
 resolved store state instead of reissuing mount-time posture fetches from each
 surface. Shared commercial posture loading may still dedupe or force-refresh
 through the store for governed billing or first-run flows, but route-local or
@@ -2315,47 +2303,14 @@ legacy/API-connected resources separately, but it may not regress the primary
 banner label or CTA text back to host-agent product language.
 The self-hosted commercial paywall copy on those shared warning surfaces is
 now also explicitly locked to monitored systems rather than agents. When a
-shared banner or shared settings shell is explaining self-hosted plan caps,
-the operator-facing commercial term must follow the monitored-system model even
-if explicit legacy-v5 compatibility helpers still decode older alias fields at
-import boundaries.
-That same settings-shell framing must stay in customer language. Shared headers
-and descriptions should talk about monitored-system limits, plan limits, and
-subscription or license status instead of reviving legacy `installed-agent`
-terms or vague internal nouns like `allocation`.
-That banner boundary now also owns the canonical monitored-system naming
-surface directly: the shared warning component path and exported symbol are
-`MonitoredSystemLimitWarningBanner`, and future work may not reintroduce an
-agent-era banner filename or component name as the primary primitive.
-That shared monitored-system warning banner now also follows the shell/runtime/model
-owner split. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
-stays the render shell, `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`
-owns hosted-mode eligibility, entitlement load, warning metric emission,
-migration click tracking, and policy-review plus collector-link runtime, and
-`frontend-modern/src/components/shared/monitoredSystemLimitWarningBannerModel.ts`
-owns monitored-system warning policy, count aggregation, and tone/text-class
-policy while sourcing customer-facing monitored-system copy from the canonical
-`frontend-modern/src/utils/monitoredSystemPresentation.ts` helper. Future
-warning-banner work should extend those owners instead of pushing entitlement
-state, hosted-mode checks, or route selection back into the render shell. In
-ordinary self-hosted mode the banner must remain absent rather than turning
-stale finite policy data into monitored-system limit pressure. When hosted
-capacity policy is active, the shared primitive must stay a compact
-policy-review pointer into the usage-owned ledger rather than a plan-selection
-or "capacity" CTA. The banner may signal the current hosted monitored-system
-posture and link into the owned usage surface, but the longer over-plan or
-continuity explanation belongs in the bounded usage ledger and commercial
-detail sections owned by `cloud-paid`, not in permanent app-shell banner copy.
-That same shared warning boundary now also owns the monitored-system capacity
-posture vocabulary. Shared banners, plan summaries, and ledger headers must
-describe the canonical admission-freeze model from
-`monitored_system_capacity`: existing monitoring continues, new monitored
-systems block at the plan boundary, and over-plan posture is an explicitly
-frozen state. Shared primitives must not fall back to raw `current / limit`
-slash math or `0 remaining` wording that implies Pulse should retroactively
-black out already-monitored systems.
-orchestration, tracking, or naming math back into the shared shell or
-reintroducing banner-local monitored-system copy strings.
+shared banner or shared settings shell would explain monitored-system plan
+caps, the correct primitive decision is absence: monitored-system volume is not
+a current paid-capacity surface. Shared headers and descriptions may use
+monitored-system language for inventory grouping and support ledgers, but they
+must not talk about monitored-system limits, cap pressure, plan capacity,
+admission freezes, or upgrade actions. Future work must not recreate
+`MonitoredSystemLimitWarningBanner`, its state hook, or banner-local
+monitored-system copy strings.
 Shared frontend label-formatting helpers now also have an explicit owner here.
 `frontend-modern/src/utils/textPresentation.ts` is the canonical shared owner
 for token humanization, identifier label formatting, title-casing, and
@@ -2649,7 +2604,7 @@ plan-owned (`Plans`) while the page itself still names the concrete job
 That same settings-shell framing boundary also covers adjacent top-level
 settings references to the self-hosted commercial surface. When
 `InfrastructureWorkspace.tsx` or other settings-shell surfaces point operators
-toward Pulse Pro for billing, monitored-system limits, or license status, they
+toward Plans for billing, license status, or paid feature activation, they
 must reuse the shared referral copy from
 `SELF_HOSTED_PRO_BILLING_PRESENTATION` rather than drafting local “go there
 for billing” variants.
@@ -2824,7 +2779,6 @@ commercial suppression. `frontend-modern/src/components/Settings/settingsNavCata
 `frontend-modern/src/stores/sessionCapabilities.ts`,
 `frontend-modern/src/stores/demoMode.ts`,
 `frontend-modern/src/useAppRuntimeState.ts`,
-`frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
 `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
 `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`

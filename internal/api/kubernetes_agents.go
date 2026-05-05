@@ -63,16 +63,6 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 	}
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
-	if enforceMonitoredSystemLimitForKubernetesReport(
-		w,
-		r.Context(),
-		h.getMonitor(r.Context()),
-		report,
-		tokenRecord,
-	) {
-		return
-	}
-
 	cluster, err := h.getMonitor(r.Context()).ApplyKubernetesReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)

@@ -38,7 +38,7 @@ const (
 	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
 	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
 	FeatureMultiTenant = "multi_tenant" // Multi-tenant organizations
-	FeatureUnlimited   = "unlimited"    // Hosted capacity policy marker for MSP/enterprise deals
+	FeatureUnlimited   = "unlimited"    // Compatibility capability marker for MSP/enterprise deals
 
 	// Internal-only runtime capabilities. These must never be added to public
 	// tier defaults or public pricing contracts.
@@ -59,48 +59,6 @@ const (
 	TierMSP        Tier = "msp"
 	TierEnterprise Tier = "enterprise"
 )
-
-// TierMonitoredSystemLimits defines the maximum monitored-system count per tier.
-// A value of 0 means unlimited.
-var TierMonitoredSystemLimits = map[Tier]int{
-	TierFree:       0, // Self-hosted Community no longer caps core monitoring
-	TierRelay:      0, // Self-hosted Relay adds convenience features, not more room
-	TierPro:        0, // Self-hosted Pro monetizes operations features, not monitoring volume
-	TierProPlus:    0, // Legacy/self-hosted compatibility tier; no monitored-system cap
-	TierProAnnual:  0, // Legacy: same as Pro
-	TierLifetime:   0, // Grandfathered lifetime entitlements remain uncapped
-	TierCloud:      0, // Cloud tiers have per-plan limits set in license claims
-	TierMSP:        0, // MSP tiers have per-plan pool limits set in license claims
-	TierEnterprise: 0, // Custom
-}
-
-// CloudPlanMonitoredSystemLimits maps hosted and continuity plan version strings to
-// per-plan monitored-system limits. When a tenant is provisioned or its subscription
-// changes, the provisioner uses this map to populate
-// BillingState.Limits[MaxMonitoredSystemsLicenseGateKey].
-//
-// This intentionally includes the grandfathered recurring v5/v1 continuity
-// plans that still renew through Stripe. Those subscriptions are not "unknown"
-// just because they are no longer sold; they remain canonical paid states that
-// must preserve their plan identity during webhook-driven billing updates.
-// A value of 0 means uncapped continuity for active recurring v5 customers.
-var CloudPlanMonitoredSystemLimits = map[string]int{
-	// Individual Cloud tiers
-	"cloud_starter":  10,
-	"cloud_power":    30,
-	"cloud_max":      75,
-	"cloud_founding": 10, // Founding rate = Starter limits
-
-	// Grandfathered recurring Pulse Pro continuity plans remain uncapped while
-	// the recurring subscription stays active.
-	"v5_pro_monthly_grandfathered": 0,
-	"v5_pro_annual_grandfathered":  0,
-
-	// MSP tiers — host pool limits from pricing spec
-	"msp_starter": 50,  // MSP Starter: 10 clients, 50 host pool
-	"msp_growth":  150, // MSP Growth: 25 clients, 150 host pool
-	"msp_scale":   400, // MSP Scale: 50 clients, 400 host pool
-}
 
 // PriceIDToPlanVersion maps Stripe price IDs to canonical plan version strings.
 // This is the authoritative reverse lookup: given a price ID from a checkout
@@ -205,10 +163,16 @@ func stripLegacyCommercialCaps(limits map[string]int64) {
 	delete(limits, "max_guests")
 }
 
-// UnknownPlanDefaultMonitoredSystemLimit is the safe-default monitored-system limit applied when a
-// plan version is not recognized. Fail-closed: unknown plans get the smallest
-// tier limit rather than unlimited access.
-const UnknownPlanDefaultMonitoredSystemLimit = 10
+func stripSelfHostedCommercialVolumeCaps(limits map[string]int64, planVersion string, tier Tier, uncapped bool) {
+	if limits == nil {
+		return
+	}
+	if uncapped ||
+		IsSelfHostedCoreMonitoringUncappedPlanVersion(planVersion) ||
+		(planVersion == "" && IsSelfHostedCoreMonitoringUncappedTier(tier)) {
+		stripLegacyCommercialCaps(limits)
+	}
+}
 
 // CloudPlanWorkspaceLimits maps cloud plan version strings to the maximum
 // number of active workspaces (tenants) the account may create. Individual
@@ -241,20 +205,6 @@ func WorkspaceLimitForPlan(planVersion string) (limit int, known bool) {
 		return l, true
 	}
 	return UnknownPlanDefaultWorkspaceLimit, false
-}
-
-// LimitsForCloudPlan returns the monitored-system limit map for a given cloud plan
-// version and whether the plan was recognized. If the plan is recognized, the
-// map contains MaxMonitoredSystemsLicenseGateKey with the per-plan limit.
-// If unrecognized, returns
-// a safe default limit (fail-closed) and known=false so callers can decide
-// whether to reject, quarantine, or proceed with restricted access.
-func LimitsForCloudPlan(planVersion string) (limits map[string]int64, known bool) {
-	planVersion = CanonicalizePlanVersion(planVersion)
-	if limit, ok := CloudPlanMonitoredSystemLimits[planVersion]; ok {
-		return map[string]int64{MaxMonitoredSystemsLicenseGateKey: int64(limit)}, true
-	}
-	return map[string]int64{MaxMonitoredSystemsLicenseGateKey: int64(UnknownPlanDefaultMonitoredSystemLimit)}, false
 }
 
 // TierHistoryDays defines the maximum metrics history retention per tier.
@@ -297,7 +247,7 @@ var proFeatures = appendFeatures(relayFeatures,
 	FeatureAdvancedReporting,
 )
 
-// mspFeatures adds multi-tenant and hosted capacity policy on top of pro.
+// mspFeatures adds multi-tenant policy on top of pro.
 var mspFeatures = appendFeatures(proFeatures,
 	FeatureUnlimited,
 	FeatureMultiTenant,
@@ -347,14 +297,13 @@ func DeriveCapabilitiesFromTier(tier Tier, explicitFeatures []string) []string {
 	return capabilities
 }
 
-// DeriveEntitlements derives capabilities and limits from tier and canonical monitored-system fields.
-func DeriveEntitlements(tier Tier, features []string, maxMonitoredSystems int, maxGuests int) (capabilities []string, limits map[string]int64) {
+// DeriveEntitlements derives capabilities and non-monitoring quantitative limits.
+// The monitored-system parameter is retained for old callers but ignored:
+// monitored-system volume is no longer a license entitlement.
+func DeriveEntitlements(tier Tier, features []string, _ int, maxGuests int) (capabilities []string, limits map[string]int64) {
 	capabilities = DeriveCapabilitiesFromTier(tier, features)
 
 	limits = make(map[string]int64)
-	if maxMonitoredSystems > 0 {
-		limits["max_monitored_systems"] = int64(maxMonitoredSystems)
-	}
 	if maxGuests > 0 {
 		limits["max_guests"] = int64(maxGuests)
 	}

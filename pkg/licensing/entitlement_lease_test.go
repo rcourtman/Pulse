@@ -24,7 +24,7 @@ func TestSignAndVerifyEntitlementLeaseToken(t *testing.T) {
 		PlanVersion:       string(SubStateTrial),
 		SubscriptionState: SubStateTrial,
 		Capabilities:      []string{"ai_autofix"},
-		Limits:            map[string]int64{"max_monitored_systems": 25},
+		Limits:            map[string]int64{"max_monitored_systems": 25, "max_guests": 7},
 		MetersEnabled:     []string{"agents"},
 		TrialStartedAt:    &startedAt,
 		TrialEndsAt:       &endsAt,
@@ -51,8 +51,11 @@ func TestSignAndVerifyEntitlementLeaseToken(t *testing.T) {
 	if claims.SubscriptionState != SubStateTrial {
 		t.Fatalf("claims.SubscriptionState=%q, want %q", claims.SubscriptionState, SubStateTrial)
 	}
-	if got := claims.Limits["max_monitored_systems"]; got != 25 {
-		t.Fatalf("claims.Limits[max_monitored_systems]=%d, want %d", got, 25)
+	if _, ok := claims.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("claims retained retired max_monitored_systems: %v", claims.Limits)
+	}
+	if got := claims.Limits["max_guests"]; got != 7 {
+		t.Fatalf("claims.Limits[max_guests]=%d, want %d", got, 7)
 	}
 }
 
@@ -132,7 +135,7 @@ func TestEntitlementLeaseCanonicalizesCloudPlanVersionAndLimits(t *testing.T) {
 		InstanceHost:      "pulse.example.com",
 		PlanVersion:       " cloud_v1 ",
 		SubscriptionState: SubStateActive,
-		Limits:            map[string]int64{"max_monitored_systems": 999},
+		Limits:            map[string]int64{"max_monitored_systems": 999, "max_guests": 7},
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
@@ -148,8 +151,11 @@ func TestEntitlementLeaseCanonicalizesCloudPlanVersionAndLimits(t *testing.T) {
 	if claims.PlanVersion != "cloud_starter" {
 		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_starter")
 	}
-	if got := claims.Limits["max_monitored_systems"]; got != 10 {
-		t.Fatalf("claims.Limits[max_monitored_systems]=%d, want %d", got, 10)
+	if _, ok := claims.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("claims retained retired max_monitored_systems: %v", claims.Limits)
+	}
+	if got := claims.Limits["max_guests"]; got != 7 {
+		t.Fatalf("claims.Limits[max_guests]=%d, want %d", got, 7)
 	}
 }
 
@@ -164,7 +170,7 @@ func TestEntitlementLeasePreservesNonCloudLimits(t *testing.T) {
 		InstanceHost:      "pulse.example.com",
 		PlanVersion:       "pro-v2",
 		SubscriptionState: SubStateActive,
-		Limits:            map[string]int64{"max_monitored_systems": 42},
+		Limits:            map[string]int64{"max_monitored_systems": 42, "max_guests": 7},
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
@@ -180,8 +186,11 @@ func TestEntitlementLeasePreservesNonCloudLimits(t *testing.T) {
 	if claims.PlanVersion != "pro-v2" {
 		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "pro-v2")
 	}
-	if got := claims.Limits["max_monitored_systems"]; got != 42 {
-		t.Fatalf("claims.Limits[max_monitored_systems]=%d, want %d", got, 42)
+	if _, ok := claims.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("claims retained retired max_monitored_systems: %v", claims.Limits)
+	}
+	if got := claims.Limits["max_guests"]; got != 7 {
+		t.Fatalf("claims.Limits[max_guests]=%d, want %d", got, 7)
 	}
 }
 
@@ -196,7 +205,7 @@ func TestEntitlementLeasePreservesMissingPlanVersion(t *testing.T) {
 		InstanceHost:      "pulse.example.com",
 		PlanVersion:       "   ",
 		SubscriptionState: SubStateActive,
-		Limits:            map[string]int64{"max_monitored_systems": 42},
+		Limits:            map[string]int64{"max_monitored_systems": 42, "max_guests": 7},
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
@@ -215,8 +224,11 @@ func TestEntitlementLeasePreservesMissingPlanVersion(t *testing.T) {
 	if claims.SubscriptionState != SubStateActive {
 		t.Fatalf("claims.SubscriptionState=%q, want %q", claims.SubscriptionState, SubStateActive)
 	}
-	if got := claims.Limits["max_monitored_systems"]; got != 42 {
-		t.Fatalf("claims.Limits[max_monitored_systems]=%d, want %d", got, 42)
+	if _, ok := claims.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("claims retained retired max_monitored_systems: %v", claims.Limits)
+	}
+	if got := claims.Limits["max_guests"]; got != 7 {
+		t.Fatalf("claims.Limits[max_guests]=%d, want %d", got, 7)
 	}
 }
 
@@ -232,7 +244,7 @@ func TestResolveEntitlementLeaseBillingStatePreservesMissingPlanVersion(t *testi
 		InstanceHost:      "pulse.example.com",
 		PlanVersion:       "   ",
 		SubscriptionState: SubStateActive,
-		Limits:            map[string]int64{"max_monitored_systems": 42},
+		Limits:            map[string]int64{"max_monitored_systems": 42, "max_guests": 7},
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
@@ -250,7 +262,10 @@ func TestResolveEntitlementLeaseBillingStatePreservesMissingPlanVersion(t *testi
 	if resolved.SubscriptionState != SubStateActive {
 		t.Fatalf("resolved.SubscriptionState=%q, want %q", resolved.SubscriptionState, SubStateActive)
 	}
-	if got := resolved.Limits["max_monitored_systems"]; got != 42 {
-		t.Fatalf("resolved.Limits[max_monitored_systems]=%d, want %d", got, 42)
+	if _, ok := resolved.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("resolved retained retired max_monitored_systems: %v", resolved.Limits)
+	}
+	if got := resolved.Limits["max_guests"]; got != 7 {
+		t.Fatalf("resolved.Limits[max_guests]=%d, want %d", got, 7)
 	}
 }

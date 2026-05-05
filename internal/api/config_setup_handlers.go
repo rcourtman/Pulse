@@ -20,7 +20,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -1273,15 +1272,6 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 				http.Error(w, "agent token auth permits token updates for existing nodes only", http.StatusForbidden)
 				return
 			}
-			if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
-				Source:   unifiedresources.SourceProxmox,
-				Type:     unifiedresources.ResourceTypeAgent,
-				Name:     serverName,
-				Hostname: pulseTokenHostCandidate(host),
-				HostURL:  host,
-			}) {
-				return
-			}
 			h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pveNode)
 			h.normalizePVEConfigState(r.Context())
 		}
@@ -1356,15 +1346,6 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			if isAgentAutoRegAuth(r.Context()) {
 				log.Warn().Str("host", host).Str("type", "pbs").Msg("Agent API token auth rejected for new PBS node registration")
 				http.Error(w, "agent token auth permits token updates for existing nodes only", http.StatusForbidden)
-				return
-			}
-			if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
-				Source:   unifiedresources.SourcePBS,
-				Type:     unifiedresources.ResourceTypePBS,
-				Name:     serverName,
-				Hostname: pulseTokenHostCandidate(host),
-				HostURL:  host,
-			}) {
 				return
 			}
 			h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbsNode)

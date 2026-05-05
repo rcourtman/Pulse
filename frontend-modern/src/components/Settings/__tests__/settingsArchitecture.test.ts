@@ -35,7 +35,7 @@ import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import agentProfileSettingsSource from '../agentProfileSettings.ts?raw';
 import connectionsTableSource from '../ConnectionsTable.tsx?raw';
-import monitoredSystemAdmissionPreviewSource from '../MonitoredSystemAdmissionPreview.tsx?raw';
+import monitoredSystemImpactPreviewSource from '../MonitoredSystemImpactPreview.tsx?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
@@ -66,7 +66,6 @@ import infrastructureOnboardingPresentationSource from '../../../utils/infrastru
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
 import auditLogPresentationSource from '../../../utils/auditLogPresentation.ts?raw';
-import monitoredSystemLimitWarningBannerSource from '../../shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 
 const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEditor/**/*.tsx'], {
   query: '?raw',
@@ -224,7 +223,6 @@ describe('settings architecture guardrails', () => {
       auditLogStateSource,
       auditWebhookPanelSource,
       auditWebhookStateSource,
-      monitoredSystemLimitWarningBannerSource,
       rbacFeatureGateSectionSource,
       rbacFeatureGateStateSource,
       reportingPanelSource,
@@ -246,9 +244,6 @@ describe('settings architecture guardrails', () => {
     expect(rbacFeatureGateSectionSource).not.toContain('Custom Roles (Pro)');
     expect(rbacFeatureGateSectionSource).not.toContain('Centralized Access Control (Pro)');
     expect(ssoProvidersPanelSource).not.toContain('Add SAML (Pro)');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain(
-      'Unlimited self-hosted monitoring',
-    );
   });
 
   it('keeps SAML SSO available without a self-hosted Pro upsell boundary', () => {
@@ -446,18 +441,18 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Infrastructure systems');
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
-    expect(monitoredSystemAdmissionPreviewSource).toContain(
-      'getMonitoredSystemAdmissionPreviewTitle',
+    expect(monitoredSystemImpactPreviewSource).toContain(
+      'getMonitoredSystemImpactPreviewTitle',
     );
-    expect(monitoredSystemAdmissionPreviewSource).toContain(
-      'formatMonitoredSystemAdmissionPreviewSummary',
+    expect(monitoredSystemImpactPreviewSource).toContain(
+      'formatMonitoredSystemImpactPreviewSummary',
     );
-    expect(monitoredSystemAdmissionPreviewSource).not.toContain('Current usage');
-    expect(monitoredSystemAdmissionPreviewSource).not.toContain(' / ');
-    expect(monitoredSystemAdmissionPreviewSource).not.toContain(
-      'reuses your current monitored-system capacity',
+    expect(monitoredSystemImpactPreviewSource).not.toContain('Current usage');
+    expect(monitoredSystemImpactPreviewSource).not.toContain(' / ');
+    expect(monitoredSystemImpactPreviewSource).not.toContain(
+      'reuses your current monitored-system allowance',
     );
-    expect(monitoredSystemAdmissionPreviewSource).not.toContain('frees monitored-system capacity');
+    expect(monitoredSystemImpactPreviewSource).not.toContain('frees monitored-system allowance');
     expect(infrastructureSourceManagerSource).toContain(
       "Add, discover, and verify the platform APIs plus Pulse Agent telemetry that make up Pulse's infrastructure model.",
     );

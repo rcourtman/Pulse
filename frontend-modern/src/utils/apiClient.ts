@@ -83,7 +83,6 @@ type APIErrorShape = Error & {
   detail?: string;
   details?: APIErrorDetails;
   feature?: string;
-  monitored_system_preview?: unknown;
   requiredScope?: string;
   upgrade_url?: string;
   status?: number;
@@ -118,7 +117,6 @@ async function createAPIErrorFromResponse(
   let errorDetail: string | undefined;
   let errorDetails: APIErrorDetails | undefined;
   let errorFeature: string | undefined;
-  let errorMonitoredSystemPreview: unknown;
   let errorRequiredScope: string | undefined;
   let errorUpgradeUrl: string | undefined;
   try {
@@ -133,12 +131,6 @@ async function createAPIErrorFromResponse(
     }
     errorCode = sanitizeBoundedText(jsonError.code, MAX_API_ERROR_CODE_LENGTH) ?? undefined;
     errorDetails = sanitizeAPIErrorDetails(jsonError.details);
-    if (
-      jsonError.monitored_system_preview &&
-      typeof jsonError.monitored_system_preview === 'object'
-    ) {
-      errorMonitoredSystemPreview = jsonError.monitored_system_preview;
-    }
     errorRequiredScope = sanitizeBoundedText(jsonError.requiredScope, 128) ?? undefined;
     errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
     errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
@@ -173,9 +165,6 @@ async function createAPIErrorFromResponse(
   }
   if (errorFeature) {
     err.feature = errorFeature;
-  }
-  if (errorMonitoredSystemPreview) {
-    err.monitored_system_preview = errorMonitoredSystemPreview;
   }
   if (errorUpgradeUrl) {
     err.upgrade_url = errorUpgradeUrl;

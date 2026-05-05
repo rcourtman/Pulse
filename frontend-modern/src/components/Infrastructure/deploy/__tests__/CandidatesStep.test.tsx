@@ -94,7 +94,6 @@ function createMockWizard(
     retryableTargets: (() => []) as Accessor<unknown[]>,
     skippedTargets: (() => []) as Accessor<unknown[]>,
     canceledTargets: (() => []) as Accessor<unknown[]>,
-    maxAgentSlots: (() => 0) as Accessor<number>,
     startingPreflight: (() => false) as Accessor<boolean>,
     startingDeploy: (() => false) as Accessor<boolean>,
     retrying: (() => false) as Accessor<boolean>,

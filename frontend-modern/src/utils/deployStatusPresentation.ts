@@ -43,10 +43,6 @@ const DEPLOY_STATUS_PRESENTATION: Record<DeployTargetStatus, DeployStatusPresent
     label: 'Already monitored',
     className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
   },
-  skipped_license: {
-    label: 'Workspace capacity',
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-  },
   canceled: { label: 'Canceled', className: 'bg-surface-alt text-muted' },
 };
 

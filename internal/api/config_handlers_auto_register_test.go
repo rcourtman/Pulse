@@ -1014,7 +1014,7 @@ func TestHandleAutoRegisterSelectsReachableFallbackCandidateHost(t *testing.T) {
 	}
 }
 
-func TestHandleAutoRegister_BlocksNewCountedSystemAtLimit(t *testing.T) {
+func TestHandleAutoRegister_AllowsNewCountedSystemWithCapsRetired(t *testing.T) {
 	stubAutoRegisterNetworkDeps(t)
 
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
@@ -1086,8 +1086,8 @@ func TestHandleAutoRegister_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleAutoRegister(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402 once monitored-system cap is full, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with monitored-system caps retired, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

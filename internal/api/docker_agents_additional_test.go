@@ -109,9 +109,9 @@ func TestDockerAgentHandlers_HandleReport(t *testing.T) {
 	}
 }
 
-// TestDockerAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit verifies
-// that a new Docker host counts as a monitored system.
-func TestDockerAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit(t *testing.T) {
+// TestDockerAgentHandlers_HandleReport_AllowsNewMonitoredSystemWithCapsRetired
+// verifies that a new Docker host is accepted without monitored-system caps.
+func TestDockerAgentHandlers_HandleReport_AllowsNewMonitoredSystemWithCapsRetired(t *testing.T) {
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, monitor := newDockerAgentHandlers(t, nil)
@@ -120,7 +120,7 @@ func TestDockerAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit(t *tes
 		t.Fatalf("expected seeded host ID")
 	}
 
-	// New Docker host should be blocked because it is a distinct monitored system.
+	// New Docker host should be accepted because monitored-system caps are retired.
 	newReport := agentsdocker.Report{
 		Agent: agentsdocker.AgentInfo{
 			ID:              "agent-2",
@@ -142,8 +142,8 @@ func TestDockerAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit(t *tes
 	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/docker/report", bytes.NewReader(newBody))
 	newRec := httptest.NewRecorder()
 	handler.HandleReport(newRec, newReq)
-	if newRec.Code != http.StatusPaymentRequired {
-		t.Fatalf("status = %d, want 402: %s", newRec.Code, newRec.Body.String())
+	if newRec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", newRec.Code, newRec.Body.String())
 	}
 }
 

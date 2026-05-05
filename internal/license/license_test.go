@@ -123,8 +123,7 @@ func TestServiceStatus_UsesEffectiveClaimsCapabilitiesAndScrubsSelfHostedCommerc
 				"max_monitored_systems": 99,
 				"max_guests":            7,
 			},
-			MaxMonitoredSystems: 1,
-			MaxGuests:           2,
+			MaxGuests: 2,
 		},
 	})
 
@@ -138,9 +137,6 @@ func TestServiceStatus_UsesEffectiveClaimsCapabilitiesAndScrubsSelfHostedCommerc
 	status := svc.Status()
 	if !reflect.DeepEqual(status.Features, []string{FeatureAIAutoFix}) {
 		t.Fatalf("Status().Features=%v, want %v", status.Features, []string{FeatureAIAutoFix})
-	}
-	if status.MaxMonitoredSystems != 0 {
-		t.Fatalf("Status().MaxMonitoredSystems=%d, want 0 for uncapped self-hosted Pro", status.MaxMonitoredSystems)
 	}
 	if status.MaxGuests != 0 {
 		t.Fatalf("Status().MaxGuests=%d, want 0 for uncapped self-hosted Pro", status.MaxGuests)
@@ -976,14 +972,14 @@ func TestClaimsEffectiveCapabilities(t *testing.T) {
 func TestClaimsEffectiveLimits(t *testing.T) {
 	t.Run("explicit limits", func(t *testing.T) {
 		claims := Claims{
-			MaxMonitoredSystems: 25,
 			Limits: map[string]int64{
 				"max_monitored_systems": 50,
+				"max_guests":            75,
 			},
 		}
 
 		got := claims.EffectiveLimits()
-		want := map[string]int64{"max_monitored_systems": 50}
+		want := map[string]int64{"max_guests": 75}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("EffectiveLimits() = %v, want %v", got, want)
 		}
@@ -991,14 +987,12 @@ func TestClaimsEffectiveLimits(t *testing.T) {
 
 	t.Run("derived from fields", func(t *testing.T) {
 		claims := Claims{
-			MaxMonitoredSystems: 25,
-			MaxGuests:           100,
+			MaxGuests: 100,
 		}
 
 		got := claims.EffectiveLimits()
 		want := map[string]int64{
-			"max_monitored_systems": 25,
-			"max_guests":            100,
+			"max_guests": 100,
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("EffectiveLimits() = %v, want %v", got, want)
@@ -1007,8 +1001,7 @@ func TestClaimsEffectiveLimits(t *testing.T) {
 
 	t.Run("zero fields omitted", func(t *testing.T) {
 		claims := Claims{
-			MaxMonitoredSystems: 0,
-			Limits:              nil,
+			Limits: nil,
 		}
 
 		got := claims.EffectiveLimits()
@@ -1021,15 +1014,14 @@ func TestClaimsEffectiveLimits(t *testing.T) {
 func TestClaimsJSONRoundtrip(t *testing.T) {
 	t.Run("new fields set", func(t *testing.T) {
 		original := Claims{
-			LicenseID:           "license_roundtrip",
-			Email:               "roundtrip@example.com",
-			Tier:                TierPro,
-			IssuedAt:            1700000000,
-			ExpiresAt:           1800000000,
-			Features:            []string{"legacy_feature"},
-			MaxMonitoredSystems: 10,
-			MaxGuests:           20,
-			Capabilities:        []string{"cap_a", "cap_b"},
+			LicenseID:    "license_roundtrip",
+			Email:        "roundtrip@example.com",
+			Tier:         TierPro,
+			IssuedAt:     1700000000,
+			ExpiresAt:    1800000000,
+			Features:     []string{"legacy_feature"},
+			MaxGuests:    20,
+			Capabilities: []string{"cap_a", "cap_b"},
 			Limits: map[string]int64{
 				"max_monitored_systems": 50,
 				"max_guests":            100,
@@ -1124,8 +1116,7 @@ func TestDeriveEntitlements(t *testing.T) {
 		sort.Strings(wantCapabilities)
 
 		wantLimits := map[string]int64{
-			"max_monitored_systems": 25,
-			"max_guests":            100,
+			"max_guests": 100,
 		}
 
 		if !reflect.DeepEqual(capabilities, wantCapabilities) {
@@ -1413,9 +1404,6 @@ func TestEvaluatorMatrix(t *testing.T) {
 		}
 		// Hosted path unions free-tier baseline capabilities with evaluator-provided capabilities.
 		assertFeatureSetEq(t, status.Features, []string{FeatureUpdateAlerts, FeatureSSO, FeatureAdvancedSSO, FeatureAIPatrol, FeatureAIAutoFix})
-		if status.MaxMonitoredSystems != 42 {
-			t.Fatalf("Status().MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, 42)
-		}
 		if status.MaxGuests != 13 {
 			t.Fatalf("Status().MaxGuests=%d, want %d", status.MaxGuests, 13)
 		}
@@ -1490,8 +1478,8 @@ func TestEvaluatorMatrix(t *testing.T) {
 		if !reflect.DeepEqual(status.Features, TierFeatures[TierFree]) {
 			t.Fatalf("Status().Features=%v, want %v", status.Features, TierFeatures[TierFree])
 		}
-		if status.MaxMonitoredSystems != TierMonitoredSystemLimits[TierFree] || status.MaxGuests != 0 {
-			t.Fatalf("expected free-tier fallback limits for expired subscription, got MaxMonitoredSystems=%d MaxGuests=%d", status.MaxMonitoredSystems, status.MaxGuests)
+		if status.MaxGuests != 0 {
+			t.Fatalf("expected free-tier fallback limits for expired subscription, got MaxGuests=%d", status.MaxGuests)
 		}
 	})
 

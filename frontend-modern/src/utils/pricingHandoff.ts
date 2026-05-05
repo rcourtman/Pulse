@@ -51,7 +51,6 @@ export const SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF = `${SELF_HOSTED_PRO_BI
 
 const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
-  max_monitored_systems: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   // Paid self-hosted feature keys: route to the owned billing plan page instead
   // of the Pulse Account purchase-start handoff, which fails for local instances
   // without PublicURL.

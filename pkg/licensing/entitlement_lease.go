@@ -56,15 +56,10 @@ func normalizeEntitlementLeaseClaims(claims *EntitlementLeaseClaims) {
 	claims.PlanVersion = CanonicalizePlanVersion(strings.TrimSpace(claims.PlanVersion))
 	claims.Capabilities = cloneStringSlice(claims.Capabilities)
 	claims.Limits = NormalizeMonitoredSystemLimits(claims.Limits)
+	stripSelfHostedCommercialVolumeCaps(claims.Limits, claims.PlanVersion, "", false)
 	claims.MetersEnabled = cloneStringSlice(claims.MetersEnabled)
 	claims.TrialStartedAt = cloneInt64Ptr(claims.TrialStartedAt)
 	claims.TrialEndsAt = cloneInt64Ptr(claims.TrialEndsAt)
-	if limit, known := CloudPlanMonitoredSystemLimits[claims.PlanVersion]; known {
-		if claims.Limits == nil {
-			claims.Limits = map[string]int64{}
-		}
-		claims.Limits[MaxMonitoredSystemsLicenseGateKey] = int64(limit)
-	}
 }
 
 // SignEntitlementLeaseToken signs a hosted entitlement lease JWT.

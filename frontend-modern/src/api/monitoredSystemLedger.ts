@@ -61,7 +61,6 @@ export interface MonitoredSystemLedgerLatestSignal {
 export interface MonitoredSystemLedgerResponse {
   systems: MonitoredSystemLedgerEntry[];
   total: number;
-  limit: number; // 0 = unlimited
 }
 
 export interface MonitoredSystemLedgerExplainRequest {
@@ -112,8 +111,6 @@ export interface MonitoredSystemLedgerPreviewResponse {
   current_count: number;
   projected_count: number;
   additional_count: number;
-  limit: number;
-  would_exceed_limit: boolean;
   effect: MonitoredSystemLedgerPreviewEffect | string;
   current_systems: MonitoredSystemLedgerEntry[];
   projected_systems: MonitoredSystemLedgerEntry[];
@@ -244,7 +241,6 @@ export function normalizeMonitoredSystemLedgerExplainResponse(
   const rawLedger: MonitoredSystemLedgerRawResponse = response.ledger ?? {
     systems: [],
     total: 0,
-    limit: 0,
   };
   return {
     ledger: normalizeMonitoredSystemLedgerResponse(rawLedger),

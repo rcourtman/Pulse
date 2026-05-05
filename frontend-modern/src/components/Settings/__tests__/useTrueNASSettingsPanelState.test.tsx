@@ -36,8 +36,6 @@ const safeTrueNASPreview = () => ({
   current_count: 1,
   projected_count: 1,
   additional_count: 0,
-  limit: 10,
-  would_exceed_limit: false,
   effect: 'attaches_existing',
   current_systems: [],
   projected_systems: [
@@ -227,8 +225,11 @@ describe('useTrueNASSettingsPanelState', () => {
     expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection successful');
   });
 
-  it('requires a successful monitored-system preview before saving', async () => {
-    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+  it('saves a connection without requiring a monitored-system preview', async () => {
+    vi.mocked(TrueNASAPI.listConnections)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([] as never);
+    vi.mocked(TrueNASAPI.createConnection).mockResolvedValueOnce({} as never);
 
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
     await waitFor(() => expect(result.loading()).toBe(false));
@@ -239,13 +240,15 @@ describe('useTrueNASSettingsPanelState', () => {
       apiKey: 'secret',
     });
 
-    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
     await result.saveCurrentForm();
 
-    expect(TrueNASAPI.createConnection).not.toHaveBeenCalled();
-    expect(notificationStore.error).toHaveBeenCalledWith(
-      'Pulse must preview the monitored-system impact for this platform connection before it can be saved.',
+    expect(TrueNASAPI.createConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: 'tower.local',
+        apiKey: 'secret',
+      }),
     );
+    expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection added');
   });
 
   it('previews monitored-system impact through the canonical TrueNAS preview path', async () => {
@@ -254,8 +257,6 @@ describe('useTrueNASSettingsPanelState', () => {
       current_count: 4,
       projected_count: 4,
       additional_count: 0,
-      limit: 10,
-      would_exceed_limit: false,
       effect: 'attaches_existing',
       current_systems: [
         {
@@ -303,10 +304,13 @@ describe('useTrueNASSettingsPanelState', () => {
     expect(result.monitoredSystemPreview()?.effect).toBe('attaches_existing');
   });
 
-  it('blocks save when monitored-system usage is temporarily unavailable during preview', async () => {
-    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+  it('allows save when monitored-system impact preview is temporarily unavailable', async () => {
+    vi.mocked(TrueNASAPI.listConnections)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([] as never);
+    vi.mocked(TrueNASAPI.createConnection).mockResolvedValueOnce({} as never);
     vi.mocked(TrueNASAPI.previewConnection).mockRejectedValueOnce(
-      Object.assign(new Error('Unable to verify monitored-system capacity right now'), {
+      Object.assign(new Error('Unable to verify monitored-system grouping right now'), {
         status: 503,
         code: 'monitored_system_usage_unavailable',
         details: {
@@ -328,48 +332,25 @@ describe('useTrueNASSettingsPanelState', () => {
 
     expect(preview).toBeNull();
     expect(result.monitoredSystemPreview()).toBeNull();
-    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
     expect(result.monitoredSystemPreviewErrorTitle()).toBe(
       'Monitored-system verification is temporarily unavailable',
     );
     expect(result.monitoredSystemPreviewError()).toBe(
-      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+      'Pulse is still settling provider-owned inventory for this platform connection. You can still save the connection and review the impact after the first baseline finishes.',
     );
 
     await result.saveCurrentForm();
 
-    expect(TrueNASAPI.createConnection).not.toHaveBeenCalled();
-    expect(notificationStore.error).toHaveBeenLastCalledWith(
-      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
-    );
+    expect(TrueNASAPI.createConnection).toHaveBeenCalled();
+    expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection added');
   });
 
-  it('reuses the canonical monitored-system preview when a save is denied by the backend', async () => {
+  it('surfaces backend save errors without reopening retired cap-preview handling', async () => {
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
     vi.mocked(TrueNASAPI.previewConnection).mockResolvedValueOnce(safeTrueNASPreview() as never);
     vi.mocked(TrueNASAPI.createConnection).mockRejectedValueOnce(
-      Object.assign(new Error('Monitored-system capacity reached (10/9)'), {
-        status: 402,
-        feature: 'max_monitored_systems',
-        monitored_system_preview: {
-          current_count: 9,
-          projected_count: 10,
-          additional_count: 1,
-          limit: 9,
-          would_exceed_limit: true,
-          effect: 'creates_new',
-          current_systems: [],
-          projected_systems: [
-            {
-              name: 'tower',
-              type: 'truenas-system',
-              status: 'online',
-              source: 'truenas',
-            },
-          ],
-          current_system: null,
-          projected_system: null,
-        },
+      Object.assign(new Error('TrueNAS connection save failed'), {
+        status: 500,
       }),
     );
 
@@ -384,20 +365,19 @@ describe('useTrueNASSettingsPanelState', () => {
     await result.previewCurrentForm();
     await result.saveCurrentForm();
 
-    expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system capacity reached (10/9)');
+    expect(notificationStore.error).toHaveBeenCalledWith('TrueNAS connection save failed');
     expect(result.monitoredSystemPreview()).toMatchObject({
-      would_exceed_limit: true,
-      projected_count: 10,
-      effect: 'creates_new',
+      projected_count: 1,
+      effect: 'attaches_existing',
     });
     expect(result.dialogOpen()).toBe(true);
   });
 
-  it('surfaces monitored-system usage unavailability when save races a stale preview', async () => {
+  it('treats save-time monitored-system usage unavailability as an ordinary save error', async () => {
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
     vi.mocked(TrueNASAPI.previewConnection).mockResolvedValueOnce(safeTrueNASPreview() as never);
     vi.mocked(TrueNASAPI.createConnection).mockRejectedValueOnce(
-      Object.assign(new Error('Unable to verify monitored-system capacity right now'), {
+      Object.assign(new Error('Unable to verify monitored-system grouping right now'), {
         status: 503,
         code: 'monitored_system_usage_unavailable',
         details: {
@@ -417,13 +397,13 @@ describe('useTrueNASSettingsPanelState', () => {
     await result.previewCurrentForm();
     await result.saveCurrentForm();
 
-    expect(result.monitoredSystemPreview()).toBeNull();
-    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
-    expect(result.monitoredSystemPreviewError()).toBe(
-      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
-    );
+    expect(result.monitoredSystemPreview()).toMatchObject({
+      projected_count: 1,
+      effect: 'attaches_existing',
+    });
+    expect(result.monitoredSystemPreviewError()).toBeNull();
     expect(notificationStore.error).toHaveBeenCalledWith(
-      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+      'Unable to verify monitored-system grouping right now',
     );
   });
 });
