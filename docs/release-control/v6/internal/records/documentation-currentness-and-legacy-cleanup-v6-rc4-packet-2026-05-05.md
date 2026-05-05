@@ -93,13 +93,36 @@ The current RC packet now points at `v6.0.0-rc.4`:
 - `docs/release-control/v6/internal/subsystems/deployment-installability.md`
   - records that RC4 follows the later-corrective-RC packet requirements for
     rollback, trust-root continuity, and release-control evidence
+- `docker-compose.yml`
+  - pins the default Pulse image tag to `6.0.0-rc.4`
+- `scripts/install-docker.sh`
+  - pins the standalone installer fallback image version to `6.0.0-rc.4`
+- `internal/config/billing_state_test.go`
+  - asserts that billing-state normalization scrubs retired monitored-system
+    limit metadata instead of preserving it as entitlement state
+- `tests/migration/v5_full_upgrade_test.go` and
+  `tests/migration/v5_real_exchange_upgrade_test.go`
+  - align v5-to-v6 exchange proof with the canonical self-hosted contract:
+    migrated self-hosted plans preserve plan identity and paid continuity
+    without reintroducing monitored-system caps
 
 ## Outcome
 
-The audit did not identify a new unhandled code blocker from the commit range.
-It did identify a release-packet currentness gap because the repo still pointed
-operators at `rc.3` while the branch had moved beyond the published `rc.3`
-tag. The gap is addressed by the RC4 packet before release workflow dispatch.
+The audit did not identify a new unhandled code blocker from the feature/runtime
+commit range. It did identify a release-packet currentness gap because the repo
+still pointed operators at `rc.3` while the branch had moved beyond the
+published `rc.3` tag. The initial draft release workflow also exposed two
+release-validation gaps before publication:
+
+- Docker Compose and turnkey Docker install defaults still pinned the RC3 image
+  tag.
+- Backend migration and billing-state tests still expected the retired
+  `max_monitored_systems` contract to survive in self-hosted entitlement state.
+
+Both gaps are addressed before publishing RC4. The corrected tests assert the
+canonical root contract: self-hosted v6 plans preserve paid continuity without
+monitored-system volume caps, and `max_monitored_systems` remains only as
+legacy metadata to scrub.
 
 No public issue comment, retitle, closure, or customer-facing message was made
 as part of this packet update.
@@ -112,3 +135,8 @@ as part of this packet update.
 - `PYTHONPATH=scripts/release_control python3 -m unittest scripts.release_control.release_promotion_policy_test.ReleasePromotionPolicyTest.test_release_notes_index_points_at_current_rc_packet scripts.release_control.release_promotion_policy_test.ReleasePromotionPolicyTest.test_operator_support_packs_keep_free_first_paid_continuity_wording scripts.release_control.release_promotion_policy_test.ReleasePromotionPolicyTest.test_version_file_matches_current_rc_packet scripts.release_control.release_promotion_policy_test.ReleasePromotionPolicyTest.test_upgrade_guide_points_at_current_rc_support_pack -q`
 - `python3 scripts/release_control/resolve_release_promotion.py --version 6.0.0-rc.4 --rollback-version v5.1.29 --release-notes-file docs/releases/RELEASE_NOTES_v6_RC4_DRAFT.md`
 - `python3 scripts/release_control/status_audit.py --pretty`
+- Draft release workflow `25382802275`:
+  - `prepare`, `frontend_checks`, `helm_smoke`, and `docker_build` passed
+  - `backend_tests` failed on stale RC3 Docker defaults and stale retired
+    monitored-system cap expectations
+- `go test -race ./internal/config ./tests/migration ./scripts/installtests`

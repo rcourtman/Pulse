@@ -367,6 +367,13 @@ root `docker-compose.yml` sample and `scripts/install-docker.sh` must default
 to the governed `VERSION` cut instead of floating `:latest`, so self-hosted
 operators only move to a newer image when they choose a newer explicit tag or
 override `PULSE_IMAGE`.
+For every RC or stable release cut, those Docker defaults must move with the
+same governed `VERSION` change and the installer proof in
+`scripts/installtests/install_docker_sh_test.go` must assert both the repo-root
+compose image default and the standalone installer fallback constant. A draft
+release workflow failure caused by stale Docker image pins is a release-packet
+blocker until the defaults, tests, and evidence record are refreshed from the
+new branch head.
 
 `internal/updates/` is the live deployment and upgrade planner. It owns
 deployment-type detection, update-plan generation, adapter selection, server

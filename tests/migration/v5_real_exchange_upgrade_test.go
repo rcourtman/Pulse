@@ -128,7 +128,7 @@ func TestV5PaidLicenseUpgrade_RealLicenseServerExchange(t *testing.T) {
 			assert.NotEqual(t, tc.licenseID, current.Claims.LicenseID, "real exchange should promote the legacy token into a new canonical v6 license id")
 			assert.Equal(t, tc.tier, current.Claims.Tier)
 			assert.Equal(t, tc.planKey, current.Claims.PlanVersion)
-			assert.Equal(t, pkglicensing.TierMonitoredSystemLimits[tc.tier], current.Claims.MaxMonitoredSystems)
+			assertMonitoredSystemLimitAbsent(t, current.Claims.EffectiveLimits())
 
 			activationState, err := persistence.LoadActivationState()
 			require.NoError(t, err)
@@ -154,7 +154,6 @@ func TestV5PaidLicenseUpgrade_RealLicenseServerExchange(t *testing.T) {
 			assert.Equal(t, tc.tier, status.Tier)
 			assert.Equal(t, tc.planKey, status.PlanVersion)
 			assert.Equal(t, tc.wantIsLifetime, status.IsLifetime)
-			assert.Equal(t, pkglicensing.TierMonitoredSystemLimits[tc.tier], status.MaxMonitoredSystems)
 
 			entReq := httpRequestWithOrg(http.MethodGet, "/api/license/entitlements", ctx)
 			entRec := responseRecorder()
@@ -167,7 +166,7 @@ func TestV5PaidLicenseUpgrade_RealLicenseServerExchange(t *testing.T) {
 			assert.Equal(t, "active", entitlements.SubscriptionState)
 			assert.Equal(t, string(tc.tier), entitlements.Tier)
 			assert.Equal(t, tc.wantIsLifetime, entitlements.IsLifetime)
-			assert.Equal(t, int64(pkglicensing.TierMonitoredSystemLimits[tc.tier]), entitlementLimitByKey(entitlements.Limits, pkglicensing.MaxMonitoredSystemsLicenseGateKey))
+			assertEntitlementLimitAbsent(t, entitlements.Limits, pkglicensing.MaxMonitoredSystemsLicenseGateKey)
 		})
 	}
 }
@@ -180,13 +179,18 @@ func responseRecorder() *httptest.ResponseRecorder {
 	return httptest.NewRecorder()
 }
 
-func entitlementLimitByKey(limits []pkglicensing.LimitStatus, key string) int64 {
+func assertMonitoredSystemLimitAbsent(t *testing.T, limits map[string]int64) {
+	t.Helper()
+	assert.NotContains(t, limits, pkglicensing.MaxMonitoredSystemsLicenseGateKey)
+}
+
+func assertEntitlementLimitAbsent(t *testing.T, limits []pkglicensing.LimitStatus, key string) {
+	t.Helper()
 	for _, limit := range limits {
 		if limit.Key == key {
-			return limit.Limit
+			t.Fatalf("entitlement limit %q present, want absent: %+v", key, limits)
 		}
 	}
-	return 0
 }
 
 func managedLicenseServerDir(t *testing.T) string {
@@ -229,21 +233,21 @@ func managedLicenseServerPlansJSON(t *testing.T) string {
 			"tier":                  string(pkglicensing.TierLifetime),
 			"duration_days":         0,
 			"features":              pkglicensing.TierFeatures[pkglicensing.TierLifetime],
-			"max_monitored_systems": pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierLifetime],
+			"max_monitored_systems": 0,
 			"max_guests":            5,
 		},
 		"v5_pro_monthly_grandfathered": {
 			"tier":                  string(pkglicensing.TierPro),
 			"duration_days":         30,
 			"features":              pkglicensing.TierFeatures[pkglicensing.TierPro],
-			"max_monitored_systems": pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro],
+			"max_monitored_systems": 0,
 			"max_guests":            5,
 		},
 		"v5_pro_annual_grandfathered": {
 			"tier":                  string(pkglicensing.TierPro),
 			"duration_days":         365,
 			"features":              pkglicensing.TierFeatures[pkglicensing.TierPro],
-			"max_monitored_systems": pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro],
+			"max_monitored_systems": 0,
 			"max_guests":            5,
 		},
 	}

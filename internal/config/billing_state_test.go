@@ -366,9 +366,8 @@ func TestBillingState_SaveCanonicalizesCloudPlanContract(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, loaded)
 	assert.Equal(t, "cloud_starter", loaded.PlanVersion)
-	assert.Equal(t, int64(10), loaded.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey])
-	_, hasOld := loaded.Limits["max_nodes"]
-	assert.False(t, hasOld)
+	assert.NotContains(t, loaded.Limits, pkglicensing.MaxMonitoredSystemsLicenseGateKey)
+	assert.NotContains(t, loaded.Limits, "max_nodes")
 
 	data, err := os.ReadFile(filepath.Join(dir, "billing.json"))
 	require.NoError(t, err)
@@ -378,9 +377,8 @@ func TestBillingState_SaveCanonicalizesCloudPlanContract(t *testing.T) {
 	assert.Equal(t, "cloud_starter", raw["plan_version"])
 	rawLimits, ok := raw["limits"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, float64(10), rawLimits[pkglicensing.MaxMonitoredSystemsLicenseGateKey])
-	_, hasOld = rawLimits["max_nodes"]
-	assert.False(t, hasOld)
+	assert.NotContains(t, rawLimits, pkglicensing.MaxMonitoredSystemsLicenseGateKey)
+	assert.NotContains(t, rawLimits, "max_nodes")
 }
 
 func TestBillingState_GrandfatheredRecurringSelfHostedPlanStaysUncapped(t *testing.T) {
@@ -487,7 +485,7 @@ func TestBillingState_AllFieldsSurviveRoundTrip(t *testing.T) {
 
 	// Every field must survive save → reload → HMAC verify.
 	assert.ElementsMatch(t, []string{"relay", "ai_autofix"}, loaded.Capabilities)
-	assert.Equal(t, map[string]int64{pkglicensing.MaxMonitoredSystemsLicenseGateKey: 50, "max_hosts": 100}, loaded.Limits)
+	assert.Equal(t, map[string]int64{"max_hosts": 100}, loaded.Limits)
 	assert.ElementsMatch(t, []string{"active_agents", "api_calls"}, loaded.MetersEnabled)
 	assert.Equal(t, "pro-v2", loaded.PlanVersion)
 	assert.Equal(t, entitlements.SubStateActive, loaded.SubscriptionState)

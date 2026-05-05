@@ -97,6 +97,19 @@ func TestRepoDockerComposeDefaultPinsCurrentVersion(t *testing.T) {
 	}
 }
 
+func TestInstallDockerScriptFallbackPinsCurrentVersion(t *testing.T) {
+	version := currentReleaseVersion(t)
+	content, err := os.ReadFile(repoFile("scripts", "install-docker.sh"))
+	if err != nil {
+		t.Fatalf("read install-docker.sh: %v", err)
+	}
+
+	text := string(content)
+	if !strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`) {
+		t.Fatalf("install-docker.sh fallback must pin the current release version:\n%s", text)
+	}
+}
+
 func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
 	t.Helper()
 

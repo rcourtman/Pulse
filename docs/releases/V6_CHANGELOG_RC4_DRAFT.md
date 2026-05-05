@@ -21,8 +21,8 @@ match the current governed v6 architecture before wider RC retesting.
 
 ## Commit Coverage Audit
 
-The changelog was audited against every commit in the exact release range for
-the current candidate head:
+The changelog was audited against every feature/runtime commit in the exact
+release range for the current candidate head:
 
 - `v6.0.0-rc.3`: `f1744d36d0bde3c8735ae75a190af45c35087841`
 - candidate commit: `3f16d7845a92d6bf0c5700728bd70e1f4fe32966`
@@ -36,7 +36,9 @@ cleanup, API-first action planning, CLI action and fleet reads, action audit
 execution proof, self-hosted licensing continuity, root-agent and Proxmox
 setup hardening, TrueNAS/RAID/Ceph/storage correctness, Workloads empty-state
 handling, Patrol mobile controls, mock-mode cleanup, and release-control
-evidence.
+evidence. The final RC4 prerelease target also includes packet and
+release-validation commits that pin Docker install defaults to `6.0.0-rc.4` and
+remove stale migration-test expectations for retired monitored-system caps.
 
 ## Major Changes
 

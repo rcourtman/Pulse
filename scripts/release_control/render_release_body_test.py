@@ -152,6 +152,9 @@ Old metadata section.
         self.assertIn("API-first action planning", changelog)
         self.assertIn("monitored-system and child-resource volume unmetered", release_notes)
         self.assertIn("Pulse Mobile pairing for handoff", support_pack)
+        self.assertIn("pin Docker install defaults to `6.0.0-rc.4`", changelog)
+        self.assertIn("Docker Compose and turnkey Docker installer defaults", release_notes)
+        self.assertIn("release-validation commits", changelog)
 
 
 if __name__ == "__main__":
