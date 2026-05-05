@@ -74,6 +74,9 @@ func applyActivationContinuityToClaims(claims *Claims, continuity ActivationCont
 	if continuity.GrandfatheredMaxMonitoredSystems <= 0 {
 		return
 	}
+	if claims.shouldScrubLegacyCommercialCaps() {
+		return
+	}
 
 	currentLimit := int64(0)
 	if existing, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {

@@ -201,6 +201,11 @@ entitlement enforcement, frontend plan presentation, public
 pricing/checkout/download behavior, Pro admin-extra runtime behavior, and
 Relay entitlement acceptance together rather than treating copy, checkout, and
 runtime gating as separate unlinked claims.
+Uncapped self-hosted plans must also remain uncapped before and after legacy
+activation continuity is applied. A captured monitored-system continuity floor
+may preserve capacity for capped grants, but it must not be written back as a
+raw monitored-system cap for Community, Relay, Pro, Pro+, annual Pro, lifetime,
+or other self-hosted uncapped continuity plans.
 
 ## Extension Points
 

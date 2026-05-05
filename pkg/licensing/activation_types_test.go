@@ -179,11 +179,41 @@ func TestGrantClaimsToLicense(t *testing.T) {
 	})
 }
 
-func TestGrantClaimsToClaimsWithContinuityAppliesGrandfatherFloor(t *testing.T) {
+func TestGrantClaimsToClaimsWithContinuityDoesNotWriteRawFloorForUncappedSelfHostedPro(t *testing.T) {
 	gc := &GrantClaims{
 		LicenseID:           "lic_floor",
 		State:               "active",
 		Tier:                "pro",
+		MaxMonitoredSystems: 0,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	}
+
+	claims := grantClaimsToClaimsWithContinuity(gc, ActivationContinuity{
+		LegacyMigration:                         true,
+		GrandfatheredMaxMonitoredSystems:        1,
+		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
+	})
+
+	if !claims.CoreMonitoringUncapped {
+		t.Fatal("expected grant-backed self-hosted continuity claims to carry the uncapped core monitoring marker")
+	}
+	if claims.MaxMonitoredSystems != 0 {
+		t.Fatalf("MaxMonitoredSystems = %d, want 0 for uncapped self-hosted Pro", claims.MaxMonitoredSystems)
+	}
+	if _, ok := claims.Limits[MaxMonitoredSystemsLicenseGateKey]; ok {
+		t.Fatalf("Limits[%q] present, want absent for uncapped self-hosted Pro", MaxMonitoredSystemsLicenseGateKey)
+	}
+	if got, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
+		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d present, want absent (uncapped self-hosted)", got)
+	}
+}
+
+func TestGrantClaimsToClaimsWithContinuityAppliesGrandfatherFloorToCappedGrant(t *testing.T) {
+	gc := &GrantClaims{
+		LicenseID:           "lic_floor_capped",
+		State:               "active",
+		Tier:                "legacy_capped",
 		MaxMonitoredSystems: 10,
 		IssuedAt:            time.Now().Unix(),
 		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
@@ -195,16 +225,14 @@ func TestGrantClaimsToClaimsWithContinuityAppliesGrandfatherFloor(t *testing.T) 
 		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
 	})
 
-	// The raw MaxMonitoredSystems field still records the continuity floor, but
-	// self-hosted Pro is uncapped, so EffectiveLimits must not surface a cap.
-	if !claims.CoreMonitoringUncapped {
-		t.Fatal("expected grant-backed self-hosted continuity claims to carry the uncapped core monitoring marker")
+	if claims.CoreMonitoringUncapped {
+		t.Fatal("did not expect capped continuity claims to carry the uncapped core monitoring marker")
 	}
 	if claims.MaxMonitoredSystems != 23 {
 		t.Fatalf("MaxMonitoredSystems = %d, want 23", claims.MaxMonitoredSystems)
 	}
-	if got, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d present, want absent (uncapped self-hosted)", got)
+	if got := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; got != 23 {
+		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d, want 23", got)
 	}
 }
 
