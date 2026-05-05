@@ -37,6 +37,19 @@ assert_contains() {
   fi
 }
 
+assert_file_absent() {
+  local desc="$1"
+  local path="$2"
+
+  if [[ ! -e "${path}" ]]; then
+    echo "[PASS] ${desc}"
+  else
+    echo "[FAIL] ${desc}" >&2
+    echo "Did not expect file to exist: ${path}" >&2
+    ((failures++))
+  fi
+}
+
 make_stub_hot_dev_bg() {
   local dir
   dir="$(mktemp -d)"
@@ -211,12 +224,45 @@ EOF
   assert_contains "ensure_mock_env_file still seeds missing defaults" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=3"
 }
 
+test_set_mock_mode_does_not_recreate_legacy_sidecars() {
+  local state dev_env runtime_env
+  state="$(mktemp -d)"
+  temp_dirs+=("${state}")
+  dev_env="${state}/dev/.env"
+  runtime_env="${state}/runtime/.env"
+
+  TOGGLE_MOCK_PATH="${TOGGLE_MOCK}" \
+  MOCK_ENV_OVERRIDE="${dev_env}" \
+  DEV_DATA_DIR_OVERRIDE="${state}/dev" \
+  RUNTIME_MOCK_ENV_OVERRIDE="${runtime_env}" \
+  LEGACY_DEV_MOCK_ENV_OVERRIDE="${state}/dev/mock.env" \
+  LEGACY_ROOT_MOCK_ENV_OVERRIDE="${state}/mock.env" \
+  LEGACY_RUNTIME_MOCK_ENV_OVERRIDE="${state}/runtime/mock.env" \
+  bash -lc '
+    source "${TOGGLE_MOCK_PATH}"
+    MOCK_ENV_FILE="${MOCK_ENV_OVERRIDE}"
+    DEV_DATA_DIR="${DEV_DATA_DIR_OVERRIDE}"
+    RUNTIME_MOCK_ENV_FILE="${RUNTIME_MOCK_ENV_OVERRIDE}"
+    LEGACY_DEV_MOCK_ENV_FILE="${LEGACY_DEV_MOCK_ENV_OVERRIDE}"
+    LEGACY_ROOT_MOCK_ENV_FILE="${LEGACY_ROOT_MOCK_ENV_OVERRIDE}"
+    LEGACY_RUNTIME_MOCK_ENV_FILE="${LEGACY_RUNTIME_MOCK_ENV_OVERRIDE}"
+    set_mock_mode true
+  '
+
+  assert_contains "set_mock_mode writes canonical dev env" "$(cat "${dev_env}")" "PULSE_MOCK_MODE=true"
+  assert_contains "set_mock_mode writes canonical runtime env" "$(cat "${runtime_env}")" "PULSE_MOCK_MODE=true"
+  assert_file_absent "set_mock_mode does not recreate dev legacy mock sidecar" "${state}/dev/mock.env"
+  assert_file_absent "set_mock_mode does not recreate root legacy mock sidecar" "${state}/mock.env"
+  assert_file_absent "set_mock_mode does not recreate runtime legacy mock sidecar" "${state}/runtime/mock.env"
+}
+
 main() {
   test_detects_managed_hot_dev_runtime
   test_managed_hot_dev_start_uses_takeover
   test_managed_hot_dev_stop_uses_control_plane
   test_ensure_mock_env_file_seeds_canonical_demo_defaults
   test_ensure_mock_env_file_migrates_legacy_sidecar
+  test_set_mock_mode_does_not_recreate_legacy_sidecars
 
   if (( failures > 0 )); then
     echo "Total failures: ${failures}" >&2

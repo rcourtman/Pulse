@@ -359,9 +359,6 @@ set_mock_mode() {
     set_env_value "$MOCK_ENV_FILE" "PULSE_MOCK_MODE" "$enabled"
     sync_mock_entries_to_file "$DEV_DATA_DIR/.env"
     sync_mock_entries_to_file "$RUNTIME_MOCK_ENV_FILE"
-    sync_mock_entries_to_file "$LEGACY_DEV_MOCK_ENV_FILE"
-    sync_mock_entries_to_file "$LEGACY_RUNTIME_MOCK_ENV_FILE"
-    sync_mock_entries_to_file "$LEGACY_ROOT_MOCK_ENV_FILE"
     touch "$MOCK_ENV_FILE"
 }
 
