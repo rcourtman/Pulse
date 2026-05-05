@@ -62,6 +62,59 @@ func TestOrganizationPrincipalIdentityCanonicalization(t *testing.T) {
 	}
 }
 
+func TestOrganizationPrincipalIdentityRejectsStableContactEmailCollision(t *testing.T) {
+	org := &Organization{
+		ID:          "org-1",
+		OwnerUserID: "u_owner",
+		OwnerEmail:  "owner@example.com",
+		Members: []OrganizationMember{
+			{UserID: "u_owner", Email: "owner@example.com", Role: OrgRoleOwner, AddedBy: "u_owner"},
+			{UserID: "u_admin", Email: "admin@example.com", Role: OrgRoleAdmin, AddedBy: "u_owner"},
+		},
+	}
+
+	if role := org.GetMemberRoleForPrincipal("u_intruder", "owner@example.com"); role != "" {
+		t.Fatalf("owner email collision role = %q, want empty", role)
+	}
+	if role := org.GetMemberRoleForPrincipal("u_intruder", "admin@example.com"); role != "" {
+		t.Fatalf("member email collision role = %q, want empty", role)
+	}
+	if org.CanonicalizePrincipalIdentity("u_intruder", "owner@example.com") {
+		t.Fatal("stable owner contact email must not canonicalize to a different principal")
+	}
+	if org.OwnerUserID != "u_owner" || org.Members[0].UserID != "u_owner" {
+		t.Fatalf("owner identity changed to (%q, %q), want stable owner unchanged", org.OwnerUserID, org.Members[0].UserID)
+	}
+	if org.CanonicalizePrincipalIdentity("u_intruder", "admin@example.com") {
+		t.Fatal("stable member contact email must not canonicalize to a different principal")
+	}
+	if org.Members[1].UserID != "u_admin" {
+		t.Fatalf("admin identity changed to %q, want stable admin unchanged", org.Members[1].UserID)
+	}
+}
+
+func TestOrganizationPrincipalIdentityAllowsLegacyEmailKeyedMemberMigration(t *testing.T) {
+	org := &Organization{
+		ID:          "org-1",
+		OwnerUserID: "u_owner",
+		OwnerEmail:  "owner@example.com",
+		Members: []OrganizationMember{
+			{UserID: "u_owner", Email: "owner@example.com", Role: OrgRoleOwner, AddedBy: "u_owner"},
+			{UserID: "legacy-admin@example.com", Role: OrgRoleAdmin, AddedBy: "owner@example.com"},
+		},
+	}
+
+	if role := org.GetMemberRoleForPrincipal("u_admin", "legacy-admin@example.com"); role != OrgRoleAdmin {
+		t.Fatalf("legacy member role = %q, want %q", role, OrgRoleAdmin)
+	}
+	if !org.CanonicalizePrincipalIdentity("u_admin", "legacy-admin@example.com") {
+		t.Fatal("expected legacy member identity to canonicalize")
+	}
+	if org.Members[1].UserID != "u_admin" || org.Members[1].Email != "legacy-admin@example.com" || org.Members[1].AddedBy != "owner@example.com" {
+		t.Fatalf("member identity = (%q, %q, %q), want stable user with preserved contact metadata", org.Members[1].UserID, org.Members[1].Email, org.Members[1].AddedBy)
+	}
+}
+
 func TestOrganizationStrictUserIDAccessRejectsContactEmail(t *testing.T) {
 	org := &Organization{
 		ID:          "org-1",

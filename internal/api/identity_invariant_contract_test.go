@@ -137,6 +137,8 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"OwnerEmail string",
 			"ResolvePrincipalByEmail",
 			"CanonicalizePrincipalIdentity",
+			"ownerMatchesLegacyEmailPrincipal",
+			"memberMatchesLegacyEmailPrincipal",
 			"return \"\", \"\", false",
 		},
 		"../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md": {
@@ -144,6 +146,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"Pulse control-plane user ID",
 			"SSO provider subject",
 			"reject caller-supplied metadata",
+			"contact email attached to an already-stable owner/member principal must not",
 			"Self-hosted SSO sessions now use provider-scoped",
 		},
 	}
@@ -216,6 +219,8 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		},
 		"../models/organization.go": {
 			"userID = email",
+			"ownerMatchesUserID(o, userID) || ownerMatchesEmail(o, email)",
+			"memberMatchesUserID(member, userID) || memberMatchesEmail(member, email)",
 		},
 	}
 	for file, needles := range forbidden {

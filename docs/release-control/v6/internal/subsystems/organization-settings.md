@@ -184,6 +184,10 @@ helper so handlers do not duplicate membership lookup or accidentally bind
 sessions to email. A matching owner/member contact email without a stored
 `OwnerUserID` or member `UserID` is not a principal; the helper must fail
 closed instead of manufacturing a session key from email.
+Organization-principal canonicalization may use email only when the stored
+owner/member principal is itself legacy email-keyed. A contact email on an
+already-stable owner/member must not authorize, replace, or migrate a different
+stable subject.
 That same org-control surface also treats owner transfer as a re-auth-bound
 operation. Existing membership remains a prerequisite for the target user, and
 the acting owner must present a fresh browser session minted through the

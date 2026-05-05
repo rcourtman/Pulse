@@ -76,7 +76,9 @@ principal once a stable user ID exists.
 1. Handoff sessions bind to the signed stable subject or `UserID`, then verify
    that subject against existing server-side organization membership. Blank or
    email-shaped handoff subjects are invalid; email may only help find legacy
-   email-keyed tenant records after a stable subject is already present.
+   email-keyed tenant records after a stable subject is already present. A
+   contact email attached to an already-stable owner/member principal must not
+   authorize or canonicalize a different stable subject.
 2. Magic-link sessions bind to the stored organization principal resolved from
    contact email at verification time, not to the email embedded in the token.
    If the matching organization owner/member has no stored principal, the

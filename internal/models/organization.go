@@ -311,6 +311,25 @@ func ownerMatchesEmail(org *Organization, email string) bool {
 	return false
 }
 
+func ownerMatchesLegacyEmailPrincipal(org *Organization, email string) bool {
+	if org == nil {
+		return false
+	}
+	ownerUserID := normalizeOrganizationIdentityValue(org.OwnerUserID)
+	if !identityLooksLikeEmail(ownerUserID) {
+		return false
+	}
+	return normalizeOrganizationEmail(ownerUserID) == normalizeOrganizationEmail(email)
+}
+
+func memberMatchesLegacyEmailPrincipal(member OrganizationMember, email string) bool {
+	userID := normalizeOrganizationIdentityValue(member.UserID)
+	if !identityLooksLikeEmail(userID) {
+		return false
+	}
+	return normalizeOrganizationEmail(userID) == normalizeOrganizationEmail(email)
+}
+
 // HasMember checks if a user is a member of the organization.
 func (o *Organization) HasMember(userID string) bool {
 	for _, member := range o.Members {
@@ -395,18 +414,18 @@ func (o *Organization) CanUserIDManage(userID string) bool {
 }
 
 // GetMemberRoleForPrincipal resolves a role using the durable user ID first,
-// then email only as a legacy/contact fallback.
+// then email only when the stored principal is still legacy email-keyed.
 func (o *Organization) GetMemberRoleForPrincipal(userID, email string) OrganizationRole {
 	if o == nil {
 		return ""
 	}
-	if ownerMatchesUserID(o, userID) || ownerMatchesEmail(o, email) {
+	if ownerMatchesUserID(o, userID) || ownerMatchesLegacyEmailPrincipal(o, email) {
 		return OrgRoleOwner
 	}
 	userID = normalizeOrganizationIdentityValue(userID)
 	email = normalizeOrganizationEmail(email)
 	for _, member := range o.Members {
-		if memberMatchesUserID(member, userID) || memberMatchesEmail(member, email) {
+		if memberMatchesUserID(member, userID) || memberMatchesLegacyEmailPrincipal(member, email) {
 			return NormalizeOrganizationRole(member.Role)
 		}
 	}
@@ -457,7 +476,7 @@ func (o *Organization) CanonicalizePrincipalIdentity(userID, email string) bool 
 	}
 
 	changed := false
-	if ownerMatchesUserID(o, userID) || ownerMatchesEmail(o, email) {
+	if ownerMatchesUserID(o, userID) || ownerMatchesLegacyEmailPrincipal(o, email) {
 		if normalizeOrganizationIdentityValue(o.OwnerUserID) != userID {
 			o.OwnerUserID = userID
 			changed = true
@@ -470,7 +489,7 @@ func (o *Organization) CanonicalizePrincipalIdentity(userID, email string) bool 
 
 	for i := range o.Members {
 		member := o.Members[i]
-		if !memberMatchesUserID(member, userID) && !memberMatchesEmail(member, email) {
+		if !memberMatchesUserID(member, userID) && !memberMatchesLegacyEmailPrincipal(member, email) {
 			continue
 		}
 		oldUserID := normalizeOrganizationIdentityValue(member.UserID)
