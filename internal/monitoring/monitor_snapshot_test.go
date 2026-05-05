@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,7 +13,11 @@ import (
 
 type mockPVEClientSnapshots struct {
 	mockPVEClientExtra
-	snapshots []proxmox.Snapshot
+	snapshots    []proxmox.Snapshot
+	vmSnapshots  map[int][]proxmox.Snapshot
+	snapshotGate <-chan struct{}
+	inflight     int64
+	maxInflight  int64
 }
 
 func (m *mockPVEClientSnapshots) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error) {
@@ -20,11 +25,34 @@ func (m *mockPVEClientSnapshots) GetVMSnapshots(ctx context.Context, node string
 		// simulate timeout/error
 		return nil, fmt.Errorf("timeout")
 	}
+	m.trackSnapshotConcurrency(ctx)
+	if m.vmSnapshots != nil {
+		return m.vmSnapshots[vmid], nil
+	}
 	return m.snapshots, nil
 }
 
 func (m *mockPVEClientSnapshots) GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error) {
 	return m.snapshots, nil
+}
+
+func (m *mockPVEClientSnapshots) trackSnapshotConcurrency(ctx context.Context) {
+	if m.snapshotGate == nil {
+		return
+	}
+	current := atomic.AddInt64(&m.inflight, 1)
+	for {
+		max := atomic.LoadInt64(&m.maxInflight)
+		if current <= max || atomic.CompareAndSwapInt64(&m.maxInflight, max, current) {
+			break
+		}
+	}
+	defer atomic.AddInt64(&m.inflight, -1)
+
+	select {
+	case <-m.snapshotGate:
+	case <-ctx.Done():
+	}
 }
 
 func TestMonitor_PollGuestSnapshots_Coverage(t *testing.T) {
@@ -127,6 +155,68 @@ func TestMonitor_PollGuestSnapshots_PreservesPreviousOnPerVMError(t *testing.T) 
 	}
 	if _, persisted := byName["snap_persisted"]; !persisted {
 		t.Errorf("expected snap_persisted to be carried forward after fetch failure, got names=%v", keys(byName))
+	}
+}
+
+func TestMonitor_PollGuestSnapshots_PollsGuestsConcurrently(t *testing.T) {
+	m := &Monitor{state: models.NewState()}
+
+	const guestCount = 12
+	vms := make([]models.VM, 0, guestCount)
+	snapshotsByVMID := make(map[int][]proxmox.Snapshot, guestCount)
+	for i := 0; i < guestCount; i++ {
+		vmid := 100 + i
+		vms = append(vms, models.VM{
+			ID:       fmt.Sprintf("qemu/%d", vmid),
+			VMID:     vmid,
+			Node:     "node1",
+			Instance: "pve1",
+			Name:     fmt.Sprintf("vm%d", vmid),
+		})
+		snapshotsByVMID[vmid] = []proxmox.Snapshot{{
+			Name:        fmt.Sprintf("snap-%d", vmid),
+			SnapTime:    int64(3000 + i),
+			Description: "fresh",
+		}}
+	}
+	m.state.UpdateVMsForInstance("pve1", vms)
+
+	gate := make(chan struct{})
+	client := &mockPVEClientSnapshots{
+		vmSnapshots:  snapshotsByVMID,
+		snapshotGate: gate,
+	}
+
+	done := make(chan struct{})
+	go func() {
+		m.pollGuestSnapshots(context.Background(), "pve1", client)
+		close(done)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for atomic.LoadInt64(&client.maxInflight) < 2 {
+		select {
+		case <-deadline:
+			close(gate)
+			<-done
+			t.Fatalf("guest snapshot polling did not start concurrent guest fetches; max inflight=%d", atomic.LoadInt64(&client.maxInflight))
+		case <-done:
+			t.Fatalf("guest snapshot polling completed before the gated snapshot fetches were released")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	close(gate)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("guest snapshot polling did not finish after releasing concurrent fetches")
+	}
+
+	got := m.state.GetSnapshot().PVEBackups.GuestSnapshots
+	if len(got) != guestCount {
+		t.Fatalf("guest snapshots = %d, want %d: %+v", len(got), guestCount, got)
 	}
 }
 

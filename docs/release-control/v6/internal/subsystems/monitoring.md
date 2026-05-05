@@ -260,6 +260,12 @@ reports stale or zero I/O totals. `internal/monitoring/monitor_pve.go`,
 path before LXC rate calculation and must reuse the same prefetched status
 snapshot for metadata enrichment instead of paying disconnected metric and
 metadata status reads that can diverge.
+That same Proxmox backup/snapshot boundary owns bounded concurrent guest
+snapshot enumeration. `internal/monitoring/monitor_backups.go` must query VM
+and LXC snapshot endpoints through one capped worker pool and preserve
+previously-known snapshots only for guests that were not successfully polled in
+the current cycle, so large or slow clusters do not starve later guests while
+transient misses still avoid destructive state churn.
 That same guest-monitoring boundary also owns linked host-agent precedence for
 Proxmox VMs. When a VM has a live linked Pulse host agent, the canonical disk
 inventory and aggregate disk summary must prefer that linked host-agent disk

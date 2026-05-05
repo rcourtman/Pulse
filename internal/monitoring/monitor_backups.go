@@ -747,9 +747,10 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	}
 
 	const (
-		minSnapshotTimeout      = 60 * time.Second
-		maxSnapshotTimeout      = 4 * time.Minute
-		snapshotTimeoutPerGuest = 2 * time.Second
+		minSnapshotTimeout              = 60 * time.Second
+		maxSnapshotTimeout              = 4 * time.Minute
+		snapshotTimeoutPerGuest         = 2 * time.Second
+		maxConcurrentGuestSnapshotPolls = 8
 	)
 
 	timeout := minSnapshotTimeout
@@ -789,111 +790,148 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	deadlineExceeded := false
 	polledGuestKeys := make(map[string]struct{})
 
-	// Poll VM snapshots
+	type guestSnapshotPollTarget struct {
+		key       string
+		node      string
+		guestType string
+		vmid      int
+		vmState   bool
+	}
+
+	targets := make([]guestSnapshotPollTarget, 0, activeGuests)
+
 	for _, vm := range vms {
-		// Skip templates
 		if vm.Template {
 			continue
 		}
-
-		snapshots, err := client.GetVMSnapshots(snapshotCtx, vm.Node, vm.VMID)
-		if err != nil {
-			if snapshotCtx.Err() != nil {
-				log.Warn().
-					Str("instance", instanceName).
-					Str("node", vm.Node).
-					Int("vmid", vm.VMID).
-					Err(snapshotCtx.Err()).
-					Msg("Aborting guest snapshot polling due to context cancellation while fetching VM snapshots")
-				deadlineExceeded = true
-				break
-			}
-			// This is common for VMs without snapshots, so use debug level
-			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_vm_snapshots", instanceName, err).WithNode(vm.Node)
-			log.Debug().
-				Err(monErr).
-				Str("node", vm.Node).
-				Int("vmid", vm.VMID).
-				Msg("Failed to get VM snapshots")
-			continue
-		}
-
-		polledGuestKeys[guestKey(instanceName, vm.Node, vm.VMID)] = struct{}{}
-		for _, snap := range snapshots {
-			snapshot := models.GuestSnapshot{
-				ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, vm.Node, vm.VMID, snap.Name),
-				Name:        snap.Name,
-				Node:        vm.Node,
-				Instance:    instanceName,
-				Type:        "qemu",
-				VMID:        vm.VMID,
-				Time:        time.Unix(snap.SnapTime, 0),
-				Description: snap.Description,
-				Parent:      snap.Parent,
-				VMState:     true, // VM state support enabled
-			}
-
-			allSnapshots = append(allSnapshots, snapshot)
-		}
+		targets = append(targets, guestSnapshotPollTarget{
+			key:       guestKey(instanceName, vm.Node, vm.VMID),
+			node:      vm.Node,
+			guestType: "qemu",
+			vmid:      vm.VMID,
+			vmState:   true,
+		})
 	}
 
-	// Poll container snapshots
 	for _, ct := range containers {
-		// Skip templates
 		if ct.Template {
 			continue
 		}
-		if snapshotCtx.Err() != nil {
-			deadlineExceeded = true
-			break
-		}
+		targets = append(targets, guestSnapshotPollTarget{
+			key:       guestKey(instanceName, ct.Node, ct.VMID),
+			node:      ct.Node,
+			guestType: "lxc",
+			vmid:      ct.VMID,
+			vmState:   false,
+		})
+	}
 
-		snapshots, err := client.GetContainerSnapshots(snapshotCtx, ct.Node, ct.VMID)
-		if err != nil {
-			if snapshotCtx.Err() != nil {
-				log.Warn().
-					Str("instance", instanceName).
-					Str("node", ct.Node).
-					Int("vmid", ct.VMID).
-					Err(snapshotCtx.Err()).
-					Msg("Aborting guest snapshot polling due to context cancellation while fetching container snapshots")
-				deadlineExceeded = true
-				break
+	type guestSnapshotPollResult struct {
+		target    guestSnapshotPollTarget
+		snapshots []models.GuestSnapshot
+		err       error
+		polled    bool
+	}
+
+	buildSnapshot := func(target guestSnapshotPollTarget, snap proxmox.Snapshot) models.GuestSnapshot {
+		return models.GuestSnapshot{
+			ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, target.node, target.vmid, snap.Name),
+			Name:        snap.Name,
+			Node:        target.node,
+			Instance:    instanceName,
+			Type:        target.guestType,
+			VMID:        target.vmid,
+			Time:        time.Unix(snap.SnapTime, 0),
+			Description: snap.Description,
+			Parent:      snap.Parent,
+			VMState:     target.vmState,
+		}
+	}
+
+	fetchSnapshots := func(target guestSnapshotPollTarget) ([]proxmox.Snapshot, error) {
+		if target.guestType == "lxc" {
+			return client.GetContainerSnapshots(snapshotCtx, target.node, target.vmid)
+		}
+		return client.GetVMSnapshots(snapshotCtx, target.node, target.vmid)
+	}
+
+	results := make(chan guestSnapshotPollResult, len(targets))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, maxConcurrentGuestSnapshotPolls)
+
+	for _, target := range targets {
+		target := target
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			select {
+			case sem <- struct{}{}:
+			case <-snapshotCtx.Done():
+				results <- guestSnapshotPollResult{target: target, err: snapshotCtx.Err()}
+				return
 			}
-			// API error 596 means snapshots not supported/available - this is expected for many containers
-			errStr := err.Error()
-			if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
-				// Silently skip containers without snapshot support; treat
-				// them as polled so stale unsupported snapshots are not kept.
-				polledGuestKeys[guestKey(instanceName, ct.Node, ct.VMID)] = struct{}{}
-				continue
+			defer func() { <-sem }()
+
+			snapshots, err := fetchSnapshots(target)
+			result := guestSnapshotPollResult{target: target, err: err}
+			if err == nil {
+				result.polled = true
+				result.snapshots = make([]models.GuestSnapshot, 0, len(snapshots))
+				for _, snap := range snapshots {
+					result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
+				}
+			} else if target.guestType == "lxc" {
+				errStr := err.Error()
+				if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
+					result.polled = true
+				}
 			}
-			// Log other errors at debug level
-			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_container_snapshots", instanceName, err).WithNode(ct.Node)
-			log.Debug().
-				Err(monErr).
-				Str("node", ct.Node).
-				Int("vmid", ct.VMID).
-				Msg("Failed to get container snapshots")
+
+			results <- result
+		}()
+	}
+
+	wg.Wait()
+	close(results)
+
+	for result := range results {
+		if result.polled {
+			polledGuestKeys[result.target.key] = struct{}{}
+			allSnapshots = append(allSnapshots, result.snapshots...)
 			continue
 		}
 
-		polledGuestKeys[guestKey(instanceName, ct.Node, ct.VMID)] = struct{}{}
-		for _, snap := range snapshots {
-			snapshot := models.GuestSnapshot{
-				ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, ct.Node, ct.VMID, snap.Name),
-				Name:        snap.Name,
-				Node:        ct.Node,
-				Instance:    instanceName,
-				Type:        "lxc",
-				VMID:        ct.VMID,
-				Time:        time.Unix(snap.SnapTime, 0),
-				Description: snap.Description,
-				Parent:      snap.Parent,
-				VMState:     false,
-			}
+		if result.err == nil {
+			continue
+		}
 
-			allSnapshots = append(allSnapshots, snapshot)
+		if snapshotCtx.Err() != nil {
+			deadlineExceeded = true
+			log.Warn().
+				Str("instance", instanceName).
+				Str("node", result.target.node).
+				Str("type", result.target.guestType).
+				Int("vmid", result.target.vmid).
+				Err(snapshotCtx.Err()).
+				Msg("Guest snapshot polling context expired before all guests completed")
+			continue
+		}
+
+		if result.target.guestType == "lxc" {
+			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_container_snapshots", instanceName, result.err).WithNode(result.target.node)
+			log.Debug().
+				Err(monErr).
+				Str("node", result.target.node).
+				Int("vmid", result.target.vmid).
+				Msg("Failed to get container snapshots")
+		} else {
+			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_vm_snapshots", instanceName, result.err).WithNode(result.target.node)
+			log.Debug().
+				Err(monErr).
+				Str("node", result.target.node).
+				Int("vmid", result.target.vmid).
+				Msg("Failed to get VM snapshots")
 		}
 	}
 

@@ -88,6 +88,26 @@ func TestPVEBackupPermissionWarningsPreserveTokenACLRepair(t *testing.T) {
 	}
 }
 
+func TestGuestSnapshotPollingStaysBoundedConcurrent(t *testing.T) {
+	data, err := os.ReadFile("monitor_backups.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_backups.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"maxConcurrentGuestSnapshotPolls = 8",
+		"targets := make([]guestSnapshotPollTarget, 0, activeGuests)",
+		"results := make(chan guestSnapshotPollResult, len(targets))",
+		"sem := make(chan struct{}, maxConcurrentGuestSnapshotPolls)",
+		"polledGuestKeys[result.target.key] = struct{}{}",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_backups.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {
