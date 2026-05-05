@@ -19,15 +19,15 @@ const getNodeSetupStrategyPresentation = (
 
   if (setupMode === 'agent') {
     return {
-      label: 'API + Agent',
-      detail: `Recommended: creates the ${productLabel} API token, installs Pulse Agent, and registers the source automatically. No token fields are needed in this form.`,
+      label: 'Host telemetry agent',
+      detail: `Optional full host telemetry: creates the ${productLabel} API token, installs Pulse Agent as the supported root service, and registers the source automatically.`,
     };
   }
 
   if (setupMode === 'auto') {
     return {
       label: 'API inventory',
-      detail: `Advanced: creates the ${productLabel} API token and registers the API connection, but does not install Pulse Agent for node-local telemetry.`,
+      detail: `Recommended least-privilege path: creates the ${productLabel} API token and registers the API connection without installing a root agent.`,
     };
   }
 
@@ -37,6 +37,13 @@ const getNodeSetupStrategyPresentation = (
       'Advanced escape hatch: use this only when you already created the API token yourself and want to paste the token details into Pulse.',
   };
 };
+
+const setupModeButtonClass = (selected: boolean): string =>
+  `inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
+    selected
+      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
+  }`;
 
 export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionProps> = (props) => {
   const { modalProps, state } = props;
@@ -49,6 +56,34 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
       </div>
       <div class="mt-1 text-sm font-semibold text-base-content">{setupStrategy().label}</div>
       <p class="mt-1 text-xs leading-5 text-muted">{setupStrategy().detail}</p>
+    </div>
+  );
+  const setupModeControls = () => (
+    <div class="flex gap-2 flex-wrap">
+      <button
+        type="button"
+        onClick={() => state.updateField('setupMode', 'auto')}
+        class={setupModeButtonClass(state.formData().setupMode === 'auto')}
+      >
+        API Inventory
+        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+          Recommended
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => state.updateField('setupMode', 'agent')}
+        class={setupModeButtonClass(state.formData().setupMode === 'agent')}
+      >
+        Host Telemetry Agent
+      </button>
+      <button
+        type="button"
+        onClick={() => state.updateField('setupMode', 'manual')}
+        class={setupModeButtonClass(state.isAdvancedSetupMode())}
+      >
+        Manual Token Setup
+      </button>
     </div>
   );
 
@@ -74,77 +109,22 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
             {setupStrategyPanel()}
 
             <div class="space-y-3 text-xs">
-              <div class="flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => state.updateField('setupMode', 'agent')}
-                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                    state.formData().setupMode === 'agent'
-                      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
-                  }`}
-                >
-                  Agent Install
-                  <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                    Recommended
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (state.formData().setupMode === 'agent') {
-                      state.updateField('setupMode', 'auto');
-                    }
-                  }}
-                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                    state.isAdvancedSetupMode()
-                      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
-                  }`}
-                >
-                  Advanced
-                </button>
-              </div>
-
-              <Show when={state.isAdvancedSetupMode()}>
-                <div class="mt-1 flex gap-2 flex-wrap pl-0.5">
-                  <button
-                    type="button"
-                    onClick={() => state.updateField('setupMode', 'auto')}
-                    class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${
-                      state.formData().setupMode === 'auto'
-                        ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                        : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
-                    }`}
-                  >
-                    Direct Connection
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => state.updateField('setupMode', 'manual')}
-                    class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${
-                      state.formData().setupMode === 'manual'
-                        ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                        : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
-                    }`}
-                  >
-                    Manual Token Setup
-                  </button>
-                </div>
-              </Show>
+              {setupModeControls()}
 
               <Show when={state.formData().setupMode === 'agent'}>
                 <div class="space-y-3">
                   <p class="text-xs text-muted">
-                    Recommended API + Agent setup. This single command creates the API token,
-                    installs Pulse Agent, registers the node, and leaves Pulse waiting for the agent
-                    check-in:
+                    Optional full host telemetry setup. This command creates the API token, installs
+                    the Pulse Agent root service, registers the node, and leaves Pulse waiting for
+                    the agent check-in:
                   </p>
                   <ul class="text-xs text-muted list-disc list-inside space-y-1">
                     <li>Creates monitoring user and API token automatically</li>
                     <li>Registers the node with Pulse</li>
-                    <li>Enables temperature monitoring (no SSH required)</li>
-                    <li>Enables Pulse Patrol automation for managing VMs/containers</li>
+                    <li>
+                      Adds host-local telemetry such as temperatures, SMART, ZFS, Ceph, and mdadm
+                    </li>
+                    <li>Enables Pulse Patrol command execution for VMs and containers</li>
                   </ul>
                   <p class="text-blue-800 dark:text-blue-200 font-medium">
                     Run this command on your Proxmox VE node:
@@ -217,11 +197,12 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
 
               <Show when={state.formData().setupMode === 'auto'}>
                 <div class="space-y-3">
-                  <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-900">
-                    <p class="text-xs text-amber-800 dark:text-amber-200">
-                      <strong>Advanced API inventory path:</strong> this connects Pulse to Proxmox
-                      without installing the unified agent, so temperature monitoring and Pulse
-                      Patrol automation stay unavailable until an agent is installed.
+                  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950/30">
+                    <p class="text-xs text-emerald-800 dark:text-emerald-200">
+                      <strong>Recommended API inventory path:</strong> this connects Pulse to
+                      Proxmox without installing a root agent. Add the host telemetry agent later
+                      only where you need temperatures, SMART, local storage details, or
+                      agent-driven operations.
                     </p>
                   </div>
                   <p class="text-blue-800 dark:text-blue-200">
@@ -556,76 +537,21 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
             {setupStrategyPanel()}
 
             <div class="space-y-3 text-xs">
-              <div class="flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => state.updateField('setupMode', 'agent')}
-                  class={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                    state.formData().setupMode === 'agent'
-                      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
-                  }`}
-                >
-                  Agent Install
-                  <span class="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                    Recommended
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (state.formData().setupMode === 'agent') {
-                      state.updateField('setupMode', 'auto');
-                    }
-                  }}
-                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
-                    state.isAdvancedSetupMode()
-                      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                      : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
-                  }`}
-                >
-                  Advanced
-                </button>
-              </div>
-
-              <Show when={state.isAdvancedSetupMode()}>
-                <div class="mt-1 flex gap-2 flex-wrap pl-0.5">
-                  <button
-                    type="button"
-                    onClick={() => state.updateField('setupMode', 'auto')}
-                    class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${
-                      state.formData().setupMode === 'auto'
-                        ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                        : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
-                    }`}
-                  >
-                    Direct Connection
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => state.updateField('setupMode', 'manual')}
-                    class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${
-                      state.formData().setupMode === 'manual'
-                        ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
-                        : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
-                    }`}
-                  >
-                    Manual Token Setup
-                  </button>
-                </div>
-              </Show>
+              {setupModeControls()}
 
               <Show when={state.formData().setupMode === 'agent'}>
                 <div class="space-y-3">
                   <p class="text-xs text-muted">
-                    Recommended API + Agent setup. This single command creates the API token,
-                    installs Pulse Agent, registers the server, and leaves Pulse waiting for the
-                    agent check-in:
+                    Optional full host telemetry setup. This command creates the API token, installs
+                    the Pulse Agent root service, registers the server, and leaves Pulse waiting for
+                    the agent check-in:
                   </p>
                   <ul class="text-xs text-muted list-disc list-inside space-y-1">
                     <li>One-command setup (creates API user and token automatically)</li>
-                    <li>Built-in temperature monitoring (no SSH required)</li>
-                    <li>Pulse features (execute commands via Pulse Assistant)</li>
+                    <li>
+                      Host-local telemetry such as temperatures, SMART, services, and local disks
+                    </li>
+                    <li>Agent-driven commands and service telemetry when explicitly used</li>
                     <li>Automatic reconnection on network issues</li>
                   </ul>
                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">
@@ -699,11 +625,12 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
 
               <Show when={state.formData().setupMode === 'auto'}>
                 <div class="space-y-3">
-                  <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-900">
-                    <p class="text-xs text-amber-800 dark:text-amber-200">
-                      <strong>Advanced API inventory path:</strong> this connects Pulse to Proxmox
-                      Backup Server without installing the unified agent, so host-local telemetry
-                      and agent-driven operations stay unavailable until an agent is installed.
+                  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950/30">
+                    <p class="text-xs text-emerald-800 dark:text-emerald-200">
+                      <strong>Recommended API inventory path:</strong> this connects Pulse to
+                      Proxmox Backup Server without installing a root agent. Add the host telemetry
+                      agent later only where you need host-local telemetry or agent-driven
+                      operations.
                     </p>
                   </div>
                   <p class="text-blue-800 dark:text-blue-200">

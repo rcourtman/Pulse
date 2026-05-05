@@ -1,17 +1,19 @@
 # Pulse Unified Agent
 
 The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces older split-agent installs with one deployment and one service for simpler operations.
-Install it on each host you want Pulse to monitor. This is the primary monitoring path for infrastructure onboarding.
+Install it on standalone hosts and on machines where Pulse needs full node-local telemetry.
+For API-backed platforms, start with the platform connection first and add the agent only where local telemetry is needed.
 
 For Proxmox, install the agent only where you need telemetry that the Proxmox
 API cannot provide, such as inside-guest Docker/Podman visibility, host SMART
 and temperature data, local ZFS/Ceph/mdadm detail, or arbitrary mount reads.
 Basic Proxmox inventory and utilization can use a read-only or narrowly scoped
-Proxmox API token instead. See [Agent Security](AGENT_SECURITY.md) for the
-root-service trade-off, restricted-user expectations, and supply-chain
+Proxmox API token instead. Settings uses that API inventory path as the
+default for new PVE/PBS setup. See [Agent Security](AGENT_SECURITY.md) for
+the root-service trade-off, restricted-user expectations, and supply-chain
 verification guidance.
 
-> Note: For temperature monitoring, use `pulse-agent --enable-proxmox` (recommended) or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
+> Note: For agent-based temperature monitoring, use `pulse-agent --enable-proxmox` or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
 
 ## Quick Start
 

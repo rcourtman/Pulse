@@ -17,18 +17,18 @@ describe('nodeModalPresentation', () => {
   it('returns canonical default form data per proxmox node type', () => {
     expect(getNodeModalDefaultFormData('pve')).toMatchObject({
       authType: 'token',
-      setupMode: 'agent',
+      setupMode: 'auto',
       verifySSL: true,
       monitorPhysicalDisks: false,
     });
     expect(getNodeModalDefaultFormData('pbs')).toMatchObject({
       authType: 'token',
-      setupMode: 'agent',
+      setupMode: 'auto',
       verifySSL: true,
     });
     expect(getNodeModalDefaultFormData('pmg')).toMatchObject({
       authType: 'password',
-      setupMode: 'agent',
+      setupMode: 'manual',
       monitorMailStats: true,
       monitorQueues: true,
     });

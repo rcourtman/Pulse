@@ -41,8 +41,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
 
-  const isAdvancedSetupMode = () =>
-    formData().setupMode === 'auto' || formData().setupMode === 'manual';
+  const isAdvancedSetupMode = () => formData().setupMode === 'manual';
   const showTemperatureMonitoringSection = () =>
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
@@ -92,7 +91,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       setAgentCommandError(copyFailureMessage);
       notificationStore.error(copyFailureMessage);
     } catch (error) {
-      logger.error('[Agent Install] Error:', error);
+      logger.error('[Host Telemetry Agent] Error:', error);
       const message = error instanceof Error ? error.message : 'Failed to generate install command';
       setAgentCommandError(message);
       notificationStore.error(message);
@@ -337,7 +336,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       data.setupMode !== 'manual'
     ) {
       const setupPath =
-        data.setupMode === 'agent' ? 'Pulse Agent install command' : 'setup command';
+        data.setupMode === 'agent' ? 'Host Telemetry Agent command' : 'API Inventory setup command';
       notificationStore.info(
         `Run the ${setupPath} on the host. Pulse will add the node automatically.`,
       );

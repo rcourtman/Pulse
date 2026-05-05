@@ -42,7 +42,8 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(agent.catalogDescription).toContain('Low-overhead host telemetry');
     expect(agent.sourceStrategy).toBe('agent');
     expect(pve.sourceStrategy).toBe('api-agent');
-    expect(pve.coverage).toContain('Install Pulse Agent on each node');
+    expect(pve.coverage).toContain('through the Proxmox API');
+    expect(pve.coverage).toContain('Install Pulse Agent only on nodes');
     expect(pve.coverage).toContain('SMART data');
   });
 
@@ -56,8 +57,8 @@ describe('infrastructureOnboardingPresentation', () => {
       summary: 'Pulse Agent',
     });
     expect(getInfrastructureSourceStrategyPresentation('api-agent')).toMatchObject({
-      label: 'API + Agent',
-      summary: 'Platform API with Pulse Agent',
+      label: 'API first',
+      summary: 'Platform API, agent optional',
     });
 
     expect(getInfrastructureOnboardingProductPresentation('vmware').sourceStrategy).toBe('api');

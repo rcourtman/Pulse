@@ -110,7 +110,7 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
           <Show when={state.formData().setupMode === 'manual'}>
             <div class="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs leading-5 text-muted">
               Advanced manual token path: use this only when you already created the API token
-              yourself. Agent Install and Direct Connection register the source automatically
+              yourself. API Inventory and Host Telemetry Agent register the source automatically
               without copying token credentials into this form.
             </div>
 

@@ -142,14 +142,14 @@ only; lifecycle surfaces must not present them as executable, dispatch them
 through agent-local command paths, or bypass the API fail-closed execution gate.
 
 The node setup modal boundary must keep guided setup and manual credential
-submission separate. For new PVE/PBS setup, Agent Install and Direct Connection
-setup-script modes are command-driven auto-registration paths; Token ID/Value
+submission separate. For new PVE/PBS setup, API Inventory and Host Telemetry
+Agent setup modes are command-driven auto-registration paths; Token ID/Value
 fields, Test Connection, and Add Node submission belong only to Manual Token
 Setup or existing-node edit flows.
-The setup guide must also present the source strategy at action time: Agent
-Install is the recommended API + Agent path, Direct Connection is the advanced
-API inventory path, and Manual Token Setup is an advanced manual API-token
-escape hatch.
+The setup guide must also present the source strategy at action time: API
+Inventory is the recommended least-privilege API path, Host Telemetry Agent is
+the optional full-host-telemetry root-agent path, and Manual Token Setup is an
+advanced manual API-token escape hatch.
 
 That shared monitored-system impact preview boundary also owns the disabled
 platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks
@@ -772,6 +772,11 @@ The supported full-telemetry systemd agent may still run as `root`, but
 in the rendered service, and generated systemd units must keep conservative
 sandboxing in place unless a future telemetry requirement records a narrower
 exception.
+New Proxmox VE and Proxmox Backup Server setup must default to the API
+Inventory path: the UI may recommend a root Pulse Agent only as the Host
+Telemetry Agent path for temperatures, SMART, local storage detail,
+agent-driven operations, or other node-local telemetry the Proxmox API cannot
+provide.
 
 Generated TrueNAS CORE rc.d service scripts must give `/usr/sbin/daemon -r` a
 supervisor pidfile with `-P`, keep the child pid in a separate diagnostic

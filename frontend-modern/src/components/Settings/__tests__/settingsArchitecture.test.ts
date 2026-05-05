@@ -530,7 +530,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureOnboardingPresentationSource).toContain(
       'getInfrastructureSourceStrategyPresentation',
     );
-    expect(infrastructureOnboardingPresentationSource).toContain('API + Agent');
+    expect(infrastructureOnboardingPresentationSource).toContain('API first');
     expect(infrastructureOnboardingPresentationSource).toContain(
       'getInfrastructureSupportSummaryBadges',
     );
@@ -549,10 +549,10 @@ describe('settings architecture guardrails', () => {
     );
     expect(nodeModalAuthenticationSectionSource).toContain('Advanced manual token path');
     expect(nodeModalSetupGuideSectionSource).toContain('Source strategy');
-    expect(nodeModalSetupGuideSectionSource).toContain('API + Agent');
+    expect(nodeModalSetupGuideSectionSource).toContain('Host telemetry agent');
     expect(nodeModalSetupGuideSectionSource).toContain('API inventory');
     expect(nodeModalSetupGuideSectionSource).toContain('Manual API token');
-    expect(nodeModalSetupGuideSectionSource).toContain('No token fields are needed');
+    expect(nodeModalSetupGuideSectionSource).toContain('Recommended least-privilege path');
     expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
     expect(nodeModalStateSource).toContain('data.setupMode !==');
 

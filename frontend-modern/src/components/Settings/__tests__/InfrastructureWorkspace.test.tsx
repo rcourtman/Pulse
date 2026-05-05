@@ -298,7 +298,7 @@ describe('InfrastructureWorkspace', () => {
     expect(within(readiness).getByText('Discovery off')).toBeInTheDocument();
     expect(within(readiness).getByRole('button', { name: /Install agents/i })).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
-    expect(screen.getByText('Proxmox VE').closest('tr')?.className).toContain('bg-base');
+    expect(screen.getByText('Proxmox VE').closest('tr')?.className).toContain('grouped-table-row');
     expect(screen.queryByText('VMware vCenter')).toBeNull();
     expect(screen.queryByText('TrueNAS SCALE')).toBeNull();
     expect(screen.queryByText('Standalone hosts')).toBeNull();
@@ -621,7 +621,7 @@ describe('InfrastructureWorkspace', () => {
     expect(within(dialog).getByText('Virtualization')).toBeInTheDocument();
     expect(within(dialog).getAllByText('API inventory').length).toBeGreaterThan(0);
     expect(within(dialog).getByText('Agent telemetry')).toBeInTheDocument();
-    expect(within(dialog).getAllByText('API + Agent').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('API first').length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText('Unlocks').length).toBeGreaterThan(0);
     expect(within(dialog).getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
   });

@@ -60,6 +60,8 @@ If Proxmox API data is enough for your use case, prefer API-only monitoring and
 do not install a host agent just because the installer exists. Install agents
 where you need data that Proxmox cannot provide through its API, or where the
 data lives inside a guest/container rather than at the Proxmox node layer.
+The Settings Proxmox setup flow uses this API inventory path as the default;
+the host telemetry agent path is for the full-telemetry cases above.
 
 Running `pulse-agent` as a custom non-root systemd user is possible by editing
 the service unit, but it is not a supported full-telemetry mode today. Expect

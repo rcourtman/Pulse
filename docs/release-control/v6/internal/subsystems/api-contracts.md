@@ -162,13 +162,13 @@ product API routes free of maintainer commercial analytics.
 30. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `agent-lifecycle`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 31. `internal/api/access_control_handlers.go` shared with `organization-settings`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.
     The shared node setup boundary above owns the guided/manual setup split
-    for PVE/PBS consumers: Agent Install and Direct Connection setup-script
-    modes are auto-registration paths, while Token ID/Value fields, Test
-    Connection, and Add Node are manual-token or existing-node edit controls
-    only.
+    for PVE/PBS consumers: API Inventory and Host Telemetry Agent setup modes
+    are auto-registration paths, while Token ID/Value fields, Test Connection,
+    and Add Node are manual-token or existing-node edit controls only.
     That same client contract must expose the setup strategy before a token
-    path is chosen: Agent Install is API + Agent, Direct Connection is API
-    inventory, and Manual Token Setup is a manual API-token escape hatch.
+    path is chosen: API Inventory is the recommended least-privilege API path,
+    Host Telemetry Agent is the optional full-host-telemetry root-agent path,
+    and Manual Token Setup is a manual API-token escape hatch.
     The inline node credential slot must keep the visible submit sequence as
     `Endpoint`, `Authentication`, and `Coverage` before the API-backed setup
     controls. That sequence is presentation guidance for the existing setup
@@ -2531,10 +2531,10 @@ masked: copy-success messaging may not tell the operator to paste a token
 cleanup paths may not survive in one Proxmox branch after the shared UI state
 has moved to hint-only handling.
 That same shared settings consumer must keep command-driven setup and manual
-credential submission distinct. When a new PVE/PBS setup is in Agent Install or
-Direct Connection setup-script mode, the settings UI must not render Token
-ID/Value fields, Test Connection, or Add Node controls; those controls are only
-valid for Manual Token Setup or existing-node edit flows.
+credential submission distinct. When a new PVE/PBS setup is in API Inventory or
+Host Telemetry Agent mode, the settings UI must not render Token ID/Value
+fields, Test Connection, or Add Node controls; those controls are only valid for
+Manual Token Setup or existing-node edit flows.
 That same shared frontend setup surface must also trim and validate the
 canonical `host` input before invoking `/api/setup-script` downloads, and the
 shared `frontend-modern/src/api/nodes.ts` helper must reject empty `host` or

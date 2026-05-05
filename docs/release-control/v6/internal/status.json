@@ -3362,6 +3362,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-lifecycle-proxmox-api-first-onboarding-2026-05-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/agent-lifecycle-root-agent-hardening-2026-05-05.md",
           "kind": "file"
         },
@@ -3403,6 +3408,31 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/useNodeModalState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/nodeModalPresentation.ts",
           "kind": "file"
         },
         {

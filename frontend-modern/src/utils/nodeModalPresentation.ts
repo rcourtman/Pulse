@@ -41,15 +41,15 @@ export interface NodeModalTestResultPresentation {
   icon: NodeModalTestStatus;
 }
 
-export function getNodeModalDefaultFormData(
-  nodeType: NodeModalNodeType,
-): NodeModalFormData {
+export function getNodeModalDefaultFormData(nodeType: NodeModalNodeType): NodeModalFormData {
+  const setupMode: NodeModalSetupMode = nodeType === 'pmg' ? 'manual' : 'auto';
+
   return {
     name: '',
     host: '',
     guestURL: '',
     authType: nodeType === 'pmg' ? 'password' : 'token',
-    setupMode: 'agent',
+    setupMode,
     user: '',
     password: '',
     tokenName: '',

@@ -85,10 +85,10 @@ const SOURCE_STRATEGY_PRESENTATION: Record<
     detail: 'Installs Pulse Agent for host telemetry, local services, Docker, and Kubernetes.',
   },
   'api-agent': {
-    label: 'API + Agent',
-    summary: 'Platform API with Pulse Agent',
+    label: 'API first',
+    summary: 'Platform API, agent optional',
     detail:
-      'Starts from platform inventory and adds Pulse Agent when node-local telemetry is needed.',
+      'Starts with platform API inventory and adds Pulse Agent only where node-local telemetry is needed.',
   },
 };
 
@@ -130,7 +130,7 @@ const PRODUCT_PRESENTATION: Record<
     label: 'Proxmox VE',
     bestFor: 'Virtualization clusters and standalone hypervisors',
     coverage:
-      'VMs, containers, storage, and cluster health. Install Pulse Agent on each node when you want full node-local telemetry such as temperatures and SMART data',
+      'VMs, containers, storage, and cluster health through the Proxmox API. Install Pulse Agent only on nodes where you want full node-local telemetry such as temperatures and SMART data',
     catalogDescription: 'VMs, containers, storage, cluster health',
     sourceStrategy: 'api-agent',
     autoDetect: true,
@@ -140,7 +140,8 @@ const PRODUCT_PRESENTATION: Record<
   pbs: {
     label: 'Proxmox Backup Server',
     bestFor: 'Backup infrastructure and protected storage',
-    coverage: 'Backup jobs, sync, verify, prune, GC',
+    coverage:
+      'Backup jobs, sync, verify, prune, and GC through the Proxmox API. Install Pulse Agent only where host-local telemetry is needed',
     catalogDescription: 'Backup jobs, sync, verify, prune, GC',
     sourceStrategy: 'api-agent',
     autoDetect: true,
