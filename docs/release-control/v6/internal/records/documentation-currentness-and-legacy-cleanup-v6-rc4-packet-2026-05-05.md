@@ -18,11 +18,11 @@ packet audit was based on the published GitHub prerelease tag target.
 
 - From tag: `v6.0.0-rc.3`
 - From commit: `f1744d36d0bde3c8735ae75a190af45c35087841`
-- To candidate commit: `3f16d7845a92d6bf0c5700728bd70e1f4fe32966`
-- Git range: `v6.0.0-rc.3..3f16d7845a92d6bf0c5700728bd70e1f4fe32966`
-- Commit count: `51`
+- To validation commit: `1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`
+- Git range: `v6.0.0-rc.3..1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`
+- Commit count: `54`
 - Date span in the range: `2026-05-03` through `2026-05-05`
-- Changed scope: `325` files, `15911` insertions, `11356` deletions
+- Changed scope: `343` files, `16760` insertions, `11434` deletions
 
 ## Review Method
 
@@ -43,7 +43,7 @@ Commands used for the coverage pass:
 
 ## Commit Coverage Summary
 
-The 51 commits were covered by these release-note buckets:
+The 54 commits were covered by these release-note buckets:
 
 - hosted tenant identity keys, hosted signup owner IDs, hosted handoff
   identity, SSO stable principals, checkout magic-link principals, blank
@@ -66,6 +66,9 @@ The 51 commits were covered by these release-note buckets:
   demo admin read hiding, mock-mode legacy sidecar cleanup, mobile Relay docs
   label cleanup, release key helper module path, and Agent Security docs
   currentness
+- RC4 packet preparation, RC4 Docker default correction, release-validation
+  test alignment for retired monitored-system caps, and tenant monitor
+  WebSocket-hub nil handling
 
 ## Packet Updates
 
@@ -84,7 +87,7 @@ The current RC packet now points at `v6.0.0-rc.4`:
   - summarizes identity, API/CLI, action governance, self-hosted licensing,
     agent setup, monitoring, storage, Patrol, and mock-mode changes
 - `docs/releases/V6_CHANGELOG_RC4_DRAFT.md`
-  - groups the 51-commit release range into release-risk buckets
+  - groups the 54-commit release range into release-risk buckets
 - `docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md`
   - gives support staff the current rollback, trust-root, identity, action,
     Proxmox, and escalation language

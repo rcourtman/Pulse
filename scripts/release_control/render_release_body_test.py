@@ -146,17 +146,17 @@ Old metadata section.
             repo_root / "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("3f16d7845a92d6bf0c5700728bd70e1f4fe32966", release_notes)
-        self.assertIn("commit count: `51`", changelog)
+        self.assertIn("1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9", release_notes)
+        self.assertIn("commit count: `54`", changelog)
         self.assertIn("stable identity principals", support_pack)
         self.assertIn("API-first action planning", changelog)
         self.assertIn("monitored-system and child-resource volume unmetered", release_notes)
         self.assertIn("Pulse Mobile pairing for handoff", support_pack)
         self.assertIn("pin Docker install defaults to `6.0.0-rc.4`", changelog)
         self.assertIn("Docker Compose and turnkey Docker installer defaults", release_notes)
-        self.assertIn("release-validation commits", changelog)
+        self.assertIn("release-validation\ncommits", changelog)
         self.assertIn("Tenant monitor state broadcasts", release_notes)
-        self.assertIn("tenant monitor broadcast guard", changelog)
+        self.assertIn("tenant\nmonitor broadcast guard", changelog)
 
 
 if __name__ == "__main__":

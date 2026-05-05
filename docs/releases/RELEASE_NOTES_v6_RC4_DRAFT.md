@@ -24,15 +24,15 @@ hardening into a retestable v6 candidate:
 - Workloads empty-state detection, Patrol mobile header controls, mock-mode
   legacy sidecar cleanup, and agent-security guidance were refreshed
 
-This packet was audited against all `51` feature and runtime commits in the
-exact `rc.3` to `rc.4` candidate range, from the published `v6.0.0-rc.3` tag commit
-`f1744d36d0bde3c8735ae75a190af45c35087841` through candidate commit
-`3f16d7845a92d6bf0c5700728bd70e1f4fe32966`. The final prerelease target also
-includes RC4 packet and release-validation commits that set the governed
-version, pin Docker install defaults to `6.0.0-rc.4`, and align migration tests
-with the canonical self-hosted licensing contract. The final validation slice
-also makes tenant monitor state broadcasts no-op safely when a headless or test
-runtime has no WebSocket hub wired.
+This packet was audited against `54` commits in the exact `rc.3` to `rc.4`
+pre-publication validation range, from the published `v6.0.0-rc.3` tag commit
+`f1744d36d0bde3c8735ae75a190af45c35087841` through validation commit
+`1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`. That range includes `51` feature
+and runtime commits plus RC4 packet and release-validation commits that set the
+governed version, pin Docker install defaults to `6.0.0-rc.4`, align migration
+tests with the canonical self-hosted licensing contract, and make tenant
+monitor state broadcasts no-op safely when a headless or test runtime has no
+WebSocket hub wired.
 
 ## Support Stance
 

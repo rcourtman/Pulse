@@ -25,10 +25,10 @@ The changelog was audited against every feature/runtime commit in the exact
 release range for the current candidate head:
 
 - `v6.0.0-rc.3`: `f1744d36d0bde3c8735ae75a190af45c35087841`
-- candidate commit: `3f16d7845a92d6bf0c5700728bd70e1f4fe32966`
-- range: `v6.0.0-rc.3..3f16d7845a92d6bf0c5700728bd70e1f4fe32966`
-- commit count: `51`
-- changed scope: `325` files, `15911` insertions, `11356` deletions
+- validation commit: `1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`
+- range: `v6.0.0-rc.3..1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`
+- commit count: `54`
+- changed scope: `343` files, `16760` insertions, `11434` deletions
 
 Those commits are grouped in this changelog rather than listed one by one. The
 range includes identity hardening, hosted signup and checkout principal
@@ -36,10 +36,10 @@ cleanup, API-first action planning, CLI action and fleet reads, action audit
 execution proof, self-hosted licensing continuity, root-agent and Proxmox
 setup hardening, TrueNAS/RAID/Ceph/storage correctness, Workloads empty-state
 handling, Patrol mobile controls, mock-mode cleanup, and release-control
-evidence. The final RC4 prerelease target also includes packet and
-release-validation commits that pin Docker install defaults to `6.0.0-rc.4` and
-remove stale migration-test expectations for retired monitored-system caps, plus
-a tenant monitor broadcast guard for runtimes without a WebSocket hub.
+evidence. The final validation range also includes packet and release-validation
+commits that pin Docker install defaults to `6.0.0-rc.4`, remove stale
+migration-test expectations for retired monitored-system caps, and add a tenant
+monitor broadcast guard for runtimes without a WebSocket hub.
 
 ## Major Changes
 

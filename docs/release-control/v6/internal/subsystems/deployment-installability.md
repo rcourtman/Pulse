@@ -193,6 +193,10 @@ server-side update execution surfaces.
    guard fixes discovered by the release workflow itself, must still be named
    in the audit record and reflected in the candidate commit hash, commit
    count, and changed-scope summary before the workflow is restarted.
+   A metadata-only packet refresh may identify the last validation commit that
+   introduced release risk separately from the packet-refresh commit itself,
+   but it must make that distinction explicit in the release notes and audit
+   record before dispatch.
    The prerelease feedback intake template and active demo/update metadata must
    also stay on generic or current-RC wording instead of hard-coding stale
    `rc.1` examples once later candidates exist.
