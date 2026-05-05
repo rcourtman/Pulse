@@ -62,6 +62,13 @@ where you need data that Proxmox cannot provide through its API, or where the
 data lives inside a guest/container rather than at the Proxmox node layer.
 The Settings Proxmox setup flow uses this API inventory path as the default;
 the host telemetry agent path is for the full-telemetry cases above.
+Generated API Inventory setup still needs a one-time privileged shell on the
+Proxmox host so it can create the `pulse-monitor` account, token, and ACLs, but
+steady-state monitoring uses the Proxmox API rather than a root Pulse agent.
+For PVE, the generated script creates a privilege-separated API token and
+mirrors the generated read/monitoring ACLs onto both the service user and the
+token. For PBS, the generated script grants the `Audit` ACL to both the service
+user and token.
 
 Running `pulse-agent` as a custom non-root systemd user is possible by editing
 the service unit, but it is not a supported full-telemetry mode today. Expect

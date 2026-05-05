@@ -136,7 +136,11 @@ func (h *ConfigHandlers) handleSetupScript(w http.ResponseWriter, r *http.Reques
 
 	storagePerms := ""
 	if backupPerms {
-		storagePerms = "\npveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin"
+		storagePerms = `
+pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
+if [ "$TOKEN_CREATED" = true ]; then
+    pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin
+fi`
 	}
 
 	script := renderSetupScript(serverType, setupScriptRenderContext{

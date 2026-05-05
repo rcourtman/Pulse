@@ -73,6 +73,21 @@ func TestNoGetStateResourceArrayRegression(t *testing.T) {
 	}
 }
 
+func TestPVEBackupPermissionWarningsPreserveTokenACLRepair(t *testing.T) {
+	warning := pveBackupPermissionWarning(&config.PVEInstance{
+		TokenName: "pulse-monitor@pve!pulse-example",
+	})
+
+	for _, snippet := range []string{
+		"pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin",
+		"pveum aclmod /storage -token 'pulse-monitor@pve!pulse-example' -role PVEDatastoreAdmin",
+	} {
+		if !strings.Contains(warning, snippet) {
+			t.Fatalf("expected warning to contain %q, got %q", snippet, warning)
+		}
+	}
+}
+
 func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

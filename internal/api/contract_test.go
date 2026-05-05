@@ -72,6 +72,87 @@ func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T)
 	}
 }
 
+func TestContract_ProxmoxSetupScriptUsesPrivilegeSeparatedTokenACLs(t *testing.T) {
+	storagePerms := `
+pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
+if [ "$TOKEN_CREATED" = true ]; then
+    pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin
+fi`
+	pveArtifact := buildSetupScriptInstallArtifact(
+		"https://pulse.example",
+		"pve",
+		"https://pve.example:8006",
+		"https://pulse.example",
+		true,
+		"setup-token-123",
+		0,
+	)
+	pveScript := renderSetupScript("pve", setupScriptRenderContext{
+		ServerName:       "pve-example",
+		PulseURL:         "https://pulse.example",
+		ServerHost:       "https://pve.example:8006",
+		SetupToken:       "setup-token-123",
+		TokenName:        "pulse-example",
+		TokenMatchPrefix: "pulse-example",
+		StoragePerms:     storagePerms,
+		SensorsPublicKey: "ssh-ed25519 AAAATEST pulse@test",
+		Artifact:         pveArtifact,
+	})
+
+	for _, required := range []string{
+		`TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1)`,
+		`pveum aclmod / -user pulse-monitor@pve -role PVEAuditor`,
+		`pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor`,
+		`pveum aclmod / -user pulse-monitor@pve -role PulseMonitor`,
+		`pveum aclmod / -token "$PULSE_TOKEN_ID" -role PulseMonitor`,
+		`pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin`,
+		`pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`,
+	} {
+		if !strings.Contains(pveScript, required) {
+			t.Fatalf("PVE setup script must contain %q", required)
+		}
+	}
+	if strings.Contains(pveScript, "--privsep 0") {
+		t.Fatal("PVE setup script must not create full-privilege API tokens")
+	}
+
+	pbsArtifact := buildSetupScriptInstallArtifact(
+		"https://pulse.example",
+		"pbs",
+		"https://pbs.example:8007",
+		"https://pulse.example",
+		false,
+		"setup-token-123",
+		0,
+	)
+	pbsScript := renderSetupScript("pbs", setupScriptRenderContext{
+		ServerName:       "pbs-example",
+		PulseURL:         "https://pulse.example",
+		ServerHost:       "https://pbs.example:8007",
+		SetupToken:       "setup-token-123",
+		TokenName:        "pulse-example",
+		TokenMatchPrefix: "pulse-example",
+		Artifact:         pbsArtifact,
+	})
+
+	for _, required := range []string{
+		`proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs`,
+		`proxmox-backup-manager acl update / Audit --auth-id "$PULSE_TOKEN_ID"`,
+	} {
+		if !strings.Contains(pbsScript, required) {
+			t.Fatalf("PBS setup script must contain %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		`Admin --auth-id pulse-monitor@pbs`,
+		`Admin --auth-id "$PULSE_TOKEN_ID"`,
+	} {
+		if strings.Contains(pbsScript, forbidden) {
+			t.Fatalf("PBS setup script must not grant admin ACL %q", forbidden)
+		}
+	}
+}
+
 func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	source, err := os.ReadFile(filepath.Clean("magic_link_handlers.go"))
 	if err != nil {

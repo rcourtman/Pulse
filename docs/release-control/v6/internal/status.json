@@ -3142,6 +3142,16 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/monitoring/monitor_backup_poll_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor_backups.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/monitoring/poll_providers.go",
           "kind": "file"
         },
@@ -3352,6 +3362,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/AGENT_SECURITY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/agent-lifecycle-agent-privilege-docs-2026-05-01.md",
           "kind": "file"
         },
@@ -3367,6 +3382,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-lifecycle-proxmox-setup-permission-proof-2026-05-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/agent-lifecycle-root-agent-hardening-2026-05-05.md",
           "kind": "file"
         },
@@ -3378,6 +3398,16 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/UNIFIED_AGENT.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/UPGRADE_v5.md",
           "kind": "file"
         },
         {
@@ -3442,7 +3472,27 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/agent_install_command_shared_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/config_handlers_setup_script_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/config_setup_handlers.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/setup_script_render.go",
           "kind": "file"
         },
         {

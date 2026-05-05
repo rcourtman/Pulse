@@ -85,7 +85,11 @@ This can happen if:
 **Quick fix** (run on each Proxmox host):
 ```bash
 pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
+pveum aclmod /storage -token 'pulse-monitor@pve!<token-name>' -role PVEDatastoreAdmin
 ```
+Replace `pulse-monitor@pve!<token-name>` with the full token ID shown in Pulse,
+for example `pulse-monitor@pve!pulse-example`. Privilege-separated PVE tokens
+need the storage ACL on the token as well as the service user.
 
 **Alternative** (re-run setup):
 1. Delete the node from Pulse Settings

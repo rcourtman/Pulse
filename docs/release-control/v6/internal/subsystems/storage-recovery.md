@@ -66,6 +66,12 @@ state.
 
 ## Extension Points
 
+Generated Proxmox setup-script changes in `internal/api/` that affect backup
+visibility permissions are storage/recovery-adjacent: optional PVE `/storage`
+grants must remain effective for privilege-separated tokens by assigning the
+same `PVEDatastoreAdmin` role to both the service user and the concrete token
+id.
+
 Storage/recovery auth-adjacent changes may consume SSO-authenticated sessions,
 but they must not reinterpret SAML or multi-provider SSO availability as a
 storage/recovery entitlement; that provider-route and license truth belongs to
@@ -2353,6 +2359,10 @@ names stay bound to the canonical Pulse endpoint across setup/bootstrap
 surfaces, so adjacent setup and recovery-linked flows may not derive token
 scope from request-local `Host` fallbacks and accidentally fork monitor-token
 identity for the same Pulse instance.
+That same shared dependency also assumes generated PVE setup scripts keep
+backup visibility permissions effective on privilege-separated tokens: optional
+`/storage` `PVEDatastoreAdmin` grants must be mirrored to the service user and
+the concrete token id, not left as a user-only ACL that the token cannot use.
 That same shared dependency also assumes `/api/setup-script` stays on one
 canonical artifact contract: manual setup downloads must ship as
 `text/x-shellscript` attachments with deterministic `pulse-setup-*.sh`

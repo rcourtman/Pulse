@@ -87,6 +87,22 @@ func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceNa
 	m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplates)
 }
 
+func quotePVEACLTokenID(tokenID string) string {
+	return "'" + strings.ReplaceAll(tokenID, "'", `'"'"'`) + "'"
+}
+
+func pveBackupPermissionWarning(instanceCfg *config.PVEInstance) string {
+	warning := "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin"
+	if instanceCfg == nil {
+		return warning + "; if using a privilege-separated API token, also grant PVEDatastoreAdmin on /storage to that token."
+	}
+	tokenID := strings.TrimSpace(instanceCfg.TokenName)
+	if tokenID == "" || !strings.Contains(tokenID, "!") {
+		return warning + "; if using a privilege-separated API token, also grant PVEDatastoreAdmin on /storage to that token."
+	}
+	return warning + " && pveum aclmod /storage -token " + quotePVEACLTokenID(tokenID) + " -role PVEDatastoreAdmin"
+}
+
 func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {
 	if m == nil {
 		return nil
@@ -204,8 +220,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if strings.Contains(errStr, "403") || strings.Contains(errStr, "401") ||
 					strings.Contains(errStr, "permission") || strings.Contains(errStr, "forbidden") {
 					hadPermissionError = true
+					warning := pveBackupPermissionWarning(m.getInstanceConfig(instanceName))
 					m.mu.Lock()
-					m.backupPermissionWarnings[instanceName] = "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin"
+					m.backupPermissionWarnings[instanceName] = warning
 					m.mu.Unlock()
 					log.Warn().
 						Str("instance", instanceName).

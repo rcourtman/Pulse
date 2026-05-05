@@ -479,8 +479,8 @@ if pveum user token list pulse-monitor@pve 2>/dev/null | awk 'NR>3 {print $2}' |
     fi
 fi
 
-# Create token and capture value (shown once by Proxmox)
-TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 0 2>&1)
+# Create a privilege-separated token and capture value (shown once by Proxmox)
+TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1)
 TOKEN_CREATE_RC=$?
 if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
     echo "❌ Failed to create token '$TOKEN_NAME'"
@@ -517,7 +517,10 @@ fi
 
 # Set up permissions
 echo "Setting up permissions..."
-pveum aclmod / -user pulse-monitor@pve -role PVEAuditor%s
+pveum aclmod / -user pulse-monitor@pve -role PVEAuditor
+if [ "$TOKEN_CREATED" = true ]; then
+    pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor
+fi%s
 
 # Detect Proxmox version and apply appropriate permissions
 # Method 1: Try to check if VM.Monitor exists (reliable for PVE 8 and below)
@@ -578,6 +581,9 @@ if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
     # Prefer modify (non-destructive) in case PulseMonitor already exists.
     if pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null; then
         pveum aclmod / -user pulse-monitor@pve -role PulseMonitor
+        if [ "$TOKEN_CREATED" = true ]; then
+            pveum aclmod / -token "$PULSE_TOKEN_ID" -role PulseMonitor
+        fi
         echo "  • Applied privileges: $PRIV_STRING"
     else
         echo "  • Failed to configure PulseMonitor role with: $PRIV_STRING"

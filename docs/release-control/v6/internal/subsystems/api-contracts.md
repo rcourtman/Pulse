@@ -183,6 +183,14 @@ product API routes free of maintainer commercial analytics.
     That same canonical payload contract also owns strict-TLS truth for that selected host: `/api/auto-register` may only persist `VerifySSL=true` when Pulse actually captured a certificate fingerprint for the selected candidate, and it must not pretend public-CA verification is safe after every candidate fingerprint probe failed.
     That same contract now owns stale-marker verification as well: setup-token-authenticated `checkRegistration` requests may omit token completion fields and must answer `{registered:boolean}` from canonical candidate-host matching so runtime repair can distinguish real registrations from stale local marker files without rotating tokens first.
     That same shared setup contract also owns teardown symmetry for script-managed Proxmox nodes: `/api/auto-unregister` must accept the canonical `type`, normalized `host`, explicit `serverName`, optional canonical `tokenId`, request-body `authToken`, and `source:"script"` payload, and it must answer the same canonical success envelope on both real removals and idempotent no-op reruns so browser/runtime callers do not invent a second uninstall vocabulary.
+    That same setup-script payload contract owns the generated Proxmox
+    permission shape. PVE scripts must create `pulse-monitor@pve!pulse-*`
+    tokens with privilege separation enabled, then apply the generated
+    `PVEAuditor`, optional `PulseMonitor`, and optional `/storage`
+    `PVEDatastoreAdmin` ACLs to both `pulse-monitor@pve` and the concrete
+    token id. PBS scripts must grant `Audit` to both `pulse-monitor@pbs` and
+    the concrete token id. Browser/runtime setup callers must not fork this
+    into token-shared, token-unprivileged, or user-only ACL variants.
 37. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
 38. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 39. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.

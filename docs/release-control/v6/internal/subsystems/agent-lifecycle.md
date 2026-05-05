@@ -777,6 +777,11 @@ Inventory path: the UI may recommend a root Pulse Agent only as the Host
 Telemetry Agent path for temperatures, SMART, local storage detail,
 agent-driven operations, or other node-local telemetry the Proxmox API cannot
 provide.
+Generated API Inventory scripts remain a one-time privileged setup action, but
+their steady-state credential must be a narrowly scoped Proxmox API token: PVE
+setup must use a privilege-separated token and mirror generated ACLs onto both
+the service user and token, while PBS setup must keep `Audit` grants on both
+the service user and token.
 
 Generated TrueNAS CORE rc.d service scripts must give `/usr/sbin/daemon -r` a
 supervisor pidfile with `-P`, keep the child pid in a separate diagnostic

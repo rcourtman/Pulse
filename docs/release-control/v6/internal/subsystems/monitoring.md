@@ -879,6 +879,11 @@ instance and guest type, including template VMIDs that are intentionally
 excluded from normal workload resources. Backup alert evaluation may then
 receive that scoped signal from monitoring, but alert code must not infer PVE
 orphan readiness from recovery rollups alone.
+That same Proxmox backup boundary also owns permission-repair guidance for PVE
+backup visibility failures. When storage content reads fail with authorization
+errors, the monitoring warning must tell operators to grant `/storage`
+`PVEDatastoreAdmin` to both the `pulse-monitor@pve` service user and the
+configured privilege-separated token when that token id is known.
 That same monitoring-owned host-agent ingest boundary now also owns
 vendor-managed NAS RAID normalization. `internal/monitoring/monitor_agents.go`
 must filter vendor-managed system arrays through the shared

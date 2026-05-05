@@ -8,6 +8,32 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
+func TestPVEBackupPermissionWarningIncludesTokenACLWhenAvailable(t *testing.T) {
+	warning := pveBackupPermissionWarning(&config.PVEInstance{
+		TokenName: "pulse-monitor@pve!pulse-example",
+	})
+
+	for _, snippet := range []string{
+		"pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin",
+		"pveum aclmod /storage -token 'pulse-monitor@pve!pulse-example' -role PVEDatastoreAdmin",
+	} {
+		if !strings.Contains(warning, snippet) {
+			t.Fatalf("expected warning to contain %q, got %q", snippet, warning)
+		}
+	}
+}
+
+func TestPVEBackupPermissionWarningFallsBackForManualTokens(t *testing.T) {
+	warning := pveBackupPermissionWarning(&config.PVEInstance{})
+
+	if !strings.Contains(warning, "pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin") {
+		t.Fatalf("expected user ACL guidance, got %q", warning)
+	}
+	if !strings.Contains(warning, "if using a privilege-separated API token") {
+		t.Fatalf("expected privilege-separated token fallback guidance, got %q", warning)
+	}
+}
+
 func TestShouldRunBackupPoll(t *testing.T) {
 	now := time.Now()
 	last := now.Add(-5 * time.Minute)

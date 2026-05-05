@@ -292,15 +292,23 @@ func TestPVESetupScript_ConfiguresPulseMonitorRoleSafely(t *testing.T) {
 
 	script := rr.Body.String()
 
-	// Privileges must be comma-separated for pveum, and role updates should be non-destructive.
+	// Privileges must be comma-separated for pveum, and generated tokens must stay privilege-separated.
 	wantSnippets := []string{
+		`TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1)`,
+		`pveum aclmod / -user pulse-monitor@pve -role PVEAuditor`,
+		`pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor`,
 		`PRIV_STRING="$(IFS=,; echo "${EXTRA_PRIVS[*]}")"`,
 		`pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null`,
+		`pveum aclmod / -user pulse-monitor@pve -role PulseMonitor`,
+		`pveum aclmod / -token "$PULSE_TOKEN_ID" -role PulseMonitor`,
 	}
 	for _, snippet := range wantSnippets {
 		if !containsString(script, snippet) {
 			t.Fatalf("expected generated script to contain:\n%s\n\nGot (first 500 chars):\n%s", snippet, truncate(script, 500))
 		}
+	}
+	if containsString(script, `--privsep 0`) {
+		t.Fatalf("expected generated PVE token to remain privilege-separated, got: %s", truncate(script, 900))
 	}
 }
 
@@ -382,6 +390,9 @@ func TestPVESetupScript_PreservesEncodedRerunURLAndBackupPerms(t *testing.T) {
 	}
 	if !containsString(script, `pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin`) {
 		t.Fatalf("expected backup permission role setup to remain enabled, got: %s", truncate(script, 900))
+	}
+	if !containsString(script, `pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`) {
+		t.Fatalf("expected backup permission role setup to apply to the privilege-separated token, got: %s", truncate(script, 900))
 	}
 }
 
@@ -1008,6 +1019,26 @@ func TestHandleSetupScript_PBSTypeGeneratesScript(t *testing.T) {
 				t.Errorf("%s\nExpected to find: %s", tt.desc, tt.contains)
 			}
 		})
+	}
+
+	wantACLs := []string{
+		`proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs`,
+		`proxmox-backup-manager acl update / Audit --auth-id "$PULSE_TOKEN_ID"`,
+	}
+	for _, snippet := range wantACLs {
+		if !containsString(script, snippet) {
+			t.Fatalf("expected generated PBS script to contain exact Audit ACL:\n%s\n\nGot (first 900 chars):\n%s", snippet, truncate(script, 900))
+		}
+	}
+	for _, forbidden := range []string{
+		`Admin --auth-id pulse-monitor@pbs`,
+		`Admin --auth-id "$PULSE_TOKEN_ID"`,
+		`DatastoreAdmin`,
+		`PVEDatastoreAdmin`,
+	} {
+		if containsString(script, forbidden) {
+			t.Fatalf("expected generated PBS setup to avoid admin ACL %q, got: %s", forbidden, truncate(script, 900))
+		}
 	}
 
 	// Verify PBS script does NOT contain PVE-specific content

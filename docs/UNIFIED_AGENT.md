@@ -378,7 +378,10 @@ If local PVE backups aren't appearing in Pulse after setting up via `--enable-pr
 1. **Check permissions**: The API token needs `PVEDatastoreAdmin` on `/storage`:
    ```bash
    pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
+   pveum aclmod /storage -token 'pulse-monitor@pve!<token-name>' -role PVEDatastoreAdmin
    ```
+   Replace `pulse-monitor@pve!<token-name>` with the full token ID shown in Pulse.
+   Privilege-separated PVE tokens need the storage ACL on the token as well as the service user.
 
 2. **Re-run setup**: Delete the node in Pulse Settings and re-run the agent with `--enable-proxmox`. Recent versions grant this permission automatically.
 

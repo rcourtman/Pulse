@@ -207,7 +207,11 @@ func TestRenderSetupScript_UsesSharedInstallArtifactShape(t *testing.T) {
 		SetupToken:       "setup-token-123",
 		TokenName:        buildPulseMonitorTokenName("https://pulse.example"),
 		TokenMatchPrefix: buildPulseMonitorTokenName("https://pulse.example"),
-		StoragePerms:     "\npveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin",
+		StoragePerms: `
+pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
+if [ "$TOKEN_CREATED" = true ]; then
+    pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin
+fi`,
 		SensorsPublicKey: "ssh-ed25519 AAAATEST pulse@test",
 		Artifact:         artifact,
 	})
@@ -216,6 +220,7 @@ func TestRenderSetupScript_UsesSharedInstallArtifactShape(t *testing.T) {
 	require.Contains(t, script, `PULSE_BOOTSTRAP_COMMAND_WITH_ENV='curl -fsSL '"'"'https://pulse.example/api/setup-script?backup_perms=true&host=https%3A%2F%2Fpve1.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve'"'"' | `)
 	require.Contains(t, script, `PULSE_SETUP_TOKEN="${PULSE_SETUP_TOKEN:-setup-token-123}"`)
 	require.Contains(t, script, `pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin`)
+	require.Contains(t, script, `pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`)
 }
 
 func TestInstallBaseURLRequiresInsecure(t *testing.T) {
