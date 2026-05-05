@@ -628,3 +628,8 @@ may consume websocket-backed revocation fan-out through
 `frontend-modern/src/contexts/appRuntime.ts`, but security/privacy authority
 stays in the governed API token contract. The hook must not import `@/App` or
 borrow root-shell ownership as token-management authority.
+That same live auth-env reload boundary also owns watcher lifecycle cleanup:
+`internal/config/watcher.go` must not return from `ConfigWatcher.Stop()` while
+its fsnotify or polling goroutine can still read debounce or callback state.
+Stopping the watcher is the synchronization point that lets tests and runtime
+teardown restore auth/config state without racing a background reload.

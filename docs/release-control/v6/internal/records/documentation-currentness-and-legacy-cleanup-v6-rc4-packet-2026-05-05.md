@@ -141,6 +141,14 @@ committed the canonical TrueNAS host record. The test now waits for the actual
 ingested TrueNAS host before stopping the poller, so the release gate proves the
 canonical record instead of transport activity alone.
 
+The first publish release workflow exposed one more backend race in
+`TestConfigWatcher_WatchForChanges_Live`: `ConfigWatcher.Stop()` closed the
+watcher but did not wait for the fsnotify goroutine to exit, so test teardown
+could restore package-level debounce state while a background reload was still
+reading it. `ConfigWatcher` now tracks watcher and polling goroutines and joins
+them during `Stop()`, making the stop call the canonical lifecycle barrier for
+live auth-env reload teardown.
+
 No public issue comment, retitle, closure, or customer-facing message was made
 as part of this packet update.
 
@@ -164,6 +172,18 @@ as part of this packet update.
   - `prepare`, `frontend_checks`, `helm_smoke`, and `docker_build` passed
   - `backend_tests` failed on `TestTrueNASPollerEnableDisableCycle` stopping
     before canonical TrueNAS host ingest was proved
+- Draft release workflow `25386988654`:
+  - `prepare`, `frontend_checks`, `helm_smoke`, `docker_build`,
+    `backend_tests`, `create_release`, and `validate_release_assets` passed
+  - created and validated a draft `v6.0.0-rc.4` prerelease with `139` assets
+    against annotated tag `v6.0.0-rc.4` peeling to
+    `868239a6481873dc117492efcd88a16a381b9596`
+- Publish release workflow `25390505458`:
+  - `prepare`, `frontend_checks`, `helm_smoke`, and `docker_build` passed
+  - `backend_tests` failed on a race in
+    `TestConfigWatcher_WatchForChanges_Live`
 - `go test -race ./internal/config ./tests/migration ./scripts/installtests`
 - `go test -race ./internal/monitoring ./internal/api`
 - `go test -race ./internal/monitoring -run TestTrueNASPollerEnableDisableCycle -count=20`
+- `go test -race ./internal/config -run TestConfigWatcher_WatchForChanges_Live -count=20`
+- `go test -race ./internal/config`

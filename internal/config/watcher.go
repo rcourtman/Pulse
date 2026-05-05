@@ -35,6 +35,7 @@ type ConfigWatcher struct {
 	watcher              *fsnotify.Watcher
 	stopChan             chan struct{}
 	stopOnce             sync.Once // Ensures Stop() can only close channel once
+	wg                   sync.WaitGroup
 	lastModTime          time.Time
 	lastEnvHash          string
 	apiTokensLastModTime time.Time
@@ -161,11 +162,19 @@ func (cw *ConfigWatcher) Start() error {
 			Str("env_path", cw.envPath).
 			Dur("poll_interval", cw.pollInterval).
 			Msg("Falling back to polling for config changes")
-		go cw.pollForChanges()
+		cw.wg.Add(1)
+		go func() {
+			defer cw.wg.Done()
+			cw.pollForChanges()
+		}()
 		return nil
 	}
 
-	go cw.watchForChanges()
+	cw.wg.Add(1)
+	go func() {
+		defer cw.wg.Done()
+		cw.watchForChanges()
+	}()
 	log.Info().Str("env_path", cw.envPath).Str("api_tokens_path", cw.apiTokensPath).Msg("Started watching config files for changes")
 	return nil
 }
@@ -175,7 +184,10 @@ func (cw *ConfigWatcher) Stop() {
 	// Use sync.Once to prevent double-close panic
 	cw.stopOnce.Do(func() {
 		close(cw.stopChan)
-		cw.watcher.Close()
+		if cw.watcher != nil {
+			_ = cw.watcher.Close()
+		}
+		cw.wg.Wait()
 	})
 }
 

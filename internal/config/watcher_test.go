@@ -84,6 +84,29 @@ func TestNewConfigWatcher_DirectoryPriority(t *testing.T) {
 	}
 }
 
+func TestConfigWatcher_StopWaitsForBackgroundWorker(t *testing.T) {
+	cw := &ConfigWatcher{
+		stopChan: make(chan struct{}),
+	}
+
+	workerDone := make(chan struct{})
+	cw.wg.Add(1)
+	go func() {
+		defer cw.wg.Done()
+		<-cw.stopChan
+		time.Sleep(25 * time.Millisecond)
+		close(workerDone)
+	}()
+
+	cw.Stop()
+
+	select {
+	case <-workerDone:
+	default:
+		t.Fatal("Stop returned before watcher worker exited")
+	}
+}
+
 func TestConfigWatcher_ReloadConfig(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
