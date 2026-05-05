@@ -62,6 +62,27 @@ describe('routeStateNavigation', () => {
       ROUTE_STATE_REPLACE_OPTIONS,
     );
     expect(scrollToSpy).toHaveBeenCalledWith(24, 320);
+    scheduler.cleanup();
+  });
+
+  it('cancels deferred same-path scroll restoration when cleaned up', () => {
+    const navigate = vi.fn();
+    let currentPath = '/infrastructure?source=proxmox-pve';
+    const scheduler = createRouteStateNavigateScheduler(navigate, () => currentPath);
+
+    scheduler.schedule('/infrastructure?source=proxmox-pve&resource=agent-123');
+    vi.advanceTimersByTime(0);
+
+    expect(navigate).toHaveBeenCalledWith(
+      '/infrastructure?source=proxmox-pve&resource=agent-123',
+      ROUTE_STATE_REPLACE_OPTIONS,
+    );
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+
+    scheduler.cleanup();
+    vi.runAllTimers();
+
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
   });
 
   it('captures the app scroll shell before same-path route state navigation', () => {
@@ -92,6 +113,7 @@ describe('routeStateNavigation', () => {
 
     expect(navigate).not.toHaveBeenCalled();
     expect(scrollToSpy).not.toHaveBeenCalled();
+    scheduler.cleanup();
   });
 
   it('stops replaying preserved scroll after a later deliberate scroll change', () => {

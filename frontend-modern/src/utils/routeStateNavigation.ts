@@ -34,6 +34,44 @@ export const createRouteStateNavigateScheduler = (
 ) => {
   let pendingHandle: number | null = null;
   let pendingPath: string | null = null;
+  let scrollRestoreTimeoutHandles: number[] = [];
+  let scrollRestoreFrameHandles: number[] = [];
+
+  const clearScrollRestoreWork = () => {
+    scrollRestoreTimeoutHandles.forEach((handle) => {
+      if (typeof window !== 'undefined') {
+        window.clearTimeout(handle);
+      } else {
+        clearTimeout(handle);
+      }
+    });
+    scrollRestoreTimeoutHandles = [];
+
+    if (typeof window !== 'undefined') {
+      scrollRestoreFrameHandles.forEach((handle) => window.cancelAnimationFrame(handle));
+    }
+    scrollRestoreFrameHandles = [];
+  };
+
+  const scheduleScrollRestoreTimeout = (callback: () => void, delay: number) => {
+    const handle = window.setTimeout(() => {
+      scrollRestoreTimeoutHandles = scrollRestoreTimeoutHandles.filter(
+        (candidate) => candidate !== handle,
+      );
+      callback();
+    }, delay);
+    scrollRestoreTimeoutHandles.push(handle);
+  };
+
+  const scheduleScrollRestoreFrame = (callback: () => void) => {
+    const handle = window.requestAnimationFrame(() => {
+      scrollRestoreFrameHandles = scrollRestoreFrameHandles.filter(
+        (candidate) => candidate !== handle,
+      );
+      callback();
+    });
+    scrollRestoreFrameHandles.push(handle);
+  };
 
   const schedule = (nextPath: string) => {
     pendingPath = nextPath;
@@ -41,6 +79,10 @@ export const createRouteStateNavigateScheduler = (
 
     pendingHandle = window.setTimeout(() => {
       pendingHandle = null;
+      if (typeof window === 'undefined') {
+        pendingPath = null;
+        return;
+      }
       const target = pendingPath;
       pendingPath = null;
       if (!target) return;
@@ -52,6 +94,7 @@ export const createRouteStateNavigateScheduler = (
         : null;
 
       if (restoreScroll) {
+        clearScrollRestoreWork();
         const previousScrollRestoration = window.history.scrollRestoration;
         window.history.scrollRestoration = 'manual';
         const shell = document.querySelector<HTMLElement>('.app-scroll-shell');
@@ -59,6 +102,7 @@ export const createRouteStateNavigateScheduler = (
           schedulePendingAppShellRestoreTop(shell.scrollTop);
         }
         const applyScrollRestore = () => {
+          if (typeof window === 'undefined') return;
           if (/jsdom/i.test(window.navigator.userAgent)) return;
           if (routeStateDeliberateScrollSuppressedUntil > Date.now()) {
             return;
@@ -73,15 +117,16 @@ export const createRouteStateNavigateScheduler = (
         };
         navigate(target, ROUTE_STATE_REPLACE_OPTIONS);
         applyScrollRestore();
-        window.setTimeout(applyScrollRestore, 0);
-        window.requestAnimationFrame(() => {
+        scheduleScrollRestoreTimeout(applyScrollRestore, 0);
+        scheduleScrollRestoreFrame(() => {
           applyScrollRestore();
-          window.requestAnimationFrame(() => {
+          scheduleScrollRestoreFrame(() => {
             applyScrollRestore();
           });
         });
-        window.setTimeout(() => {
+        scheduleScrollRestoreTimeout(() => {
           applyScrollRestore();
+          if (typeof window === 'undefined') return;
           window.history.scrollRestoration = previousScrollRestoration;
         }, 120);
         return;
@@ -92,9 +137,11 @@ export const createRouteStateNavigateScheduler = (
   };
 
   const cleanup = () => {
-    if (pendingHandle === null) return;
-    window.clearTimeout(pendingHandle);
-    pendingHandle = null;
+    clearScrollRestoreWork();
+    if (pendingHandle !== null) {
+      window.clearTimeout(pendingHandle);
+      pendingHandle = null;
+    }
     pendingPath = null;
   };
 

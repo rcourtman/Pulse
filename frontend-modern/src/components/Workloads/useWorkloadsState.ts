@@ -5,6 +5,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useWorkloads } from '@/hooks/useWorkloads';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
@@ -12,6 +13,7 @@ import {
   getWorkloadsGuestsEmptyState,
   getWorkloadsInfrastructureEmptyState,
   getWorkloadsLoadingState,
+  getWorkloadsNoInventoryState,
 } from '@/utils/workloadEmptyStatePresentation';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import {
@@ -20,14 +22,15 @@ import {
   filterWorkloads,
   type FilterWorkloadsParams,
 } from './workloadSelectors';
-import {
-  type WorkloadsSortKey,
-} from './workloadsFilterModel';
+import { type WorkloadsSortKey } from './workloadsFilterModel';
 import { useWorkloadsControlsState } from './useWorkloadsControlsState';
 import { useWorkloadGuestMetadataState } from './useWorkloadGuestMetadataState';
 import { useWorkloadSelectionState } from './useWorkloadSelectionState';
 import { useWorkloadsDerivedState } from './useWorkloadsDerivedState';
 import { useWorkloadRouteState } from './useWorkloadRouteState';
+
+const WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY =
+  'type=agent,docker-host,k8s-cluster,k8s-node,pbs,pmg,storage,physical_disk,ceph';
 
 export interface WorkloadsSurfaceProps {
   vms: VM[];
@@ -51,6 +54,11 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
 
   const workloadsEnabled = createMemo(() => props.useWorkloads === true);
   const workloads = useWorkloads(workloadsEnabled);
+  const infrastructureSources = useUnifiedResources({
+    query: WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY,
+    cacheKey: 'workloads-infrastructure-sources',
+    enabled: workloadsEnabled,
+  });
 
   const dedupeGuests = (guests: WorkloadGuest[]): WorkloadGuest[] => {
     const seen = new Set<string>();
@@ -142,11 +150,24 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     viewMode,
   });
 
-  const workloadsInfrastructureEmptyState = createMemo(() => getWorkloadsInfrastructureEmptyState());
+  const workloadsInfrastructureEmptyState = createMemo(() =>
+    getWorkloadsInfrastructureEmptyState(),
+  );
   const workloadsGuestsEmptyState = createMemo(() => getWorkloadsGuestsEmptyState(search()));
   const workloadsLoadingState = createMemo(() => getWorkloadsLoadingState(reconnecting()));
-  const workloadsDisconnectedState = createMemo(() => getWorkloadsDisconnectedState(reconnecting()));
+  const workloadsNoInventoryState = createMemo(() => getWorkloadsNoInventoryState());
+  const workloadsDisconnectedState = createMemo(() =>
+    getWorkloadsDisconnectedState(reconnecting()),
+  );
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
+  const hasInfrastructureSources = createMemo(() =>
+    workloadsEnabled()
+      ? props.nodes.length > 0 || infrastructureSources.resources().length > 0
+      : props.nodes.length > 0,
+  );
+  const infrastructureSourceStateReady = createMemo(() =>
+    workloadsEnabled() ? hasInfrastructureSources() || !infrastructureSources.loading() : true,
+  );
   const surfaceConnected = createMemo(() =>
     workloadsEnabled()
       ? workloads.loading() || hasWorkloadsData() || !workloads.error()
@@ -154,7 +175,8 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   );
   const surfaceInitialDataReceived = createMemo(() =>
     workloadsEnabled()
-      ? hasWorkloadsData() || !workloads.loading() || Boolean(workloads.error())
+      ? hasWorkloadsData() ||
+        ((!workloads.loading() || Boolean(workloads.error())) && infrastructureSourceStateReady())
       : initialDataReceived(),
   );
 
@@ -298,9 +320,11 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     handleNodeSelect,
     handleSort,
     handleTagClick,
+    hasInfrastructureSources,
     hostFilterConfig,
     hoveredSummaryWorkloadGroupScope,
     hoveredWorkloadId,
+    infrastructureSourceStateReady,
     initialDataReceived,
     isMobile,
     isSearchLocked,
@@ -368,6 +392,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadsSummaryFallbackSnapshots,
     workloadsSummaryRange,
     workloadsSummaryVisibleIds,
+    workloadsNoInventoryState,
     ws,
     groupingMode,
   } as const;

@@ -19,6 +19,15 @@ export function getWorkloadsGuestsEmptyState(search: string) {
   } as const;
 }
 
+export function getWorkloadsNoInventoryState() {
+  return {
+    title: 'No workload inventory available',
+    description:
+      'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now. Review source credentials, permissions, and collection status in Settings → Infrastructure.',
+    actionLabel: 'Review infrastructure sources',
+  } as const;
+}
+
 export function getWorkloadsLoadingState(reconnecting: boolean) {
   return {
     title: 'Loading workloads...',

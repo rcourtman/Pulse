@@ -85,6 +85,17 @@ vi.mock('@/hooks/useWorkloads', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useUnifiedResources', () => ({
+  useUnifiedResources: () => ({
+    resources: () => [],
+    policyPosture: () => null,
+    refetch: vi.fn(),
+    mutate: vi.fn(),
+    loading: () => false,
+    error: () => null,
+  }),
+}));
+
 vi.mock('@/api/guestMetadata', () => ({
   GuestMetadataAPI: {
     getAllMetadata: vi.fn().mockResolvedValue({}),

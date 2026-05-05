@@ -14,11 +14,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
   const state = useWorkloadsState(props);
 
   return (
-    <div
-      ref={state.setClearSurfaceRootRef}
-      class="space-y-3"
-      data-testid="workloads-page"
-    >
+    <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
       <PageHeader
         title="Workloads"
         description="Inspect live workloads, filter by platform and status, and drill into compute, memory, and I/O posture."
@@ -61,11 +57,13 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
         workloadsGuestsEmptyState={state.workloadsGuestsEmptyState}
         workloadsInfrastructureEmptyState={state.workloadsInfrastructureEmptyState}
         workloadsLoadingState={state.workloadsLoadingState}
+        workloadsNoInventoryState={state.workloadsNoInventoryState}
         filteredGuests={state.filteredGuests}
+        hasInfrastructureSources={state.hasInfrastructureSources}
+        infrastructureSourceStateReady={state.infrastructureSourceStateReady}
         initialDataReceived={state.surfaceInitialDataReceived}
         kioskMode={state.kioskMode}
         navigate={state.navigate}
-        nodeCount={props.nodes.length}
         reconnect={state.reconnectSurface}
         workloads={state.workloads}
       />
@@ -93,7 +91,9 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
               setSortDirection={state.setSortDirection}
               onBeforeAutoFocus={state.handleBeforeAutoFocus}
               columnVisibility={state.workloadsFilterColumnVisibility()}
-              chartsCollapsed={state.isWorkloadsRoute() ? state.workloadsSummaryCollapsed : undefined}
+              chartsCollapsed={
+                state.isWorkloadsRoute() ? state.workloadsSummaryCollapsed : undefined
+              }
               onChartsToggle={
                 state.isWorkloadsRoute()
                   ? () => state.setWorkloadsSummaryCollapsed((collapsed) => !collapsed)

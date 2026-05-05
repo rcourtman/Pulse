@@ -1,6 +1,9 @@
 import { Show } from 'solid-js';
 
-import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
+import {
+  buildInfrastructureOnboardingPath,
+  buildInfrastructureWorkspacePath,
+} from '@/components/Settings/infrastructureWorkspaceModel';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 
@@ -14,15 +17,16 @@ type WorkloadsStateCardsProps = Pick<
   | 'workloadsGuestsEmptyState'
   | 'workloadsInfrastructureEmptyState'
   | 'workloadsLoadingState'
+  | 'workloadsNoInventoryState'
   | 'filteredGuests'
+  | 'hasInfrastructureSources'
+  | 'infrastructureSourceStateReady'
   | 'initialDataReceived'
   | 'kioskMode'
   | 'navigate'
   | 'reconnect'
   | 'workloads'
-> & {
-  nodeCount: number;
-};
+>;
 
 export function WorkloadsStateCards(props: WorkloadsStateCardsProps) {
   return (
@@ -62,7 +66,8 @@ export function WorkloadsStateCards(props: WorkloadsStateCardsProps) {
           props.connected() &&
           props.initialDataReceived() &&
           !props.workloads.loading() &&
-          props.nodeCount === 0 &&
+          props.infrastructureSourceStateReady() &&
+          !props.hasInfrastructureSources() &&
           props.allGuests().length === 0
         }
       >
@@ -93,6 +98,50 @@ export function WorkloadsStateCards(props: WorkloadsStateCardsProps) {
                   class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   {props.workloadsInfrastructureEmptyState().actionLabel}
+                </button>
+              ) : undefined
+            }
+          />
+        </Card>
+      </Show>
+
+      <Show
+        when={
+          props.connected() &&
+          props.initialDataReceived() &&
+          !props.workloads.loading() &&
+          props.infrastructureSourceStateReady() &&
+          props.hasInfrastructureSources() &&
+          props.allGuests().length === 0
+        }
+      >
+        <Card padding="lg">
+          <EmptyState
+            icon={
+              <svg
+                class="h-12 w-12 text-amber-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                />
+              </svg>
+            }
+            title={props.workloadsNoInventoryState().title}
+            description={props.workloadsNoInventoryState().description}
+            actions={
+              !props.kioskMode() ? (
+                <button
+                  type="button"
+                  onClick={() => props.navigate(buildInfrastructureWorkspacePath())}
+                  class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                >
+                  {props.workloadsNoInventoryState().actionLabel}
                 </button>
               ) : undefined
             }

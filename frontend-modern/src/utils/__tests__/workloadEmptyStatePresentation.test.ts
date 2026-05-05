@@ -6,6 +6,7 @@ import {
   getWorkloadsInfrastructureEmptyState,
   getWorkloadsLoadingState,
   getWorkloadsNoResourcesState,
+  getWorkloadsNoInventoryState,
   getWorkloadsUnavailableState,
 } from '@/utils/workloadEmptyStatePresentation';
 
@@ -78,6 +79,12 @@ describe('workloadEmptyStatePresentation', () => {
       title: 'Workloads unavailable',
       description: 'Real-time workload data is currently unavailable. Reconnect to try again.',
       actionLabel: 'Reconnect',
+    });
+    expect(getWorkloadsNoInventoryState()).toEqual({
+      title: 'No workload inventory available',
+      description:
+        'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now. Review source credentials, permissions, and collection status in Settings → Infrastructure.',
+      actionLabel: 'Review infrastructure sources',
     });
     expect(getWorkloadsNoResourcesState()).toEqual({
       title: 'Connect your first infrastructure source',

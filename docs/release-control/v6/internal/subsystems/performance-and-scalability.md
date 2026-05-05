@@ -627,7 +627,10 @@ context, but they must now also surface focused-entity detail inside the same
 card instead of dimming the rest of the map into unusable background noise or
 swapping the hot path into a transient single-series chart. Line-card
 isolation must still flow through the shared sparkline runtime instead of a
-page-local focus overlay.
+page-local focus overlay. The shared same-path scheduler must also own cleanup
+for every deferred scroll-restore timeout and animation frame it creates, so
+route-state cleanup cannot leave hot-path replay work running after the owning
+surface unmounts.
 That same hot-path rule now also covers infrastructure drawer hydration. Row
 focus may mount drawer-local facet and intelligence fetches, but those
 requests must retain the mounted page shell through the shared non-suspending
@@ -677,10 +680,15 @@ storage-page `/api/storage-charts` payload or an N+1 per-pool
 `/api/metrics-store/history` fan-out.
 That same Workloads shell boundary also owns empty-state action routing in
 `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`. When the
-Workloads route has no connected infrastructure, the CTA must hand operators
-directly to the canonical infrastructure install route via
-`buildInfrastructureWorkspacePath('install')` instead of bouncing through a
-generic settings landing page.
+Workloads route has no connected infrastructure sources, the CTA must hand
+operators directly to the canonical source picker through
+`buildInfrastructureOnboardingPath('pick')` instead of bouncing through a generic
+settings landing page. When canonical unified-resource source presence shows
+that infrastructure exists but no workload inventory is available, the route
+must not reuse the first-run no-source state; it must send operators to the
+canonical infrastructure workspace through `buildInfrastructureWorkspacePath()`
+so credential, permission, and collection status can be reviewed from the source
+of truth.
 That workload route now also treats readiness as a route-owned contract instead
 of a raw websocket proxy signal: `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 and `frontend-modern/src/components/Workloads/useWorkloadsState.ts` must keep

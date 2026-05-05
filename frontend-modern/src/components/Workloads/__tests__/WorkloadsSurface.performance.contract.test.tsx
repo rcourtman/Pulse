@@ -74,6 +74,8 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 
 let mockLocationSearch = '';
 let mockWorkloads: Array<Record<string, unknown>> = [];
+let mockInfrastructureResources: Resource[] = [];
+let mockUnifiedResourcesQuery = '';
 let setMockWorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;
 const workloadsRefetchMock = vi.fn();
 let guestRowMountCount = 0;
@@ -149,6 +151,21 @@ vi.mock('@/hooks/useWorkloads', () => ({
     return {
       workloads,
       refetch: (...args: unknown[]) => workloadsRefetchMock(...args),
+      mutate: vi.fn(),
+      loading: () => false,
+      error: () => null,
+    };
+  },
+}));
+
+vi.mock('@/hooks/useUnifiedResources', () => ({
+  useUnifiedResources: (options?: { query?: string }) => {
+    mockUnifiedResourcesQuery = options?.query ?? '';
+    const [resources] = createSignal(mockInfrastructureResources);
+    return {
+      resources,
+      policyPosture: () => null,
+      refetch: vi.fn(),
       mutate: vi.fn(),
       loading: () => false,
       error: () => null,
@@ -322,6 +339,8 @@ describe('Workloads performance contract', () => {
     localStorage.clear();
     mockLocationSearch = '';
     mockWorkloads = [];
+    mockInfrastructureResources = [];
+    mockUnifiedResourcesQuery = '';
     setMockWorkloadsSignal = null;
     setWsConnectedSignal = null;
     workloadsRefetchMock.mockReset();
@@ -385,6 +404,28 @@ describe('Workloads performance contract', () => {
 
       expect(document.body).not.toHaveTextContent('Connection lost');
       expect(document.body).not.toHaveTextContent('Attempting to reconnect…');
+    });
+
+    it('does not label an empty workload resource list as missing infrastructure when sources exist', async () => {
+      mockLocationSearch = '?type=all';
+      mockWorkloads = [];
+      mockInfrastructureResources = [
+        makeResource({
+          id: 'agent:pve-hrc-dev-proxmox1',
+          type: 'agent',
+          name: 'hrc-dev-proxmox1',
+          sourceType: 'api',
+          status: 'offline',
+        }),
+      ];
+
+      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+
+      await waitFor(() => {
+        expect(document.body).toHaveTextContent('No workload inventory available');
+      });
+      expect(document.body).not.toHaveTextContent('No infrastructure sources connected');
+      expect(mockUnifiedResourcesQuery).toContain('type=agent');
     });
 
     it('keeps governed resource search aligned with the preferred display label', () => {
