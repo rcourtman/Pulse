@@ -197,6 +197,10 @@ server-side update execution surfaces.
    introduced release risk separately from the packet-refresh commit itself,
    but it must make that distinction explicit in the release notes and audit
    record before dispatch.
+   For the `rc.4` release packet, that distinction is explicit: the
+   code-backed validation-risk range ends at the config watcher lifecycle fix,
+   while a later packet-only refresh may be the branch head used for the final
+   release workflow dispatch.
    The prerelease feedback intake template and active demo/update metadata must
    also stay on generic or current-RC wording instead of hard-coding stale
    `rc.1` examples once later candidates exist.

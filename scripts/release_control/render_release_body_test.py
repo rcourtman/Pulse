@@ -146,8 +146,8 @@ Old metadata section.
             repo_root / "docs/releases/V6_RC4_OPERATOR_SUPPORT_PACK_DRAFT.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9", release_notes)
-        self.assertIn("commit count: `54`", changelog)
+        self.assertIn("7cebe788590d0485f65bf4e04830356204657e86", release_notes)
+        self.assertIn("commit count: `57`", changelog)
         self.assertIn("stable identity principals", support_pack)
         self.assertIn("API-first action planning", changelog)
         self.assertIn("monitored-system and child-resource volume unmetered", release_notes)
@@ -157,6 +157,8 @@ Old metadata section.
         self.assertIn("release-validation\ncommits", changelog)
         self.assertIn("Tenant monitor state broadcasts", release_notes)
         self.assertIn("tenant\nmonitor broadcast guard", changelog)
+        self.assertIn("live auth-env watcher teardown", release_notes)
+        self.assertIn("join live config watcher goroutines", changelog)
 
 
 if __name__ == "__main__":

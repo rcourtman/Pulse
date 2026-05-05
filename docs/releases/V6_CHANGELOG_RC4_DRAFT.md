@@ -22,13 +22,13 @@ match the current governed v6 architecture before wider RC retesting.
 ## Commit Coverage Audit
 
 The changelog was audited against every feature/runtime commit in the exact
-release range for the current candidate head:
+code-backed release-validation range for the current candidate:
 
 - `v6.0.0-rc.3`: `f1744d36d0bde3c8735ae75a190af45c35087841`
-- validation commit: `1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`
-- range: `v6.0.0-rc.3..1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`
-- commit count: `54`
-- changed scope: `343` files, `16760` insertions, `11434` deletions
+- validation-risk commit: `7cebe788590d0485f65bf4e04830356204657e86`
+- range: `v6.0.0-rc.3..7cebe788590d0485f65bf4e04830356204657e86`
+- commit count: `57`
+- changed scope: `345` files, `16846` insertions, `11438` deletions
 
 Those commits are grouped in this changelog rather than listed one by one. The
 range includes identity hardening, hosted signup and checkout principal
@@ -39,7 +39,8 @@ handling, Patrol mobile controls, mock-mode cleanup, and release-control
 evidence. The final validation range also includes packet and release-validation
 commits that pin Docker install defaults to `6.0.0-rc.4`, remove stale
 migration-test expectations for retired monitored-system caps, and add a tenant
-monitor broadcast guard for runtimes without a WebSocket hub.
+monitor broadcast guard for runtimes without a WebSocket hub, stabilize
+TrueNAS ingest proof, and join live config watcher goroutines during stop.
 
 ## Major Changes
 
@@ -55,6 +56,8 @@ runtime paths:
   are blocked
 - API token minting records owner metadata and binds tokens to stable owner
   identity
+- live auth-env watcher shutdown waits for its background reload goroutine, so
+  teardown cannot race the watched auth/mock-env state it just reloaded
 - organization runtime access and workspace-owner proof use stable user IDs
 - Stripe webhook fixtures and strict organization identity invariants now
   match the stable-principal model

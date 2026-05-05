@@ -18,11 +18,15 @@ packet audit was based on the published GitHub prerelease tag target.
 
 - From tag: `v6.0.0-rc.3`
 - From commit: `f1744d36d0bde3c8735ae75a190af45c35087841`
-- To validation commit: `1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`
-- Git range: `v6.0.0-rc.3..1a3e5ec27d7d1c59f8b19e4a48c4ce83cac31bb9`
-- Commit count: `54`
+- To validation-risk commit: `7cebe788590d0485f65bf4e04830356204657e86`
+- Git range: `v6.0.0-rc.3..7cebe788590d0485f65bf4e04830356204657e86`
+- Commit count: `57`
 - Date span in the range: `2026-05-03` through `2026-05-05`
-- Changed scope: `343` files, `16760` insertions, `11434` deletions
+- Changed scope: `345` files, `16846` insertions, `11438` deletions
+
+The final tag may point at a later metadata-only refresh commit. That refresh is
+not counted as a new validation-risk commit when it only updates this packet to
+name the last code-backed validation fix.
 
 ## Review Method
 
@@ -43,7 +47,8 @@ Commands used for the coverage pass:
 
 ## Commit Coverage Summary
 
-The 54 commits were covered by these release-note buckets:
+The 57 code-backed validation commits were covered by these release-note
+buckets:
 
 - hosted tenant identity keys, hosted signup owner IDs, hosted handoff
   identity, SSO stable principals, checkout magic-link principals, blank
@@ -64,11 +69,12 @@ The 54 commits were covered by these release-note buckets:
   rollup write amplification
 - Workloads empty-state source detection, Patrol mobile header controls, public
   demo admin read hiding, mock-mode legacy sidecar cleanup, mobile Relay docs
-  label cleanup, release key helper module path, and Agent Security docs
-  currentness
+  label cleanup, release key helper module path, live auth-env watcher teardown,
+  and Agent Security docs currentness
 - RC4 packet preparation, RC4 Docker default correction, release-validation
   test alignment for retired monitored-system caps, and tenant monitor
-  WebSocket-hub nil handling
+  WebSocket-hub nil handling, TrueNAS ingest proof stabilization, and config
+  watcher stop lifecycle synchronization
 
 ## Packet Updates
 
