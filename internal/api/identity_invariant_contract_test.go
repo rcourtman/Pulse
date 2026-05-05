@@ -18,22 +18,26 @@ func readIdentityContractFile(t *testing.T, rel string) string {
 
 func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 	files := map[string]string{
-		"magic_link_handlers.go":           readIdentityContractFile(t, "magic_link_handlers.go"),
-		"cloud_handoff.go":                 readIdentityContractFile(t, "cloud_handoff.go"),
-		"cloud_handoff_handlers.go":        readIdentityContractFile(t, "cloud_handoff_handlers.go"),
-		"oidc_handlers.go":                 readIdentityContractFile(t, "oidc_handlers.go"),
-		"payments_webhook_handlers.go":     readIdentityContractFile(t, "payments_webhook_handlers.go"),
-		"saml_handlers.go":                 readIdentityContractFile(t, "saml_handlers.go"),
-		"auth_principal_identity.go":       readIdentityContractFile(t, "auth_principal_identity.go"),
-		"security_tokens.go":               readIdentityContractFile(t, "security_tokens.go"),
-		"agent_install_command_shared.go":  readIdentityContractFile(t, "agent_install_command_shared.go"),
-		"deploy_handlers.go":               readIdentityContractFile(t, "deploy_handlers.go"),
-		"router.go":                        readIdentityContractFile(t, "router.go"),
-		"security_setup_fix.go":            readIdentityContractFile(t, "security_setup_fix.go"),
-		"public_signup_handlers.go":        readIdentityContractFile(t, "public_signup_handlers.go"),
-		"../cloudcp/stripe/provisioner.go": readIdentityContractFile(t, "../cloudcp/stripe/provisioner.go"),
-		"../hosted/provisioner.go":         readIdentityContractFile(t, "../hosted/provisioner.go"),
-		"../models/organization.go":        readIdentityContractFile(t, "../models/organization.go"),
+		"magic_link_handlers.go":                     readIdentityContractFile(t, "magic_link_handlers.go"),
+		"cloud_handoff.go":                           readIdentityContractFile(t, "cloud_handoff.go"),
+		"cloud_handoff_handlers.go":                  readIdentityContractFile(t, "cloud_handoff_handlers.go"),
+		"oidc_handlers.go":                           readIdentityContractFile(t, "oidc_handlers.go"),
+		"authorization.go":                           readIdentityContractFile(t, "authorization.go"),
+		"cloud_org_admin_auth.go":                    readIdentityContractFile(t, "cloud_org_admin_auth.go"),
+		"payments_webhook_handlers.go":               readIdentityContractFile(t, "payments_webhook_handlers.go"),
+		"saml_handlers.go":                           readIdentityContractFile(t, "saml_handlers.go"),
+		"auth_principal_identity.go":                 readIdentityContractFile(t, "auth_principal_identity.go"),
+		"security_tokens.go":                         readIdentityContractFile(t, "security_tokens.go"),
+		"org_handlers.go":                            readIdentityContractFile(t, "org_handlers.go"),
+		"agent_install_command_shared.go":            readIdentityContractFile(t, "agent_install_command_shared.go"),
+		"deploy_handlers.go":                         readIdentityContractFile(t, "deploy_handlers.go"),
+		"router.go":                                  readIdentityContractFile(t, "router.go"),
+		"security_setup_fix.go":                      readIdentityContractFile(t, "security_setup_fix.go"),
+		"public_signup_handlers.go":                  readIdentityContractFile(t, "public_signup_handlers.go"),
+		"../cloudcp/account/tenant_handlers_test.go": readIdentityContractFile(t, "../cloudcp/account/tenant_handlers_test.go"),
+		"../cloudcp/stripe/provisioner.go":           readIdentityContractFile(t, "../cloudcp/stripe/provisioner.go"),
+		"../hosted/provisioner.go":                   readIdentityContractFile(t, "../hosted/provisioner.go"),
+		"../models/organization.go":                  readIdentityContractFile(t, "../models/organization.go"),
 		"../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md": readIdentityContractFile(t, "../../docs/release-control/v6/internal/IDENTITY_INVARIANTS.md"),
 	}
 
@@ -69,6 +73,18 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"ssoLegacyPrincipalCandidates",
 			"applySSORoleAssignments",
 		},
+		"authorization.go": {
+			"org.CanUserIDAccess(userID)",
+		},
+		"cloud_org_admin_auth.go": {
+			"org.IsOwnerUserID(userID)",
+		},
+		"org_handlers.go": {
+			"org.CanUserIDAccess(username)",
+			"org.CanUserIDManage(username)",
+			"org.IsOwnerUserID(username)",
+			"org.GetMemberRoleByUserID(username)",
+		},
 		"security_tokens.go": {
 			"mergeAPITokenMetadata",
 			"setAPITokenOwnerUserID",
@@ -89,6 +105,7 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))",
 		},
 		"security_setup_fix.go": {
+			"org.CanUserIDManage(sessionUser)",
 			"setAPITokenOwnerUserID(tokenRecord, setupRequest.Username)",
 			"setAPITokenOwnerUserID(tokenRecord, apiTokenOwnerUserIDForRequest(r.config, rq))",
 		},
@@ -102,6 +119,13 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"org.OwnerEmail = ownerEmail",
 			"UserID:  seed.userID",
 			"Email:   seed.email",
+		},
+		"../cloudcp/account/tenant_handlers_test.go": {
+			"TestCreateWorkspace_SeedsStableOwnerFromAuthenticatedUserEmail",
+			"reg.GetUserByEmail(\"operator@example.com\")",
+			"org.OwnerUserID != operatorUser.ID",
+			"org.GetMemberRoleByUserID(operatorUser.ID)",
+			"org.GetMemberRoleByUserID(\"operator@example.com\")",
 		},
 		"../hosted/provisioner.go": {
 			"newUserID:    registry.GenerateUserID",
@@ -151,6 +175,18 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"establishOIDCSession(w, req, username, oidcTokens)",
 			"UpdateUserRoles(username, rolesToAssign)",
 		},
+		"authorization.go": {
+			"org.CanUserAccess(userID)",
+		},
+		"cloud_org_admin_auth.go": {
+			"strings.EqualFold(strings.TrimSpace(org.OwnerUserID), strings.TrimSpace(userID))",
+		},
+		"org_handlers.go": {
+			"org.CanUserAccess(username)",
+			"org.CanUserManage(username)",
+			"org.IsOwner(username)",
+			"org.GetMemberRole(username)",
+		},
 		"saml_handlers.go": {
 			"establishSAMLSession(w, req, username, samlSession)",
 			"UpdateUserRoles(result.Username, rolesToAssign)",
@@ -163,6 +199,11 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"org.OwnerUserID = ownerEmail",
 			"UserID:  seed.email",
 			"memberSeeds[ownerEmail]",
+		},
+		"../cloudcp/account/tenant_handlers_test.go": {
+			"TestCreateWorkspace_SeedsOwnerFromAuthenticatedUserEmail",
+			"org.OwnerUserID != \"operator@example.com\"",
+			"org.GetMemberRole(\"operator@example.com\")",
 		},
 		"public_signup_handlers.go": {
 			"GenerateToken(userID, orgID)",
