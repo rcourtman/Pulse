@@ -518,6 +518,75 @@ func TestHandleExecuteActionWithoutExecutorLeavesApprovedAuditUnchanged(t *testi
 	}
 }
 
+func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
+	h.SetActionExecutor(executor)
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	record := unified.ActionAuditRecord{
+		ID:        "act_dry_run_only",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now,
+		State:     unified.ActionStatePlanned,
+		Request: unified.ActionRequest{
+			RequestID:      "req-dry-run-only",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "Validate restart path without execution",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:        "act_dry_run_only",
+			RequestID:       "req-dry-run-only",
+			Allowed:         true,
+			ApprovalPolicy:  unified.ApprovalDryRun,
+			PlannedAt:       now.Add(-time.Minute),
+			ExpiresAt:       now.Add(5 * time.Minute),
+			ResourceVersion: "resource:sha256:test",
+			PolicyVersion:   "policy:sha256:test",
+			PlanHash:        "sha256:test",
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	executeRec := httptest.NewRecorder()
+	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/act_dry_run_only/execute", bytes.NewBufferString(`{}`))
+	executeReq.SetPathValue("id", "act_dry_run_only")
+	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
+	h.HandleExecuteAction(executeRec, executeReq)
+	if executeRec.Code != http.StatusConflict {
+		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
+	}
+	if !strings.Contains(executeRec.Body.String(), `"code":"action_dry_run_only"`) {
+		t.Fatalf("execute body = %s", executeRec.Body.String())
+	}
+	if executor.calls != 0 {
+		t.Fatalf("dry-run-only plan should not call executor, calls=%d received=%#v", executor.calls, executor.received)
+	}
+
+	got, ok, err := store.GetActionAudit("act_dry_run_only")
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || got.State != unified.ActionStatePlanned || got.Result != nil {
+		t.Fatalf("dry-run-only audit changed = %#v, ok=%v", got, ok)
+	}
+	events, err := store.GetActionLifecycleEvents("act_dry_run_only", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("dry-run-only execution must not append lifecycle events: %#v", events)
+	}
+}
+
 func TestPersistActionPlanAuditFillsMissingLifecycleState(t *testing.T) {
 	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
 	store := unified.NewMemoryStore()

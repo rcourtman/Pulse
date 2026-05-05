@@ -426,6 +426,8 @@ func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
 		writeErrorResponse(w, http.StatusConflict, "action_not_executing", "Action is not executing", nil)
 	case errors.Is(err, unified.ErrActionPlanExpired):
 		writeErrorResponse(w, http.StatusConflict, "action_plan_expired", "Action plan has expired", nil)
+	case errors.Is(err, unified.ErrActionDryRunOnly):
+		writeErrorResponse(w, http.StatusConflict, "action_dry_run_only", "Action plan is dry-run only and cannot be executed", nil)
 	default:
 		writeErrorResponse(w, http.StatusInternalServerError, "action_execution_failed", sanitizeErrorForClient(err, "Action execution failed"), nil)
 	}
@@ -437,7 +439,8 @@ func writeActionExecutionPersistError(w http.ResponseWriter, err error) {
 		errors.Is(err, unified.ErrActionAlreadyExecuting),
 		errors.Is(err, unified.ErrActionExecutionFinal),
 		errors.Is(err, unified.ErrActionNotExecuting),
-		errors.Is(err, unified.ErrActionPlanExpired):
+		errors.Is(err, unified.ErrActionPlanExpired),
+		errors.Is(err, unified.ErrActionDryRunOnly):
 		writeActionExecutionApplyError(w, err)
 	default:
 		writeErrorResponse(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(err, "Failed to persist action execution"), nil)

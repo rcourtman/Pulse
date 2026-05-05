@@ -137,7 +137,9 @@ implicit command execution or define a parallel execution handoff. When a
 planned resource capability is actually executed from an agent-lifecycle
 surface, that handoff must route through `POST /api/actions/{id}/execute` so
 the API-owned action audit records `executing` before dispatch and the
-terminal execution result afterward.
+terminal execution result afterward. Dry-run-only plans remain planning evidence
+only; lifecycle surfaces must not present them as executable, dispatch them
+through agent-local command paths, or bypass the API fail-closed execution gate.
 
 The node setup modal boundary must keep guided setup and manual credential
 submission separate. For new PVE/PBS setup, Agent Install and Direct Connection

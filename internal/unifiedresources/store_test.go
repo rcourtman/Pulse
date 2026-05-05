@@ -1520,6 +1520,67 @@ func TestRecordActionExecutionStartAndResult_UpdatesAuditAndAppendsLifecycle(t *
 	}
 }
 
+func TestRecordActionExecutionStartRejectsDryRunOnlyPlan(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 5, 4, 15, 0, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "act_dry_run_only",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-time.Minute),
+		State:     ActionStatePlanned,
+		Request: ActionRequest{
+			RequestID:      "req-dry-run",
+			ResourceID:     "vm:404",
+			CapabilityName: "restart",
+			Reason:         "dry-run validation",
+			RequestedBy:    "agent:test",
+		},
+		Plan: ActionPlan{
+			ActionID:        "act_dry_run_only",
+			RequestID:       "req-dry-run",
+			Allowed:         true,
+			ApprovalPolicy:  ApprovalDryRun,
+			PlannedAt:       now.Add(-time.Minute),
+			ExpiresAt:       now.Add(5 * time.Minute),
+			ResourceVersion: "resource:sha256:test",
+			PolicyVersion:   "policy:sha256:test",
+			PlanHash:        "sha256:test",
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	forcedExecuting := record
+	forcedExecuting.State = ActionStateExecuting
+	forcedExecuting.UpdatedAt = now
+	err := store.RecordActionExecutionStart(forcedExecuting, ActionLifecycleEvent{
+		ActionID:  record.ID,
+		Timestamp: now,
+		State:     ActionStateExecuting,
+		Actor:     "agent:test",
+		Message:   "should not execute",
+	})
+	if !errors.Is(err, ErrActionDryRunOnly) {
+		t.Fatalf("RecordActionExecutionStart error = %v, want %v", err, ErrActionDryRunOnly)
+	}
+
+	got, ok, err := store.GetActionAudit(record.ID)
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || got.State != ActionStatePlanned || got.Result != nil {
+		t.Fatalf("dry-run-only audit changed = %#v, ok=%v", got, ok)
+	}
+	events, err := store.GetActionLifecycleEvents(record.ID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("dry-run-only execution should not append events: %#v", events)
+	}
+}
+
 func TestRecordActionAudit_NormalizesGovernedPlan(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 4, 25, 22, 40, 0, 0, time.UTC)

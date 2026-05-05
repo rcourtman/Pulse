@@ -309,11 +309,13 @@ the canonical monitored-system blocked payload.
    requires a later explicit execution contract.
    Action execution is API-owned as the next explicit contract:
    `POST /api/actions/{id}/execute` may only start execution for an approved
-   action or an approval-free allowed plan, must atomically persist the
+   action or an approval-free executable plan, must atomically persist the
    `executing` lifecycle state before invoking a registered executor, and must
    atomically persist the terminal `completed` or `failed` result afterward.
-   If no API executor is registered, the endpoint must fail closed without
-   mutating the approved audit record or appending execution lifecycle events.
+   Dry-run-only plans are not executable plans and must fail closed before any
+   `executing` mutation. If no API executor is registered, the endpoint must
+   fail closed without mutating the approved audit record or appending execution
+   lifecycle events.
    Approval must never imply execution, and local UI, CLI, MCP, agent, or
    storage/recovery adapters must not bypass this endpoint with a parallel
    execution transport.

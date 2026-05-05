@@ -133,6 +133,7 @@ var (
 	ErrActionAlreadyExecuting = errors.New("action is already executing")
 	ErrActionExecutionFinal   = errors.New("action execution is already final")
 	ErrActionPlanExpired      = errors.New("action plan expired")
+	ErrActionDryRunOnly       = errors.New("action plan is dry-run only")
 	ErrInvalidApprovalOutcome = errors.New("invalid approval outcome")
 )
 
@@ -296,6 +297,9 @@ func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error
 	}
 	if !record.Plan.ExpiresAt.IsZero() && !now.Before(record.Plan.ExpiresAt) {
 		return ErrActionPlanExpired
+	}
+	if record.Plan.ApprovalPolicy == ApprovalDryRun {
+		return ErrActionDryRunOnly
 	}
 	switch record.State {
 	case ActionStateApproved:

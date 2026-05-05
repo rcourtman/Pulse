@@ -12019,6 +12019,109 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+
+	record := unifiedresources.ActionAuditRecord{
+		ID:        "act_dry_run_contract",
+		CreatedAt: now.Add(-time.Minute),
+		UpdatedAt: now.Add(-time.Minute),
+		State:     unifiedresources.ActionStatePlanned,
+		Request: unifiedresources.ActionRequest{
+			RequestID:      "agent-run-dry-run",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         "Inspect possible restart remediation",
+			RequestedBy:    "agent:oncall-helper",
+		},
+		Plan: unifiedresources.ActionPlan{
+			ActionID:          "act_dry_run_contract",
+			RequestID:         "agent-run-dry-run",
+			Allowed:           true,
+			RequiresApproval:  false,
+			ApprovalPolicy:    unifiedresources.ApprovalDryRun,
+			RollbackAvailable: false,
+			PlannedAt:         now.Add(-time.Minute),
+			ExpiresAt:         now.Add(4 * time.Minute),
+			ResourceVersion:   "resource:sha256:dry-run-contract",
+			PolicyVersion:     "policy:sha256:dry-run-contract",
+			PlanHash:          "sha256:dry-run-contract",
+			Preflight: &unifiedresources.ActionPreflight{
+				Target:          "vm:42",
+				CurrentState:    "web-42 is warning",
+				IntendedChange:  "Dry-run only restart inspection",
+				DryRunAvailable: true,
+				DryRunSummary:   "Provider advertised dry-run only; no execution is allowed.",
+				SafetyChecks: []string{
+					"Dry-run-only plans are not executable.",
+				},
+				VerificationSteps: []string{
+					"Review /api/audit/actions/act_dry_run_contract/events for lifecycle evidence.",
+				},
+				GeneratedAt: now.Add(-time.Minute),
+			},
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("record action audit: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/act_dry_run_contract/execute", bytes.NewBufferString(`{}`))
+	req.SetPathValue("id", "act_dry_run_contract")
+	rec := httptest.NewRecorder()
+	h.HandleExecuteAction(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	var apiErr APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &apiErr); err != nil {
+		t.Fatalf("decode dry-run execution error: %v", err)
+	}
+	payload := struct {
+		Status int `json:"status"`
+		Error  struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}{Status: rec.Code}
+	payload.Error.Code = apiErr.Code
+	payload.Error.Message = apiErr.ErrorMessage
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal dry-run execution error contract: %v", err)
+	}
+	const want = `{
+		"status":409,
+		"error":{
+			"code":"action_dry_run_only",
+			"message":"Action plan is dry-run only and cannot be executed"
+		}
+	}`
+	assertJSONSnapshot(t, got, want)
+
+	gotAudit, ok, err := store.GetActionAudit("act_dry_run_contract")
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok || gotAudit.State != unifiedresources.ActionStatePlanned || gotAudit.Result != nil {
+		t.Fatalf("dry-run audit mutated: ok=%v state=%q result=%#v", ok, gotAudit.State, gotAudit.Result)
+	}
+	events, err := store.GetActionLifecycleEvents("act_dry_run_contract", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("dry-run execution should not append lifecycle events, got %d", len(events))
+	}
+}
+
 func TestContract_ResourceTimelineEndpointsIncludeRelatedChanges(t *testing.T) {
 	now := time.Date(2026, 4, 25, 22, 15, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})

@@ -263,6 +263,13 @@ func TestBeginActionExecutionRejectsUnsafeStates(t *testing.T) {
 	if _, _, err := BeginActionExecution(expired, "operator@example.com", now); !errors.Is(err, ErrActionPlanExpired) {
 		t.Fatalf("expired error = %v, want %v", err, ErrActionPlanExpired)
 	}
+	dryRunOnly := base
+	dryRunOnly.State = ActionStatePlanned
+	dryRunOnly.Plan.RequiresApproval = false
+	dryRunOnly.Plan.ApprovalPolicy = ApprovalDryRun
+	if _, _, err := BeginActionExecution(dryRunOnly, "operator@example.com", now); !errors.Is(err, ErrActionDryRunOnly) {
+		t.Fatalf("dry-run-only error = %v, want %v", err, ErrActionDryRunOnly)
+	}
 }
 
 func TestCompleteActionExecutionRecordsResult(t *testing.T) {

@@ -478,7 +478,9 @@ the current audit record and append the lifecycle event atomically without
 creating execution results or accepting stale second decisions.
 Action execution now follows that same resource-owned state machine:
 `BeginActionExecution` may transition only an approved action, or an
-approval-free allowed plan, into `executing`; `CompleteActionExecution` may
+approval-free allowed plan that is not `ApprovalDryRun`, into `executing`;
+dry-run-only plans may remain audited planning evidence, but must fail closed
+before any `executing` lifecycle mutation. `CompleteActionExecution` may
 transition only an executing record into `completed` or `failed` with an
 explicit `ExecutionResult`. `RecordActionExecutionStart` and
 `RecordActionExecutionResult` must perform the audit update and lifecycle

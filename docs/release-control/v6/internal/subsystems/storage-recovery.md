@@ -112,7 +112,10 @@ without executing the underlying capability. Any storage/recovery execution
 handoff for the approved action must route through
 `POST /api/actions/{id}/execute` so the API-owned action audit records
 `executing` before dispatch and the terminal result afterward instead of
-creating storage-local action transport.
+creating storage-local action transport. Dry-run-only plans remain planning
+evidence only; storage and recovery surfaces must not present them as
+executable, dispatch them through provider-local restore/remediation paths, or
+bypass the API fail-closed execution gate.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`

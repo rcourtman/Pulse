@@ -155,6 +155,12 @@ Returns the deterministic pre-execution plan for a capability advertised on a un
 
 This endpoint is API-first and plan-only: it resolves the resource from the unified registry, verifies the requested capability and parameter schema, returns approval policy, blast radius, stale-plan hashes, and preflight checks, and does not approve or execute anything.
 
+`POST /api/actions/{id}/decision`
+Records an explicit `approved` or `rejected` decision for a persisted `pending_approval` action. It does not execute the action.
+
+`POST /api/actions/{id}/execute`
+Starts execution only for an approved action or an approval-free executable plan, records `executing` before dispatch, and records the terminal result afterward. Dry-run-only plans are rejected and cannot be executed through this endpoint.
+
 CLI adapter:
 ```bash
 PULSE_API_TOKEN=your-token pulse actions capabilities \
@@ -169,6 +175,17 @@ PULSE_API_TOKEN=your-token pulse actions plan \
   --param mode=graceful \
   --reason "Recover after confirmed outage" \
   --requested-by agent:oncall-helper
+
+PULSE_API_TOKEN=your-token pulse actions decide \
+  --api-url http://localhost:7655 \
+  --action-id act_... \
+  --outcome approved \
+  --reason "Inside maintenance window"
+
+PULSE_API_TOKEN=your-token pulse actions execute \
+  --api-url http://localhost:7655 \
+  --action-id act_... \
+  --reason "Execute approved recovery"
 
 PULSE_API_TOKEN=your-token pulse actions audit \
   --api-url http://localhost:7655 \

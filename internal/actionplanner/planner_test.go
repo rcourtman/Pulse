@@ -2,6 +2,7 @@ package actionplanner
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,6 +95,48 @@ func TestPlannerBuildsDeterministicGovernedPlan(t *testing.T) {
 	}
 	if plan.Preflight.DryRunAvailable {
 		t.Fatalf("DryRunAvailable = true, want false without provider dry-run contract")
+	}
+}
+
+func TestPlannerBuildsDryRunOnlyPlanWithoutExecutionApproval(t *testing.T) {
+	now := time.Date(2026, 5, 5, 9, 0, 0, 0, time.UTC)
+	resource := unified.Resource{
+		ID:     "vm:42",
+		Type:   unified.ResourceTypeVM,
+		Name:   "web-42",
+		Status: unified.StatusOnline,
+		Capabilities: []unified.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unified.CapabilityTypeCommon,
+				Description:          "Restart the VM",
+				MinimumApprovalLevel: unified.ApprovalDryRun,
+			},
+		},
+	}
+	req := unified.ActionRequest{
+		RequestID:      "agent-run-dry-run",
+		ResourceID:     "vm:42",
+		CapabilityName: "restart",
+		Reason:         "Validate restart path without execution",
+		RequestedBy:    "agent:oncall-helper",
+	}
+
+	plan, err := (Planner{Now: func() time.Time { return now }}).Plan(req, resource)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if plan.ApprovalPolicy != unified.ApprovalDryRun {
+		t.Fatalf("ApprovalPolicy = %q, want %q", plan.ApprovalPolicy, unified.ApprovalDryRun)
+	}
+	if plan.RequiresApproval {
+		t.Fatalf("RequiresApproval = true, want false because dry-run-only plans cannot be executed")
+	}
+	if plan.Preflight == nil || !strings.Contains(strings.Join(plan.Preflight.SafetyChecks, " "), "dry-run-only") {
+		t.Fatalf("dry-run-only safety checks missing: %#v", plan.Preflight)
+	}
+	if !strings.Contains(plan.Message, "dry-run only") {
+		t.Fatalf("plan message = %q", plan.Message)
 	}
 }
 
