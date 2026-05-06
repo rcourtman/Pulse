@@ -97,6 +97,11 @@ type BusinessHooks struct {
 	// CreateAlertAnalyzer creates the premium alert-triggered analyzer.
 	// Returns nil in OSS. Enterprise provides a concrete implementation.
 	CreateAlertAnalyzer func(deps aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer
+
+	// ResolveMonitoredSystemAdmissionPolicy lets commercial runtimes own
+	// monitored-system admission policy while the public server owns inventory
+	// projection and the shared API contract.
+	ResolveMonitoredSystemAdmissionPolicy func(context.Context, extensions.MonitoredSystemAdmissionInput) extensions.MonitoredSystemAdmissionDecision
 }
 
 var (
@@ -122,7 +127,8 @@ func runtimeIdentityForBusinessHooks(h BusinessHooks) pkglicensing.RuntimeIdenti
 		h.CreateRemediationEngine != nil ||
 		h.CreateInvestigationStore != nil ||
 		h.CreateInvestigationOrchestrator != nil ||
-		h.CreateAlertAnalyzer != nil {
+		h.CreateAlertAnalyzer != nil ||
+		h.ResolveMonitoredSystemAdmissionPolicy != nil {
 		return pkglicensing.ProRuntimeIdentity()
 	}
 	return pkglicensing.CommunityRuntimeIdentity()

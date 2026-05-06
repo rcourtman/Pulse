@@ -55,6 +55,15 @@ func TestRuntimeIdentityForBusinessHooks(t *testing.T) {
 	if got.Build != pkglicensing.RuntimeBuildPro {
 		t.Fatalf("enterprise hooks runtime build=%q, want pro", got.Build)
 	}
+
+	got = runtimeIdentityForBusinessHooks(BusinessHooks{
+		ResolveMonitoredSystemAdmissionPolicy: func(context.Context, extensions.MonitoredSystemAdmissionInput) extensions.MonitoredSystemAdmissionDecision {
+			return extensions.MonitoredSystemAdmissionDecision{}
+		},
+	})
+	if got.Build != pkglicensing.RuntimeBuildPro {
+		t.Fatalf("commercial admission hook runtime build=%q, want pro", got.Build)
+	}
 }
 
 func TestPerformAutoImport_Success(t *testing.T) {
