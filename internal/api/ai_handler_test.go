@@ -739,6 +739,7 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.Contains(t, reqArg.HandoffContext, "Latest Lifecycle Event: 2026-05-06T12:03:00Z | investigation_completed | Fix queued for approval | investigating -> fix_queued")
 			assert.Contains(t, reqArg.HandoffContext, "Current Conclusion: Backup job saturated CPU.")
 			assert.Contains(t, reqArg.HandoffContext, "Recommended Next Step: Approve a controlled service restart after backup completion.")
+			assert.Contains(t, reqArg.HandoffContext, "Operator Decision: review governed approval approval-123 before execution; proposed fix fix-123; risk medium; destructive true")
 			assert.Contains(t, reqArg.HandoffContext, "Action Posture: approval approval-123; proposed fix fix-123; risk medium; destructive true; remediation remediation-123")
 			assert.Contains(t, reqArg.HandoffContext, "Operator Boundary: Treat Patrol data as product context for explanation and review")
 			assert.Contains(t, reqArg.HandoffContext, "[Finding Context]")

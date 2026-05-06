@@ -132,9 +132,9 @@ Patrol-specific presentation helpers.
    briefing derived from the unified finding and structured investigation record
    before the detailed finding context, so Assistant leads with the current risk,
    recency, evidence snapshot, verification summary, conclusion, latest
-   lifecycle event, recommended next step, and governed approval/proposed-fix
-   posture instead of behaving like a generic chat over a pasted incident dump.
-   The assembled handoff must still pass
+   lifecycle event, recommended next step, explicit operator decision framing,
+   and governed approval/proposed-fix posture instead of behaving like a generic
+   chat over a pasted incident dump. The assembled handoff must still pass
    through the Assistant runtime's
    resource-policy sanitizer before prompt injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or

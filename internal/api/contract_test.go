@@ -179,6 +179,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		`appendChatContextLine(b, "Verification", verification)`,
 		"formatInvestigationRecordEvidenceBriefing",
 		"formatBriefingStringList",
+		`appendChatContextLine(b, "Operator Decision", decision)`,
+		"unifiedFindingBriefingOperatorDecision(f)",
 		"Latest Lifecycle Event",
 		"Operator Boundary",
 		`return "suppressed"`,

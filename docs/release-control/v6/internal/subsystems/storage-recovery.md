@@ -428,14 +428,14 @@ bypass the API fail-closed execution gate.
     event briefing lines, and detailed lifecycle context carried by the same
     handoff remain Patrol/AI review metadata and must not become backup recency,
     restore support, or storage-local lifecycle state. Primary finding recency,
-    evidence, and verification facts in the operator briefing and related
-    root-cause or correlated finding summaries resolved for that Assistant
-    handoff are also adjacent AI/runtime explanation context only, including
-    any recency or latest lifecycle facts attached to those related summaries;
-    storage and recovery surfaces must not reinterpret those related records or
-    their seeded handoff resources as backup freshness, restore eligibility,
-    recovery execution authority, or storage-local capability truth. Current
-    resource-state, source-health,
+    evidence, verification, and operator-decision facts in the operator
+    briefing and related root-cause or correlated finding summaries resolved
+    for that Assistant handoff are also adjacent AI/runtime explanation context
+    only, including any recency or latest lifecycle facts attached to those
+    related summaries; storage and recovery surfaces must not reinterpret those
+    related records or their seeded handoff resources as backup freshness,
+    restore eligibility, recovery execution authority, or storage-local
+    capability truth. Current resource-state, source-health,
     incident, metric, and capability summaries carried by that handoff are also
     adjacent AI/runtime context and must not become backup freshness, restore
     eligibility, recovery execution authority, or storage-local capability

@@ -207,11 +207,12 @@ runtime cost control, and shared AI transport surfaces.
     resolved timestamps, recurrence, regression, and recent lifecycle events so
     Assistant explains the current Patrol record rather than only the original
     investigation narrative. The operator briefing must surface the primary
-    finding's current recency facts, bounded evidence snapshot, and verification
-    summary before investigation guidance, may surface the latest lifecycle
-    event as the current handoff state, and detailed lifecycle events must stay
-    in a bounded `[Finding Lifecycle Context]` block with an explicit model-only
-    boundary. Assistant runtime may also hydrate canonical
+    finding's current recency facts, bounded evidence snapshot, verification
+    summary, and explicit operator decision framing before investigation
+    guidance, may surface the latest lifecycle event as the current handoff
+    state, and detailed lifecycle events must stay in a bounded
+    `[Finding Lifecycle Context]` block with an explicit model-only boundary.
+    Assistant runtime may also hydrate canonical
     resource-policy context for those handoff resources, using the same
     unified-resource resolution and policy presentation helpers that govern
     mention prefetch and provider-bound redaction; that context remains
@@ -963,11 +964,11 @@ Assistant finding handoffs now also receive a model-only operator briefing
 derived from the current unified finding and structured Patrol investigation
 record before the lower-level finding context. That briefing must summarize the
 finding, resource, priority, current recency facts, bounded evidence and
-verification summaries, investigation confidence, recommended next step, latest
-lifecycle event, and governed action posture as operator guidance, while
-leaving detailed lifecycle history, current resource-state, timeline,
-related-finding, and action-audit hydration in the existing canonical AI
-runtime handoff builders. Related root-cause and
+verification summaries, investigation confidence, recommended next step,
+operator decision framing, latest lifecycle event, and governed action posture
+as operator guidance, while leaving detailed lifecycle history, current
+resource-state, timeline, related-finding, and action-audit hydration in the
+existing canonical AI runtime handoff builders. Related root-cause and
 correlated finding records may be summarized from current unified finding state,
 including their recency and latest lifecycle facts, and may seed their own
 handoff resources for canonical policy, state, topology, and timeline

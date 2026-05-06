@@ -990,6 +990,9 @@ func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.
 	}
 	appendChatContextLine(b, "Current Conclusion", unifiedFindingBriefingConclusion(f))
 	appendChatContextLine(b, "Recommended Next Step", unifiedFindingBriefingNextStep(f))
+	if decision := unifiedFindingBriefingOperatorDecision(f); decision != "" {
+		appendChatContextLine(b, "Operator Decision", decision)
+	}
 	appendChatContextLine(b, "Action Posture", unifiedFindingBriefingActionPosture(f))
 	appendChatContextLine(b, "Operator Boundary", "Treat Patrol data as product context for explanation and review; do not invent commands, expose raw command text, or treat chat as approval or execution authority.")
 	appendChatContextLine(b, "", "")
@@ -1199,6 +1202,75 @@ func unifiedFindingBriefingNextStep(f *unified.UnifiedFinding) string {
 		return recommendation
 	}
 	return "Explain what Patrol knows and identify the next evidence to verify before remediation."
+}
+
+func unifiedFindingBriefingOperatorDecision(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+	if unifiedFindingChatStatus(f, time.Now()) == "resolved" {
+		return "Finding is resolved; explain the resolution and monitoring follow-up without proposing execution."
+	}
+
+	rec := f.InvestigationRecord
+	if rec != nil {
+		if approvalID := strings.TrimSpace(rec.ApprovalID); approvalID != "" {
+			parts := []string{"review governed approval " + approvalID + " before execution"}
+			if rec.ProposedFix != nil {
+				if fixID := strings.TrimSpace(rec.ProposedFix.ID); fixID != "" {
+					parts = append(parts, "proposed fix "+fixID)
+				} else if description := strings.TrimSpace(rec.ProposedFix.Description); description != "" {
+					parts = append(parts, "proposed fix recorded")
+				}
+				if risk := strings.TrimSpace(rec.ProposedFix.RiskLevel); risk != "" {
+					parts = append(parts, "risk "+risk)
+				}
+				if rec.ProposedFix.Destructive {
+					parts = append(parts, "destructive true")
+				}
+			}
+			return strings.Join(parts, "; ")
+		}
+
+		switch rec.Outcome {
+		case aicontracts.OutcomeFixQueued:
+			return "Review the proposed fix in the governed approval or remediation flow before execution."
+		case aicontracts.OutcomeFixExecuted:
+			return "Verify the execution result before closing or resolving the finding."
+		case aicontracts.OutcomeFixFailed, aicontracts.OutcomeFixVerificationFailed:
+			return "Review failed remediation evidence before retrying or escalating."
+		case aicontracts.OutcomeFixVerificationUnknown:
+			return "Gather verification evidence before closing or retrying remediation."
+		case aicontracts.OutcomeNeedsAttention, aicontracts.OutcomeCannotFix:
+			return "Operator intervention is required; use the evidence to choose the next manual step."
+		case aicontracts.OutcomeTimedOut:
+			return "Patrol timed out; rerun investigation or gather more evidence before remediation."
+		}
+
+		switch rec.Status {
+		case aicontracts.InvestigationStatusPending, aicontracts.InvestigationStatusRunning:
+			return "Wait for Patrol to finish the investigation before approving remediation."
+		case aicontracts.InvestigationStatusFailed:
+			return "Review the Patrol investigation failure and gather evidence before remediation."
+		case aicontracts.InvestigationStatusNeedsAttention:
+			return "Operator intervention is required; use the evidence to choose the next manual step."
+		}
+	}
+
+	if remediationID := strings.TrimSpace(f.RemediationID); remediationID != "" {
+		return "Review governed remediation " + remediationID + " before execution."
+	}
+	loopState := strings.ToLower(strings.TrimSpace(f.LoopState))
+	switch {
+	case strings.Contains(loopState, "approval"):
+		return "Review the governed approval flow before execution."
+	case strings.Contains(loopState, "investigat"):
+		return "Wait for Patrol to finish the investigation before approving remediation."
+	}
+	if unifiedFindingChatStatus(f, time.Now()) == "active" {
+		return "Continue investigation or monitoring; no governed action reference is ready."
+	}
+	return ""
 }
 
 func formatInvestigationRecordEvidenceBriefing(evidence []aicontracts.InvestigationRecordEvidence, limit int) string {
