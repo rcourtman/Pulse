@@ -971,8 +971,10 @@ surplus width is redistributed across peer metric, source, uptime, and action
 columns instead of being dumped into the first column and wasting operator
 visible table density.
 That hot-path contract now includes policy badge rendering on resource rows.
-Policy-rich table rows must collapse to a single inline policy summary chip
-instead of stacking sensitivity and routing badges inside the resource column.
+Policy-rich table rows must only surface a single inline summary chip for
+blocking `local-only`/`restricted` posture; non-blocking `sensitive` +
+`local-first` and redaction-only metadata belongs in Data Handling, detail, and
+AI/governance surfaces instead of spending default row visual budget.
 Agentless availability evidence belongs on that same bounded row path.
 Infrastructure `network-endpoint` rows may replace otherwise empty host metric
 slots with one compact inline target/result readout, while the System column

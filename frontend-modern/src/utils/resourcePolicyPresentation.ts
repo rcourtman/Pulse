@@ -95,12 +95,6 @@ const routingPresentation: Record<
   },
 };
 
-const redactionBadgePresentation: Pick<PolicyBadgePresentation, 'label' | 'title' | 'className'> = {
-  label: 'Redacted',
-  title: 'Resource identity fields are redacted before governed handling.',
-  className: `${badgeBaseClass} bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300`,
-};
-
 const redactionLabels: Record<ResourceRedactionHint, string> = {
   hostname: 'Hostname',
   'ip-address': 'IP Address',
@@ -122,25 +116,22 @@ export const hasDefaultResourcePolicyPosture = (policy?: ResourcePolicy): boolea
     (policy.routing.redact?.length ?? 0) === 0,
   );
 
+export const hasBlockingResourcePolicyPosture = (policy?: ResourcePolicy): boolean =>
+  Boolean(policy && (policy.sensitivity === 'restricted' || policy.routing.scope === 'local-only'));
+
 export const getResourcePolicyTableBadges = (
   policy?: ResourcePolicy,
 ): PolicyBadgePresentation[] => {
   if (!policy) return [];
 
-  if (hasDefaultResourcePolicyPosture(policy)) {
+  if (!hasBlockingResourcePolicyPosture(policy)) {
     return [];
   }
 
   const sensitivity = sensitivityPresentation[policy.sensitivity];
   const routing = routingPresentation[policy.routing.scope];
   const redactions = getResourcePolicyRedactionLabels(policy);
-  const hasNonDefaultSensitivity = policy.sensitivity !== 'internal';
-  const hasNonDefaultRouting = policy.routing.scope !== 'cloud-summary';
-  const primary = hasNonDefaultSensitivity
-    ? sensitivity
-    : hasNonDefaultRouting
-      ? routing
-      : redactionBadgePresentation;
+  const primary = policy.routing.scope === 'local-only' ? routing : sensitivity;
   const redactionTitle = redactions.length > 0 ? `Redacts ${redactions.join(', ')}.` : undefined;
 
   return [

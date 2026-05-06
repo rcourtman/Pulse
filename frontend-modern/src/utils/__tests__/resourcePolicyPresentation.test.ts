@@ -4,6 +4,7 @@ import {
   RESOURCE_POLICY_REDACTION_ORDER,
   RESOURCE_POLICY_ROUTING_ORDER,
   RESOURCE_POLICY_SENSITIVITY_ORDER,
+  hasBlockingResourcePolicyPosture,
   hasDefaultResourcePolicyPosture,
   getResourcePolicyTableBadges,
   getResourcePolicyGovernedSummary,
@@ -37,7 +38,7 @@ describe('resourcePolicyPresentation utils', () => {
     ).toEqual(['Hostname', 'IP Address']);
   });
 
-  it('suppresses the default internal cloud-summary posture in table rows', () => {
+  it('keeps non-blocking policy posture out of table rows', () => {
     expect(
       hasDefaultResourcePolicyPosture({
         sensitivity: 'internal',
@@ -57,14 +58,14 @@ describe('resourcePolicyPresentation utils', () => {
     ).toEqual([]);
 
     expect(
-      getResourcePolicyTableBadges({
+      hasBlockingResourcePolicyPosture({
         sensitivity: 'sensitive',
         routing: {
           scope: 'local-first',
           redact: ['hostname'],
         },
-      }).map((badge) => badge.label),
-    ).toEqual(['Sensitive']);
+      }),
+    ).toBe(false);
     expect(
       getResourcePolicyTableBadges({
         sensitivity: 'sensitive',
@@ -72,8 +73,8 @@ describe('resourcePolicyPresentation utils', () => {
           scope: 'local-first',
           redact: ['hostname'],
         },
-      })[0]?.title,
-    ).toContain('Local First');
+      }).map((badge) => badge.label),
+    ).toEqual([]);
     expect(
       getResourcePolicyTableBadges({
         sensitivity: 'internal',
@@ -82,7 +83,7 @@ describe('resourcePolicyPresentation utils', () => {
           redact: ['hostname'],
         },
       }).map((badge) => badge.label),
-    ).toEqual(['Redacted']);
+    ).toEqual([]);
 
     expect(
       hasDefaultResourcePolicyPosture({
@@ -93,6 +94,30 @@ describe('resourcePolicyPresentation utils', () => {
         },
       }),
     ).toBe(false);
+  });
+
+  it('surfaces blocking local-only policy posture in table rows', () => {
+    expect(
+      hasBlockingResourcePolicyPosture({
+        sensitivity: 'restricted',
+        routing: {
+          scope: 'local-only',
+          redact: ['hostname'],
+        },
+      }),
+    ).toBe(true);
+
+    const badges = getResourcePolicyTableBadges({
+      sensitivity: 'restricted',
+      routing: {
+        scope: 'local-only',
+        redact: ['hostname'],
+      },
+    });
+
+    expect(badges.map((badge) => badge.label)).toEqual(['Local Only']);
+    expect(badges[0]?.title).toContain('Restricted');
+    expect(badges[0]?.title).toContain('Redacts Hostname');
   });
 
   it('uses concise governed labels for redacted resources', () => {

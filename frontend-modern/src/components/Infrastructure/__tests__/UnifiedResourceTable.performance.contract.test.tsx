@@ -659,7 +659,7 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(matchesSearch(governedResource, 'secret-host-9')).toBe(false);
     });
 
-    it('suppresses the default policy posture badges in host-table rows while preserving exceptional policy badges', async () => {
+    it('suppresses non-blocking policy posture in host-table rows while preserving blocking policy badges', async () => {
       const resources = [
         makeResource(0, {
           name: 'default-policy-host',
@@ -675,6 +675,14 @@ describe('UnifiedResourceTable performance contract', () => {
           policy: {
             sensitivity: 'sensitive',
             routing: { scope: 'local-first', redact: ['hostname'] },
+          },
+        }),
+        makeResource(2, {
+          name: 'local-only-host',
+          displayName: 'Local Only Host',
+          policy: {
+            sensitivity: 'restricted',
+            routing: { scope: 'local-only', redact: ['hostname'] },
           },
         }),
       ];
@@ -698,10 +706,11 @@ describe('UnifiedResourceTable performance contract', () => {
 
       expect(bodyQueries.queryByText('Internal')).not.toBeInTheDocument();
       expect(bodyQueries.queryByText('Cloud Summary')).not.toBeInTheDocument();
-      const policyBadge = bodyQueries.getByText('Sensitive');
-      expect(policyBadge).toBeInTheDocument();
-      expect(policyBadge.closest('[title]')?.getAttribute('title')).toContain('Local First');
+      expect(bodyQueries.queryByText('Sensitive')).not.toBeInTheDocument();
       expect(bodyQueries.queryByText('Local First')).not.toBeInTheDocument();
+      const policyBadge = bodyQueries.getByText('Local Only');
+      expect(policyBadge).toBeInTheDocument();
+      expect(policyBadge.closest('[title]')?.getAttribute('title')).toContain('Restricted');
     });
 
     it('renders facet summary badges without changing the Profile S row budget', async () => {
@@ -935,7 +944,7 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(rowCount).toBeLessThanOrEqual(140);
       });
       await waitFor(() => {
-        expect(getAllByText('Restricted').length).toBeGreaterThan(0);
+        expect(getAllByText('Local Only').length).toBeGreaterThan(0);
       });
       expect(getPreferredInfrastructureDisplayName(resources[0]!)).toBe('Sensitive Host');
     });

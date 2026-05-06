@@ -58,7 +58,7 @@ const resource: Resource = {
 };
 
 describe('UnifiedResourceTable governance presentation', () => {
-  it('surfaces canonical policy badges in the resource row', () => {
+  it('surfaces blocking policy posture in the resource row', () => {
     const { getByText, queryByText } = render(() => (
       <UnifiedResourceTable
         resources={[resource]}
@@ -68,17 +68,28 @@ describe('UnifiedResourceTable governance presentation', () => {
       />
     ));
 
-    expect(getByText('Restricted')).toBeInTheDocument();
     expect(getByText('Local Only')).toBeInTheDocument();
+    expect(queryByText('Restricted')).toBeNull();
     expect(getByText('Sensitive Host')).toBeInTheDocument();
     expect(queryByText('restricted host summary safe for remote AI consumption')).toBeNull();
     expect(queryByText('(sensitive-host)')).toBeNull();
   });
 
   it('surfaces resource facet counts in the resource row', () => {
+    const facetResource: Resource = {
+      ...resource,
+      policy: {
+        sensitivity: 'sensitive',
+        routing: {
+          scope: 'local-first',
+          redact: ['hostname'],
+        },
+      },
+    };
+
     const { getByText, queryByText } = render(() => (
       <UnifiedResourceTable
-        resources={[resource]}
+        resources={[facetResource]}
         expandedResourceId={null}
         onExpandedResourceChange={vi.fn()}
         groupingMode="flat"

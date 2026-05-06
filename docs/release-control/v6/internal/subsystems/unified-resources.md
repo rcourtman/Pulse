@@ -955,9 +955,12 @@ per-resource policy lines instead of reconstructing a separate
 The infrastructure host-table shell now treats the default
 `Internal` + `Cloud Summary` posture as canonical policy metadata that should
 stay available in the drawer and AI/governance surfaces without being promoted
-to always-on row chrome. Inline row badges are reserved for non-default policy
-states so the canonical resource surface does not imply that every host carries
-an operator-actionable governance exception.
+to always-on row chrome. Inline row badges are reserved for blocking policy
+states such as `local-only` routing or `restricted` sensitivity, while
+`sensitive` + `local-first` and redaction-only posture remains visible in Data
+Handling, detail, and AI/governance surfaces. The table must not imply that
+ordinary sensitive resources carry an operator-actionable infrastructure
+exception.
 The resource drawer now applies the same rule to its investigation-context
 governance block: the default posture remains part of the canonical policy
 contract, but the drawer only surfaces the governance section when the policy
@@ -1603,10 +1606,11 @@ performance proof route. The shared resource table and resource drawer now
 surface compact timeline summary chips, so facet presentation changes must
 continue to flow through the same governed resource-row surface rather than
 inventing a separate ad hoc summary path. Dense table rows must bound those
-chips with an explicit visible limit and overflow label, while policy-rich
-table rows collapse sensitivity/routing posture into a single inline summary
-chip so mock-rich canonical resources cannot stack badges inside the resource
-column. Those row summaries now prefer canonical `facetCounts` on the
+chips with an explicit visible limit and overflow label, while row-level
+policy chips are limited to blocking `local-only`/`restricted` posture so
+mock-rich canonical resources cannot stack or overstate governance badges
+inside the resource column. Those row summaries now prefer canonical
+`facetCounts` on the
 resource object when available, so the backend list/read shapes remain the
 source of truth instead of forcing the frontend to infer totals only from
 loaded slices. The drawer now fetches those facets
