@@ -120,6 +120,13 @@ Patrol-specific presentation helpers.
    for explanation; Assistant resolves those state, topology, and timeline
    lookups through the current canonical unified-resource model before falling
    back to handoff IDs where compatibility requires it.
+   When a Patrol finding declares root-cause or correlated finding IDs, the
+   Assistant handoff may also resolve those related findings through the current
+   unified finding store and summarize them as model-only context. Those
+   related finding summaries may seed their own structured resources for the
+   same canonical policy, state, topology, and timeline hydration, but Patrol
+   presentation must treat them as explanation for the current finding rather
+   than approval, lifecycle, disclosure, or execution authority.
    Assistant handoffs from Patrol findings must also include a concise operator
    briefing derived from the unified finding and structured investigation record
    before the detailed finding context, so Assistant leads with the current risk,

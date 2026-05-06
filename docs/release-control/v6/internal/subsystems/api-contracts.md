@@ -312,12 +312,16 @@ the canonical monitored-system blocked payload.
     `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
     `internal/api/contract_test.go` together. Patrol-originated handoffs must
     keep `[Operator Briefing]`, `[Finding Context]`, structured handoff
-    resources, and structured handoff actions model-only, with the briefing
-    summarizing operator next steps and governed action posture without raw
-    command text. Chat execution owns resource-policy sanitization of the
-    assembled model-only handoff before prompt injection, so API payload
-    builders may pass structured product context without turning raw resource
-    identity into user-authored text or disclosure authority.
+    resources, related root-cause/correlation finding context, and structured
+    handoff actions model-only, with the briefing summarizing operator next
+    steps and governed action posture without raw command text. Related finding
+    context must resolve from the current unified finding store, stay bounded
+    and deduplicated, and seed only structured handoff resources for canonical
+    policy, state, topology, and timeline hydration. Chat execution owns
+    resource-policy sanitization of the assembled model-only handoff before
+    prompt injection, so API payload builders may pass structured product
+    context without turning raw resource identity into user-authored text or
+    disclosure authority.
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
    That same resource payload contract owns `aggregations.policyPosture` on
    `/api/resources` and `/api/resources/stats`. The aggregation must be derived
@@ -778,7 +782,12 @@ the canonical monitored-system blocked payload.
    snoozed/dismissed/suppressed status, detection/last-seen/resolution
    timestamps, recurrence/regression facts, and recent lifecycle events, so API
    consumers do not reduce Assistant context to an outdated investigation
-   summary. Chat execution may also hydrate canonical
+   summary. Chat execution may also resolve root-cause and correlated finding
+   IDs from that current unified finding into compact related-finding summaries
+   and structured handoff resources, but those related records remain
+   model-only explanation context and must not become saved user text,
+   disclosure authority, lifecycle authority, approval authority, or execution
+   authority. Chat execution may also hydrate canonical
    resource-policy context for those resources through unified-resource
    resolution and shared policy presentation helpers, but the resulting handling
    guidance is read-only, model-only context and must not become saved user text,

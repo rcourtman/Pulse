@@ -189,7 +189,14 @@ runtime cost control, and shared AI transport surfaces.
     persist as session model-context metadata so follow-up turns can refresh the
     current unified finding and investigation record before model execution;
     those references remain model-only context selectors, not saved user text or
-    lifecycle authority. If the referenced finding no longer resolves through
+    lifecycle authority. When the current finding identifies root-cause or
+    correlated finding IDs, Assistant may resolve those related findings through
+    the current unified finding store and include compact related-finding
+    summaries plus their structured handoff resources as model-only explanation
+    context. Those related findings must be deduplicated, bounded, refreshed
+    from current store state, and treated only as context for the same operator
+    conversation; they do not grant approval, lifecycle, disclosure, or
+    execution authority. If the referenced finding no longer resolves through
     the current unified finding store, Assistant must invalidate the stored
     model-only handoff and unpinned handoff-seeded resource scope instead of
     falling back to stale investigation context. The refreshed finding context
@@ -950,12 +957,16 @@ derived from the current unified finding and structured Patrol investigation
 record before the lower-level finding context. That briefing must summarize the
 finding, resource, priority, investigation confidence, recommended next step,
 and governed action posture as operator guidance, while leaving current
-resource-state, timeline, and action-audit hydration in the existing canonical
-AI runtime handoff builders. It is explanation and review context only, not
-approval or execution authority. The assembled briefing is policy-sanitized by
-the chat handoff runtime before prompt injection, so governed resource names,
-IDs, aliases, nodes, paths, and addresses are redacted or represented through
-the canonical AI-safe summary instead of leaking through product prose.
+resource-state, timeline, related-finding, and action-audit hydration in the
+existing canonical AI runtime handoff builders. Related root-cause and
+correlated finding records may be summarized from current unified finding state
+and may seed their own handoff resources for canonical policy, state, topology,
+and timeline hydration. That related context is explanation and review context
+only, not approval or execution authority. The assembled briefing and related
+context are policy-sanitized by the chat handoff runtime before prompt
+injection, so governed resource names, IDs, aliases, nodes, paths, and
+addresses are redacted or represented through the canonical AI-safe summary
+instead of leaking through product prose.
 The same page and drawer now also render their recent-change timeline through
 the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so the canonical recent-change layout and relative-time wording stay

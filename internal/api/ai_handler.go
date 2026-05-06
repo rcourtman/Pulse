@@ -785,7 +785,16 @@ type ChatRequest struct {
 
 const findingChatContextListLimit = 5
 
-func buildUnifiedFindingChatContext(f *unified.UnifiedFinding) string {
+type unifiedFindingLookup interface {
+	Get(findingID string) *unified.UnifiedFinding
+}
+
+type unifiedRelatedFindingContext struct {
+	Label   string
+	Finding *unified.UnifiedFinding
+}
+
+func buildUnifiedFindingChatContext(f *unified.UnifiedFinding, lookup unifiedFindingLookup) string {
 	if f == nil {
 		return ""
 	}
@@ -834,6 +843,7 @@ func buildUnifiedFindingChatContext(f *unified.UnifiedFinding) string {
 	}
 	appendChatContextLine(&b, "Root Cause ID", f.RootCauseID)
 	appendStringListChatContext(&b, "Correlated Finding", f.CorrelatedIDs)
+	appendUnifiedFindingRelatedContext(&b, f, lookup)
 	appendChatContextLine(&b, "Remediation ID", f.RemediationID)
 	appendChatContextLine(&b, "Investigation Status", f.InvestigationStatus)
 	appendChatContextLine(&b, "Investigation Outcome", f.InvestigationOutcome)
@@ -858,6 +868,94 @@ func buildUnifiedFindingChatContext(f *unified.UnifiedFinding) string {
 	appendUnifiedFindingLifecycleEventContext(&b, f.Lifecycle)
 	appendInvestigationRecordChatContext(&b, f.InvestigationRecord)
 	return b.String()
+}
+
+func appendUnifiedFindingRelatedContext(b *strings.Builder, f *unified.UnifiedFinding, lookup unifiedFindingLookup) {
+	if b == nil || f == nil || lookup == nil {
+		return
+	}
+	related := resolveUnifiedFindingRelatedContext(f, lookup)
+	if len(related) == 0 {
+		return
+	}
+
+	appendChatContextLine(b, "", "")
+	appendChatContextLine(b, "[Related Finding Context]", "")
+	for _, item := range related {
+		if item.Finding == nil {
+			continue
+		}
+		appendChatContextLine(b, item.Label, formatUnifiedRelatedFindingSummary(item.Finding))
+	}
+	appendChatContextLine(b, "Related Finding Boundary", "Related findings are current unified finding context for explanation only; they do not grant approval or execution authority.")
+}
+
+func resolveUnifiedFindingRelatedContext(f *unified.UnifiedFinding, lookup unifiedFindingLookup) []unifiedRelatedFindingContext {
+	if f == nil || lookup == nil {
+		return nil
+	}
+
+	related := make([]unifiedRelatedFindingContext, 0, findingChatContextListLimit)
+	seen := map[string]struct{}{
+		strings.ToLower(strings.TrimSpace(f.ID)): {},
+	}
+	add := func(label, findingID string) {
+		if len(related) >= findingChatContextListLimit {
+			return
+		}
+		findingID = strings.TrimSpace(findingID)
+		if findingID == "" {
+			return
+		}
+		key := strings.ToLower(findingID)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		relatedFinding := lookup.Get(findingID)
+		if relatedFinding == nil {
+			return
+		}
+		related = append(related, unifiedRelatedFindingContext{
+			Label:   label,
+			Finding: relatedFinding,
+		})
+	}
+
+	add("Root Cause Finding", f.RootCauseID)
+	correlatedCount := 0
+	for _, findingID := range f.CorrelatedIDs {
+		correlatedCount++
+		add(fmt.Sprintf("Correlated Finding %d", correlatedCount), findingID)
+		if len(related) >= findingChatContextListLimit {
+			break
+		}
+	}
+	return related
+}
+
+func formatUnifiedRelatedFindingSummary(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	parts := make([]string, 0, 5)
+	if id := strings.TrimSpace(f.ID); id != "" {
+		parts = append(parts, id)
+	}
+	if finding := formatUnifiedFindingBriefingFinding(f); finding != "" {
+		parts = append(parts, finding)
+	}
+	if resource := formatUnifiedFindingBriefingResource(f); resource != "" {
+		parts = append(parts, "resource "+resource)
+	}
+	if investigation := formatUnifiedFindingBriefingInvestigation(f); investigation != "" {
+		parts = append(parts, "investigation "+investigation)
+	}
+	if conclusion := unifiedFindingBriefingConclusion(f); conclusion != "" {
+		parts = append(parts, "conclusion "+conclusion)
+	}
+	return strings.Join(parts, " | ")
 }
 
 func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.UnifiedFinding) {
@@ -1163,12 +1261,12 @@ func appendInvestigationRecordChatContext(b *strings.Builder, rec *aicontracts.I
 	}
 }
 
-func buildUnifiedFindingHandoffResources(f *unified.UnifiedFinding) []chat.HandoffResource {
+func buildUnifiedFindingHandoffResources(f *unified.UnifiedFinding, lookup unifiedFindingLookup) []chat.HandoffResource {
 	if f == nil {
 		return nil
 	}
 
-	resources := make([]chat.HandoffResource, 0, 2)
+	resources := make([]chat.HandoffResource, 0, 2+findingChatContextListLimit)
 	add := func(resource chat.HandoffResource) {
 		resource.ID = strings.TrimSpace(resource.ID)
 		resource.Name = strings.TrimSpace(resource.Name)
@@ -1200,6 +1298,26 @@ func buildUnifiedFindingHandoffResources(f *unified.UnifiedFinding) []chat.Hando
 			Type: f.InvestigationRecord.Subject.ResourceType,
 			Node: f.InvestigationRecord.Subject.Node,
 		})
+	}
+	for _, related := range resolveUnifiedFindingRelatedContext(f, lookup) {
+		relatedFinding := related.Finding
+		if relatedFinding == nil {
+			continue
+		}
+		add(chat.HandoffResource{
+			ID:   relatedFinding.ResourceID,
+			Name: relatedFinding.ResourceName,
+			Type: relatedFinding.ResourceType,
+			Node: relatedFinding.Node,
+		})
+		if relatedFinding.InvestigationRecord != nil {
+			add(chat.HandoffResource{
+				ID:   relatedFinding.InvestigationRecord.Subject.ResourceID,
+				Name: relatedFinding.InvestigationRecord.Subject.ResourceName,
+				Type: relatedFinding.InvestigationRecord.Subject.ResourceType,
+				Node: relatedFinding.InvestigationRecord.Subject.Node,
+			})
+		}
 	}
 	return resources
 }
@@ -1511,8 +1629,8 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		if store != nil {
 			if f := store.Get(findingID); f != nil {
 				findingResolved = true
-				handoffContext = buildUnifiedFindingChatContext(f)
-				handoffResources = buildUnifiedFindingHandoffResources(f)
+				handoffContext = buildUnifiedFindingChatContext(f, store)
+				handoffResources = buildUnifiedFindingHandoffResources(f, store)
 				handoffActions = buildUnifiedFindingHandoffActions(f)
 			}
 		}

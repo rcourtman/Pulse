@@ -663,6 +663,53 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			ApprovalID:   "approval-123",
 		},
 	})
+	store.AddFromAI(&unified.UnifiedFinding{
+		ID:                   "finding-root",
+		Source:               unified.SourceAIPatrol,
+		Severity:             unified.SeverityWarning,
+		Category:             unified.CategoryCapacity,
+		ResourceID:           "storage-100",
+		ResourceName:         "backup-store",
+		ResourceType:         "storage",
+		Node:                 "pve-1",
+		Title:                "Backup storage pressure",
+		Description:          "Backup storage latency increased before the CPU spike.",
+		DetectedAt:           detectedAt.Add(-5 * time.Minute),
+		LastSeenAt:           lastSeenAt,
+		AIContext:            "Backup storage pressure preceded the workload CPU saturation.",
+		AIConfidence:         0.74,
+		InvestigationStatus:  "completed",
+		InvestigationOutcome: "root_cause",
+	})
+	store.AddFromAI(&unified.UnifiedFinding{
+		ID:                   "finding-storage",
+		Source:               unified.SourceAIPatrol,
+		Severity:             unified.SeverityWarning,
+		Category:             unified.CategoryCapacity,
+		ResourceID:           "storage-200",
+		ResourceName:         "vm-datastore",
+		ResourceType:         "storage",
+		Node:                 "pve-2",
+		Title:                "Datastore latency",
+		Description:          "Datastore writes were elevated during the same window.",
+		DetectedAt:           detectedAt.Add(-4 * time.Minute),
+		LastSeenAt:           lastSeenAt,
+		InvestigationStatus:  "completed",
+		InvestigationOutcome: "correlated",
+		InvestigationRecord: &aicontracts.InvestigationRecord{
+			ID: "investigation-storage",
+			Subject: aicontracts.InvestigationRecordSubject{
+				ResourceID:   "storage-200",
+				ResourceName: "vm-datastore",
+				ResourceType: "storage",
+				Node:         "pve-2",
+			},
+			Status:     aicontracts.InvestigationStatusCompleted,
+			Outcome:    aicontracts.OutcomeResolved,
+			Confidence: aicontracts.InvestigationRecordConfidenceMedium,
+			Conclusion: "Datastore latency recovered after backup completion.",
+		},
+	})
 	h.SetUnifiedStore(store)
 
 	mockSvc.On("IsRunning").Return(true)
@@ -694,6 +741,10 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.Contains(t, reqArg.HandoffContext, "AI Confidence: 0.87")
 			assert.Contains(t, reqArg.HandoffContext, "Root Cause ID: finding-root")
 			assert.Contains(t, reqArg.HandoffContext, "Correlated Finding 1: finding-storage")
+			assert.Contains(t, reqArg.HandoffContext, "[Related Finding Context]")
+			assert.Contains(t, reqArg.HandoffContext, "Root Cause Finding: finding-root | Backup storage pressure (warning, capacity, active) | resource backup-store (storage) [storage-100] on pve-1 | investigation completed; outcome root_cause; ai confidence 0.74 | conclusion Backup storage pressure preceded the workload CPU saturation.")
+			assert.Contains(t, reqArg.HandoffContext, "Correlated Finding 1: finding-storage | Datastore latency (warning, capacity, active) | resource vm-datastore (storage) [storage-200] on pve-2 | investigation completed; outcome resolved; confidence medium | conclusion Datastore latency recovered after backup completion.")
+			assert.Contains(t, reqArg.HandoffContext, "Related Finding Boundary: Related findings are current unified finding context for explanation only")
 			assert.Contains(t, reqArg.HandoffContext, "Remediation ID: remediation-123")
 			assert.Contains(t, reqArg.HandoffContext, "Last Investigated At: 2026-05-06T12:04:00Z")
 			assert.Contains(t, reqArg.HandoffContext, "Investigation Attempts: 1")
@@ -715,6 +766,16 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 				Name: "web-server",
 				Type: "vm",
 				Node: "pve-1",
+			}, {
+				ID:   "storage-100",
+				Name: "backup-store",
+				Type: "storage",
+				Node: "pve-1",
+			}, {
+				ID:   "storage-200",
+				Name: "vm-datastore",
+				Type: "storage",
+				Node: "pve-2",
 			}}, reqArg.HandoffResources)
 			assert.Equal(t, []chat.HandoffAction{{
 				FindingID:          "finding-123",

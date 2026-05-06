@@ -368,14 +368,18 @@ profile and assignment columns, but embedded table framing must route through
    the finding no longer resolves is also AI/runtime invalidation, not an agent
    lifecycle transition. Unified finding lifecycle facts included in Assistant
    handoff context remain Patrol/AI review metadata and must not become agent
-   lifecycle state or fleet-control authority. Structured Assistant handoff action
-   references from the same Patrol finding remain AI/runtime review metadata
-   only; lifecycle code must not treat approval IDs, action IDs, fix IDs,
-   action lifecycle state, risk, or target-resource labels from that handoff as
-   agent command grants, enrollment proof, or auto-approval policy. Any approval
-   or action-audit status snapshot refreshed for Assistant review remains
-   read-only AI/runtime context and must not become command-websocket authority
-   or lifecycle execution state.
+   lifecycle state or fleet-control authority. Related root-cause or correlated
+   finding summaries resolved for the same Assistant handoff follow that same
+   isolation rule: they may explain Patrol context to the model and seed
+   model-only handoff resources, but they are not enrollment evidence,
+   command-websocket identity, agent command grants, or auto-approval policy.
+   Structured Assistant handoff action references from the same Patrol finding
+   remain AI/runtime review metadata only; lifecycle code must not treat
+   approval IDs, action IDs, fix IDs, action lifecycle state, risk, or
+   target-resource labels from that handoff as agent command grants, enrollment
+   proof, or auto-approval policy. Any approval or action-audit status snapshot
+   refreshed for Assistant review remains read-only AI/runtime context and must
+   not become command-websocket authority or lifecycle execution state.
    The same isolation rule applies to CSRF token-store behavior in
    `internal/api/csrf_store.go`: lifecycle-adjacent browser flows may rely on
    the shared API/security layer to keep parallel replacement-token retries
