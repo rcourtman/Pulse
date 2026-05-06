@@ -979,6 +979,12 @@ func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.
 	appendChatContextLine(b, "Priority", formatUnifiedFindingBriefingPriority(f))
 	appendChatContextLine(b, "Recency", formatUnifiedFindingBriefingRecencyFacts(f))
 	appendChatContextLine(b, "Investigation", formatUnifiedFindingBriefingInvestigation(f))
+	if evidence := unifiedFindingBriefingEvidence(f); evidence != "" {
+		appendChatContextLine(b, "Evidence Snapshot", evidence)
+	}
+	if verification := unifiedFindingBriefingVerification(f); verification != "" {
+		appendChatContextLine(b, "Verification", verification)
+	}
 	if latestLifecycle := formatUnifiedFindingLatestLifecycleEvent(f.Lifecycle); latestLifecycle != "" {
 		appendChatContextLine(b, "Latest Lifecycle Event", latestLifecycle)
 	}
@@ -1153,6 +1159,25 @@ func unifiedFindingBriefingConclusion(f *unified.UnifiedFinding) string {
 	return ""
 }
 
+func unifiedFindingBriefingEvidence(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+	if f.InvestigationRecord != nil {
+		if evidence := formatInvestigationRecordEvidenceBriefing(f.InvestigationRecord.Evidence, 2); evidence != "" {
+			return evidence
+		}
+	}
+	return strings.TrimSpace(f.Evidence)
+}
+
+func unifiedFindingBriefingVerification(f *unified.UnifiedFinding) string {
+	if f == nil || f.InvestigationRecord == nil {
+		return ""
+	}
+	return formatBriefingStringList(f.InvestigationRecord.Verification, 2, "verification")
+}
+
 func unifiedFindingBriefingNextStep(f *unified.UnifiedFinding) string {
 	if f == nil {
 		return ""
@@ -1174,6 +1199,67 @@ func unifiedFindingBriefingNextStep(f *unified.UnifiedFinding) string {
 		return recommendation
 	}
 	return "Explain what Patrol knows and identify the next evidence to verify before remediation."
+}
+
+func formatInvestigationRecordEvidenceBriefing(evidence []aicontracts.InvestigationRecordEvidence, limit int) string {
+	if limit <= 0 || len(evidence) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, limit+1)
+	total := 0
+	for _, item := range evidence {
+		summaryParts := make([]string, 0, 3)
+		if kind := strings.TrimSpace(item.Kind); kind != "" {
+			summaryParts = append(summaryParts, kind)
+		}
+		if id := strings.TrimSpace(item.ID); id != "" {
+			summaryParts = append(summaryParts, id)
+		}
+		if summary := strings.TrimSpace(item.Summary); summary != "" {
+			summaryParts = append(summaryParts, summary)
+		}
+		if len(summaryParts) == 0 {
+			continue
+		}
+		total++
+		if len(parts) < limit {
+			parts = append(parts, strings.Join(summaryParts, ": "))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	if remaining := total - len(parts); remaining > 0 {
+		parts = append(parts, fmt.Sprintf("%d more evidence items", remaining))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func formatBriefingStringList(values []string, limit int, itemName string) string {
+	if limit <= 0 || len(values) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, limit+1)
+	total := 0
+	for _, value := range values {
+		if normalized := strings.TrimSpace(value); normalized != "" {
+			total++
+			if len(parts) < limit {
+				parts = append(parts, normalized)
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	if remaining := total - len(parts); remaining > 0 {
+		itemName = strings.TrimSpace(itemName)
+		if itemName == "" {
+			itemName = "items"
+		}
+		parts = append(parts, fmt.Sprintf("%d more %s", remaining, itemName))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func unifiedFindingBriefingActionPosture(f *unified.UnifiedFinding) string {

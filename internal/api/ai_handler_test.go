@@ -734,6 +734,8 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.Contains(t, reqArg.HandoffContext, "Priority: critical performance; status active; loop awaiting_approval; raised 3 times; regressed 2 times")
 			assert.Contains(t, reqArg.HandoffContext, "Recency: detected 2026-05-06T12:00:00Z; last seen 2026-05-06T12:02:00Z; raised 3 times; regressed 2 times; last regression 2026-05-06T12:06:00Z")
 			assert.Contains(t, reqArg.HandoffContext, "Investigation: completed; outcome fix_queued; confidence high; attempts 1")
+			assert.Contains(t, reqArg.HandoffContext, "Evidence Snapshot: metrics: CPU stayed above 95% for 10 minutes")
+			assert.Contains(t, reqArg.HandoffContext, "Verification: CPU returned below 50%")
 			assert.Contains(t, reqArg.HandoffContext, "Latest Lifecycle Event: 2026-05-06T12:03:00Z | investigation_completed | Fix queued for approval | investigating -> fix_queued")
 			assert.Contains(t, reqArg.HandoffContext, "Current Conclusion: Backup job saturated CPU.")
 			assert.Contains(t, reqArg.HandoffContext, "Recommended Next Step: Approve a controlled service restart after backup completion.")
