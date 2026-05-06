@@ -65,6 +65,7 @@ operator-facing alert routing behavior for live runtime alerts.
 43. `internal/alerts/backup_snapshot.go`
 44. `internal/alerts/disk_health.go`
 45. `internal/alerts/metric_runtime.go`
+46. `internal/alerts/health_assessment.go`
 
 ## Shared Boundaries
 
@@ -280,6 +281,13 @@ per-metric delay resolution, legacy metric alert creation/update/clear
 behavior, metric runtime options, alert key sanitation, and metric delta
 helpers; future metric-threshold behavior should extend that owner rather than
 adding shared metric logic back to the central Manager file.
+Shared storage-health assessment alerting now lives in
+`internal/alerts/health_assessment.go`. That file owns storage-health reason
+normalization, ZFS pool/device reason filtering, canonical health-assessment
+alert synchronization, and ZFS device assessment construction for host and
+storage checkers; future shared health-assessment behavior should extend that
+owner rather than reappearing inside resource-specific evaluators or the
+central Manager file.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial

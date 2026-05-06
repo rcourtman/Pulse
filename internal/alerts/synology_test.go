@@ -6,7 +6,21 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
+
+func TestStorageHealthReasonCodesSortsAndDeduplicates(t *testing.T) {
+	got := storageHealthReasonCodes([]storagehealth.Reason{
+		{Code: " zfs_device_errors "},
+		{Code: "zfs_device_state"},
+		{Code: "zfs_device_errors"},
+		{Code: " "},
+	})
+
+	if len(got) != 2 || got[0] != "zfs_device_errors" || got[1] != "zfs_device_state" {
+		t.Fatalf("storageHealthReasonCodes() = %#v, want sorted unique ZFS codes", got)
+	}
+}
 
 func TestSynologyRAIDSuppression(t *testing.T) {
 	m := newTestManager(t)
