@@ -16169,6 +16169,31 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		}
 	})
 
+	t.Run("normalizes PMG connection health before offline check", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.offlineConfirmations["pmg1"] = 2
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:               "pmg1",
+			Name:             "testpmg",
+			Status:           "online",
+			ConnectionHealth: " UNHEALTHY ",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		alert := testRequireActiveAlert(t, m, "pmg-offline-pmg1")
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected offline alert for normalized PMG connection health")
+		}
+	})
+
 	t.Run("clears stale PMG metric alerts when connection health is unhealthy", func(t *testing.T) {
 		m := newTestManager(t)
 		m.ClearActiveAlerts()

@@ -56,6 +56,7 @@ operator-facing alert routing behavior for live runtime alerts.
 34. `internal/alerts/config/identity.go`
 35. `internal/alerts/notification_policy.go`
 36. `internal/alerts/read_model.go`
+37. `internal/alerts/pmg.go`
 
 ## Shared Boundaries
 
@@ -223,6 +224,11 @@ owns active alert projection and sorting, metadata coercion helpers,
 recently-resolved and history output wrappers, and notify-existing redispatch;
 future output-ordering or metadata coercion changes should extend that owner
 rather than adding another read path inside resource-specific evaluators.
+PMG alert evaluation now lives in `internal/alerts/pmg.go`. That file owns PMG
+connectivity evaluation, PMG queue and per-node queue checks, quarantine growth
+tracking, and mail-rate anomaly detection; future Proxmox Mail Gateway alert
+behavior should extend that resource checker owner rather than adding more PMG
+logic to the central Manager file.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial
