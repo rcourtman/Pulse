@@ -975,6 +975,9 @@ func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.
 	appendChatContextLine(b, "Resource", formatUnifiedFindingBriefingResource(f))
 	appendChatContextLine(b, "Priority", formatUnifiedFindingBriefingPriority(f))
 	appendChatContextLine(b, "Investigation", formatUnifiedFindingBriefingInvestigation(f))
+	if latestLifecycle := formatUnifiedFindingLatestLifecycleEvent(f.Lifecycle); latestLifecycle != "" {
+		appendChatContextLine(b, "Latest Lifecycle Event", latestLifecycle)
+	}
 	appendChatContextLine(b, "Current Conclusion", unifiedFindingBriefingConclusion(f))
 	appendChatContextLine(b, "Recommended Next Step", unifiedFindingBriefingNextStep(f))
 	appendChatContextLine(b, "Action Posture", unifiedFindingBriefingActionPosture(f))
@@ -1180,32 +1183,64 @@ func appendUnifiedFindingLifecycleEventContext(b *strings.Builder, events []unif
 	if len(events) > findingChatContextListLimit {
 		start = len(events) - findingChatContextListLimit
 	}
+	type formattedLifecycleEvent struct {
+		Label   string
+		Summary string
+	}
+	formatted := make([]formattedLifecycleEvent, 0, findingChatContextListLimit)
 	for idx, event := range events[start:] {
-		parts := make([]string, 0, 4)
-		if !event.At.IsZero() {
-			parts = append(parts, event.At.Format(time.RFC3339))
-		}
-		eventType := strings.TrimSpace(event.Type)
-		if eventType != "" {
-			parts = append(parts, eventType)
-		}
-		message := strings.TrimSpace(event.Message)
-		if message != "" {
-			parts = append(parts, message)
-		}
-		from := strings.TrimSpace(event.From)
-		to := strings.TrimSpace(event.To)
-		if from != "" || to != "" {
-			parts = append(parts, from+" -> "+to)
-		}
-		if len(parts) == 0 {
+		summary := formatUnifiedFindingLifecycleEvent(event)
+		if summary == "" {
 			continue
 		}
-		appendChatContextLine(b, fmt.Sprintf("Lifecycle Event %d", idx+1), strings.Join(parts, " | "))
+		formatted = append(formatted, formattedLifecycleEvent{
+			Label:   fmt.Sprintf("Lifecycle Event %d", idx+1),
+			Summary: summary,
+		})
+	}
+	if len(formatted) == 0 {
+		return
+	}
+
+	appendChatContextLine(b, "", "")
+	appendChatContextLine(b, "[Finding Lifecycle Context]", "")
+	for _, event := range formatted {
+		appendChatContextLine(b, event.Label, event.Summary)
 	}
 	if start > 0 {
 		appendChatContextLine(b, "Lifecycle Additional Count", strconv.Itoa(start))
 	}
+	appendChatContextLine(b, "Lifecycle Boundary", "Finding lifecycle events are current Patrol review context only; they do not grant approval or execution authority.")
+}
+
+func formatUnifiedFindingLatestLifecycleEvent(events []unified.UnifiedFindingLifecycleEvent) string {
+	for idx := len(events) - 1; idx >= 0; idx-- {
+		if summary := formatUnifiedFindingLifecycleEvent(events[idx]); summary != "" {
+			return summary
+		}
+	}
+	return ""
+}
+
+func formatUnifiedFindingLifecycleEvent(event unified.UnifiedFindingLifecycleEvent) string {
+	parts := make([]string, 0, 4)
+	if !event.At.IsZero() {
+		parts = append(parts, event.At.Format(time.RFC3339))
+	}
+	eventType := strings.TrimSpace(event.Type)
+	if eventType != "" {
+		parts = append(parts, eventType)
+	}
+	message := strings.TrimSpace(event.Message)
+	if message != "" {
+		parts = append(parts, message)
+	}
+	from := strings.TrimSpace(event.From)
+	to := strings.TrimSpace(event.To)
+	if from != "" || to != "" {
+		parts = append(parts, from+" -> "+to)
+	}
+	return strings.Join(parts, " | ")
 }
 
 func appendInvestigationRecordChatContext(b *strings.Builder, rec *aicontracts.InvestigationRecord) {

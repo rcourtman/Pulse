@@ -366,7 +366,8 @@ profile and assignment columns, but embedded table framing must route through
    AI/runtime context selector and still cannot become agent enrollment,
    lifecycle, or command-websocket authority. Clearing that stored handoff when
    the finding no longer resolves is also AI/runtime invalidation, not an agent
-   lifecycle transition. Unified finding lifecycle facts included in Assistant
+   lifecycle transition. Unified finding lifecycle facts, latest lifecycle
+   event briefing lines, and detailed lifecycle context included in Assistant
    handoff context remain Patrol/AI review metadata and must not become agent
    lifecycle state or fleet-control authority. Related root-cause or correlated
    finding summaries resolved for the same Assistant handoff follow that same

@@ -130,9 +130,10 @@ Patrol-specific presentation helpers.
    Assistant handoffs from Patrol findings must also include a concise operator
    briefing derived from the unified finding and structured investigation record
    before the detailed finding context, so Assistant leads with the current risk,
-   conclusion, recommended next step, and governed approval/proposed-fix posture
-   instead of behaving like a generic chat over a pasted incident dump. The
-   assembled handoff must still pass through the Assistant runtime's
+   conclusion, latest lifecycle event, recommended next step, and governed
+   approval/proposed-fix posture instead of behaving like a generic chat over a
+   pasted incident dump. The assembled handoff must still pass through the
+   Assistant runtime's
    resource-policy sanitizer before prompt injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
    addresses outside the canonical policy boundary.
@@ -142,10 +143,12 @@ Patrol-specific presentation helpers.
    finding's current lifecycle and recency facts, including active/resolved/
    snoozed/dismissed/suppressed state, detection/last-seen/resolution
    timestamps, recurrence/regression, and recent lifecycle events, rather than
-   treating the investigation conclusion as the whole current record. Patrol
-   must keep the visible finding and drawer briefing tied to the shared
-   investigation payload rather than forking a Patrol-local lifecycle, policy,
-   topology, or timeline summary.
+   treating the investigation conclusion as the whole current record. Detailed
+   lifecycle events in Assistant handoff context must stay bounded, model-only,
+   and explicitly separated from approval/execution authority. Patrol must keep
+   the visible finding and drawer briefing tied to the shared investigation
+   payload rather than forking a Patrol-local lifecycle, policy, topology, or
+   timeline summary.
 
 ## Current State
 

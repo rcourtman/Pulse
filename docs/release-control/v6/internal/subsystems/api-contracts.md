@@ -311,12 +311,13 @@ the canonical monitored-system blocked payload.
 3c. Route Assistant finding handoff context changes through
     `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
     `internal/api/contract_test.go` together. Patrol-originated handoffs must
-    keep `[Operator Briefing]`, `[Finding Context]`, structured handoff
-    resources, related root-cause/correlation finding context, and structured
-    handoff actions model-only, with the briefing summarizing operator next
-    steps and governed action posture without raw command text. Related finding
-    context must resolve from the current unified finding store, stay bounded
-    and deduplicated, and seed only structured handoff resources for canonical
+    keep `[Operator Briefing]`, `[Finding Context]`, `[Finding Lifecycle
+    Context]`, structured handoff resources, related root-cause/correlation
+    finding context, and structured handoff actions model-only, with the
+    briefing summarizing operator next steps, latest lifecycle event, and
+    governed action posture without raw command text. Related finding context
+    must resolve from the current unified finding store, stay bounded and
+    deduplicated, and seed only structured handoff resources for canonical
     policy, state, topology, and timeline hydration. Chat execution owns
     resource-policy sanitization of the assembled model-only handoff before
     prompt injection, so API payload builders may pass structured product
@@ -782,7 +783,9 @@ the canonical monitored-system blocked payload.
    snoozed/dismissed/suppressed status, detection/last-seen/resolution
    timestamps, recurrence/regression facts, and recent lifecycle events, so API
    consumers do not reduce Assistant context to an outdated investigation
-   summary. Chat execution may also resolve root-cause and correlated finding
+   summary. The briefing may carry the latest lifecycle event as the current
+   handoff state, while the detailed lifecycle list must stay bounded and
+   model-only. Chat execution may also resolve root-cause and correlated finding
    IDs from that current unified finding into compact related-finding summaries
    and structured handoff resources, but those related records remain
    model-only explanation context and must not become saved user text,
