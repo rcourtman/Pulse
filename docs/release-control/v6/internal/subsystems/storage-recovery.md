@@ -420,7 +420,10 @@ bypass the API fail-closed execution gate.
     are also adjacent AI/runtime review metadata only; storage and recovery
     surfaces must not reinterpret approval IDs, fix IDs, risk, or target labels
     as restore support, backup freshness, recovery execution authority, or a
-    storage-local approval bypass.
+    storage-local approval bypass. Any refreshed approval status snapshot in
+    Assistant handoff context is still read-only AI/runtime context and must not
+    become recovery freshness, restore eligibility, or storage-local execution
+    state.
     That same adjacent `internal/api/` boundary still carries Patrol-run
     execution identity. Storage and recovery may observe shared Patrol
     transport through `internal/api/chat_service_adapter.go`, but they must not

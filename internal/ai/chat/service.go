@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -517,6 +518,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("message_count", len(messages)).
 		Msg("[ChatService] Got messages, calling agentic loop")
 
+	handoffActions = refreshHandoffActionApprovalStatus(handoffActions, s.orgID)
+	if len(handoffActions) > 0 {
+		if err := sessions.SetModelHandoffActions(session.ID, handoffActions); err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist refreshed handoff action status")
+		}
+	}
 	handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)
 	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
 
@@ -861,6 +868,13 @@ func buildHandoffActionContext(handoffActions []HandoffAction) string {
 		appendHandoffActionLine(&b, label+" Finding ID", action.FindingID)
 		appendHandoffActionLine(&b, label+" Record ID", action.RecordID)
 		appendHandoffActionLine(&b, label+" Approval ID", action.ApprovalID)
+		appendHandoffActionLine(&b, label+" Approval Status", action.ApprovalStatus)
+		appendHandoffActionLine(&b, label+" Approval Requested At", action.ApprovalRequestedAt)
+		appendHandoffActionLine(&b, label+" Approval Expires At", action.ApprovalExpiresAt)
+		appendHandoffActionLine(&b, label+" Approval Decided At", action.ApprovalDecidedAt)
+		if action.ApprovalConsumed {
+			appendHandoffActionLine(&b, label+" Approval Consumed", "true")
+		}
 		appendHandoffActionLine(&b, label+" Fix ID", action.FixID)
 		appendHandoffActionLine(&b, label+" Proposed Fix", action.Description)
 		appendHandoffActionLine(&b, label+" Risk", action.RiskLevel)
@@ -872,6 +886,66 @@ func buildHandoffActionContext(handoffActions []HandoffAction) string {
 	}
 	appendHandoffActionLine(&b, "Action Boundary", "Review and approval must stay in governed approval/remediation flows; this reference is not command authority and must not be used to infer raw command text.")
 	return strings.TrimSpace(b.String())
+}
+
+func refreshHandoffActionApprovalStatus(handoffActions []HandoffAction, orgID string) []HandoffAction {
+	actions := normalizeHandoffActions(handoffActions)
+	if len(actions) == 0 {
+		return nil
+	}
+
+	store := approval.GetStore()
+	normalizedOrgID := approval.NormalizeOrgID(orgID)
+	for idx := range actions {
+		clearHandoffActionApprovalStatus(&actions[idx])
+		approvalID := strings.TrimSpace(actions[idx].ApprovalID)
+		if approvalID == "" || store == nil {
+			continue
+		}
+		req, ok := store.GetApproval(approvalID)
+		if !ok || !approval.BelongsToOrg(req, normalizedOrgID) {
+			continue
+		}
+
+		actions[idx].ApprovalStatus = string(req.Status)
+		actions[idx].ApprovalRequestedAt = formatHandoffActionTime(req.RequestedAt)
+		actions[idx].ApprovalExpiresAt = formatHandoffActionTime(req.ExpiresAt)
+		if req.DecidedAt != nil {
+			actions[idx].ApprovalDecidedAt = formatHandoffActionTime(*req.DecidedAt)
+		}
+		actions[idx].ApprovalConsumed = req.Consumed
+		if strings.TrimSpace(actions[idx].RiskLevel) == "" {
+			actions[idx].RiskLevel = string(req.RiskLevel)
+		}
+		if strings.TrimSpace(actions[idx].TargetResourceID) == "" {
+			actions[idx].TargetResourceID = strings.TrimSpace(req.TargetID)
+		}
+		if strings.TrimSpace(actions[idx].TargetResourceName) == "" {
+			actions[idx].TargetResourceName = strings.TrimSpace(req.TargetName)
+		}
+		if strings.TrimSpace(actions[idx].TargetResourceType) == "" {
+			actions[idx].TargetResourceType = strings.TrimSpace(req.TargetType)
+		}
+	}
+	return normalizeHandoffActions(actions)
+}
+
+func clearHandoffActionApprovalStatus(action *HandoffAction) {
+	if action == nil {
+		return
+	}
+	action.ApprovalStatus = ""
+	action.ApprovalRequestedAt = ""
+	action.ApprovalExpiresAt = ""
+	action.ApprovalDecidedAt = ""
+	action.ApprovalConsumed = false
+}
+
+func formatHandoffActionTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
 }
 
 func appendHandoffActionLine(b *strings.Builder, label, value string) {

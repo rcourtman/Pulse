@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -16,6 +17,28 @@ import (
 
 type stubServiceProvider struct {
 	streamFn func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
+}
+
+func installTestApprovalStore(t *testing.T, req *approval.ApprovalRequest) {
+	t.Helper()
+	previous := approval.GetStore()
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DefaultTimeout:     10 * time.Minute,
+		DisablePersistence: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create approval store: %v", err)
+	}
+	approval.SetStore(store)
+	t.Cleanup(func() {
+		approval.SetStore(previous)
+	})
+	if req != nil {
+		if err := store.CreateApproval(req); err != nil {
+			t.Fatalf("failed to create approval: %v", err)
+		}
+	}
 }
 
 func (s *stubServiceProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
@@ -95,6 +118,17 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 }
 
 func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
+	installTestApprovalStore(t, &approval.ApprovalRequest{
+		ID:         "approval-123",
+		OrgID:      approval.DefaultOrgID,
+		Command:    "systemctl restart workload.service",
+		TargetType: "vm",
+		TargetID:   "vm-100",
+		TargetName: "web-server",
+		RiskLevel:  approval.RiskMedium,
+		ExpiresAt:  time.Now().Add(10 * time.Minute),
+	})
+
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
 	if err != nil {
@@ -183,12 +217,26 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	if !strings.Contains(modelUserContent, "Pending Action Approval ID: approval-123") {
 		t.Fatalf("model user content missing approval reference: %q", modelUserContent)
 	}
+	if !strings.Contains(modelUserContent, "Pending Action Approval Status: pending") {
+		t.Fatalf("model user content missing approval status: %q", modelUserContent)
+	}
 	if strings.Contains(modelUserContent, "systemctl restart workload.service") {
 		t.Fatalf("model user content must not infer raw command text: %q", modelUserContent)
 	}
 }
 
 func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testing.T) {
+	installTestApprovalStore(t, &approval.ApprovalRequest{
+		ID:         "approval-123",
+		OrgID:      approval.DefaultOrgID,
+		Command:    "systemctl restart workload.service",
+		TargetType: "vm",
+		TargetID:   "vm-100",
+		TargetName: "web-server",
+		RiskLevel:  approval.RiskMedium,
+		ExpiresAt:  time.Now().Add(10 * time.Minute),
+	})
+
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
 	if err != nil {
@@ -295,6 +343,9 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	if !strings.Contains(firstModelUserContent, "Pending Action Approval ID: approval-123") {
 		t.Fatalf("first provider turn missing approval reference: %q", firstModelUserContent)
 	}
+	if !strings.Contains(firstModelUserContent, "Pending Action Approval Status: pending") {
+		t.Fatalf("first provider turn missing approval status: %q", firstModelUserContent)
+	}
 	secondModelUserContent := latestProviderUserContent(t, capturedRequests[1])
 	if !strings.Contains(secondModelUserContent, "[Finding Context]") {
 		t.Fatalf("follow-up provider turn missing stored handoff context: %q", secondModelUserContent)
@@ -308,8 +359,46 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	if !strings.Contains(secondModelUserContent, "Pending Action Approval ID: approval-123") {
 		t.Fatalf("follow-up provider turn missing stored approval reference: %q", secondModelUserContent)
 	}
+	if !strings.Contains(secondModelUserContent, "Pending Action Approval Status: pending") {
+		t.Fatalf("follow-up provider turn missing refreshed approval status: %q", secondModelUserContent)
+	}
 	if strings.Contains(firstModelUserContent+secondModelUserContent, "systemctl restart workload.service") {
 		t.Fatalf("provider turns must not include raw command text")
+	}
+}
+
+func TestRefreshHandoffActionApprovalStatusRejectsCrossOrgApproval(t *testing.T) {
+	installTestApprovalStore(t, &approval.ApprovalRequest{
+		ID:         "approval-cross-org",
+		OrgID:      "org-a",
+		Command:    "systemctl restart workload.service",
+		TargetType: "vm",
+		TargetID:   "vm-100",
+		TargetName: "web-server",
+		RiskLevel:  approval.RiskHigh,
+		ExpiresAt:  time.Now().Add(10 * time.Minute),
+	})
+
+	actions := refreshHandoffActionApprovalStatus([]HandoffAction{{
+		ApprovalID:          "approval-cross-org",
+		ApprovalStatus:      "pending",
+		ApprovalRequestedAt: "2026-01-01T00:00:00Z",
+		FixID:               "fix-123",
+		Description:         "Restart the workload service",
+	}}, "org-b")
+
+	if len(actions) != 1 {
+		t.Fatalf("actions = %#v, want one retained action reference", actions)
+	}
+	if actions[0].ApprovalStatus != "" || actions[0].ApprovalRequestedAt != "" {
+		t.Fatalf("cross-org approval status should be cleared, got %#v", actions[0])
+	}
+	contextText := buildHandoffActionContext(actions)
+	if strings.Contains(contextText, "Approval Status") {
+		t.Fatalf("cross-org approval status leaked into action context: %q", contextText)
+	}
+	if strings.Contains(contextText, "systemctl restart workload.service") {
+		t.Fatalf("raw command leaked into action context: %q", contextText)
 	}
 }
 

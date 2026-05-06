@@ -760,9 +760,12 @@ the canonical monitored-system blocked payload.
    and approval references from the investigation record into chat execution,
    but those references must omit raw proposed-fix commands, remain model-only
    review context, and leave approval/execution authority with the governed
-   approval and remediation APIs. Frontend handoff briefings must derive from
-   the same shared investigation payload rather than inventing a second
-   finding-context transport shape.
+   approval and remediation APIs. Chat execution may refresh approval status
+   snapshots for those references from the canonical approval store, but that
+   snapshot is read-only, org-scoped, and must not expose or infer the raw
+   command. Frontend handoff briefings must derive from the same shared
+   investigation payload rather than inventing a second finding-context
+   transport shape.
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the main Patrol page composition boundary, so once that governed

@@ -105,7 +105,10 @@ Patrol-specific presentation helpers.
    hands a pending fix or approval into Assistant, the shared handoff may retain
    only structured action references such as approval ID, fix ID, risk, target,
    and resource identity; approval and execution authority stays with the
-   governed approval/remediation surfaces.
+   governed approval/remediation surfaces. Assistant may refresh the referenced
+   approval's current status for review, but Patrol presentation must still keep
+   command payloads inside governed approval/remediation context rather than
+   rendering them as handoff copy.
 
 ## Current State
 

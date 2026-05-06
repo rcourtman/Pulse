@@ -166,9 +166,11 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"sessions.GetModelHandoffResources(session.ID)",
 		"sessions.SetModelHandoffActions(session.ID, handoffActions)",
 		"sessions.GetModelHandoffActions(session.ID)",
+		"refreshHandoffActionApprovalStatus(handoffActions, s.orgID)",
 		"handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)",
 		"s.hydrateHandoffResources(session.ID, handoffResources, sessions, unifiedResourceProvider)",
 		"injectHandoffContextIntoLatestUserMessage(messages, handoffContext)",
+		"Approval Status",
 		"Action Boundary",
 		"User message: ",
 	} {
@@ -200,6 +202,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"HandoffResources []HandoffResource",
 		"type HandoffAction struct",
 		"HandoffActions   []HandoffAction",
+		"ApprovalStatus      string",
 	} {
 		if !strings.Contains(chatTypesText, required) {
 			t.Fatalf("chat request must carry structured handoff resource scope outside messages: missing %q", required)

@@ -189,7 +189,10 @@ runtime cost control, and shared AI transport surfaces.
     references from the same investigation record as model-context metadata, but
     those references are review context only: they must not include raw command
     text, must not grant approval or execution authority, and must route any
-    operator decision back through the governed approval/remediation flow.
+    operator decision back through the governed approval/remediation flow. When
+    those references include an approval ID, Assistant runtime may refresh a
+    current status snapshot from the canonical approval store on each turn, but
+    it must enforce org scoping and still omit the approval command payload.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.
