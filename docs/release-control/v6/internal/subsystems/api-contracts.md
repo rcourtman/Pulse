@@ -320,7 +320,11 @@ the canonical monitored-system blocked payload.
     references may use the current live Patrol investigation-fix approval for
     the finding when that approval is newer than the approval ID on the durable
     record, but the payload may carry only IDs, status/risk/target metadata, and
-    fix/action references, never the approval command payload. The operator
+    fix/action references, never the approval command payload. Patrol
+    remediation-plan handoffs must use the same boundary for frontend-authored
+    prompts: plan status, risk, step labels, and command counts are allowed,
+    while raw command and rollback command payloads remain in governed action
+    surfaces. The operator
     decision and action-posture lines in the briefing must derive from those
     same structured action references after recovery so the briefing cannot
     contradict the handoff action payload. Related finding
@@ -2977,6 +2981,9 @@ approval command text remains inside the governed approval/remediation surface.
 Patrol approval-row Assistant prompts must use the same safe metadata boundary
 and set `autonomousMode:false` for the request-local chat handoff; they must not
 paste raw approval or proposed-fix command text into the authored chat prompt.
+Patrol remediation-plan Assistant prompts must also pass only safe plan metadata,
+step labels, risk/status, and command counts; raw plan command and rollback
+command payloads remain owned by the governed remediation/action APIs and panels.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

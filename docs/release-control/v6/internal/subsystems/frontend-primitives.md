@@ -823,7 +823,10 @@ frontend primitive boundary.
     follow that same drawer primitive contract: safe approval metadata may enter
     the prompt and context, but raw command text stays out and the scoped
     request must pass `autonomousMode:false` instead of changing the user's
-    persistent Assistant control level.
+    persistent Assistant control level. Patrol remediation-plan drawer handoffs
+    must use the same primitive boundary: plan title/status/risk, step labels,
+    and command counts may enter Assistant context; raw command and rollback
+    command payloads must stay in the governed remediation/action panel.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like

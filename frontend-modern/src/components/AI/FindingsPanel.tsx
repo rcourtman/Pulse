@@ -20,6 +20,8 @@ import { aiChatStore } from '@/stores/aiChat';
 import {
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingPrompt,
+  buildPatrolRemediationPlanAssistantBriefing,
+  buildPatrolRemediationPlanAssistantPrompt,
 } from '@/features/patrol/patrolInvestigationContextModel';
 import { useResources } from '@/hooks/useResources';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
@@ -465,24 +467,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     e.stopPropagation();
     const subject = getFindingSubjectPresentation(finding).label;
     const title = getFindingTitlePresentation(finding).label;
-
-    let prompt = `Pulse Patrol generated a remediation plan for a finding. Please help me apply it safely.\n\n`;
-    prompt += `**Finding:** ${title} on ${subject}\n`;
-    if (plan.title) prompt += `**Plan:** ${plan.title}\n`;
-    if (plan.risk_level) prompt += `**Risk level:** ${plan.risk_level}\n`;
-    if (plan.description) prompt += `\n**Plan context:** ${plan.description}\n`;
-    prompt += `\n**Steps:**\n`;
-    for (const step of plan.steps || []) {
-      prompt += `${step.order}. ${step.action}\n`;
-      if (step.command) prompt += ` Command: \`${step.command}\`\n`;
-      if (step.rollback_command) prompt += ` Rollback: \`${step.rollback_command}\`\n`;
-    }
-    prompt += `\nIf any step is risky or ambiguous, ask me before proceeding.`;
+    const prompt = buildPatrolRemediationPlanAssistantPrompt({ title, subject, plan });
+    const briefing = buildPatrolRemediationPlanAssistantBriefing({ title, subject, plan });
 
     aiChatStore.openWithPrompt(prompt, {
       targetType: finding.resourceType,
       targetId: finding.resourceId,
       findingId: finding.id,
+      briefing,
+      autonomousMode: false,
     });
   };
 

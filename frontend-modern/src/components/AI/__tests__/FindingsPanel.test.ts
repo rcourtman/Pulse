@@ -50,6 +50,14 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('pendingApproval: pendingApproval');
     expect(findingsPanelSource).toContain('await aiIntelligenceStore.loadPendingApprovals()');
   });
+
+  it('routes remediation plan handoffs through the command-free Patrol handoff model', () => {
+    expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantPrompt');
+    expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantBriefing');
+    expect(findingsPanelSource).toContain('autonomousMode: false');
+    expect(findingsPanelSource).not.toContain('Command: `');
+    expect(findingsPanelSource).not.toContain('Rollback: `');
+  });
 });
 
 describe('aiFindingPresentation', () => {

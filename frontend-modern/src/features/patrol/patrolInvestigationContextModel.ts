@@ -2,7 +2,7 @@ import type {
   CorrelationsResponse,
   IntelligencePolicyPostureSummary,
 } from '@/types/aiIntelligence';
-import type { InvestigationRecord } from '@/api/ai';
+import type { InvestigationRecord, RemediationPlan } from '@/api/ai';
 import type { AIChatContextBriefing } from '@/stores/aiChat';
 
 export interface PatrolInvestigationContextSummaryInput {
@@ -68,6 +68,12 @@ export interface PatrolAssistantFindingBriefingInput {
   remediationId?: string | null;
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
+}
+
+export interface PatrolRemediationPlanAssistantInput {
+  title: string;
+  subject: string;
+  plan: RemediationPlan;
 }
 
 export function buildPatrolInvestigationContextSummary(
@@ -168,6 +174,95 @@ export function buildPatrolAssistantFindingPrompt(
     prompt += `\n\n${description}`;
   }
   return prompt;
+}
+
+export function buildPatrolRemediationPlanAssistantPrompt(
+  input: PatrolRemediationPlanAssistantInput,
+): string {
+  const title = normalizeText(input.title) || 'Patrol finding';
+  const subject = normalizeText(input.subject) || 'the affected resource';
+  const plan = input.plan;
+  const planTitle = normalizeText(plan.title);
+  const planDescription = normalizeText(plan.description);
+  const riskLabel = formatIdentifierLabel(plan.risk_level)?.toLowerCase();
+  const statusLabel = formatIdentifierLabel(plan.status)?.toLowerCase();
+
+  let prompt =
+    'Pulse Patrol generated a governed remediation plan for a finding. Review it from the attached plan context before suggesting next actions.\n\n';
+  prompt += `**Finding:** ${title} on ${subject}\n`;
+  if (planTitle) prompt += `**Plan:** ${planTitle}\n`;
+  if (statusLabel) prompt += `**Plan status:** ${statusLabel}\n`;
+  if (riskLabel) prompt += `**Risk level:** ${riskLabel}\n`;
+  if (planDescription) prompt += `\n**Plan context:** ${planDescription}\n`;
+
+  const steps = Array.isArray(plan.steps) ? plan.steps : [];
+  if (steps.length > 0) {
+    prompt += '\n**Steps:**\n';
+    for (const step of steps) {
+      const action = normalizeText(step.action) || `Step ${step.order}`;
+      const qualifiers = [
+        formatIdentifierLabel(step.risk_level)?.toLowerCase()
+          ? `${formatIdentifierLabel(step.risk_level)?.toLowerCase()} risk`
+          : undefined,
+        step.command ? 'command recorded in governed plan' : undefined,
+        step.rollback_command ? 'rollback command recorded in governed plan' : undefined,
+      ].filter(isNonEmptyString);
+      prompt += `${step.order}. ${action}${qualifiers.length > 0 ? ` (${qualifiers.join('; ')})` : ''}\n`;
+    }
+  }
+
+  const commandSummary = formatPlanCommandSummary(plan);
+  if (commandSummary) {
+    prompt += `\n**Governed action details:** ${commandSummary}.\n`;
+  }
+  prompt +=
+    '\nCommand details stay in the remediation or approval surface. Do not infer, repeat, or execute raw command text from this chat handoff. If any step is risky or ambiguous, ask before proceeding.';
+  return prompt;
+}
+
+export function buildPatrolRemediationPlanAssistantBriefing(
+  input: PatrolRemediationPlanAssistantInput,
+): AIChatContextBriefing {
+  const title = normalizeText(input.title) || 'Patrol finding';
+  const subject = normalizeText(input.subject) || 'affected resource';
+  const plan = input.plan;
+  const steps = Array.isArray(plan.steps) ? plan.steps : [];
+  const statusParts = [
+    formatIdentifierLabel(plan.status),
+    formatIdentifierLabel(plan.risk_level)
+      ? `${formatIdentifierLabel(plan.risk_level)} risk`
+      : undefined,
+  ].filter(isNonEmptyString);
+  const planTitle = normalizeText(plan.title);
+  const planDescription = normalizeText(plan.description);
+  const commandSummary = formatPlanCommandSummary(plan);
+  const stepSummaries = steps
+    .map((step) => {
+      const action = normalizeText(step.action);
+      if (!action) return undefined;
+      const risk = formatIdentifierLabel(step.risk_level);
+      return risk ? `${action} (${risk} risk)` : action;
+    })
+    .filter(isNonEmptyString)
+    .slice(0, 4);
+
+  return {
+    sourceLabel: 'Pulse Patrol',
+    title: 'Remediation plan attached',
+    subject: `${title} on ${subject}`,
+    statusLabel: statusParts.join(' · ') || undefined,
+    detailLines: [
+      planTitle ? `Plan: ${planTitle}` : undefined,
+      planDescription,
+      steps.length > 0 ? `${steps.length} planned step${steps.length === 1 ? '' : 's'}` : undefined,
+    ].filter(isNonEmptyString),
+    evidence: stepSummaries,
+    actionLabel: planTitle || undefined,
+    commandSummary,
+    safetyNote: commandSummary
+      ? 'Command details stay in governed remediation context; execution requires the approval flow.'
+      : 'Review the governed remediation context before execution.',
+  };
 }
 
 export function buildPatrolAssistantFindingBriefing(
@@ -455,6 +550,29 @@ function formatCommandSummary(count: number): string | undefined {
   return count === 1
     ? '1 command recorded for approval context'
     : `${count} commands recorded for approval context`;
+}
+
+function formatPlanCommandSummary(plan: RemediationPlan): string | undefined {
+  const steps = Array.isArray(plan.steps) ? plan.steps : [];
+  const commandCount = steps.filter((step) => Boolean(step.command)).length;
+  const rollbackCount = steps.filter((step) => Boolean(step.rollback_command)).length;
+  if (commandCount === 0 && rollbackCount === 0) return undefined;
+  const parts: string[] = [];
+  if (commandCount > 0) {
+    parts.push(
+      commandCount === 1
+        ? '1 command recorded for governed plan review'
+        : `${commandCount} commands recorded for governed plan review`,
+    );
+  }
+  if (rollbackCount > 0) {
+    parts.push(
+      rollbackCount === 1
+        ? '1 rollback command recorded'
+        : `${rollbackCount} rollback commands recorded`,
+    );
+  }
+  return parts.join('; ');
 }
 
 function formatBriefingStringList(

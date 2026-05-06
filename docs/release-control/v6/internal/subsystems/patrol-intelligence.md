@@ -160,8 +160,11 @@ Patrol-specific presentation helpers.
    posture. Inline Patrol approval actions that open Assistant must follow the
    same rule: pass approval ID/status/risk/target as review context, force the
    request-local approval-required mode, and never paste the approval command or
-   proposed-fix command text into the chat prompt. The assembled handoff must
-   still pass through the Assistant runtime's
+   proposed-fix command text into the chat prompt. Remediation-plan Assistant
+   handoffs follow the same boundary: step labels, plan status, risk, and command
+   counts are allowed, while command and rollback command text stays in the
+   governed remediation or approval surface. The assembled handoff must still
+   pass through the Assistant runtime's
    resource-policy sanitizer before prompt injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
    addresses outside the canonical policy boundary.

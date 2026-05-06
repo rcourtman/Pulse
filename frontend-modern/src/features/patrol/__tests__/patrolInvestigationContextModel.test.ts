@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import type { RemediationPlan } from '@/api/ai';
 
 import {
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingPrompt,
   buildPatrolInvestigationContextSummary,
   buildPatrolInvestigationRecordPresentation,
+  buildPatrolRemediationPlanAssistantBriefing,
+  buildPatrolRemediationPlanAssistantPrompt,
 } from '../patrolInvestigationContextModel';
 
 describe('patrolInvestigationContextModel', () => {
@@ -222,6 +225,59 @@ describe('patrolInvestigationContextModel', () => {
         'Command details stay in approval context; destructive actions require governed approval.',
     });
     expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
+  });
+
+  it('builds remediation plan Assistant handoff context without exposing raw commands', () => {
+    const plan: RemediationPlan = {
+      id: 'plan-1',
+      finding_id: 'finding-1',
+      resource_id: 'agent-1',
+      title: 'Restore web service',
+      description: 'Restart the service and verify health.',
+      risk_level: 'high',
+      status: 'pending',
+      created_at: '2026-05-06T12:00:00Z',
+      steps: [
+        {
+          order: 1,
+          action: 'Restart web service',
+          command: 'systemctl restart nginx',
+          rollback_command: 'systemctl stop nginx',
+          risk_level: 'high',
+        },
+        {
+          order: 2,
+          action: 'Check service health',
+          command: 'systemctl status nginx',
+          risk_level: 'low',
+        },
+      ],
+    };
+
+    const prompt = buildPatrolRemediationPlanAssistantPrompt({
+      title: 'Nginx down',
+      subject: 'node-1',
+      plan,
+    });
+    const briefing = buildPatrolRemediationPlanAssistantBriefing({
+      title: 'Nginx down',
+      subject: 'node-1',
+      plan,
+    });
+
+    expect(prompt).toContain('Pulse Patrol generated a governed remediation plan');
+    expect(prompt).toContain('1. Restart web service (high risk; command recorded');
+    expect(prompt).toContain('2 commands recorded for governed plan review');
+    expect(prompt).not.toContain('systemctl restart nginx');
+    expect(prompt).not.toContain('systemctl stop nginx');
+    expect(prompt).not.toContain('systemctl status nginx');
+    expect(briefing.commandSummary).toBe(
+      '2 commands recorded for governed plan review; 1 rollback command recorded',
+    );
+    expect(briefing.safetyNote).toBe(
+      'Command details stay in governed remediation context; execution requires the approval flow.',
+    );
+    expect(JSON.stringify(briefing)).not.toContain('systemctl');
   });
 
   it('builds an operator briefing from current finding facts before a Patrol record exists', () => {
