@@ -773,7 +773,12 @@ the canonical monitored-system blocked payload.
    resolution and shared policy presentation helpers, but the resulting handling
    guidance is read-only, model-only context and must not become saved user text,
    disclosure authority, or action authority. Chat execution may also hydrate
-   canonical relationship context for those resources through shared
+   current canonical resource-state context for those resources, including
+   compact status, freshness, source-health, metric, incident, and
+   governed-capability summaries from the unified-resource model, but that
+   snapshot is model-only read-only infrastructure context and must not become
+   saved user text, disclosure authority, or action authority. Chat execution
+   may also hydrate canonical relationship context for those resources through shared
    unified-resource relationship presentation and parent-edge synthesis, but
    topology context is read-only and must not become saved user text or action
    authority. Chat execution may also hydrate recent changes for those handoff

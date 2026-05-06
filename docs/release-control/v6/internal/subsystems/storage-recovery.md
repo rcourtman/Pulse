@@ -426,7 +426,11 @@ bypass the API fail-closed execution gate.
     approval references carried by that handoff are also adjacent AI/runtime
     review metadata only. Unified finding lifecycle facts carried by the same
     handoff remain Patrol/AI review metadata and must not become backup recency,
-    restore support, or storage-local lifecycle state.
+    restore support, or storage-local lifecycle state. Current resource-state,
+    source-health, incident, metric, and capability summaries carried by that
+    handoff are also adjacent AI/runtime context and must not become backup
+    freshness, restore eligibility, recovery execution authority, or
+    storage-local capability truth.
     storage and recovery surfaces must not reinterpret approval IDs, action IDs,
     action lifecycle state, fix IDs, risk, or target labels as restore support,
     backup freshness, recovery execution authority, or a storage-local approval

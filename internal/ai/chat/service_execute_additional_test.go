@@ -219,7 +219,38 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 		t.Fatalf("RecordChange failed: %v", err)
 	}
 
-	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	unifiedProvider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeVM: {{
+			ID:        "vm-100",
+			Type:      unifiedresources.ResourceTypeVM,
+			Name:      "web-server",
+			Status:    unifiedresources.StatusWarning,
+			LastSeen:  actionNow.Add(-5 * time.Minute),
+			UpdatedAt: actionNow.Add(-2 * time.Minute),
+			Sources:   []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+			SourceStatus: map[unifiedresources.DataSource]unifiedresources.SourceStatus{
+				unifiedresources.SourceAgent:   {Status: "online", LastSeen: actionNow.Add(-5 * time.Minute)},
+				unifiedresources.SourceProxmox: {Status: "stale", LastSeen: actionNow.Add(-20 * time.Minute), Error: "raw provider endpoint unavailable"},
+			},
+			Metrics: &unifiedresources.ResourceMetrics{
+				CPU:    &unifiedresources.MetricValue{Percent: 91.4},
+				Memory: &unifiedresources.MetricValue{Percent: 88},
+			},
+			ParentName:      "pve-1",
+			ChildCount:      1,
+			IncidentCount:   1,
+			IncidentSummary: "CPU saturation after backup job",
+			Capabilities: []unifiedresources.ResourceCapability{{
+				Name:                 "restart",
+				Type:                 unifiedresources.CapabilityTypeCommon,
+				Description:          "Restart the workload service",
+				MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+				InternalHandler:      "internal-restart-handler",
+			}},
+		}},
+	}}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{UnifiedResourceProvider: unifiedProvider})
 	var capturedMessages []providers.Message
 	provider := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
@@ -238,13 +269,14 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	loop := NewAgenticLoop(provider, executor, "system")
 
 	svc := &Service{
-		cfg:              &config.AIConfig{ChatModel: "openai:test"},
-		sessions:         store,
-		executor:         executor,
-		agenticLoop:      loop,
-		provider:         provider,
-		started:          true,
-		actionAuditStore: timelineStore,
+		cfg:                     &config.AIConfig{ChatModel: "openai:test"},
+		sessions:                store,
+		executor:                executor,
+		agenticLoop:             loop,
+		provider:                provider,
+		started:                 true,
+		actionAuditStore:        timelineStore,
+		unifiedResourceProvider: unifiedProvider,
 	}
 
 	req := ExecuteRequest{
@@ -295,6 +327,9 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	if strings.Contains(stored[0].Content, "Recent Changes Across Infrastructure") {
 		t.Fatalf("stored user message should not include timeline context: %q", stored[0].Content)
 	}
+	if strings.Contains(stored[0].Content, "Resource State Context") {
+		t.Fatalf("stored user message should not include resource state context: %q", stored[0].Content)
+	}
 	storedFindingID, err := store.GetModelHandoffFindingID("sess-handoff")
 	if err != nil {
 		t.Fatalf("GetModelHandoffFindingID failed: %v", err)
@@ -321,6 +356,27 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 	if !strings.Contains(modelUserContent, "Action Reference Approval Status: pending") {
 		t.Fatalf("model user content missing approval status: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "[Resource State Context]") {
+		t.Fatalf("model user content missing resource state context: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Resource State Status: warning") {
+		t.Fatalf("model user content missing current resource status: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Resource State Source Health: agent: online") {
+		t.Fatalf("model user content missing canonical source health: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Resource State Metrics: cpu 91.4%, memory 88%") {
+		t.Fatalf("model user content missing canonical metric summary: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Resource State Incident Summary: count 1") {
+		t.Fatalf("model user content missing resource incident summary: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Resource State Capabilities: restart (common; approval admin)") {
+		t.Fatalf("model user content missing governed capability summary: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Resource State Boundary: Current resource state, source health, incidents, metrics, and capabilities are read-only canonical infrastructure context") {
+		t.Fatalf("model user content missing resource state boundary: %q", modelUserContent)
 	}
 	if !strings.Contains(modelUserContent, "Action Reference Action ID: act-handoff-123") {
 		t.Fatalf("model user content missing canonical action id: %q", modelUserContent)
@@ -352,7 +408,7 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	if !strings.Contains(modelUserContent, "### Recent Changes Across Infrastructure") {
 		t.Fatalf("model user content missing timeline context: %q", modelUserContent)
 	}
-	if !strings.Contains(modelUserContent, "vm-100: **State transition** running") {
+	if !strings.Contains(modelUserContent, "redacted by policy: **State transition** running") {
 		t.Fatalf("model user content missing canonical timeline summary: %q", modelUserContent)
 	}
 	if !strings.Contains(modelUserContent, "Timeline Boundary: Recent changes are read-only canonical resource timeline context") {
@@ -360,6 +416,9 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 	if strings.Contains(modelUserContent, "systemctl restart workload.service") {
 		t.Fatalf("model user content must not infer raw command text: %q", modelUserContent)
+	}
+	if strings.Contains(modelUserContent, "internal-restart-handler") || strings.Contains(modelUserContent, "raw provider endpoint unavailable") {
+		t.Fatalf("model user content leaked raw provider execution detail: %q", modelUserContent)
 	}
 }
 
@@ -779,6 +838,91 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	}
 	if strings.Contains(firstModelUserContent+secondModelUserContent, "systemctl restart workload.service") {
 		t.Fatalf("provider turns must not include raw command text")
+	}
+}
+
+func TestBuildHandoffResourceStateContextUsesCanonicalResourceState(t *testing.T) {
+	now := time.Date(2026, 5, 6, 14, 0, 0, 0, time.UTC)
+	parentID := "cluster:production"
+	provider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeAgent: {{
+			ID:        "agent:pve-1",
+			Type:      unifiedresources.ResourceTypeAgent,
+			Name:      "pve-1",
+			Status:    unifiedresources.StatusWarning,
+			LastSeen:  now.Add(-3 * time.Minute),
+			UpdatedAt: now.Add(-1 * time.Minute),
+			Sources:   []unifiedresources.DataSource{unifiedresources.SourceAgent, unifiedresources.SourceProxmox},
+			SourceStatus: map[unifiedresources.DataSource]unifiedresources.SourceStatus{
+				unifiedresources.SourceAgent:   {Status: "online", LastSeen: now.Add(-3 * time.Minute)},
+				unifiedresources.SourceProxmox: {Status: "stale", LastSeen: now.Add(-15 * time.Minute), Error: "ssh://root@example.invalid/private"},
+			},
+			Metrics: &unifiedresources.ResourceMetrics{
+				CPU:    &unifiedresources.MetricValue{Percent: 92.5},
+				Memory: &unifiedresources.MetricValue{Percent: 81},
+				Disk:   &unifiedresources.MetricValue{Percent: 71.2},
+			},
+			ParentID:        &parentID,
+			ParentName:      "production-cluster",
+			ChildCount:      2,
+			IncidentCount:   1,
+			IncidentSummary: "pve-1 is saturated after backup traffic",
+			Incidents: []unifiedresources.ResourceIncident{{
+				NativeID: "native-secret-incident",
+				Code:     "cpu_saturation",
+				Summary:  "CPU saturation remains elevated",
+			}},
+			Capabilities: []unifiedresources.ResourceCapability{{
+				Name:                 "restart",
+				Type:                 unifiedresources.CapabilityTypeCommon,
+				Description:          "Restart the workload",
+				MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+				InternalHandler:      "internal-restart-handler",
+				Params: []unifiedresources.CapabilityParam{{
+					Name:         "token",
+					Type:         "string",
+					IsSensitive:  true,
+					DefaultValue: "secret-token",
+				}},
+			}},
+		}},
+	}}
+
+	contextText := buildHandoffResourceStateContext([]HandoffResource{{
+		Name: "pve-1",
+		Type: "agent",
+	}}, provider)
+	for _, expected := range []string{
+		"[Resource State Context]",
+		"Resource State: pve-1",
+		"Resource State ID: agent:pve-1",
+		"Resource State Type: agent",
+		"Resource State Status: warning",
+		"Resource State Last Seen At: 2026-05-06T13:57:00Z",
+		"Resource State Updated At: 2026-05-06T13:59:00Z",
+		"Resource State Sources: agent, proxmox",
+		"Resource State Source Health: agent: online",
+		"proxmox: stale",
+		"Resource State Metrics: cpu 92.5%, memory 81%, disk 71.2%",
+		"Resource State Parent: production-cluster",
+		"Resource State Child Count: 2",
+		"Resource State Incident Summary: count 1; pve-1 is saturated after backup traffic; CPU saturation remains elevated (cpu_saturation)",
+		"Resource State Capabilities: restart (common; approval admin): Restart the workload",
+		"Resource State Boundary: Current resource state, source health, incidents, metrics, and capabilities are read-only canonical infrastructure context",
+	} {
+		if !strings.Contains(contextText, expected) {
+			t.Fatalf("resource state context missing %q: %q", expected, contextText)
+		}
+	}
+	for _, forbidden := range []string{
+		"internal-restart-handler",
+		"secret-token",
+		"native-secret-incident",
+		"ssh://root@example.invalid/private",
+	} {
+		if strings.Contains(contextText, forbidden) {
+			t.Fatalf("resource state context leaked raw execution/provider detail %q: %q", forbidden, contextText)
+		}
 	}
 }
 

@@ -202,6 +202,12 @@ runtime cost control, and shared AI transport surfaces.
     unified-resource resolution and policy presentation helpers that govern
     mention prefetch and provider-bound redaction; that context remains
     model-only handling guidance, not saved user text or disclosure authority.
+    Assistant runtime may also hydrate current canonical resource-state context
+    for those handoff resources, including compact status, freshness,
+    source-health, metric, incident, and governed-capability summaries from the
+    unified-resource model. That state snapshot remains model-only read-only
+    infrastructure context, must honor the same policy/redaction boundary before
+    provider transport, and must not grant approval or execution authority.
     Assistant runtime may also hydrate canonical
     relationship context for those handoff resources through
     `FormatResourceRelationshipContext(...)` and canonical parent-edge synthesis,

@@ -114,10 +114,12 @@ Patrol-specific presentation helpers.
    posture, and terminal success/failure without treating approval as execution
    authority or exposing raw command/execution payloads. Assistant may also
    enrich that same handoff with refreshed unified finding and
-   investigation-record state, canonical resource-policy guidance, canonical
+   investigation-record state, canonical resource-policy guidance, current
+   canonical resource-state and capability context, canonical
    resource-relationship context, and recent canonical resource-timeline changes
-   for explanation; Assistant resolves those timeline lookups through the
-   current canonical unified-resource model before falling back to handoff IDs.
+   for explanation; Assistant resolves those state, topology, and timeline
+   lookups through the current canonical unified-resource model before falling
+   back to handoff IDs where compatibility requires it.
    If the referenced finding is no longer current,
    Assistant must drop the stored handoff instead of continuing from stale
    Patrol context. Assistant handoff context must also carry the unified

@@ -534,6 +534,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	handoffResourceProvider := s.unifiedResourceProvider
 	s.mu.RUnlock()
 	handoffContext = mergeHandoffResourcePolicyContext(handoffContext, handoffResources, handoffResourceProvider)
+	handoffContext = mergeHandoffResourceStateContext(handoffContext, handoffResources, handoffResourceProvider)
 	handoffContext = mergeHandoffResourceRelationshipContext(handoffContext, handoffResources, handoffResourceProvider)
 	handoffContext = mergeHandoffResourceTimelineContext(handoffContext, handoffResources, handoffResourceProvider, s.actionAuditStore, time.Now())
 	handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)
@@ -865,28 +866,14 @@ func mergeHandoffResourcePolicyContext(handoffContext string, handoffResources [
 }
 
 func buildHandoffResourcePolicyContext(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
-	resources := normalizeHandoffResources(handoffResources)
-	if len(resources) == 0 || provider == nil {
+	resources := canonicalHandoffResources(handoffResources, provider)
+	if len(resources) == 0 {
 		return ""
 	}
 
 	var b strings.Builder
-	seen := make(map[string]struct{}, len(resources))
 	count := 0
-	for _, handoffResource := range resources {
-		resource, ok := tools.CanonicalHandoffUnifiedResource(provider, handoffResource.ID, handoffResource.Name, handoffResource.Type, handoffResource.Node)
-		if !ok {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(string(resource.Type)) + "\x00" + strings.TrimSpace(resource.ID))
-		if key == "\x00" {
-			continue
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-
+	for _, resource := range resources {
 		policy, aiSafeSummary := unifiedresources.CanonicalGovernanceMetadata(&resource)
 		if policy == nil && strings.TrimSpace(aiSafeSummary) == "" {
 			continue
@@ -930,6 +917,61 @@ func buildHandoffResourcePolicyContext(handoffResources []HandoffResource, provi
 	return strings.TrimSpace(b.String())
 }
 
+func mergeHandoffResourceStateContext(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
+	stateContext := buildHandoffResourceStateContext(handoffResources, provider)
+	switch {
+	case strings.TrimSpace(handoffContext) == "":
+		return stateContext
+	case stateContext == "":
+		return strings.TrimSpace(handoffContext)
+	default:
+		return strings.TrimSpace(handoffContext) + "\n\n" + stateContext
+	}
+}
+
+func buildHandoffResourceStateContext(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
+	resources := canonicalHandoffResources(handoffResources, provider)
+	if len(resources) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("[Resource State Context]")
+	for idx, resource := range resources {
+		labelPrefix := "Resource State"
+		if len(resources) > 1 {
+			labelPrefix = fmt.Sprintf("Resource State %d", idx+1)
+		}
+		policy, aiSafeSummary := unifiedresources.CanonicalGovernanceMetadata(&resource)
+		label := unifiedresources.ResourcePolicyLabel(resource.Name, aiSafeSummary, policy)
+		if label == "" {
+			label = "resource"
+		}
+		resourceType := strings.TrimSpace(string(unifiedresources.ContractResourceType(resource)))
+		if resourceType == "" {
+			resourceType = strings.TrimSpace(string(resource.Type))
+		}
+
+		appendHandoffContextLine(&b, labelPrefix, label)
+		appendHandoffContextLine(&b, labelPrefix+" ID", formatHandoffResourceID(resource, policy))
+		appendHandoffContextLine(&b, labelPrefix+" Type", resourceType)
+		appendHandoffContextLine(&b, labelPrefix+" Status", string(resource.Status))
+		appendHandoffContextLine(&b, labelPrefix+" Last Seen At", formatHandoffContextTime(resource.LastSeen))
+		appendHandoffContextLine(&b, labelPrefix+" Updated At", formatHandoffContextTime(resource.UpdatedAt))
+		appendHandoffContextLine(&b, labelPrefix+" Sources", formatHandoffResourceSources(resource))
+		appendHandoffContextLine(&b, labelPrefix+" Source Health", formatHandoffResourceSourceStatus(resource))
+		appendHandoffContextLine(&b, labelPrefix+" Metrics", formatHandoffResourceMetrics(resource.Metrics))
+		appendHandoffContextLine(&b, labelPrefix+" Parent", formatHandoffResourceParent(resource, policy))
+		if resource.ChildCount > 0 {
+			appendHandoffContextLine(&b, labelPrefix+" Child Count", fmt.Sprintf("%d", resource.ChildCount))
+		}
+		appendHandoffContextLine(&b, labelPrefix+" Incident Summary", formatHandoffResourceIncidentSummary(resource, policy))
+		appendHandoffContextLine(&b, labelPrefix+" Capabilities", formatHandoffResourceCapabilities(resource, policy, 4))
+	}
+	appendHandoffContextLine(&b, "Resource State Boundary", "Current resource state, source health, incidents, metrics, and capabilities are read-only canonical infrastructure context; they are not approval or execution authority.")
+	return strings.TrimSpace(b.String())
+}
+
 func mergeHandoffResourceRelationshipContext(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
 	relationshipContext := buildHandoffResourceRelationshipContext(handoffResources, provider)
 	switch {
@@ -943,28 +985,14 @@ func mergeHandoffResourceRelationshipContext(handoffContext string, handoffResou
 }
 
 func buildHandoffResourceRelationshipContext(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
-	resources := normalizeHandoffResources(handoffResources)
-	if len(resources) == 0 || provider == nil {
+	resources := canonicalHandoffResources(handoffResources, provider)
+	if len(resources) == 0 {
 		return ""
 	}
 
 	var b strings.Builder
-	seen := make(map[string]struct{}, len(resources))
 	count := 0
-	for _, handoffResource := range resources {
-		resource, ok := tools.CanonicalHandoffUnifiedResource(provider, handoffResource.ID, handoffResource.Name, handoffResource.Type, handoffResource.Node)
-		if !ok {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(string(resource.Type)) + "\x00" + strings.TrimSpace(resource.ID))
-		if key == "\x00" {
-			continue
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-
+	for _, resource := range resources {
 		resource.Relationships = unifiedresources.ResourceRelationshipsWithCanonicalParent(resource)
 		relationshipContext := strings.TrimSpace(unifiedresources.FormatResourceRelationshipContext(&resource, 3))
 		if relationshipContext == "" {
@@ -1103,6 +1131,32 @@ func canonicalHandoffTimelineResourceIDs(handoffResources []HandoffResource, pro
 		return nil
 	}
 	return ids
+}
+
+func canonicalHandoffResources(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) []unifiedresources.Resource {
+	resources := normalizeHandoffResources(handoffResources)
+	if len(resources) == 0 || provider == nil {
+		return nil
+	}
+
+	out := make([]unifiedresources.Resource, 0, len(resources))
+	seen := make(map[string]struct{}, len(resources))
+	for _, handoffResource := range resources {
+		resource, ok := tools.CanonicalHandoffUnifiedResource(provider, handoffResource.ID, handoffResource.Name, handoffResource.Type, handoffResource.Node)
+		if !ok {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(string(resource.Type)) + "\x00" + strings.TrimSpace(resource.ID))
+		if key == "\x00" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, resource)
+	}
+	return out
 }
 
 func handoffResourceTimelineChangeKey(change unifiedresources.ResourceChange) string {
@@ -1285,10 +1339,264 @@ func hydrateHandoffActionAudit(action *HandoffAction, store unifiedresources.Res
 }
 
 func formatHandoffActionTime(value time.Time) string {
+	return formatHandoffContextTime(value)
+}
+
+func formatHandoffContextTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
 	}
 	return value.UTC().Format(time.RFC3339)
+}
+
+func formatHandoffResourceSources(resource unifiedresources.Resource) string {
+	seen := make(map[string]struct{}, len(resource.Sources)+len(resource.SourceStatus))
+	sources := make([]string, 0, len(resource.Sources)+len(resource.SourceStatus))
+	for _, source := range resource.Sources {
+		name := strings.TrimSpace(string(source))
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		sources = append(sources, name)
+	}
+	for source := range resource.SourceStatus {
+		name := strings.TrimSpace(string(source))
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		sources = append(sources, name)
+	}
+	sort.Strings(sources)
+	return strings.Join(sources, ", ")
+}
+
+func formatHandoffResourceSourceStatus(resource unifiedresources.Resource) string {
+	if len(resource.SourceStatus) == 0 {
+		return ""
+	}
+
+	sources := make([]string, 0, len(resource.SourceStatus))
+	for source := range resource.SourceStatus {
+		if name := strings.TrimSpace(string(source)); name != "" {
+			sources = append(sources, name)
+		}
+	}
+	sort.Strings(sources)
+
+	parts := make([]string, 0, len(sources))
+	for _, sourceName := range sources {
+		status := resource.SourceStatus[unifiedresources.DataSource(sourceName)]
+		state := strings.TrimSpace(status.Status)
+		if state == "" && status.LastSeen.IsZero() {
+			continue
+		}
+		if state == "" {
+			state = "reported"
+		}
+		part := sourceName + ": " + state
+		if lastSeen := formatHandoffContextTime(status.LastSeen); lastSeen != "" {
+			part += " (last seen " + lastSeen + ")"
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func formatHandoffResourceMetrics(metrics *unifiedresources.ResourceMetrics) string {
+	if metrics == nil {
+		return ""
+	}
+	values := []struct {
+		label string
+		value *unifiedresources.MetricValue
+	}{
+		{label: "cpu", value: metrics.CPU},
+		{label: "memory", value: metrics.Memory},
+		{label: "disk", value: metrics.Disk},
+		{label: "network in", value: metrics.NetIn},
+		{label: "network out", value: metrics.NetOut},
+	}
+
+	parts := make([]string, 0, len(values))
+	for _, item := range values {
+		if formatted := formatHandoffMetricValue(item.value); formatted != "" {
+			parts = append(parts, item.label+" "+formatted)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatHandoffMetricValue(value *unifiedresources.MetricValue) string {
+	if value == nil {
+		return ""
+	}
+	if value.Percent > 0 {
+		return trimHandoffFloat(value.Percent) + "%"
+	}
+	unit := strings.TrimSpace(value.Unit)
+	if value.Value != 0 {
+		if unit != "" {
+			return trimHandoffFloat(value.Value) + " " + unit
+		}
+		return trimHandoffFloat(value.Value)
+	}
+	if value.Used != nil && value.Total != nil && *value.Total > 0 {
+		return fmt.Sprintf("%d/%d", *value.Used, *value.Total)
+	}
+	return ""
+}
+
+func trimHandoffFloat(value float64) string {
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.1f", value), "0"), ".")
+}
+
+func formatHandoffResourceParent(resource unifiedresources.Resource, policy *unifiedresources.ResourcePolicy) string {
+	parent := strings.TrimSpace(resource.ParentName)
+	if parent != "" {
+		return unifiedresources.ResourcePolicyRedactedValue(parent, policy,
+			unifiedresources.ResourceRedactionHostname,
+			unifiedresources.ResourceRedactionAlias,
+			unifiedresources.ResourceRedactionPlatformID,
+		)
+	}
+	parentID := ""
+	if resource.ParentID != nil {
+		parentID = strings.TrimSpace(*resource.ParentID)
+	}
+	if parentID == "" {
+		return ""
+	}
+	return unifiedresources.ResourcePolicyRedactedValue(parentID, policy,
+		unifiedresources.ResourceRedactionAlias,
+		unifiedresources.ResourceRedactionPlatformID,
+		unifiedresources.ResourceRedactionPath,
+	)
+}
+
+func formatHandoffResourceID(resource unifiedresources.Resource, policy *unifiedresources.ResourcePolicy) string {
+	return unifiedresources.ResourcePolicyRedactedValue(resource.ID, policy,
+		unifiedresources.ResourceRedactionAlias,
+		unifiedresources.ResourceRedactionHostname,
+		unifiedresources.ResourceRedactionPlatformID,
+		unifiedresources.ResourceRedactionPath,
+	)
+}
+
+func formatHandoffResourceIncidentSummary(resource unifiedresources.Resource, policy *unifiedresources.ResourcePolicy) string {
+	parts := make([]string, 0, 4)
+	if resource.IncidentCount > 0 {
+		parts = append(parts, fmt.Sprintf("count %d", resource.IncidentCount))
+	}
+	if severity := strings.TrimSpace(string(resource.IncidentSeverity)); severity != "" {
+		parts = append(parts, "severity "+severity)
+	}
+	if summary := strings.TrimSpace(resource.IncidentSummary); summary != "" {
+		if safeSummary := formatHandoffResourceFreeText(summary, resource, policy); safeSummary != "" {
+			parts = append(parts, safeSummary)
+		}
+	}
+	if action := strings.TrimSpace(resource.IncidentAction); action != "" {
+		if safeAction := formatHandoffResourceFreeText(action, resource, policy); safeAction != "" {
+			parts = append(parts, "action "+safeAction)
+		}
+	}
+	for idx, incident := range resource.Incidents {
+		if idx >= 2 {
+			break
+		}
+		summary := strings.TrimSpace(incident.Summary)
+		if summary == "" && strings.TrimSpace(incident.Code) == "" {
+			continue
+		}
+		item := formatHandoffResourceFreeText(summary, resource, policy)
+		if item == "" {
+			item = strings.TrimSpace(incident.Code)
+		} else if code := strings.TrimSpace(incident.Code); code != "" {
+			item += " (" + code + ")"
+		}
+		if severity := strings.TrimSpace(string(incident.Severity)); severity != "" {
+			item += " severity " + severity
+		}
+		parts = append(parts, item)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func formatHandoffResourceCapabilities(resource unifiedresources.Resource, policy *unifiedresources.ResourcePolicy, limit int) string {
+	if len(resource.Capabilities) == 0 {
+		return ""
+	}
+	if limit <= 0 {
+		limit = len(resource.Capabilities)
+	}
+
+	seen := make(map[string]struct{}, len(resource.Capabilities))
+	parts := make([]string, 0, min(limit, len(resource.Capabilities)))
+	for _, capability := range resource.Capabilities {
+		name := strings.TrimSpace(capability.Name)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name + "\x00" + strings.TrimSpace(string(capability.Type)))
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		qualifiers := make([]string, 0, 2)
+		if capabilityType := strings.TrimSpace(string(capability.Type)); capabilityType != "" {
+			qualifiers = append(qualifiers, capabilityType)
+		}
+		if approvalLevel := strings.TrimSpace(string(capability.MinimumApprovalLevel)); approvalLevel != "" {
+			qualifiers = append(qualifiers, "approval "+approvalLevel)
+		}
+
+		part := name
+		if len(qualifiers) > 0 {
+			part += " (" + strings.Join(qualifiers, "; ") + ")"
+		}
+		if description := strings.TrimSpace(capability.Description); description != "" {
+			if safeDescription := formatHandoffResourceFreeText(description, resource, policy); safeDescription != "" {
+				part += ": " + safeDescription
+			}
+		}
+		parts = append(parts, part)
+		if len(parts) >= limit {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	if remaining := len(resource.Capabilities) - len(parts); remaining > 0 {
+		parts = append(parts, fmt.Sprintf("%d more", remaining))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func formatHandoffResourceFreeText(value string, resource unifiedresources.Resource, policy *unifiedresources.ResourcePolicy) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	redacted := strings.TrimSpace(unifiedresources.ResourcePolicyRedactedText(value, resource))
+	if redacted == "" {
+		return ""
+	}
+	if unifiedresources.ResourcePolicyRequiresGovernedSummary(policy) && redacted == value {
+		return ""
+	}
+	return redacted
 }
 
 func appendHandoffContextLine(b *strings.Builder, label, value string) {
