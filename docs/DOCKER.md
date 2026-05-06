@@ -7,7 +7,10 @@ Pulse is distributed as a lightweight, Alpine-based Docker image.
 > does not include the private Pulse Pro runtime hooks. Use
 > <https://pulserelay.pro/download.html> with your activation key, then run the
 > private registry login and `PULSE_IMAGE=license.pulserelay.pro/pulse-pro:<version>`
-> compose commands shown there.
+> compose commands shown there. Those commands require the compose file image
+> line to use the `PULSE_IMAGE` variable, as shown below. If your compose file
+> hardcodes `image: rcourtman/pulse:...`, replace that line with the variable
+> form or with the private image shown on the download page before restarting.
 
 ## 🚀 Quick Start
 
@@ -31,7 +34,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   pulse:
-    image: rcourtman/pulse:vX.Y.Z
+    image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}
     container_name: pulse
     restart: unless-stopped
     ports:
@@ -49,6 +52,10 @@ volumes:
 ```
 
 Run with: `docker compose up -d`
+
+The `PULSE_IMAGE` variable lets the same compose file run either the public
+community image or, for eligible paid customers, the private Pulse Pro image
+shown on <https://pulserelay.pro/download.html>.
 
 ---
 
@@ -183,7 +190,10 @@ Paid Pulse Pro Docker installs use the private Pulse Pro registry rather than
 the public `rcourtman/pulse` image. Open <https://pulserelay.pro/download.html>,
 paste your activation key, run the Docker login command shown there, then run
 the shown `PULSE_IMAGE=license.pulserelay.pro/pulse-pro:<version> docker compose pull`
-and `docker compose up -d` commands from the host that already runs Pulse.
+and `docker compose up -d` commands from the host that already runs Pulse. If
+your compose file has a hardcoded `image: rcourtman/pulse:...` line, change it
+to `image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}` or directly to the private
+image shown on the download page before running those commands.
 
 ### Disabling Update Features
 
@@ -197,7 +207,7 @@ Pulse provides granular control over update features via environment variables o
 ```yaml
 services:
   pulse:
-    image: rcourtman/pulse:vX.Y.Z
+    image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}
     environment:
       - PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
 ```

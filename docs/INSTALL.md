@@ -6,7 +6,10 @@ Pulse offers flexible installation options from Docker to enterprise-ready Kuber
 > public `rcourtman/pulse` Docker image are community builds. They can accept an
 > activation key, but they do not include the private Pulse Pro runtime hooks.
 > Use <https://pulserelay.pro/download.html> with your activation key to get the
-> private Pulse Pro Docker image or Linux archive.
+> private Pulse Pro Docker image or Linux archive. For Docker Compose, use the
+> `PULSE_IMAGE`-aware image line shown below, or replace a hardcoded
+> `rcourtman/pulse` image line with the private image shown on the download
+> page.
 
 ## 🚀 Quick Start (Recommended)
 
@@ -48,7 +51,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   pulse:
-    image: rcourtman/pulse:vX.Y.Z
+    image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}
     container_name: pulse
     restart: unless-stopped
     ports:
@@ -62,6 +65,11 @@ services:
 volumes:
   pulse_data:
 ```
+
+The `PULSE_IMAGE` variable lets paid Docker users switch the same compose file
+to the private Pulse Pro image shown on
+<https://pulserelay.pro/download.html> without rebuilding the file around a
+second deployment path.
 
 > **Note**: Plain text passwords set via `PULSE_AUTH_PASS` are auto-hashed on startup. For production, prefer Quick Security Setup or a pre-hashed bcrypt value.
 > **Note**: Docker monitoring requires the unified agent on the Docker host with socket access; the Pulse server container does not need `/var/run/docker.sock`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).

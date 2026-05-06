@@ -150,7 +150,11 @@ an activation key, but they do not include the private Pulse Pro runtime hooks.
 Use <https://pulserelay.pro/download.html> with your activation key instead.
 Docker users should run the private registry login and
 `PULSE_IMAGE=license.pulserelay.pro/pulse-pro:<version>` compose commands shown
-there. Direct Linux users should download the private Pulse Pro archive from the
+there. Those commands require your compose file image line to use the
+`PULSE_IMAGE` variable. If your compose file hardcodes
+`image: rcourtman/pulse:...`, replace that line with the variable form from
+`docker-compose.yml` or directly with the private image shown on the download
+page. Direct Linux users should download the private Pulse Pro archive from the
 same page.
 
 #### v5 License Migration

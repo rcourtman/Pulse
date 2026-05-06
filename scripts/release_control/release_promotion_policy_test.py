@@ -357,6 +357,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertIn("`pulse-pro-v...` archives identify `Pulse Pro`", contract)
         self.assertIn("https://pulserelay.pro/download.html", contract)
+        self.assertIn("PULSE_IMAGE`-aware compose image line", normalize_ws(contract))
+        self.assertIn("hardcoded `image: rcourtman/pulse:...`", normalize_ws(contract))
         self.assertIn("control_plane.py --branch-for-version", content)
         self.assertIn('git fetch --prune origin main "${REQUIRED_BRANCH}" --tags', content)
         self.assertIn('REQUIRED_BRANCH: ${{ steps.branch_policy.outputs.required_branch }}', content)

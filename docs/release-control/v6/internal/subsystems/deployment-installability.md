@@ -226,7 +226,11 @@ server-side update execution surfaces.
    where paid customers are likely to install or upgrade, and generated public
    release bodies must send Relay, Pulse Pro, and eligible legacy customers to
    `https://pulserelay.pro/download.html` for the private Pulse Pro Docker image
-   or Linux archive.
+   or Linux archive. Public Docker and install docs must also preserve a
+   `PULSE_IMAGE`-aware compose image line and warn that any hardcoded
+   `image: rcourtman/pulse:...` line must be replaced before the private
+   Pulse Pro compose commands can move an existing Docker install off the
+   community image.
    The repo-root VERSION file is part of the same governed boundary and must
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or
