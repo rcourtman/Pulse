@@ -43,6 +43,7 @@ type AIService interface {
 	CreateSession(ctx context.Context) (*chat.Session, error)
 	DeleteSession(ctx context.Context, sessionID string) error
 	GetMessages(ctx context.Context, sessionID string) ([]chat.Message, error)
+	GetModelHandoffFindingID(ctx context.Context, sessionID string) (string, error)
 	AbortSession(ctx context.Context, sessionID string) error
 	SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
 	GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error)
@@ -1175,10 +1176,18 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	handoffContext := ""
 	var handoffResources []chat.HandoffResource
 	var handoffActions []chat.HandoffAction
-	if req.FindingID != "" {
+	findingID := strings.TrimSpace(req.FindingID)
+	if findingID == "" && strings.TrimSpace(req.SessionID) != "" {
+		if storedFindingID, err := svc.GetModelHandoffFindingID(ctx, req.SessionID); err != nil {
+			log.Debug().Err(err).Str("session_id", req.SessionID).Msg("Unable to load stored Assistant finding handoff reference")
+		} else {
+			findingID = strings.TrimSpace(storedFindingID)
+		}
+	}
+	if findingID != "" {
 		store := h.GetUnifiedStoreForOrg(GetOrgID(ctx))
 		if store != nil {
-			if f := store.Get(req.FindingID); f != nil {
+			if f := store.Get(findingID); f != nil {
 				handoffContext = buildUnifiedFindingChatContext(f)
 				handoffResources = buildUnifiedFindingHandoffResources(f)
 				handoffActions = buildUnifiedFindingHandoffActions(f)
@@ -1193,7 +1202,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		SessionID:        req.SessionID,
 		Model:            req.Model,
 		Mentions:         chatMentions,
-		FindingID:        req.FindingID,
+		FindingID:        findingID,
 		HandoffContext:   handoffContext,
 		HandoffResources: handoffResources,
 		HandoffActions:   handoffActions,

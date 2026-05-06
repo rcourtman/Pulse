@@ -59,6 +59,24 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	if initial != "" {
 		t.Fatalf("initial handoff context = %q, want empty", initial)
 	}
+	initialFindingID, err := store.GetModelHandoffFindingID(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffFindingID failed: %v", err)
+	}
+	if initialFindingID != "" {
+		t.Fatalf("initial handoff finding ID = %q, want empty", initialFindingID)
+	}
+
+	if err := store.SetModelHandoffFindingID(session.ID, " finding-123 "); err != nil {
+		t.Fatalf("SetModelHandoffFindingID failed: %v", err)
+	}
+	gotFindingID, err := store.GetModelHandoffFindingID(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffFindingID failed: %v", err)
+	}
+	if gotFindingID != "finding-123" {
+		t.Fatalf("handoff finding ID = %q, want finding-123", gotFindingID)
+	}
 
 	handoffContext := "  [Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup.  "
 	if err := store.SetModelHandoffContext(session.ID, handoffContext); err != nil {
@@ -158,6 +176,13 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	if len(reloadedResources) != 1 || reloadedResources[0].ID != "vm-100" {
 		t.Fatalf("reloaded handoff resources = %#v, want persisted VM reference", reloadedResources)
 	}
+	reloadedFindingID, err := reloadedStore.GetModelHandoffFindingID(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffFindingID after reload failed: %v", err)
+	}
+	if reloadedFindingID != "finding-123" {
+		t.Fatalf("reloaded handoff finding ID = %q, want finding-123", reloadedFindingID)
+	}
 	reloadedActions, err := reloadedStore.GetModelHandoffActions(session.ID)
 	if err != nil {
 		t.Fatalf("GetModelHandoffActions after reload failed: %v", err)
@@ -182,6 +207,13 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	}
 	if got != strings.TrimSpace(handoffContext) {
 		t.Fatalf("handoff context after resource clear = %q, want retained context", got)
+	}
+	gotFindingID, err = store.GetModelHandoffFindingID(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffFindingID after resource clear failed: %v", err)
+	}
+	if gotFindingID != "finding-123" {
+		t.Fatalf("handoff finding ID after resource clear = %q, want retained finding reference", gotFindingID)
 	}
 	gotActions, err = store.GetModelHandoffActions(session.ID)
 	if err != nil {
@@ -247,6 +279,13 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	if len(gotActions) != 1 {
 		t.Fatalf("expected keep-pinned context clear to retain handoff actions, got %#v", gotActions)
 	}
+	gotFindingID, err = store.GetModelHandoffFindingID(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffFindingID after keep-pinned clear failed: %v", err)
+	}
+	if gotFindingID != "finding-123" {
+		t.Fatalf("expected keep-pinned context clear to retain finding reference, got %q", gotFindingID)
+	}
 
 	store.ClearSessionState(session.ID, false)
 	got, err = store.GetModelHandoffContext(session.ID)
@@ -269,6 +308,13 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	}
 	if len(gotActions) != 0 {
 		t.Fatalf("handoff actions after full clear = %#v, want empty", gotActions)
+	}
+	gotFindingID, err = store.GetModelHandoffFindingID(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffFindingID after full clear failed: %v", err)
+	}
+	if gotFindingID != "" {
+		t.Fatalf("handoff finding ID after full clear = %q, want empty", gotFindingID)
 	}
 }
 

@@ -756,7 +756,11 @@ the canonical monitored-system blocked payload.
    affect session-scoped action validation. If stored for follow-up turns, they
    remain model-context references rather than saved user text or action
    authority, and the runtime must re-resolve them against current canonical
-   resources before use. Chat execution may also hydrate canonical
+   resources before use. The API/chat boundary may also store the originating
+   finding ID as model-context metadata so later turns in the same Assistant
+   session can refresh the current unified finding and investigation record
+   before model execution; that reference is not lifecycle authority and must not
+   be persisted as user text. Chat execution may also hydrate canonical
    resource-policy context for those resources through unified-resource
    resolution and shared policy presentation helpers, but the resulting handling
    guidance is read-only, model-only context and must not become saved user text,

@@ -360,13 +360,17 @@ profile and assignment columns, but embedded table framing must route through
    context for a Patrol finding, including same-session metadata retained for
    follow-up turns and any resolved-resource scope hydrated from that finding,
    is also not agent lifecycle state and must not be used as enrollment
-   evidence, command-websocket identity, or installer authority. Structured
-   Assistant handoff action references from the same Patrol finding remain
-   AI/runtime review metadata only; lifecycle code must not treat approval IDs,
-   fix IDs, risk, or target-resource labels from that handoff as agent command
-   grants, enrollment proof, or auto-approval policy. Any approval status
-   snapshot refreshed for Assistant review remains read-only AI/runtime context
-   and must not become command-websocket authority or lifecycle execution state.
+   evidence, command-websocket identity, or installer authority. If Assistant
+   stores the originating finding ID to refresh the current unified finding and
+   investigation record on follow-up turns, that stored reference remains an
+   AI/runtime context selector and still cannot become agent enrollment,
+   lifecycle, or command-websocket authority. Structured Assistant handoff action
+   references from the same Patrol finding remain AI/runtime review metadata
+   only; lifecycle code must not treat approval IDs, fix IDs, risk, or
+   target-resource labels from that handoff as agent command grants, enrollment
+   proof, or auto-approval policy. Any approval status snapshot refreshed for
+   Assistant review remains read-only AI/runtime context and must not become
+   command-websocket authority or lifecycle execution state.
    The same isolation rule applies to CSRF token-store behavior in
    `internal/api/csrf_store.go`: lifecycle-adjacent browser flows may rely on
    the shared API/security layer to keep parallel replacement-token retries

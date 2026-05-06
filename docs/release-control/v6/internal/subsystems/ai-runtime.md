@@ -185,11 +185,16 @@ runtime cost control, and shared AI transport surfaces.
     references may persist as session model-context metadata for follow-up turns,
     but they remain references only; each turn must rehydrate them from the
     current canonical unified-resource model before action validation can use
-    them. Assistant runtime may also hydrate canonical resource-policy context
-    for those handoff resources, using the same unified-resource resolution and
-    policy presentation helpers that govern mention prefetch and provider-bound
-    redaction; that context remains model-only handling guidance, not saved user
-    text or disclosure authority. Assistant runtime may also hydrate canonical
+    them. Structured finding references from Patrol/Assistant handoffs may also
+    persist as session model-context metadata so follow-up turns can refresh the
+    current unified finding and investigation record before model execution;
+    those references remain model-only context selectors, not saved user text or
+    lifecycle authority. Assistant runtime may also hydrate canonical
+    resource-policy context for those handoff resources, using the same
+    unified-resource resolution and policy presentation helpers that govern
+    mention prefetch and provider-bound redaction; that context remains
+    model-only handling guidance, not saved user text or disclosure authority.
+    Assistant runtime may also hydrate canonical
     relationship context for those handoff resources through
     `FormatResourceRelationshipContext(...)` and canonical parent-edge synthesis,
     but those topology facts remain read-only explanation context and do not

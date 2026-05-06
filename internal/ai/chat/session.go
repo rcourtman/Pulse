@@ -51,6 +51,7 @@ type sessionData struct {
 }
 
 type sessionModelContext struct {
+	HandoffFindingID string            `json:"handoff_finding_id,omitempty"`
 	HandoffContext   string            `json:"handoff_context,omitempty"`
 	HandoffResources []HandoffResource `json:"handoff_resources,omitempty"`
 	HandoffActions   []HandoffAction   `json:"handoff_actions,omitempty"`
@@ -128,7 +129,8 @@ func modelContextEmpty(modelContext *sessionModelContext) bool {
 	if modelContext == nil {
 		return true
 	}
-	return strings.TrimSpace(modelContext.HandoffContext) == "" &&
+	return strings.TrimSpace(modelContext.HandoffFindingID) == "" &&
+		strings.TrimSpace(modelContext.HandoffContext) == "" &&
 		len(normalizeHandoffResources(modelContext.HandoffResources)) == 0 &&
 		len(normalizeHandoffActions(modelContext.HandoffActions)) == 0
 }
@@ -381,6 +383,34 @@ func (s *SessionStore) AddMessage(id string, msg Message) error {
 	return s.writeSession(*data)
 }
 
+// SetModelHandoffFindingID stores the product-originated finding reference for
+// follow-up turns. The reference lets API handlers refresh the current Patrol
+// context without treating the finding as user-authored chat text.
+func (s *SessionStore) SetModelHandoffFindingID(id, findingID string) error {
+	findingID = strings.TrimSpace(findingID)
+	if findingID == "" {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if data.ModelContext == nil {
+		data.ModelContext = &sessionModelContext{}
+	}
+	data.ModelContext.HandoffFindingID = findingID
+	data.ModelContext.UpdatedAt = now
+	data.UpdatedAt = now
+
+	return s.writeSession(*data)
+}
+
 // SetModelHandoffContext stores model-only handoff context for future turns.
 // It is intentionally session metadata, not a user-authored chat message.
 func (s *SessionStore) SetModelHandoffContext(id, handoffContext string) error {
@@ -462,6 +492,22 @@ func (s *SessionStore) SetModelHandoffActions(id string, handoffActions []Handof
 	data.UpdatedAt = now
 
 	return s.writeSession(*data)
+}
+
+// GetModelHandoffFindingID returns the stored product-originated finding
+// reference for a session.
+func (s *SessionStore) GetModelHandoffFindingID(id string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return "", err
+	}
+	if data.ModelContext == nil {
+		return "", nil
+	}
+	return strings.TrimSpace(data.ModelContext.HandoffFindingID), nil
 }
 
 // GetModelHandoffContext returns model-only handoff context for a session.

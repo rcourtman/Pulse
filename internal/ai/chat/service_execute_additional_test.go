@@ -189,6 +189,7 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	req := ExecuteRequest{
 		SessionID:      "sess-handoff",
 		Prompt:         "What happened?",
+		FindingID:      "finding-123",
 		HandoffContext: "[Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup.",
 		HandoffResources: []HandoffResource{{
 			ID:   "vm-100",
@@ -232,6 +233,13 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 	if strings.Contains(stored[0].Content, "Recent Changes Across Infrastructure") {
 		t.Fatalf("stored user message should not include timeline context: %q", stored[0].Content)
+	}
+	storedFindingID, err := store.GetModelHandoffFindingID("sess-handoff")
+	if err != nil {
+		t.Fatalf("GetModelHandoffFindingID failed: %v", err)
+	}
+	if storedFindingID != "finding-123" {
+		t.Fatalf("stored handoff finding ID = %q, want finding-123", storedFindingID)
 	}
 
 	if len(capturedMessages) == 0 {

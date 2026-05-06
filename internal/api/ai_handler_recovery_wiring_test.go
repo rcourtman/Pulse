@@ -43,6 +43,9 @@ func (s *capturingAIService) DeleteSession(ctx context.Context, sessionID string
 func (s *capturingAIService) GetMessages(ctx context.Context, sessionID string) ([]chat.Message, error) {
 	return nil, nil
 }
+func (s *capturingAIService) GetModelHandoffFindingID(ctx context.Context, sessionID string) (string, error) {
+	return "", nil
+}
 func (s *capturingAIService) AbortSession(ctx context.Context, sessionID string) error { return nil }
 func (s *capturingAIService) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
 	return nil, nil

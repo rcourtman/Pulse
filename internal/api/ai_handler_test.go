@@ -83,6 +83,16 @@ func (m *MockAIService) GetMessages(ctx context.Context, sessionID string) ([]ch
 	return args.Get(0).([]chat.Message), args.Error(1)
 }
 
+func (m *MockAIService) GetModelHandoffFindingID(ctx context.Context, sessionID string) (string, error) {
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "GetModelHandoffFindingID" {
+			args := m.Called(ctx, sessionID)
+			return args.String(0), args.Error(1)
+		}
+	}
+	return "", nil
+}
+
 func (m *MockAIService) AbortSession(ctx context.Context, sessionID string) error {
 	args := m.Called(ctx, sessionID)
 	return args.Error(0)
@@ -668,6 +678,64 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 	h.HandleChat(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleChat_RefreshesStoredFindingContextForFollowUp(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	resolvedAt := time.Date(2026, 5, 6, 13, 0, 0, 0, time.UTC)
+	store := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
+	store.AddFromAI(&unified.UnifiedFinding{
+		ID:                   "finding-123",
+		Source:               unified.SourceAIPatrol,
+		Severity:             unified.SeverityWarning,
+		Category:             unified.CategoryReliability,
+		ResourceID:           "vm-100",
+		ResourceName:         "web-server",
+		ResourceType:         "vm",
+		Node:                 "pve-1",
+		Title:                "Backup pressure resolved",
+		Description:          "CPU pressure returned to baseline.",
+		Recommendation:       "Keep monitoring the next backup window.",
+		InvestigationStatus:  "completed",
+		InvestigationOutcome: "resolved",
+		UserNote:             "Operator confirmed the maintenance window completed.",
+		ResolvedAt:           &resolvedAt,
+		DetectedAt:           resolvedAt.Add(-30 * time.Minute),
+		LastSeenAt:           resolvedAt,
+	})
+	h.SetUnifiedStore(store)
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("GetModelHandoffFindingID", mock.Anything, "session-123").
+		Return("finding-123", nil)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "session-123", reqArg.SessionID)
+			assert.Equal(t, "finding-123", reqArg.FindingID)
+			assert.Equal(t, "What changed?", reqArg.Prompt)
+			assert.Contains(t, reqArg.HandoffContext, "[Finding Context]")
+			assert.Contains(t, reqArg.HandoffContext, "Title: Backup pressure resolved")
+			assert.Contains(t, reqArg.HandoffContext, "Investigation Outcome: resolved")
+			assert.Contains(t, reqArg.HandoffContext, "User Note: Operator confirmed the maintenance window completed.")
+			assert.NotContains(t, reqArg.HandoffContext, "User message: What changed?")
+		})
+
+	body := `{"prompt":"What changed?","session_id":"session-123"}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockSvc.AssertExpectations(t)
 }
 
 func TestHandleChat_DropsLegacyMentionTypes(t *testing.T) {

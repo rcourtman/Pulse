@@ -452,6 +452,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	handoffContext := strings.TrimSpace(req.HandoffContext)
 	handoffResources := normalizeHandoffResources(req.HandoffResources)
 	handoffActions := normalizeHandoffActions(req.HandoffActions)
+	handoffFindingID := strings.TrimSpace(req.FindingID)
+	if handoffFindingID != "" {
+		if err := sessions.SetModelHandoffFindingID(session.ID, handoffFindingID); err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff finding reference")
+		}
+	}
 	if handoffContext != "" {
 		if err := sessions.SetModelHandoffContext(session.ID, handoffContext); err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff context")
@@ -1588,6 +1594,20 @@ func (s *Service) GetMessages(ctx context.Context, sessionID string) ([]Message,
 	}
 
 	return sessions.GetMessages(sessionID)
+}
+
+// GetModelHandoffFindingID returns the session-scoped finding reference used to
+// refresh model-only Patrol context on follow-up turns.
+func (s *Service) GetModelHandoffFindingID(ctx context.Context, sessionID string) (string, error) {
+	s.mu.RLock()
+	sessions := s.sessions
+	s.mu.RUnlock()
+
+	if sessions == nil {
+		return "", fmt.Errorf("service not started")
+	}
+
+	return sessions.GetModelHandoffFindingID(sessionID)
 }
 
 // AbortSession aborts an ongoing session

@@ -140,6 +140,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 
 	handlerText := string(handlerSource)
 	for _, required := range []string{
+		`svc.GetModelHandoffFindingID(ctx, req.SessionID)`,
 		"handoffContext = buildUnifiedFindingChatContext(f)",
 		"handoffResources = buildUnifiedFindingHandoffResources(f)",
 		"handoffActions = buildUnifiedFindingHandoffActions(f)",
@@ -159,8 +160,11 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	chatServiceText := string(chatServiceSource)
 	for _, required := range []string{
 		"handoffContext := strings.TrimSpace(req.HandoffContext)",
+		"handoffFindingID := strings.TrimSpace(req.FindingID)",
+		"sessions.SetModelHandoffFindingID(session.ID, handoffFindingID)",
 		"handoffResources := normalizeHandoffResources(req.HandoffResources)",
 		"sessions.SetModelHandoffContext(session.ID, handoffContext)",
+		"GetModelHandoffFindingID",
 		"sessions.GetModelHandoffContext(session.ID)",
 		"sessions.SetModelHandoffResources(session.ID, handoffResources)",
 		"sessions.GetModelHandoffResources(session.ID)",
@@ -190,6 +194,9 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	chatSessionText := string(chatSessionSource)
 	for _, required := range []string{
 		"ModelContext *sessionModelContext",
+		"SetModelHandoffFindingID",
+		"GetModelHandoffFindingID",
+		"HandoffFindingID string",
 		"SetModelHandoffContext",
 		"GetModelHandoffContext",
 		"SetModelHandoffResources",
