@@ -19,6 +19,19 @@ func TestGuestSnapshotResourceTypeUsesCanonicalSystemContainer(t *testing.T) {
 	}
 }
 
+func TestParsePulseTagsRecognizesGuestRuntimeControls(t *testing.T) {
+	settings := parsePulseTags([]string{
+		" PULSE-NO-ALERTS ",
+		"pulse-monitor-only",
+		"pulse-relaxed",
+		"unrelated",
+	})
+
+	if !settings.Suppress || !settings.MonitorOnly || !settings.Relaxed {
+		t.Fatalf("parsePulseTags() = %+v, want all guest runtime controls enabled", settings)
+	}
+}
+
 func TestEmptyGuestSnapshot_NormalizesCollections(t *testing.T) {
 	snapshot := emptyGuestSnapshot()
 	if snapshot.Disks == nil || snapshot.Tags == nil {

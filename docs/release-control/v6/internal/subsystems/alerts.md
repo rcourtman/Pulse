@@ -66,6 +66,7 @@ operator-facing alert routing behavior for live runtime alerts.
 44. `internal/alerts/disk_health.go`
 45. `internal/alerts/metric_runtime.go`
 46. `internal/alerts/health_assessment.go`
+47. `internal/alerts/guest.go`
 
 ## Shared Boundaries
 
@@ -288,6 +289,11 @@ alert synchronization, and ZFS device assessment construction for host and
 storage checkers; future shared health-assessment behavior should extend that
 owner rather than reappearing inside resource-specific evaluators or the
 central Manager file.
+Proxmox guest alert evaluation now lives in `internal/alerts/guest.go`. That
+file owns guest metric projection, per-disk guest metric alerts, guest
+powered-off lifecycle alerts, Pulse tag controls, relaxed guest thresholds, and
+guest suppression cleanup; future guest-specific alert behavior should extend
+that checker owner rather than expanding the central Manager file.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial
