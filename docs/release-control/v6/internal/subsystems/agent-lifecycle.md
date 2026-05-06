@@ -370,11 +370,12 @@ profile and assignment columns, but embedded table framing must route through
    handoff context remain Patrol/AI review metadata and must not become agent
    lifecycle state or fleet-control authority. Structured Assistant handoff action
    references from the same Patrol finding remain AI/runtime review metadata
-   only; lifecycle code must not treat approval IDs, fix IDs, risk, or
-   target-resource labels from that handoff as agent command grants, enrollment
-   proof, or auto-approval policy. Any approval status snapshot refreshed for
-   Assistant review remains read-only AI/runtime context and must not become
-   command-websocket authority or lifecycle execution state.
+   only; lifecycle code must not treat approval IDs, action IDs, fix IDs,
+   action lifecycle state, risk, or target-resource labels from that handoff as
+   agent command grants, enrollment proof, or auto-approval policy. Any approval
+   or action-audit status snapshot refreshed for Assistant review remains
+   read-only AI/runtime context and must not become command-websocket authority
+   or lifecycle execution state.
    The same isolation rule applies to CSRF token-store behavior in
    `internal/api/csrf_store.go`: lifecycle-adjacent browser flows may rely on
    the shared API/security layer to keep parallel replacement-token retries

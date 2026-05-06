@@ -101,6 +101,17 @@ func normalizeHandoffActions(actions []HandoffAction) []HandoffAction {
 		action.ApprovalRequestedAt = strings.TrimSpace(action.ApprovalRequestedAt)
 		action.ApprovalExpiresAt = strings.TrimSpace(action.ApprovalExpiresAt)
 		action.ApprovalDecidedAt = strings.TrimSpace(action.ApprovalDecidedAt)
+		action.ActionID = strings.TrimSpace(action.ActionID)
+		action.ActionState = strings.TrimSpace(action.ActionState)
+		action.ActionUpdatedAt = strings.TrimSpace(action.ActionUpdatedAt)
+		action.ActionRequestedBy = strings.TrimSpace(action.ActionRequestedBy)
+		action.ActionCapability = strings.TrimSpace(action.ActionCapability)
+		action.ActionApprovalPolicy = strings.TrimSpace(action.ActionApprovalPolicy)
+		action.ActionPlanExpiresAt = strings.TrimSpace(action.ActionPlanExpiresAt)
+		action.ActionPlanMessage = strings.TrimSpace(action.ActionPlanMessage)
+		action.ActionPreflight = strings.TrimSpace(action.ActionPreflight)
+		action.ActionDryRunSummary = strings.TrimSpace(action.ActionDryRunSummary)
+		action.ActionResult = strings.TrimSpace(action.ActionResult)
 		action.FixID = strings.TrimSpace(action.FixID)
 		action.Description = strings.TrimSpace(action.Description)
 		action.RiskLevel = strings.TrimSpace(action.RiskLevel)
@@ -109,10 +120,10 @@ func normalizeHandoffActions(actions []HandoffAction) []HandoffAction {
 		action.TargetResourceName = strings.TrimSpace(action.TargetResourceName)
 		action.TargetResourceType = strings.TrimSpace(action.TargetResourceType)
 		action.TargetNode = strings.TrimSpace(action.TargetNode)
-		if action.ApprovalID == "" && action.FixID == "" && action.Description == "" && action.FindingID == "" {
+		if action.ApprovalID == "" && action.ActionID == "" && action.FixID == "" && action.Description == "" && action.FindingID == "" {
 			continue
 		}
-		key := strings.ToLower(action.FindingID + "\x00" + action.RecordID + "\x00" + action.ApprovalID + "\x00" + action.FixID + "\x00" + action.Description + "\x00" + action.TargetResourceID + "\x00" + action.TargetHost)
+		key := strings.ToLower(action.FindingID + "\x00" + action.RecordID + "\x00" + action.ApprovalID + "\x00" + action.ActionID + "\x00" + action.FixID + "\x00" + action.Description + "\x00" + action.TargetResourceID + "\x00" + action.TargetHost)
 		if _, ok := seen[key]; ok {
 			continue
 		}

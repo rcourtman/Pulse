@@ -439,6 +439,10 @@ persisted action records must identify the requester, resource, capability,
 approval policy, preflight dry-run posture, and lifecycle state before they are
 read through audit APIs, so audit history cannot silently accept an unscoped or
 unplanned execution record.
+Assistant handoff context may hydrate those normalized action-audit facts for
+review, but that read is still model-only context: it must remain org-scoped,
+must not expose raw command text or raw execution output, and must not grant
+approval or execution authority.
 Action planning and action decision mutations remain privileged runtime
 control surfaces even though the decision endpoint does not execute the
 capability. `POST /api/actions/plan` and

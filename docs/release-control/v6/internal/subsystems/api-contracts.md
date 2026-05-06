@@ -789,9 +789,15 @@ the canonical monitored-system blocked payload.
    governed approval and remediation APIs. Chat execution may refresh approval
    status snapshots for those references from the canonical approval store, but
    that snapshot is read-only, org-scoped, and must not expose or infer the raw
-   command. Frontend handoff briefings must derive from
-   the same shared investigation payload rather than inventing a second
-   finding-context transport shape.
+   command. When the reference resolves to a governed action plan or action
+   audit, chat execution must hydrate the canonical action ID, lifecycle state,
+   requester, capability, approval policy, plan expiry, preflight/dry-run
+   summary, and terminal success/failure state from the action-audit store so
+   API consumers do not mistake the original approval snapshot for current
+   action truth. That action-audit snapshot remains model-only review context
+   and must not expose raw command text or raw execution output. Frontend
+   handoff briefings must derive from the same shared investigation payload
+   rather than inventing a second finding-context transport shape.
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the main Patrol page composition boundary, so once that governed

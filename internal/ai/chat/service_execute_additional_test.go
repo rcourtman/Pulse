@@ -49,6 +49,63 @@ func installTestApprovalStore(t *testing.T, req *approval.ApprovalRequest) {
 	}
 }
 
+func testHandoffActionPlan(now time.Time) unifiedresources.ActionPlan {
+	return unifiedresources.ActionPlan{
+		ActionID:          "act-handoff-123",
+		RequestID:         "approval-123",
+		Allowed:           true,
+		RequiresApproval:  true,
+		ApprovalPolicy:    unifiedresources.ApprovalAdmin,
+		RollbackAvailable: true,
+		Message:           "Plan created for workload restart. Execution requires approval.",
+		PlannedAt:         now,
+		ExpiresAt:         now.Add(10 * time.Minute),
+		ResourceVersion:   "resource:sha256:handoff",
+		PolicyVersion:     "policy:sha256:handoff",
+		PlanHash:          "sha256:handoff",
+		Preflight: &unifiedresources.ActionPreflight{
+			Target:          "vm-100",
+			CurrentState:    "web-server is degraded",
+			IntendedChange:  "Restart the workload service",
+			DryRunAvailable: false,
+			DryRunSummary:   "No provider-supported dry run is available for this action.",
+			SafetyChecks: []string{
+				"Approval is scoped to this organization.",
+			},
+			VerificationSteps: []string{
+				"Confirm workload health after restart.",
+			},
+			GeneratedAt: now,
+		},
+	}
+}
+
+func seedHandoffActionAudit(t *testing.T, store unifiedresources.ResourceStore, plan unifiedresources.ActionPlan, state unifiedresources.ActionState, result *unifiedresources.ExecutionResult) {
+	t.Helper()
+	if store == nil {
+		t.Fatal("action audit store is nil")
+	}
+	updatedAt := plan.PlannedAt.Add(time.Minute)
+	record := unifiedresources.ActionAuditRecord{
+		ID:        plan.ActionID,
+		CreatedAt: plan.PlannedAt,
+		UpdatedAt: updatedAt,
+		State:     state,
+		Request: unifiedresources.ActionRequest{
+			RequestID:      plan.RequestID,
+			ResourceID:     "vm-100",
+			CapabilityName: "restart",
+			Reason:         "Recover after confirmed workload saturation",
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan:   plan,
+		Result: result,
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit failed: %v", err)
+	}
+}
+
 func (s *stubServiceProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 	return &providers.ChatResponse{Content: "ok", Model: req.Model}, nil
 }
@@ -126,6 +183,8 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 }
 
 func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
+	actionNow := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	actionPlan := testHandoffActionPlan(actionNow)
 	installTestApprovalStore(t, &approval.ApprovalRequest{
 		ID:         "approval-123",
 		OrgID:      approval.DefaultOrgID,
@@ -135,6 +194,7 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 		TargetName: "web-server",
 		RiskLevel:  approval.RiskMedium,
 		ExpiresAt:  time.Now().Add(10 * time.Minute),
+		Plan:       &actionPlan,
 	})
 
 	tmpDir := t.TempDir()
@@ -143,6 +203,7 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 		t.Fatalf("failed to create session store: %v", err)
 	}
 	timelineStore := unifiedresources.NewMemoryStore()
+	seedHandoffActionAudit(t, timelineStore, actionPlan, unifiedresources.ActionStatePending, nil)
 	if err := timelineStore.RecordChange(unifiedresources.ResourceChange{
 		ID:            "change-123",
 		ResourceID:    "vm-100",
@@ -255,11 +316,38 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	if !strings.Contains(modelUserContent, "[Action Context]") {
 		t.Fatalf("model user content missing action context: %q", modelUserContent)
 	}
-	if !strings.Contains(modelUserContent, "Pending Action Approval ID: approval-123") {
+	if !strings.Contains(modelUserContent, "Action Reference Approval ID: approval-123") {
 		t.Fatalf("model user content missing approval reference: %q", modelUserContent)
 	}
-	if !strings.Contains(modelUserContent, "Pending Action Approval Status: pending") {
+	if !strings.Contains(modelUserContent, "Action Reference Approval Status: pending") {
 		t.Fatalf("model user content missing approval status: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action ID: act-handoff-123") {
+		t.Fatalf("model user content missing canonical action id: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action State: pending_approval") {
+		t.Fatalf("model user content missing canonical action state: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action Requested By: pulse_patrol") {
+		t.Fatalf("model user content missing action requester: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action Capability: restart") {
+		t.Fatalf("model user content missing action capability: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action Approval Policy: admin") {
+		t.Fatalf("model user content missing action approval policy: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action Requires Approval: true") {
+		t.Fatalf("model user content missing action approval requirement: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action Plan Expires At: 2026-05-06T12:10:00Z") {
+		t.Fatalf("model user content missing action plan expiry: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action Preflight: Restart the workload service") {
+		t.Fatalf("model user content missing action preflight: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Action Reference Action Dry Run Summary: No provider-supported dry run is available for this action.") {
+		t.Fatalf("model user content missing action dry-run summary: %q", modelUserContent)
 	}
 	if !strings.Contains(modelUserContent, "### Recent Changes Across Infrastructure") {
 		t.Fatalf("model user content missing timeline context: %q", modelUserContent)
@@ -506,6 +594,8 @@ func TestService_ExecuteStream_HandoffResourceRelationshipContextIsModelOnly(t *
 }
 
 func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testing.T) {
+	actionNow := time.Date(2026, 5, 6, 12, 30, 0, 0, time.UTC)
+	actionPlan := testHandoffActionPlan(actionNow)
 	installTestApprovalStore(t, &approval.ApprovalRequest{
 		ID:         "approval-123",
 		OrgID:      approval.DefaultOrgID,
@@ -515,6 +605,7 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 		TargetName: "web-server",
 		RiskLevel:  approval.RiskMedium,
 		ExpiresAt:  time.Now().Add(10 * time.Minute),
+		Plan:       &actionPlan,
 	})
 
 	tmpDir := t.TempDir()
@@ -523,6 +614,7 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 		t.Fatalf("failed to create session store: %v", err)
 	}
 	timelineStore := unifiedresources.NewMemoryStore()
+	seedHandoffActionAudit(t, timelineStore, actionPlan, unifiedresources.ActionStatePending, nil)
 	if err := timelineStore.RecordChange(unifiedresources.ResourceChange{
 		ID:            "change-followup",
 		ResourceID:    "vm-100",
@@ -645,11 +737,17 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	if !strings.Contains(firstModelUserContent, "[Action Context]") {
 		t.Fatalf("first provider turn missing action context: %q", firstModelUserContent)
 	}
-	if !strings.Contains(firstModelUserContent, "Pending Action Approval ID: approval-123") {
+	if !strings.Contains(firstModelUserContent, "Action Reference Approval ID: approval-123") {
 		t.Fatalf("first provider turn missing approval reference: %q", firstModelUserContent)
 	}
-	if !strings.Contains(firstModelUserContent, "Pending Action Approval Status: pending") {
+	if !strings.Contains(firstModelUserContent, "Action Reference Approval Status: pending") {
 		t.Fatalf("first provider turn missing approval status: %q", firstModelUserContent)
+	}
+	if !strings.Contains(firstModelUserContent, "Action Reference Action ID: act-handoff-123") {
+		t.Fatalf("first provider turn missing action id: %q", firstModelUserContent)
+	}
+	if !strings.Contains(firstModelUserContent, "Action Reference Action State: pending_approval") {
+		t.Fatalf("first provider turn missing action state: %q", firstModelUserContent)
 	}
 	if !strings.Contains(firstModelUserContent, "### Recent Changes Across Infrastructure") {
 		t.Fatalf("first provider turn missing timeline context: %q", firstModelUserContent)
@@ -664,11 +762,17 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	if !strings.Contains(secondModelUserContent, "[Action Context]") {
 		t.Fatalf("follow-up provider turn missing stored action context: %q", secondModelUserContent)
 	}
-	if !strings.Contains(secondModelUserContent, "Pending Action Approval ID: approval-123") {
+	if !strings.Contains(secondModelUserContent, "Action Reference Approval ID: approval-123") {
 		t.Fatalf("follow-up provider turn missing stored approval reference: %q", secondModelUserContent)
 	}
-	if !strings.Contains(secondModelUserContent, "Pending Action Approval Status: pending") {
+	if !strings.Contains(secondModelUserContent, "Action Reference Approval Status: pending") {
 		t.Fatalf("follow-up provider turn missing refreshed approval status: %q", secondModelUserContent)
+	}
+	if !strings.Contains(secondModelUserContent, "Action Reference Action ID: act-handoff-123") {
+		t.Fatalf("follow-up provider turn missing refreshed action id: %q", secondModelUserContent)
+	}
+	if !strings.Contains(secondModelUserContent, "Action Reference Action State: pending_approval") {
+		t.Fatalf("follow-up provider turn missing refreshed action state: %q", secondModelUserContent)
 	}
 	if !strings.Contains(secondModelUserContent, "### Recent Changes Across Infrastructure") {
 		t.Fatalf("follow-up provider turn missing stored resource timeline context: %q", secondModelUserContent)
@@ -797,6 +901,51 @@ func TestRefreshHandoffActionApprovalStatusRejectsCrossOrgApproval(t *testing.T)
 	}
 	if strings.Contains(contextText, "systemctl restart workload.service") {
 		t.Fatalf("raw command leaked into action context: %q", contextText)
+	}
+}
+
+func TestRefreshHandoffActionStatusHydratesCanonicalActionAudit(t *testing.T) {
+	actionNow := time.Date(2026, 5, 6, 13, 0, 0, 0, time.UTC)
+	actionPlan := testHandoffActionPlan(actionNow)
+	store := unifiedresources.NewMemoryStore()
+	seedHandoffActionAudit(t, store, actionPlan, unifiedresources.ActionStateCompleted, &unifiedresources.ExecutionResult{
+		Success: true,
+		Output:  "restart dispatched",
+	})
+
+	actions := refreshHandoffActionStatus([]HandoffAction{{
+		ActionID:    "act-handoff-123",
+		Description: "Restart the workload service",
+	}}, approval.DefaultOrgID, store)
+
+	if len(actions) != 1 {
+		t.Fatalf("actions = %#v, want one action reference", actions)
+	}
+	if actions[0].ActionState != string(unifiedresources.ActionStateCompleted) {
+		t.Fatalf("action state = %q, want completed", actions[0].ActionState)
+	}
+	if actions[0].ActionResult != "success" {
+		t.Fatalf("action result = %q, want success", actions[0].ActionResult)
+	}
+	if actions[0].ActionCapability != "restart" || actions[0].ActionRequestedBy != "pulse_patrol" {
+		t.Fatalf("action audit identity not hydrated: %#v", actions[0])
+	}
+
+	contextText := buildHandoffActionContext(actions)
+	for _, expected := range []string{
+		"Action Reference Action ID: act-handoff-123",
+		"Action Reference Action State: completed",
+		"Action Reference Action Result: success",
+		"Action Reference Action Requested By: pulse_patrol",
+		"Action Reference Action Capability: restart",
+		"Action Reference Action Preflight: Restart the workload service",
+	} {
+		if !strings.Contains(contextText, expected) {
+			t.Fatalf("action context missing %q: %q", expected, contextText)
+		}
+	}
+	if strings.Contains(contextText, "restart dispatched") {
+		t.Fatalf("action context should expose result state, not raw execution output: %q", contextText)
 	}
 }
 

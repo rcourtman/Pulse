@@ -524,7 +524,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("message_count", len(messages)).
 		Msg("[ChatService] Got messages, calling agentic loop")
 
-	handoffActions = refreshHandoffActionApprovalStatus(handoffActions, s.orgID)
+	handoffActions = refreshHandoffActionStatus(handoffActions, s.orgID, s.actionAuditStore)
 	if len(handoffActions) > 0 {
 		if err := sessions.SetModelHandoffActions(session.ID, handoffActions); err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist refreshed handoff action status")
@@ -1121,9 +1121,9 @@ func buildHandoffActionContext(handoffActions []HandoffAction) string {
 	var b strings.Builder
 	b.WriteString("[Action Context]")
 	for idx, action := range actions {
-		label := "Pending Action"
+		label := "Action Reference"
 		if len(actions) > 1 {
-			label = fmt.Sprintf("Pending Action %d", idx+1)
+			label = fmt.Sprintf("Action Reference %d", idx+1)
 		}
 		appendHandoffContextLine(&b, label+" Finding ID", action.FindingID)
 		appendHandoffContextLine(&b, label+" Record ID", action.RecordID)
@@ -1135,6 +1135,20 @@ func buildHandoffActionContext(handoffActions []HandoffAction) string {
 		if action.ApprovalConsumed {
 			appendHandoffContextLine(&b, label+" Approval Consumed", "true")
 		}
+		appendHandoffContextLine(&b, label+" Action ID", action.ActionID)
+		appendHandoffContextLine(&b, label+" Action State", action.ActionState)
+		appendHandoffContextLine(&b, label+" Action Updated At", action.ActionUpdatedAt)
+		appendHandoffContextLine(&b, label+" Action Requested By", action.ActionRequestedBy)
+		appendHandoffContextLine(&b, label+" Action Capability", action.ActionCapability)
+		appendHandoffContextLine(&b, label+" Action Approval Policy", action.ActionApprovalPolicy)
+		if action.ActionRequiresApproval {
+			appendHandoffContextLine(&b, label+" Action Requires Approval", "true")
+		}
+		appendHandoffContextLine(&b, label+" Action Plan Expires At", action.ActionPlanExpiresAt)
+		appendHandoffContextLine(&b, label+" Action Plan Message", action.ActionPlanMessage)
+		appendHandoffContextLine(&b, label+" Action Preflight", action.ActionPreflight)
+		appendHandoffContextLine(&b, label+" Action Dry Run Summary", action.ActionDryRunSummary)
+		appendHandoffContextLine(&b, label+" Action Result", action.ActionResult)
 		appendHandoffContextLine(&b, label+" Fix ID", action.FixID)
 		appendHandoffContextLine(&b, label+" Proposed Fix", action.Description)
 		appendHandoffContextLine(&b, label+" Risk", action.RiskLevel)
@@ -1149,6 +1163,10 @@ func buildHandoffActionContext(handoffActions []HandoffAction) string {
 }
 
 func refreshHandoffActionApprovalStatus(handoffActions []HandoffAction, orgID string) []HandoffAction {
+	return refreshHandoffActionStatus(handoffActions, orgID, nil)
+}
+
+func refreshHandoffActionStatus(handoffActions []HandoffAction, orgID string, actionStore unifiedresources.ResourceStore) []HandoffAction {
 	actions := normalizeHandoffActions(handoffActions)
 	if len(actions) == 0 {
 		return nil
@@ -1157,40 +1175,39 @@ func refreshHandoffActionApprovalStatus(handoffActions []HandoffAction, orgID st
 	store := approval.GetStore()
 	normalizedOrgID := approval.NormalizeOrgID(orgID)
 	for idx := range actions {
-		clearHandoffActionApprovalStatus(&actions[idx])
+		clearHandoffActionStatus(&actions[idx])
 		approvalID := strings.TrimSpace(actions[idx].ApprovalID)
-		if approvalID == "" || store == nil {
-			continue
+		if approvalID != "" && store != nil {
+			req, ok := store.GetApproval(approvalID)
+			if ok && approval.BelongsToOrg(req, normalizedOrgID) {
+				actions[idx].ApprovalStatus = string(req.Status)
+				actions[idx].ApprovalRequestedAt = formatHandoffActionTime(req.RequestedAt)
+				actions[idx].ApprovalExpiresAt = formatHandoffActionTime(req.ExpiresAt)
+				if req.DecidedAt != nil {
+					actions[idx].ApprovalDecidedAt = formatHandoffActionTime(*req.DecidedAt)
+				}
+				actions[idx].ApprovalConsumed = req.Consumed
+				if strings.TrimSpace(actions[idx].RiskLevel) == "" {
+					actions[idx].RiskLevel = string(req.RiskLevel)
+				}
+				if strings.TrimSpace(actions[idx].TargetResourceID) == "" {
+					actions[idx].TargetResourceID = strings.TrimSpace(req.TargetID)
+				}
+				if strings.TrimSpace(actions[idx].TargetResourceName) == "" {
+					actions[idx].TargetResourceName = strings.TrimSpace(req.TargetName)
+				}
+				if strings.TrimSpace(actions[idx].TargetResourceType) == "" {
+					actions[idx].TargetResourceType = strings.TrimSpace(req.TargetType)
+				}
+				hydrateHandoffActionPlan(&actions[idx], req.Plan)
+			}
 		}
-		req, ok := store.GetApproval(approvalID)
-		if !ok || !approval.BelongsToOrg(req, normalizedOrgID) {
-			continue
-		}
-
-		actions[idx].ApprovalStatus = string(req.Status)
-		actions[idx].ApprovalRequestedAt = formatHandoffActionTime(req.RequestedAt)
-		actions[idx].ApprovalExpiresAt = formatHandoffActionTime(req.ExpiresAt)
-		if req.DecidedAt != nil {
-			actions[idx].ApprovalDecidedAt = formatHandoffActionTime(*req.DecidedAt)
-		}
-		actions[idx].ApprovalConsumed = req.Consumed
-		if strings.TrimSpace(actions[idx].RiskLevel) == "" {
-			actions[idx].RiskLevel = string(req.RiskLevel)
-		}
-		if strings.TrimSpace(actions[idx].TargetResourceID) == "" {
-			actions[idx].TargetResourceID = strings.TrimSpace(req.TargetID)
-		}
-		if strings.TrimSpace(actions[idx].TargetResourceName) == "" {
-			actions[idx].TargetResourceName = strings.TrimSpace(req.TargetName)
-		}
-		if strings.TrimSpace(actions[idx].TargetResourceType) == "" {
-			actions[idx].TargetResourceType = strings.TrimSpace(req.TargetType)
-		}
+		hydrateHandoffActionAudit(&actions[idx], actionStore)
 	}
 	return normalizeHandoffActions(actions)
 }
 
-func clearHandoffActionApprovalStatus(action *HandoffAction) {
+func clearHandoffActionStatus(action *HandoffAction) {
 	if action == nil {
 		return
 	}
@@ -1199,6 +1216,72 @@ func clearHandoffActionApprovalStatus(action *HandoffAction) {
 	action.ApprovalExpiresAt = ""
 	action.ApprovalDecidedAt = ""
 	action.ApprovalConsumed = false
+	action.ActionState = ""
+	action.ActionUpdatedAt = ""
+	action.ActionRequestedBy = ""
+	action.ActionCapability = ""
+	action.ActionApprovalPolicy = ""
+	action.ActionRequiresApproval = false
+	action.ActionPlanExpiresAt = ""
+	action.ActionPlanMessage = ""
+	action.ActionPreflight = ""
+	action.ActionDryRunSummary = ""
+	action.ActionResult = ""
+}
+
+func hydrateHandoffActionPlan(action *HandoffAction, plan *unifiedresources.ActionPlan) {
+	if action == nil || plan == nil {
+		return
+	}
+	if strings.TrimSpace(action.ActionID) == "" {
+		action.ActionID = strings.TrimSpace(plan.ActionID)
+	}
+	action.ActionRequiresApproval = plan.RequiresApproval
+	action.ActionApprovalPolicy = strings.TrimSpace(string(plan.ApprovalPolicy))
+	action.ActionPlanExpiresAt = formatHandoffActionTime(plan.ExpiresAt)
+	action.ActionPlanMessage = strings.TrimSpace(plan.Message)
+	if plan.Preflight != nil {
+		action.ActionPreflight = strings.TrimSpace(plan.Preflight.IntendedChange)
+		action.ActionDryRunSummary = strings.TrimSpace(plan.Preflight.DryRunSummary)
+	}
+}
+
+func hydrateHandoffActionAudit(action *HandoffAction, store unifiedresources.ResourceStore) {
+	if action == nil || store == nil {
+		return
+	}
+	actionID := strings.TrimSpace(action.ActionID)
+	if actionID == "" {
+		return
+	}
+	record, ok, err := store.GetActionAudit(actionID)
+	if err != nil {
+		log.Debug().
+			Err(err).
+			Str("action_id", actionID).
+			Msg("[ChatService] Failed to load handoff action audit")
+		return
+	}
+	if !ok {
+		return
+	}
+
+	action.ActionID = strings.TrimSpace(record.ID)
+	action.ActionState = strings.TrimSpace(string(record.State))
+	action.ActionUpdatedAt = formatHandoffActionTime(record.UpdatedAt)
+	action.ActionRequestedBy = strings.TrimSpace(record.Request.RequestedBy)
+	action.ActionCapability = strings.TrimSpace(record.Request.CapabilityName)
+	if strings.TrimSpace(action.TargetResourceID) == "" {
+		action.TargetResourceID = strings.TrimSpace(record.Request.ResourceID)
+	}
+	hydrateHandoffActionPlan(action, &record.Plan)
+	if record.Result != nil {
+		if record.Result.Success {
+			action.ActionResult = "success"
+		} else {
+			action.ActionResult = "failed"
+		}
+	}
 }
 
 func formatHandoffActionTime(value time.Time) string {

@@ -221,6 +221,13 @@ runtime cost control, and shared AI transport surfaces.
     those references include an approval ID, Assistant runtime may refresh a
     current status snapshot from the canonical approval store on each turn, but
     it must enforce org scoping and still omit the approval command payload.
+    When those references resolve to a governed action plan or action audit,
+    Assistant runtime must hydrate the canonical action ID, lifecycle state,
+    requester, capability, approval policy, plan expiry, preflight/dry-run
+    summary, and terminal success/failure state from the action-audit store
+    rather than treating the original approval as the current action truth.
+    That action snapshot remains model-only review context and must expose
+    lifecycle status rather than raw execution output or command text.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.

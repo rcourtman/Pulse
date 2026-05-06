@@ -100,27 +100,39 @@ type HandoffResource struct {
 	Node string `json:"node,omitempty"`
 }
 
-// HandoffAction represents a product-originated pending action reference.
+// HandoffAction represents a product-originated action reference.
 // It is context for review only: it carries no command text and grants no
 // authority to approve, execute, or replay a remediation.
 type HandoffAction struct {
-	FindingID           string `json:"finding_id,omitempty"`
-	RecordID            string `json:"record_id,omitempty"`
-	ApprovalID          string `json:"approval_id,omitempty"`
-	ApprovalStatus      string `json:"approval_status,omitempty"`
-	ApprovalRequestedAt string `json:"approval_requested_at,omitempty"`
-	ApprovalExpiresAt   string `json:"approval_expires_at,omitempty"`
-	ApprovalDecidedAt   string `json:"approval_decided_at,omitempty"`
-	ApprovalConsumed    bool   `json:"approval_consumed,omitempty"`
-	FixID               string `json:"fix_id,omitempty"`
-	Description         string `json:"description,omitempty"`
-	RiskLevel           string `json:"risk_level,omitempty"`
-	Destructive         bool   `json:"destructive,omitempty"`
-	TargetHost          string `json:"target_host,omitempty"`
-	TargetResourceID    string `json:"target_resource_id,omitempty"`
-	TargetResourceName  string `json:"target_resource_name,omitempty"`
-	TargetResourceType  string `json:"target_resource_type,omitempty"`
-	TargetNode          string `json:"target_node,omitempty"`
+	FindingID              string `json:"finding_id,omitempty"`
+	RecordID               string `json:"record_id,omitempty"`
+	ApprovalID             string `json:"approval_id,omitempty"`
+	ApprovalStatus         string `json:"approval_status,omitempty"`
+	ApprovalRequestedAt    string `json:"approval_requested_at,omitempty"`
+	ApprovalExpiresAt      string `json:"approval_expires_at,omitempty"`
+	ApprovalDecidedAt      string `json:"approval_decided_at,omitempty"`
+	ApprovalConsumed       bool   `json:"approval_consumed,omitempty"`
+	ActionID               string `json:"action_id,omitempty"`
+	ActionState            string `json:"action_state,omitempty"`
+	ActionUpdatedAt        string `json:"action_updated_at,omitempty"`
+	ActionRequestedBy      string `json:"action_requested_by,omitempty"`
+	ActionCapability       string `json:"action_capability,omitempty"`
+	ActionApprovalPolicy   string `json:"action_approval_policy,omitempty"`
+	ActionRequiresApproval bool   `json:"action_requires_approval,omitempty"`
+	ActionPlanExpiresAt    string `json:"action_plan_expires_at,omitempty"`
+	ActionPlanMessage      string `json:"action_plan_message,omitempty"`
+	ActionPreflight        string `json:"action_preflight,omitempty"`
+	ActionDryRunSummary    string `json:"action_dry_run_summary,omitempty"`
+	ActionResult           string `json:"action_result,omitempty"`
+	FixID                  string `json:"fix_id,omitempty"`
+	Description            string `json:"description,omitempty"`
+	RiskLevel              string `json:"risk_level,omitempty"`
+	Destructive            bool   `json:"destructive,omitempty"`
+	TargetHost             string `json:"target_host,omitempty"`
+	TargetResourceID       string `json:"target_resource_id,omitempty"`
+	TargetResourceName     string `json:"target_resource_name,omitempty"`
+	TargetResourceType     string `json:"target_resource_type,omitempty"`
+	TargetNode             string `json:"target_node,omitempty"`
 }
 
 // ExecuteRequest represents a chat execution request
