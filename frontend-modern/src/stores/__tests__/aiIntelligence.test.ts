@@ -60,6 +60,7 @@ describe('aiIntelligenceStore', () => {
           description: 'CPU usage is high',
           detected_at: '2026-03-01T00:00:00Z',
           last_seen_at: '2026-03-05T00:00:00Z',
+          times_raised: 5,
           alertIdentifier: 'instance:node:100::metric/cpu',
           investigation_record: {
             id: 'investigation-1',
@@ -92,6 +93,7 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.findings[0]).toMatchObject({
       alertIdentifier: 'instance:node:100::metric/cpu',
       lastSeenAt: '2026-03-05T00:00:00Z',
+      timesRaised: 5,
       investigationRecord: {
         id: 'investigation-1',
         finding_id: 'finding-1',

@@ -122,6 +122,7 @@ describe('InvestigationSection', () => {
     expect(screen.getByText('Backup job saturated CPU.')).toBeInTheDocument();
     expect(screen.getByText('CPU stayed above 95% for 10 minutes')).toBeInTheDocument();
     expect(screen.getByText('1 command recorded for approval context')).toBeInTheDocument();
+    expect(screen.queryByText(/No investigation data available/)).not.toBeInTheDocument();
     expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
   });
 });

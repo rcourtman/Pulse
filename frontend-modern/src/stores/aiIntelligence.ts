@@ -148,6 +148,7 @@ export interface UnifiedFinding {
     to?: string;
     metadata?: Record<string, string>;
   }>;
+  timesRaised?: number;
   regressionCount?: number;
   lastRegressionAt?: string;
 }
@@ -318,6 +319,7 @@ export const aiIntelligenceStore = {
           investigationRecord: item.investigation_record,
           loopState: item.loop_state || undefined,
           lifecycle: item.lifecycle || [],
+          timesRaised: item.times_raised || 0,
           regressionCount: item.regression_count || 0,
           lastRegressionAt: item.last_regression_at || undefined,
         };

@@ -811,8 +811,11 @@ frontend primitive boundary.
     so shared drawer primitives stay shell-owned rather than becoming a
     Patrol-specific prompt formatter. The drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
-    feature-owned helpers must provide the source labels, evidence summaries,
-    action copy, and safety note.
+    feature-owned helpers must provide the source labels, attention reason,
+    evidence summaries, operator-decision copy, action copy, and safety note.
+    Patrol finding handoffs should still provide that briefing from current
+    finding facts when a durable Patrol investigation record is not attached
+    yet, rather than opening the shared drawer as empty generic chat.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like
@@ -2169,7 +2172,8 @@ or polling lifecycle. The Patrol feature is the current reference shape:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` stays the
 feature shell, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
-owns the pure investigation-context summary derivation,
+owns the pure investigation-context summary and Patrol-to-Assistant operator
+briefing derivation,
 `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owns canonical AI
 summary normalization at the shared store boundary, and the Patrol-owned
 header/banner/summary/workspace section files under

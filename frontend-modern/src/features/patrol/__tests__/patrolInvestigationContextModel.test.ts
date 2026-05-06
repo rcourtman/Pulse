@@ -161,6 +161,13 @@ describe('patrolInvestigationContextModel', () => {
     const briefing = buildPatrolAssistantFindingBriefing({
       title: 'High CPU usage',
       subject: 'web-server',
+      severity: 'critical',
+      findingStatus: 'active',
+      loopState: 'awaiting_approval',
+      timesRaised: 4,
+      regressionCount: 2,
+      lastRegressionAt: '2026-05-06T12:06:00Z',
+      remediationId: 'remediation-1',
       investigationRecord: {
         id: 'record-1',
         finding_id: 'finding-1',
@@ -177,28 +184,58 @@ describe('patrolInvestigationContextModel', () => {
           description: 'Restart the workload service',
           commands: ['systemctl restart workload.service'],
           risk_level: 'medium',
-          destructive: false,
+          destructive: true,
         },
         verification: ['CPU returned below 50%'],
         tools_used: [],
         started_at: '2026-05-06T12:00:00Z',
+        approval_id: 'approval-1',
       },
     });
 
     expect(briefing).toEqual({
       sourceLabel: 'Pulse Patrol',
-      title: 'Investigation record attached',
+      title: 'Operator briefing attached',
       subject: 'High CPU usage on web-server',
       statusLabel: 'Completed · Fix Queued · High confidence',
       detailLines: [
+        'Attention: active critical finding; regressed 2 times; last regression 2026-05-06T12:06:00Z; loop awaiting approval; approval approval-1; destructive proposed fix; fix queued for governed review',
         'Backup job saturated CPU.',
         'Approve a controlled restart after the backup completes.',
+        'Decision: review governed approval approval-1 before execution; proposed fix fix-1; risk medium; destructive true',
       ],
       evidence: ['CPU stayed above 95% for 10 minutes', 'Verified: CPU returned below 50%'],
       actionLabel: 'Restart the workload service',
       commandSummary: '1 command recorded for approval context',
-      safetyNote: 'Command details stay in approval context.',
+      safetyNote:
+        'Command details stay in approval context; destructive actions require governed approval.',
     });
     expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
+  });
+
+  it('builds an operator briefing from current finding facts before a Patrol record exists', () => {
+    expect(
+      buildPatrolAssistantFindingBriefing({
+        title: 'High CPU usage',
+        subject: 'web-server',
+        severity: 'warning',
+        findingStatus: 'active',
+        loopState: 'investigating',
+        timesRaised: 3,
+      }),
+    ).toEqual({
+      sourceLabel: 'Pulse Patrol',
+      title: 'Operator briefing attached',
+      subject: 'High CPU usage on web-server',
+      statusLabel: undefined,
+      detailLines: [
+        'Attention: active warning finding; raised 3 times; loop investigating',
+        'Decision: Wait for Patrol to finish the investigation before approving remediation.',
+      ],
+      evidence: [],
+      actionLabel: undefined,
+      commandSummary: undefined,
+      safetyNote: undefined,
+    });
   });
 });

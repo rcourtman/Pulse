@@ -785,7 +785,10 @@ the canonical monitored-system blocked payload.
    snoozed/dismissed/suppressed status, detection/last-seen/resolution
    timestamps, recurrence/regression facts, and recent lifecycle events, so API
    consumers do not reduce Assistant context to an outdated investigation
-   summary. The briefing must carry the primary finding's current attention
+   summary. The frontend store boundary must preserve those recurrence facts
+   from the shared payload, including `times_raised`, so Patrol presentation and
+   Assistant handoff helpers do not infer repeated findings from page-local
+   state. The briefing must carry the primary finding's current attention
    reason, recency facts, bounded evidence snapshot, verification summary, and
    explicit operator decision framing before investigation guidance and may
    carry the latest lifecycle event as the current handoff state, while the
@@ -2944,8 +2947,10 @@ canonical operator-facing frame for Assistant: it carries the finding summary,
 resource, priority, current attention reason, current recency facts, bounded
 evidence and verification summaries, investigation confidence, recommended next
 step, and operator-decision framing plus approval/proposed-fix posture without
-raw command text, and the downstream chat service then hydrates live resource
-state, timeline, and action audit context around that same handoff.
+raw command text. Patrol's frontend Assistant drawer briefing must use that same
+operator frame for visible handoffs from findings, while the downstream chat
+service hydrates live resource state, timeline, and action audit context around
+that same handoff.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

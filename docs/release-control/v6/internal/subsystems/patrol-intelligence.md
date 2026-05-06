@@ -46,6 +46,7 @@ Patrol-specific presentation helpers.
 23. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
 24. `frontend-modern/src/utils/patrolRuntimePresentation.ts`
 25. `frontend-modern/src/utils/textPresentation.ts`
+26. `tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts`
 
 ## Shared Boundaries
 
@@ -134,7 +135,17 @@ Patrol-specific presentation helpers.
    attention reason, recency, evidence snapshot, verification summary,
    conclusion, latest lifecycle event, recommended next step, explicit operator
    decision framing, and governed approval/proposed-fix posture instead of
-   behaving like a generic chat over a pasted incident dump. The assembled handoff must still pass
+   behaving like a generic chat over a pasted incident dump. The visible
+   Assistant drawer briefing opened from a Patrol finding must mirror that same
+   Patrol-owned operator frame, including current severity/status, recurrence or
+   regression, loop state, approval/proposed-fix posture, and the explicit
+   operator decision being requested. That visible briefing remains a summary
+   surface only: proposed-fix commands stay summarized by count and destructive
+   action copy must point back to governed approval/remediation context. When a
+   structured investigation record is not available yet, the same Patrol-owned
+   helper must still brief the operator from current finding facts such as
+   active status, severity, recurrence, and loop state instead of opening a
+   generic empty Assistant drawer. The assembled handoff must still pass
    through the Assistant runtime's
    resource-policy sanitizer before prompt injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
@@ -150,7 +161,10 @@ Patrol-specific presentation helpers.
    and explicitly separated from approval/execution authority. Patrol must keep
    the visible finding and drawer briefing tied to the shared investigation
    payload rather than forking a Patrol-local lifecycle, policy, topology, or
-   timeline summary.
+   timeline summary. The inline Patrol investigation surface must also treat a
+   structured `investigationRecord` as investigation data, even when the legacy
+   investigation-detail endpoint has no separate session payload, so it must not
+   render empty-state copy above a durable Patrol record.
 
 ## Current State
 

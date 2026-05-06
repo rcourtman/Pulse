@@ -57,6 +57,12 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       }
     },
   );
+  const hasInvestigationContext = createMemo(
+    () => Boolean(investigation()) || investigationRecord().hasRecord,
+  );
+  const investigationSectionState = createMemo(() =>
+    getInvestigationSectionState(investigation.loading, hasInvestigationContext()),
+  );
 
   // Auto-poll while investigation is active
   createEffect(() => {
@@ -149,23 +155,16 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       </div>
 
       {/* Loading */}
-      <Show
-        when={
-          !getInvestigationSectionState(investigation.loading, !!investigation()).empty &&
-          getInvestigationSectionState(investigation.loading, !!investigation()).text
-        }
-      >
+      <Show when={!investigationSectionState().empty && investigationSectionState().text}>
         <div class="flex items-center gap-2 text-xs text-muted py-2">
           <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          {getInvestigationSectionState(investigation.loading, !!investigation()).text}
+          {investigationSectionState().text}
         </div>
       </Show>
 
       {/* No investigation data */}
-      <Show when={getInvestigationSectionState(investigation.loading, !!investigation()).empty}>
-        <p class="text-xs text-muted py-1">
-          {getInvestigationSectionState(investigation.loading, !!investigation()).text}
-        </p>
+      <Show when={investigationSectionState().empty}>
+        <p class="text-xs text-muted py-1">{investigationSectionState().text}</p>
       </Show>
 
       <Show when={investigationRecord().hasRecord}>

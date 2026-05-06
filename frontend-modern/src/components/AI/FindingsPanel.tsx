@@ -430,6 +430,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const briefing = buildPatrolAssistantFindingBriefing({
       title,
       subject,
+      severity: finding.severity,
+      findingStatus: finding.status,
+      loopState: finding.loopState,
+      timesRaised: finding.timesRaised,
+      regressionCount: finding.regressionCount,
+      lastRegressionAt: finding.lastRegressionAt,
+      remediationId: finding.remediationPlanId,
       investigationRecord: finding.investigationRecord,
     });
     aiChatStore.openWithPrompt(prompt, {
