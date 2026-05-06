@@ -18048,6 +18048,66 @@ func TestSaveAndLoadActiveAlerts_UsesManagerDataDirAndSecurePermissions(t *testi
 	}
 }
 
+func TestLoadActiveAlertsHardensExistingFilePermissions(t *testing.T) {
+	alertsDir := filepath.Join(t.TempDir(), "alerts")
+	if err := os.MkdirAll(alertsDir, 0o755); err != nil {
+		t.Fatalf("failed to create alerts dir: %v", err)
+	}
+
+	now := time.Now()
+	payload, err := json.Marshal([]*Alert{
+		{
+			ID:           "loose-permission-alert",
+			Type:         "cpu",
+			Level:        AlertLevelWarning,
+			ResourceID:   "guest-100",
+			ResourceName: "guest-100",
+			StartTime:    now.Add(-1 * time.Minute),
+			LastSeen:     now,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal active alerts: %v", err)
+	}
+
+	alertsFile := filepath.Join(alertsDir, "active-alerts.json")
+	if err := os.WriteFile(alertsFile, payload, 0o644); err != nil {
+		t.Fatalf("failed to write active alerts file: %v", err)
+	}
+
+	m := &Manager{
+		alertsDir:            alertsDir,
+		activeAlerts:         make(map[string]*Alert),
+		activeAlertAlias:     make(map[string]string),
+		ackState:             make(map[string]ackRecord),
+		ackStateByCanonical:  make(map[string]ackRecord),
+		escalationStop:       make(chan struct{}),
+		recentlyResolved:     make(map[string]*ResolvedAlert),
+		resolvedAlias:        make(map[string]string),
+		pendingAlerts:        make(map[string]time.Time),
+		offlineConfirmations: make(map[string]int),
+	}
+
+	if err := m.LoadActiveAlerts(); err != nil {
+		t.Fatalf("LoadActiveAlerts failed: %v", err)
+	}
+
+	info, err := os.Stat(alertsFile)
+	if err != nil {
+		t.Fatalf("failed to stat active alerts file: %v", err)
+	}
+	if info.Mode().Perm() != alertsFilePerm {
+		t.Fatalf("active alerts file permissions = %o, want %o", info.Mode().Perm(), alertsFilePerm)
+	}
+
+	m.mu.RLock()
+	_, loaded := testLookupActiveAlert(t, m, "loose-permission-alert")
+	m.mu.RUnlock()
+	if !loaded {
+		t.Fatal("expected alert to load from existing active alerts file")
+	}
+}
+
 func TestNamespaceMatchesInstance(t *testing.T) {
 	tests := []struct {
 		name      string

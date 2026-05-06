@@ -68,6 +68,8 @@ operator-facing alert routing behavior for live runtime alerts.
 46. `internal/alerts/health_assessment.go`
 47. `internal/alerts/guest.go`
 48. `internal/alerts/config_runtime.go`
+49. `internal/alerts/active_persistence.go`
+50. `internal/alerts/tracking_cleanup.go`
 
 ## Shared Boundaries
 
@@ -230,6 +232,16 @@ global disable cleanup, active alert reevaluation after threshold changes,
 threshold override cloning and merge behavior, and hysteresis defaults; future
 config-driven runtime behavior should extend that owner rather than expanding
 the central Manager file.
+Active-alert persistence now lives in `internal/alerts/active_persistence.go`.
+That file owns active-alert save/load, secure active-alert storage leaves,
+startup restoration and legacy active-alert ID migration, and periodic active
+alert persistence; persistence changes should extend that owner rather than
+adding save/load logic back to the central Manager file.
+Tracking-map cleanup now lives in `internal/alerts/tracking_cleanup.go`. That
+file owns stale flapping, suppression, pending-alert, offline-confirmation,
+Docker tracking, rate-limit, recent-alert, acknowledgement, and stale active
+alert cleanup; future cleanup rules should extend that owner rather than
+mixing cleanup into resource evaluators.
 Alert notification policy now lives in `internal/alerts/notification_policy.go`.
 That file owns dispatch suppression, flapping suppression, quiet-hours
 suppression, monitor-only notification suppression, cooldown decisions, and
