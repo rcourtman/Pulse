@@ -522,6 +522,10 @@ records with the saved target id, probe address, protocol, cadence, last check,
 failure count, and threshold in `AvailabilityData`. Registry merge policy must
 preserve that payload and incident state without trying to fold endpoints into
 hosts, VMs, or storage resources solely because an address matches.
+Frontend resource adapters must preserve that same availability identity on
+both REST and realtime paths: a thin `network-endpoint` update with
+availability data is still `platformType=availability`, `sourceType=api`, and
+must not regress to a generic platform badge in infrastructure rows or drawers.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata
@@ -711,6 +715,11 @@ one graph instead of combining a legacy snapshot read with standalone provider
 defaults. The shared resource graph must therefore see one coherent mock
 platform set regardless of whether a platform is snapshot-backed or
 supplemental-provider-backed.
+Agentless availability fixtures join that same graph-owned seed contract:
+mock UPS, MQTT, HTTP, and controller endpoints must project as
+`SourceAvailability` `network-endpoint` resources with real availability
+payloads, incidents, and source status rather than as generic host rows or
+settings-only sample data.
 Callers should therefore consume `CurrentFixtureGraph()` and graph-owned
 projections rather than reintroducing platform-only or state-only mock helper
 exports.

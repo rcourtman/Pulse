@@ -41,6 +41,11 @@ func NewAvailabilityHandlers(
 }
 
 func (h *AvailabilityHandlers) HandleList(w http.ResponseWriter, r *http.Request) {
+	if mock.IsMockEnabled() {
+		writeJSON(w, http.StatusOK, mockAvailabilityTargetResponses())
+		return
+	}
+
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
 		return
@@ -211,6 +216,15 @@ func (h *AvailabilityHandlers) HandleTestSavedConnection(w http.ResponseWriter, 
 		writeErrorResponse(w, http.StatusBadRequest, "missing_target_id", "Availability target ID is required", nil)
 		return
 	}
+	if mock.IsMockEnabled() {
+		if response, ok := mockAvailabilityTestResponse(targetID); ok {
+			writeJSON(w, http.StatusOK, response)
+			return
+		}
+		writeErrorResponse(w, http.StatusNotFound, "availability_not_found", "Availability target not found", nil)
+		return
+	}
+
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
 		return

@@ -10,12 +10,13 @@ import (
 )
 
 // FixtureGraph is the canonical mock runtime owner for snapshot-backed and
-// provider-backed platform fixtures. All mock projections should derive from
-// this graph rather than mixing independent snapshot and provider helpers.
+// provider-backed fixtures. All mock projections should derive from this graph
+// rather than mixing independent snapshot and provider helpers.
 type FixtureGraph struct {
-	State            models.StateSnapshot
-	AlertHistory     []models.Alert
-	PlatformFixtures PlatformFixtures
+	State                models.StateSnapshot
+	AlertHistory         []models.Alert
+	PlatformFixtures     PlatformFixtures
+	AvailabilityFixtures []AvailabilityFixture
 }
 
 func emptyFixtureGraph() FixtureGraph {
@@ -27,8 +28,9 @@ func emptyFixtureGraph() FixtureGraph {
 func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 	setMockUpdateInterval(cfg.UpdateInterval)
 	graph := FixtureGraph{
-		State:            buildFixtureState(cfg),
-		PlatformFixtures: defaultPlatformFixtures(),
+		State:                buildFixtureState(cfg),
+		PlatformFixtures:     defaultPlatformFixtures(),
+		AvailabilityFixtures: defaultAvailabilityFixtures(now),
 	}
 	applyDemoScenarioGraph(&graph, now)
 	syncMetricRoleRegistryFromGraph(graph)
@@ -40,9 +42,10 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 
 func cloneFixtureGraph(in FixtureGraph) FixtureGraph {
 	return FixtureGraph{
-		State:            cloneState(in.State),
-		AlertHistory:     append([]models.Alert(nil), in.AlertHistory...),
-		PlatformFixtures: clonePlatformFixtures(in.PlatformFixtures),
+		State:                cloneState(in.State),
+		AlertHistory:         append([]models.Alert(nil), in.AlertHistory...),
+		PlatformFixtures:     clonePlatformFixtures(in.PlatformFixtures),
+		AvailabilityFixtures: cloneAvailabilityFixtures(in.AvailabilityFixtures),
 	}
 }
 
@@ -56,6 +59,7 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	syncMetricRoleRegistryFromGraph(*g)
 	updateFixtureStateMetricsAt(&g.State, cfg, now)
 	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
+	g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
 	applyDemoScenarioGraph(g, now)
 	syncMetricRoleRegistryFromGraph(*g)
 }

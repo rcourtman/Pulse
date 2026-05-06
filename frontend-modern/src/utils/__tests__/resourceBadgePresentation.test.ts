@@ -29,6 +29,7 @@ describe('resourceBadgePresentation', () => {
     expect(getPlatformBadge('proxmox-pve')?.label).toBe('PVE');
     expect(getPlatformBadge('proxmox-pbs')?.label).toBe('PBS');
     expect(getPlatformBadge('docker')?.label).toBe('Docker / Podman');
+    expect(getPlatformBadge('availability')?.label).toBe('Availability');
   });
 
   it('returns source badges for infrastructure source types', () => {
@@ -108,6 +109,30 @@ describe('resourceBadgePresentation', () => {
       'PVE',
     ]);
     expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('PVE');
+  });
+
+  it('uses availability identity for agentless network endpoints', () => {
+    const resource = makeResource({
+      type: 'network-endpoint',
+      platformType: 'generic',
+      sourceType: 'api',
+      platformData: {
+        sources: ['availability'],
+        availability: {
+          protocol: 'tcp',
+          address: 'power-meter-01.lab.local',
+          port: 1883,
+        },
+      },
+    });
+
+    expect(getInfrastructureSystemIdentityBadges(resource).map((badge) => badge.label)).toEqual([
+      'Availability',
+    ]);
+    expect(getInfrastructureSystemIdentityBadges(resource)[0]?.title).toBe(
+      'TCP power-meter-01.lab.local:1883',
+    );
+    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('Availability');
   });
 
   it('falls back to reported OS identity for agent-only systems', () => {

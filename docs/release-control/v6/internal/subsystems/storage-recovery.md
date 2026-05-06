@@ -465,8 +465,9 @@ bypass the API fail-closed execution gate.
     `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json` through
     `frontend-modern/src/utils/platformSupportManifest.ts`, not from
     storage-local hard-coded provider arrays.
-32. Keep infrastructure summary chart bucketing presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets for operator-facing summary cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples as recovery freshness windows, backup cadence, or restore evidence.
-33. Keep workload chart downsampling presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets for operator-facing workload cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples as recovery freshness windows, backup cadence, or restore evidence.
+32. Keep agentless availability endpoints neutral on the shared unified-resource and API contracts. When `internal/api/availability_handlers.go`, `internal/api/connections_handlers.go`, `internal/api/platform_mock_connections.go`, or `frontend-modern/src/hooks/useUnifiedResources.ts` surface `network-endpoint` availability resources, storage and recovery may consume their liveness as infrastructure context only; they must not reinterpret ping/TCP/HTTP endpoints as storage providers, backup targets, recovery repositories, or protected-workload evidence.
+33. Keep infrastructure summary chart bucketing presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets for operator-facing summary cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples as recovery freshness windows, backup cadence, or restore evidence.
+34. Keep workload chart downsampling presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets for operator-facing workload cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples as recovery freshness windows, backup cadence, or restore evidence.
     The same adjacent chart boundary now covers compact storage capacity
     transport. `internal/api/router.go` may batch only the canonical `used`
     and `avail` storage series for `/api/charts/storage-summary`, but storage
@@ -481,14 +482,14 @@ bypass the API fail-closed execution gate.
     In mock mode, that same compact route must stay aggregate-only and
     sampler-prewarmed; storage and recovery must not trigger per-pool chart
     reconstruction on the first dashboard request after each mock refresh.
-34. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and adjacent summary/detail composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
+35. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and adjacent summary/detail composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
     That same dashboard composition boundary is now a retired negative space.
     Storage and recovery-adjacent summaries may reuse
     `/api/charts/storage-summary` through their owning summary components, but
     they must not restore `/api/resources/dashboard-summary`, paginated
     `useUnifiedResources()` transport, or per-pool `/api/metrics-store/history`
     fan-out under a dashboard hot path.
-35. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
+36. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated
     commercial compatibility handoffs like `/pricing` must stay separate thin
@@ -528,7 +529,7 @@ bypass the API fail-closed execution gate.
     top-level tabs are warm after authentication, but it must not fetch storage
     summary charts, recovery history, provider state, or preview data from
     `frontend-modern/src/App.tsx` itself.
-36. Keep public self-hosted purchase handoff and activation routes on the
+37. Keep public self-hosted purchase handoff and activation routes on the
     adjacent commercial/auth boundary. When `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,
     or `internal/api/demo_mode_commercial.go` evolve
@@ -576,7 +577,7 @@ bypass the API fail-closed execution gate.
     runtime as populated mock inventory, but they must not expose
     `demo_fixtures`, billing identity, or alternate entitlement semantics as
     recovery-local transport or operator-facing storage metadata.
-37. Keep storage summary fetches scope-owned on the shared summary caches.
+38. Keep storage summary fetches scope-owned on the shared summary caches.
     `frontend-modern/src/components/Storage/StorageSummary.tsx`,
     `frontend-modern/src/utils/storageSummaryCache.ts`,
     and `frontend-modern/src/utils/storageSummaryTrendCache.ts` may reuse
@@ -584,14 +585,14 @@ bypass the API fail-closed execution gate.
     refetch the full `/api/storage-charts` payload once per adjacent summary
     card or invent a dashboard-only storage summary transport path outside the
     canonical cache owners.
-38. Keep storage and recovery route framing additive and owner-neutral.
+39. Keep storage and recovery route framing additive and owner-neutral.
     `frontend-modern/src/components/Storage/Storage.tsx` and storage/recovery-
     adjacent route composition may use the shared `PageHeader` shell for
     top-level route framing, but that header must stay additive on top of the
     canonical storage page model, recovery presenters, and shared summary
     caches. Header chrome must not become a second owner for storage filters,
     recovery posture, commercial purchase state, or transport selection.
-39. Keep the unified connections ledger owner-neutral toward storage and
+40. Keep the unified connections ledger owner-neutral toward storage and
     recovery. Shared `internal/api/router.go` may mount the
     `/api/connections` and `/api/connections/probe` routes alongside the
     existing storage/recovery-adjacent API surfaces, and

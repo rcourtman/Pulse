@@ -57,6 +57,49 @@ type resourceContractSnapshot struct {
 	Type string
 }
 
+func TestContract_MockAvailabilityTargetsUseSavedTargetPayloads(t *testing.T) {
+	previousMock := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previousMock) })
+
+	targets := mockAvailabilityTargetResponses()
+	if len(targets) < 4 {
+		t.Fatalf("expected mock availability target payloads, got %d", len(targets))
+	}
+
+	seen := map[string]availabilityTargetResponse{}
+	for _, target := range targets {
+		if target.ID == "" {
+			t.Fatal("mock availability target payload must keep a saved target id")
+		}
+		if target.Status == nil {
+			t.Fatalf("mock availability target %q must include probe status", target.ID)
+		}
+		if target.Status.TargetID != target.ID {
+			t.Fatalf("mock availability target %q status target id drifted to %q", target.ID, target.Status.TargetID)
+		}
+		seen[target.ID] = target
+	}
+
+	mqtt, ok := seen["mock-availability-mqtt-meter"]
+	if !ok {
+		t.Fatal("mock MQTT availability target missing from API payload contract")
+	}
+	if mqtt.Protocol != config.AvailabilityProbeTCP || mqtt.Port != 1883 {
+		t.Fatalf("mock MQTT availability target must remain a saved TCP:1883 target, got protocol=%q port=%v", mqtt.Protocol, mqtt.Port)
+	}
+
+	response, ok := mockAvailabilityTestResponse("mock-availability-mqtt-meter")
+	if !ok {
+		t.Fatal("saved mock availability test response missing")
+	}
+	if !response.Success || response.LatencyMillis <= 0 || response.Error != "" {
+		t.Fatalf("mock MQTT saved-test response must be successful with latency and no error: %+v", response)
+	}
+}
+
 func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T) {
 	files := []string{"ai_handlers.go", "router_routes_ai_relay.go"}
 	for _, file := range files {

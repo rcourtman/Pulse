@@ -133,9 +133,12 @@ const hasGenericSource = (sources?: string[]): boolean =>
   Boolean(
     sources?.some((source) => {
       const normalized = normalizeSourcePlatformKey(source) || source.toLowerCase();
-      return normalized === 'availability' || normalized === 'generic';
+      return normalized === 'generic';
     }),
   );
+
+const hasAvailabilitySource = (sources?: string[]): boolean =>
+  Boolean(sources?.some((source) => source.trim().toLowerCase() === 'availability'));
 
 export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType | undefined => {
   const flags = readSourcePlatformFlags(sources);
@@ -147,6 +150,7 @@ export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType
   if (flags.hasKubernetes) return 'kubernetes';
   if (flags.hasDocker) return 'docker';
   if (flags.hasAgent) return 'agent';
+  if (hasAvailabilitySource(sources)) return 'availability';
   if (hasGenericSource(sources)) return 'generic';
   return undefined;
 };
@@ -161,7 +165,8 @@ export const resolveSourceTypeFromSources = (sources?: string[]): SourceType => 
     flags.hasPmg ||
     flags.hasTrueNAS ||
     flags.hasVMware ||
-    hasGenericSource(sources);
+    hasGenericSource(sources) ||
+    hasAvailabilitySource(sources);
   if (flags.hasAgent && hasOther) return 'hybrid';
   if (flags.hasAgent) return 'agent';
   return 'api';

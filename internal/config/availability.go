@@ -197,13 +197,13 @@ func normalizeAvailabilityAddress(raw string) string {
 	if value == "" {
 		return ""
 	}
-	if host, _, err := net.SplitHostPort(value); err == nil && strings.TrimSpace(host) != "" {
-		return strings.Trim(strings.TrimSpace(host), "[]")
-	}
 	if strings.Contains(value, "://") {
 		if u, err := url.Parse(value); err == nil && strings.TrimSpace(u.Hostname()) != "" {
 			return strings.TrimSpace(u.Hostname())
 		}
+	}
+	if host, _, err := net.SplitHostPort(value); err == nil && strings.TrimSpace(host) != "" {
+		return strings.Trim(strings.TrimSpace(host), "[]")
 	}
 	return strings.Trim(value, "[]")
 }

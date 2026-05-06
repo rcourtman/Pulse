@@ -206,6 +206,11 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle surfaces may display contact email when supplied by the shared
    auth boundary, but they must not reinterpret SSO or Stripe email as the
    canonical user identifier for setup, install, or fleet-management actions.
+   Availability-target API changes are adjacent but not lifecycle-owned:
+   agentless ping/TCP/HTTP targets may appear in shared `internal/api/`
+   handlers and connection ledgers, but they must remain settings/API
+   availability resources and must not create install commands, agent tokens, or
+   host uninstall/stop-monitoring lifecycle actions.
    Hosted handoff subjects consumed through the shared API auth boundary must
    already be stable, non-email principals; lifecycle-adjacent routes must not
    recover authority from a blank handoff subject by falling back to contact

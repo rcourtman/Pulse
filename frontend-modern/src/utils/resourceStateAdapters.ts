@@ -30,6 +30,10 @@ import {
   getPreferredResourceClusterName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
+import {
+  resolvePlatformTypeFromSources,
+  resolveSourceTypeFromSources,
+} from '@/utils/sourcePlatforms';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -66,10 +70,7 @@ const getCanonicalPlatformId = (resource: Resource): string | undefined => {
 export const resourcePlatformData = (resource: Resource): Record<string, unknown> | undefined =>
   asRecord(resource.platformData);
 
-const mergeStringArrays = (
-  incoming?: string[],
-  existing?: string[],
-): string[] | undefined => {
+const mergeStringArrays = (incoming?: string[], existing?: string[]): string[] | undefined => {
   const merged = [...(incoming ?? []), ...(existing ?? [])]
     .map((value) => asString(value))
     .filter((value): value is string => Boolean(value));
@@ -101,6 +102,7 @@ const mergePlatformData = (
     'kubernetes',
     'vmware',
     'storage',
+    'availability',
     'physicalDisk',
     'ceph',
     'metrics',
@@ -132,6 +134,15 @@ const mergePlatformData = (
 };
 
 const deriveLegacySourceList = (resource: Resource): string[] | undefined => {
+  if (
+    resource.type === 'network-endpoint' ||
+    resource.platformType === 'availability' ||
+    Boolean(resource.availability) ||
+    Boolean(asRecord(resource.platformData)?.availability)
+  ) {
+    return ['availability'];
+  }
+
   switch (resource.platformType) {
     case 'proxmox-pve':
       return resource.sourceType === 'hybrid' ? ['proxmox', 'agent'] : ['proxmox'];
@@ -185,7 +196,8 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
       }
     }
     if (platformData.memory !== undefined) agentPayload.memory = platformData.memory;
-    if (platformData.interfaces !== undefined) agentPayload.networkInterfaces = platformData.interfaces;
+    if (platformData.interfaces !== undefined)
+      agentPayload.networkInterfaces = platformData.interfaces;
     if (platformData.disks !== undefined) agentPayload.disks = platformData.disks;
     if (Object.keys(agentPayload).length > 0) {
       normalized.agent = agentPayload;
@@ -217,7 +229,8 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
       }
     }
     if (platformData.swarm !== undefined) dockerPayload.swarm = platformData.swarm;
-    if (platformData.interfaces !== undefined) dockerPayload.networkInterfaces = platformData.interfaces;
+    if (platformData.interfaces !== undefined)
+      dockerPayload.networkInterfaces = platformData.interfaces;
     if (platformData.disks !== undefined) dockerPayload.disks = platformData.disks;
     if (Object.keys(dockerPayload).length > 0) {
       normalized.docker = dockerPayload;
@@ -309,11 +322,44 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
   return normalized;
 };
 
+const getCanonicalSourceList = (
+  resource: Resource,
+  platformData?: Resource['platformData'],
+): string[] | undefined => {
+  const platformRecord = asRecord(platformData);
+  return Array.isArray(platformRecord?.sources) && platformRecord.sources.length > 0
+    ? (platformRecord.sources as string[])
+    : deriveLegacySourceList({ ...resource, platformData });
+};
+
+const hasAvailabilityFacet = (
+  resource: Resource,
+  platformData?: Resource['platformData'],
+): boolean => {
+  const platformRecord = asRecord(platformData);
+  const sources = getCanonicalSourceList(resource, platformData);
+  return (
+    resource.type === 'network-endpoint' ||
+    resource.platformType === 'availability' ||
+    Boolean(resource.availability) ||
+    Boolean(platformRecord?.availability) ||
+    Boolean(sources?.some((source) => source.trim().toLowerCase() === 'availability'))
+  );
+};
+
 export const canonicalizeRealtimeResource = (resource: Resource): Resource => {
   const platformData = canonicalizeLegacyPlatformData(resource);
   const platformRecord = asRecord(platformData);
+  const sources = getCanonicalSourceList(resource, platformData);
+  const platformType =
+    resolvePlatformTypeFromSources(sources) ||
+    (hasAvailabilityFacet(resource, platformData) ? 'availability' : resource.platformType);
+  const sourceType =
+    sources && sources.length > 0 ? resolveSourceTypeFromSources(sources) : resource.sourceType;
   const normalizedBase = {
     ...resource,
+    platformType,
+    sourceType,
     platformData,
   };
   return {
@@ -326,6 +372,8 @@ export const canonicalizeRealtimeResource = (resource: Resource): Resource => {
     kubernetes: resource.kubernetes ?? (platformRecord?.kubernetes as Resource['kubernetes']),
     vmware: resource.vmware ?? (platformRecord?.vmware as Resource['vmware']),
     storage: resource.storage ?? (platformRecord?.storage as Resource['storage']),
+    availability:
+      resource.availability ?? (platformRecord?.availability as Resource['availability']),
     physicalDisk:
       resource.physicalDisk ?? (platformRecord?.physicalDisk as Resource['physicalDisk']),
   };
@@ -365,14 +413,38 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
     recentChanges: incoming.recentChanges ?? existingCanonical.recentChanges,
     facetCounts: incoming.facetCounts ?? existingCanonical.facetCounts,
     diskIO: incoming.diskIO ?? existingCanonical.diskIO,
-    agent: mergeRecord(incoming.agent as JsonRecord | undefined, existingCanonical.agent as JsonRecord | undefined) as Resource['agent'],
-    proxmox: mergeRecord(incoming.proxmox as JsonRecord | undefined, existingCanonical.proxmox as JsonRecord | undefined) as Resource['proxmox'],
-    pbs: mergeRecord(incoming.pbs as JsonRecord | undefined, existingCanonical.pbs as JsonRecord | undefined) as Resource['pbs'],
-    kubernetes: mergeRecord(incoming.kubernetes as JsonRecord | undefined, existingCanonical.kubernetes as JsonRecord | undefined) as Resource['kubernetes'],
-    vmware: mergeRecord(incoming.vmware as JsonRecord | undefined, existingCanonical.vmware as JsonRecord | undefined) as Resource['vmware'],
-    storage: mergeRecord(incoming.storage as JsonRecord | undefined, existingCanonical.storage as JsonRecord | undefined) as Resource['storage'],
-    physicalDisk: mergeRecord(incoming.physicalDisk as JsonRecord | undefined, existingCanonical.physicalDisk as JsonRecord | undefined) as Resource['physicalDisk'],
-    identity: mergeRecord(incoming.identity as JsonRecord | undefined, existingCanonical.identity as JsonRecord | undefined) as Resource['identity'],
+    agent: mergeRecord(
+      incoming.agent as JsonRecord | undefined,
+      existingCanonical.agent as JsonRecord | undefined,
+    ) as Resource['agent'],
+    proxmox: mergeRecord(
+      incoming.proxmox as JsonRecord | undefined,
+      existingCanonical.proxmox as JsonRecord | undefined,
+    ) as Resource['proxmox'],
+    pbs: mergeRecord(
+      incoming.pbs as JsonRecord | undefined,
+      existingCanonical.pbs as JsonRecord | undefined,
+    ) as Resource['pbs'],
+    kubernetes: mergeRecord(
+      incoming.kubernetes as JsonRecord | undefined,
+      existingCanonical.kubernetes as JsonRecord | undefined,
+    ) as Resource['kubernetes'],
+    vmware: mergeRecord(
+      incoming.vmware as JsonRecord | undefined,
+      existingCanonical.vmware as JsonRecord | undefined,
+    ) as Resource['vmware'],
+    storage: mergeRecord(
+      incoming.storage as JsonRecord | undefined,
+      existingCanonical.storage as JsonRecord | undefined,
+    ) as Resource['storage'],
+    physicalDisk: mergeRecord(
+      incoming.physicalDisk as JsonRecord | undefined,
+      existingCanonical.physicalDisk as JsonRecord | undefined,
+    ) as Resource['physicalDisk'],
+    identity: mergeRecord(
+      incoming.identity as JsonRecord | undefined,
+      existingCanonical.identity as JsonRecord | undefined,
+    ) as Resource['identity'],
     platformData: mergePlatformData(incoming.platformData, existingCanonical.platformData),
     tags: incoming.tags && incoming.tags.length > 0 ? incoming.tags : existingCanonical.tags,
     labels:

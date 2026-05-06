@@ -267,6 +267,43 @@ describe('resourceStateAdapters nodeFromResource', () => {
     });
   });
 
+  it('canonicalizes agentless availability realtime resources as availability endpoints', () => {
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'network-endpoint-1',
+          type: 'network-endpoint',
+          name: 'MQTT power meter',
+          displayName: 'MQTT power meter',
+          platformId: 'mock-availability-mqtt-meter',
+          platformType: 'generic',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: Date.now(),
+          platformData: {
+            availability: {
+              targetId: 'mock-availability-mqtt-meter',
+              protocol: 'tcp',
+              address: 'power-meter-01.lab.local',
+              port: 1883,
+            },
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resource.platformType).toBe('availability');
+    expect(resource.sourceType).toBe('api');
+    expect(resource.availability).toMatchObject({
+      targetId: 'mock-availability-mqtt-meter',
+      protocol: 'tcp',
+      address: 'power-meter-01.lab.local',
+      port: 1883,
+    });
+    expect((resource.platformData as Record<string, unknown>).sources).toEqual(['availability']);
+  });
+
   it('preserves richer existing resource details when realtime updates are thinner', () => {
     const existing: Resource = {
       id: 'node-1',

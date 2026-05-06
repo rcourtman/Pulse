@@ -130,6 +130,10 @@ load from the config persistence boundary, schedule through
 the default low-overhead check, while TCP and HTTP are canonical fallbacks for
 devices or runtimes where ICMP is unavailable or the useful signal is a port or
 web interface.
+Mock-mode availability targets must use that same provider vocabulary. The
+mock fixture graph may author ping/TCP/HTTP endpoint examples, but monitoring
+and API consumers must receive them through `SourceAvailability` supplemental
+records and probe-status projections, not through a mock-only monitoring type.
 That same monitoring boundary also owns the escalation callback bridge into the
 alerts delivery layer. Monitor-owned escalation handling may still publish
 canonical escalation state to websocket consumers, but notification fan-out
@@ -766,6 +770,10 @@ from standalone defaults, consume partial legacy helper exports, or mix
 snapshot state with separate provider fixtures when seeding read-state or
 metrics history. The graph, its platform projections, and its curated demo
 scenario layer are the canonical mock runtime API.
+Availability mock fixtures belong to that same graph authority: UPS network
+cards, MQTT meters, HTTP panels, and controller ping targets must be authored
+once in `internal/mock/` and then projected into availability status, unified
+resources, and connections payloads from that shared graph.
 That same boundary now also owns native disk-history fallback when Pulse's own
 history is shallow. `internal/truenas/client.go`,
 `internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and

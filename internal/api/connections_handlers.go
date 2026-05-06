@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
@@ -76,6 +77,11 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 		inputs.hosts = []models.Host{}
 		inputs.instanceHealth = map[string]monitoring.InstanceHealth{}
 		inputs.availabilityStatuses = map[string]monitoring.AvailabilityProbeStatus{}
+	}
+	if mock.IsMockEnabled() {
+		mockTargets, mockStatuses := mockAvailabilityConnectionInputs()
+		inputs.availabilityTargets = mergeAvailabilityTargets(inputs.availabilityTargets, mockTargets)
+		inputs.availabilityStatuses = mergeAvailabilityStatuses(inputs.availabilityStatuses, mockStatuses)
 	}
 	inputs.expectedAgentVersion = currentAgentTargetVersion()
 

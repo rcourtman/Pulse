@@ -179,6 +179,11 @@ work extends shared components instead of creating new local variants.
 8. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
 9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+    That shared boundary must preserve `availability` as the agentless
+    infrastructure source for `network-endpoint` resources and settings
+    presets, so source badges and platform/source type resolution do not fall
+    back to `generic` when an endpoint is represented by ping, TCP, or HTTP
+    probe data rather than an installed agent or provider API.
 
 ## Extension Points
 
@@ -2798,3 +2803,8 @@ settings add-flow copy must use the shared onboarding and source-platform
 helpers instead of feature-local wording, so availability probes stay visually
 aligned with the single Infrastructure settings surface without pretending to
 be a host agent install.
+Availability setup presets for pingable devices, MQTT, ESPHome, or similar
+agentless endpoints must also stay on the shared settings form vocabulary:
+presets may fill protocol, port, and path defaults, but display badges and
+drawers still derive `Availability` and `Network Endpoint` labels from the
+shared resource presentation helpers rather than from preset-local copy.

@@ -142,6 +142,9 @@ product API routes free of maintainer commercial analytics.
     ledger rows with type `availability` must route pause, remove, and test
     actions to those availability-target endpoints and must not reuse node,
     SSH, or Pulse Agent setup payloads.
+    Mock mode must expose authored availability targets through those same
+    list, saved-test, and connections-ledger payloads so demo endpoints exercise
+    the canonical API contract rather than a frontend-only fixture.
 13. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 16. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 17. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
@@ -3410,6 +3413,10 @@ runtime status, projected through the connections ledger and unified resources
 as a `network-endpoint`. Browser callers may test unsaved or saved targets, but
 the persisted target list remains owned by `/api/availability-targets` and
 must not be reconstructed from resource snapshots or monitored-system counts.
+Mock availability fixtures must still behave like saved targets: `/api/connections`
+reports them as availability rows, `/api/availability-targets` lists them with
+probe status, and saved-test calls return the synthetic probe result instead of
+attempting live network I/O against demo-only addresses.
 That same shared metrics-history contract now also owns physical-disk live I/O
 windows. `internal/api/router.go` must accept `resourceType=disk` on
 `/api/metrics-store/history`, keep `30m` as a valid compact live range, and

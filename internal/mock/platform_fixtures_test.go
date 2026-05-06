@@ -60,6 +60,51 @@ func TestSupplementalRecordsNormalizesVMwareAlias(t *testing.T) {
 	}
 }
 
+func TestFixtureGraphProjectsAvailabilityFixturesAsNetworkEndpoints(t *testing.T) {
+	now := time.Date(2026, time.May, 6, 12, 0, 0, 0, time.UTC)
+
+	graph := buildFixtureGraph(DefaultConfig, now)
+	resources, freshness := graph.UnifiedResourceSnapshot()
+	if freshness.IsZero() {
+		t.Fatal("expected non-zero unified resource freshness")
+	}
+
+	var mqtt *unifiedresources.Resource
+	var door *unifiedresources.Resource
+	for i := range resources {
+		switch resources[i].Name {
+		case "MQTT power meter":
+			mqtt = &resources[i]
+		case "Workshop door controller":
+			door = &resources[i]
+		}
+	}
+	if mqtt == nil {
+		t.Fatal("expected MQTT power meter availability endpoint")
+	}
+	if mqtt.Type != unifiedresources.ResourceTypeNetworkEndpoint {
+		t.Fatalf("MQTT resource type = %q, want network-endpoint", mqtt.Type)
+	}
+	if mqtt.Availability == nil || mqtt.Availability.Protocol != "tcp" || mqtt.Availability.Port != 1883 {
+		t.Fatalf("unexpected MQTT availability metadata: %+v", mqtt.Availability)
+	}
+	if door == nil {
+		t.Fatal("expected workshop door controller availability endpoint")
+	}
+	if door.Status != unifiedresources.StatusOffline {
+		t.Fatalf("door controller status = %q, want offline", door.Status)
+	}
+	if door.Availability == nil || door.Availability.TargetID != "mock-availability-door-controller" {
+		t.Fatalf("unexpected door availability metadata: %+v", door.Availability)
+	}
+	if len(door.Incidents) != 1 || door.Incidents[0].Code != "availability_unreachable" {
+		t.Fatalf("expected availability incident, got %+v", door.Incidents)
+	}
+	if door.Canonical == nil || door.Canonical.PrimaryID != "availability:mock-availability-door-controller" {
+		t.Fatalf("unexpected door canonical identity: %+v", door.Canonical)
+	}
+}
+
 func TestBuildFixtureGraphRebasesPlatformFixtureTimestampsForDemoRuntime(t *testing.T) {
 	now := time.Date(2026, time.March, 31, 17, 30, 0, 0, time.UTC)
 
@@ -70,6 +115,9 @@ func TestBuildFixtureGraphRebasesPlatformFixtureTimestampsForDemoRuntime(t *test
 	}
 	if got := graph.PlatformFixtures.VMware.CollectedAt; !got.Equal(now) {
 		t.Fatalf("expected VMware collectedAt %s, got %s", now, got)
+	}
+	if got := availabilityFixturesFreshness(graph.AvailabilityFixtures); got.IsZero() || got.Before(now.Add(-2*time.Minute)) || got.After(now) {
+		t.Fatalf("expected availability fixture freshness near %s, got %s", now, got)
 	}
 	if got := graph.PlatformFixtures.TrueNAS.System.CollectedAt; got.IsZero() || got.Before(now.Add(-2*time.Minute)) || got.After(now) {
 		t.Fatalf("expected rebased TrueNAS system collectedAt near %s, got %s", now, got)
@@ -97,6 +145,9 @@ func TestFixtureGraphUpdateMetricsKeepsPlatformFixtureFreshnessCurrent(t *testin
 	}
 	if got := graph.PlatformFixtures.VMware.CollectedAt; !got.Equal(later) {
 		t.Fatalf("expected rebased VMware collectedAt %s, got %s", later, got)
+	}
+	if got := availabilityFixturesFreshness(graph.AvailabilityFixtures); got.IsZero() || got.Before(later.Add(-2*time.Minute)) || got.After(later) {
+		t.Fatalf("expected availability fixture freshness near %s, got %s", later, got)
 	}
 	if len(graph.PlatformFixtures.VMware.Hosts) == 0 || len(graph.PlatformFixtures.VMware.Hosts[0].RecentEvents) == 0 {
 		t.Fatal("expected canonical VMware fixtures with host events")

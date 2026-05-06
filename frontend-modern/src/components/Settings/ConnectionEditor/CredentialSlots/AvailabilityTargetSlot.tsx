@@ -13,6 +13,13 @@ import {
   type AvailabilityTarget,
   type AvailabilityTestResponse,
 } from '@/api/availabilityTargets';
+import {
+  AVAILABILITY_TARGET_PRESETS,
+  CUSTOM_AVAILABILITY_PRESET_ID,
+  applyAvailabilityTargetPreset,
+  availabilityPresetById,
+  type AvailabilityTargetPresetID,
+} from '../availabilityTargetPresets';
 
 const buttonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
@@ -97,18 +104,50 @@ const testToneClass = (result: AvailabilityTestResponse) =>
     ? 'border-green-300 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200'
     : 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200';
 
+const presetSensitiveFormKeys: ReadonlySet<keyof AvailabilityForm> = new Set([
+  'path',
+  'port',
+  'protocol',
+]);
+
 export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (props) => {
   const [form, setForm] = createSignal<AvailabilityForm>(newAvailabilityForm());
+  const [selectedPreset, setSelectedPreset] = createSignal<AvailabilityTargetPresetID>(
+    CUSTOM_AVAILABILITY_PRESET_ID,
+  );
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [testResult, setTestResult] = createSignal<AvailabilityTestResponse | null>(null);
 
-  const updateForm = (patch: Partial<AvailabilityForm>) => {
+  const updateForm = (patch: Partial<AvailabilityForm>, preservePreset = false) => {
     setForm((current) => ({ ...current, ...patch }));
+    if (
+      !preservePreset &&
+      Object.keys(patch).some((key) => presetSensitiveFormKeys.has(key as keyof AvailabilityForm))
+    ) {
+      setSelectedPreset(CUSTOM_AVAILABILITY_PRESET_ID);
+    }
     setError(null);
     setTestResult(null);
+  };
+
+  const selectedPresetConfig = () => availabilityPresetById(selectedPreset());
+
+  const addressPlaceholder = () =>
+    selectedPresetConfig()?.addressPlaceholder ??
+    (form().protocol === 'http' ? 'http://device.local/status' : 'device.local');
+
+  const portPlaceholder = () =>
+    selectedPresetConfig()?.portPlaceholder ?? (form().protocol === 'http' ? 'Optional' : '1883');
+
+  const handlePresetChange = (presetId: AvailabilityTargetPresetID) => {
+    setSelectedPreset(presetId);
+    setError(null);
+    setTestResult(null);
+    if (presetId === CUSTOM_AVAILABILITY_PRESET_ID) return;
+    setForm((current) => applyAvailabilityTargetPreset(current, presetId));
   };
 
   onMount(async () => {
@@ -177,6 +216,19 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
       </Show>
 
       <div class="grid gap-4 sm:grid-cols-2">
+        <FormSelect
+          label="Preset"
+          value={selectedPreset()}
+          onChange={(event) =>
+            handlePresetChange(event.currentTarget.value as AvailabilityTargetPresetID)
+          }
+          fieldClass="sm:col-span-2"
+        >
+          <option value={CUSTOM_AVAILABILITY_PRESET_ID}>Custom endpoint</option>
+          {AVAILABILITY_TARGET_PRESETS.map((preset) => (
+            <option value={preset.id}>{preset.label}</option>
+          ))}
+        </FormSelect>
         <label class={formField}>
           <span class={formLabel}>Name</span>
           <input
@@ -203,7 +255,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             class={formControl}
             value={form().address}
             onInput={(event) => updateForm({ address: event.currentTarget.value })}
-            placeholder={form().protocol === 'http' ? 'http://device.local/status' : 'device.local'}
+            placeholder={addressPlaceholder()}
           />
           <span class={formHelpText}>
             {form().protocol === 'icmp'
@@ -221,7 +273,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               inputMode="numeric"
               value={form().port}
               onInput={(event) => updateForm({ port: event.currentTarget.value })}
-              placeholder={form().protocol === 'http' ? 'Optional' : '1883'}
+              placeholder={portPlaceholder()}
             />
           </label>
         </Show>

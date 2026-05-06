@@ -18,6 +18,7 @@ const baseBadge =
   'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
 const typeClasses = 'bg-surface-alt text-base-content';
+const availabilityBadgeClasses = 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300';
 
 const PRIMARY_SYSTEM_SOURCE_PRIORITY: KnownSourcePlatform[] = [
   'proxmox-pve',
@@ -91,6 +92,13 @@ const buildUnifiedSourceBadges = (sources: KnownSourcePlatform[]): ResourceBadge
 
 export function getPlatformBadge(platformType?: PlatformType): ResourceBadge | null {
   if (!platformType) return null;
+  if (platformType === 'availability') {
+    return {
+      label: 'Availability',
+      classes: `${baseBadge} ${availabilityBadgeClasses}`,
+      title: 'Availability',
+    };
+  }
   const sharedBadge = getSourcePlatformBadge(platformType);
   if (!sharedBadge) return null;
   return {
@@ -207,9 +215,41 @@ const getAgentSystemIdentityBadge = (resource: Resource): ResourceBadge | null =
   return null;
 };
 
+const getAvailabilitySystemIdentityBadge = (
+  resource: Resource,
+  platformData: Record<string, unknown> | undefined,
+): ResourceBadge | null => {
+  const availability = platformData?.availability as
+    | { address?: string; protocol?: string; port?: number }
+    | undefined;
+  const sources = (platformData?.sources as string[] | undefined) ?? [];
+  const isAvailabilityEndpoint =
+    resource.type === 'network-endpoint' ||
+    Boolean(availability) ||
+    sources.some((source) => source.trim().toLowerCase() === 'availability');
+
+  if (!isAvailabilityEndpoint) return null;
+
+  const protocol = trimString(availability?.protocol).toUpperCase();
+  const address = trimString(availability?.address);
+  const port = Number.isFinite(availability?.port) && availability?.port ? `:${availability.port}` : '';
+  return {
+    label: 'Availability',
+    classes: `${baseBadge} ${availabilityBadgeClasses}`,
+    title: titleFromParts(protocol || 'Availability', address ? `${address}${port}` : undefined),
+  };
+};
+
 export function getInfrastructureSystemIdentityBadges(resource: Resource): ResourceBadge[] {
-  const platformData = getPlatformDataRecord(resource) as { sources?: string[] } | undefined;
+  const platformData = getPlatformDataRecord(resource) as
+    | (Record<string, unknown> & { sources?: string[] })
+    | undefined;
   const sources = normalizeUnifiedSourceKeys(platformData?.sources);
+  const availabilityIdentityBadge = getAvailabilitySystemIdentityBadge(resource, platformData);
+  if (availabilityIdentityBadge) {
+    return [availabilityIdentityBadge];
+  }
+
   const systemSource = firstSystemSource(sources, resource.platformType);
   if (systemSource) {
     return buildUnifiedSourceBadges([systemSource]);

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 )
 
 func TestAvailabilityHandlersCRUDPersistsTargets(t *testing.T) {
@@ -127,6 +128,81 @@ func TestAvailabilityHandlersTestSavedTarget(t *testing.T) {
 	}
 	if !response.Success {
 		t.Fatalf("response = %+v, want success", response)
+	}
+}
+
+func TestAvailabilityHandlersListReturnsMockTargetsInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+	handler := NewAvailabilityHandlers(
+		func(context.Context) *config.ConfigPersistence {
+			t.Fatal("mock availability list should not load persistence")
+			return nil
+		},
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/availability-targets", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HandleList status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var listed []availabilityTargetResponse
+	if err := json.NewDecoder(rec.Body).Decode(&listed); err != nil {
+		t.Fatalf("decode listed targets: %v", err)
+	}
+	if len(listed) < 4 {
+		t.Fatalf("expected mock availability targets, got %+v", listed)
+	}
+	foundMQTT := false
+	for _, target := range listed {
+		if target.ID != "mock-availability-mqtt-meter" {
+			continue
+		}
+		foundMQTT = true
+		if target.Protocol != config.AvailabilityProbeTCP || target.Port != 1883 {
+			t.Fatalf("unexpected MQTT target: %+v", target.AvailabilityTarget)
+		}
+		if target.Status == nil || !target.Status.Available {
+			t.Fatalf("expected successful MQTT status, got %+v", target.Status)
+		}
+	}
+	if !foundMQTT {
+		t.Fatalf("expected MQTT power meter target, got %+v", listed)
+	}
+}
+
+func TestAvailabilityHandlersTestSavedMockTargetUsesSyntheticStatus(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+	handler := NewAvailabilityHandlers(nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/availability-targets/mock-availability-door-controller/test", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestSavedConnection(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HandleTestSavedConnection status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var response availabilityTestResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode test response: %v", err)
+	}
+	if response.Success {
+		t.Fatalf("expected synthetic failure for offline mock target, got %+v", response)
+	}
+	if response.Error != "icmp probe timed out" {
+		t.Fatalf("unexpected mock test error: %+v", response)
 	}
 }
 

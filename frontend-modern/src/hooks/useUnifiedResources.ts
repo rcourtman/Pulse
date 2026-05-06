@@ -619,6 +619,10 @@ const toResource = (v2: APIResource): Resource => {
   const canonical = v2.canonicalIdentity;
   const name = asTrimmedString(canonical?.displayName) || v2.name || v2.id;
   const platformId = asTrimmedString(canonical?.platformId) || getPreferredNormalizedPlatformId(v2);
+  const resourceType = resolveType(v2.type);
+  const platformType =
+    resolvePlatformTypeFromSources(sources) ||
+    (resourceType === 'network-endpoint' ? 'availability' : 'agent');
 
   const discoveryResourceType = resolveDiscoveryResourceType(v2.discoveryTarget?.resourceType);
   const discoveryAgentId = v2.discoveryTarget?.agentId;
@@ -635,11 +639,11 @@ const toResource = (v2: APIResource): Resource => {
   const metricsTarget = resolveMetricsTarget(v2.type, v2.metricsTarget);
   return {
     id: v2.id,
-    type: resolveType(v2.type),
+    type: resourceType,
     name,
     displayName: name,
     platformId,
-    platformType: resolvePlatformTypeFromSources(sources) || 'agent',
+    platformType,
     sourceType: resolveSourceTypeFromSources(sources),
     parentId: v2.parentId,
     parentName: v2.parentName,

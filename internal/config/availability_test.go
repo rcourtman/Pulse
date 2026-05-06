@@ -41,6 +41,18 @@ func TestNormalizeAvailabilityTargetReducesICMPAddressToHost(t *testing.T) {
 	}
 }
 
+func TestAvailabilityTargetProbeAddressUsesHTTPHostname(t *testing.T) {
+	target := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Address:  "http://solar-inverter.lab.local/status",
+		Protocol: AvailabilityProbeHTTP,
+		Enabled:  true,
+	})
+
+	if got := target.ProbeAddress(); got != "solar-inverter.lab.local" {
+		t.Fatalf("ProbeAddress() = %q, want solar-inverter.lab.local", got)
+	}
+}
+
 func TestAvailabilityTargetHTTPURLAppliesPortAndPath(t *testing.T) {
 	target := NormalizeAvailabilityTarget(AvailabilityTarget{
 		Address:  "device.local/status",

@@ -685,6 +685,48 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('projects availability endpoints onto the availability platform model', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'endpoint-1',
+            type: 'network-endpoint',
+            name: 'MQTT power meter',
+            sources: ['availability'],
+            availability: {
+              targetId: 'mock-availability-mqtt-meter',
+              protocol: 'tcp',
+              address: 'power-meter-01.lab.local',
+              port: 1883,
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].type).toBe('network-endpoint');
+    expect(result!.resources()[0].platformType).toBe('availability');
+    expect(result!.resources()[0].sourceType).toBe('api');
+    expect(result!.resources()[0].platformData?.availability).toMatchObject({
+      protocol: 'tcp',
+      address: 'power-meter-01.lab.local',
+      port: 1883,
+    });
+
+    dispose();
+  });
+
   it('maps discoveryTarget.agentId into canonical discovery agentId', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

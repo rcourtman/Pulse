@@ -117,12 +117,19 @@ func defaultTrueNASConnectionFixture(fixtures PlatformFixtures) TrueNASConnectio
 }
 
 func SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.IngestRecord {
-	fixtures := currentOrDefaultPlatformFixtures()
-	switch normalizePlatformSource(source) {
+	if IsMockEnabled() {
+		return CurrentFixtureGraph().SupplementalRecords(source)
+	}
+
+	platformFixtures := defaultPlatformFixtures()
+	now := time.Now().UTC()
+	switch normalizeSupplementalSource(source) {
 	case unifiedresources.SourceTrueNAS:
-		return truenas.FixtureRecords(fixtures.TrueNAS)
+		return truenas.FixtureRecords(platformFixtures.TrueNAS)
 	case unifiedresources.SourceVMware:
-		return vmware.FixtureRecords(fixtures.VMware)
+		return vmware.FixtureRecords(platformFixtures.VMware)
+	case unifiedresources.SourceAvailability:
+		return availabilityFixtureRecords(defaultAvailabilityFixtures(now), now)
 	default:
 		return nil
 	}
@@ -132,6 +139,14 @@ func PlatformOwnedSources() []unifiedresources.DataSource {
 	return []unifiedresources.DataSource{
 		unifiedresources.SourceTrueNAS,
 		unifiedresources.SourceVMware,
+	}
+}
+
+func SupplementalOwnedSources() []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{
+		unifiedresources.SourceTrueNAS,
+		unifiedresources.SourceVMware,
+		unifiedresources.SourceAvailability,
 	}
 }
 
@@ -145,9 +160,9 @@ func UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 
 func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(unifiedresources.SnapshotWithoutSources(g.State, PlatformOwnedSources()))
+	registry.IngestSnapshot(unifiedresources.SnapshotWithoutSources(g.State, SupplementalOwnedSources()))
 
-	for _, source := range PlatformOwnedSources() {
+	for _, source := range SupplementalOwnedSources() {
 		records := g.SupplementalRecords(source)
 		if len(records) == 0 {
 			continue
@@ -159,6 +174,7 @@ func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, ti
 	for _, candidate := range []time.Time{
 		trueNASCollectedAt(g.PlatformFixtures.TrueNAS),
 		g.PlatformFixtures.VMware.CollectedAt,
+		availabilityFixturesFreshness(g.AvailabilityFixtures),
 	} {
 		if candidate.IsZero() {
 			continue
@@ -179,11 +195,13 @@ func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, ti
 }
 
 func (g FixtureGraph) SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.IngestRecord {
-	switch normalizePlatformSource(source) {
+	switch normalizeSupplementalSource(source) {
 	case unifiedresources.SourceTrueNAS:
 		return truenas.FixtureRecords(g.PlatformFixtures.TrueNAS)
 	case unifiedresources.SourceVMware:
 		return vmware.FixtureRecords(g.PlatformFixtures.VMware)
+	case unifiedresources.SourceAvailability:
+		return availabilityFixtureRecords(g.AvailabilityFixtures, availabilityFixturesFreshness(g.AvailabilityFixtures))
 	default:
 		return nil
 	}
@@ -523,12 +541,14 @@ func shiftTime(value time.Time, shift time.Duration, fallback time.Time) time.Ti
 	return value.Add(shift)
 }
 
-func normalizePlatformSource(source unifiedresources.DataSource) unifiedresources.DataSource {
+func normalizeSupplementalSource(source unifiedresources.DataSource) unifiedresources.DataSource {
 	switch strings.ToLower(strings.TrimSpace(string(source))) {
 	case "truenas":
 		return unifiedresources.SourceTrueNAS
 	case "vmware", "vmware-vsphere":
 		return unifiedresources.SourceVMware
+	case "availability", "network-endpoint", "network-endpoints":
+		return unifiedresources.SourceAvailability
 	default:
 		return ""
 	}

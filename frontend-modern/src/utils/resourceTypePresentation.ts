@@ -94,6 +94,10 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'Ceph',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
+    'network-endpoint': {
+      label: 'Network Endpoint',
+      badgeClasses: DEFAULT_BADGE_CLASSES,
+    },
   };
 
 const EXTERNAL_TYPE_PRESENTATION: Record<string, ResourceTypePresentation> = {
