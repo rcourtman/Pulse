@@ -311,6 +311,43 @@ func TestSubscribeAlertCallbackUnsubscribeKeepsOtherSubscribers(t *testing.T) {
 	}
 }
 
+func TestDispatchAlertSuppressesMonitorOnlyAlert(t *testing.T) {
+	m := newTestManager(t)
+
+	alert := &Alert{
+		ID:           "monitor-only-alert",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "vm-102",
+		ResourceName: "worker-1",
+		StartTime:    time.Now().Add(-time.Minute),
+		LastSeen:     time.Now(),
+		Metadata: map[string]interface{}{
+			"monitorOnly": true,
+		},
+	}
+
+	notifyDone := make(chan string, 1)
+	m.SubscribeAlertCallback(func(alert *Alert) {
+		notifyDone <- alert.ID
+	})
+
+	m.mu.Lock()
+	m.config.ActivationState = ActivationActive
+	dispatched := m.dispatchAlert(alert, false)
+	m.mu.Unlock()
+
+	if dispatched {
+		t.Fatal("expected monitor-only alert dispatch to be suppressed")
+	}
+
+	select {
+	case got := <-notifyDone:
+		t.Fatalf("monitor-only alert fired callback with alert ID %q", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestOnAlertHistoryRegistersCallback(t *testing.T) {
 	m := newTestManager(t)
 

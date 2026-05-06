@@ -54,6 +54,7 @@ operator-facing alert routing behavior for live runtime alerts.
 32. `internal/alerts/config/types.go`
 33. `internal/alerts/config/normalize.go`
 34. `internal/alerts/config/identity.go`
+35. `internal/alerts/notification_policy.go`
 
 ## Shared Boundaries
 
@@ -210,6 +211,12 @@ helpers now live under `internal/alerts/config/`; the parent `alerts` package
 may re-export aliases and wrappers for compatibility, but consumer packages
 must keep importing `internal/alerts` unless they are explicitly taking
 ownership of alert configuration internals.
+Alert notification policy now lives in `internal/alerts/notification_policy.go`.
+That file owns dispatch suppression, flapping suppression, quiet-hours
+suppression, monitor-only notification suppression, cooldown decisions, and
+per-alert rate limiting; future notification-gating changes should extend that
+policy owner rather than burying new checks inside metric or resource-specific
+evaluators.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial
