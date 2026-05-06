@@ -784,9 +784,10 @@ the canonical monitored-system blocked payload.
    snoozed/dismissed/suppressed status, detection/last-seen/resolution
    timestamps, recurrence/regression facts, and recent lifecycle events, so API
    consumers do not reduce Assistant context to an outdated investigation
-   summary. The briefing may carry the latest lifecycle event as the current
-   handoff state, while the detailed lifecycle list must stay bounded and
-   model-only. Chat execution may also resolve root-cause and correlated finding
+   summary. The briefing must carry the primary finding's current recency facts
+   before investigation guidance and may carry the latest lifecycle event as the
+   current handoff state, while the detailed lifecycle list must stay bounded
+   and model-only. Chat execution may also resolve root-cause and correlated finding
    IDs from that current unified finding into compact related-finding summaries
    and structured handoff resources. Those related summaries may include the
    related record's current recency and latest lifecycle facts, but those
@@ -2932,10 +2933,10 @@ The `/api/ai/chat` finding handoff contract must also include a model-only
 `[Operator Briefing]` generated from the unified finding and structured Patrol
 investigation record before detailed `[Finding Context]`. The briefing is the
 canonical operator-facing frame for Assistant: it carries the finding summary,
-resource, priority, investigation confidence, recommended next step, and
-approval/proposed-fix posture without raw command text, and the downstream chat
-service then hydrates live resource state, timeline, and action audit context
-around that same handoff.
+resource, priority, current recency facts, investigation confidence,
+recommended next step, and approval/proposed-fix posture without raw command
+text, and the downstream chat service then hydrates live resource state,
+timeline, and action audit context around that same handoff.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

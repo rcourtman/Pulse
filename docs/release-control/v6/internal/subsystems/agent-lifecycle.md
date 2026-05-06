@@ -369,11 +369,12 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle transition. Unified finding lifecycle facts, latest lifecycle
    event briefing lines, and detailed lifecycle context included in Assistant
    handoff context remain Patrol/AI review metadata and must not become agent
-   lifecycle state or fleet-control authority. Related root-cause or correlated
-   finding summaries resolved for the same Assistant handoff follow that same
-   isolation rule, including any recency or latest lifecycle facts attached to
-   those related summaries: they may explain Patrol context to the model and
-   seed model-only handoff resources, but they are not enrollment evidence,
+   lifecycle state or fleet-control authority. Primary finding recency facts in
+   the operator briefing and related root-cause or correlated finding summaries
+   resolved for the same Assistant handoff follow that same isolation rule,
+   including any recency or latest lifecycle facts attached to those related
+   summaries: they may explain Patrol context to the model and seed model-only
+   handoff resources, but they are not enrollment evidence,
    command-websocket identity, agent command grants, or auto-approval policy.
    Structured Assistant handoff action references from the same Patrol finding
    remain AI/runtime review metadata only; lifecycle code must not treat

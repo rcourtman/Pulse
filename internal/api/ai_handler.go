@@ -977,6 +977,7 @@ func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.
 	appendChatContextLine(b, "Finding", formatUnifiedFindingBriefingFinding(f))
 	appendChatContextLine(b, "Resource", formatUnifiedFindingBriefingResource(f))
 	appendChatContextLine(b, "Priority", formatUnifiedFindingBriefingPriority(f))
+	appendChatContextLine(b, "Recency", formatUnifiedFindingBriefingRecencyFacts(f))
 	appendChatContextLine(b, "Investigation", formatUnifiedFindingBriefingInvestigation(f))
 	if latestLifecycle := formatUnifiedFindingLatestLifecycleEvent(f.Lifecycle); latestLifecycle != "" {
 		appendChatContextLine(b, "Latest Lifecycle Event", latestLifecycle)
@@ -1061,6 +1062,18 @@ func formatUnifiedFindingBriefingRecency(f *unified.UnifiedFinding) string {
 		return ""
 	}
 
+	parts := nonEmptyStrings(formatUnifiedFindingBriefingRecencyFacts(f))
+	if latestLifecycle := formatUnifiedFindingLatestLifecycleEvent(f.Lifecycle); latestLifecycle != "" {
+		parts = append(parts, "latest lifecycle "+latestLifecycle)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func formatUnifiedFindingBriefingRecencyFacts(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
 	parts := make([]string, 0, 8)
 	if !f.DetectedAt.IsZero() {
 		parts = append(parts, "detected "+f.DetectedAt.Format(time.RFC3339))
@@ -1091,9 +1104,6 @@ func formatUnifiedFindingBriefingRecency(f *unified.UnifiedFinding) string {
 	}
 	if f.AcknowledgedAt != nil {
 		parts = append(parts, "acknowledged "+f.AcknowledgedAt.Format(time.RFC3339))
-	}
-	if latestLifecycle := formatUnifiedFindingLatestLifecycleEvent(f.Lifecycle); latestLifecycle != "" {
-		parts = append(parts, "latest lifecycle "+latestLifecycle)
 	}
 	return strings.Join(parts, "; ")
 }

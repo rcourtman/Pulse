@@ -173,6 +173,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"Lifecycle Boundary",
 		"appendUnifiedFindingOperatorBriefingContext(&b, f)",
 		"[Operator Briefing]",
+		`appendChatContextLine(b, "Recency", formatUnifiedFindingBriefingRecencyFacts(f))`,
+		"formatUnifiedFindingBriefingRecencyFacts(f)",
 		"Latest Lifecycle Event",
 		"Operator Boundary",
 		`return "suppressed"`,
