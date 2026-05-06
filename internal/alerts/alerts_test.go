@@ -18328,3 +18328,24 @@ func TestSetAckRecordUsesCanonicalKeyWithoutMutatingLiveAlert(t *testing.T) {
 		t.Fatalf("legacy ack record for %q should have been removed in favor of canonical state", alert.ID)
 	}
 }
+
+func TestDefaultAlertConfigUsesIndependentBackupAlertOrphanedPointer(t *testing.T) {
+	first := defaultAlertConfig()
+	second := defaultAlertConfig()
+
+	if first.BackupDefaults.AlertOrphaned == nil {
+		t.Fatal("first default backup AlertOrphaned is nil")
+	}
+	if second.BackupDefaults.AlertOrphaned == nil {
+		t.Fatal("second default backup AlertOrphaned is nil")
+	}
+
+	if first.BackupDefaults.AlertOrphaned == second.BackupDefaults.AlertOrphaned {
+		t.Fatal("default configs must not share the backup AlertOrphaned pointer")
+	}
+
+	*first.BackupDefaults.AlertOrphaned = false
+	if !*second.BackupDefaults.AlertOrphaned {
+		t.Fatal("mutating one default config changed another default config")
+	}
+}

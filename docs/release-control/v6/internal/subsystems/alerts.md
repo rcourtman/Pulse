@@ -49,29 +49,36 @@ operator-facing alert routing behavior for live runtime alerts.
 27. `frontend-modern/src/stores/alertsActivation.ts`
 28. `frontend-modern/src/utils/alertThresholdDefaults.ts`
 29. `frontend-modern/src/utils/metricThresholds.ts`
-30. `internal/alerts/alerts.go`
-31. `internal/alerts/callbacks.go`
-32. `internal/alerts/config/types.go`
-33. `internal/alerts/config/normalize.go`
-34. `internal/alerts/config/identity.go`
-35. `internal/alerts/notification_policy.go`
-36. `internal/alerts/read_model.go`
-37. `internal/alerts/pmg.go`
-38. `internal/alerts/docker.go`
-39. `internal/alerts/pbs.go`
-40. `internal/alerts/storage.go`
-41. `internal/alerts/node.go`
-42. `internal/alerts/host.go`
-43. `internal/alerts/backup_snapshot.go`
-44. `internal/alerts/disk_health.go`
-45. `internal/alerts/metric_runtime.go`
-46. `internal/alerts/health_assessment.go`
-47. `internal/alerts/guest.go`
-48. `internal/alerts/config_runtime.go`
-49. `internal/alerts/active_persistence.go`
-50. `internal/alerts/tracking_cleanup.go`
-51. `internal/alerts/active_lifecycle.go`
-52. `internal/alerts/active_cleanup.go`
+30. `internal/alerts/config_facade.go`
+31. `internal/alerts/constants.go`
+32. `internal/alerts/model.go`
+33. `internal/alerts/metric_hooks.go`
+34. `internal/alerts/manager.go`
+35. `internal/alerts/default_config.go`
+36. `internal/alerts/lifecycle.go`
+37. `internal/alerts/escalation.go`
+38. `internal/alerts/callbacks.go`
+39. `internal/alerts/config/types.go`
+40. `internal/alerts/config/normalize.go`
+41. `internal/alerts/config/identity.go`
+42. `internal/alerts/notification_policy.go`
+43. `internal/alerts/read_model.go`
+44. `internal/alerts/pmg.go`
+45. `internal/alerts/docker.go`
+46. `internal/alerts/pbs.go`
+47. `internal/alerts/storage.go`
+48. `internal/alerts/node.go`
+49. `internal/alerts/host.go`
+50. `internal/alerts/backup_snapshot.go`
+51. `internal/alerts/disk_health.go`
+52. `internal/alerts/metric_runtime.go`
+53. `internal/alerts/health_assessment.go`
+54. `internal/alerts/guest.go`
+55. `internal/alerts/config_runtime.go`
+56. `internal/alerts/active_persistence.go`
+57. `internal/alerts/tracking_cleanup.go`
+58. `internal/alerts/active_lifecycle.go`
+59. `internal/alerts/active_cleanup.go`
 
 ## Shared Boundaries
 
@@ -80,7 +87,8 @@ operator-facing alert routing behavior for live runtime alerts.
 ## Extension Points
 
 1. Add new alert rule kinds in `internal/alerts/specs/`
-2. Add typed collector/builders in `internal/alerts/alerts.go`
+2. Add typed collector/builders in the resource-specific checker owner or
+   `internal/alerts/metric_runtime.go`
 3. Add identity/persistence updates through canonical alert helpers only
 4. Add or change alert history persistence through `internal/alerts/history.go` using normalized owned storage roots and fixed storage leaves only
 5. Add or change locked alert-investigation commercial handoff behavior through
@@ -253,6 +261,16 @@ Active-alert cleanup now lives in `internal/alerts/active_cleanup.go`. That
 file owns TTL cleanup, auto-acknowledgement cleanup, stale acknowledgement
 retention cleanup, node-retirement cleanup, and full active-alert state reset;
 future cleanup policy changes should extend that owner.
+The old central `internal/alerts/alerts.go` file is intentionally gone. The
+residual manager surface is now split by ownership: `config_facade.go` owns
+compatibility aliases and wrapper functions for the leaf config package,
+`model.go` owns alert runtime data structures and clone semantics,
+`constants.go` owns package-wide cleanup and storage constants,
+`metric_hooks.go` owns Prometheus integration callbacks, `manager.go` owns
+Manager state and construction, `default_config.go` owns the default runtime
+configuration literal, `lifecycle.go` owns shutdown, and `escalation.go` owns
+the escalation loop and escalation state mutation. Future changes must extend
+the owning file rather than reintroducing a central catch-all manager file.
 Alert notification policy now lives in `internal/alerts/notification_policy.go`.
 That file owns dispatch suppression, flapping suppression, quiet-hours
 suppression, monitor-only notification suppression, cooldown decisions, and
@@ -820,7 +838,7 @@ primitives. Frontend alert tables may not drift back to ad hoc host-key
 grouping or narrow filter key predicates that drop optional hostname values
 before alert group metadata is derived.
 That same shared alert boundary now also owns provider-backed `resource-incident`
-alerts beyond storage-only cases. `internal/alerts/alerts.go`,
+alerts beyond storage-only cases. `internal/alerts/model.go`,
 `internal/alerts/unified_incidents.go`, and
 `frontend-modern/src/utils/alertIncidentPresentation.ts` must treat VMware-
 backed host and VM incidents as the same canonical `resource-incident`

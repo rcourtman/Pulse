@@ -9,7 +9,7 @@ import (
 )
 
 // TestTypeAliasIdentity verifies that alerts.AlertConfig and config.AlertConfig
-// are the same underlying type via the type alias in alerts.go.
+// are the same underlying type via the type alias in config_facade.go.
 func TestTypeAliasIdentity(t *testing.T) {
 	if reflect.TypeOf(alertconfig.AlertConfig{}) != reflect.TypeOf(alerts.AlertConfig{}) {
 		t.Error("config.AlertConfig and alerts.AlertConfig must be the same type (type alias)")
