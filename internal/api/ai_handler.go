@@ -791,6 +791,7 @@ func buildUnifiedFindingChatContext(f *unified.UnifiedFinding) string {
 	}
 
 	var b strings.Builder
+	appendUnifiedFindingOperatorBriefingContext(&b, f)
 	appendChatContextLine(&b, "[Finding Context]", "")
 	appendChatContextLine(&b, "ID", f.ID)
 	appendChatContextLine(&b, "Title", f.Title)
@@ -857,6 +858,200 @@ func buildUnifiedFindingChatContext(f *unified.UnifiedFinding) string {
 	appendUnifiedFindingLifecycleEventContext(&b, f.Lifecycle)
 	appendInvestigationRecordChatContext(&b, f.InvestigationRecord)
 	return b.String()
+}
+
+func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.UnifiedFinding) {
+	if b == nil || f == nil {
+		return
+	}
+
+	briefingSource := "Product structured finding"
+	if f.Source == unified.SourceAIPatrol {
+		briefingSource = "Pulse Patrol structured finding"
+	}
+
+	appendChatContextLine(b, "[Operator Briefing]", "")
+	appendChatContextLine(b, "Briefing Source", briefingSource)
+	appendChatContextLine(b, "Operator Role", "Explain the investigation, highlight current risk, and guide the operator through evidence, approval, or continued monitoring.")
+	appendChatContextLine(b, "Finding", formatUnifiedFindingBriefingFinding(f))
+	appendChatContextLine(b, "Resource", formatUnifiedFindingBriefingResource(f))
+	appendChatContextLine(b, "Priority", formatUnifiedFindingBriefingPriority(f))
+	appendChatContextLine(b, "Investigation", formatUnifiedFindingBriefingInvestigation(f))
+	appendChatContextLine(b, "Current Conclusion", unifiedFindingBriefingConclusion(f))
+	appendChatContextLine(b, "Recommended Next Step", unifiedFindingBriefingNextStep(f))
+	appendChatContextLine(b, "Action Posture", unifiedFindingBriefingActionPosture(f))
+	appendChatContextLine(b, "Operator Boundary", "Treat Patrol data as product context for explanation and review; do not invent commands, expose raw command text, or treat chat as approval or execution authority.")
+	appendChatContextLine(b, "", "")
+}
+
+func formatUnifiedFindingBriefingFinding(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	title := strings.TrimSpace(f.Title)
+	if title == "" {
+		title = strings.TrimSpace(f.ID)
+	}
+	qualifiers := nonEmptyStrings(
+		string(f.Severity),
+		string(f.Category),
+		unifiedFindingChatStatus(f, time.Now()),
+	)
+	if len(qualifiers) == 0 {
+		return title
+	}
+	if title == "" {
+		return strings.Join(qualifiers, ", ")
+	}
+	return title + " (" + strings.Join(qualifiers, ", ") + ")"
+}
+
+func formatUnifiedFindingBriefingResource(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	resource := formatChatResource(f.ResourceName, f.ResourceType)
+	resourceID := strings.TrimSpace(f.ResourceID)
+	if resourceID != "" {
+		if resource == "" {
+			resource = resourceID
+		} else {
+			resource += " [" + resourceID + "]"
+		}
+	}
+	if node := strings.TrimSpace(f.Node); node != "" {
+		if resource == "" {
+			resource = "node " + node
+		} else {
+			resource += " on " + node
+		}
+	}
+	return resource
+}
+
+func formatUnifiedFindingBriefingPriority(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	parts := nonEmptyStrings(
+		strings.TrimSpace(string(f.Severity)+" "+string(f.Category)),
+		"status "+unifiedFindingChatStatus(f, time.Now()),
+	)
+	if loopState := strings.TrimSpace(f.LoopState); loopState != "" {
+		parts = append(parts, "loop "+loopState)
+	}
+	if f.TimesRaised > 0 {
+		parts = append(parts, fmt.Sprintf("raised %d times", f.TimesRaised))
+	}
+	if f.RegressionCount > 0 {
+		parts = append(parts, fmt.Sprintf("regressed %d times", f.RegressionCount))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func formatUnifiedFindingBriefingInvestigation(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	rec := f.InvestigationRecord
+	parts := make([]string, 0, 5)
+	if rec != nil {
+		parts = append(parts, nonEmptyStrings(
+			string(rec.Status),
+			briefingLabelValue("outcome", string(rec.Outcome)),
+			briefingLabelValue("confidence", string(rec.Confidence)),
+		)...)
+	} else {
+		parts = append(parts, nonEmptyStrings(
+			f.InvestigationStatus,
+			briefingLabelValue("outcome", f.InvestigationOutcome),
+		)...)
+	}
+	if f.InvestigationAttempts > 0 {
+		parts = append(parts, fmt.Sprintf("attempts %d", f.InvestigationAttempts))
+	}
+	if f.AIConfidence > 0 && (rec == nil || strings.TrimSpace(string(rec.Confidence)) == "") {
+		parts = append(parts, fmt.Sprintf("ai confidence %.2f", f.AIConfidence))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func unifiedFindingBriefingConclusion(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+	if f.InvestigationRecord != nil {
+		if conclusion := strings.TrimSpace(f.InvestigationRecord.Conclusion); conclusion != "" {
+			return conclusion
+		}
+	}
+	for _, value := range []string{f.AIContext, f.Description, f.Evidence} {
+		if normalized := strings.TrimSpace(value); normalized != "" {
+			return normalized
+		}
+	}
+	return ""
+}
+
+func unifiedFindingBriefingNextStep(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+	if unifiedFindingChatStatus(f, time.Now()) == "resolved" {
+		return "Explain the resolution and any monitoring follow-up; do not propose execution unless a new active finding is raised."
+	}
+	if f.InvestigationRecord != nil {
+		if next := strings.TrimSpace(f.InvestigationRecord.RecommendedAction); next != "" {
+			return next
+		}
+		if f.InvestigationRecord.ProposedFix != nil {
+			if description := strings.TrimSpace(f.InvestigationRecord.ProposedFix.Description); description != "" {
+				return "Review proposed fix: " + description
+			}
+		}
+	}
+	if recommendation := strings.TrimSpace(f.Recommendation); recommendation != "" {
+		return recommendation
+	}
+	return "Explain what Patrol knows and identify the next evidence to verify before remediation."
+}
+
+func unifiedFindingBriefingActionPosture(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	rec := f.InvestigationRecord
+	parts := make([]string, 0, 5)
+	if rec != nil {
+		if approvalID := strings.TrimSpace(rec.ApprovalID); approvalID != "" {
+			parts = append(parts, "approval "+approvalID)
+		}
+		if rec.ProposedFix != nil {
+			if fixID := strings.TrimSpace(rec.ProposedFix.ID); fixID != "" {
+				parts = append(parts, "proposed fix "+fixID)
+			} else if description := strings.TrimSpace(rec.ProposedFix.Description); description != "" {
+				parts = append(parts, "proposed fix recorded")
+			}
+			if risk := strings.TrimSpace(rec.ProposedFix.RiskLevel); risk != "" {
+				parts = append(parts, "risk "+risk)
+			}
+			if rec.ProposedFix.Destructive {
+				parts = append(parts, "destructive true")
+			}
+		}
+	}
+	if remediationID := strings.TrimSpace(f.RemediationID); remediationID != "" {
+		parts = append(parts, "remediation "+remediationID)
+	}
+	if len(parts) == 0 {
+		return "No governed action is ready; keep the response investigative."
+	}
+	return strings.Join(parts, "; ")
 }
 
 func unifiedFindingChatStatus(f *unified.UnifiedFinding, now time.Time) string {
@@ -1106,6 +1301,28 @@ func appendStringListChatContext(b *strings.Builder, label string, values []stri
 	if remaining := len(values) - count; remaining > 0 {
 		appendChatContextLine(b, fmt.Sprintf("%s Additional Count", label), fmt.Sprintf("%d", remaining))
 	}
+}
+
+func nonEmptyStrings(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if normalized := strings.TrimSpace(value); normalized != "" {
+			out = append(out, normalized)
+		}
+	}
+	return out
+}
+
+func briefingLabelValue(label, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return value
+	}
+	return label + " " + value
 }
 
 func appendChatContextLine(b *strings.Builder, label string, value string) {

@@ -985,6 +985,12 @@ prior chat session. Lifecycle-adjacent mobile pairing and setup flows depend
 on `/api/ai/approvals` becoming ready from the first governed settings save,
 not only after some earlier process-start or chat-start side effect has
 already initialized the approval store.
+That same shared `internal/api/ai_handler.go` dependency now also assumes
+Assistant finding handoffs may include a model-only operator briefing from
+Patrol's unified finding and structured investigation record. Lifecycle-adjacent
+setup, install, and fleet surfaces may treat that briefing as adjacent
+AI/runtime guidance only; it must not become agent readiness, install status,
+or lifecycle execution authority.
 That same shared dependency now also assumes hosted cloud handoff authorizes
 tenant org access before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,

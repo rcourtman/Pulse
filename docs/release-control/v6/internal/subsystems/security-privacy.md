@@ -443,6 +443,10 @@ Assistant handoff context may hydrate those normalized action-audit facts for
 review, but that read is still model-only context: it must remain org-scoped,
 must not expose raw command text or raw execution output, and must not grant
 approval or execution authority.
+Assistant operator briefings generated from Patrol findings follow the same
+boundary: they may summarize approval IDs, proposed-fix IDs, risk, destructive
+posture, and recommended next steps for review, but they must not expose raw
+command payloads or convert chat into approval or execution authority.
 Action planning and action decision mutations remain privileged runtime
 control surfaces even though the decision endpoint does not execute the
 capability. `POST /api/actions/plan` and

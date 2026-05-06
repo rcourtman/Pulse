@@ -308,6 +308,13 @@ the canonical monitored-system blocked payload.
     hide/unhide, pending uninstall, display-name, and host metadata paths must
     use Docker / Podman agent or host wording instead of generic container
     runtime labels.
+3c. Route Assistant finding handoff context changes through
+    `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
+    `internal/api/contract_test.go` together. Patrol-originated handoffs must
+    keep `[Operator Briefing]`, `[Finding Context]`, structured handoff
+    resources, and structured handoff actions model-only, with the briefing
+    summarizing operator next steps and governed action posture without raw
+    command text.
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
    That same resource payload contract owns `aggregations.policyPosture` on
    `/api/resources` and `/api/resources/stats`. The aggregation must be derived
@@ -2899,6 +2906,14 @@ actions visible even when no live pending approval remains and
 `/api/ai/findings/{id}/investigation` resolves to `null` or omits
 `proposed_fix`: queued remediation state cannot collapse into a dead badge with
 no user action path.
+The `/api/ai/chat` finding handoff contract must also include a model-only
+`[Operator Briefing]` generated from the unified finding and structured Patrol
+investigation record before detailed `[Finding Context]`. The briefing is the
+canonical operator-facing frame for Assistant: it carries the finding summary,
+resource, priority, investigation confidence, recommended next step, and
+approval/proposed-fix posture without raw command text, and the downstream chat
+service then hydrates live resource state, timeline, and action audit context
+around that same handoff.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

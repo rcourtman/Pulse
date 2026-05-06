@@ -120,9 +120,14 @@ Patrol-specific presentation helpers.
    for explanation; Assistant resolves those state, topology, and timeline
    lookups through the current canonical unified-resource model before falling
    back to handoff IDs where compatibility requires it.
-   If the referenced finding is no longer current,
-   Assistant must drop the stored handoff instead of continuing from stale
-   Patrol context. Assistant handoff context must also carry the unified
+   Assistant handoffs from Patrol findings must also include a concise operator
+   briefing derived from the unified finding and structured investigation record
+   before the detailed finding context, so Assistant leads with the current risk,
+   conclusion, recommended next step, and governed approval/proposed-fix posture
+   instead of behaving like a generic chat over a pasted incident dump.
+   If the referenced finding is no longer current, Assistant must drop the
+   stored handoff instead of continuing from stale Patrol context. Assistant
+   handoff context must also carry the unified
    finding's current lifecycle and recency facts, including active/resolved/
    snoozed/dismissed/suppressed state, detection/last-seen/resolution
    timestamps, recurrence/regression, and recent lifecycle events, rather than

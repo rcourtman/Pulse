@@ -940,6 +940,14 @@ card, so the learned-correlation layout and edge wording stay aligned across
 both surfaces. That shared card also owns the correlation ordering and
 truncation rule, so callers pass raw learned edges instead of page-specific
 top-N slices.
+Assistant finding handoffs now also receive a model-only operator briefing
+derived from the current unified finding and structured Patrol investigation
+record before the lower-level finding context. That briefing must summarize the
+finding, resource, priority, investigation confidence, recommended next step,
+and governed action posture as operator guidance, while leaving current
+resource-state, timeline, and action-audit hydration in the existing canonical
+AI runtime handoff builders. It is explanation and review context only, not
+approval or execution authority.
 The same page and drawer now also render their recent-change timeline through
 the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so the canonical recent-change layout and relative-time wording stay

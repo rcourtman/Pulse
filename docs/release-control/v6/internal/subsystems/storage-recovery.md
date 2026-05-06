@@ -437,6 +437,11 @@ bypass the API fail-closed execution gate.
     bypass. Any refreshed approval or action-audit status snapshot in Assistant
     handoff context is still read-only AI/runtime context and must not become
     recovery freshness, restore eligibility, or storage-local execution state.
+    Operator briefings generated for those same Assistant finding handoffs are
+    also adjacent AI/runtime context only: storage and recovery surfaces may read
+    their Patrol conclusion or recommended next step as investigation guidance,
+    but must not reinterpret the briefing as backup recency, restore support, or
+    storage-local action authority.
     That same adjacent `internal/api/` boundary still carries Patrol-run
     execution identity. Storage and recovery may observe shared Patrol
     transport through `internal/api/chat_service_adapter.go`, but they must not
