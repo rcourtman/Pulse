@@ -3,6 +3,7 @@ import type {
   IntelligencePolicyPostureSummary,
 } from '@/types/aiIntelligence';
 import type { InvestigationRecord } from '@/api/ai';
+import type { AIChatContextBriefing } from '@/stores/aiChat';
 
 export interface PatrolInvestigationContextSummaryInput {
   recentChangesCount?: number | null;
@@ -43,6 +44,12 @@ export interface PatrolAssistantFindingPromptInput {
   title: string;
   subject: string;
   description: string;
+  investigationRecord?: InvestigationRecord | null;
+}
+
+export interface PatrolAssistantFindingBriefingInput {
+  title: string;
+  subject: string;
   investigationRecord?: InvestigationRecord | null;
 }
 
@@ -146,6 +153,41 @@ export function buildPatrolAssistantFindingPrompt(
   return prompt;
 }
 
+export function buildPatrolAssistantFindingBriefing(
+  input: PatrolAssistantFindingBriefingInput,
+): AIChatContextBriefing | undefined {
+  const record = buildPatrolInvestigationRecordPresentation(input.investigationRecord);
+  if (!record.hasRecord) {
+    return undefined;
+  }
+
+  const title = normalizeText(input.title) || 'Patrol finding';
+  const subject = normalizeText(input.subject) || 'affected resource';
+  const statusParts = [
+    record.statusLabel,
+    record.outcomeLabel,
+    record.confidenceLabel,
+  ].filter(isNonEmptyString);
+  const detailLines = [record.conclusion, record.recommendedAction]
+    .filter(isNonEmptyString)
+    .slice(0, 2);
+  const verificationLines = record.verificationSummaries.map((summary) => `Verified: ${summary}`);
+
+  return {
+    sourceLabel: 'Pulse Patrol',
+    title: 'Investigation record attached',
+    subject: `${title} on ${subject}`,
+    statusLabel: statusParts.join(' · ') || undefined,
+    detailLines,
+    evidence: [...record.evidenceSummaries, ...verificationLines].slice(0, 4),
+    actionLabel: record.proposedFix?.description,
+    commandSummary: record.proposedFix?.commandSummary,
+    safetyNote: record.proposedFix?.commandSummary
+      ? 'Command details stay in approval context.'
+      : undefined,
+  };
+}
+
 function normalizeCorrelationCount(correlations?: CorrelationsResponse | null): number {
   if (!correlations) return 0;
   if (typeof correlations.count === 'number' && Number.isFinite(correlations.count)) {
@@ -191,6 +233,10 @@ function formatToolLabel(value?: string | null): string {
 function normalizeText(value?: string | null): string {
   if (typeof value !== 'string') return '';
   return value.trim();
+}
+
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 const PATROL_TOOL_LABELS: Record<string, string> = {

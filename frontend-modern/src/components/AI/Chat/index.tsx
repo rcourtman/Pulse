@@ -311,6 +311,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   });
 
   const hasScopedApprovalHandoff = createMemo(() => aiChatStore.context.autonomousMode === false);
+  const contextBriefing = createMemo(() => aiChatStore.context.briefing);
+  const contextBriefingEvidence = createMemo(() => contextBriefing()?.evidence ?? []);
+  const contextBriefingDetails = createMemo(() => contextBriefing()?.detailLines ?? []);
 
   // Compute current status for display
   const currentStatus = createMemo(() => {
@@ -1177,6 +1180,58 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </svg>
               </button>
             </div>
+          </Show>
+
+          <Show when={contextBriefing()}>
+            <section
+              class="border-b border-border bg-surface px-4 py-3"
+              aria-label="Assistant context"
+            >
+              <div class="flex flex-wrap items-center gap-2 text-[10px] font-medium uppercase text-muted">
+                <span>{contextBriefing()!.sourceLabel}</span>
+                <Show when={contextBriefing()!.statusLabel}>
+                  <span class="h-1 w-1 rounded-full bg-border" />
+                  <span class="normal-case">{contextBriefing()!.statusLabel}</span>
+                </Show>
+              </div>
+              <div class="mt-1 text-sm font-semibold text-base-content">
+                {contextBriefing()!.title}
+              </div>
+              <Show when={contextBriefing()!.subject}>
+                <div class="mt-0.5 text-xs text-muted">{contextBriefing()!.subject}</div>
+              </Show>
+              <Show when={contextBriefingDetails().length > 0}>
+                <div class="mt-2 space-y-1">
+                  <For each={contextBriefingDetails()}>
+                    {(line) => <div class="text-xs text-base-content leading-relaxed">{line}</div>}
+                  </For>
+                </div>
+              </Show>
+              <Show when={contextBriefingEvidence().length > 0}>
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                  <For each={contextBriefingEvidence()}>
+                    {(item) => (
+                      <span class="rounded border border-border bg-surface-alt px-2 py-1 text-[11px] text-muted">
+                        {item}
+                      </span>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              <Show when={contextBriefing()!.actionLabel || contextBriefing()!.commandSummary}>
+                <div class="mt-2 rounded border border-border bg-surface-alt px-2.5 py-2 text-[11px] text-muted">
+                  <Show when={contextBriefing()!.actionLabel}>
+                    <div class="font-medium text-base-content">{contextBriefing()!.actionLabel}</div>
+                  </Show>
+                  <Show when={contextBriefing()!.commandSummary}>
+                    <div>{contextBriefing()!.commandSummary}</div>
+                  </Show>
+                  <Show when={contextBriefing()!.safetyNote}>
+                    <div>{contextBriefing()!.safetyNote}</div>
+                  </Show>
+                </div>
+              </Show>
+            </section>
           </Show>
 
           {/* Messages */}

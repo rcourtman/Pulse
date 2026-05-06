@@ -17,7 +17,10 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { buildPatrolAssistantFindingPrompt } from '@/features/patrol/patrolInvestigationContextModel';
+import {
+  buildPatrolAssistantFindingBriefing,
+  buildPatrolAssistantFindingPrompt,
+} from '@/features/patrol/patrolInvestigationContextModel';
 import { useResources } from '@/hooks/useResources';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import type { RemediationPlan } from '@/api/ai';
@@ -424,10 +427,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       description: finding.description,
       investigationRecord: finding.investigationRecord,
     });
+    const briefing = buildPatrolAssistantFindingBriefing({
+      title,
+      subject,
+      investigationRecord: finding.investigationRecord,
+    });
     aiChatStore.openWithPrompt(prompt, {
       targetType: finding.resourceType,
       targetId: finding.resourceId,
       findingId: finding.id,
+      briefing,
     });
   };
 

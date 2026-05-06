@@ -78,6 +78,19 @@ const {
       initialPrompt: undefined as string | undefined,
       findingId: undefined as string | undefined,
       autonomousMode: undefined as boolean | undefined,
+      briefing: undefined as
+        | {
+            sourceLabel: string;
+            title: string;
+            subject?: string;
+            statusLabel?: string;
+            detailLines?: string[];
+            evidence?: string[];
+            actionLabel?: string;
+            commandSummary?: string;
+            safetyNote?: string;
+          }
+        | undefined,
     },
     clearInitialPrompt: vi.fn(),
     clearFindingId: vi.fn(),
@@ -223,6 +236,7 @@ beforeEach(() => {
     initialPrompt: undefined,
     findingId: undefined,
     autonomousMode: undefined,
+    briefing: undefined,
   };
   mockChat.messages.mockReturnValue([]);
   mockChat.isLoading.mockReturnValue(false);
@@ -278,6 +292,34 @@ describe('AIChat', () => {
       renderChat();
       expect(screen.getByText('to send')).toBeInTheDocument();
       expect(screen.getByText('to mention resources')).toBeInTheDocument();
+    });
+
+    it('renders attached context briefing without raw command text', () => {
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        findingId: 'finding-1',
+        autonomousMode: undefined,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Investigation record attached',
+          subject: 'High CPU usage on web-server',
+          statusLabel: 'Completed · Fix Queued · High confidence',
+          detailLines: ['Backup job saturated CPU.'],
+          evidence: ['CPU stayed above 95% for 10 minutes'],
+          actionLabel: 'Restart the workload service',
+          commandSummary: '1 command recorded for approval context',
+          safetyNote: 'Command details stay in approval context.',
+        },
+      };
+
+      renderChat();
+
+      expect(screen.getByLabelText('Assistant context')).toBeInTheDocument();
+      expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+      expect(screen.getByText('High CPU usage on web-server')).toBeInTheDocument();
+      expect(screen.getByText('Backup job saturated CPU.')).toBeInTheDocument();
+      expect(screen.getByText('1 command recorded for approval context')).toBeInTheDocument();
+      expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
     });
 
     it('renders New button', () => {
@@ -961,6 +1003,7 @@ describe('AIChat', () => {
         initialPrompt: undefined,
         findingId: undefined,
         autonomousMode: false,
+        briefing: undefined,
       };
 
       renderChat();
@@ -1070,6 +1113,7 @@ describe('AIChat', () => {
         initialPrompt: undefined,
         findingId: 'finding-123',
         autonomousMode: undefined,
+        briefing: undefined,
       };
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');

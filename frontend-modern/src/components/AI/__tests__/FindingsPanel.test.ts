@@ -42,6 +42,14 @@ const patrolWorkspaceSource = readFileSync(
   'utf-8',
 );
 
+describe('FindingsPanel assistant handoff', () => {
+  it('routes Patrol investigation records into the Assistant briefing context', () => {
+    expect(findingsPanelSource).toContain('buildPatrolAssistantFindingBriefing');
+    expect(findingsPanelSource).toContain('briefing,');
+    expect(findingsPanelSource).toContain('investigationRecord: finding.investigationRecord');
+  });
+});
+
 describe('aiFindingPresentation', () => {
   describe('severity presentation', () => {
     it('has correct sort order for critical', () => {
@@ -679,7 +687,7 @@ describe('aiFindingPresentation', () => {
             status: 'pending',
             toolId: 'investigation_fix',
             targetId: 'finding-1',
-            expiresAt: '2026-04-30T00:06:00Z',
+            expiresAt: '2026-12-30T00:06:00Z',
           },
         ] as never),
       ).toBe(true);
@@ -707,7 +715,7 @@ describe('aiFindingPresentation', () => {
               status: 'pending',
               toolId: 'investigation_fix',
               targetId: 'finding-1',
-              expiresAt: '2026-04-30T00:06:00Z',
+              expiresAt: '2026-12-30T00:06:00Z',
             },
           ] as never,
         ),

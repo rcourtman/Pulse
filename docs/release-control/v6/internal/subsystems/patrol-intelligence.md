@@ -98,7 +98,10 @@ Patrol-specific presentation helpers.
    record when transport carries one. `frontend-modern/src/stores/aiIntelligence.ts`
    may retain `investigationRecord` as data for Assistant handoff and Patrol
    presentation, but visible Patrol copy and Assistant handoff prompt framing
-   must flow through the governed Patrol investigation-context helpers.
+   must flow through the governed Patrol investigation-context helpers. Those
+   helpers also own the Assistant drawer briefing content for Patrol records,
+   including the rule that proposed-fix commands are summarized by count only
+   and never rendered as raw command text in the handoff surface.
 
 ## Current State
 

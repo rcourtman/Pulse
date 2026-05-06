@@ -95,10 +95,18 @@ describe('aiChatStore', () => {
   });
 
   it('opens with a pre-filled prompt', () => {
-    aiChatStore.openWithPrompt('hello', { targetType: 'vm', targetId: 'vm-101' });
+    aiChatStore.openWithPrompt('hello', {
+      targetType: 'vm',
+      targetId: 'vm-101',
+      briefing: {
+        sourceLabel: 'Pulse Patrol',
+        title: 'Investigation record attached',
+      },
+    });
     expect(aiChatStore.isOpen).toBe(true);
     expect(aiChatStore.context.initialPrompt).toBe('hello');
     expect(aiChatStore.context.targetId).toBe('vm-101');
+    expect(aiChatStore.context.briefing?.title).toBe('Investigation record attached');
   });
 
   it('preserves scoped autonomous-mode overrides for pre-filled prompts', () => {

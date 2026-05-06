@@ -809,7 +809,10 @@ frontend primitive boundary.
     investigation-record framing must derive that prompt copy through
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
     so shared drawer primitives stay shell-owned rather than becoming a
-    Patrol-specific prompt formatter.
+    Patrol-specific prompt formatter. The drawer may render a generic
+    context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
+    feature-owned helpers must provide the source labels, evidence summaries,
+    action copy, and safety note.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like

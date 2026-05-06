@@ -4,12 +4,25 @@ import { eventBus } from '@/stores/events';
 // NOTE: AIAPI import removed - session management is handled by Pulse AI's embedded UI
 import type { AIChatSessionSummary } from '@/types/ai';
 
-interface AIChatContext {
+export interface AIChatContextBriefing {
+  sourceLabel: string;
+  title: string;
+  subject?: string;
+  statusLabel?: string;
+  detailLines?: string[];
+  evidence?: string[];
+  actionLabel?: string;
+  commandSummary?: string;
+  safetyNote?: string;
+}
+
+export interface AIChatContext {
   targetType?: string;
   targetId?: string;
   context?: Record<string, unknown>;
   initialPrompt?: string;
   findingId?: string; // If opened from AI Insights "Get Help", the finding ID to resolve on success
+  briefing?: AIChatContextBriefing;
   // Per-request execution mode override; false keeps scoped handoffs approval-required.
   autonomousMode?: boolean;
 }

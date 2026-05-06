@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingPrompt,
   buildPatrolInvestigationContextSummary,
   buildPatrolInvestigationRecordPresentation,
@@ -154,5 +155,50 @@ describe('patrolInvestigationContextModel', () => {
         },
       }),
     ).toContain('Use that record as the main context before suggesting next actions.');
+  });
+
+  it('builds a drawer briefing for Assistant handoff without exposing raw commands', () => {
+    const briefing = buildPatrolAssistantFindingBriefing({
+      title: 'High CPU usage',
+      subject: 'web-server',
+      investigationRecord: {
+        id: 'record-1',
+        finding_id: 'finding-1',
+        subject: { resource_id: 'vm-100' },
+        trigger: { detected_at: '2026-05-06T12:00:00Z' },
+        status: 'completed',
+        outcome: 'fix_queued',
+        confidence: 'high',
+        conclusion: 'Backup job saturated CPU.',
+        recommended_action: 'Approve a controlled restart after the backup completes.',
+        evidence: [{ kind: 'metrics', summary: 'CPU stayed above 95% for 10 minutes' }],
+        proposed_fix: {
+          id: 'fix-1',
+          description: 'Restart the workload service',
+          commands: ['systemctl restart workload.service'],
+          risk_level: 'medium',
+          destructive: false,
+        },
+        verification: ['CPU returned below 50%'],
+        tools_used: [],
+        started_at: '2026-05-06T12:00:00Z',
+      },
+    });
+
+    expect(briefing).toEqual({
+      sourceLabel: 'Pulse Patrol',
+      title: 'Investigation record attached',
+      subject: 'High CPU usage on web-server',
+      statusLabel: 'Completed · Fix Queued · High confidence',
+      detailLines: [
+        'Backup job saturated CPU.',
+        'Approve a controlled restart after the backup completes.',
+      ],
+      evidence: ['CPU stayed above 95% for 10 minutes', 'Verified: CPU returned below 50%'],
+      actionLabel: 'Restart the workload service',
+      commandSummary: '1 command recorded for approval context',
+      safetyNote: 'Command details stay in approval context.',
+    });
+    expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
   });
 });

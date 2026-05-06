@@ -4349,6 +4349,9 @@ describe('frontend resource type boundaries', () => {
       'export function buildPatrolAssistantFindingPrompt',
     );
     expect(patrolInvestigationContextModelSource).toContain(
+      'export function buildPatrolAssistantFindingBriefing',
+    );
+    expect(patrolInvestigationContextModelSource).toContain(
       'formatCommandSummary(record.proposed_fix.commands?.length ?? 0)',
     );
     expect(patrolInvestigationContextModelSource).not.toContain(

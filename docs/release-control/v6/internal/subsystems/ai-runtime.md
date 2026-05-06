@@ -177,6 +177,9 @@ runtime cost control, and shared AI transport surfaces.
     runtime must enrich the prompt from that durable record before provider
     transport while keeping proposed-fix command text out of the chat prompt;
     command payloads remain approval-context data, not conversational copy.
+    The Assistant drawer may also render an attached context briefing for that
+    handoff, but the briefing is runtime context visibility only: it must not
+    mutate chat control settings, execute tools, or reveal raw command payloads.
 
 ## Current State
 
