@@ -353,7 +353,10 @@ profile and assignment columns, but embedded table framing must route through
    through shared AI intelligence handlers and `internal/api/router.go`:
    lifecycle surfaces may observe the resulting resource context, but they must
    not reinterpret `investigation_record` as agent enrollment, installer,
-   command policy, or fleet-control authority.
+   command policy, or fleet-control authority. Assistant chat enrichment from
+   `finding_id` follows the same rule: lifecycle-owned command execution and
+   agent auto-approval policy stay canonical in the agent/runtime owners, not
+   in Patrol investigation-record prompt text.
    The same isolation rule applies to CSRF token-store behavior in
    `internal/api/csrf_store.go`: lifecycle-adjacent browser flows may rely on
    the shared API/security layer to keep parallel replacement-token retries

@@ -21,6 +21,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -780,6 +781,156 @@ type ChatRequest struct {
 	AutonomousMode *bool         `json:"autonomous_mode,omitempty"`
 }
 
+const findingChatContextListLimit = 5
+
+func buildUnifiedFindingChatContext(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	var b strings.Builder
+	appendChatContextLine(&b, "[Finding Context]", "")
+	appendChatContextLine(&b, "ID", f.ID)
+	appendChatContextLine(&b, "Title", f.Title)
+	appendChatContextLine(&b, "Severity", string(f.Severity))
+	appendChatContextLine(&b, "Category", string(f.Category))
+	appendChatContextLine(&b, "Resource", fmt.Sprintf("%s (%s)", f.ResourceName, f.ResourceType))
+	appendChatContextLine(&b, "Description", f.Description)
+	appendChatContextLine(&b, "Recommendation", f.Recommendation)
+	appendChatContextLine(&b, "Evidence", f.Evidence)
+	appendChatContextLine(&b, "Investigation Status", f.InvestigationStatus)
+	appendChatContextLine(&b, "Investigation Outcome", f.InvestigationOutcome)
+	appendChatContextLine(&b, "User Note", f.UserNote)
+	if f.AcknowledgedAt != nil {
+		appendChatContextLine(&b, "Acknowledged At", f.AcknowledgedAt.Format(time.RFC3339))
+	}
+	appendChatContextLine(&b, "Node", f.Node)
+	appendInvestigationRecordChatContext(&b, f.InvestigationRecord)
+	return b.String()
+}
+
+func appendInvestigationRecordChatContext(b *strings.Builder, rec *aicontracts.InvestigationRecord) {
+	if rec == nil {
+		return
+	}
+
+	appendChatContextLine(b, "", "")
+	appendChatContextLine(b, "[Investigation Record]", "")
+	appendChatContextLine(b, "Record ID", rec.ID)
+	appendChatContextLine(b, "Session ID", rec.SessionID)
+	appendChatContextLine(b, "Status", string(rec.Status))
+	appendChatContextLine(b, "Outcome", string(rec.Outcome))
+	appendChatContextLine(b, "Confidence", string(rec.Confidence))
+	appendChatContextLine(b, "Conclusion", rec.Conclusion)
+	appendChatContextLine(b, "Recommended Action", rec.RecommendedAction)
+	appendChatContextLine(b, "Trigger", rec.Trigger.Title)
+	appendChatContextLine(b, "Trigger Description", rec.Trigger.Description)
+	if !rec.Trigger.DetectedAt.IsZero() {
+		appendChatContextLine(b, "Detected At", rec.Trigger.DetectedAt.Format(time.RFC3339))
+	}
+	if !rec.StartedAt.IsZero() {
+		appendChatContextLine(b, "Investigation Started At", rec.StartedAt.Format(time.RFC3339))
+	}
+	if rec.CompletedAt != nil {
+		appendChatContextLine(b, "Investigation Completed At", rec.CompletedAt.Format(time.RFC3339))
+	}
+	appendChatContextLine(b, "Approval ID", rec.ApprovalID)
+	appendChatContextLine(b, "Error", rec.Error)
+
+	appendInvestigationRecordEvidenceContext(b, rec.Evidence)
+	appendStringListChatContext(b, "Verification", rec.Verification)
+	appendStringListChatContext(b, "Tools Used", rec.ToolsUsed)
+
+	if rec.ProposedFix != nil {
+		appendChatContextLine(b, "Proposed Fix", rec.ProposedFix.Description)
+		appendChatContextLine(b, "Proposed Fix Risk", rec.ProposedFix.RiskLevel)
+		appendChatContextLine(b, "Proposed Fix Target Host", rec.ProposedFix.TargetHost)
+		appendChatContextLine(b, "Proposed Fix Rationale", rec.ProposedFix.Rationale)
+		if rec.ProposedFix.Destructive {
+			appendChatContextLine(b, "Proposed Fix Destructive", "true")
+		}
+		switch len(rec.ProposedFix.Commands) {
+		case 0:
+		case 1:
+			appendChatContextLine(b, "Proposed Fix Commands", "1 command recorded for approval context")
+		default:
+			appendChatContextLine(b, "Proposed Fix Commands", fmt.Sprintf("%d commands recorded for approval context", len(rec.ProposedFix.Commands)))
+		}
+	}
+}
+
+func appendInvestigationRecordEvidenceContext(b *strings.Builder, evidence []aicontracts.InvestigationRecordEvidence) {
+	if len(evidence) == 0 {
+		return
+	}
+
+	count := 0
+	for _, item := range evidence {
+		if count >= findingChatContextListLimit {
+			break
+		}
+		parts := make([]string, 0, 3)
+		if strings.TrimSpace(item.Kind) != "" {
+			parts = append(parts, strings.TrimSpace(item.Kind))
+		}
+		if strings.TrimSpace(item.ID) != "" {
+			parts = append(parts, strings.TrimSpace(item.ID))
+		}
+		if strings.TrimSpace(item.Summary) != "" {
+			parts = append(parts, strings.TrimSpace(item.Summary))
+		}
+		if len(parts) == 0 {
+			continue
+		}
+		count++
+		appendChatContextLine(b, fmt.Sprintf("Evidence %d", count), strings.Join(parts, ": "))
+	}
+	if remaining := len(evidence) - count; remaining > 0 {
+		appendChatContextLine(b, "Evidence Additional Count", fmt.Sprintf("%d", remaining))
+	}
+}
+
+func appendStringListChatContext(b *strings.Builder, label string, values []string) {
+	count := 0
+	for _, value := range values {
+		normalized := strings.TrimSpace(value)
+		if normalized == "" {
+			continue
+		}
+		if count >= findingChatContextListLimit {
+			break
+		}
+		count++
+		appendChatContextLine(b, fmt.Sprintf("%s %d", label, count), normalized)
+	}
+	if remaining := len(values) - count; remaining > 0 {
+		appendChatContextLine(b, fmt.Sprintf("%s Additional Count", label), fmt.Sprintf("%d", remaining))
+	}
+}
+
+func appendChatContextLine(b *strings.Builder, label string, value string) {
+	label = strings.TrimSpace(label)
+	value = strings.TrimSpace(value)
+	if label == "" && value == "" {
+		b.WriteByte('\n')
+		return
+	}
+	if label == "" {
+		b.WriteString(value)
+		b.WriteByte('\n')
+		return
+	}
+	if value == "" {
+		b.WriteString(label)
+		b.WriteByte('\n')
+		return
+	}
+	b.WriteString(label)
+	b.WriteString(": ")
+	b.WriteString(value)
+	b.WriteByte('\n')
+}
+
 // HandleChat handles POST /api/ai/chat - streaming chat
 func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// CORS
@@ -929,29 +1080,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		store := h.GetUnifiedStoreForOrg(GetOrgID(ctx))
 		if store != nil {
 			if f := store.Get(req.FindingID); f != nil {
-				findingCtx := fmt.Sprintf("[Finding Context]\nID: %s\nTitle: %s\nSeverity: %s\nCategory: %s\nResource: %s (%s)\nDescription: %s",
-					f.ID, f.Title, f.Severity, f.Category, f.ResourceName, f.ResourceType, f.Description)
-				if f.Recommendation != "" {
-					findingCtx += fmt.Sprintf("\nRecommendation: %s", f.Recommendation)
-				}
-				if f.Evidence != "" {
-					findingCtx += fmt.Sprintf("\nEvidence: %s", f.Evidence)
-				}
-				if f.InvestigationStatus != "" {
-					findingCtx += fmt.Sprintf("\nInvestigation Status: %s", f.InvestigationStatus)
-				}
-				if f.InvestigationOutcome != "" {
-					findingCtx += fmt.Sprintf("\nInvestigation Outcome: %s", f.InvestigationOutcome)
-				}
-				if f.UserNote != "" {
-					findingCtx += fmt.Sprintf("\nUser Note: %s", f.UserNote)
-				}
-				if f.AcknowledgedAt != nil {
-					findingCtx += fmt.Sprintf("\nAcknowledged At: %s", f.AcknowledgedAt.Format(time.RFC3339))
-				}
-				if f.Node != "" {
-					findingCtx += fmt.Sprintf("\nNode: %s", f.Node)
-				}
+				findingCtx := buildUnifiedFindingChatContext(f)
 				prompt = findingCtx + "\n\n---\nUser message: " + prompt
 			}
 		}

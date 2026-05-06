@@ -173,7 +173,10 @@ runtime cost control, and shared AI transport surfaces.
     `InvestigationSession` as execution detail, but Assistant handoff,
     unified findings, persistence, and approval/remediation context must use
     the durable investigation record when they need operator-facing
-    investigation context.
+    investigation context. When `/api/ai/chat` receives `finding_id`, the
+    runtime must enrich the prompt from that durable record before provider
+    transport while keeping proposed-fix command text out of the chat prompt;
+    command payloads remain approval-context data, not conversational copy.
 
 ## Current State
 

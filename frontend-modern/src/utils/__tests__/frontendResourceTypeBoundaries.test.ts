@@ -4342,6 +4342,18 @@ describe('frontend resource type boundaries', () => {
     expect(patrolInvestigationContextModelSource).toContain(
       'export function buildPatrolInvestigationContextSummary',
     );
+    expect(patrolInvestigationContextModelSource).toContain(
+      'export function buildPatrolInvestigationRecordPresentation',
+    );
+    expect(patrolInvestigationContextModelSource).toContain(
+      'export function buildPatrolAssistantFindingPrompt',
+    );
+    expect(patrolInvestigationContextModelSource).toContain(
+      'formatCommandSummary(record.proposed_fix.commands?.length ?? 0)',
+    );
+    expect(patrolInvestigationContextModelSource).not.toContain(
+      'record.proposed_fix.commands.join',
+    );
     expect(patrolInvestigationContextModelSource).toContain('policy-covered resource');
     expect(patrolIntelligenceHeaderSource).toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceHeaderSource).not.toContain('getAIQuickstartCreditsPresentation');

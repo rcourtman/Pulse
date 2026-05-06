@@ -743,7 +743,11 @@ the canonical monitored-system blocked payload.
    and the structured investigation-record contract, so unified findings may
    expose `investigation_record` only through the shared
    `aicontracts.InvestigationRecord` payload shape, with frontend API types
-   and backend contract tests updated in the same slice as any field change.
+   and backend contract tests updated in the same slice as any field change
+   and the Assistant finding-context request contract, so `/api/ai/chat`
+   payloads carrying `finding_id` may hydrate a structured investigation
+   summary from the unified finding, but raw proposed-fix commands must stay
+   out of the prompt and inside governed approval/remediation context.
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the main Patrol page composition boundary, so once that governed

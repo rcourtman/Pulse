@@ -13,9 +13,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -538,6 +540,102 @@ func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
 		})
 
 	body := `{"prompt":"summarize dashboard","autonomous_mode":false}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	detectedAt := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	completedAt := detectedAt.Add(3 * time.Minute)
+	store := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
+	store.AddFromAI(&unified.UnifiedFinding{
+		ID:                    "finding-123",
+		Source:                unified.SourceAIPatrol,
+		Severity:              unified.SeverityCritical,
+		Category:              unified.CategoryPerformance,
+		ResourceID:            "vm-100",
+		ResourceName:          "web-server",
+		ResourceType:          "vm",
+		Node:                  "pve-1",
+		Title:                 "High CPU usage",
+		Description:           "CPU stayed above 95%.",
+		Recommendation:        "Review the backup job.",
+		Evidence:              "cpu=96%",
+		DetectedAt:            detectedAt,
+		LastSeenAt:            detectedAt,
+		InvestigationStatus:   "completed",
+		InvestigationOutcome:  "fix_queued",
+		InvestigationAttempts: 1,
+		InvestigationRecord: &aicontracts.InvestigationRecord{
+			ID:        "investigation-123",
+			FindingID: "finding-123",
+			SessionID: "session-123",
+			Subject: aicontracts.InvestigationRecordSubject{
+				ResourceID:   "vm-100",
+				ResourceName: "web-server",
+				ResourceType: "vm",
+				Node:         "pve-1",
+			},
+			Trigger: aicontracts.InvestigationRecordTrigger{
+				FindingKey:  "cpu-high",
+				Source:      "ai-patrol",
+				Severity:    "critical",
+				Category:    "performance",
+				Title:       "High CPU usage",
+				DetectedAt:  detectedAt,
+				Description: "CPU stayed above 95%.",
+			},
+			Status:            aicontracts.InvestigationStatusCompleted,
+			Outcome:           aicontracts.OutcomeFixQueued,
+			Confidence:        aicontracts.InvestigationRecordConfidenceHigh,
+			Evidence:          []aicontracts.InvestigationRecordEvidence{{Kind: "metrics", Summary: "CPU stayed above 95% for 10 minutes"}},
+			Conclusion:        "Backup job saturated CPU.",
+			RecommendedAction: "Approve a controlled service restart after backup completion.",
+			ProposedFix: &aicontracts.InvestigationRecordFix{
+				ID:          "fix-123",
+				Description: "Restart the workload service",
+				Commands:    []string{"systemctl restart workload.service"},
+				RiskLevel:   "medium",
+				TargetHost:  "pve-1",
+				Rationale:   "The process is wedged after backup IO pressure.",
+			},
+			Verification: []string{"CPU returned below 50%"},
+			ToolsUsed:    []string{"metrics.history", "ssh.exec"},
+			StartedAt:    detectedAt,
+			CompletedAt:  &completedAt,
+			ApprovalID:   "approval-123",
+		},
+	})
+	h.SetUnifiedStore(store)
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "finding-123", reqArg.FindingID)
+			assert.Contains(t, reqArg.Prompt, "[Finding Context]")
+			assert.Contains(t, reqArg.Prompt, "[Investigation Record]")
+			assert.Contains(t, reqArg.Prompt, "Conclusion: Backup job saturated CPU.")
+			assert.Contains(t, reqArg.Prompt, "Recommended Action: Approve a controlled service restart after backup completion.")
+			assert.Contains(t, reqArg.Prompt, "Evidence 1: metrics: CPU stayed above 95% for 10 minutes")
+			assert.Contains(t, reqArg.Prompt, "Proposed Fix: Restart the workload service")
+			assert.Contains(t, reqArg.Prompt, "Proposed Fix Commands: 1 command recorded for approval context")
+			assert.Contains(t, reqArg.Prompt, "User message: What happened?")
+			assert.NotContains(t, reqArg.Prompt, "systemctl restart workload.service")
+		})
+
+	body := `{"prompt":"What happened?","finding_id":"finding-123"}`
 	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
 	w := httptest.NewRecorder()
 

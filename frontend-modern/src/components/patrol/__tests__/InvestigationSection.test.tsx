@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { InvestigationRecord } from '@/api/ai';
 import type { Investigation } from '@/api/patrol';
 import {
   getInvestigationOutcomeBadgeClasses,
@@ -83,5 +84,44 @@ describe('InvestigationSection', () => {
     expect(outcomeBadge.className).toContain(
       getInvestigationOutcomeBadgeClasses('needs_attention'),
     );
+  });
+
+  it('renders the durable Patrol investigation record through the inline investigation surface', async () => {
+    getInvestigationMock.mockResolvedValue(undefined as unknown as Investigation);
+
+    const record: InvestigationRecord = {
+      id: 'record-1',
+      finding_id: 'finding-1',
+      subject: { resource_id: 'vm-100', resource_name: 'web', resource_type: 'vm' },
+      trigger: {
+        title: 'High CPU usage',
+        detected_at: '2026-05-06T12:00:00Z',
+      },
+      status: 'completed',
+      outcome: 'fix_queued',
+      confidence: 'high',
+      evidence: [{ kind: 'metrics', summary: 'CPU stayed above 95% for 10 minutes' }],
+      conclusion: 'Backup job saturated CPU.',
+      recommended_action: 'Approve a controlled restart after the backup completes.',
+      proposed_fix: {
+        id: 'fix-1',
+        description: 'Restart the workload service',
+        commands: ['systemctl restart workload.service'],
+        risk_level: 'medium',
+        destructive: false,
+        target_host: 'pve-1',
+      },
+      verification: ['CPU returned below 50%'],
+      tools_used: ['metrics.history'],
+      started_at: '2026-05-06T12:00:00Z',
+    };
+
+    render(() => <InvestigationSection findingId="finding-1" investigationRecord={record} />);
+
+    expect(await screen.findByText('Patrol record')).toBeInTheDocument();
+    expect(screen.getByText('Backup job saturated CPU.')).toBeInTheDocument();
+    expect(screen.getByText('CPU stayed above 95% for 10 minutes')).toBeInTheDocument();
+    expect(screen.getByText('1 command recorded for approval context')).toBeInTheDocument();
+    expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
   });
 });

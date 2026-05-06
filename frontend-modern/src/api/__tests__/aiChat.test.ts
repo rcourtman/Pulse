@@ -109,4 +109,38 @@ describe('AIChatAPI', () => {
       }),
     );
   });
+
+  it('includes a Patrol finding id when supplied for Assistant context', async () => {
+    const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIChatAPI.chat(
+      'inspect this finding',
+      'session-2',
+      undefined,
+      vi.fn(),
+      undefined,
+      undefined,
+      'finding-123',
+    );
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/ai/chat',
+      expect.objectContaining({
+        body: JSON.stringify({
+          prompt: 'inspect this finding',
+          session_id: 'session-2',
+          model: undefined,
+          finding_id: 'finding-123',
+        }),
+      }),
+    );
+  });
 });

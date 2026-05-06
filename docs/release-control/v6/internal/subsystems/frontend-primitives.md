@@ -805,7 +805,11 @@ frontend primitive boundary.
     Assistant drawer with a pre-filled prompt, context, and
     `autonomousMode:false`, but they must not mutate persistent AI control-level
     settings or trigger background Assistant settings/model bootstrap before
-    the drawer is open.
+    the drawer is open. Patrol finding handoffs that add structured
+    investigation-record framing must derive that prompt copy through
+    `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
+    so shared drawer primitives stay shell-owned rather than becoming a
+    Patrol-specific prompt formatter.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like

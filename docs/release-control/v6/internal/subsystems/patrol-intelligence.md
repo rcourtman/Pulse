@@ -96,9 +96,9 @@ Patrol-specific presentation helpers.
    not as a broad automation promise.
 8. Keep the Patrol store aligned with the shared structured investigation
    record when transport carries one. `frontend-modern/src/stores/aiIntelligence.ts`
-   may retain `investigationRecord` as data for Assistant handoff and future
-   Patrol presentation, but visible Patrol copy must still flow through the
-   governed Patrol presentation helpers before the record becomes UI.
+   may retain `investigationRecord` as data for Assistant handoff and Patrol
+   presentation, but visible Patrol copy and Assistant handoff prompt framing
+   must flow through the governed Patrol investigation-context helpers.
 
 ## Current State
 

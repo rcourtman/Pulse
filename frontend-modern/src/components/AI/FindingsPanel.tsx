@@ -17,6 +17,7 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
+import { buildPatrolAssistantFindingPrompt } from '@/features/patrol/patrolInvestigationContextModel';
 import { useResources } from '@/hooks/useResources';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import type { RemediationPlan } from '@/api/ai';
@@ -417,10 +418,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     e.stopPropagation();
     const subject = getFindingSubjectPresentation(finding).label;
     const title = getFindingTitlePresentation(finding).label;
-    aiChatStore.openWithPrompt(
-      `I'd like to discuss this Patrol finding: "${title}" on ${subject}.\n\n${finding.description}`,
-      { targetType: finding.resourceType, targetId: finding.resourceId, findingId: finding.id },
-    );
+    const prompt = buildPatrolAssistantFindingPrompt({
+      title,
+      subject,
+      description: finding.description,
+      investigationRecord: finding.investigationRecord,
+    });
+    aiChatStore.openWithPrompt(prompt, {
+      targetType: finding.resourceType,
+      targetId: finding.resourceId,
+      findingId: finding.id,
+    });
   };
 
   const handleOpenPlanInAssistant = (finding: UnifiedFinding, plan: RemediationPlan, e: Event) => {
@@ -1032,6 +1040,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             investigationStatus={finding.investigationStatus}
             investigationOutcome={finding.investigationOutcome}
             investigationAttempts={finding.investigationAttempts}
+            investigationRecord={finding.investigationRecord}
           />
         </Show>
 

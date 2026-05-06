@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildPatrolInvestigationContextSummary } from '../patrolInvestigationContextModel';
+import {
+  buildPatrolAssistantFindingPrompt,
+  buildPatrolInvestigationContextSummary,
+  buildPatrolInvestigationRecordPresentation,
+} from '../patrolInvestigationContextModel';
 
 describe('patrolInvestigationContextModel', () => {
   it('builds the canonical investigation context summary from recent changes, correlations, and policy posture', () => {
@@ -78,5 +82,77 @@ describe('patrolInvestigationContextModel', () => {
       hasContext: false,
       summaryText: '',
     });
+  });
+
+  it('builds operator-facing Patrol record presentation without exposing raw commands', () => {
+    const presentation = buildPatrolInvestigationRecordPresentation({
+      id: 'record-1',
+      finding_id: 'finding-1',
+      subject: { resource_id: 'vm-100', resource_name: 'web', resource_type: 'vm' },
+      trigger: {
+        title: 'High CPU usage',
+        detected_at: '2026-05-06T12:00:00Z',
+      },
+      status: 'completed',
+      outcome: 'fix_queued',
+      confidence: 'high',
+      conclusion: 'Backup job saturated CPU.',
+      recommended_action: 'Approve a controlled restart after the backup completes.',
+      evidence: [
+        { kind: 'metrics', summary: 'CPU stayed above 95% for 10 minutes' },
+        { kind: 'logs', summary: 'Backup process held IO wait.' },
+      ],
+      proposed_fix: {
+        id: 'fix-1',
+        description: 'Restart the workload service',
+        commands: ['systemctl restart workload.service'],
+        risk_level: 'medium',
+        destructive: false,
+        target_host: 'pve-1',
+        rationale: 'The process is wedged after backup IO pressure.',
+      },
+      verification: ['CPU returned below 50%'],
+      tools_used: ['metrics.history', 'ssh.exec'],
+      started_at: '2026-05-06T12:00:00Z',
+    });
+
+    expect(presentation).toMatchObject({
+      hasRecord: true,
+      statusLabel: 'Completed',
+      outcomeLabel: 'Fix Queued',
+      confidenceLabel: 'High confidence',
+      conclusion: 'Backup job saturated CPU.',
+      evidenceSummaries: ['CPU stayed above 95% for 10 minutes', 'Backup process held IO wait.'],
+      verificationSummaries: ['CPU returned below 50%'],
+      toolsUsed: ['Metrics history', 'SSH exec'],
+      proposedFix: {
+        description: 'Restart the workload service',
+        riskLabel: 'Medium',
+        targetHost: 'pve-1',
+        commandSummary: '1 command recorded for approval context',
+      },
+    });
+    expect(JSON.stringify(presentation)).not.toContain('systemctl restart workload.service');
+  });
+
+  it('frames Assistant handoff around the structured Patrol record when one exists', () => {
+    expect(
+      buildPatrolAssistantFindingPrompt({
+        title: 'High CPU usage',
+        subject: 'web-server',
+        description: 'CPU stayed above 95%.',
+        investigationRecord: {
+          id: 'record-1',
+          finding_id: 'finding-1',
+          subject: { resource_id: 'vm-100' },
+          trigger: { detected_at: '2026-05-06T12:00:00Z' },
+          status: 'completed',
+          evidence: [],
+          verification: [],
+          tools_used: [],
+          started_at: '2026-05-06T12:00:00Z',
+        },
+      }),
+    ).toContain('Use that record as the main context before suggesting next actions.');
   });
 });
