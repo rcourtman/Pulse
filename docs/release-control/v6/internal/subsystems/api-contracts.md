@@ -314,7 +314,10 @@ the canonical monitored-system blocked payload.
     keep `[Operator Briefing]`, `[Finding Context]`, structured handoff
     resources, and structured handoff actions model-only, with the briefing
     summarizing operator next steps and governed action posture without raw
-    command text.
+    command text. Chat execution owns resource-policy sanitization of the
+    assembled model-only handoff before prompt injection, so API payload
+    builders may pass structured product context without turning raw resource
+    identity into user-authored text or disclosure authority.
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
    That same resource payload contract owns `aggregations.policyPosture` on
    `/api/resources` and `/api/resources/stats`. The aggregation must be derived
@@ -779,7 +782,12 @@ the canonical monitored-system blocked payload.
    resource-policy context for those resources through unified-resource
    resolution and shared policy presentation helpers, but the resulting handling
    guidance is read-only, model-only context and must not become saved user text,
-   disclosure authority, or action authority. Chat execution may also hydrate
+   disclosure authority, or action authority. Chat execution must apply that
+   same resource-policy boundary to the assembled product-originated handoff
+   text before model prompt injection, including operator briefings and
+   lower-level finding/action context, so governed resource identities are
+   redacted even when the selected model is local and no provider-bound
+   sanitizer will run. Chat execution may also hydrate
    current canonical resource-state context for those resources, including
    compact status, freshness, source-health, metric, incident, and
    governed-capability summaries from the unified-resource model, but that

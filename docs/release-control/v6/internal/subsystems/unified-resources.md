@@ -199,7 +199,10 @@ Canonical policy presentation and exact-value redaction helpers are owned in
 `internal/unifiedresources/policy_presentation.go`. AI, Patrol, alert, export,
 and prompt consumers must use those helpers for governed resource names,
 hostnames, IP addresses, platform IDs, aliases, and paths instead of inventing
-consumer-local scrubbers.
+consumer-local scrubbers. When a consumer has product-originated resource
+references that are not guaranteed to be present on the canonical resource
+record, it must pass them through the shared redaction-reference helper rather
+than recomputing local policy checks.
 Canonical policy posture aggregation is owned here as well. Resource API
 payloads may expose a camelCase transport projection, but the counts must be
 derived from `internal/unifiedresources/policy_posture.go` after canonical

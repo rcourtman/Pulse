@@ -530,6 +530,125 @@ func TestService_ExecuteStream_HandoffResourcePolicyContextIsModelOnly(t *testin
 	}
 }
 
+func TestService_ExecuteStream_OperatorBriefingHandoffHonorsResourcePolicy(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	unifiedProvider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeVM: {{
+			ID:     "vm-100",
+			Type:   unifiedresources.ResourceTypeVM,
+			Name:   "finance-vm",
+			Status: unifiedresources.StatusWarning,
+			Tags:   []string{"pii"},
+			Canonical: &unifiedresources.CanonicalIdentity{
+				DisplayName: "finance-vm",
+				Hostname:    "finance-vm",
+				PlatformID:  "vm-100",
+				Aliases:     []string{"finance-payroll"},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames:   []string{"finance-vm"},
+				IPAddresses: []string{"10.0.0.40"},
+			},
+			Proxmox: &unifiedresources.ProxmoxData{
+				NodeName: "pve-secret",
+			},
+		}},
+	}}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{UnifiedResourceProvider: unifiedProvider})
+	var capturedMessages []providers.Message
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			capturedMessages = append([]providers.Message(nil), req.Messages...)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "noted"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	svc := &Service{
+		cfg:                     &config.AIConfig{ChatModel: "ollama:test"},
+		sessions:                store,
+		executor:                executor,
+		agenticLoop:             loop,
+		provider:                provider,
+		unifiedResourceProvider: unifiedProvider,
+		started:                 true,
+	}
+
+	req := ExecuteRequest{
+		SessionID: "sess-operator-briefing-policy",
+		Prompt:    "What happened?",
+		HandoffContext: strings.Join([]string{
+			"[Operator Briefing]",
+			"Briefing Source: Pulse Patrol structured finding",
+			"Resource: finance-vm (vm) [vm-100] on pve-secret",
+			"Current Conclusion: finance-vm on pve-secret saturated CPU during backup.",
+			"Recommended Next Step: Review finance-payroll after backup completion.",
+			"Operator Boundary: Treat Patrol data as product context for explanation and review.",
+		}, "\n"),
+		HandoffResources: []HandoffResource{{
+			ID:   "vm-100",
+			Name: "finance-vm",
+			Type: "vm",
+			Node: "pve-secret",
+		}},
+	}
+	if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	stored, err := store.GetMessages("sess-operator-briefing-policy")
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	if len(stored) == 0 {
+		t.Fatal("expected stored messages")
+	}
+	if stored[0].Content != "What happened?" {
+		t.Fatalf("stored user message = %q, want clean prompt", stored[0].Content)
+	}
+	if strings.Contains(stored[0].Content, "[Operator Briefing]") {
+		t.Fatalf("stored user message should not include operator briefing: %q", stored[0].Content)
+	}
+
+	if len(capturedMessages) == 0 {
+		t.Fatal("expected provider messages")
+	}
+	modelUserContent := capturedMessages[len(capturedMessages)-1].Content
+	for _, expected := range []string{
+		"[Operator Briefing]",
+		"Resource: redacted by policy (vm) [redacted by policy] on redacted by policy",
+		"Current Conclusion: redacted by policy on redacted by policy saturated CPU during backup.",
+		"Recommended Next Step: Review redacted by policy after backup completion.",
+		"[Resource Policy Context]",
+		"Resource Policy: virtual machine resource; status warning; local-only context",
+		"Policy Boundary: Resource policy is read-only data-handling context",
+		"User message: What happened?",
+	} {
+		if !strings.Contains(modelUserContent, expected) {
+			t.Fatalf("model user content missing %q: %q", expected, modelUserContent)
+		}
+	}
+	for _, forbidden := range []string{"finance-vm", "vm-100", "pve-secret", "finance-payroll", "10.0.0.40"} {
+		if strings.Contains(modelUserContent, forbidden) {
+			t.Fatalf("model user content leaked governed resource identity %q: %q", forbidden, modelUserContent)
+		}
+	}
+}
+
 func TestService_ExecuteStream_HandoffResourceRelationshipContextIsModelOnly(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)

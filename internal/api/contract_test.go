@@ -200,6 +200,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"mergeHandoffResourceRelationshipContext(handoffContext, handoffResources, handoffResourceProvider)",
 		"mergeHandoffResourceTimelineContext(handoffContext, handoffResources, handoffResourceProvider, s.actionAuditStore, time.Now())",
 		"handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)",
+		"sanitizeHandoffContextForResourcePolicy(handoffContext, handoffResources, handoffResourceProvider)",
 		"Action Reference",
 		"Action State",
 		"Action Plan Expires At",

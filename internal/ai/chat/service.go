@@ -538,6 +538,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	handoffContext = mergeHandoffResourceRelationshipContext(handoffContext, handoffResources, handoffResourceProvider)
 	handoffContext = mergeHandoffResourceTimelineContext(handoffContext, handoffResources, handoffResourceProvider, s.actionAuditStore, time.Now())
 	handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)
+	handoffContext = sanitizeHandoffContextForResourcePolicy(handoffContext, handoffResources, handoffResourceProvider)
 	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
 
 	// Determine which model/loop to use for this request.
@@ -851,6 +852,111 @@ func injectHandoffContextIntoLatestUserMessage(messages []Message, handoffContex
 		messages[idx].Content = contextText + "\n\n---\nUser message: " + userText
 		return
 	}
+}
+
+func sanitizeHandoffContextForResourcePolicy(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
+	contextText := strings.TrimSpace(handoffContext)
+	resources := normalizeHandoffResources(handoffResources)
+	if contextText == "" || len(resources) == 0 || provider == nil {
+		return contextText
+	}
+
+	redacted := contextText
+	for _, handoffResource := range resources {
+		resource, ok := tools.CanonicalHandoffUnifiedResource(provider, handoffResource.ID, handoffResource.Name, handoffResource.Type, handoffResource.Node)
+		if !ok {
+			continue
+		}
+
+		policy, aiSafeSummary := unifiedresources.CanonicalGovernanceMetadata(&resource)
+		if policy == nil {
+			continue
+		}
+		resource.Policy = policy
+		resource.AISafeSummary = aiSafeSummary
+		redacted = unifiedresources.ResourcePolicyRedactedTextWithReferences(redacted, resource, handoffResourcePolicyReferences(handoffResource, resource)...)
+	}
+	return strings.TrimSpace(redacted)
+}
+
+func handoffResourcePolicyReferences(handoffResource HandoffResource, resource unifiedresources.Resource) []unifiedresources.ResourcePolicyRedactionReference {
+	references := make([]unifiedresources.ResourcePolicyRedactionReference, 0, 16)
+	add := func(value string, hints ...unifiedresources.ResourceRedactionHint) {
+		references = append(references, unifiedresources.ResourcePolicyReference(value, hints...))
+	}
+
+	add(resource.Name,
+		unifiedresources.ResourceRedactionHostname,
+		unifiedresources.ResourceRedactionAlias,
+	)
+	add(resource.ID,
+		unifiedresources.ResourceRedactionPlatformID,
+		unifiedresources.ResourceRedactionAlias,
+	)
+	if resource.Canonical != nil {
+		add(resource.Canonical.DisplayName,
+			unifiedresources.ResourceRedactionHostname,
+			unifiedresources.ResourceRedactionAlias,
+		)
+		add(resource.Canonical.Hostname,
+			unifiedresources.ResourceRedactionHostname,
+		)
+		add(resource.Canonical.PlatformID,
+			unifiedresources.ResourceRedactionPlatformID,
+		)
+		add(resource.Canonical.PrimaryID,
+			unifiedresources.ResourceRedactionPlatformID,
+		)
+		for _, alias := range resource.Canonical.Aliases {
+			add(alias,
+				unifiedresources.ResourceRedactionAlias,
+			)
+		}
+	}
+	if resource.Proxmox != nil {
+		add(resource.Proxmox.NodeName,
+			unifiedresources.ResourceRedactionHostname,
+			unifiedresources.ResourceRedactionAlias,
+		)
+		add(resource.Proxmox.ClusterName,
+			unifiedresources.ResourceRedactionAlias,
+		)
+	}
+	if resource.Kubernetes != nil {
+		add(resource.Kubernetes.NodeName,
+			unifiedresources.ResourceRedactionHostname,
+			unifiedresources.ResourceRedactionAlias,
+		)
+		add(resource.Kubernetes.ClusterID,
+			unifiedresources.ResourceRedactionPlatformID,
+		)
+		add(resource.Kubernetes.ClusterName,
+			unifiedresources.ResourceRedactionAlias,
+		)
+		add(resource.Kubernetes.SourceName,
+			unifiedresources.ResourceRedactionAlias,
+		)
+	}
+	if resource.Storage != nil {
+		add(resource.Storage.Path,
+			unifiedresources.ResourceRedactionPath,
+		)
+	}
+
+	add(handoffResource.Name,
+		unifiedresources.ResourceRedactionHostname,
+		unifiedresources.ResourceRedactionAlias,
+	)
+	add(handoffResource.ID,
+		unifiedresources.ResourceRedactionPlatformID,
+		unifiedresources.ResourceRedactionAlias,
+	)
+	add(handoffResource.Node,
+		unifiedresources.ResourceRedactionHostname,
+		unifiedresources.ResourceRedactionPlatformID,
+		unifiedresources.ResourceRedactionAlias,
+	)
+	return references
 }
 
 func mergeHandoffResourcePolicyContext(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {

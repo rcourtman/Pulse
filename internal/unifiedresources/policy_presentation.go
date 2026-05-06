@@ -264,6 +264,23 @@ func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...
 	return value
 }
 
+// ResourcePolicyRedactionReference describes an additional product-originated
+// resource reference that should follow the same governed prompt-label boundary
+// as canonical resource identifiers.
+type ResourcePolicyRedactionReference struct {
+	Value string
+	Hints []ResourceRedactionHint
+}
+
+// ResourcePolicyReference builds a redaction reference with a defensive copy of
+// the supplied hint list.
+func ResourcePolicyReference(value string, hints ...ResourceRedactionHint) ResourcePolicyRedactionReference {
+	return ResourcePolicyRedactionReference{
+		Value: strings.TrimSpace(value),
+		Hints: append([]ResourceRedactionHint(nil), hints...),
+	}
+}
+
 // ResourcePolicyRedactedText replaces exact resource identifiers that the
 // canonical resource policy marks for redaction. It is intentionally
 // value-based so alert, prompt, and export summaries cannot leak the same raw
@@ -303,6 +320,63 @@ func ResourcePolicyRedactedText(value string, resource Resource) string {
 	}
 
 	return redacted
+}
+
+// ResourcePolicyRedactedTextWithReferences redacts canonical resource
+// identifiers plus additional structured references supplied by the caller.
+// References represent prompt labels, handoff selectors, or transport fields
+// that identify the same resource but are not guaranteed to be present on the
+// canonical resource itself. When policy requires a governed summary, references
+// are redacted as identity fields even if their individual hint is not listed,
+// matching ResourcePolicyLabel's "safe summary over raw label" contract.
+func ResourcePolicyRedactedTextWithReferences(value string, resource Resource, references ...ResourcePolicyRedactionReference) string {
+	redacted := ResourcePolicyRedactedText(value, resource)
+	if strings.TrimSpace(redacted) == "" || resource.Policy == nil || len(references) == 0 {
+		return redacted
+	}
+
+	candidates := make([]ResourcePolicyRedactionReference, 0, len(references))
+	seen := make(map[string]struct{}, len(references))
+	for _, reference := range references {
+		reference.Value = strings.TrimSpace(reference.Value)
+		if reference.Value == "" || len([]rune(reference.Value)) < 3 {
+			continue
+		}
+		if _, ok := seen[reference.Value]; ok {
+			continue
+		}
+		seen[reference.Value] = struct{}{}
+		reference.Hints = append([]ResourceRedactionHint(nil), reference.Hints...)
+		candidates = append(candidates, reference)
+	}
+	if len(candidates) == 0 {
+		return redacted
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if len(candidates[i].Value) == len(candidates[j].Value) {
+			return candidates[i].Value < candidates[j].Value
+		}
+		return len(candidates[i].Value) > len(candidates[j].Value)
+	})
+
+	for _, candidate := range candidates {
+		if !resourcePolicyShouldRedactReference(resource.Policy, candidate.Hints...) {
+			continue
+		}
+		redacted = strings.ReplaceAll(redacted, candidate.Value, ResourcePolicyRedactedLabel)
+	}
+	return redacted
+}
+
+func resourcePolicyShouldRedactReference(policy *ResourcePolicy, hints ...ResourceRedactionHint) bool {
+	if policy == nil {
+		return false
+	}
+	if ResourcePolicyRequiresGovernedSummary(policy) {
+		return true
+	}
+	return ResourcePolicyRedacts(policy, hints...)
 }
 
 // ResourceDisplayName returns the canonical resource display name fallback.

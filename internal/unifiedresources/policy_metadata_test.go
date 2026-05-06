@@ -463,6 +463,41 @@ func TestResourcePolicyRedactedText(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyRedactedTextWithReferences(t *testing.T) {
+	resource := Resource{
+		ID:     "storage:local-zfs",
+		Name:   "local-zfs",
+		Type:   ResourceTypeStorage,
+		Status: StatusOnline,
+		Storage: &StorageMeta{
+			Path: "/mnt/pve/finance",
+		},
+		Policy: &ResourcePolicy{
+			Sensitivity: ResourceSensitivitySensitive,
+			Routing: ResourceRoutingPolicy{
+				Scope:  ResourceRoutingScopeLocalFirst,
+				Redact: []ResourceRedactionHint{ResourceRedactionPath},
+			},
+		},
+	}
+
+	got := ResourcePolicyRedactedTextWithReferences(
+		"finance-dataset uses local-zfs at /mnt/pve/finance on pve-secret",
+		resource,
+		ResourcePolicyReference("finance-dataset", ResourceRedactionAlias),
+		ResourcePolicyReference("local-zfs", ResourceRedactionHostname),
+		ResourcePolicyReference("pve-secret", ResourceRedactionHostname),
+	)
+	for _, raw := range []string{"finance-dataset", "local-zfs", "/mnt/pve/finance", "pve-secret"} {
+		if strings.Contains(got, raw) {
+			t.Fatalf("expected %q to be redacted from %q", raw, got)
+		}
+	}
+	if count := strings.Count(got, ResourcePolicyRedactedLabel); count < 4 {
+		t.Fatalf("expected redaction markers in %q", got)
+	}
+}
+
 func TestResourceRedactionLabelsFromHints(t *testing.T) {
 	got := ResourceRedactionLabelsFromHints([]ResourceRedactionHint{
 		ResourceRedactionPath,

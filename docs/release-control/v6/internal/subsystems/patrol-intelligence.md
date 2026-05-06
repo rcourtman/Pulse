@@ -124,7 +124,11 @@ Patrol-specific presentation helpers.
    briefing derived from the unified finding and structured investigation record
    before the detailed finding context, so Assistant leads with the current risk,
    conclusion, recommended next step, and governed approval/proposed-fix posture
-   instead of behaving like a generic chat over a pasted incident dump.
+   instead of behaving like a generic chat over a pasted incident dump. The
+   assembled handoff must still pass through the Assistant runtime's
+   resource-policy sanitizer before prompt injection, so Patrol-owned prose
+   cannot leak governed resource names, IDs, aliases, nodes, paths, or
+   addresses outside the canonical policy boundary.
    If the referenced finding is no longer current, Assistant must drop the
    stored handoff instead of continuing from stale Patrol context. Assistant
    handoff context must also carry the unified

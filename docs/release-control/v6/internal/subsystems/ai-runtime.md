@@ -202,6 +202,11 @@ runtime cost control, and shared AI transport surfaces.
     unified-resource resolution and policy presentation helpers that govern
     mention prefetch and provider-bound redaction; that context remains
     model-only handling guidance, not saved user text or disclosure authority.
+    Before injecting any product-originated handoff context into the model
+    prompt, the runtime must also apply canonical resource-policy redaction to
+    the assembled handoff text itself, including operator briefings and
+    lower-level finding/action context, so local-model prompts and non-local
+    provider transport share the same governed identity boundary.
     Assistant runtime may also hydrate current canonical resource-state context
     for those handoff resources, including compact status, freshness,
     source-health, metric, incident, and governed-capability summaries from the
@@ -947,7 +952,10 @@ finding, resource, priority, investigation confidence, recommended next step,
 and governed action posture as operator guidance, while leaving current
 resource-state, timeline, and action-audit hydration in the existing canonical
 AI runtime handoff builders. It is explanation and review context only, not
-approval or execution authority.
+approval or execution authority. The assembled briefing is policy-sanitized by
+the chat handoff runtime before prompt injection, so governed resource names,
+IDs, aliases, nodes, paths, and addresses are redacted or represented through
+the canonical AI-safe summary instead of leaking through product prose.
 The same page and drawer now also render their recent-change timeline through
 the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so the canonical recent-change layout and relative-time wording stay
