@@ -216,6 +216,12 @@ helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart --version ${VER
 
 See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for details.
 
+Paid Pulse Pro, Relay, and eligible legacy customers: public GitHub release
+assets and the public \`rcourtman/pulse\` Docker image are community builds. They do
+not include the private Pulse Pro runtime hooks. Use
+https://pulserelay.pro/download.html with your activation key to get the
+private Pulse Pro Docker image or Linux archive.
+
 GUIDELINES:
 - Write plain, factual release notes. No marketing language or excitement.
 - Only mention features that exist in the FINAL code state

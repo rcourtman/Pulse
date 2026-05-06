@@ -70,6 +70,12 @@ Power-user shortcuts:
 
 ## ⚡ Quick Start
 
+> **Paid Pulse Pro / Relay / legacy customers:** GitHub release assets and the
+> public `rcourtman/pulse` Docker image are community builds. They can accept an
+> activation key, but they do not include the private Pulse Pro runtime hooks.
+> Use <https://pulserelay.pro/download.html> with your activation key to get the
+> private Pulse Pro Docker image or Linux archive.
+
 ### Option 1: Proxmox LXC (Recommended)
 Replace `vX.Y.Z` with the exact release tag you want, verify the signed installer, then run it on your Proxmox host:
 

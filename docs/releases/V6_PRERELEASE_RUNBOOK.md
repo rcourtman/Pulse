@@ -84,7 +84,7 @@ The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
    other explicit trust-migration path before testing those newer packets.
 6. For paid-user GA, run the `pulse-enterprise` Pro release workflow against the
    same Pulse ref/version, verify `pulse-pro-v...` archives exist, verify
-   `bin/pulse --version` identifies `Pulse Pro (Enterprise)`, and confirm the paid
+   `bin/pulse --version` identifies `Pulse Pro`, and confirm the paid
    install/upgrade docs point paid customers to the Pro artifacts or verified paid
    container image.
 

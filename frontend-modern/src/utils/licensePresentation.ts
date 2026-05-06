@@ -74,6 +74,11 @@ export interface SelfHostedActivationNoticeCopy {
   body: string;
 }
 
+export interface LicenseExternalActionCopy {
+  actionLabel: string;
+  actionUrl: string;
+}
+
 export interface SelfHostedRecoveryPresentation {
   disclosureLabel: string;
   disclosureDescription: string;
@@ -82,6 +87,7 @@ export interface SelfHostedRecoveryPresentation {
   helpTextBeforeTerms: string;
   helpTextAfterTerms: string;
   termsLabel: string;
+  privateRuntimeNotice: SelfHostedActivationNoticeCopy & LicenseExternalActionCopy;
   activateIdleLabel: string;
   activatePendingLabel: string;
   clearIdleLabel: string;
@@ -98,6 +104,7 @@ export interface SelfHostedCurrentPlanPresentation {
   includedExtras: string[];
   supplementalBadges: string[];
   supplementalSummary?: string;
+  privateRuntimeAction?: LicenseExternalActionCopy;
 }
 
 export interface SelfHostedActivationProofItem {
@@ -116,6 +123,8 @@ export interface SelfHostedActivationProofPresentation {
 export interface SelfHostedActivationSuccessPresentation extends LicenseInlineNotice {
   highlightsLabel: string;
   highlights: string[];
+  actionLabel?: string;
+  actionUrl?: string;
 }
 
 export type SelfHostedActivationSuccessSource = 'manual' | 'purchase';
@@ -155,6 +164,8 @@ const PRO_RUNTIME_REQUIRED_TIERS = new Set([
   'lifetime',
   'enterprise',
 ]);
+
+export const PULSE_PRO_DOWNLOAD_URL = 'https://pulserelay.pro/download.html';
 
 const isActivePaidRuntimeState = (subscriptionState?: string | null): boolean => {
   const normalized = (subscriptionState || '').trim().toLowerCase();
@@ -436,13 +447,13 @@ export const getSelfHostedCurrentPlanPresentation = ({
     if (runtimeMismatch) {
       supplementalBadges.push('Pro runtime missing');
       supplementalDetails.unshift(
-        'Public GitHub releases and the public Docker image are community builds. Install the private Pulse Pro runtime to test Pro-only runtime hooks during the trial.',
+        'Public GitHub releases and the public Docker image are community builds. Open Pulse Pro downloads with your activation key to install the private Pulse Pro runtime and test Pro-only runtime hooks during the trial.',
       );
     }
     return {
       title: `Current plan: ${planLabel} Trial`,
       body: runtimeMismatch
-        ? `${planLabel} trial entitlement is active, but this install is running the community runtime. Install the private Pulse Pro runtime from the paid download page to use Pro-only features.`
+        ? `${planLabel} trial entitlement is active, but this install is running the community runtime. Open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime to use Pro-only features.`
         : unlockedFeatures.length > 0
           ? `${planLabel} trial capabilities are active on this instance right now.`
           : `${planLabel} trial entitlement is being confirmed for this instance.`,
@@ -452,6 +463,14 @@ export const getSelfHostedCurrentPlanPresentation = ({
       includedExtras,
       supplementalBadges,
       supplementalSummary: supplementalDetails.join(' '),
+      ...(runtimeMismatch
+        ? {
+            privateRuntimeAction: {
+              actionLabel: 'Open Pulse Pro downloads',
+              actionUrl: PULSE_PRO_DOWNLOAD_URL,
+            },
+          }
+        : {}),
     };
   }
 
@@ -477,13 +496,17 @@ export const getSelfHostedCurrentPlanPresentation = ({
       );
       return {
         title: `Current plan: ${planLabel}`,
-        body: `${planLabel} is active, but this install is running the community runtime. Install the private Pulse Pro runtime from the paid download page to use Pro-only features such as Audit Log, Audit Webhooks, RBAC, and governed remediation.`,
+        body: `${planLabel} is active, but this install is running the community runtime. Open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime to use Pro-only features such as Audit Log, Audit Webhooks, RBAC, and governed remediation.`,
         unlockedFeaturesLabel,
         unlockedFeatures,
         includedExtrasLabel: includedExtras.length > 0 ? 'Included extras' : undefined,
         includedExtras,
         supplementalBadges,
         supplementalSummary: supplementalDetails.join(' '),
+        privateRuntimeAction: {
+          actionLabel: 'Open Pulse Pro downloads',
+          actionUrl: PULSE_PRO_DOWNLOAD_URL,
+        },
       };
     }
 
@@ -588,7 +611,7 @@ export const getSelfHostedActivationProofPresentation = (
       statusLabel: hasProRuntime ? 'Active' : 'Needs attention',
       detail: hasProRuntime
         ? 'This install reports the private Pulse Pro runtime.'
-        : 'This install reports the community runtime. Install the private Pulse Pro runtime from the paid download page; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.',
+        : `This install reports the community runtime. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key and install the private Pulse Pro runtime; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`,
     });
   }
   items.push(
@@ -698,13 +721,19 @@ export const getSelfHostedActivationSuccessPresentation = ({
     body:
       source === 'purchase'
         ? runtimeMismatch
-          ? `Checkout completed and the license is active. This install is still running the community runtime, so install the private Pulse Pro runtime from the paid download page before using Pro-only features.`
+          ? `Checkout completed and the license is active. This install is still running the community runtime, so open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime before using Pro-only features.`
           : `Checkout completed and this instance is now running ${planLabel}.`
         : runtimeMismatch
-          ? `The activation key was accepted. This install is still running the community runtime, so install the private Pulse Pro runtime from the paid download page before using Pro-only features.`
+          ? `The activation key was accepted. This install is still running the community runtime, so open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime before using Pro-only features.`
           : `The activation key was accepted and this instance is now running ${planLabel}.`,
     highlightsLabel: runtimeMismatch ? 'Licensed capabilities' : 'Available now on this instance',
     highlights,
+    ...(runtimeMismatch
+      ? {
+          actionLabel: 'Open Pulse Pro downloads',
+          actionUrl: PULSE_PRO_DOWNLOAD_URL,
+        }
+      : {}),
   };
 };
 
@@ -886,6 +915,12 @@ export const SELF_HOSTED_RECOVERY_PRESENTATION: SelfHostedRecoveryPresentation =
     'Paste the Pulse v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email, but the hosted success page is the primary handoff. You can also paste a legacy Pulse v5 Pro/Lifetime license key and Pulse will exchange it automatically during activation when migration is available. By activating a license, you agree to the',
   helpTextAfterTerms: '.',
   termsLabel: 'Terms of Service',
+  privateRuntimeNotice: {
+    title: 'Paid Docker and Linux installs use a private runtime',
+    body: 'Public GitHub releases and the public Docker image are community builds. They can accept an activation key, but Pro-only runtime hooks require the private Pulse Pro Docker image or Linux archive.',
+    actionLabel: 'Open Pulse Pro downloads',
+    actionUrl: PULSE_PRO_DOWNLOAD_URL,
+  },
   activateIdleLabel: 'Activate Key',
   activatePendingLabel: 'Activating...',
   clearIdleLabel: 'Clear Key',

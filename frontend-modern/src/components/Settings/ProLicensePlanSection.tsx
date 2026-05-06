@@ -28,6 +28,8 @@ interface ProLicensePlanSectionProps {
     tone: string;
     highlightsLabel: string;
     highlights: string[];
+    actionLabel?: string;
+    actionUrl?: string;
   } | null;
   activationProof: {
     title: string;
@@ -55,6 +57,10 @@ interface ProLicensePlanSectionProps {
     includedExtras: string[];
     supplementalBadges: string[];
     supplementalSummary?: string;
+    privateRuntimeAction?: {
+      actionLabel: string;
+      actionUrl: string;
+    };
   };
   entitlements: {
     in_grace_period?: boolean;
@@ -109,6 +115,16 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           <div class={`mb-4 rounded-md border p-3 text-sm ${summary().tone}`}>
             <p class="font-medium">{summary().title}</p>
             <p class="mt-1 text-xs opacity-90">{summary().body}</p>
+            <Show when={summary().actionUrl && summary().actionLabel}>
+              <a
+                href={summary().actionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                {summary().actionLabel}
+              </a>
+            </Show>
             <Show when={summary().highlights.length > 0}>
               <div class="mt-3">
                 <p class="text-[11px] uppercase tracking-wide opacity-80">
@@ -185,6 +201,18 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         <p class="mt-1 text-sm text-muted">{props.currentPlanSummary.body}</p>
         <Show when={props.currentPlanSummary.supplementalSummary}>
           {(summary) => <p class="mt-2 text-xs text-muted">{summary()}</p>}
+        </Show>
+        <Show when={props.currentPlanSummary.privateRuntimeAction}>
+          {(action) => (
+            <a
+              href={action().actionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
+            >
+              {action().actionLabel}
+            </a>
+          )}
         </Show>
         <Show when={props.currentPlanSummary.unlockedFeatures.length > 0}>
           <div class="mt-4">
@@ -326,9 +354,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           <Show
             when={props.hasLicenseDetails}
             fallback={
-              <div class="text-sm text-muted">
-                {getNoActiveSelfHostedActivationState().text}
-              </div>
+              <div class="text-sm text-muted">{getNoActiveSelfHostedActivationState().text}</div>
             }
           >
             <CommercialStatGrid items={props.commercialPlanModel.summary} />
@@ -343,9 +369,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
                 )}
               </For>
             </div>
-
           </Show>
-
         </Show>
       </Show>
     </>

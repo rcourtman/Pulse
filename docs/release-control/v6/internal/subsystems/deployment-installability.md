@@ -219,9 +219,14 @@ server-side update execution surfaces.
    Paid-user GA is part of that same release boundary: the public Pulse release
    workflow builds OSS `pulse-v...` artifacts only, so release docs and runbooks
    must require a same-ref/same-version `pulse-enterprise` Pro package, verify
-   `pulse-pro-v...` archives identify `Pulse Pro (Enterprise)`, and keep the
-   paid install/upgrade path pointed at Pro artifacts or a verified paid image
-   before any paid-user Pro runtime claim is made.
+   `pulse-pro-v...` archives identify `Pulse Pro`, and keep the paid
+   install/upgrade path pointed at Pro artifacts or a verified paid image before
+   any paid-user Pro runtime claim is made. Public GitHub release assets and the
+   public `rcourtman/pulse` Docker image must be described as community builds
+   where paid customers are likely to install or upgrade, and generated public
+   release bodies must send Relay, Pulse Pro, and eligible legacy customers to
+   `https://pulserelay.pro/download.html` for the private Pulse Pro Docker image
+   or Linux archive.
    The repo-root VERSION file is part of the same governed boundary and must
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or

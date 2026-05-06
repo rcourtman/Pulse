@@ -67,6 +67,22 @@ export const SelfHostedCommercialRecoverySection: Component<
             </a>
             {SELF_HOSTED_RECOVERY_PRESENTATION.helpTextAfterTerms}
           </p>
+          <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
+            <p class="font-medium">
+              {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.title}
+            </p>
+            <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+              {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.body}
+            </p>
+            <a
+              href={SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.actionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:underline"
+            >
+              {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.actionLabel}
+            </a>
+          </div>
           <Show when={props.looksLikeLegacyLicenseKey}>
             <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
               <p class="font-medium">{SELF_HOSTED_RECOVERY_PRESENTATION.legacyNotice.title}</p>

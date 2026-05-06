@@ -349,13 +349,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("It does not automatically check out or build `pulse-enterprise`.", runbook)
         self.assertIn("public `pulse-v...` release archives are OSS runtime artifacts", runbook)
         self.assertIn("`pulse-pro-v...` archives", runbook)
-        self.assertIn("`bin/pulse --version` identifies `Pulse Pro (Enterprise)`", runbook)
+        self.assertIn("`bin/pulse --version` identifies `Pulse Pro`", runbook)
         self.assertIn("Paid-user GA is part of that same release boundary", contract)
         self.assertIn(
             "the public Pulse release workflow builds OSS `pulse-v...` artifacts only",
             normalize_ws(contract),
         )
-        self.assertIn("`pulse-pro-v...` archives identify `Pulse Pro (Enterprise)`", contract)
+        self.assertIn("`pulse-pro-v...` archives identify `Pulse Pro`", contract)
+        self.assertIn("https://pulserelay.pro/download.html", contract)
         self.assertIn("control_plane.py --branch-for-version", content)
         self.assertIn('git fetch --prune origin main "${REQUIRED_BRANCH}" --tags', content)
         self.assertIn('REQUIRED_BRANCH: ${{ steps.branch_policy.outputs.required_branch }}', content)

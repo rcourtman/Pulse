@@ -53,6 +53,11 @@ describe('licensePresentation', () => {
       fieldLabel: 'License or Activation Key',
       activateIdleLabel: 'Activate Key',
       clearIdleLabel: 'Clear Key',
+      privateRuntimeNotice: {
+        title: 'Paid Docker and Linux installs use a private runtime',
+        actionLabel: 'Open Pulse Pro downloads',
+        actionUrl: 'https://pulserelay.pro/download.html',
+      },
       legacyNotice: {
         title: 'Legacy v5 license detected',
       },
@@ -369,6 +374,10 @@ describe('licensePresentation', () => {
       title: 'Current plan: Pulse Pro',
       body: expect.stringContaining('private Pulse Pro runtime'),
       supplementalBadges: ['Pro runtime missing'],
+      privateRuntimeAction: {
+        actionLabel: 'Open Pulse Pro downloads',
+        actionUrl: 'https://pulserelay.pro/download.html',
+      },
     });
     expect(getSelfHostedActivationProofPresentation(entitlements)?.items[0]).toMatchObject({
       label: 'Pulse Pro runtime',
@@ -387,6 +396,8 @@ describe('licensePresentation', () => {
       tone: expect.stringContaining('amber'),
       body: expect.stringContaining('community runtime'),
       highlightsLabel: 'Licensed capabilities',
+      actionLabel: 'Open Pulse Pro downloads',
+      actionUrl: 'https://pulserelay.pro/download.html',
     });
   });
 

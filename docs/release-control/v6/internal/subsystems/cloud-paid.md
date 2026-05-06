@@ -701,6 +701,10 @@ blocked when the process is the public community build. Customer-facing paid
 runtime copy must send those users to the private Pulse Pro download rather
 than implying that the public GitHub release or public Docker image can unlock
 the same runtime hooks.
+The owned self-hosted Plans surface must also show a direct Pulse Pro downloads
+action when an active paid entitlement is running on the community runtime, and
+the existing-key recovery panel must warn that paid Docker and Linux installs
+need the private Pulse Pro image or archive before a customer pastes a key.
 That same browser-shell boundary also owns utility-nav suppression:
 `frontend-modern/src/AppLayout.tsx` must not expose a separate top-level
 Operations destination. Diagnostics, reports, and logs now live under the

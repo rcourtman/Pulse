@@ -140,6 +140,19 @@ activation, recovery, or BYOK/local AI setup instead; any exceptional
 support-issued entitlement is reflected through hosted entitlement state rather
 than a local in-app trial acquisition flow.
 
+#### Paid Pulse Pro Runtime
+
+Paid Pulse Pro, Relay, and eligible legacy customers should not use public
+GitHub release assets or the public `rcourtman/pulse` Docker image for paid
+runtime features. Those public downloads are community builds. They can accept
+an activation key, but they do not include the private Pulse Pro runtime hooks.
+
+Use <https://pulserelay.pro/download.html> with your activation key instead.
+Docker users should run the private registry login and
+`PULSE_IMAGE=license.pulserelay.pro/pulse-pro:<version>` compose commands shown
+there. Direct Linux users should download the private Pulse Pro archive from the
+same page.
+
 #### v5 License Migration
 
 Pulse v6 uses the activation/grant model for active licensing, but it can migrate valid Pulse v5 paid JWT-style licenses, including legacy Pro and Lifetime licenses.

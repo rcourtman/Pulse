@@ -87,6 +87,11 @@ Old metadata section.
             self.assertEqual(body.count("## Installation"), 1)
             self.assertEqual(body.count("## Promotion Metadata"), 1)
             self.assertIn("docker pull rcourtman/pulse:6.0.0-rc.2", body)
+            self.assertIn(
+                "public GitHub release assets and the public `rcourtman/pulse` Docker image are community builds",
+                body,
+            )
+            self.assertIn("https://pulserelay.pro/download.html", body)
             self.assertIn("- Rollback target: v5.1.28", body)
 
     def test_current_release_packets_use_pulse_mobile_handoff_copy(self) -> None:

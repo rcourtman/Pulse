@@ -2,6 +2,13 @@
 
 Pulse is distributed as a lightweight, Alpine-based Docker image.
 
+> **Paid Pulse Pro / Relay / legacy customers:** The public `rcourtman/pulse`
+> Docker image is the community build. It can accept an activation key, but it
+> does not include the private Pulse Pro runtime hooks. Use
+> <https://pulserelay.pro/download.html> with your activation key, then run the
+> private registry login and `PULSE_IMAGE=license.pulserelay.pro/pulse-pro:<version>`
+> compose commands shown there.
+
 ## 🚀 Quick Start
 
 ```bash
@@ -171,6 +178,12 @@ docker login registry.example.com
 ```
 
 The agent uses the Docker daemon's credentials for both pulling images and checking for updates.
+
+Paid Pulse Pro Docker installs use the private Pulse Pro registry rather than
+the public `rcourtman/pulse` image. Open <https://pulserelay.pro/download.html>,
+paste your activation key, run the Docker login command shown there, then run
+the shown `PULSE_IMAGE=license.pulserelay.pro/pulse-pro:<version> docker compose pull`
+and `docker compose up -d` commands from the host that already runs Pulse.
 
 ### Disabling Update Features
 

@@ -499,7 +499,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Pulse Pro value proof')).toBeInTheDocument();
     expect(
       screen.getByText(
-        "These checks come from this instance's entitlement payload, not from public pricing copy.",
+        "These checks come from this instance's entitlement and runtime payloads, not from public pricing copy.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Remote access, pairing, and push')).toBeInTheDocument();
@@ -1118,7 +1118,9 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).not.toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.title');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.supplementalBadges');
+    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.privateRuntimeAction');
     expect(proLicensePlanSectionSource).toContain('props.activationSuccessSummary');
+    expect(proLicensePlanSectionSource).toContain('summary().actionUrl');
     expect(proLicensePlanSectionSource).toContain('props.planComparisonSummary.cards.length > 0');
     expect(proLicensePlanSectionSource).toContain(
       'SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonSectionTitle',
@@ -1145,6 +1147,7 @@ describe('ProLicensePanel', () => {
     );
     expect(selfHostedCommercialRecoverySectionSource).toContain('TERMS_DOC_URL');
     expect(selfHostedCommercialRecoverySectionSource).toContain('disclosureLabel');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('privateRuntimeNotice');
     expect(selfHostedCommercialRecoverySectionSource).toContain('recoverySectionTitle');
     expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
