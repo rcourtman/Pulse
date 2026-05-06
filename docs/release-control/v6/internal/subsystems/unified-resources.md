@@ -528,10 +528,11 @@ availability data is still `platformType=availability`, `sourceType=api`, and
 must not regress to a generic platform badge in infrastructure rows or drawers.
 Infrastructure row presentation must also consume that availability payload as
 operator evidence, not only as badge identity. `network-endpoint` rows should
-surface the probe method, latest latency or failure result, and recent check
-timing from either the top-level availability field or the live-state
-`platformData.availability` mirror, so REST and realtime paths answer what was
-measured without requiring the drawer.
+surface one visible probe readout, method plus latest latency or failure
+result, from either the top-level availability field or the live-state
+`platformData.availability` mirror. Recent check timing and fuller failure
+context may stay in tooltip or drawer detail, but the table row must not show
+the same probe evidence in both the resource identity cell and metric cell.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata

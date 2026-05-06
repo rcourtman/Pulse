@@ -403,18 +403,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               counts={resource.facetCounts}
                               class="mt-0.5"
                             />
-                            <Show when={availabilityProbe()}>
-                              {(probe) => (
-                                <div class="mt-0.5 flex min-w-0 items-center">
-                                  <span
-                                    class={`min-w-0 truncate text-[9px] leading-tight ${probe().toneClassName}`}
-                                    title={probe().detailLabel}
-                                  >
-                                    {probe().rowLabel}
-                                  </span>
-                                </div>
-                              )}
-                            </Show>
                           </div>
                           <Show when={workloadsHref()}>
                             {(href) => (
@@ -540,14 +528,14 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                             >
                               {(probe) => (
                                 <div
-                                  class="mx-auto flex max-w-full flex-col items-center justify-center leading-tight"
+                                  class="mx-auto inline-flex max-w-full min-w-0 items-baseline justify-center gap-1 whitespace-nowrap text-[11px] leading-tight"
                                   title={probe().detailLabel}
                                 >
-                                  <span class="max-w-full truncate text-[9px] tracking-normal text-muted">
-                                    {probe().methodLabel}
+                                  <span class="min-w-0 truncate text-muted">
+                                    {probe().methodLabel}:
                                   </span>
                                   <span
-                                    class={`max-w-full truncate text-[11px] font-medium tabular-nums ${probe().toneClassName}`}
+                                    class={`shrink-0 font-medium tabular-nums ${probe().toneClassName}`}
                                   >
                                     {probe().resultLabel}
                                   </span>

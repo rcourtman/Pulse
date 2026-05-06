@@ -248,7 +248,7 @@ describe('UnifiedResourceTable performance contract', () => {
         }),
       ];
 
-      const { getByText, getAllByText } = render(() => (
+      const { getByText, getAllByText, queryByText } = render(() => (
         <UnifiedResourceTable
           resources={resources}
           expandedResourceId={null}
@@ -258,9 +258,11 @@ describe('UnifiedResourceTable performance contract', () => {
       ));
 
       await waitFor(() => {
-        expect(getByText('TCP 1883 - 7 ms - checked 14s ago')).toBeInTheDocument();
+        expect(getByText('TCP 1883:')).toBeInTheDocument();
+        expect(getByText('7 ms')).toBeInTheDocument();
       });
-      expect(getAllByText('7 ms').length).toBeGreaterThanOrEqual(1);
+      expect(queryByText('TCP 1883 - 7 ms - checked 14s ago')).toBeNull();
+      expect(getAllByText('7 ms')).toHaveLength(1);
     });
 
     it('adapts host columns from the measured table surface width instead of the window width', async () => {
