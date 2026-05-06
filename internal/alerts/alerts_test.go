@@ -309,6 +309,13 @@ func TestGetActiveAlertsKeepsInstanceScopedNodeDisplayNames(t *testing.T) {
 	}
 }
 
+func TestNodeDisplayNameCacheKeyTrimsParts(t *testing.T) {
+	got := nodeDisplayNameCacheKey(" cluster-a ", " pve ")
+	if got != "cluster-a\x00pve" {
+		t.Fatalf("nodeDisplayNameCacheKey() = %q, want %q", got, "cluster-a\x00pve")
+	}
+}
+
 func TestQuietHoursCategoryForResourceIncidentUsesIncidentCategoryMetadata(t *testing.T) {
 	availability := &Alert{
 		Type: "resource-incident",
