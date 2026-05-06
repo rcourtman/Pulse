@@ -208,7 +208,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   const isEditing = () => Boolean(props.editingTargetId);
 
   return (
-    <div class="space-y-6">
+    <div class="flex min-h-full flex-col gap-6">
       <Show when={loading()}>
         <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-sm text-muted">
           Loading target…
@@ -372,53 +372,60 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
         </div>
       </Show>
 
-      <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex flex-col gap-2 sm:flex-row">
-          <button type="button" onClick={props.onCancel} class={buttonClass} disabled={isBusy()}>
-            Cancel
-          </button>
-          <button type="button" onClick={handleTest} class={buttonClass} disabled={isBusy()}>
-            {testing() ? 'Testing…' : 'Test probe'}
-          </button>
-        </div>
-        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Show when={isEditing() && props.onToggleEnabled}>
-            <button
-              type="button"
-              onClick={props.onToggleEnabled}
-              disabled={isBusy() || props.togglePending}
-              class={buttonClass}
-            >
-              {props.togglePending
-                ? props.connectionEnabled
-                  ? 'Pausing…'
-                  : 'Resuming…'
-                : props.connectionEnabled
-                  ? 'Pause target'
-                  : 'Resume target'}
+      <div class="sticky bottom-0 -mx-4 mt-auto border-t border-border bg-surface px-4 py-3 shadow-[0_-8px_16px_rgba(15,23,42,0.04)]">
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={props.onCancel} class={buttonClass} disabled={isBusy()}>
+              Cancel
             </button>
-          </Show>
-          <Show when={isEditing() && props.onDelete}>
+            <button type="button" onClick={handleTest} class={buttonClass} disabled={isBusy()}>
+              {testing() ? 'Testing…' : 'Test probe'}
+            </button>
+          </div>
+          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Show when={isEditing() && props.onToggleEnabled}>
+              <button
+                type="button"
+                onClick={props.onToggleEnabled}
+                disabled={isBusy() || props.togglePending}
+                class={buttonClass}
+              >
+                {props.togglePending
+                  ? props.connectionEnabled
+                    ? 'Pausing…'
+                    : 'Resuming…'
+                  : props.connectionEnabled
+                    ? 'Pause target'
+                    : 'Resume target'}
+              </button>
+            </Show>
+            <Show when={isEditing() && props.onDelete}>
+              <button
+                type="button"
+                onClick={props.onDelete}
+                disabled={isBusy()}
+                class={
+                  props.deleteConfirming
+                    ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
+                    : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
+                }
+              >
+                {props.deletePending
+                  ? 'Removing…'
+                  : props.deleteConfirming
+                    ? 'Click again to confirm'
+                    : 'Remove target'}
+              </button>
+            </Show>
             <button
               type="button"
-              onClick={props.onDelete}
+              onClick={handleSave}
+              class={primaryButtonClass}
               disabled={isBusy()}
-              class={
-                props.deleteConfirming
-                  ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
-                  : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
-              }
             >
-              {props.deletePending
-                ? 'Removing…'
-                : props.deleteConfirming
-                  ? 'Click again to confirm'
-                  : 'Remove target'}
+              {saving() ? 'Saving…' : isEditing() ? 'Save target' : 'Add target'}
             </button>
-          </Show>
-          <button type="button" onClick={handleSave} class={primaryButtonClass} disabled={isBusy()}>
-            {saving() ? 'Saving…' : isEditing() ? 'Save target' : 'Add target'}
-          </button>
+          </div>
         </div>
       </div>
     </div>
