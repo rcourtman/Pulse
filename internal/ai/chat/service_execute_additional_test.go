@@ -134,6 +134,21 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
 	}
+	timelineStore := unifiedresources.NewMemoryStore()
+	if err := timelineStore.RecordChange(unifiedresources.ResourceChange{
+		ID:            "change-123",
+		ResourceID:    "vm-100",
+		ObservedAt:    time.Now().Add(-10 * time.Minute),
+		Kind:          unifiedresources.ChangeStateTransition,
+		From:          "running",
+		To:            "degraded",
+		SourceType:    unifiedresources.SourcePulseDiff,
+		SourceAdapter: unifiedresources.AdapterProxmox,
+		Confidence:    unifiedresources.ConfidenceHigh,
+		Reason:        "CPU saturation detected after backup job",
+	}); err != nil {
+		t.Fatalf("RecordChange failed: %v", err)
+	}
 
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	var capturedMessages []providers.Message
@@ -154,18 +169,25 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	loop := NewAgenticLoop(provider, executor, "system")
 
 	svc := &Service{
-		cfg:         &config.AIConfig{ChatModel: "openai:test"},
-		sessions:    store,
-		executor:    executor,
-		agenticLoop: loop,
-		provider:    provider,
-		started:     true,
+		cfg:              &config.AIConfig{ChatModel: "openai:test"},
+		sessions:         store,
+		executor:         executor,
+		agenticLoop:      loop,
+		provider:         provider,
+		started:          true,
+		actionAuditStore: timelineStore,
 	}
 
 	req := ExecuteRequest{
 		SessionID:      "sess-handoff",
 		Prompt:         "What happened?",
 		HandoffContext: "[Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup.",
+		HandoffResources: []HandoffResource{{
+			ID:   "vm-100",
+			Name: "web-server",
+			Type: "vm",
+			Node: "pve-1",
+		}},
 		HandoffActions: []HandoffAction{{
 			FindingID:          "finding-123",
 			RecordID:           "record-123",
@@ -200,6 +222,9 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	if strings.Contains(stored[0].Content, "[Action Context]") {
 		t.Fatalf("stored user message should not include action context: %q", stored[0].Content)
 	}
+	if strings.Contains(stored[0].Content, "Recent Changes Across Infrastructure") {
+		t.Fatalf("stored user message should not include timeline context: %q", stored[0].Content)
+	}
 
 	if len(capturedMessages) == 0 {
 		t.Fatal("expected provider messages")
@@ -219,6 +244,15 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 	if !strings.Contains(modelUserContent, "Pending Action Approval Status: pending") {
 		t.Fatalf("model user content missing approval status: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "### Recent Changes Across Infrastructure") {
+		t.Fatalf("model user content missing timeline context: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "vm-100: **State transition** running") {
+		t.Fatalf("model user content missing canonical timeline summary: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Timeline Boundary: Recent changes are read-only canonical resource timeline context") {
+		t.Fatalf("model user content missing timeline boundary: %q", modelUserContent)
 	}
 	if strings.Contains(modelUserContent, "systemctl restart workload.service") {
 		t.Fatalf("model user content must not infer raw command text: %q", modelUserContent)
@@ -242,6 +276,21 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
 	}
+	timelineStore := unifiedresources.NewMemoryStore()
+	if err := timelineStore.RecordChange(unifiedresources.ResourceChange{
+		ID:            "change-followup",
+		ResourceID:    "vm-100",
+		ObservedAt:    time.Now().Add(-5 * time.Minute),
+		Kind:          unifiedresources.ChangeConfigUpdate,
+		From:          "backup-window",
+		To:            "backup-window+cpu-spike",
+		SourceType:    unifiedresources.SourcePulseDiff,
+		SourceAdapter: unifiedresources.AdapterProxmox,
+		Confidence:    unifiedresources.ConfidenceHigh,
+		Reason:        "backup job changed workload pressure",
+	}); err != nil {
+		t.Fatalf("RecordChange failed: %v", err)
+	}
 
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	var capturedRequests [][]providers.Message
@@ -262,12 +311,13 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	loop := NewAgenticLoop(provider, executor, "system")
 
 	svc := &Service{
-		cfg:         &config.AIConfig{ChatModel: "openai:test"},
-		sessions:    store,
-		executor:    executor,
-		agenticLoop: loop,
-		provider:    provider,
-		started:     true,
+		cfg:              &config.AIConfig{ChatModel: "openai:test"},
+		sessions:         store,
+		executor:         executor,
+		agenticLoop:      loop,
+		provider:         provider,
+		started:          true,
+		actionAuditStore: timelineStore,
 	}
 
 	handoffContext := "[Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup."
@@ -288,6 +338,12 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 		SessionID:      "sess-handoff-followup",
 		Prompt:         "What happened?",
 		HandoffContext: handoffContext,
+		HandoffResources: []HandoffResource{{
+			ID:   "vm-100",
+			Name: "web-server",
+			Type: "vm",
+			Node: "pve-1",
+		}},
 		HandoffActions: handoffActions,
 	}
 	if err := svc.ExecuteStream(context.Background(), firstReq, func(StreamEvent) {}); err != nil {
@@ -322,6 +378,9 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 		if strings.Contains(content, "[Action Context]") {
 			t.Fatalf("stored user message should not include action context: %q", content)
 		}
+		if strings.Contains(content, "Recent Changes Across Infrastructure") {
+			t.Fatalf("stored user message should not include timeline context: %q", content)
+		}
 	}
 	if storedUserMessages[0] != "What happened?" || storedUserMessages[1] != "What should I do next?" {
 		t.Fatalf("stored user messages = %#v, want clean prompts", storedUserMessages)
@@ -346,6 +405,9 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	if !strings.Contains(firstModelUserContent, "Pending Action Approval Status: pending") {
 		t.Fatalf("first provider turn missing approval status: %q", firstModelUserContent)
 	}
+	if !strings.Contains(firstModelUserContent, "### Recent Changes Across Infrastructure") {
+		t.Fatalf("first provider turn missing timeline context: %q", firstModelUserContent)
+	}
 	secondModelUserContent := latestProviderUserContent(t, capturedRequests[1])
 	if !strings.Contains(secondModelUserContent, "[Finding Context]") {
 		t.Fatalf("follow-up provider turn missing stored handoff context: %q", secondModelUserContent)
@@ -362,8 +424,60 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	if !strings.Contains(secondModelUserContent, "Pending Action Approval Status: pending") {
 		t.Fatalf("follow-up provider turn missing refreshed approval status: %q", secondModelUserContent)
 	}
+	if !strings.Contains(secondModelUserContent, "### Recent Changes Across Infrastructure") {
+		t.Fatalf("follow-up provider turn missing stored resource timeline context: %q", secondModelUserContent)
+	}
 	if strings.Contains(firstModelUserContent+secondModelUserContent, "systemctl restart workload.service") {
 		t.Fatalf("provider turns must not include raw command text")
+	}
+}
+
+func TestBuildHandoffResourceTimelineContextUsesRelatedCanonicalChanges(t *testing.T) {
+	now := time.Now()
+	store := unifiedresources.NewMemoryStore()
+	for _, change := range []unifiedresources.ResourceChange{
+		{
+			ID:               "change-direct",
+			ResourceID:       "vm-100",
+			ObservedAt:       now.Add(-2 * time.Minute),
+			Kind:             unifiedresources.ChangeStateTransition,
+			From:             "running",
+			To:               "degraded",
+			SourceType:       unifiedresources.SourcePulseDiff,
+			SourceAdapter:    unifiedresources.AdapterProxmox,
+			Confidence:       unifiedresources.ConfidenceHigh,
+			RelatedResources: []string{"storage-1"},
+		},
+		{
+			ID:               "change-related",
+			ResourceID:       "storage-1",
+			ObservedAt:       now.Add(-1 * time.Minute),
+			Kind:             unifiedresources.ChangeActivity,
+			To:               "backup completed",
+			SourceType:       unifiedresources.SourcePlatformEvent,
+			SourceAdapter:    unifiedresources.AdapterProxmox,
+			Confidence:       unifiedresources.ConfidenceHigh,
+			RelatedResources: []string{"vm-100"},
+		},
+	} {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s) failed: %v", change.ID, err)
+		}
+	}
+
+	contextText := buildHandoffResourceTimelineContext([]HandoffResource{{
+		ID:   "vm-100",
+		Name: "web-server",
+		Type: "vm",
+	}}, store, now)
+	if !strings.Contains(contextText, "vm-100: **State transition** running") {
+		t.Fatalf("timeline context missing direct change: %q", contextText)
+	}
+	if !strings.Contains(contextText, "storage-1: **Activity**") {
+		t.Fatalf("timeline context missing related change: %q", contextText)
+	}
+	if strings.Contains(contextText, "Approval ID") {
+		t.Fatalf("timeline context should not include approval metadata: %q", contextText)
 	}
 }
 

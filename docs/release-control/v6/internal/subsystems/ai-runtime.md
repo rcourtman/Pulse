@@ -185,11 +185,15 @@ runtime cost control, and shared AI transport surfaces.
     references may persist as session model-context metadata for follow-up turns,
     but they remain references only; each turn must rehydrate them from the
     current canonical unified-resource model before action validation can use
-    them. The runtime may also persist structured pending-action and approval
-    references from the same investigation record as model-context metadata, but
-    those references are review context only: they must not include raw command
-    text, must not grant approval or execution authority, and must route any
-    operator decision back through the governed approval/remediation flow. When
+    them. Assistant runtime may also hydrate recent changes for those handoff
+    resources from the canonical unified-resource timeline as model-only context
+    on each turn, but those timeline facts remain read-only explanation context
+    and do not grant action authority. The runtime may also persist structured
+    pending-action and approval references from the same investigation record as
+    model-context metadata, but those references are review context only: they
+    must not include raw command text, must not grant approval or execution
+    authority, and must route any operator decision back through the governed
+    approval/remediation flow. When
     those references include an approval ID, Assistant runtime may refresh a
     current status snapshot from the canonical approval store on each turn, but
     it must enforce org scoping and still omit the approval command payload.

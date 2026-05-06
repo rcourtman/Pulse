@@ -1018,6 +1018,12 @@ The same surfaces now also render recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops.
+Assistant finding handoffs are part of that same timeline contract: when the AI
+runtime needs recent changes for product-originated handoff resources, it should
+read the canonical unified-resource timeline and `FormatResourceRecentChangesContext`
+rather than rebuilding recent-change wording or querying Patrol-local change
+detectors first. Those handoff timeline entries remain read-only explanation
+context, not action authority.
 The unified-resource detail drawer now also routes resource-tag presentation
 through the shared `frontend-modern/src/components/shared/TagBadges.tsx`
 primitive instead of importing a workload-local badge helper into the
