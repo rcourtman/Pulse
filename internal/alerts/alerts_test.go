@@ -8155,6 +8155,7 @@ func TestGetResolvedAlert(t *testing.T) {
 			},
 			ResolvedTime: resolvedTime,
 		}
+		stored := m.recentlyResolved["test"].Alert
 		m.resolvedMutex.Unlock()
 
 		result := m.GetResolvedAlert("test")
@@ -8166,6 +8167,13 @@ func TestGetResolvedAlert(t *testing.T) {
 		}
 		if result.ResolvedTime != resolvedTime {
 			t.Error("expected resolved time to match")
+		}
+		if result.Alert == stored {
+			t.Fatal("expected resolved alert output to clone the stored alert")
+		}
+		result.Alert.Message = "mutated"
+		if stored.Message == "mutated" {
+			t.Fatal("mutating returned alert changed stored resolved alert")
 		}
 	})
 }

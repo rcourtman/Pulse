@@ -55,6 +55,7 @@ operator-facing alert routing behavior for live runtime alerts.
 33. `internal/alerts/config/normalize.go`
 34. `internal/alerts/config/identity.go`
 35. `internal/alerts/notification_policy.go`
+36. `internal/alerts/read_model.go`
 
 ## Shared Boundaries
 
@@ -217,6 +218,11 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+Alert read-side output now lives in `internal/alerts/read_model.go`. That file
+owns active alert projection and sorting, metadata coercion helpers,
+recently-resolved and history output wrappers, and notify-existing redispatch;
+future output-ordering or metadata coercion changes should extend that owner
+rather than adding another read path inside resource-specific evaluators.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial
