@@ -61,6 +61,7 @@ operator-facing alert routing behavior for live runtime alerts.
 39. `internal/alerts/pbs.go`
 40. `internal/alerts/storage.go`
 41. `internal/alerts/node.go`
+42. `internal/alerts/host.go`
 
 ## Shared Boundaries
 
@@ -253,6 +254,12 @@ owns node metric and temperature projection, node offline lifecycle handling,
 host-agent deduplication bookkeeping, and instance-scoped node display-name
 cache updates; future Proxmox node alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
+Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
+owns host identity, host-agent metric projection, host disk/SMART/RAID/Unraid
+health handling, host cleanup, and host offline lifecycle handling; future host
+agent alert behavior should extend that resource checker owner while shared
+health-assessment evaluation remains package-level until all storage-health
+callers can be separated behind a narrower owner.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial

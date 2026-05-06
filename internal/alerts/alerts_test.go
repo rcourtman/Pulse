@@ -316,6 +316,15 @@ func TestNodeDisplayNameCacheKeyTrimsParts(t *testing.T) {
 	}
 }
 
+func TestHostResourceIDTrimsID(t *testing.T) {
+	if got := hostResourceID(" host-1 "); got != "agent:host-1" {
+		t.Fatalf("hostResourceID() = %q, want %q", got, "agent:host-1")
+	}
+	if got := hostResourceID(" \t "); got != "agent:unknown" {
+		t.Fatalf("blank hostResourceID() = %q, want %q", got, "agent:unknown")
+	}
+}
+
 func TestQuietHoursCategoryForResourceIncidentUsesIncidentCategoryMetadata(t *testing.T) {
 	availability := &Alert{
 		Type: "resource-incident",
