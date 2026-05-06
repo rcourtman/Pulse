@@ -5171,8 +5171,72 @@
       "subsystem_ids": []
     }
   ],
-  "coverage_gaps": [],
-  "candidate_lanes": [],
+  "coverage_gaps": [
+    {
+      "id": "pulse-intelligence-proactive-operations-product-gap",
+      "summary": "Pulse Assistant and Patrol are governed as AI runtime pieces, but the product lane does not yet carry the stronger proactive Pulse Intelligence contract: Patrol should create trusted structured investigations and Assistant should explain, collaborate, approve, and execute from those records instead of being optimized as a generic chat surface.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-05-06",
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L14",
+        "L18",
+        "L19",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence",
+        "security-privacy",
+        "unified-resources"
+      ],
+      "proposed_resolution": "new-lane",
+      "coverage_impact": 85,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/AI.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        }
+      ]
+    }
+  ],
+  "candidate_lanes": [
+    {
+      "id": "pulse-intelligence-proactive-operations",
+      "name": "Pulse Intelligence proactive operations",
+      "summary": "Promote Pulse Pro's AI value from reactive Assistant chat into proactive infrastructure intelligence: Patrol owns structured detection and investigations; Assistant becomes the contextual explanation, collaboration, approval, and governed action surface; policy-aware data handling, resource timelines, and action audit are treated as product prerequisites rather than optional chat enhancements.",
+      "status": "proposed",
+      "recorded_at": "2026-05-06",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L6",
+        "L13",
+        "L14",
+        "L18",
+        "L19",
+        "L20"
+      ],
+      "coverage_gap_ids": [
+        "pulse-intelligence-proactive-operations-product-gap"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence",
+        "security-privacy",
+        "unified-resources"
+      ]
+    }
+  ],
   "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
@@ -5750,6 +5814,27 @@
         "L20",
         "L21",
         "L22"
+      ]
+    },
+    {
+      "id": "pulse-intelligence-product-contract",
+      "summary": "Pulse Pro's AI direction is proactive infrastructure intelligence: Patrol is the detection and investigation engine, Assistant is the contextual conversation, approval, and governed action surface, and generic chat polish is not the canonical product objective.",
+      "kind": "contract",
+      "decided_at": "2026-05-06",
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence",
+        "security-privacy",
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L14",
+        "L18",
+        "L19",
+        "L20"
       ]
     }
   ]
