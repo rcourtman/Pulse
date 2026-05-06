@@ -263,6 +263,54 @@ func TestDispatchAlertInvokesSubscribedAlertCallbacks(t *testing.T) {
 	}
 }
 
+func TestSubscribeAlertCallbackUnsubscribeKeepsOtherSubscribers(t *testing.T) {
+	m := newTestManager(t)
+
+	alert := &Alert{
+		ID:           "unsubscribed-alert",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "vm-101",
+		ResourceName: "api-1",
+		StartTime:    time.Now().Add(-time.Minute),
+		LastSeen:     time.Now(),
+	}
+
+	firstDone := make(chan string, 1)
+	secondDone := make(chan string, 1)
+	unsubscribeFirst := m.SubscribeAlertCallback(func(alert *Alert) {
+		firstDone <- alert.ID
+	})
+	m.SubscribeAlertCallback(func(alert *Alert) {
+		secondDone <- alert.ID
+	})
+	unsubscribeFirst()
+
+	m.mu.Lock()
+	m.config.ActivationState = ActivationActive
+	dispatched := m.dispatchAlert(alert, false)
+	m.mu.Unlock()
+
+	if !dispatched {
+		t.Fatal("expected dispatchAlert to report a subscribed callback dispatch")
+	}
+
+	select {
+	case got := <-firstDone:
+		t.Fatalf("unsubscribed callback fired with alert ID %q", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	select {
+	case got := <-secondDone:
+		if got != alert.ID {
+			t.Fatalf("second callback ID = %q, want %q", got, alert.ID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected remaining subscribed callback to fire")
+	}
+}
+
 func TestOnAlertHistoryRegistersCallback(t *testing.T) {
 	m := newTestManager(t)
 

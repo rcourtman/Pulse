@@ -23,6 +23,7 @@ regression protection.
 1. `pkg/metrics/store.go`
 2. `pkg/metrics/store_query_plan_test.go`
 3. `pkg/metrics/store_slo_test.go`
+4. `pkg/metrics/store_additional_test.go`
 4. `internal/api/slo.go`
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
@@ -1147,6 +1148,11 @@ That same metrics-store boundary also owns the persistent DB file path. The
 runtime must normalize the owned metrics directory and resolve the selected DB
 filename through the shared storage-path helper before it creates directories
 or opens SQLite, instead of trusting raw caller-built paths.
+That same ownership includes local SQLite artifact permissions. The metrics
+store must create or re-harden the selected database directory as owner-only
+and must reject symlink or non-regular database targets before opening SQLite;
+the `.db`, `.db-wal`, and `.db-shm` artifacts must be chmodded owner-only even
+under a permissive process umask.
 That same metrics hot path must also keep startup maintenance off the
 constructor critical path. `NewStore` may initialize schema and return a usable
 store, but restart-time retention cleanup and one-time auto-vacuum migration

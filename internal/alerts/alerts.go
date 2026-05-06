@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	alertconfig "github.com/rcourtman/pulse-go-rewrite/internal/alerts/config"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
@@ -24,43 +25,76 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// AlertLevel represents the severity of an alert
-type AlertLevel string
+// Type aliases re-exported from alerts/config for backward compatibility.
+// These guarantee compile-time type identity: alerts.AlertLevel = alertconfig.AlertLevel.
+type AlertLevel = alertconfig.AlertLevel
+type ActivationState = alertconfig.ActivationState
+type HysteresisThreshold = alertconfig.HysteresisThreshold
+type ThresholdConfig = alertconfig.ThresholdConfig
+type QuietHours = alertconfig.QuietHours
+type QuietHoursSuppression = alertconfig.QuietHoursSuppression
+type EscalationLevel = alertconfig.EscalationLevel
+type EscalationConfig = alertconfig.EscalationConfig
+type GroupingConfig = alertconfig.GroupingConfig
+type ScheduleConfig = alertconfig.ScheduleConfig
+type FilterCondition = alertconfig.FilterCondition
+type FilterStack = alertconfig.FilterStack
+type CustomAlertRule = alertconfig.CustomAlertRule
+type DockerThresholdConfig = alertconfig.DockerThresholdConfig
+type PMGThresholdConfig = alertconfig.PMGThresholdConfig
+type SnapshotAlertConfig = alertconfig.SnapshotAlertConfig
+type BackupAlertConfig = alertconfig.BackupAlertConfig
+type GuestLookup = alertconfig.GuestLookup
+type AlertConfig = alertconfig.AlertConfig
 
 const (
-	AlertLevelWarning  AlertLevel = "warning"
-	AlertLevelCritical AlertLevel = "critical"
+	AlertLevelWarning  = alertconfig.AlertLevelWarning
+	AlertLevelCritical = alertconfig.AlertLevelCritical
+	ActivationPending  = alertconfig.ActivationPending
+	ActivationActive   = alertconfig.ActivationActive
+	ActivationSnoozed  = alertconfig.ActivationSnoozed
 )
 
 var ErrAlertNotFound = errors.New("alert not found")
 
-// ActivationState represents the alert notification activation state
-type ActivationState string
-
-const (
-	ActivationPending ActivationState = "pending_review"
-	ActivationActive  ActivationState = "active"
-	ActivationSnoozed ActivationState = "snoozed"
-)
-
-// Cleanup intervals
-const (
-	StaleTrackingThreshold              = 24 * time.Hour
-	RateLimitCleanupWindow              = 1 * time.Hour
-	alertsDirPerm                       = 0o700
-	alertsFilePerm                      = 0o600
-	offlineRecoveryConfirmationsDefault = 3
-	offlineRecoveryConfirmationsStorage = 2
-)
+func NormalizeAlertConfigAliases(config *AlertConfig) {
+	alertconfig.NormalizeAlertConfigAliases(config)
+}
+func NormalizeMetricTimeThresholds(input map[string]map[string]int) map[string]map[string]int {
+	return alertconfig.NormalizeMetricTimeThresholds(input)
+}
+func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {
+	return alertconfig.NormalizeDockerIgnoredPrefixes(prefixes)
+}
+func CanonicalResourceTypeKeys(resourceType string) []string {
+	return alertconfig.CanonicalResourceTypeKeys(resourceType)
+}
+func NormalizePoweredOffSeverity(level AlertLevel) AlertLevel {
+	return alertconfig.NormalizePoweredOffSeverity(level)
+}
 
 func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
-	switch strings.ToLower(string(level)) {
-	case string(AlertLevelCritical):
-		return AlertLevelCritical
-	default:
-		return AlertLevelWarning
-	}
+	return alertconfig.NormalizePoweredOffSeverity(level)
 }
+func ensureValidHysteresis(threshold *HysteresisThreshold, metricName string) {
+	alertconfig.EnsureValidHysteresis(threshold, metricName)
+}
+func normalizeStorageDefaults(config *AlertConfig) { alertconfig.NormalizeStorageDefaults(config) }
+func normalizeDockerThreshold(th HysteresisThreshold, defaultTrigger float64, metricName string) HysteresisThreshold {
+	return alertconfig.NormalizeDockerThreshold(th, defaultTrigger, metricName)
+}
+func normalizeDockerDefaults(config *AlertConfig)   { alertconfig.NormalizeDockerDefaults(config) }
+func normalizePMGDefaults(config *AlertConfig)      { alertconfig.NormalizePMGDefaults(config) }
+func normalizeSnapshotDefaults(config *AlertConfig) { alertconfig.NormalizeSnapshotDefaults(config) }
+func normalizeBackupDefaults(config *AlertConfig)   { alertconfig.NormalizeBackupDefaults(config) }
+func normalizeNodeDefaults(config *AlertConfig)     { alertconfig.NormalizeNodeDefaults(config) }
+func normalizeAgentDefaults(config *AlertConfig)    { alertconfig.NormalizeAgentDefaults(config) }
+func normalizeGeneralSettings(config *AlertConfig)  { alertconfig.NormalizeGeneralSettings(config) }
+func normalizeTimeThresholds(config *AlertConfig)   { alertconfig.NormalizeTimeThresholds(config) }
+func validateHysteresisThresholds(config *AlertConfig) {
+	alertconfig.ValidateHysteresisThresholds(config)
+}
+func validateQuietHoursTimezone(config *AlertConfig) { alertconfig.ValidateQuietHoursTimezone(config) }
 
 // Alert represents an active alert
 type Alert struct {
@@ -84,11 +118,9 @@ type Alert struct {
 	AckTime         *time.Time             `json:"ackTime,omitempty"`
 	AckUser         string                 `json:"ackUser,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	// Notification tracking
-	LastNotified *time.Time `json:"lastNotified,omitempty"` // Last time notification was sent
-	// Escalation tracking
-	LastEscalation  int         `json:"lastEscalation,omitempty"`  // Last escalation level notified
-	EscalationTimes []time.Time `json:"escalationTimes,omitempty"` // Times when escalations were sent
+	LastNotified    *time.Time             `json:"lastNotified,omitempty"`
+	LastEscalation  int                    `json:"lastEscalation,omitempty"`
+	EscalationTimes []time.Time            `json:"escalationTimes,omitempty"`
 }
 
 // Clone returns a deep copy of the alert so it can be safely shared across goroutines.
@@ -171,302 +203,15 @@ type ResolvedAlert struct {
 	ResolvedTime time.Time `json:"resolvedTime"`
 }
 
-// HysteresisThreshold represents a threshold with hysteresis
-type HysteresisThreshold struct {
-	Trigger float64 `json:"trigger"` // Threshold to trigger alert
-	Clear   float64 `json:"clear"`   // Threshold to clear alert
-}
-
-// ThresholdConfig represents threshold configuration
-type ThresholdConfig struct {
-	Disabled            bool                 `json:"disabled,omitempty"`            // Completely disable alerts for this guest
-	DisableConnectivity bool                 `json:"disableConnectivity,omitempty"` // Disable node offline/connectivity/powered-off alerts
-	PoweredOffSeverity  AlertLevel           `json:"poweredOffSeverity,omitempty"`  // Severity for powered-off alerts
-	CPU                 *HysteresisThreshold `json:"cpu,omitempty"`
-	Memory              *HysteresisThreshold `json:"memory,omitempty"`
-	Disk                *HysteresisThreshold `json:"disk,omitempty"`
-	DiskRead            *HysteresisThreshold `json:"diskRead,omitempty"`
-	DiskWrite           *HysteresisThreshold `json:"diskWrite,omitempty"`
-	NetworkIn           *HysteresisThreshold `json:"networkIn,omitempty"`
-	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
-	Usage               *HysteresisThreshold `json:"usage,omitempty"`           // For storage devices
-	Temperature         *HysteresisThreshold `json:"temperature,omitempty"`     // For node CPU temperature
-	DiskTemperature     *HysteresisThreshold `json:"diskTemperature,omitempty"` // For host SMART temperatures
-	Backup              *BackupAlertConfig   `json:"backup,omitempty"`
-	Snapshot            *SnapshotAlertConfig `json:"snapshot,omitempty"`
-	Note                *string              `json:"note,omitempty"`
-}
-
-// QuietHours represents quiet hours configuration
-type QuietHours struct {
-	Enabled  bool                  `json:"enabled"`
-	Start    string                `json:"start"` // 24-hour format "HH:MM"
-	End      string                `json:"end"`   // 24-hour format "HH:MM"
-	Timezone string                `json:"timezone"`
-	Days     map[string]bool       `json:"days"` // monday, tuesday, etc.
-	Suppress QuietHoursSuppression `json:"suppress"`
-}
-
-// QuietHoursSuppression controls which alert categories are silenced during quiet hours.
-type QuietHoursSuppression struct {
-	Performance bool `json:"performance"`
-	Storage     bool `json:"storage"`
-	Offline     bool `json:"offline"`
-}
-
-// EscalationLevel represents an escalation rule
-type EscalationLevel struct {
-	After  int    `json:"after"`  // minutes after initial alert
-	Notify string `json:"notify"` // "email", "webhook", or "all"
-}
-
-// EscalationConfig represents alert escalation configuration
-type EscalationConfig struct {
-	Enabled bool              `json:"enabled"`
-	Levels  []EscalationLevel `json:"levels"`
-}
-
-// GroupingConfig represents alert grouping configuration
-type GroupingConfig struct {
-	Enabled bool `json:"enabled"`
-	Window  int  `json:"window"`  // seconds
-	ByNode  bool `json:"byNode"`  // Group alerts by node
-	ByGuest bool `json:"byGuest"` // Group alerts by guest type
-}
-
-// ScheduleConfig represents alerting schedule configuration
-type ScheduleConfig struct {
-	QuietHours      QuietHours       `json:"quietHours"`
-	Cooldown        int              `json:"cooldown"`        // minutes
-	MaxAlertsHour   int              `json:"maxAlertsHour"`   // max alerts per hour per resource
-	NotifyOnResolve bool             `json:"notifyOnResolve"` // Send notification when alert clears
-	Escalation      EscalationConfig `json:"escalation"`
-	Grouping        GroupingConfig   `json:"grouping"`
-}
-
-// FilterCondition represents a single filter condition
-type FilterCondition struct {
-	Type     string      `json:"type"` // "metric", "text", or "raw"
-	Field    string      `json:"field,omitempty"`
-	Operator string      `json:"operator,omitempty"`
-	Value    interface{} `json:"value,omitempty"`
-	RawText  string      `json:"rawText,omitempty"`
-}
-
-// FilterStack represents a collection of filters with logical operator
-type FilterStack struct {
-	Filters         []FilterCondition `json:"filters"`
-	LogicalOperator string            `json:"logicalOperator"` // "AND" or "OR"
-}
-
-// CustomAlertRule represents a custom alert rule with filter conditions
-type CustomAlertRule struct {
-	ID               string          `json:"id"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description,omitempty"`
-	FilterConditions FilterStack     `json:"filterConditions"`
-	Thresholds       ThresholdConfig `json:"thresholds"`
-	Priority         int             `json:"priority"`
-	Enabled          bool            `json:"enabled"`
-	Notifications    struct {
-		Email *struct {
-			Enabled    bool     `json:"enabled"`
-			Recipients []string `json:"recipients"`
-		} `json:"email,omitempty"`
-		Webhook *struct {
-			Enabled bool   `json:"enabled"`
-			URL     string `json:"url"`
-		} `json:"webhook,omitempty"`
-	} `json:"notifications"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
-
-// DockerThresholdConfig represents Docker-specific alert thresholds
-type DockerThresholdConfig struct {
-	CPU                      HysteresisThreshold `json:"cpu"`                                // CPU usage % threshold (default: 80%)
-	Memory                   HysteresisThreshold `json:"memory"`                             // Memory usage % threshold (default: 85%)
-	Disk                     HysteresisThreshold `json:"disk"`                               // Writable layer usage % threshold (default: 85%)
-	RestartCount             int                 `json:"restartCount"`                       // Number of restarts to trigger alert (default: 3)
-	RestartWindow            int                 `json:"restartWindow"`                      // Time window in seconds for restart loop detection (default: 300 = 5min)
-	MemoryWarnPct            int                 `json:"memoryWarnPct"`                      // Memory limit % to trigger warning (default: 90)
-	MemoryCriticalPct        int                 `json:"memoryCriticalPct"`                  // Memory limit % to trigger critical (default: 95)
-	ServiceWarnGapPct        int                 `json:"serviceWarnGapPercent"`              // % of desired tasks missing to trigger warning (default: 10)
-	ServiceCritGapPct        int                 `json:"serviceCriticalGapPercent"`          // % of desired tasks missing to trigger critical (default: 50)
-	StateDisableConnectivity bool                `json:"stateDisableConnectivity,omitempty"` // Disable container offline/state alerts globally
-	StatePoweredOffSeverity  AlertLevel          `json:"statePoweredOffSeverity,omitempty"`  // Default severity for container state/offline alerts
-	UpdateAlertDelayHours    int                 `json:"updateAlertDelayHours,omitempty"`    // Hours to wait before alerting on available image updates (default: 24, -1 = disabled)
-}
-
-// PMGThresholdConfig represents Proxmox Mail Gateway-specific alert thresholds
-type PMGThresholdConfig struct {
-	QueueTotalWarning       int `json:"queueTotalWarning"`       // Total queue depth warning threshold (default: 500)
-	QueueTotalCritical      int `json:"queueTotalCritical"`      // Total queue depth critical threshold (default: 1000)
-	OldestMessageWarnMins   int `json:"oldestMessageWarnMins"`   // Oldest queued message age warning in minutes (default: 30)
-	OldestMessageCritMins   int `json:"oldestMessageCritMins"`   // Oldest queued message age critical in minutes (default: 60)
-	DeferredQueueWarn       int `json:"deferredQueueWarn"`       // Deferred queue depth warning (default: 200)
-	DeferredQueueCritical   int `json:"deferredQueueCritical"`   // Deferred queue depth critical (default: 500)
-	HoldQueueWarn           int `json:"holdQueueWarn"`           // Hold queue depth warning (default: 100)
-	HoldQueueCritical       int `json:"holdQueueCritical"`       // Hold queue depth critical (default: 300)
-	QuarantineSpamWarn      int `json:"quarantineSpamWarn"`      // Spam quarantine absolute warning (default: 2000)
-	QuarantineSpamCritical  int `json:"quarantineSpamCritical"`  // Spam quarantine absolute critical (default: 5000)
-	QuarantineVirusWarn     int `json:"quarantineVirusWarn"`     // Virus quarantine absolute warning (default: 2000)
-	QuarantineVirusCritical int `json:"quarantineVirusCritical"` // Virus quarantine absolute critical (default: 5000)
-	QuarantineGrowthWarnPct int `json:"quarantineGrowthWarnPct"` // Growth % to trigger warning (default: 25)
-	QuarantineGrowthWarnMin int `json:"quarantineGrowthWarnMin"` // Minimum message growth for warning (default: 250)
-	QuarantineGrowthCritPct int `json:"quarantineGrowthCritPct"` // Growth % to trigger critical (default: 50)
-	QuarantineGrowthCritMin int `json:"quarantineGrowthCritMin"` // Minimum message growth for critical (default: 500)
-}
-
-// SnapshotAlertConfig represents snapshot age alert configuration
-type SnapshotAlertConfig struct {
-	Enabled         bool    `json:"enabled"`
-	WarningDays     int     `json:"warningDays"`
-	CriticalDays    int     `json:"criticalDays"`
-	WarningSizeGiB  float64 `json:"warningSizeGiB,omitempty"`
-	CriticalSizeGiB float64 `json:"criticalSizeGiB,omitempty"`
-}
-
-// BackupAlertConfig represents backup age alert configuration
-type BackupAlertConfig struct {
-	Enabled      bool `json:"enabled"`
-	WarningDays  int  `json:"warningDays"`
-	CriticalDays int  `json:"criticalDays"`
-	// Indicator thresholds for the dashboard (separate from alert thresholds)
-	FreshHours int `json:"freshHours"` // Backups newer than this show as green (default: 24)
-	StaleHours int `json:"staleHours"` // Backups older than FreshHours but newer than this show as amber (default: 72)
-	// Global backup alert filters
-	AlertOrphaned *bool    `json:"alertOrphaned,omitempty"` // Alert on backups that do not match a known guest (default: true)
-	IgnoreVMIDs   []string `json:"ignoreVMIDs,omitempty"`   // Skip alerts for matching VMIDs (supports prefix*)
-}
-
-// GuestLookup describes a guest identity used for snapshot/backup evaluations.
-type GuestLookup struct {
-	ResourceID string
-	Name       string
-	Instance   string
-	Node       string
-	Type       string
-	VMID       int
-}
-
-// AlertConfig represents the complete alert configuration
-type AlertConfig struct {
-	Enabled                        bool                       `json:"enabled"`
-	ActivationState                ActivationState            `json:"activationState,omitempty"`
-	ObservationWindowHours         int                        `json:"observationWindowHours,omitempty"`
-	ActivationTime                 *time.Time                 `json:"activationTime,omitempty"`
-	GuestDefaults                  ThresholdConfig            `json:"guestDefaults"`
-	NodeDefaults                   ThresholdConfig            `json:"nodeDefaults"`
-	AgentDefaults                  ThresholdConfig            `json:"agentDefaults"`
-	StorageDefault                 HysteresisThreshold        `json:"storageDefault"`
-	DockerDefaults                 DockerThresholdConfig      `json:"dockerDefaults"`
-	DockerIgnoredContainerPrefixes []string                   `json:"dockerIgnoredContainerPrefixes,omitempty"`
-	IgnoredGuestPrefixes           []string                   `json:"ignoredGuestPrefixes,omitempty"`
-	GuestTagWhitelist              []string                   `json:"guestTagWhitelist,omitempty"`
-	GuestTagBlacklist              []string                   `json:"guestTagBlacklist,omitempty"`
-	PMGDefaults                    PMGThresholdConfig         `json:"pmgDefaults"`
-	PBSDefaults                    ThresholdConfig            `json:"pbsDefaults"`
-	SnapshotDefaults               SnapshotAlertConfig        `json:"snapshotDefaults"`
-	BackupDefaults                 BackupAlertConfig          `json:"backupDefaults"`
-	Overrides                      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
-	CustomRules                    []CustomAlertRule          `json:"customRules,omitempty"`
-	Schedule                       ScheduleConfig             `json:"schedule"`
-	// Global disable flags per resource type
-	DisableAllNodes              bool `json:"disableAllNodes"`              // Disable all alerts for Proxmox nodes
-	DisableAllGuests             bool `json:"disableAllGuests"`             // Disable all alerts for VMs/containers
-	DisableAllAgents             bool `json:"disableAllAgents"`             // Disable all alerts for Pulse agents
-	DisableAllStorage            bool `json:"disableAllStorage"`            // Disable all alerts for storage
-	DisableAllPBS                bool `json:"disableAllPBS"`                // Disable all alerts for PBS servers
-	DisableAllPMG                bool `json:"disableAllPMG"`                // Disable all alerts for PMG instances
-	DisableAllDockerHosts        bool `json:"disableAllDockerHosts"`        // Disable all alerts for Docker hosts
-	DisableAllDockerContainers   bool `json:"disableAllDockerContainers"`   // Disable all alerts for Docker containers
-	DisableAllDockerServices     bool `json:"disableAllDockerServices"`     // Disable all alerts for Docker services
-	DisableAllNodesOffline       bool `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
-	DisableAllGuestsOffline      bool `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
-	DisableAllAgentsOffline      bool `json:"disableAllAgentsOffline"`      // Disable agent offline alerts globally
-	DisableAllPBSOffline         bool `json:"disableAllPBSOffline"`         // Disable PBS offline alerts globally
-	DisableAllPMGOffline         bool `json:"disableAllPMGOffline"`         // Disable PMG offline alerts globally
-	DisableAllDockerHostsOffline bool `json:"disableAllDockerHostsOffline"` // Disable Docker host offline alerts globally
-	// New configuration options
-	MinimumDelta         float64                   `json:"minimumDelta"`         // Minimum % change to trigger new alert
-	SuppressionWindow    int                       `json:"suppressionWindow"`    // Minutes to suppress duplicate alerts
-	HysteresisMargin     float64                   `json:"hysteresisMargin"`     // Default margin for legacy thresholds
-	TimeThresholds       map[string]int            `json:"timeThresholds"`       // Per-type delays: guest, node, agent, storage, pbs
-	MetricTimeThresholds map[string]map[string]int `json:"metricTimeThresholds"` // Optional per-metric delays keyed by resource type
-	// Alert TTL and auto-cleanup
-	MaxAlertAgeDays           int `json:"maxAlertAgeDays"`           // Maximum age for alerts before auto-cleanup (0 = disabled)
-	MaxAcknowledgedAgeDays    int `json:"maxAcknowledgedAgeDays"`    // Maximum age for acknowledged alerts (0 = disabled)
-	AutoAcknowledgeAfterHours int `json:"autoAcknowledgeAfterHours"` // Auto-acknowledge alerts after X hours (0 = disabled)
-	// Flapping detection
-	FlappingEnabled         bool `json:"flappingEnabled"`         // Enable flapping detection
-	FlappingWindowSeconds   int  `json:"flappingWindowSeconds"`   // Time window for counting state changes
-	FlappingThreshold       int  `json:"flappingThreshold"`       // Number of state changes to trigger flapping
-	FlappingCooldownMinutes int  `json:"flappingCooldownMinutes"` // Cooldown period after flapping detected
-}
-
-// UnmarshalJSON accepts canonical v6 alert config keys.
-func (c *AlertConfig) UnmarshalJSON(data []byte) error {
-	type alias AlertConfig
-	var decoded alias
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*c = AlertConfig(decoded)
-
-	raw := make(map[string]json.RawMessage)
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	NormalizeAlertConfigAliases(c)
-	return nil
-}
-
-// NormalizeAlertConfigAliases strips deprecated legacy alias keys.
-func NormalizeAlertConfigAliases(config *AlertConfig) {
-	if config == nil {
-		return
-	}
-
-	if config.TimeThresholds != nil {
-		for key := range config.TimeThresholds {
-			typeKey := canonicalAlertResourceType(key)
-			if typeKey == "" || typeKey == "all" {
-				continue
-			}
-			if isUnsupportedLegacyAlertResourceType(typeKey) {
-				delete(config.TimeThresholds, key)
-			}
-		}
-	}
-
-	if len(config.MetricTimeThresholds) == 0 {
-		return
-	}
-
-	for key := range config.MetricTimeThresholds {
-		typeKey := canonicalAlertResourceType(key)
-		if typeKey == "" || typeKey == "all" {
-			continue
-		}
-		if isUnsupportedLegacyAlertResourceType(typeKey) {
-			delete(config.MetricTimeThresholds, key)
-		}
-	}
-}
-
-func cloneStringIntMap(src map[string]int) map[string]int {
-	if len(src) == 0 {
-		return nil
-	}
-
-	dst := make(map[string]int, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
-	return dst
-}
+// Cleanup intervals
+const (
+	StaleTrackingThreshold              = 24 * time.Hour
+	RateLimitCleanupWindow              = 1 * time.Hour
+	alertsDirPerm                       = 0o700
+	alertsFilePerm                      = 0o600
+	offlineRecoveryConfirmationsDefault = 3
+	offlineRecoveryConfirmationsStorage = 2
+)
 
 // pmgQuarantineSnapshot stores quarantine counts at a point in time for growth detection
 type pmgQuarantineSnapshot struct {
@@ -529,22 +274,12 @@ func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(s
 type Manager struct {
 	mu               sync.RWMutex
 	saveMu           sync.Mutex
-	callbackMu       sync.RWMutex
+	callbacks        callbackBus
 	alertsDir        string
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
 	activeAlertAlias map[string]string
 	historyManager   *HistoryManager
-	onAlert          func(alert *Alert)
-	alertSubs        map[int]func(alert *Alert)
-	onResolved       func(alertID string)
-	resolvedSubs     map[int]func(alertID string)
-	onAcknowledged   func(alert *Alert, user string)
-	onUnacknowledged func(alert *Alert, user string)
-	onEscalate       func(alert *Alert, level int)
-	onAlertForAI     func(alert *Alert) // AI analysis callback - bypasses notification suppression
-	alertForAISubs   map[int]func(alert *Alert)
-	nextCallbackID   int
 	escalationStop   chan struct{}
 	alertRateLimit   map[string][]time.Time // Track alert times for rate limiting
 	// New fields for deduplication and suppression
@@ -633,10 +368,8 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		activeAlerts:                    make(map[string]*Alert),
 		activeAlertAlias:                make(map[string]string),
 		historyManager:                  NewHistoryManager(alertsDir),
+		callbacks:                       newCallbackBus(),
 		escalationStop:                  make(chan struct{}),
-		alertSubs:                       make(map[int]func(*Alert)),
-		resolvedSubs:                    make(map[int]func(string)),
-		alertForAISubs:                  make(map[int]func(*Alert)),
 		alertRateLimit:                  make(map[string][]time.Time),
 		recentAlerts:                    make(map[string]*Alert),
 		suppressedUntil:                 make(map[string]time.Time),
@@ -842,304 +575,6 @@ func (m *Manager) addRecentlyResolvedWithPrimaryLock(resolved *ResolvedAlert) {
 	m.mu.Lock()
 }
 
-// SetAlertCallback sets the callback for new alerts
-func (m *Manager) SetAlertCallback(cb func(alert *Alert)) {
-	m.callbackMu.Lock()
-	defer m.callbackMu.Unlock()
-	m.onAlert = cb
-}
-
-// SubscribeAlertCallback registers an additional alert callback without
-// replacing the legacy single callback slot. The returned function removes the
-// subscription when called.
-func (m *Manager) SubscribeAlertCallback(cb func(alert *Alert)) func() {
-	if cb == nil {
-		return func() {}
-	}
-
-	m.callbackMu.Lock()
-	m.nextCallbackID++
-	id := m.nextCallbackID
-	m.alertSubs[id] = cb
-	m.callbackMu.Unlock()
-
-	return func() {
-		m.callbackMu.Lock()
-		delete(m.alertSubs, id)
-		m.callbackMu.Unlock()
-	}
-}
-
-// SetAlertForAICallback sets a callback for AI analysis when alerts are created.
-// Unlike SetAlertCallback, this callback is invoked unconditionally - it bypasses
-// activation state, quiet hours, and other notification suppression checks.
-// This allows AI to analyze alerts even when the user hasn't finished setup.
-func (m *Manager) SetAlertForAICallback(cb func(alert *Alert)) {
-	m.callbackMu.Lock()
-	defer m.callbackMu.Unlock()
-	m.onAlertForAI = cb
-	log.Info().Msg("alert-for-AI callback registered (bypasses notification suppression)")
-}
-
-// SubscribeAlertForAICallback registers an additional AI alert callback without
-// replacing the legacy single callback slot. The returned function removes the
-// subscription when called.
-func (m *Manager) SubscribeAlertForAICallback(cb func(alert *Alert)) func() {
-	if cb == nil {
-		return func() {}
-	}
-
-	m.callbackMu.Lock()
-	m.nextCallbackID++
-	id := m.nextCallbackID
-	m.alertForAISubs[id] = cb
-	m.callbackMu.Unlock()
-
-	return func() {
-		m.callbackMu.Lock()
-		delete(m.alertForAISubs, id)
-		m.callbackMu.Unlock()
-	}
-}
-
-// SetResolvedCallback sets the callback for resolved alerts
-func (m *Manager) SetResolvedCallback(cb func(alertID string)) {
-	m.callbackMu.Lock()
-	defer m.callbackMu.Unlock()
-	m.onResolved = cb
-}
-
-// SubscribeResolvedCallback registers an additional resolved-alert callback
-// without replacing the legacy single callback slot. The returned function
-// removes the subscription when called.
-func (m *Manager) SubscribeResolvedCallback(cb func(alertID string)) func() {
-	if cb == nil {
-		return func() {}
-	}
-
-	m.callbackMu.Lock()
-	m.nextCallbackID++
-	id := m.nextCallbackID
-	m.resolvedSubs[id] = cb
-	m.callbackMu.Unlock()
-
-	return func() {
-		m.callbackMu.Lock()
-		delete(m.resolvedSubs, id)
-		m.callbackMu.Unlock()
-	}
-}
-
-// SetAcknowledgedCallback sets the callback for acknowledged alerts.
-func (m *Manager) SetAcknowledgedCallback(cb func(alert *Alert, user string)) {
-	m.callbackMu.Lock()
-	defer m.callbackMu.Unlock()
-	m.onAcknowledged = cb
-}
-
-// SetUnacknowledgedCallback sets the callback for unacknowledged alerts.
-func (m *Manager) SetUnacknowledgedCallback(cb func(alert *Alert, user string)) {
-	m.callbackMu.Lock()
-	defer m.callbackMu.Unlock()
-	m.onUnacknowledged = cb
-}
-
-// SetEscalateCallback sets the callback for escalated alerts
-func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
-	m.callbackMu.Lock()
-	defer m.callbackMu.Unlock()
-	m.onEscalate = cb
-}
-
-func (m *Manager) getAlertCallback() func(alert *Alert) {
-	m.callbackMu.RLock()
-	cb := m.onAlert
-	m.callbackMu.RUnlock()
-	return cb
-}
-
-func (m *Manager) getAlertCallbacks() []func(alert *Alert) {
-	m.callbackMu.RLock()
-	defer m.callbackMu.RUnlock()
-
-	callbacks := make([]func(alert *Alert), 0, len(m.alertSubs)+1)
-	if m.onAlert != nil {
-		callbacks = append(callbacks, m.onAlert)
-	}
-	for _, cb := range m.alertSubs {
-		if cb != nil {
-			callbacks = append(callbacks, cb)
-		}
-	}
-	return callbacks
-}
-
-func (m *Manager) getAlertForAICallback() func(alert *Alert) {
-	m.callbackMu.RLock()
-	cb := m.onAlertForAI
-	m.callbackMu.RUnlock()
-	return cb
-}
-
-func (m *Manager) getAlertForAICallbacks() []func(alert *Alert) {
-	m.callbackMu.RLock()
-	defer m.callbackMu.RUnlock()
-
-	callbacks := make([]func(alert *Alert), 0, len(m.alertForAISubs)+1)
-	if m.onAlertForAI != nil {
-		callbacks = append(callbacks, m.onAlertForAI)
-	}
-	for _, cb := range m.alertForAISubs {
-		if cb != nil {
-			callbacks = append(callbacks, cb)
-		}
-	}
-	return callbacks
-}
-
-func (m *Manager) getResolvedCallback() func(alertID string) {
-	m.callbackMu.RLock()
-	cb := m.onResolved
-	m.callbackMu.RUnlock()
-	return cb
-}
-
-func (m *Manager) getResolvedCallbacks() []func(alertID string) {
-	m.callbackMu.RLock()
-	defer m.callbackMu.RUnlock()
-
-	callbacks := make([]func(alertID string), 0, len(m.resolvedSubs)+1)
-	if m.onResolved != nil {
-		callbacks = append(callbacks, m.onResolved)
-	}
-	for _, cb := range m.resolvedSubs {
-		if cb != nil {
-			callbacks = append(callbacks, cb)
-		}
-	}
-	return callbacks
-}
-
-func (m *Manager) getAcknowledgedCallback() func(alert *Alert, user string) {
-	m.callbackMu.RLock()
-	cb := m.onAcknowledged
-	m.callbackMu.RUnlock()
-	return cb
-}
-
-func (m *Manager) getUnacknowledgedCallback() func(alert *Alert, user string) {
-	m.callbackMu.RLock()
-	cb := m.onUnacknowledged
-	m.callbackMu.RUnlock()
-	return cb
-}
-
-func (m *Manager) getEscalateCallback() func(alert *Alert, level int) {
-	m.callbackMu.RLock()
-	cb := m.onEscalate
-	m.callbackMu.RUnlock()
-	return cb
-}
-
-// safeCallResolvedAlertCallback invokes onResolved with panic recovery while
-// preserving canonical state as the internal identity and emitting the public
-// alert ID to external callbacks for compatibility.
-func (m *Manager) safeCallResolvedAlertCallback(alert *Alert, fallbackID string, async bool) {
-	callbacks := m.getResolvedCallbacks()
-	if len(callbacks) == 0 {
-		return
-	}
-
-	publicID := exportedAlertID(alert, fallbackID)
-	trackingKey := canonicalTrackingKeyForAlert(alert)
-
-	callbackFunc := func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Str("alertID", publicID).
-					Str("trackingKey", trackingKey).
-					Msg("Panic in onResolved callback")
-			}
-		}()
-		for _, callback := range callbacks {
-			callback(publicID)
-		}
-	}
-
-	if async {
-		go callbackFunc()
-	} else {
-		callbackFunc()
-	}
-}
-
-// safeCallAcknowledgedCallback invokes onAcknowledged with panic recovery and alert cloning.
-func (m *Manager) safeCallAcknowledgedCallback(alert *Alert, user string) {
-	callback := m.getAcknowledgedCallback()
-	if callback == nil || alert == nil {
-		return
-	}
-
-	alertCopy := cloneAlertForOutput(alert)
-	go func(a *Alert, u string) {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Str("alertID", a.ID).
-					Msg("Panic in onAcknowledged callback")
-			}
-		}()
-		callback(a, u)
-	}(alertCopy, user)
-}
-
-// safeCallUnacknowledgedCallback invokes onUnacknowledged with panic recovery and alert cloning.
-func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
-	callback := m.getUnacknowledgedCallback()
-	if callback == nil || alert == nil {
-		return
-	}
-
-	alertCopy := cloneAlertForOutput(alert)
-	go func(a *Alert, u string) {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Str("alertID", a.ID).
-					Msg("Panic in onUnacknowledged callback")
-			}
-		}()
-		callback(a, u)
-	}(alertCopy, user)
-}
-
-// safeCallEscalateCallback invokes onEscalate with panic recovery and alert cloning
-func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
-	callback := m.getEscalateCallback()
-	if callback == nil {
-		return
-	}
-
-	// Clone alert to prevent concurrent modification
-	alertCopy := cloneAlertForOutput(alert)
-	go func(a *Alert, lvl int) {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Str("alertID", a.ID).
-					Int("level", lvl).
-					Msg("Panic in onEscalate callback")
-			}
-		}()
-		callback(a, lvl)
-	}(alertCopy, level)
-}
-
 // checkFlappingLocked detects alert flapping and returns true if alert should be suppressed.
 // It modifies flappingHistory, flappingActive, and suppressedUntil maps.
 // IMPORTANT: Caller MUST hold m.mu before calling this function.
@@ -1308,29 +743,6 @@ func isMonitorOnlyAlert(alert *Alert) bool {
 	return false
 }
 
-// ensureValidHysteresis ensures clear < trigger for hysteresis thresholds
-func ensureValidHysteresis(threshold *HysteresisThreshold, metricName string) {
-	if threshold == nil {
-		return
-	}
-	// Disabled thresholds don't need hysteresis validation
-	if threshold.Trigger <= 0 {
-		return
-	}
-	if threshold.Clear >= threshold.Trigger {
-		log.Warn().
-			Str("metric", metricName).
-			Float64("trigger", threshold.Trigger).
-			Float64("clear", threshold.Clear).
-			Msg("Invalid hysteresis: clear >= trigger, auto-fixing")
-		// Auto-fix: set clear to 5% below trigger
-		threshold.Clear = threshold.Trigger - 5
-		if threshold.Clear < 0 {
-			threshold.Clear = 0
-		}
-	}
-}
-
 // UpdateConfig updates the alert configuration
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
@@ -1346,29 +758,29 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	}
 
 	// Normalize all config sections
-	NormalizeAlertConfigAliases(&config)
-	normalizeStorageDefaults(&config)
-	normalizeDockerDefaults(&config)
-	normalizePMGDefaults(&config)
-	normalizeSnapshotDefaults(&config)
-	normalizeBackupDefaults(&config)
-	normalizeNodeDefaults(&config)
-	normalizeAgentDefaults(&config)
-	normalizeGeneralSettings(&config)
-	normalizeTimeThresholds(&config)
+	alertconfig.NormalizeAlertConfigAliases(&config)
+	alertconfig.NormalizeStorageDefaults(&config)
+	alertconfig.NormalizeDockerDefaults(&config)
+	alertconfig.NormalizePMGDefaults(&config)
+	alertconfig.NormalizeSnapshotDefaults(&config)
+	alertconfig.NormalizeBackupDefaults(&config)
+	alertconfig.NormalizeNodeDefaults(&config)
+	alertconfig.NormalizeAgentDefaults(&config)
+	alertconfig.NormalizeGeneralSettings(&config)
+	alertconfig.NormalizeTimeThresholds(&config)
 
-	config.GuestDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
-	config.NodeDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
-	config.DockerIgnoredContainerPrefixes = NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
+	config.GuestDefaults.PoweredOffSeverity = alertconfig.NormalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
+	config.NodeDefaults.PoweredOffSeverity = alertconfig.NormalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
+	config.DockerIgnoredContainerPrefixes = alertconfig.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
 	// Migration logic for activation state (backward compatibility)
 	m.migrateActivationState(&config)
 
 	// Validate hysteresis thresholds to prevent stuck alerts
-	validateHysteresisThresholds(&config)
+	alertconfig.ValidateHysteresisThresholds(&config)
 
 	// Validate timezone if quiet hours are enabled
-	validateQuietHoursTimezone(&config)
+	alertconfig.ValidateQuietHoursTimezone(&config)
 
 	m.config = config
 	normalizeOverrides(m.config.Overrides)
@@ -1403,216 +815,6 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.reevaluateActiveAlertsLocked()
 }
 
-// normalizeStorageDefaults ensures storage default thresholds are set
-// Trigger=0 is allowed and means "disable storage alerting"
-func normalizeStorageDefaults(config *AlertConfig) {
-	if config.StorageDefault.Trigger < 0 {
-		config.StorageDefault.Trigger = 85
-		config.StorageDefault.Clear = 80
-	} else if config.StorageDefault.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.StorageDefault.Clear = 0
-	} else if config.StorageDefault.Clear <= 0 {
-		config.StorageDefault.Clear = config.StorageDefault.Trigger - 5
-		if config.StorageDefault.Clear < 0 {
-			config.StorageDefault.Clear = 0
-		}
-	}
-}
-
-// normalizeDockerThreshold normalizes a single Docker threshold
-func normalizeDockerThreshold(th HysteresisThreshold, defaultTrigger float64, metricName string) HysteresisThreshold {
-	normalized := th
-
-	// Negative triggers are treated as unset and replaced with defaults.
-	if normalized.Trigger < 0 {
-		normalized.Trigger = defaultTrigger
-	}
-
-	// Explicit disable: keep trigger at 0 and clamp clear to 0.
-	if normalized.Trigger == 0 {
-		if normalized.Clear < 0 {
-			normalized.Clear = 0
-		}
-		return normalized
-	}
-
-	if normalized.Clear <= 0 {
-		normalized.Clear = normalized.Trigger - 5
-		if normalized.Clear < 0 {
-			normalized.Clear = 0
-		}
-	}
-
-	ensureValidHysteresis(&normalized, metricName)
-	return normalized
-}
-
-// normalizeDockerDefaults ensures Docker default thresholds are set
-func normalizeDockerDefaults(config *AlertConfig) {
-	config.DockerDefaults.CPU = normalizeDockerThreshold(config.DockerDefaults.CPU, 80, "docker.cpu")
-	config.DockerDefaults.Memory = normalizeDockerThreshold(config.DockerDefaults.Memory, 85, "docker.memory")
-	config.DockerDefaults.Disk = normalizeDockerThreshold(config.DockerDefaults.Disk, 85, "docker.disk")
-
-	if config.DockerDefaults.RestartCount <= 0 {
-		config.DockerDefaults.RestartCount = 3
-	}
-	if config.DockerDefaults.RestartWindow <= 0 {
-		config.DockerDefaults.RestartWindow = 300 // 5 minutes
-	}
-	if config.DockerDefaults.MemoryWarnPct <= 0 {
-		config.DockerDefaults.MemoryWarnPct = 90
-	}
-	if config.DockerDefaults.MemoryCriticalPct <= 0 {
-		config.DockerDefaults.MemoryCriticalPct = 95
-	}
-	if config.DockerDefaults.ServiceWarnGapPct <= 0 {
-		config.DockerDefaults.ServiceWarnGapPct = 10
-	}
-	if config.DockerDefaults.ServiceCritGapPct <= 0 {
-		config.DockerDefaults.ServiceCritGapPct = 50
-	}
-	if config.DockerDefaults.ServiceCritGapPct > 0 &&
-		config.DockerDefaults.ServiceCritGapPct < config.DockerDefaults.ServiceWarnGapPct {
-		log.Warn().
-			Int("warnGapPercent", config.DockerDefaults.ServiceWarnGapPct).
-			Int("criticalGapPercent", config.DockerDefaults.ServiceCritGapPct).
-			Msg("Adjusting Docker service critical gap to match warning gap")
-		config.DockerDefaults.ServiceCritGapPct = config.DockerDefaults.ServiceWarnGapPct
-	}
-	if config.DockerDefaults.StatePoweredOffSeverity == "" {
-		config.DockerDefaults.StatePoweredOffSeverity = AlertLevelWarning
-	}
-	config.DockerDefaults.StatePoweredOffSeverity = normalizePoweredOffSeverity(config.DockerDefaults.StatePoweredOffSeverity)
-	// Default to 24 hours delay for update alerts; set to -1 to explicitly disable
-	if config.DockerDefaults.UpdateAlertDelayHours == 0 {
-		config.DockerDefaults.UpdateAlertDelayHours = 24
-	}
-}
-
-// normalizePMGDefaults ensures PMG (Proxmox Mail Gateway) defaults are set
-func normalizePMGDefaults(config *AlertConfig) {
-	if config.PMGDefaults.QueueTotalWarning <= 0 {
-		config.PMGDefaults.QueueTotalWarning = 500
-	}
-	if config.PMGDefaults.QueueTotalCritical <= 0 {
-		config.PMGDefaults.QueueTotalCritical = 1000
-	}
-	if config.PMGDefaults.OldestMessageWarnMins <= 0 {
-		config.PMGDefaults.OldestMessageWarnMins = 30
-	}
-	if config.PMGDefaults.OldestMessageCritMins <= 0 {
-		config.PMGDefaults.OldestMessageCritMins = 60
-	}
-	if config.PMGDefaults.DeferredQueueWarn <= 0 {
-		config.PMGDefaults.DeferredQueueWarn = 200
-	}
-	if config.PMGDefaults.DeferredQueueCritical <= 0 {
-		config.PMGDefaults.DeferredQueueCritical = 500
-	}
-	if config.PMGDefaults.HoldQueueWarn <= 0 {
-		config.PMGDefaults.HoldQueueWarn = 100
-	}
-	if config.PMGDefaults.HoldQueueCritical <= 0 {
-		config.PMGDefaults.HoldQueueCritical = 300
-	}
-	if config.PMGDefaults.QuarantineSpamWarn <= 0 {
-		config.PMGDefaults.QuarantineSpamWarn = 2000
-	}
-	if config.PMGDefaults.QuarantineSpamCritical <= 0 {
-		config.PMGDefaults.QuarantineSpamCritical = 5000
-	}
-	if config.PMGDefaults.QuarantineVirusWarn <= 0 {
-		config.PMGDefaults.QuarantineVirusWarn = 2000
-	}
-	if config.PMGDefaults.QuarantineVirusCritical <= 0 {
-		config.PMGDefaults.QuarantineVirusCritical = 5000
-	}
-	if config.PMGDefaults.QuarantineGrowthWarnPct <= 0 {
-		config.PMGDefaults.QuarantineGrowthWarnPct = 25
-	}
-	if config.PMGDefaults.QuarantineGrowthWarnMin <= 0 {
-		config.PMGDefaults.QuarantineGrowthWarnMin = 250
-	}
-	if config.PMGDefaults.QuarantineGrowthCritPct <= 0 {
-		config.PMGDefaults.QuarantineGrowthCritPct = 50
-	}
-	if config.PMGDefaults.QuarantineGrowthCritMin <= 0 {
-		config.PMGDefaults.QuarantineGrowthCritMin = 500
-	}
-}
-
-// normalizeSnapshotDefaults ensures snapshot alert thresholds are valid
-func normalizeSnapshotDefaults(config *AlertConfig) {
-	if config.SnapshotDefaults.WarningDays < 0 {
-		config.SnapshotDefaults.WarningDays = 0
-	}
-	if config.SnapshotDefaults.CriticalDays < 0 {
-		config.SnapshotDefaults.CriticalDays = 0
-	}
-	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
-		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
-	}
-	if config.SnapshotDefaults.CriticalDays == 0 && config.SnapshotDefaults.WarningDays > 0 {
-		config.SnapshotDefaults.CriticalDays = config.SnapshotDefaults.WarningDays
-	}
-	if config.SnapshotDefaults.WarningSizeGiB < 0 {
-		config.SnapshotDefaults.WarningSizeGiB = 0
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
-		config.SnapshotDefaults.CriticalSizeGiB = 0
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB > 0 && config.SnapshotDefaults.WarningSizeGiB > config.SnapshotDefaults.CriticalSizeGiB {
-		config.SnapshotDefaults.WarningSizeGiB = config.SnapshotDefaults.CriticalSizeGiB
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
-		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
-	}
-}
-
-// normalizeBackupDefaults ensures backup alert thresholds are valid
-func normalizeBackupDefaults(config *AlertConfig) {
-	if config.BackupDefaults.WarningDays < 0 {
-		config.BackupDefaults.WarningDays = 0
-	}
-	if config.BackupDefaults.CriticalDays < 0 {
-		config.BackupDefaults.CriticalDays = 0
-	}
-	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
-		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
-	}
-	// Default indicator thresholds for dashboard (separate from alert thresholds).
-	if config.BackupDefaults.FreshHours <= 0 {
-		config.BackupDefaults.FreshHours = 24
-	}
-	if config.BackupDefaults.StaleHours <= 0 {
-		config.BackupDefaults.StaleHours = 72
-	}
-	if config.BackupDefaults.StaleHours < config.BackupDefaults.FreshHours {
-		config.BackupDefaults.StaleHours = config.BackupDefaults.FreshHours
-	}
-	if config.BackupDefaults.AlertOrphaned == nil {
-		alertOrphaned := true
-		config.BackupDefaults.AlertOrphaned = &alertOrphaned
-	}
-	if len(config.BackupDefaults.IgnoreVMIDs) > 0 {
-		seen := make(map[string]struct{}, len(config.BackupDefaults.IgnoreVMIDs))
-		normalized := make([]string, 0, len(config.BackupDefaults.IgnoreVMIDs))
-		for _, entry := range config.BackupDefaults.IgnoreVMIDs {
-			value := strings.TrimSpace(entry)
-			if value == "" {
-				continue
-			}
-			if _, exists := seen[value]; exists {
-				continue
-			}
-			seen[value] = struct{}{}
-			normalized = append(normalized, value)
-		}
-		config.BackupDefaults.IgnoreVMIDs = normalized
-	}
-}
-
 func backupIgnoreVMID(vmID string, ignoreList []string) bool {
 	if vmID == "" || len(ignoreList) == 0 {
 		return false
@@ -1636,123 +838,6 @@ func backupIgnoreVMID(vmID string, ignoreList []string) bool {
 	return false
 }
 
-// normalizeNodeDefaults ensures node threshold defaults exist
-// Trigger=0 is allowed for Temperature and means "disable temperature alerting"
-func normalizeNodeDefaults(config *AlertConfig) {
-	// Ensure temperature defaults exist for nodes so high temps alert out of the box
-	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger < 0 {
-		config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.NodeDefaults.Temperature.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.NodeDefaults.Temperature.Clear = 0
-	} else if config.NodeDefaults.Temperature.Clear <= 0 {
-		config.NodeDefaults.Temperature.Clear = config.NodeDefaults.Temperature.Trigger - 5
-		if config.NodeDefaults.Temperature.Clear <= 0 {
-			config.NodeDefaults.Temperature.Clear = 75
-		}
-	}
-}
-
-// normalizeAgentDefaults ensures host agent threshold defaults exist
-// Trigger=0 is allowed and means "disable alerting for this metric"
-func normalizeAgentDefaults(config *AlertConfig) {
-	if config.AgentDefaults.CPU == nil || config.AgentDefaults.CPU.Trigger < 0 {
-		config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.AgentDefaults.CPU.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.AgentDefaults.CPU.Clear = 0
-	} else if config.AgentDefaults.CPU.Clear <= 0 {
-		config.AgentDefaults.CPU.Clear = config.AgentDefaults.CPU.Trigger - 5
-		if config.AgentDefaults.CPU.Clear <= 0 {
-			config.AgentDefaults.CPU.Clear = 75
-		}
-	}
-	if config.AgentDefaults.Memory == nil || config.AgentDefaults.Memory.Trigger < 0 {
-		config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
-	} else if config.AgentDefaults.Memory.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.AgentDefaults.Memory.Clear = 0
-	} else if config.AgentDefaults.Memory.Clear <= 0 {
-		config.AgentDefaults.Memory.Clear = config.AgentDefaults.Memory.Trigger - 5
-		if config.AgentDefaults.Memory.Clear <= 0 {
-			config.AgentDefaults.Memory.Clear = 80
-		}
-	}
-	if config.AgentDefaults.Disk == nil || config.AgentDefaults.Disk.Trigger < 0 {
-		config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
-	} else if config.AgentDefaults.Disk.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.AgentDefaults.Disk.Clear = 0
-	} else if config.AgentDefaults.Disk.Clear <= 0 {
-		config.AgentDefaults.Disk.Clear = config.AgentDefaults.Disk.Trigger - 5
-		if config.AgentDefaults.Disk.Clear <= 0 {
-			config.AgentDefaults.Disk.Clear = 85
-		}
-	}
-
-	if config.AgentDefaults.DiskTemperature == nil || config.AgentDefaults.DiskTemperature.Trigger < 0 {
-		config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 55, Clear: 50}
-	} else if config.AgentDefaults.DiskTemperature.Trigger == 0 {
-		config.AgentDefaults.DiskTemperature.Clear = 0
-	} else if config.AgentDefaults.DiskTemperature.Clear <= 0 {
-		config.AgentDefaults.DiskTemperature.Clear = config.AgentDefaults.DiskTemperature.Trigger - 5
-		if config.AgentDefaults.DiskTemperature.Clear <= 0 {
-			config.AgentDefaults.DiskTemperature.Clear = 50
-		}
-	}
-	ensureValidHysteresis(config.AgentDefaults.DiskTemperature, "agent.diskTemperature")
-}
-
-// normalizeGeneralSettings ensures general alert settings have valid values
-func normalizeGeneralSettings(config *AlertConfig) {
-	if config.MinimumDelta <= 0 {
-		config.MinimumDelta = 2.0
-	}
-	if config.SuppressionWindow <= 0 {
-		config.SuppressionWindow = 5
-	}
-	if config.HysteresisMargin <= 0 {
-		config.HysteresisMargin = 5.0
-	}
-	if config.ObservationWindowHours <= 0 {
-		config.ObservationWindowHours = 24
-	}
-	if config.FlappingWindowSeconds <= 0 {
-		config.FlappingWindowSeconds = 300
-	}
-	if config.FlappingThreshold <= 0 {
-		config.FlappingThreshold = 5
-	}
-	if config.FlappingCooldownMinutes <= 0 {
-		config.FlappingCooldownMinutes = 15
-	}
-}
-
-// normalizeTimeThresholds ensures time threshold settings are valid
-func normalizeTimeThresholds(config *AlertConfig) {
-	NormalizeAlertConfigAliases(config)
-	config.MetricTimeThresholds = normalizeMetricTimeThresholds(config.MetricTimeThresholds)
-
-	const defaultDelaySeconds = 5
-	if config.TimeThresholds == nil {
-		config.TimeThresholds = make(map[string]int)
-	}
-	ensureDelay := func(key string) {
-		delay, ok := config.TimeThresholds[key]
-		if !ok || delay < 0 {
-			config.TimeThresholds[key] = defaultDelaySeconds
-		}
-	}
-	ensureDelay("guest")
-	ensureDelay("node")
-	ensureDelay("storage")
-	ensureDelay("pbs")
-	ensureDelay("agent")
-	if delay, ok := config.TimeThresholds["all"]; ok && delay < 0 {
-		config.TimeThresholds["all"] = defaultDelaySeconds
-	}
-}
-
 // migrateActivationState handles backward compatibility for activation state
 func (m *Manager) migrateActivationState(config *AlertConfig) {
 	if config.ActivationState == "" {
@@ -1773,38 +858,12 @@ func (m *Manager) migrateActivationState(config *AlertConfig) {
 	}
 }
 
-// validateHysteresisThresholds ensures hysteresis thresholds won't cause stuck alerts
-func validateHysteresisThresholds(config *AlertConfig) {
-	ensureValidHysteresis(config.GuestDefaults.CPU, "guest.cpu")
-	ensureValidHysteresis(config.GuestDefaults.Memory, "guest.memory")
-	ensureValidHysteresis(config.GuestDefaults.Disk, "guest.disk")
-	ensureValidHysteresis(config.NodeDefaults.CPU, "node.cpu")
-	ensureValidHysteresis(config.NodeDefaults.Memory, "node.memory")
-	ensureValidHysteresis(config.NodeDefaults.Temperature, "node.temperature")
-	ensureValidHysteresis(&config.StorageDefault, "storage")
-}
-
-// validateQuietHoursTimezone validates the timezone for quiet hours
-func validateQuietHoursTimezone(config *AlertConfig) {
-	if config.Schedule.QuietHours.Enabled && config.Schedule.QuietHours.Timezone != "" {
-		_, err := time.LoadLocation(config.Schedule.QuietHours.Timezone)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("timezone", config.Schedule.QuietHours.Timezone).
-				Msg("Invalid timezone in quiet hours config, disabling quiet hours")
-			// Disable quiet hours rather than silently using wrong timezone
-			config.Schedule.QuietHours.Enabled = false
-		}
-	}
-}
-
 // normalizeOverrides normalizes all threshold overrides
 func normalizeOverrides(overrides map[string]ThresholdConfig) {
 	normalized := make(map[string]ThresholdConfig, len(overrides))
 	priorityByKey := make(map[string]int, len(overrides))
 	for id, override := range overrides {
-		override.PoweredOffSeverity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
+		override.PoweredOffSeverity = NormalizePoweredOffSeverity(override.PoweredOffSeverity)
 		if override.Usage != nil {
 			override.Usage = ensureHysteresisThreshold(override.Usage)
 		}
@@ -1830,76 +889,6 @@ func normalizeOverrides(overrides map[string]ThresholdConfig) {
 	for key, override := range normalized {
 		overrides[key] = override
 	}
-}
-
-// normalizeMetricTimeThresholds cleans resource/metric keys and drops invalid delay overrides.
-func normalizeMetricTimeThresholds(input map[string]map[string]int) map[string]map[string]int {
-	if len(input) == 0 {
-		return nil
-	}
-
-	normalized := make(map[string]map[string]int)
-	for rawType, metrics := range input {
-		typeKey := canonicalAlertResourceType(rawType)
-		if typeKey == "" || len(metrics) == 0 {
-			continue
-		}
-		if typeKey != "all" && isUnsupportedLegacyAlertResourceType(typeKey) {
-			continue
-		}
-		for rawMetric, delay := range metrics {
-			metricKey := strings.ToLower(strings.TrimSpace(rawMetric))
-			if metricKey == "" || delay < 0 {
-				continue
-			}
-			if _, exists := normalized[typeKey]; !exists {
-				normalized[typeKey] = make(map[string]int)
-			}
-			normalized[typeKey][metricKey] = delay
-		}
-	}
-
-	if len(normalized) == 0 {
-		return nil
-	}
-
-	return normalized
-}
-
-// NormalizeMetricTimeThresholds exposes normalization for other packages (e.g., config persistence).
-func NormalizeMetricTimeThresholds(input map[string]map[string]int) map[string]map[string]int {
-	return normalizeMetricTimeThresholds(input)
-}
-
-// NormalizeDockerIgnoredPrefixes trims, deduplicates, and lowercases comparison keys for ignored Docker containers.
-// Returned values retain the user's original casing for display but guarantee uniqueness when compared case-insensitively.
-func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {
-	if len(prefixes) == 0 {
-		return nil
-	}
-
-	seen := make(map[string]struct{}, len(prefixes))
-	normalized := make([]string, 0, len(prefixes))
-
-	for _, prefix := range prefixes {
-		trimmed := strings.TrimSpace(prefix)
-		if trimmed == "" {
-			continue
-		}
-
-		key := strings.ToLower(trimmed)
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		normalized = append(normalized, trimmed)
-	}
-
-	if len(normalized) == 0 {
-		return nil
-	}
-
-	return normalized
 }
 
 // applyGlobalOfflineSettingsLocked clears tracking and active alerts for globally disabled offline detectors.
@@ -2035,7 +1024,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		resourceTypeMeta := ""
 		if alert.Metadata != nil {
 			if metaType, ok := alert.Metadata["resourceType"].(string); ok {
-				resourceTypeMeta = canonicalAlertResourceType(metaType)
+				resourceTypeMeta = alertconfig.CanonicalAlertResourceType(metaType)
 			}
 		}
 
@@ -2196,7 +1185,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 					alertsToResolve = append(alertsToResolve, alertID)
 					continue
 				}
-				alert.Level = normalizePoweredOffSeverity(guestThresholds.PoweredOffSeverity)
+				alert.Level = NormalizePoweredOffSeverity(guestThresholds.PoweredOffSeverity)
 				continue
 			}
 
@@ -5377,7 +4366,7 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 	m.mu.RLock()
 	override, hasOverride := m.config.Overrides[resourceID]
 	defaultDisable := m.config.DockerDefaults.StateDisableConnectivity
-	defaultSeverity := normalizePoweredOffSeverity(m.config.DockerDefaults.StatePoweredOffSeverity)
+	defaultSeverity := NormalizePoweredOffSeverity(m.config.DockerDefaults.StatePoweredOffSeverity)
 	m.mu.RUnlock()
 
 	disableConnectivity := defaultDisable
@@ -5390,7 +4379,7 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 		}
 
 		if override.PoweredOffSeverity != "" {
-			severity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
+			severity = NormalizePoweredOffSeverity(override.PoweredOffSeverity)
 		}
 	}
 
@@ -7262,116 +6251,6 @@ func (m *Manager) getGlobalMetricTimeThreshold(metricType string) (int, bool) {
 	}
 
 	return 0, false
-}
-
-// CanonicalResourceTypeKeys returns normalized resource-type keys for threshold lookup.
-func CanonicalResourceTypeKeys(resourceType string) []string {
-	typeKey := canonicalAlertResourceType(resourceType)
-	if typeKey == "" || isUnsupportedLegacyAlertResourceType(typeKey) {
-		return nil
-	}
-
-	addUnique := func(slice []string, value string) []string {
-		if value == "" {
-			return slice
-		}
-		for _, existing := range slice {
-			if existing == value {
-				return slice
-			}
-		}
-		return append(slice, value)
-	}
-
-	var keys []string
-	switch typeKey {
-	case "guest":
-		keys = addUnique(keys, "guest")
-	case "vm":
-		keys = addUnique(keys, "vm")
-		keys = addUnique(keys, "guest")
-	case "system-container":
-		keys = addUnique(keys, "system-container")
-		keys = addUnique(keys, "guest")
-	case "oci-container":
-		keys = addUnique(keys, "oci-container")
-		keys = addUnique(keys, "system-container")
-		keys = addUnique(keys, "guest")
-	case "app-container":
-		keys = addUnique(keys, "app-container")
-		keys = addUnique(keys, "guest")
-	case "docker-host":
-		keys = addUnique(keys, "docker-host")
-		keys = addUnique(keys, "node")
-	case "docker-service":
-		keys = addUnique(keys, "docker-service")
-		keys = addUnique(keys, "app-container")
-		keys = addUnique(keys, "guest")
-	case "node":
-		keys = addUnique(keys, "node")
-	case "agent":
-		keys = addUnique(keys, "agent")
-		keys = addUnique(keys, "node")
-	case "agent-disk":
-		keys = addUnique(keys, "agent-disk")
-		keys = addUnique(keys, "agent")
-		keys = addUnique(keys, "storage")
-	case "pbs":
-		keys = addUnique(keys, "pbs")
-		keys = addUnique(keys, "node")
-	case "pmg":
-		keys = addUnique(keys, "pmg")
-		keys = addUnique(keys, "node")
-	case "k8s-cluster":
-		keys = addUnique(keys, "k8s-cluster")
-		keys = addUnique(keys, "guest")
-	case "k8s-node":
-		keys = addUnique(keys, "k8s-node")
-		keys = addUnique(keys, "node")
-	case "pod":
-		keys = addUnique(keys, "pod")
-		keys = addUnique(keys, "guest")
-	case "storage":
-		keys = addUnique(keys, "storage")
-	case "disk":
-		keys = addUnique(keys, "disk")
-		keys = addUnique(keys, "storage")
-	case "datastore":
-		keys = addUnique(keys, "datastore")
-		keys = addUnique(keys, "storage")
-		keys = addUnique(keys, "pbs")
-	case "pool", "dataset":
-		keys = addUnique(keys, typeKey)
-		keys = addUnique(keys, "storage")
-	case "ceph":
-		keys = addUnique(keys, "ceph")
-		keys = addUnique(keys, "storage")
-	case "physical_disk":
-		keys = addUnique(keys, "physical_disk")
-		keys = addUnique(keys, "disk")
-		keys = addUnique(keys, "storage")
-	default:
-		keys = addUnique(keys, typeKey)
-	}
-
-	return keys
-}
-
-func isUnsupportedLegacyAlertResourceType(typeKey string) bool {
-	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(typeKey) {
-		return true
-	}
-
-	switch typeKey {
-	case "host", "qemu", "container", "lxc", "docker", "docker container", "dockercontainer", "docker host", "dockerhost", "docker service", "dockerservice", "k8s", "k8s pod", "kubernetes", "kubernetes-cluster", "agent disk", "agentdisk", "pbs server", "pbsserver", "pmg server", "proxmox mail gateway":
-		return true
-	default:
-		return false
-	}
-}
-
-func canonicalAlertResourceType(resourceType string) string {
-	return strings.ToLower(strings.TrimSpace(resourceType))
 }
 
 // checkMetric checks a single metric against its threshold with hysteresis
@@ -9572,7 +8451,7 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 
 func (m *Manager) checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType string, thresholds ThresholdConfig, monitorOnly bool) {
 	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
-	severity := normalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
+	severity := NormalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
 	resourceType := unifiedresources.ResourceTypeVM
 	if strings.EqualFold(guestType, "container") {
 		resourceType = unifiedresources.ResourceTypeSystemContainer
@@ -9991,7 +8870,7 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 		result.DisableConnectivity = true
 	}
 	if override.PoweredOffSeverity != "" {
-		result.PoweredOffSeverity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
+		result.PoweredOffSeverity = NormalizePoweredOffSeverity(override.PoweredOffSeverity)
 	}
 
 	if override.CPU != nil {

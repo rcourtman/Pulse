@@ -39,6 +39,20 @@ func getUnexportedField(t *testing.T, target interface{}, fieldName string) refl
 	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 }
 
+func getUnexportedValueField(t *testing.T, value reflect.Value, fieldName string) reflect.Value {
+	t.Helper()
+
+	if value.Kind() == reflect.Ptr {
+		value = value.Elem()
+	}
+	field := value.FieldByName(fieldName)
+	if !field.IsValid() {
+		t.Fatalf("field %s not found", fieldName)
+	}
+
+	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
+}
+
 func TestAlertManagerAdapter_NilManager(t *testing.T) {
 	adapter := NewAlertManagerAdapter(nil)
 	if adapter.GetActiveAlerts() != nil {
@@ -98,7 +112,8 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 	adapter.SetAlertCallback(func(ad AlertAdapter) {
 		alertCh <- ad.GetAlertIdentifier()
 	})
-	alertSubs := getUnexportedField(t, manager, "alertSubs")
+	callbacks := getUnexportedField(t, manager, "callbacks")
+	alertSubs := getUnexportedValueField(t, callbacks, "alertSubs")
 	if alertSubs.Len() == 0 {
 		t.Fatal("expected subscribed alert callback")
 	}
@@ -119,7 +134,7 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 	adapter.SetResolvedCallback(func(alertID string) {
 		resolvedCh <- alertID
 	})
-	resolvedSubs := getUnexportedField(t, manager, "resolvedSubs")
+	resolvedSubs := getUnexportedValueField(t, callbacks, "resolvedSubs")
 	if resolvedSubs.Len() == 0 {
 		t.Fatal("expected subscribed resolved callback")
 	}

@@ -49,6 +49,11 @@ operator-facing alert routing behavior for live runtime alerts.
 27. `frontend-modern/src/stores/alertsActivation.ts`
 28. `frontend-modern/src/utils/alertThresholdDefaults.ts`
 29. `frontend-modern/src/utils/metricThresholds.ts`
+30. `internal/alerts/alerts.go`
+31. `internal/alerts/callbacks.go`
+32. `internal/alerts/config/types.go`
+33. `internal/alerts/config/normalize.go`
+34. `internal/alerts/config/identity.go`
 
 ## Shared Boundaries
 
@@ -196,6 +201,15 @@ compose through additive fired/resolved subscriptions instead of overwriting a
 single callback slot, and alert-triggered Patrol enqueueing must stay on the
 canonical unified alert bridge plus trigger-manager path rather than reviving
 duplicate callback-side Patrol shortcuts.
+That runtime callback boundary is now factored into
+`internal/alerts/callbacks.go` as same-package Manager support code so it can
+own callback mutexes, subscription IDs, legacy Set* slots, and fan-out snapshot
+helpers without creating an import cycle around the `Alert` runtime type.
+Alert configuration types, pure normalization, and resource-type identity
+helpers now live under `internal/alerts/config/`; the parent `alerts` package
+may re-export aliases and wrappers for compatibility, but consumer packages
+must keep importing `internal/alerts` unless they are explicitly taking
+ownership of alert configuration internals.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial

@@ -4,6 +4,7 @@ package metrics
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -19,6 +20,11 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
+)
+
+const (
+	privateDirPerm  = 0o700
+	privateFilePerm = 0o600
 )
 
 // Tier represents the granularity of stored metrics
@@ -173,10 +179,13 @@ func NewStore(config StoreConfig) (*Store, error) {
 	config.DBPath = resolvedDBPath
 	config.RollupInterval = normalizeRollupInterval(config.RollupInterval, config.RetentionRaw)
 
-	// Ensure directory exists
 	dir := filepath.Dir(config.DBPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ensureOwnerOnlyDir(dir); err != nil {
 		return nil, fmt.Errorf("failed to create metrics directory: %w", err)
+	}
+
+	if err := rejectSymlinkOrNonRegular(config.DBPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
 
 	// Open database with pragmas in DSN so every pool connection is configured
@@ -219,6 +228,11 @@ func NewStore(config StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 	store.migrateLegacyHostResourceType()
+
+	if err := hardenSQLiteArtifacts(config.DBPath); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to secure metrics db files: %w", err)
+	}
 
 	// Start background workers
 	go store.backgroundWorker()
@@ -1641,6 +1655,49 @@ func (s *Store) Close() error {
 	}
 
 	return s.db.Close()
+}
+
+func ensureOwnerOnlyDir(dir string) error {
+	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
+		return err
+	}
+	return os.Chmod(dir, privateDirPerm)
+}
+
+func rejectSymlinkOrNonRegular(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("unsafe sqlite path %q: symlink is not allowed", path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("unsafe sqlite path %q: non-regular file is not allowed", path)
+	}
+	return nil
+}
+
+func hardenSQLiteFile(path string) error {
+	if err := rejectSymlinkOrNonRegular(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return os.Chmod(path, privateFilePerm)
+}
+
+func hardenSQLiteArtifacts(dbPath string) error {
+	for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if err := hardenSQLiteFile(path); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 // Clear removes all stored metrics data.

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -194,6 +195,40 @@ func TestNewStoreCanonicalizesDBPath(t *testing.T) {
 	}
 	if _, err := os.Stat(want); err != nil {
 		t.Fatalf("expected canonical metrics DB at %q: %v", want, err)
+	}
+}
+
+func TestStoreFilesOwnerOnlyUnderPermissiveUmask(t *testing.T) {
+	oldUmask := syscall.Umask(0o022)
+	defer syscall.Umask(oldUmask)
+
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-perm-test.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	ts := time.Now().UTC().Truncate(time.Second)
+	store.writeBatch([]bufferedMetric{
+		{resourceType: "vm", resourceID: "vm-1", metricType: "cpu", value: 1.0, timestamp: ts, tier: TierRaw},
+	})
+
+	artifactPaths := []string{cfg.DBPath, cfg.DBPath + "-wal", cfg.DBPath + "-shm"}
+	for _, path := range artifactPaths {
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Errorf("%s: os.Stat() failed: %v", path, err)
+			continue
+		}
+		gotPerm := fi.Mode().Perm()
+		if gotPerm != 0o600 {
+			t.Errorf("%s: expected 0600, got %#o", path, gotPerm)
+		}
 	}
 }
 

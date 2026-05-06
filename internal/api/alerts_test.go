@@ -217,7 +217,7 @@ func TestActivateAlerts_EnablesNotificationManager(t *testing.T) {
 	initialConfig := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationPending}
 	updatedConfig := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive}
 	mockManager.On("GetConfig").Return(initialConfig).Once()
-	mockManager.On("UpdateConfig", testifymock.AnythingOfType("alerts.AlertConfig")).Run(func(args testifymock.Arguments) {
+	mockManager.On("UpdateConfig", testifymock.AnythingOfType("config.AlertConfig")).Run(func(args testifymock.Arguments) {
 		cfg := args.Get(0).(alerts.AlertConfig)
 		if cfg.ActivationState != alerts.ActivationActive {
 			t.Fatalf("expected activation state to be active, got %q", cfg.ActivationState)
