@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -607,6 +608,7 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 				RiskLevel:   "medium",
 				TargetHost:  "pve-1",
 				Rationale:   "The process is wedged after backup IO pressure.",
+				Destructive: true,
 			},
 			Verification: []string{"CPU returned below 50%"},
 			ToolsUsed:    []string{"metrics.history", "ssh.exec"},
@@ -642,6 +644,21 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 				Type: "vm",
 				Node: "pve-1",
 			}}, reqArg.HandoffResources)
+			assert.Equal(t, []chat.HandoffAction{{
+				FindingID:          "finding-123",
+				RecordID:           "investigation-123",
+				ApprovalID:         "approval-123",
+				FixID:              "fix-123",
+				Description:        "Restart the workload service",
+				RiskLevel:          "medium",
+				Destructive:        true,
+				TargetHost:         "pve-1",
+				TargetResourceID:   "vm-100",
+				TargetResourceName: "web-server",
+				TargetResourceType: "vm",
+				TargetNode:         "pve-1",
+			}}, reqArg.HandoffActions)
+			assert.NotContains(t, fmt.Sprintf("%#v", reqArg.HandoffActions), "systemctl restart workload.service")
 		})
 
 	body := `{"prompt":"What happened?","finding_id":"finding-123"}`

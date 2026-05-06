@@ -185,8 +185,13 @@ runtime cost control, and shared AI transport surfaces.
     references may persist as session model-context metadata for follow-up turns,
     but they remain references only; each turn must rehydrate them from the
     current canonical unified-resource model before action validation can use
-    them. Proposed-fix command text must stay out of both the persisted chat
-    message and the model-only handoff context, and command payloads remain
+    them. The runtime may also persist structured pending-action and approval
+    references from the same investigation record as model-context metadata, but
+    those references are review context only: they must not include raw command
+    text, must not grant approval or execution authority, and must route any
+    operator decision back through the governed approval/remediation flow.
+    Proposed-fix command text must stay out of both the persisted chat message
+    and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not

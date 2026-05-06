@@ -450,12 +450,16 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	handoffContext := strings.TrimSpace(req.HandoffContext)
 	handoffResources := normalizeHandoffResources(req.HandoffResources)
+	handoffActions := normalizeHandoffActions(req.HandoffActions)
 	if handoffContext != "" {
 		if err := sessions.SetModelHandoffContext(session.ID, handoffContext); err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff context")
 		}
 		if err := sessions.SetModelHandoffResources(session.ID, handoffResources); err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff resources")
+		}
+		if err := sessions.SetModelHandoffActions(session.ID, handoffActions); err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff actions")
 		}
 	} else {
 		if len(handoffResources) > 0 {
@@ -468,6 +472,18 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff resources")
 			} else {
 				handoffResources = storedHandoffResources
+			}
+		}
+		if len(handoffActions) > 0 {
+			if err := sessions.SetModelHandoffActions(session.ID, handoffActions); err != nil {
+				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff actions")
+			}
+		} else {
+			storedHandoffActions, err := sessions.GetModelHandoffActions(session.ID)
+			if err != nil {
+				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff actions")
+			} else {
+				handoffActions = storedHandoffActions
 			}
 		}
 		storedHandoffContext, err := sessions.GetModelHandoffContext(session.ID)
@@ -501,6 +517,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("message_count", len(messages)).
 		Msg("[ChatService] Got messages, calling agentic loop")
 
+	handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)
 	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
 
 	// Determine which model/loop to use for this request.
@@ -814,6 +831,82 @@ func injectHandoffContextIntoLatestUserMessage(messages []Message, handoffContex
 		messages[idx].Content = contextText + "\n\n---\nUser message: " + userText
 		return
 	}
+}
+
+func mergeHandoffActionContext(handoffContext string, handoffActions []HandoffAction) string {
+	actionContext := buildHandoffActionContext(handoffActions)
+	switch {
+	case strings.TrimSpace(handoffContext) == "":
+		return actionContext
+	case actionContext == "":
+		return strings.TrimSpace(handoffContext)
+	default:
+		return strings.TrimSpace(handoffContext) + "\n\n" + actionContext
+	}
+}
+
+func buildHandoffActionContext(handoffActions []HandoffAction) string {
+	actions := normalizeHandoffActions(handoffActions)
+	if len(actions) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("[Action Context]")
+	for idx, action := range actions {
+		label := "Pending Action"
+		if len(actions) > 1 {
+			label = fmt.Sprintf("Pending Action %d", idx+1)
+		}
+		appendHandoffActionLine(&b, label+" Finding ID", action.FindingID)
+		appendHandoffActionLine(&b, label+" Record ID", action.RecordID)
+		appendHandoffActionLine(&b, label+" Approval ID", action.ApprovalID)
+		appendHandoffActionLine(&b, label+" Fix ID", action.FixID)
+		appendHandoffActionLine(&b, label+" Proposed Fix", action.Description)
+		appendHandoffActionLine(&b, label+" Risk", action.RiskLevel)
+		if action.Destructive {
+			appendHandoffActionLine(&b, label+" Destructive", "true")
+		}
+		appendHandoffActionLine(&b, label+" Target Host", action.TargetHost)
+		appendHandoffActionLine(&b, label+" Target Resource", formatHandoffActionResource(action))
+	}
+	appendHandoffActionLine(&b, "Action Boundary", "Review and approval must stay in governed approval/remediation flows; this reference is not command authority and must not be used to infer raw command text.")
+	return strings.TrimSpace(b.String())
+}
+
+func appendHandoffActionLine(b *strings.Builder, label, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	if b.Len() > 0 {
+		b.WriteByte('\n')
+	}
+	b.WriteString(label)
+	b.WriteString(": ")
+	b.WriteString(value)
+}
+
+func formatHandoffActionResource(action HandoffAction) string {
+	resourceName := strings.TrimSpace(action.TargetResourceName)
+	resourceType := strings.TrimSpace(action.TargetResourceType)
+	resourceID := strings.TrimSpace(action.TargetResourceID)
+	node := strings.TrimSpace(action.TargetNode)
+
+	parts := make([]string, 0, 4)
+	if resourceName != "" {
+		parts = append(parts, resourceName)
+	}
+	if resourceType != "" {
+		parts = append(parts, resourceType)
+	}
+	if resourceID != "" {
+		parts = append(parts, resourceID)
+	}
+	if node != "" {
+		parts = append(parts, "node "+node)
+	}
+	return strings.Join(parts, " / ")
 }
 
 func (s *Service) hydrateHandoffResources(sessionID string, handoffResources []HandoffResource, sessions *SessionStore, provider tools.UnifiedResourceProvider) {

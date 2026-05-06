@@ -101,7 +101,11 @@ Patrol-specific presentation helpers.
    must flow through the governed Patrol investigation-context helpers. Those
    helpers also own the Assistant drawer briefing content for Patrol records,
    including the rule that proposed-fix commands are summarized by count only
-   and never rendered as raw command text in the handoff surface.
+   and never rendered as raw command text in the handoff surface. When Patrol
+   hands a pending fix or approval into Assistant, the shared handoff may retain
+   only structured action references such as approval ID, fix ID, risk, target,
+   and resource identity; approval and execution authority stays with the
+   governed approval/remediation surfaces.
 
 ## Current State
 

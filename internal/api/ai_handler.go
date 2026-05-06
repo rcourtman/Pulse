@@ -904,6 +904,41 @@ func buildUnifiedFindingHandoffResources(f *unified.UnifiedFinding) []chat.Hando
 	return resources
 }
 
+func buildUnifiedFindingHandoffActions(f *unified.UnifiedFinding) []chat.HandoffAction {
+	if f == nil || f.InvestigationRecord == nil {
+		return nil
+	}
+
+	rec := f.InvestigationRecord
+	if strings.TrimSpace(rec.ApprovalID) == "" && rec.ProposedFix == nil {
+		return nil
+	}
+
+	action := chat.HandoffAction{
+		FindingID:          f.ID,
+		RecordID:           rec.ID,
+		ApprovalID:         rec.ApprovalID,
+		TargetResourceID:   rec.Subject.ResourceID,
+		TargetResourceName: rec.Subject.ResourceName,
+		TargetResourceType: rec.Subject.ResourceType,
+		TargetNode:         rec.Subject.Node,
+	}
+	if rec.ProposedFix != nil {
+		action.FixID = rec.ProposedFix.ID
+		action.Description = rec.ProposedFix.Description
+		action.RiskLevel = rec.ProposedFix.RiskLevel
+		action.Destructive = rec.ProposedFix.Destructive
+		action.TargetHost = rec.ProposedFix.TargetHost
+	}
+
+	if strings.TrimSpace(action.ApprovalID) == "" &&
+		strings.TrimSpace(action.FixID) == "" &&
+		strings.TrimSpace(action.Description) == "" {
+		return nil
+	}
+	return []chat.HandoffAction{action}
+}
+
 func formatChatResource(name, resourceType string) string {
 	name = strings.TrimSpace(name)
 	resourceType = strings.TrimSpace(resourceType)
@@ -1139,12 +1174,14 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// as the user's authored prompt, so conversation history stays readable.
 	handoffContext := ""
 	var handoffResources []chat.HandoffResource
+	var handoffActions []chat.HandoffAction
 	if req.FindingID != "" {
 		store := h.GetUnifiedStoreForOrg(GetOrgID(ctx))
 		if store != nil {
 			if f := store.Get(req.FindingID); f != nil {
 				handoffContext = buildUnifiedFindingChatContext(f)
 				handoffResources = buildUnifiedFindingHandoffResources(f)
+				handoffActions = buildUnifiedFindingHandoffActions(f)
 			}
 		}
 	}
@@ -1159,6 +1196,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		FindingID:        req.FindingID,
 		HandoffContext:   handoffContext,
 		HandoffResources: handoffResources,
+		HandoffActions:   handoffActions,
 		AutonomousMode:   req.AutonomousMode,
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {

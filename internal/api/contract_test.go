@@ -142,9 +142,11 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	for _, required := range []string{
 		"handoffContext = buildUnifiedFindingChatContext(f)",
 		"handoffResources = buildUnifiedFindingHandoffResources(f)",
+		"handoffActions = buildUnifiedFindingHandoffActions(f)",
 		"Prompt:",
 		"HandoffContext:",
 		"HandoffResources: handoffResources",
+		"HandoffActions:   handoffActions",
 	} {
 		if !strings.Contains(handlerText, required) {
 			t.Fatalf("ai_handler.go must preserve model-only finding handoff contract: missing %q", required)
@@ -162,8 +164,12 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"sessions.GetModelHandoffContext(session.ID)",
 		"sessions.SetModelHandoffResources(session.ID, handoffResources)",
 		"sessions.GetModelHandoffResources(session.ID)",
+		"sessions.SetModelHandoffActions(session.ID, handoffActions)",
+		"sessions.GetModelHandoffActions(session.ID)",
+		"handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)",
 		"s.hydrateHandoffResources(session.ID, handoffResources, sessions, unifiedResourceProvider)",
 		"injectHandoffContextIntoLatestUserMessage(messages, handoffContext)",
+		"Action Boundary",
 		"User message: ",
 	} {
 		if !strings.Contains(chatServiceText, required) {
@@ -179,6 +185,9 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"SetModelHandoffResources",
 		"GetModelHandoffResources",
 		"HandoffResources []HandoffResource",
+		"SetModelHandoffActions",
+		"GetModelHandoffActions",
+		"HandoffActions   []HandoffAction",
 	} {
 		if !strings.Contains(chatSessionText, required) {
 			t.Fatalf("chat session store must persist model-only handoff metadata outside messages: missing %q", required)
@@ -189,6 +198,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	for _, required := range []string{
 		"type HandoffResource struct",
 		"HandoffResources []HandoffResource",
+		"type HandoffAction struct",
+		"HandoffActions   []HandoffAction",
 	} {
 		if !strings.Contains(chatTypesText, required) {
 			t.Fatalf("chat request must carry structured handoff resource scope outside messages: missing %q", required)

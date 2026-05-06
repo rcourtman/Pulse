@@ -53,6 +53,7 @@ type sessionData struct {
 type sessionModelContext struct {
 	HandoffContext   string            `json:"handoff_context,omitempty"`
 	HandoffResources []HandoffResource `json:"handoff_resources,omitempty"`
+	HandoffActions   []HandoffAction   `json:"handoff_actions,omitempty"`
 	UpdatedAt        time.Time         `json:"updated_at,omitempty"`
 }
 
@@ -82,6 +83,50 @@ func normalizeHandoffResources(resources []HandoffResource) []HandoffResource {
 		return nil
 	}
 	return normalized
+}
+
+func normalizeHandoffActions(actions []HandoffAction) []HandoffAction {
+	if len(actions) == 0 {
+		return nil
+	}
+
+	normalized := make([]HandoffAction, 0, len(actions))
+	seen := make(map[string]struct{}, len(actions))
+	for _, action := range actions {
+		action.FindingID = strings.TrimSpace(action.FindingID)
+		action.RecordID = strings.TrimSpace(action.RecordID)
+		action.ApprovalID = strings.TrimSpace(action.ApprovalID)
+		action.FixID = strings.TrimSpace(action.FixID)
+		action.Description = strings.TrimSpace(action.Description)
+		action.RiskLevel = strings.TrimSpace(action.RiskLevel)
+		action.TargetHost = strings.TrimSpace(action.TargetHost)
+		action.TargetResourceID = strings.TrimSpace(action.TargetResourceID)
+		action.TargetResourceName = strings.TrimSpace(action.TargetResourceName)
+		action.TargetResourceType = strings.TrimSpace(action.TargetResourceType)
+		action.TargetNode = strings.TrimSpace(action.TargetNode)
+		if action.ApprovalID == "" && action.FixID == "" && action.Description == "" && action.FindingID == "" {
+			continue
+		}
+		key := strings.ToLower(action.FindingID + "\x00" + action.RecordID + "\x00" + action.ApprovalID + "\x00" + action.FixID + "\x00" + action.Description + "\x00" + action.TargetResourceID + "\x00" + action.TargetHost)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, action)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+func modelContextEmpty(modelContext *sessionModelContext) bool {
+	if modelContext == nil {
+		return true
+	}
+	return strings.TrimSpace(modelContext.HandoffContext) == "" &&
+		len(normalizeHandoffResources(modelContext.HandoffResources)) == 0 &&
+		len(normalizeHandoffActions(modelContext.HandoffActions)) == 0
 }
 
 const maxSessionIDLength = 128
@@ -379,7 +424,35 @@ func (s *SessionStore) SetModelHandoffResources(id string, handoffResources []Ha
 	}
 	data.ModelContext.HandoffResources = resources
 	data.ModelContext.UpdatedAt = now
-	if strings.TrimSpace(data.ModelContext.HandoffContext) == "" && len(data.ModelContext.HandoffResources) == 0 {
+	if modelContextEmpty(data.ModelContext) {
+		data.ModelContext = nil
+	}
+	data.UpdatedAt = now
+
+	return s.writeSession(*data)
+}
+
+// SetModelHandoffActions stores product-originated pending action references
+// for future turns. These references are not executable authority and must not
+// contain raw command text.
+func (s *SessionStore) SetModelHandoffActions(id string, handoffActions []HandoffAction) error {
+	actions := normalizeHandoffActions(handoffActions)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if data.ModelContext == nil {
+		data.ModelContext = &sessionModelContext{}
+	}
+	data.ModelContext.HandoffActions = actions
+	data.ModelContext.UpdatedAt = now
+	if modelContextEmpty(data.ModelContext) {
 		data.ModelContext = nil
 	}
 	data.UpdatedAt = now
@@ -419,13 +492,28 @@ func (s *SessionStore) GetModelHandoffResources(id string) ([]HandoffResource, e
 	return normalizeHandoffResources(data.ModelContext.HandoffResources), nil
 }
 
+// GetModelHandoffActions returns stored product-originated pending action
+// references for a session. Callers must treat them as review context only.
+func (s *SessionStore) GetModelHandoffActions(id string) ([]HandoffAction, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return nil, err
+	}
+	if data.ModelContext == nil {
+		return nil, nil
+	}
+	return normalizeHandoffActions(data.ModelContext.HandoffActions), nil
+}
+
 func (s *SessionStore) clearModelHandoffContextLocked(id string) error {
 	data, err := s.readSession(id)
 	if err != nil {
 		return err
 	}
-	if data.ModelContext == nil ||
-		(strings.TrimSpace(data.ModelContext.HandoffContext) == "" && len(normalizeHandoffResources(data.ModelContext.HandoffResources)) == 0) {
+	if modelContextEmpty(data.ModelContext) {
 		return nil
 	}
 

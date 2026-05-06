@@ -416,7 +416,11 @@ bypass the API fail-closed execution gate.
     unchanged. If the same handoff seeds Assistant resolved-resource scope, that
     scope remains AI/runtime action-validation context only and still cannot
     become backup freshness, restore eligibility, or storage-local recovery
-    authority.
+    authority. Structured action or approval references carried by that handoff
+    are also adjacent AI/runtime review metadata only; storage and recovery
+    surfaces must not reinterpret approval IDs, fix IDs, risk, or target labels
+    as restore support, backup freshness, recovery execution authority, or a
+    storage-local approval bypass.
     That same adjacent `internal/api/` boundary still carries Patrol-run
     execution identity. Storage and recovery may observe shared Patrol
     transport through `internal/api/chat_service_adapter.go`, but they must not

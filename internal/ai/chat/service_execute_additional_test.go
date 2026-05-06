@@ -132,6 +132,19 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 		SessionID:      "sess-handoff",
 		Prompt:         "What happened?",
 		HandoffContext: "[Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup.",
+		HandoffActions: []HandoffAction{{
+			FindingID:          "finding-123",
+			RecordID:           "record-123",
+			ApprovalID:         "approval-123",
+			FixID:              "fix-123",
+			Description:        "Restart the workload service",
+			RiskLevel:          "medium",
+			TargetHost:         "pve-1",
+			TargetResourceID:   "vm-100",
+			TargetResourceName: "web-server",
+			TargetResourceType: "vm",
+			TargetNode:         "pve-1",
+		}},
 	}
 	if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
@@ -150,6 +163,9 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	if strings.Contains(stored[0].Content, "[Finding Context]") {
 		t.Fatalf("stored user message should not include handoff context: %q", stored[0].Content)
 	}
+	if strings.Contains(stored[0].Content, "[Action Context]") {
+		t.Fatalf("stored user message should not include action context: %q", stored[0].Content)
+	}
 
 	if len(capturedMessages) == 0 {
 		t.Fatal("expected provider messages")
@@ -160,6 +176,15 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 	if !strings.Contains(modelUserContent, "User message: What happened?") {
 		t.Fatalf("model user content missing clean user message: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "[Action Context]") {
+		t.Fatalf("model user content missing action context: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Pending Action Approval ID: approval-123") {
+		t.Fatalf("model user content missing approval reference: %q", modelUserContent)
+	}
+	if strings.Contains(modelUserContent, "systemctl restart workload.service") {
+		t.Fatalf("model user content must not infer raw command text: %q", modelUserContent)
 	}
 }
 
@@ -198,10 +223,24 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	}
 
 	handoffContext := "[Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup."
+	handoffActions := []HandoffAction{{
+		FindingID:          "finding-123",
+		RecordID:           "record-123",
+		ApprovalID:         "approval-123",
+		FixID:              "fix-123",
+		Description:        "Restart the workload service",
+		RiskLevel:          "medium",
+		TargetHost:         "pve-1",
+		TargetResourceID:   "vm-100",
+		TargetResourceName: "web-server",
+		TargetResourceType: "vm",
+		TargetNode:         "pve-1",
+	}}
 	firstReq := ExecuteRequest{
 		SessionID:      "sess-handoff-followup",
 		Prompt:         "What happened?",
 		HandoffContext: handoffContext,
+		HandoffActions: handoffActions,
 	}
 	if err := svc.ExecuteStream(context.Background(), firstReq, func(StreamEvent) {}); err != nil {
 		t.Fatalf("first ExecuteStream failed: %v", err)
@@ -232,6 +271,9 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 		if strings.Contains(content, "[Finding Context]") {
 			t.Fatalf("stored user message should not include handoff context: %q", content)
 		}
+		if strings.Contains(content, "[Action Context]") {
+			t.Fatalf("stored user message should not include action context: %q", content)
+		}
 	}
 	if storedUserMessages[0] != "What happened?" || storedUserMessages[1] != "What should I do next?" {
 		t.Fatalf("stored user messages = %#v, want clean prompts", storedUserMessages)
@@ -247,12 +289,27 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	if !strings.Contains(firstModelUserContent, "User message: What happened?") {
 		t.Fatalf("first provider turn missing clean user message: %q", firstModelUserContent)
 	}
+	if !strings.Contains(firstModelUserContent, "[Action Context]") {
+		t.Fatalf("first provider turn missing action context: %q", firstModelUserContent)
+	}
+	if !strings.Contains(firstModelUserContent, "Pending Action Approval ID: approval-123") {
+		t.Fatalf("first provider turn missing approval reference: %q", firstModelUserContent)
+	}
 	secondModelUserContent := latestProviderUserContent(t, capturedRequests[1])
 	if !strings.Contains(secondModelUserContent, "[Finding Context]") {
 		t.Fatalf("follow-up provider turn missing stored handoff context: %q", secondModelUserContent)
 	}
 	if !strings.Contains(secondModelUserContent, "User message: What should I do next?") {
 		t.Fatalf("follow-up provider turn missing clean user message: %q", secondModelUserContent)
+	}
+	if !strings.Contains(secondModelUserContent, "[Action Context]") {
+		t.Fatalf("follow-up provider turn missing stored action context: %q", secondModelUserContent)
+	}
+	if !strings.Contains(secondModelUserContent, "Pending Action Approval ID: approval-123") {
+		t.Fatalf("follow-up provider turn missing stored approval reference: %q", secondModelUserContent)
+	}
+	if strings.Contains(firstModelUserContent+secondModelUserContent, "systemctl restart workload.service") {
+		t.Fatalf("provider turns must not include raw command text")
 	}
 }
 

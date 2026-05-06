@@ -100,6 +100,24 @@ type HandoffResource struct {
 	Node string `json:"node,omitempty"`
 }
 
+// HandoffAction represents a product-originated pending action reference.
+// It is context for review only: it carries no command text and grants no
+// authority to approve, execute, or replay a remediation.
+type HandoffAction struct {
+	FindingID          string `json:"finding_id,omitempty"`
+	RecordID           string `json:"record_id,omitempty"`
+	ApprovalID         string `json:"approval_id,omitempty"`
+	FixID              string `json:"fix_id,omitempty"`
+	Description        string `json:"description,omitempty"`
+	RiskLevel          string `json:"risk_level,omitempty"`
+	Destructive        bool   `json:"destructive,omitempty"`
+	TargetHost         string `json:"target_host,omitempty"`
+	TargetResourceID   string `json:"target_resource_id,omitempty"`
+	TargetResourceName string `json:"target_resource_name,omitempty"`
+	TargetResourceType string `json:"target_resource_type,omitempty"`
+	TargetNode         string `json:"target_node,omitempty"`
+}
+
 // ExecuteRequest represents a chat execution request
 type ExecuteRequest struct {
 	Prompt           string              `json:"prompt"`
@@ -109,6 +127,7 @@ type ExecuteRequest struct {
 	FindingID        string              `json:"finding_id,omitempty"`        // Pre-populate finding context for "Discuss" flow
 	HandoffContext   string              `json:"handoff_context,omitempty"`   // Model-only context for scoped handoffs; not persisted as user-authored text.
 	HandoffResources []HandoffResource   `json:"handoff_resources,omitempty"` // Product-originated resources to seed governed session validation.
+	HandoffActions   []HandoffAction     `json:"handoff_actions,omitempty"`   // Product-originated approval/action references for model-only review context.
 	MaxTurns         int                 `json:"max_turns,omitempty"`         // Override max agentic turns (0 = use default)
 	AutonomousMode   *bool               `json:"autonomous_mode,omitempty"`   // Per-request autonomous override (nil = use service default)
 }

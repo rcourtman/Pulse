@@ -90,6 +90,63 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 		t.Fatalf("handoff resource = %#v, want normalized VM", gotResources[0])
 	}
 
+	handoffActions := []HandoffAction{
+		{
+			FindingID:          " finding-123 ",
+			RecordID:           " record-123 ",
+			ApprovalID:         " approval-123 ",
+			FixID:              " fix-123 ",
+			Description:        " Restart the workload service ",
+			RiskLevel:          " medium ",
+			Destructive:        true,
+			TargetHost:         " pve-1 ",
+			TargetResourceID:   " vm-100 ",
+			TargetResourceName: " web-server ",
+			TargetResourceType: " vm ",
+			TargetNode:         " pve-1 ",
+		},
+		{
+			FindingID:          "finding-123",
+			RecordID:           "record-123",
+			ApprovalID:         "approval-123",
+			FixID:              "fix-123",
+			Description:        "Restart the workload service",
+			RiskLevel:          "medium",
+			Destructive:        true,
+			TargetHost:         "pve-1",
+			TargetResourceID:   "vm-100",
+			TargetResourceName: "web-server",
+			TargetResourceType: "vm",
+			TargetNode:         "pve-1",
+		},
+	}
+	if err := store.SetModelHandoffActions(session.ID, handoffActions); err != nil {
+		t.Fatalf("SetModelHandoffActions failed: %v", err)
+	}
+	gotActions, err := store.GetModelHandoffActions(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffActions failed: %v", err)
+	}
+	if len(gotActions) != 1 {
+		t.Fatalf("handoff actions = %#v, want one normalized action", gotActions)
+	}
+	if gotActions[0] != (HandoffAction{
+		FindingID:          "finding-123",
+		RecordID:           "record-123",
+		ApprovalID:         "approval-123",
+		FixID:              "fix-123",
+		Description:        "Restart the workload service",
+		RiskLevel:          "medium",
+		Destructive:        true,
+		TargetHost:         "pve-1",
+		TargetResourceID:   "vm-100",
+		TargetResourceName: "web-server",
+		TargetResourceType: "vm",
+		TargetNode:         "pve-1",
+	}) {
+		t.Fatalf("handoff action = %#v, want normalized pending action", gotActions[0])
+	}
+
 	reloadedStore, err := NewSessionStore(filepath.Dir(store.dataDir))
 	if err != nil {
 		t.Fatalf("failed to reload session store: %v", err)
@@ -100,6 +157,13 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	}
 	if len(reloadedResources) != 1 || reloadedResources[0].ID != "vm-100" {
 		t.Fatalf("reloaded handoff resources = %#v, want persisted VM reference", reloadedResources)
+	}
+	reloadedActions, err := reloadedStore.GetModelHandoffActions(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffActions after reload failed: %v", err)
+	}
+	if len(reloadedActions) != 1 || reloadedActions[0].ApprovalID != "approval-123" {
+		t.Fatalf("reloaded handoff actions = %#v, want persisted approval reference", reloadedActions)
 	}
 
 	if err := store.SetModelHandoffResources(session.ID, nil); err != nil {
@@ -119,8 +183,35 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	if got != strings.TrimSpace(handoffContext) {
 		t.Fatalf("handoff context after resource clear = %q, want retained context", got)
 	}
+	gotActions, err = store.GetModelHandoffActions(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffActions after resource clear failed: %v", err)
+	}
+	if len(gotActions) != 1 {
+		t.Fatalf("expected resource clear to retain handoff actions, got %#v", gotActions)
+	}
+	if err := store.SetModelHandoffActions(session.ID, nil); err != nil {
+		t.Fatalf("SetModelHandoffActions clear failed: %v", err)
+	}
+	gotActions, err = store.GetModelHandoffActions(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffActions after action clear failed: %v", err)
+	}
+	if len(gotActions) != 0 {
+		t.Fatalf("handoff actions after action clear = %#v, want empty", gotActions)
+	}
+	got, err = store.GetModelHandoffContext(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffContext after action clear failed: %v", err)
+	}
+	if got != strings.TrimSpace(handoffContext) {
+		t.Fatalf("handoff context after action clear = %q, want retained context", got)
+	}
 	if err := store.SetModelHandoffResources(session.ID, handoffResources); err != nil {
 		t.Fatalf("SetModelHandoffResources restore failed: %v", err)
+	}
+	if err := store.SetModelHandoffActions(session.ID, handoffActions); err != nil {
+		t.Fatalf("SetModelHandoffActions restore failed: %v", err)
 	}
 
 	if err := store.AddMessage(session.ID, Message{Role: "user", Content: "What happened?"}); err != nil {
@@ -149,6 +240,13 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	if len(gotResources) != 1 {
 		t.Fatalf("expected keep-pinned context clear to retain handoff resources, got %#v", gotResources)
 	}
+	gotActions, err = store.GetModelHandoffActions(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffActions after keep-pinned clear failed: %v", err)
+	}
+	if len(gotActions) != 1 {
+		t.Fatalf("expected keep-pinned context clear to retain handoff actions, got %#v", gotActions)
+	}
 
 	store.ClearSessionState(session.ID, false)
 	got, err = store.GetModelHandoffContext(session.ID)
@@ -164,6 +262,13 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	}
 	if len(gotResources) != 0 {
 		t.Fatalf("handoff resources after full clear = %#v, want empty", gotResources)
+	}
+	gotActions, err = store.GetModelHandoffActions(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffActions after full clear failed: %v", err)
+	}
+	if len(gotActions) != 0 {
+		t.Fatalf("handoff actions after full clear = %#v, want empty", gotActions)
 	}
 }
 
