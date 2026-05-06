@@ -325,6 +325,13 @@ func TestHostResourceIDTrimsID(t *testing.T) {
 	}
 }
 
+func TestBuildBackupPVETemplateSubjectKeyTrimsParts(t *testing.T) {
+	got := BuildBackupPVETemplateSubjectKey(" inst ", " VM ", " node ", 702)
+	if got != "inst\x00qemu\x00node\x00702" {
+		t.Fatalf("BuildBackupPVETemplateSubjectKey() = %q, want %q", got, "inst\x00qemu\x00node\x00702")
+	}
+}
+
 func TestQuietHoursCategoryForResourceIncidentUsesIncidentCategoryMetadata(t *testing.T) {
 	availability := &Alert{
 		Type: "resource-incident",

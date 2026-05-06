@@ -62,6 +62,7 @@ operator-facing alert routing behavior for live runtime alerts.
 40. `internal/alerts/storage.go`
 41. `internal/alerts/node.go`
 42. `internal/alerts/host.go`
+43. `internal/alerts/backup_snapshot.go`
 
 ## Shared Boundaries
 
@@ -260,6 +261,12 @@ health handling, host cleanup, and host offline lifecycle handling; future host
 agent alert behavior should extend that resource checker owner while shared
 health-assessment evaluation remains package-level until all storage-health
 callers can be separated behind a narrower owner.
+Snapshot and backup-age alert evaluation now lives in
+`internal/alerts/backup_snapshot.go`. That file owns snapshot age/size
+evaluation, backup rollup age evaluation, backup inventory readiness, PVE
+template subject matching, namespace disambiguation, and snapshot/backup active
+alert cleanup; future backup or snapshot alert behavior should extend that
+owner rather than expanding the central Manager file.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial
