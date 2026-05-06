@@ -256,6 +256,12 @@ Security/privacy feature gates that are suppressed by
 `presentationPolicy.hideUpgrade` must also use neutral unavailable-capability
 copy: privacy and audit surfaces must not leave `(Pro)`, trial, plan-tier, or
 upgrade wording visible after their commercial actions are hidden.
+Security audit surfaces must also distinguish runtime mismatch from billing
+failure. If `runtime-capabilities` blocks `audit_logging` with
+`paid_runtime_required`, Audit Log and Audit Webhooks may explain that the
+active Pro license needs the private Pulse Pro runtime, but they must not
+expose license keys, billing identity, or plan-upgrade copy as part of that
+security/privacy feature gate.
 That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path

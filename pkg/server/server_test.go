@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -38,6 +40,21 @@ func TestBusinessHooks(t *testing.T) {
 		t.Error("expected hook to be called")
 	}
 
+}
+
+func TestRuntimeIdentityForBusinessHooks(t *testing.T) {
+	if got := runtimeIdentityForBusinessHooks(BusinessHooks{}); got.Build != pkglicensing.RuntimeBuildCommunity {
+		t.Fatalf("empty hooks runtime build=%q, want community", got.Build)
+	}
+
+	got := runtimeIdentityForBusinessHooks(BusinessHooks{
+		BindAuditAdminEndpoints: func(defaults extensions.AuditAdminEndpoints, runtime extensions.AuditAdminRuntime) extensions.AuditAdminEndpoints {
+			return defaults
+		},
+	})
+	if got.Build != pkglicensing.RuntimeBuildPro {
+		t.Fatalf("enterprise hooks runtime build=%q, want pro", got.Build)
+	}
 }
 
 func TestPerformAutoImport_Success(t *testing.T) {

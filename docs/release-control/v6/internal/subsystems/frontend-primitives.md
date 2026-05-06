@@ -1790,6 +1790,11 @@ fetch orchestration. The shell must not re-accumulate localStorage or API
 runtime logic inline. Audit-log filter option labels must come from
 `frontend-modern/src/utils/auditLogPresentation.ts` and the shared filter-option
 label primitive instead of hard-coded title-case strings in the settings shell.
+When the shared runtime-capabilities store reports `paid_runtime_required` for
+`audit_logging`, Settings navigation must keep the Audit Log surface reachable
+and the panel must render paid-runtime-required copy with the private Pulse Pro
+download action. The runtime mismatch is not a plan upsell and must not be
+hidden by ordinary missing-feature navigation filtering.
 That shared filter-option primitive is also the canonical owner for default
 `All <scope>` option wording wherever a product surface exposes filter selects
 or segmented filter choices. Workloads filters, storage source
@@ -1806,6 +1811,10 @@ canonical `SettingsPanel` shell, while
 license/paywall lifecycle, webhook fetch/save flow, validation, paywall
 tracking, and hidden-upgrade copy posture. The shell must not re-accumulate API
 calls or paywall tracking inline.
+The same paid-runtime-required route applies to Audit Webhooks: missing
+`audit_logging` caused by a community runtime must keep the panel reachable,
+hide normal upgrade-plan prompts, and present the private Pulse Pro runtime
+download action instead of describing the feature as an unlicensed Pro upsell.
 
 The diagnostics settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx` stays the

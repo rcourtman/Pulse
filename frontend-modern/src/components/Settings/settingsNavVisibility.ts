@@ -14,14 +14,24 @@ export interface SettingsNavVisibilityContext {
   hostedModeEnabled?: boolean;
   settingsCapabilities?: Partial<SecurityStatusSettingsCapabilities> | null;
   settingsCapabilitiesResolved?: boolean;
+  isRuntimeCapabilityBlocked?: (feature: string, reason?: string) => boolean;
 }
 
-function hasRequiredFeatures(
-  tab: SettingsTab,
-  hasFeature: (feature: string) => boolean,
-): boolean {
+function hasRequiredFeatures(tab: SettingsTab, hasFeature: (feature: string) => boolean): boolean {
   const requiredFeatures = getSettingsNavItem(tab)?.features ?? [];
   return requiredFeatures.every((feature) => hasFeature(feature));
+}
+
+function missingFeaturesArePaidRuntimeBlocked(
+  tab: SettingsTab,
+  context: SettingsNavVisibilityContext,
+): boolean {
+  const requiredFeatures = getSettingsNavItem(tab)?.features ?? [];
+  const missingFeatures = requiredFeatures.filter((feature) => !context.hasFeature(feature));
+  if (missingFeatures.length === 0) return false;
+  return missingFeatures.every((feature) =>
+    context.isRuntimeCapabilityBlocked?.(feature, 'paid_runtime_required'),
+  );
 }
 
 export function shouldHideSettingsNavItem(
@@ -84,6 +94,9 @@ export function shouldHideSettingsNavItem(
   }
 
   if (item.hideWhenUnavailable && !hasRequiredFeatures(tab, context.hasFeature)) {
+    if (missingFeaturesArePaidRuntimeBlocked(tab, context)) {
+      return false;
+    }
     return true;
   }
 

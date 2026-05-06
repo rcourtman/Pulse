@@ -19,6 +19,7 @@ export interface AuditWebhookFeatureGateCopy {
 
 export interface AuditWebhookFeatureGateCopyOptions {
   showCommercialCopy?: boolean;
+  paidRuntimeRequired?: boolean;
 }
 
 export interface AuditWebhookEmptyStateCopy {
@@ -28,6 +29,13 @@ export interface AuditWebhookEmptyStateCopy {
 export function getAuditWebhookFeatureGateCopy(
   options: AuditWebhookFeatureGateCopyOptions = {},
 ): AuditWebhookFeatureGateCopy {
+  if (options.paidRuntimeRequired) {
+    return {
+      title: 'Pulse Pro runtime required',
+      body: 'Your Pro license is active, but this install is running the community runtime. Install the private Pulse Pro runtime to deliver audit webhooks. Public GitHub releases and the public Docker image do not include those Pro runtime hooks.',
+    };
+  }
+
   const showCommercialCopy = options.showCommercialCopy !== false;
 
   if (!showCommercialCopy) {

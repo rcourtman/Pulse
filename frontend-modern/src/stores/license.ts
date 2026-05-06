@@ -8,6 +8,11 @@ const FREE_RUNTIME_CAPABILITIES_FALLBACK: LicenseRuntimeCapabilities = {
   limits: [],
   hosted_mode: false,
   max_history_days: 7,
+  runtime: {
+    build: 'community',
+    label: 'Pulse Community runtime',
+  },
+  blocked_capabilities: [],
 };
 
 const [runtimeCapabilities, setRuntimeCapabilities] =
@@ -32,6 +37,7 @@ export async function loadRuntimeCapabilities(force = false): Promise<void> {
       capability_count: next.capabilities.length,
       limit_count: next.limits.length,
       max_history_days: next.max_history_days,
+      runtime_build: next.runtime?.build,
     });
   } catch (err) {
     logger.error('[licenseStore] Failed to load runtime capabilities', err);
@@ -50,6 +56,19 @@ export function hasFeature(feature: string): boolean {
   const current = runtimeCapabilities();
   if (!current) return false;
   return current.capabilities.includes(feature);
+}
+
+export function getRuntimeCapabilityBlock(feature: string) {
+  const normalized = feature.trim();
+  const current = runtimeCapabilities();
+  if (!normalized || !current?.blocked_capabilities?.length) return undefined;
+  return current.blocked_capabilities.find((block) => block.key === normalized);
+}
+
+export function isRuntimeCapabilityBlocked(feature: string, reason?: string): boolean {
+  const block = getRuntimeCapabilityBlock(feature);
+  if (!block) return false;
+  return reason ? block.reason === reason : true;
 }
 
 export function isMultiTenantEnabled(): boolean {

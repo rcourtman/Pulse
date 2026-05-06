@@ -17,6 +17,10 @@ describe('LicenseAPI', () => {
       limits: [],
       hosted_mode: false,
       max_history_days: 14,
+      runtime: { build: 'community', label: 'Pulse Community runtime' },
+      blocked_capabilities: [
+        { key: 'audit_logging', reason: 'paid_runtime_required', action_url: '/download' },
+      ],
     });
 
     const result = await LicenseAPI.getRuntimeCapabilities();
@@ -25,6 +29,10 @@ describe('LicenseAPI', () => {
     expect(result).toMatchObject({
       capabilities: ['relay'],
       max_history_days: 14,
+      runtime: { build: 'community', label: 'Pulse Community runtime' },
+      blocked_capabilities: [
+        { key: 'audit_logging', reason: 'paid_runtime_required', action_url: '/download' },
+      ],
     });
   });
 
@@ -34,12 +42,14 @@ describe('LicenseAPI', () => {
       limits: null,
       hosted_mode: false,
       max_history_days: 7,
+      blocked_capabilities: null,
     });
 
     const result = await LicenseAPI.getRuntimeCapabilities();
 
     expect(result.capabilities).toEqual([]);
     expect(result.limits).toEqual([]);
+    expect(result.blocked_capabilities).toEqual([]);
   });
 
   it('reads commercial entitlements from the commercial endpoint', async () => {

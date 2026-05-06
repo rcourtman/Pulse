@@ -10,7 +10,8 @@ import { showSuccess, showToast, showWarning } from '@/utils/toast';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { loadRuntimeCapabilities } from '@/stores/license';
+import { getRuntimeCapabilityBlock, loadRuntimeCapabilities } from '@/stores/license';
+import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 
 export interface AuditEvent {
   id: string;
@@ -110,11 +111,22 @@ export const useAuditLogPanelState = () => {
   const auditLoggingEnabled = createMemo(
     () => runtimeCapabilitiesLoaded() && hasFeature('audit_logging'),
   );
-  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
+  const auditLoggingRuntimeBlock = createMemo(() => getRuntimeCapabilityBlock('audit_logging'));
+  const paidRuntimeRequired = createMemo(
+    () => auditLoggingRuntimeBlock()?.reason === 'paid_runtime_required',
+  );
+  const showUpgradePrompts = () =>
+    !paidRuntimeRequired() && !presentationPolicyHidesUpgradePrompts();
+  const showFeatureGateAction = () => paidRuntimeRequired() || showUpgradePrompts();
   const showUpgradePaywall = createMemo(
     () => runtimeCapabilitiesLoaded() && !auditLoggingEnabled() && !loading(),
   );
-  const upgradeDestination = createMemo(() => getUpgradeActionDestination('audit_logging'));
+  const upgradeDestination = createMemo(() =>
+    paidRuntimeRequired()
+      ? resolveUpgradeDestination(auditLoggingRuntimeBlock()?.action_url)
+      : getUpgradeActionDestination('audit_logging'),
+  );
+  const upgradeActionLabel = () => (paidRuntimeRequired() ? 'Download Pulse Pro' : 'View plans');
 
   const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
     if (!auditLoggingEnabled()) {
@@ -597,11 +609,14 @@ export const useAuditLogPanelState = () => {
     setVerificationFilter,
     showUpgradePaywall,
     showUpgradePrompts,
+    showFeatureGateAction,
     submitPageInput,
     successFilter,
     totalEvents,
     totalPages,
     upgradeDestination,
+    upgradeActionLabel,
+    paidRuntimeRequired,
     verification,
     verificationFilter,
     verificationSummary,

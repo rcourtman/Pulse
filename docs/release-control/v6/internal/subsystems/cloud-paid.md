@@ -694,6 +694,13 @@ trial urgency, observed usage counts, or checkout handoff state. The
 commercial posture store and billing-entitlements store must also fail closed
 locally until the shared presentation policy resolves, then stay fail-closed
 in demo mode so hidden routes are not probed from the browser shell.
+Paid self-hosted Pro licenses also have a runtime-distribution boundary:
+billing entitlement payloads may confirm the paid feature grant, but the
+runtime-capabilities payload must mark private-runtime-only capabilities as
+blocked when the process is the public community build. Customer-facing paid
+runtime copy must send those users to the private Pulse Pro download rather
+than implying that the public GitHub release or public Docker image can unlock
+the same runtime hooks.
 That same browser-shell boundary also owns utility-nav suppression:
 `frontend-modern/src/AppLayout.tsx` must not expose a separate top-level
 Operations destination. Diagnostics, reports, and logs now live under the

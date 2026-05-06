@@ -21,6 +21,10 @@ const FREE_LICENSE_ENTITLEMENTS_FALLBACK: LicenseCommercialEntitlements = {
   },
   has_migration_gap: false,
   commercial_migration: undefined,
+  runtime: {
+    build: 'community',
+    label: 'Pulse Community runtime',
+  },
 };
 
 const [licenseEntitlementsState, setLicenseEntitlementsState] =
@@ -45,9 +49,7 @@ export async function loadLicenseEntitlements(force = false): Promise<void> {
     setLoadError(null);
     setLoaded(true);
     setLoading(false);
-    logger.debug(
-      '[licenseEntitlementsStore] Full entitlements suppressed by presentation policy',
-    );
+    logger.debug('[licenseEntitlementsStore] Full entitlements suppressed by presentation policy');
     return;
   }
 

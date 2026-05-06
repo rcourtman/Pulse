@@ -3180,6 +3180,13 @@ func (r *Router) GetLicenseHandlers() *LicenseHandlers {
 	return r.licenseHandlers
 }
 
+func (r *Router) SetLicenseRuntimeIdentity(identity runtimeIdentityModel) {
+	if r == nil || r.licenseHandlers == nil {
+		return
+	}
+	r.licenseHandlers.SetRuntimeIdentity(identity)
+}
+
 // StopGrantRefresh stops all grant refresh and revocation poll loops across all tenants.
 func (r *Router) StopGrantRefresh() {
 	if r.licenseHandlers != nil {

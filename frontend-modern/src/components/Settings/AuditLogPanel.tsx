@@ -25,11 +25,12 @@ import {
   AUDIT_VERIFICATION_FILTER_NEEDS_LABEL,
   getAuditEventStatusPresentation,
   getAuditEventTypeBadgeClass,
+  getAuditLogFeatureGateCopy,
   getAuditLogEmptyState,
   getAuditLogLoadingState,
   getAuditVerificationBadgePresentation,
 } from '@/utils/auditLogPresentation';
-import { getUpgradeActionButtonClass, UPGRADE_ACTION_LABEL } from '@/utils/upgradePresentation';
+import { getUpgradeActionButtonClass } from '@/utils/upgradePresentation';
 import { useAuditLogPanelState } from '@/components/Settings/useAuditLogPanelState';
 
 export default function AuditLogPanel() {
@@ -72,12 +73,14 @@ export default function AuditLogPanel() {
     setUserFilter,
     setVerificationFilter,
     showUpgradePaywall,
-    showUpgradePrompts,
+    showFeatureGateAction,
     submitPageInput,
     successFilter,
     totalEvents,
     totalPages,
     upgradeDestination,
+    upgradeActionLabel,
+    paidRuntimeRequired,
     verification,
     verificationFilter,
     verificationSummary,
@@ -94,6 +97,8 @@ export default function AuditLogPanel() {
     const date = new Date(ts);
     return date.toLocaleString();
   };
+  const featureGateCopy = () =>
+    getAuditLogFeatureGateCopy({ paidRuntimeRequired: paidRuntimeRequired() });
 
   return (
     <SettingsPanel
@@ -159,18 +164,19 @@ export default function AuditLogPanel() {
         <div class="p-6 bg-surface-alt border border-border rounded-md">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
-              <h3 class="text-lg font-semibold text-base-content">Audit Logging</h3>
-              <p class="text-sm text-muted mt-1">
-                Persistent, searchable audit logs with cryptographic signature verification.
-              </p>
+              <h3 class="text-lg font-semibold text-base-content">{featureGateCopy().title}</h3>
+              <p class="text-sm text-muted mt-1">{featureGateCopy().body}</p>
             </div>
-            <Show when={showUpgradePrompts()}>
+            <Show when={showFeatureGateAction()}>
               <div class="flex flex-col items-center gap-2">
                 <UpgradeLink
                   destination={upgradeDestination()}
-                  class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
+                  class={getUpgradeActionButtonClass({
+                    mobileFullWidth: false,
+                    tone: paidRuntimeRequired() ? 'warning' : 'primary',
+                  })}
                 >
-                  {UPGRADE_ACTION_LABEL}
+                  {upgradeActionLabel()}
                 </UpgradeLink>
               </div>
             </Show>

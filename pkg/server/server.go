@@ -111,6 +111,23 @@ func SetBusinessHooks(h BusinessHooks) {
 	globalHooks = h
 }
 
+func runtimeIdentityForBusinessHooks(h BusinessHooks) pkglicensing.RuntimeIdentity {
+	if h.BindAuditAdminEndpoints != nil ||
+		h.BindRBACAdminEndpoints != nil ||
+		h.BindSSOAdminEndpoints != nil ||
+		h.BindReportingAdminEndpoints != nil ||
+		h.BindAIAutoFixEndpoints != nil ||
+		h.BindAIAlertAnalysisEndpoints != nil ||
+		h.AIInvestigationEnabled != nil ||
+		h.CreateRemediationEngine != nil ||
+		h.CreateInvestigationStore != nil ||
+		h.CreateInvestigationOrchestrator != nil ||
+		h.CreateAlertAnalyzer != nil {
+		return pkglicensing.ProRuntimeIdentity()
+	}
+	return pkglicensing.CommunityRuntimeIdentity()
+}
+
 // Run starts the Pulse monitoring server.
 func Run(ctx context.Context, version string) error {
 	// Initialize logger with baseline defaults for early startup logs
@@ -274,6 +291,7 @@ func Run(ctx context.Context, version string) error {
 	createInvestigationStore := globalHooks.CreateInvestigationStore
 	createInvestigationOrchestrator := globalHooks.CreateInvestigationOrchestrator
 	createAlertAnalyzer := globalHooks.CreateAlertAnalyzer
+	runtimeIdentity := runtimeIdentityForBusinessHooks(globalHooks)
 	globalHooksMu.Unlock()
 
 	api.SetAIInvestigationEnabled(aiInvestigationEnabled)
@@ -375,6 +393,7 @@ func Run(ctx context.Context, version string) error {
 		return nil
 	}
 	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version)
+	router.SetLicenseRuntimeIdentity(runtimeIdentity)
 	router.StartBackgroundWorkers()
 
 	// Inject resource store into monitor for WebSocket broadcasts

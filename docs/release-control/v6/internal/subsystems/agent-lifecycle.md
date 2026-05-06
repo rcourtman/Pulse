@@ -878,6 +878,11 @@ out of public-preview runtime capabilities. Lifecycle-adjacent install or
 reporting surfaces may still depend on demo-safe capability flags, but they
 must not expect `monitored_system_capacity`, admission-freeze copy, or
 observed plan overage posture to exist.
+That shared runtime-capabilities exception may also carry paid-runtime block
+records for private Pro runtime hooks. Lifecycle-adjacent flows must treat
+those records as executable-runtime identity, not as agent enrollment,
+installer success, or lifecycle capability evidence, and must leave private
+runtime download guidance to the licensing/settings surfaces that own it.
 The same presentation-policy split now governs paid lifecycle extensions in
 ordinary self-hosted v6 installs. Agent profile management may remain an
 entitled lifecycle surface, but default Infrastructure navigation must not

@@ -558,6 +558,131 @@ func TestHandleRuntimeCapabilities_HostedCommunityEvaluatorStateStripsLegacyComm
 	}
 }
 
+func TestHandleRuntimeCapabilities_CommunityRuntimeBlocksPrivateProCapabilities(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureRelay,
+			license.FeatureAuditLogging,
+			license.FeatureRBAC,
+			license.FeatureAIAutoFix,
+			license.FeatureAdvancedReporting,
+		},
+		Limits:            map[string]int64{},
+		PlanVersion:       "pro",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState failed: %v", err)
+	}
+
+	h := NewLicenseHandlers(mtp, false)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+
+	runtimeReq := httptest.NewRequest(http.MethodGet, "/api/license/runtime-capabilities", nil).
+		WithContext(ctx)
+	runtimeRec := httptest.NewRecorder()
+	h.HandleRuntimeCapabilities(runtimeRec, runtimeReq)
+	if runtimeRec.Code != http.StatusOK {
+		t.Fatalf("runtime status=%d, want %d: %s", runtimeRec.Code, http.StatusOK, runtimeRec.Body.String())
+	}
+
+	var runtimePayload RuntimeCapabilitiesPayload
+	if err := json.Unmarshal(runtimeRec.Body.Bytes(), &runtimePayload); err != nil {
+		t.Fatalf("unmarshal runtime payload failed: %v", err)
+	}
+	if runtimePayload.Runtime == nil || runtimePayload.Runtime.Build != pkglicensing.RuntimeBuildCommunity {
+		t.Fatalf("runtime identity=%+v, want community", runtimePayload.Runtime)
+	}
+	for _, feature := range []string{license.FeatureAuditLogging, license.FeatureRBAC, license.FeatureAIAutoFix} {
+		if containsCapability(runtimePayload.Capabilities, feature) {
+			t.Fatalf("runtime capabilities retained private feature %q: %v", feature, runtimePayload.Capabilities)
+		}
+	}
+	for _, feature := range []string{license.FeatureRelay, license.FeatureAdvancedReporting} {
+		if !containsCapability(runtimePayload.Capabilities, feature) {
+			t.Fatalf("runtime capabilities lost supported feature %q: %v", feature, runtimePayload.Capabilities)
+		}
+	}
+	if len(runtimePayload.BlockedCapabilities) != 3 {
+		t.Fatalf("blocked capabilities=%+v, want 3 private runtime blocks", runtimePayload.BlockedCapabilities)
+	}
+	for _, block := range runtimePayload.BlockedCapabilities {
+		if block.Reason != "paid_runtime_required" {
+			t.Fatalf("blocked reason=%q, want paid_runtime_required", block.Reason)
+		}
+		if block.ActionURL != pkglicensing.PulseProDownloadURL {
+			t.Fatalf("blocked action_url=%q, want %q", block.ActionURL, pkglicensing.PulseProDownloadURL)
+		}
+	}
+
+	entitlementReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).
+		WithContext(ctx)
+	entitlementRec := httptest.NewRecorder()
+	h.HandleEntitlements(entitlementRec, entitlementReq)
+	if entitlementRec.Code != http.StatusOK {
+		t.Fatalf("entitlements status=%d, want %d: %s", entitlementRec.Code, http.StatusOK, entitlementRec.Body.String())
+	}
+	var entitlementPayload EntitlementPayload
+	if err := json.Unmarshal(entitlementRec.Body.Bytes(), &entitlementPayload); err != nil {
+		t.Fatalf("unmarshal entitlement payload failed: %v", err)
+	}
+	for _, feature := range []string{license.FeatureAuditLogging, license.FeatureRBAC, license.FeatureAIAutoFix} {
+		if !containsCapability(entitlementPayload.Capabilities, feature) {
+			t.Fatalf("entitlements lost licensed feature %q: %v", feature, entitlementPayload.Capabilities)
+		}
+	}
+}
+
+func TestHandleRuntimeCapabilities_ProRuntimePreservesPrivateProCapabilities(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureRelay,
+			license.FeatureAuditLogging,
+			license.FeatureRBAC,
+			license.FeatureAIAutoFix,
+		},
+		Limits:            map[string]int64{},
+		PlanVersion:       "pro",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState failed: %v", err)
+	}
+
+	h := NewLicenseHandlers(mtp, false)
+	h.SetRuntimeIdentity(proRuntimeIdentityFromLicensing())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/runtime-capabilities", nil).
+		WithContext(context.WithValue(context.Background(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	h.HandleRuntimeCapabilities(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("runtime status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload RuntimeCapabilitiesPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal runtime payload failed: %v", err)
+	}
+	if payload.Runtime == nil || payload.Runtime.Build != pkglicensing.RuntimeBuildPro {
+		t.Fatalf("runtime identity=%+v, want pro", payload.Runtime)
+	}
+	for _, feature := range []string{license.FeatureAuditLogging, license.FeatureRBAC, license.FeatureAIAutoFix} {
+		if !containsCapability(payload.Capabilities, feature) {
+			t.Fatalf("pro runtime capabilities lost private feature %q: %v", feature, payload.Capabilities)
+		}
+	}
+	if len(payload.BlockedCapabilities) != 0 {
+		t.Fatalf("pro runtime blocked capabilities=%+v, want none", payload.BlockedCapabilities)
+	}
+}
+
 func TestEntitlementHandler_SelfHostedTrialEligibilityRetiredForFreshOrg(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)

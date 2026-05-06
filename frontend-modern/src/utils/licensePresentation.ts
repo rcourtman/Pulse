@@ -148,6 +148,49 @@ const isActiveOrGraceSubscription = (subscriptionState?: string | null): boolean
   return normalized === 'active' || normalized === 'grace';
 };
 
+const PRO_RUNTIME_REQUIRED_TIERS = new Set([
+  'pro',
+  'pro_annual',
+  'pro_plus',
+  'lifetime',
+  'enterprise',
+]);
+
+const isActivePaidRuntimeState = (subscriptionState?: string | null): boolean => {
+  const normalized = (subscriptionState || '').trim().toLowerCase();
+  return normalized === 'active' || normalized === 'grace' || normalized === 'trial';
+};
+
+export const requiresPulseProRuntime = (
+  entitlements?: Pick<
+    LicenseCommercialEntitlements,
+    'hosted_mode' | 'subscription_state' | 'tier'
+  > | null,
+): boolean => {
+  if (!entitlements || entitlements.hosted_mode) {
+    return false;
+  }
+  const normalizedTier = (entitlements.tier || '').trim().toLowerCase();
+  return (
+    PRO_RUNTIME_REQUIRED_TIERS.has(normalizedTier) &&
+    isActivePaidRuntimeState(entitlements.subscription_state)
+  );
+};
+
+export const hasPulseProRuntime = (
+  entitlements?: Pick<LicenseCommercialEntitlements, 'runtime'> | null,
+): boolean => (entitlements?.runtime?.build || '').trim().toLowerCase() === 'pro';
+
+export const hasPulseProRuntimeMismatch = (
+  entitlements?: Pick<
+    LicenseCommercialEntitlements,
+    'hosted_mode' | 'runtime' | 'subscription_state' | 'tier'
+  > | null,
+): boolean => {
+  const runtimeBuild = (entitlements?.runtime?.build || '').trim().toLowerCase();
+  return requiresPulseProRuntime(entitlements) && runtimeBuild !== '' && runtimeBuild !== 'pro';
+};
+
 export const getLicenseTierLabel = (tier?: string | null): string => {
   const normalized = (tier || '').trim().toLowerCase();
   if (!normalized) return 'Unknown';
@@ -367,6 +410,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
   const includedExtras = getSelfHostedIncludedExtras({
     entitlements: current,
   });
+  const runtimeMismatch = hasPulseProRuntimeMismatch(current);
   const unlockedFeaturesLabel =
     normalizedTier === 'free' ? 'Included on this instance' : 'Primary capabilities';
 
@@ -389,10 +433,17 @@ export const getSelfHostedCurrentPlanPresentation = ({
   }
 
   if (normalizedState === 'trial') {
+    if (runtimeMismatch) {
+      supplementalBadges.push('Pro runtime missing');
+      supplementalDetails.unshift(
+        'Public GitHub releases and the public Docker image are community builds. Install the private Pulse Pro runtime to test Pro-only runtime hooks during the trial.',
+      );
+    }
     return {
       title: `Current plan: ${planLabel} Trial`,
-      body:
-        unlockedFeatures.length > 0
+      body: runtimeMismatch
+        ? `${planLabel} trial entitlement is active, but this install is running the community runtime. Install the private Pulse Pro runtime from the paid download page to use Pro-only features.`
+        : unlockedFeatures.length > 0
           ? `${planLabel} trial capabilities are active on this instance right now.`
           : `${planLabel} trial entitlement is being confirmed for this instance.`,
       unlockedFeaturesLabel,
@@ -419,6 +470,23 @@ export const getSelfHostedCurrentPlanPresentation = ({
   }
 
   if (normalizedState === 'active' || normalizedState === 'grace') {
+    if (runtimeMismatch) {
+      supplementalBadges.push('Pro runtime missing');
+      supplementalDetails.unshift(
+        'Public GitHub releases and the public Docker image are community builds. They can accept the license, but Pro-only runtime hooks are only in the private Pulse Pro download.',
+      );
+      return {
+        title: `Current plan: ${planLabel}`,
+        body: `${planLabel} is active, but this install is running the community runtime. Install the private Pulse Pro runtime from the paid download page to use Pro-only features such as Audit Log, Audit Webhooks, RBAC, and governed remediation.`,
+        unlockedFeaturesLabel,
+        unlockedFeatures,
+        includedExtrasLabel: includedExtras.length > 0 ? 'Included extras' : undefined,
+        includedExtras,
+        supplementalBadges,
+        supplementalSummary: supplementalDetails.join(' '),
+      };
+    }
+
     return {
       title: `Current plan: ${planLabel}`,
       body:
@@ -511,7 +579,19 @@ export const getSelfHostedActivationProofPresentation = (
   const capabilities = new Set(
     (entitlements.capabilities || []).map((capability) => capability.trim().toLowerCase()),
   );
-  const items: SelfHostedActivationProofItem[] = [
+  const items: SelfHostedActivationProofItem[] = [];
+  if (requiresPulseProRuntime(entitlements) && entitlements.runtime?.build) {
+    const hasProRuntime = hasPulseProRuntime(entitlements);
+    items.push({
+      label: 'Pulse Pro runtime',
+      state: hasProRuntime ? 'active' : 'missing',
+      statusLabel: hasProRuntime ? 'Active' : 'Needs attention',
+      detail: hasProRuntime
+        ? 'This install reports the private Pulse Pro runtime.'
+        : 'This install reports the community runtime. Install the private Pulse Pro runtime from the paid download page; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.',
+    });
+  }
+  items.push(
     buildCapabilityProofItem({
       capabilities,
       label: 'Remote access, pairing, and push',
@@ -523,7 +603,7 @@ export const getSelfHostedActivationProofPresentation = (
       missingDetail:
         'Expected Relay convenience capabilities are not present. Refresh or recover activation before treating this plan as fully active.',
     }),
-  ];
+  );
 
   const requiredHistoryDays = planDefinition.metricHistoryDays;
   const actualHistoryDays = entitlements.max_history_days;
@@ -574,7 +654,7 @@ export const getSelfHostedActivationProofPresentation = (
   const planLabel = getSelfHostedPlanLabel(entitlements.tier);
   return {
     title: `${planLabel} value proof`,
-    body: "These checks come from this instance's entitlement payload, not from public pricing copy.",
+    body: "These checks come from this instance's entitlement and runtime payloads, not from public pricing copy.",
     items,
   };
 };
@@ -608,15 +688,22 @@ export const getSelfHostedActivationSuccessPresentation = ({
     entitlements: current,
     displayableCapabilities,
   });
+  const runtimeMismatch = hasPulseProRuntimeMismatch(current);
 
   return {
-    tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
-    title: `${planLabel} is now active`,
+    tone: runtimeMismatch
+      ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
+      : 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+    title: runtimeMismatch ? `${planLabel} license is active` : `${planLabel} is now active`,
     body:
       source === 'purchase'
-        ? `Checkout completed and this instance is now running ${planLabel}.`
-        : `The activation key was accepted and this instance is now running ${planLabel}.`,
-    highlightsLabel: 'Available now on this instance',
+        ? runtimeMismatch
+          ? `Checkout completed and the license is active. This install is still running the community runtime, so install the private Pulse Pro runtime from the paid download page before using Pro-only features.`
+          : `Checkout completed and this instance is now running ${planLabel}.`
+        : runtimeMismatch
+          ? `The activation key was accepted. This install is still running the community runtime, so install the private Pulse Pro runtime from the paid download page before using Pro-only features.`
+          : `The activation key was accepted and this instance is now running ${planLabel}.`,
+    highlightsLabel: runtimeMismatch ? 'Licensed capabilities' : 'Available now on this instance',
     highlights,
   };
 };

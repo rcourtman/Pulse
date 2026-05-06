@@ -936,6 +936,11 @@ posture absent. Storage/recovery surfaces may keep demo-safe capability and
 retention truth from `/api/license/runtime-capabilities`, but they must not
 expect `monitored_system_capacity`, admission-freeze copy, or observed plan
 overage to exist.
+Storage/recovery consumers must also treat paid-runtime block records in that
+payload as runtime executable truth only. A `paid_runtime_required` block may
+explain why a licensed private Pro hook is unavailable in the community
+runtime, but it must not become recovery protection state, restore identity,
+capacity posture, or storage-history entitlement proof.
 Storage detail surfaces with page-local history selectors must also treat that
 runtime retention truth as the selector contract: pool and disk detail ranges
 must filter and clamp through the storage-owned range access helper so ordinary

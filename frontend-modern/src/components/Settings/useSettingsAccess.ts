@@ -9,7 +9,12 @@ import {
 } from '@/stores/sessionPresentationPolicy';
 import type { SecurityStatus } from '@/types/config';
 import { logger } from '@/utils/logger';
-import { hasFeature, isHostedModeEnabled, runtimeCapabilitiesLoaded } from '@/stores/license';
+import {
+  hasFeature,
+  isHostedModeEnabled,
+  isRuntimeCapabilityBlocked,
+  runtimeCapabilitiesLoaded,
+} from '@/stores/license';
 import { DEFAULT_SETTINGS_TAB, type SettingsTab } from './settingsNavigationModel';
 import { tabFeatureRequirements } from './settingsFeatureGates';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
@@ -75,26 +80,25 @@ export function useSettingsAccess({
     const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
     const settingsCapabilitiesResolved = securityStatus() !== null;
 
-    return SETTINGS_NAV_GROUPS
-      .map((group) => ({
-        ...group,
-        items: group.items.filter(
-          (item) =>
-            !shouldHideSettingsNavItem(item.id, {
-              hasFeature,
-              runtimeCapabilitiesLoaded,
-              presentationPolicyHidesCommercial: commercialSurfacesHidden(),
-              presentationPolicyIsDemoMode: demoMode(),
-              presentationPolicyIsReadOnly: readOnly(),
-              presentationPolicyHidesOrganizations: organizationSurfacesHidden(),
-              presentationPolicyResolved: presentationPolicyResolved(),
-              hostedModeEnabled,
-              settingsCapabilities,
-              settingsCapabilitiesResolved,
-            }),
-        ),
-      }))
-      .filter((group) => group.items.length > 0);
+    return SETTINGS_NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) =>
+          !shouldHideSettingsNavItem(item.id, {
+            hasFeature,
+            runtimeCapabilitiesLoaded,
+            presentationPolicyHidesCommercial: commercialSurfacesHidden(),
+            presentationPolicyIsDemoMode: demoMode(),
+            presentationPolicyIsReadOnly: readOnly(),
+            presentationPolicyHidesOrganizations: organizationSurfacesHidden(),
+            presentationPolicyResolved: presentationPolicyResolved(),
+            hostedModeEnabled,
+            settingsCapabilities,
+            settingsCapabilitiesResolved,
+            isRuntimeCapabilityBlocked,
+          }),
+      ),
+    })).filter((group) => group.items.length > 0);
   });
 
   const flatTabs = createMemo(() => accessibleTabGroups().flatMap((group) => group.items));
@@ -135,9 +139,9 @@ export function useSettingsAccess({
     const requiresCapabilityResolution = Boolean(currentItem?.requiredCapability);
     const requiresPresentationPolicyResolution = Boolean(
       currentItem?.hideWhenCommercialHidden ||
-        currentItem?.hideWhenOrganizationHidden ||
-        currentItem?.hideWhenReadOnly ||
-        currentItem?.hideWhenDemoMode,
+      currentItem?.hideWhenOrganizationHidden ||
+      currentItem?.hideWhenReadOnly ||
+      currentItem?.hideWhenDemoMode,
     );
     if (
       (requiresFeatureResolution && !runtimeCapabilitiesLoaded()) ||

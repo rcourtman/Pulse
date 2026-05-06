@@ -424,6 +424,50 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_StripsInternalOnlyCapabilities
 	}
 }
 
+func TestFilterCapabilitiesForRuntimeIdentity_BlocksPrivateRuntimeCapabilitiesOnCommunityBuild(t *testing.T) {
+	filtered, blocked := FilterCapabilitiesForRuntimeIdentity([]string{
+		FeatureRelay,
+		FeatureAuditLogging,
+		FeatureRBAC,
+		FeatureAIAutoFix,
+		FeatureAdvancedReporting,
+	}, CommunityRuntimeIdentity())
+
+	for _, feature := range []string{FeatureAuditLogging, FeatureRBAC, FeatureAIAutoFix} {
+		if containsString(filtered, feature) {
+			t.Fatalf("community runtime capabilities retained private feature %q: %v", feature, filtered)
+		}
+	}
+	for _, feature := range []string{FeatureRelay, FeatureAdvancedReporting} {
+		if !containsString(filtered, feature) {
+			t.Fatalf("community runtime capabilities lost supported feature %q: %v", feature, filtered)
+		}
+	}
+	if len(blocked) != 3 {
+		t.Fatalf("blocked capability count=%d, want 3: %+v", len(blocked), blocked)
+	}
+	for _, block := range blocked {
+		if block.Reason != "paid_runtime_required" {
+			t.Fatalf("blocked reason=%q, want paid_runtime_required", block.Reason)
+		}
+		if block.ActionURL != PulseProDownloadURL {
+			t.Fatalf("blocked action_url=%q, want %q", block.ActionURL, PulseProDownloadURL)
+		}
+	}
+}
+
+func TestFilterCapabilitiesForRuntimeIdentity_PreservesPrivateRuntimeCapabilitiesOnProBuild(t *testing.T) {
+	capabilities := []string{FeatureRelay, FeatureAuditLogging, FeatureRBAC, FeatureAIAutoFix}
+	filtered, blocked := FilterCapabilitiesForRuntimeIdentity(capabilities, ProRuntimeIdentity())
+
+	if !reflect.DeepEqual(filtered, capabilities) {
+		t.Fatalf("pro runtime capabilities=%v, want %v", filtered, capabilities)
+	}
+	if len(blocked) != 0 {
+		t.Fatalf("pro runtime blocked capabilities=%+v, want none", blocked)
+	}
+}
+
 func TestBuildRuntimeCapabilitiesPayload_NilStatusDefaultsToFreeTier(t *testing.T) {
 	payload := BuildRuntimeCapabilitiesPayload(nil, "")
 	if payload.MaxHistoryDays != TierHistoryDays[TierFree] {

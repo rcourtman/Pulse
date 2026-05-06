@@ -12,11 +12,13 @@ import {
 } from '@/stores/sessionPresentationPolicy';
 import { getUpgradeFallbackDestination } from '@/utils/pricingHandoff';
 import {
+  getRuntimeCapabilityBlock,
   getRuntimeLimit,
   hasFeature,
   isHostedModeEnabled,
   isMultiTenantEnabled,
   isRangeLocked,
+  isRuntimeCapabilityBlocked,
   runtimeCapabilitiesLoadError as runtimeLicenseLoadError,
   runtimeCapabilitiesLoaded as runtimeLicenseLoaded,
   loadRuntimeCapabilities,
@@ -57,6 +59,14 @@ describe('license stores', () => {
     limits: [{ key: 'limit1', limit: 100, current: 25, state: 'ok' }],
     hosted_mode: false,
     max_history_days: 90,
+    runtime: { build: 'community', label: 'Pulse Community runtime' },
+    blocked_capabilities: [
+      {
+        key: 'audit_logging',
+        reason: 'paid_runtime_required',
+        action_url: 'https://pulserelay.pro/download.html',
+      },
+    ],
   };
 
   const mockCommercialPosture: LicenseCommercialPosture = {
@@ -86,6 +96,8 @@ describe('license stores', () => {
     limits: [],
     hosted_mode: false,
     max_history_days: 7,
+    runtime: { build: 'community', label: 'Pulse Community runtime' },
+    blocked_capabilities: [],
   };
 
   const mockFreeCommercialPosture: LicenseCommercialPosture = {
@@ -131,6 +143,11 @@ describe('license stores', () => {
         limits: [],
         hosted_mode: false,
         max_history_days: 7,
+        runtime: {
+          build: 'community',
+          label: 'Pulse Community runtime',
+        },
+        blocked_capabilities: [],
       });
     });
 
@@ -163,6 +180,17 @@ describe('license stores', () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
       await loadRuntimeCapabilities(true);
       expect(hasFeature('missing_feature')).toBe(false);
+    });
+
+    it('exposes runtime capability blocks by feature and reason', async () => {
+      vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
+      await loadRuntimeCapabilities(true);
+
+      expect(getRuntimeCapabilityBlock('audit_logging')).toMatchObject({
+        reason: 'paid_runtime_required',
+      });
+      expect(isRuntimeCapabilityBlocked('audit_logging', 'paid_runtime_required')).toBe(true);
+      expect(isRuntimeCapabilityBlocked('audit_logging', 'other_reason')).toBe(false);
     });
 
     it('returns true when multi_tenant feature exists', async () => {
@@ -520,6 +548,10 @@ describe('license stores', () => {
           proxmox_nodes: 0,
           docker_hosts: 0,
           kubernetes_clusters: 0,
+        },
+        runtime: {
+          build: 'community',
+          label: 'Pulse Community runtime',
         },
         has_migration_gap: false,
         commercial_migration: undefined,

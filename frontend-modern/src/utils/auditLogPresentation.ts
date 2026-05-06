@@ -20,6 +20,10 @@ export interface AuditLogEmptyStatePresentation {
   description: string;
 }
 
+export interface AuditLogFeatureGateCopyOptions {
+  paidRuntimeRequired?: boolean;
+}
+
 export const AUDIT_TOOLBAR_BUTTON_CLASS =
   'flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50';
 export const AUDIT_REFRESH_BUTTON_CLASS = `${AUDIT_TOOLBAR_BUTTON_CLASS} text-base-content`;
@@ -92,6 +96,20 @@ export function getAuditVerificationBadgePresentation(
 export function getAuditLogLoadingState() {
   return {
     text: 'Loading audit events…',
+  } as const;
+}
+
+export function getAuditLogFeatureGateCopy(options: AuditLogFeatureGateCopyOptions = {}) {
+  if (options.paidRuntimeRequired) {
+    return {
+      title: 'Pulse Pro runtime required',
+      body: 'Your Pro license is active, but this install is running the community runtime. Install the private Pulse Pro runtime to use Audit Log and Audit Webhooks. Public GitHub releases and the public Docker image do not include those Pro runtime hooks.',
+    } as const;
+  }
+
+  return {
+    title: 'Audit Logging',
+    body: 'Persistent, searchable audit logs with cryptographic signature verification.',
   } as const;
 }
 

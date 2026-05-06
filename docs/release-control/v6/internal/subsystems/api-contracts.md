@@ -1123,6 +1123,14 @@ contract for real customer workspaces, and `/api/license/entitlements`
 remains billing-only. New callers must extend one of those owned shapes
 instead of reviving a combined entitlement payload for mixed runtime,
 commercial, and billing concerns.
+Paid self-hosted runtime identity is part of that owned shape: entitlement
+and runtime-capability payloads must carry a normalized `runtime` identity,
+and `runtime-capabilities` must include `blocked_capabilities` entries when a
+valid license grants a feature that the current community runtime cannot
+execute. Billing entitlements may still report the licensed feature set, but
+browser feature gates must use the runtime-capabilities contract for executable
+truth and show the paid-runtime-required action instead of treating the license
+as inactive.
 That same shared licensing contract also owns internal runtime-only
 capabilities. Release demo runtimes may use the internal `demo_fixtures`
 entitlement to authorize mock fixture data and `/api/system/mock-mode`

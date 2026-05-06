@@ -18,10 +18,7 @@ import {
   getAuditWebhookFeatureGateCopy,
   getAuditWebhookLoadingState,
 } from '@/utils/auditWebhookPresentation';
-import {
-  getUpgradeActionButtonClass,
-  UPGRADE_ACTION_LABEL,
-} from '@/utils/upgradePresentation';
+import { getUpgradeActionButtonClass } from '@/utils/upgradePresentation';
 import { useAuditWebhookPanelState } from '@/components/Settings/useAuditWebhookPanelState';
 
 interface AuditWebhookPanelProps {
@@ -39,11 +36,17 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     saving,
     setNewUrl,
     showUpgradePrompts,
+    showFeatureGateAction,
     upgradeDestination,
+    upgradeActionLabel,
+    paidRuntimeRequired,
     webhookUrls,
   } = useAuditWebhookPanelState(props.canManage);
   const featureGateCopy = () =>
-    getAuditWebhookFeatureGateCopy({ showCommercialCopy: showUpgradePrompts() });
+    getAuditWebhookFeatureGateCopy({
+      showCommercialCopy: showUpgradePrompts(),
+      paidRuntimeRequired: paidRuntimeRequired(),
+    });
   const emptyStateCopy = () => getAuditWebhookEmptyStateCopy();
 
   if (!isAuditLoggingEnabled()) {
@@ -59,13 +62,15 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                 <p class="font-semibold text-base-content">{featureGateCopy().title}</p>
                 <p class="mt-1 text-sm text-muted">{featureGateCopy().body}</p>
               </div>
-              <Show when={showUpgradePrompts()}>
+              <Show when={showFeatureGateAction()}>
                 <div class="flex flex-col sm:flex-row items-center gap-2">
                   <UpgradeLink
                     destination={upgradeDestination()}
-                    class={getUpgradeActionButtonClass()}
+                    class={getUpgradeActionButtonClass({
+                      tone: paidRuntimeRequired() ? 'warning' : 'primary',
+                    })}
                   >
-                    {UPGRADE_ACTION_LABEL}
+                    {upgradeActionLabel()}
                   </UpgradeLink>
                 </div>
               </Show>

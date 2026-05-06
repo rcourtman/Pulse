@@ -2,10 +2,11 @@ import { createEffect, createSignal, onMount } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
-import { hasFeature } from '@/stores/license';
+import { getRuntimeCapabilityBlock, hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
+import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import {
   getAuditWebhookDuplicateUrlMessage,
   getAuditWebhookInvalidUrlMessage,
@@ -20,9 +21,17 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
   const [loading, setLoading] = createSignal(true);
 
   const canManage = () => canManageOverride !== false;
-  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
+  const auditLoggingRuntimeBlock = () => getRuntimeCapabilityBlock('audit_logging');
+  const paidRuntimeRequired = () => auditLoggingRuntimeBlock()?.reason === 'paid_runtime_required';
+  const showUpgradePrompts = () =>
+    !paidRuntimeRequired() && !presentationPolicyHidesUpgradePrompts();
+  const showFeatureGateAction = () => paidRuntimeRequired() || showUpgradePrompts();
   const isAuditLoggingEnabled = () => hasFeature('audit_logging');
-  const upgradeDestination = () => getUpgradeActionDestination('audit_logging');
+  const upgradeDestination = () =>
+    paidRuntimeRequired()
+      ? resolveUpgradeDestination(auditLoggingRuntimeBlock()?.action_url)
+      : getUpgradeActionDestination('audit_logging');
+  const upgradeActionLabel = () => (paidRuntimeRequired() ? 'Download Pulse Pro' : 'View plans');
 
   const fetchWebhooks = async () => {
     try {
@@ -100,7 +109,10 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
     saving,
     setNewUrl,
     showUpgradePrompts,
+    showFeatureGateAction,
     upgradeDestination,
+    upgradeActionLabel,
+    paidRuntimeRequired,
     webhookUrls,
   };
 };

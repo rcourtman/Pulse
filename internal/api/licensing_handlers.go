@@ -63,6 +63,7 @@ type LicenseHandlers struct {
 	mtMonitor                 *monitoring.MultiTenantMonitor
 	hostedLeaseRefresh        sync.Map // map[string]*hostedEntitlementRefreshLoop
 	runtimeVersion            string
+	runtimeIdentity           runtimeIdentityModel
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -107,6 +108,20 @@ func (h *LicenseHandlers) SetRuntimeVersion(version string) {
 		return
 	}
 	h.runtimeVersion = strings.TrimSpace(version)
+}
+
+func (h *LicenseHandlers) SetRuntimeIdentity(identity runtimeIdentityModel) {
+	if h == nil {
+		return
+	}
+	h.runtimeIdentity = normalizeRuntimeIdentityFromLicensing(identity)
+}
+
+func (h *LicenseHandlers) currentRuntimeIdentity() runtimeIdentityModel {
+	if h == nil {
+		return communityRuntimeIdentityFromLicensing()
+	}
+	return normalizeRuntimeIdentityFromLicensing(h.runtimeIdentity)
 }
 
 // StopAllBackgroundLoops stops grant refresh and revocation poll loops for all tenant services.

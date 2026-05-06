@@ -12,6 +12,7 @@ import {
   AUDIT_VERIFICATION_FILTER_NEEDS_LABEL,
   getAuditEventStatusPresentation,
   getAuditEventTypeBadgeClass,
+  getAuditLogFeatureGateCopy,
   getAuditVerificationBadgePresentation,
 } from '@/utils/auditLogPresentation';
 
@@ -44,6 +45,13 @@ describe('auditLogPresentation', () => {
     });
     expect(getAuditEventStatusPresentation(false)).toMatchObject({
       className: 'w-4 h-4 text-rose-400',
+    });
+  });
+
+  it('returns paid-runtime feature gate copy when Pro hooks are unavailable', () => {
+    expect(getAuditLogFeatureGateCopy({ paidRuntimeRequired: true })).toMatchObject({
+      title: 'Pulse Pro runtime required',
+      body: expect.stringContaining('private Pulse Pro runtime'),
     });
   });
 

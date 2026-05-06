@@ -2,6 +2,7 @@ package licensing
 
 import (
 	"math"
+	"strings"
 	"time"
 )
 
@@ -83,6 +84,9 @@ type EntitlementPayload struct {
 	// CommercialMigration reports unresolved paid-license migration work entering
 	// from v5-era commercial state.
 	CommercialMigration *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
+
+	// Runtime identifies the binary/channel serving this entitlement payload.
+	Runtime *RuntimeIdentity `json:"runtime,omitempty"`
 }
 
 // CommercialPosturePayload is the canonical non-billing commercial contract
@@ -141,6 +145,31 @@ type RuntimeCapabilitiesPayload struct {
 
 	// MaxHistoryDays is the maximum metrics history retention in days for the current tier.
 	MaxHistoryDays int `json:"max_history_days"`
+
+	// Runtime identifies the binary/channel serving the runtime capability contract.
+	Runtime *RuntimeIdentity `json:"runtime,omitempty"`
+
+	// BlockedCapabilities lists licensed capabilities that this binary cannot serve.
+	BlockedCapabilities []RuntimeCapabilityBlock `json:"blocked_capabilities,omitempty"`
+}
+
+const (
+	RuntimeBuildCommunity = "community"
+	RuntimeBuildPro       = "pro"
+
+	PulseProDownloadURL = "https://pulserelay.pro/download.html"
+)
+
+type RuntimeIdentity struct {
+	Build       string `json:"build"`
+	Label       string `json:"label"`
+	DownloadURL string `json:"download_url,omitempty"`
+}
+
+type RuntimeCapabilityBlock struct {
+	Key       string `json:"key"`
+	Reason    string `json:"reason"`
+	ActionURL string `json:"action_url,omitempty"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.
@@ -189,6 +218,88 @@ func cloneLimitStatuses(values []LimitStatus) []LimitStatus {
 		return []LimitStatus{}
 	}
 	return append([]LimitStatus(nil), values...)
+}
+
+func CommunityRuntimeIdentity() RuntimeIdentity {
+	return RuntimeIdentity{
+		Build: RuntimeBuildCommunity,
+		Label: "Pulse Community runtime",
+	}
+}
+
+func ProRuntimeIdentity() RuntimeIdentity {
+	return RuntimeIdentity{
+		Build:       RuntimeBuildPro,
+		Label:       "Pulse Pro runtime",
+		DownloadURL: PulseProDownloadURL,
+	}
+}
+
+func NormalizeRuntimeIdentity(identity RuntimeIdentity) RuntimeIdentity {
+	build := strings.ToLower(strings.TrimSpace(identity.Build))
+	switch build {
+	case RuntimeBuildPro:
+		normalized := ProRuntimeIdentity()
+		if label := strings.TrimSpace(identity.Label); label != "" {
+			normalized.Label = label
+		}
+		if downloadURL := strings.TrimSpace(identity.DownloadURL); downloadURL != "" {
+			normalized.DownloadURL = downloadURL
+		}
+		return normalized
+	default:
+		normalized := CommunityRuntimeIdentity()
+		if label := strings.TrimSpace(identity.Label); label != "" {
+			normalized.Label = label
+		}
+		return normalized
+	}
+}
+
+func IsProRuntime(identity RuntimeIdentity) bool {
+	return NormalizeRuntimeIdentity(identity).Build == RuntimeBuildPro
+}
+
+func CloneRuntimeIdentity(identity RuntimeIdentity) *RuntimeIdentity {
+	normalized := NormalizeRuntimeIdentity(identity)
+	return &normalized
+}
+
+func FilterCapabilitiesForRuntimeIdentity(
+	capabilities []string,
+	identity RuntimeIdentity,
+) ([]string, []RuntimeCapabilityBlock) {
+	cloned := cloneCapabilityKeys(capabilities)
+	if IsProRuntime(identity) {
+		return cloned, nil
+	}
+
+	privateRuntimeCapabilities := map[string]struct{}{
+		FeatureAIAlerts:      {},
+		FeatureAIAutoFix:     {},
+		FeatureKubernetesAI:  {},
+		FeatureAgentProfiles: {},
+		FeatureRBAC:          {},
+		FeatureAuditLogging:  {},
+	}
+	filtered := make([]string, 0, len(cloned))
+	blocked := make([]RuntimeCapabilityBlock, 0)
+	for _, capability := range cloned {
+		normalized := strings.TrimSpace(capability)
+		if _, requiresPrivateRuntime := privateRuntimeCapabilities[normalized]; requiresPrivateRuntime {
+			blocked = append(blocked, RuntimeCapabilityBlock{
+				Key:       normalized,
+				Reason:    "paid_runtime_required",
+				ActionURL: PulseProDownloadURL,
+			})
+			continue
+		}
+		filtered = append(filtered, capability)
+	}
+	if blocked == nil {
+		blocked = []RuntimeCapabilityBlock{}
+	}
+	return filtered, blocked
 }
 
 func (c LegacyConnectionCounts) Total() int64 {

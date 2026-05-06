@@ -65,6 +65,7 @@ func (h *LicenseHandlers) buildCommercialEntitlementPayload(
 		payload.CommercialMigration = cloneCommercialMigrationStatusFromLicensing(existing.CommercialMigration)
 	}
 	payload.HostedMode = h != nil && h.hostedMode
+	payload.Runtime = cloneRuntimeIdentityFromLicensing(h.currentRuntimeIdentity())
 	return payload, nil
 }
 
@@ -127,6 +128,12 @@ func (h *LicenseHandlers) HandleRuntimeCapabilities(w http.ResponseWriter, r *ht
 		usage,
 	)
 	payload.HostedMode = h != nil && h.hostedMode
+	runtimeIdentity := h.currentRuntimeIdentity()
+	payload.Runtime = cloneRuntimeIdentityFromLicensing(runtimeIdentity)
+	payload.Capabilities, payload.BlockedCapabilities = filterCapabilitiesForRuntimeIdentityFromLicensing(
+		payload.Capabilities,
+		runtimeIdentity,
+	)
 	if h != nil && h.cfg != nil && h.cfg.DemoMode {
 		payload = sanitizeRuntimeCapabilitiesPayloadForPublicDemo(payload)
 	}

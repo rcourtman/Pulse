@@ -13,6 +13,7 @@ import {
   getSelfHostedPlanComparisonPresentation,
   getSelfHostedCurrentPlanPresentation,
   getSelfHostedCurrentPlanStatusPresentation,
+  hasPulseProRuntimeMismatch,
   getLicenseFeatureLabel,
   getLicenseStatusLoadingState,
   getLicenseSubscriptionStatusPresentation,
@@ -344,6 +345,51 @@ describe('licensePresentation', () => {
     });
   });
 
+  it('surfaces active Pro licenses that are running on the community runtime', () => {
+    const entitlements = {
+      tier: 'pro',
+      subscription_state: 'active',
+      capabilities: ['relay', 'audit_logging', 'rbac', 'ai_autofix'],
+      limits: [],
+      upgrade_reasons: [],
+      runtime: {
+        build: 'community',
+        label: 'Pulse Community runtime',
+      },
+      max_history_days: 90,
+    };
+
+    expect(hasPulseProRuntimeMismatch(entitlements)).toBe(true);
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements,
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+      }),
+    ).toMatchObject({
+      title: 'Current plan: Pulse Pro',
+      body: expect.stringContaining('private Pulse Pro runtime'),
+      supplementalBadges: ['Pro runtime missing'],
+    });
+    expect(getSelfHostedActivationProofPresentation(entitlements)?.items[0]).toMatchObject({
+      label: 'Pulse Pro runtime',
+      statusLabel: 'Needs attention',
+      state: 'missing',
+      detail: expect.stringContaining('public Docker image'),
+    });
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements,
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+        source: 'manual',
+      }),
+    ).toMatchObject({
+      title: 'Pulse Pro license is active',
+      tone: expect.stringContaining('amber'),
+      body: expect.stringContaining('community runtime'),
+      highlightsLabel: 'Licensed capabilities',
+    });
+  });
+
   it('sources active self-hosted current-plan summaries from the shared plan contract', () => {
     expect(
       getSelfHostedCurrentPlanPresentation({
@@ -468,7 +514,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Relay value proof',
-      body: "These checks come from this instance's entitlement payload, not from public pricing copy.",
+      body: "These checks come from this instance's entitlement and runtime payloads, not from public pricing copy.",
       items: [
         {
           label: 'Remote access, pairing, and push',

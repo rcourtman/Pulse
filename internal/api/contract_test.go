@@ -5875,7 +5875,8 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 		"max_history_days":7,
 		"overflow_days_remaining":14,
 			"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
-			"has_migration_gap":false
+			"has_migration_gap":false,
+			"runtime":{"build":"community","label":"Pulse Community runtime"}
 		}`
 
 	assertJSONSnapshot(t, got, want)
@@ -5914,7 +5915,8 @@ func TestContract_SelfHostedCommunityRuntimeCapabilitiesJSONSnapshot(t *testing.
 		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol"],
 			"limits":[],
 			"hosted_mode":false,
-			"max_history_days":7
+			"max_history_days":7,
+			"runtime":{"build":"community","label":"Pulse Community runtime"}
 		}`
 
 	assertJSONSnapshot(t, got, want)

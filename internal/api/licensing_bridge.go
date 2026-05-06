@@ -36,6 +36,7 @@ type subscriptionState = pkglicensing.SubscriptionState
 type entitlementPayloadModel = pkglicensing.EntitlementPayload
 type commercialPosturePayloadModel = pkglicensing.CommercialPosturePayload
 type runtimeCapabilitiesPayloadModel = pkglicensing.RuntimeCapabilitiesPayload
+type runtimeIdentityModel = pkglicensing.RuntimeIdentity
 type limitStatusModel = pkglicensing.LimitStatus
 type upgradeReasonModel = pkglicensing.UpgradeReason
 type entitlementUsageSnapshotModel = pkglicensing.EntitlementUsageSnapshot
@@ -197,6 +198,29 @@ func buildRuntimeCapabilitiesPayloadWithUsageFromLicensing(
 	usage entitlementUsageSnapshotModel,
 ) runtimeCapabilitiesPayloadModel {
 	return pkglicensing.BuildRuntimeCapabilitiesPayloadWithUsage(status, subscriptionState, usage)
+}
+
+func communityRuntimeIdentityFromLicensing() runtimeIdentityModel {
+	return pkglicensing.CommunityRuntimeIdentity()
+}
+
+func proRuntimeIdentityFromLicensing() runtimeIdentityModel {
+	return pkglicensing.ProRuntimeIdentity()
+}
+
+func normalizeRuntimeIdentityFromLicensing(identity runtimeIdentityModel) runtimeIdentityModel {
+	return pkglicensing.NormalizeRuntimeIdentity(identity)
+}
+
+func cloneRuntimeIdentityFromLicensing(identity runtimeIdentityModel) *runtimeIdentityModel {
+	return pkglicensing.CloneRuntimeIdentity(identity)
+}
+
+func filterCapabilitiesForRuntimeIdentityFromLicensing(
+	capabilities []string,
+	identity runtimeIdentityModel,
+) ([]string, []pkglicensing.RuntimeCapabilityBlock) {
+	return pkglicensing.FilterCapabilitiesForRuntimeIdentity(capabilities, identity)
 }
 
 func buildCommercialPosturePayloadWithUsageFromLicensing(

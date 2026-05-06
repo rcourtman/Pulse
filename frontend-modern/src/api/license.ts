@@ -29,6 +29,18 @@ export interface EntitlementUpgradeReason {
   action_url?: string;
 }
 
+export interface LicenseRuntimeIdentity {
+  build: string;
+  label: string;
+  download_url?: string;
+}
+
+export interface LicenseRuntimeCapabilityBlock {
+  key: string;
+  reason: string;
+  action_url?: string;
+}
+
 export interface EntitlementLegacyConnections {
   proxmox_nodes: number;
   docker_hosts: number;
@@ -48,6 +60,8 @@ export interface LicenseRuntimeCapabilities {
   limits: EntitlementLimitStatus[];
   hosted_mode?: boolean;
   max_history_days?: number;
+  runtime?: LicenseRuntimeIdentity;
+  blocked_capabilities?: LicenseRuntimeCapabilityBlock[];
 }
 
 // Mirrors internal/api/subscription_entitlements.go:CommercialPosturePayload
@@ -79,6 +93,7 @@ export interface LicenseCommercialEntitlements extends LicenseCommercialPosture 
   in_grace_period?: boolean;
   grace_period_end?: string;
   max_history_days?: number;
+  runtime?: LicenseRuntimeIdentity;
 }
 
 export type LicenseEntitlements = LicenseCommercialEntitlements;
@@ -100,13 +115,9 @@ export interface LicenseFeatureStatus {
   upgrade_url: string;
 }
 
-function normalizeRuntimeCapabilities(
-  payload: unknown,
-): LicenseRuntimeCapabilities {
+function normalizeRuntimeCapabilities(payload: unknown): LicenseRuntimeCapabilities {
   const source =
-    payload && typeof payload === 'object'
-      ? (payload as Partial<LicenseRuntimeCapabilities>)
-      : {};
+    payload && typeof payload === 'object' ? (payload as Partial<LicenseRuntimeCapabilities>) : {};
 
   return {
     ...source,
@@ -115,7 +126,12 @@ function normalizeRuntimeCapabilities(
       : [],
     limits: Array.isArray(source.limits)
       ? source.limits.filter(
-          (value): value is EntitlementLimitStatus =>
+          (value): value is EntitlementLimitStatus => Boolean(value) && typeof value === 'object',
+        )
+      : [],
+    blocked_capabilities: Array.isArray(source.blocked_capabilities)
+      ? source.blocked_capabilities.filter(
+          (value): value is LicenseRuntimeCapabilityBlock =>
             Boolean(value) && typeof value === 'object',
         )
       : [],
@@ -163,5 +179,4 @@ export class LicenseAPI {
       body: JSON.stringify({}),
     }) as Promise<ClearLicenseResponse>;
   }
-
 }

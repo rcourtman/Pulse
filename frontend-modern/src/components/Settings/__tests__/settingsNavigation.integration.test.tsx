@@ -316,6 +316,33 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
+  it('keeps paid-runtime-blocked audit tabs visible so the panel can explain the runtime mismatch', () => {
+    const isRuntimeCapabilityBlocked = (feature: string, reason?: string) =>
+      feature === 'audit_logging' && reason === 'paid_runtime_required';
+
+    expect(
+      shouldHideSettingsNavItem('security-audit', {
+        hasFeature: hasFeatures([]),
+        runtimeCapabilitiesLoaded: () => true,
+        hostedModeEnabled: false,
+        settingsCapabilitiesResolved: true,
+        settingsCapabilities: { auditLog: true },
+        isRuntimeCapabilityBlocked,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldHideSettingsNavItem('security-webhooks', {
+        hasFeature: hasFeatures([]),
+        runtimeCapabilitiesLoaded: () => true,
+        hostedModeEnabled: false,
+        settingsCapabilitiesResolved: true,
+        settingsCapabilities: { auditWebhooksRead: true },
+        isRuntimeCapabilityBlocked,
+      }),
+    ).toBe(false);
+  });
+
   it('derives global save behavior from tab metadata', () => {
     expect(getSettingsTabSaveBehavior('system-general')).toBe('system');
     expect(getSettingsTabSaveBehavior('system-network')).toBe('system');

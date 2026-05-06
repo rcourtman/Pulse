@@ -1198,6 +1198,11 @@ browser must not keep retrying `/api/license/commercial-posture`,
 commercial endpoints from performance-sensitive settings or route shells. The
 retired local commercial analytics routes must not become route-shell polling
 fallbacks or background bootstrap work after their normal product API removal.
+Paid-runtime block records are allowed on that same small
+runtime-capabilities response, but route shells must treat them as already
+loaded runtime identity facts. They must not start polling billing
+entitlements, checkout, or commercial posture endpoints just to decide whether
+a community runtime should show private Pulse Pro download guidance.
 Workloads and infrastructure summary consumers now also keep null-tolerant read
 models on the shared hot path. Guest rows, stacked bars, anomaly summaries, and
 resource detail mappers may accept partial platform metadata or undefined

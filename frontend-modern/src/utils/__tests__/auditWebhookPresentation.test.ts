@@ -24,6 +24,13 @@ describe('auditWebhookPresentation', () => {
     });
   });
 
+  it('returns paid-runtime copy when the license is active on a community runtime', () => {
+    expect(getAuditWebhookFeatureGateCopy({ paidRuntimeRequired: true })).toMatchObject({
+      title: 'Pulse Pro runtime required',
+      body: expect.stringContaining('private Pulse Pro runtime'),
+    });
+  });
+
   it('returns canonical empty state copy and shell classes', () => {
     expect(getAuditWebhookEmptyStateCopy()).toMatchObject({
       title: 'No audit webhooks configured yet.',

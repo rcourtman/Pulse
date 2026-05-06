@@ -193,9 +193,8 @@ describe('settings architecture guardrails', () => {
     expect(dataHandlingPanelSource).not.toContain('higher limits');
     expect(dataHandlingPanelSource).not.toContain('Upgrade');
     expect(dataHandlingPanelSource).not.toContain('Pro');
-    expect(auditWebhookPanelSource).toContain(
-      'getAuditWebhookFeatureGateCopy({ showCommercialCopy: showUpgradePrompts() })',
-    );
+    expect(auditWebhookPanelSource).toContain('getAuditWebhookFeatureGateCopy({');
+    expect(auditWebhookPanelSource).toContain('paidRuntimeRequired: paidRuntimeRequired()');
     expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
     expect(reportingPanelSource).toContain('if (!catalog || !state || showUpgradePrompts())');
     expect(reportingPanelSource).toContain('title: catalog.title');
@@ -250,7 +249,9 @@ describe('settings architecture guardrails', () => {
     expect(ssoProvidersPanelSource).toContain("openAddModal('saml')");
     expect(ssoProvidersPanelSource).toContain('getSSOProviderAddButtonLabel');
     expect(ssoProvidersPanelSource).toContain('Groups Claim');
-    expect(ssoProvidersPanelSource).toContain('Claim used for OIDC allowed groups and role mappings.');
+    expect(ssoProvidersPanelSource).toContain(
+      'Claim used for OIDC allowed groups and role mappings.',
+    );
     expect(ssoProvidersPanelSource).not.toContain('showSamlUpsell');
     expect(ssoProvidersPanelSource).not.toContain('UpgradeLink');
     expect(ssoProvidersPanelSource).not.toContain('Add SAML (Pro)');
@@ -441,9 +442,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Infrastructure systems');
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
-    expect(monitoredSystemImpactPreviewSource).toContain(
-      'getMonitoredSystemImpactPreviewTitle',
-    );
+    expect(monitoredSystemImpactPreviewSource).toContain('getMonitoredSystemImpactPreviewTitle');
     expect(monitoredSystemImpactPreviewSource).toContain(
       'formatMonitoredSystemImpactPreviewSummary',
     );
