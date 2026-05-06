@@ -175,6 +175,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"[Operator Briefing]",
 		`appendChatContextLine(b, "Recency", formatUnifiedFindingBriefingRecencyFacts(f))`,
 		"formatUnifiedFindingBriefingRecencyFacts(f)",
+		`appendChatContextLine(b, "Attention Reason", attention)`,
+		"unifiedFindingBriefingAttention(f)",
 		`appendChatContextLine(b, "Evidence Snapshot", evidence)`,
 		`appendChatContextLine(b, "Verification", verification)`,
 		"formatInvestigationRecordEvidenceBriefing",

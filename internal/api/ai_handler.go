@@ -977,6 +977,9 @@ func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.
 	appendChatContextLine(b, "Finding", formatUnifiedFindingBriefingFinding(f))
 	appendChatContextLine(b, "Resource", formatUnifiedFindingBriefingResource(f))
 	appendChatContextLine(b, "Priority", formatUnifiedFindingBriefingPriority(f))
+	if attention := unifiedFindingBriefingAttention(f); attention != "" {
+		appendChatContextLine(b, "Attention Reason", attention)
+	}
 	appendChatContextLine(b, "Recency", formatUnifiedFindingBriefingRecencyFacts(f))
 	appendChatContextLine(b, "Investigation", formatUnifiedFindingBriefingInvestigation(f))
 	if evidence := unifiedFindingBriefingEvidence(f); evidence != "" {
@@ -1064,6 +1067,79 @@ func formatUnifiedFindingBriefingPriority(f *unified.UnifiedFinding) string {
 		parts = append(parts, fmt.Sprintf("regressed %d times", f.RegressionCount))
 	}
 	return strings.Join(parts, "; ")
+}
+
+func unifiedFindingBriefingAttention(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	now := time.Now()
+	parts := make([]string, 0, 8)
+	status := unifiedFindingChatStatus(f, now)
+	switch status {
+	case "active":
+		if severity := strings.TrimSpace(string(f.Severity)); severity != "" {
+			parts = append(parts, "active "+severity+" finding")
+		} else {
+			parts = append(parts, "active finding")
+		}
+	case "resolved":
+		if f.RegressionCount > 0 {
+			parts = append(parts, "resolved after prior regression")
+		} else {
+			parts = append(parts, "resolved finding")
+		}
+	case "snoozed":
+		parts = append(parts, "snoozed finding")
+	case "dismissed":
+		parts = append(parts, "dismissed finding")
+	case "suppressed":
+		parts = append(parts, "suppressed finding")
+	}
+	if f.RegressionCount > 0 {
+		parts = append(parts, fmt.Sprintf("regressed %d times", f.RegressionCount))
+	} else if f.TimesRaised > 1 {
+		parts = append(parts, fmt.Sprintf("raised %d times", f.TimesRaised))
+	}
+	if f.LastRegressionAt != nil {
+		parts = append(parts, "last regression "+f.LastRegressionAt.Format(time.RFC3339))
+	}
+	if loopState := strings.TrimSpace(f.LoopState); loopState != "" {
+		parts = append(parts, "loop "+loopState)
+	}
+
+	rec := f.InvestigationRecord
+	outcome := strings.TrimSpace(f.InvestigationOutcome)
+	if rec != nil {
+		outcome = strings.TrimSpace(string(rec.Outcome))
+		if approvalID := strings.TrimSpace(rec.ApprovalID); approvalID != "" {
+			parts = append(parts, "approval "+approvalID)
+		}
+		if rec.ProposedFix != nil && rec.ProposedFix.Destructive {
+			parts = append(parts, "destructive proposed fix")
+		}
+	}
+	switch aicontracts.InvestigationOutcome(outcome) {
+	case aicontracts.OutcomeFixQueued:
+		parts = append(parts, "fix queued for governed review")
+	case aicontracts.OutcomeFixExecuted:
+		parts = append(parts, "fix executed awaiting verification")
+	case aicontracts.OutcomeFixFailed:
+		parts = append(parts, "fix failed")
+	case aicontracts.OutcomeFixVerificationFailed:
+		parts = append(parts, "verification failed")
+	case aicontracts.OutcomeFixVerificationUnknown:
+		parts = append(parts, "verification inconclusive")
+	case aicontracts.OutcomeNeedsAttention:
+		parts = append(parts, "needs operator attention")
+	case aicontracts.OutcomeCannotFix:
+		parts = append(parts, "Patrol cannot safely fix")
+	case aicontracts.OutcomeTimedOut:
+		parts = append(parts, "Patrol timed out")
+	}
+
+	return formatBriefingStringList(parts, 8, "attention facts")
 }
 
 func formatUnifiedFindingBriefingRecency(f *unified.UnifiedFinding) string {

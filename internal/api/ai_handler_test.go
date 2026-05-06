@@ -732,6 +732,7 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.Contains(t, reqArg.HandoffContext, "Finding: High CPU usage (critical, performance, active)")
 			assert.Contains(t, reqArg.HandoffContext, "Resource: web-server (vm) [vm-100] on pve-1")
 			assert.Contains(t, reqArg.HandoffContext, "Priority: critical performance; status active; loop awaiting_approval; raised 3 times; regressed 2 times")
+			assert.Contains(t, reqArg.HandoffContext, "Attention Reason: active critical finding; regressed 2 times; last regression 2026-05-06T12:06:00Z; loop awaiting_approval; approval approval-123; destructive proposed fix; fix queued for governed review")
 			assert.Contains(t, reqArg.HandoffContext, "Recency: detected 2026-05-06T12:00:00Z; last seen 2026-05-06T12:02:00Z; raised 3 times; regressed 2 times; last regression 2026-05-06T12:06:00Z")
 			assert.Contains(t, reqArg.HandoffContext, "Investigation: completed; outcome fix_queued; confidence high; attempts 1")
 			assert.Contains(t, reqArg.HandoffContext, "Evidence Snapshot: metrics: CPU stayed above 95% for 10 minutes")
