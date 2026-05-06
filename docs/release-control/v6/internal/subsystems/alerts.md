@@ -63,6 +63,7 @@ operator-facing alert routing behavior for live runtime alerts.
 41. `internal/alerts/node.go`
 42. `internal/alerts/host.go`
 43. `internal/alerts/backup_snapshot.go`
+44. `internal/alerts/disk_health.go`
 
 ## Shared Boundaries
 
@@ -267,6 +268,11 @@ evaluation, backup rollup age evaluation, backup inventory readiness, PVE
 template subject matching, namespace disambiguation, and snapshot/backup active
 alert cleanup; future backup or snapshot alert behavior should extend that
 owner rather than expanding the central Manager file.
+Proxmox disk health alert evaluation now lives in
+`internal/alerts/disk_health.go`. That file owns Proxmox disk canonical
+identity, disk health assessment alerts, known-firmware health suppression, and
+SSD wearout alerts; future Proxmox disk-health behavior should extend that
+checker owner rather than expanding the central Manager file.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial

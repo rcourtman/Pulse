@@ -332,6 +332,13 @@ func TestBuildBackupPVETemplateSubjectKeyTrimsParts(t *testing.T) {
 	}
 }
 
+func TestProxmoxDiskCanonicalResourceIDTrimsIdentity(t *testing.T) {
+	got := proxmoxDiskCanonicalResourceID(" inst ", " node ", "/dev/sda")
+	if got != "inst:node:disk:dev-sda" {
+		t.Fatalf("proxmoxDiskCanonicalResourceID() = %q, want %q", got, "inst:node:disk:dev-sda")
+	}
+}
+
 func TestQuietHoursCategoryForResourceIncidentUsesIncidentCategoryMetadata(t *testing.T) {
 	availability := &Alert{
 		Type: "resource-incident",
