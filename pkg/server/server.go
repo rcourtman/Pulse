@@ -152,6 +152,13 @@ func Run(ctx context.Context, version string) error {
 	// Initialize license public key for Pro feature validation
 	pkglicensing.InitEmbeddedPublicKey()
 
+	mainAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.FrontendPort)
+	mainListener, err := net.Listen("tcp", mainAddr)
+	if err != nil {
+		return fmt.Errorf("failed to bind UI/API server on %s: %w", mainAddr, err)
+	}
+	defer mainListener.Close()
+
 	// Multi-tenant persistence is the canonical way to resolve the base data directory.
 	// It uses cfg.DataPath, which already includes PULSE_DATA_DIR overrides.
 	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
@@ -486,7 +493,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Create HTTP server with unified configuration
 	srv := &http.Server{
-		Addr:              fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.FrontendPort),
+		Addr:              mainAddr,
 		Handler:           router.Handler(),
 		ReadHeaderTimeout: 15 * time.Second,
 		WriteTimeout:      0, // Disabled to support SSE/streaming
@@ -582,16 +589,16 @@ func Run(ctx context.Context, version string) error {
 	}
 
 	// Start server
+	serverErr := make(chan error, 1)
 	go func() {
+		var err error
 		if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
 			log.Info().
 				Str("host", cfg.BindAddress).
 				Int("port", cfg.FrontendPort).
 				Str("protocol", "HTTPS").
 				Msg("Server listening")
-			if err := srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
-				log.Error().Err(err).Msg("Failed to start HTTPS server")
-			}
+			err = srv.ServeTLS(mainListener, cfg.TLSCertFile, cfg.TLSKeyFile)
 		} else {
 			if cfg.HTTPSEnabled {
 				log.Warn().Msg("HTTPS_ENABLED is true but TLS_CERT_FILE or TLS_KEY_FILE not configured, falling back to HTTP")
@@ -601,9 +608,10 @@ func Run(ctx context.Context, version string) error {
 				Int("port", cfg.FrontendPort).
 				Str("protocol", "HTTP").
 				Msg("Server listening")
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Error().Err(err).Msg("Failed to start HTTP server")
-			}
+			err = srv.Serve(mainListener)
+		}
+		if err != nil && err != http.ErrServerClosed {
+			serverErr <- err
 		}
 	}()
 
@@ -616,8 +624,14 @@ func Run(ctx context.Context, version string) error {
 	defer signal.Stop(sigChan)
 	defer signal.Stop(reloadChan)
 
+	var runErr error
 	for {
 		select {
+		case err := <-serverErr:
+			runErr = fmt.Errorf("UI/API server stopped unexpectedly: %w", err)
+			log.Error().Err(runErr).Msg("Shutting down after UI/API server failure")
+			goto shutdown
+
 		case <-ctx.Done():
 			log.Info().Msg("Context cancelled, shutting down...")
 			goto shutdown
@@ -683,7 +697,7 @@ shutdown:
 		log.Error().Err(err).Msg("Failed to close audit logger")
 	}
 	log.Info().Msg("Server stopped")
-	return nil
+	return runErr
 }
 
 // startMetricsServer starts the Prometheus /metrics endpoint. When metricsToken

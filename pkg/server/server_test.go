@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,16 +98,60 @@ func TestPerformAutoImport_Success(t *testing.T) {
 	}
 }
 
+func availableTCPPort(t *testing.T) int {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer listener.Close()
+
+	return listener.Addr().(*net.TCPAddr).Port
+}
+
+func waitForHTTPStatus(t *testing.T, url string, want int) {
+	t.Helper()
+
+	client := &http.Client{Timeout: 200 * time.Millisecond}
+	deadline := time.Now().Add(5 * time.Second)
+	var lastErr error
+	var lastStatus int
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(url)
+		if err == nil {
+			lastStatus = resp.StatusCode
+			resp.Body.Close()
+			if lastStatus == want {
+				return
+			}
+		} else {
+			lastErr = err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if lastErr != nil {
+		t.Fatalf("timed out waiting for %s: last error: %v", url, lastErr)
+	}
+	t.Fatalf("timed out waiting for %s: last status %d, want %d", url, lastStatus, want)
+}
+
 // Minimal test for Server startup context cancellation
 func TestServerRun_Shutdown(t *testing.T) {
 	// Setup minimal environment
 	tmpDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tmpDir)
 	t.Setenv("PULSE_CONFIG_PATH", tmpDir)
+	t.Setenv("BIND_ADDRESS", "127.0.0.1")
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", availableTCPPort(t)))
 
-	// Create a dummy config.yaml
+	oldMetricsPort := MetricsPort
+	MetricsPort = 0
+	defer func() { MetricsPort = oldMetricsPort }()
+
+	// Create a minimal config; environment variables own the listener ports for this test.
 	configFile := filepath.Join(tmpDir, "config.yaml")
-	// Use 0 port to try to avoid conflicts, though Run() might default it.
 	if err := os.WriteFile(configFile, []byte("bindAddress: 127.0.0.1\nfrontendPort: 0"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -121,6 +168,61 @@ func TestServerRun_Shutdown(t *testing.T) {
 
 	if err != nil && err != context.Canceled {
 		t.Logf("Run returned: %v", err)
+	}
+}
+
+func TestServerRunFailsFastWhenFrontendPortIsAlreadyBound(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer listener.Close()
+
+	tmpDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tmpDir)
+	t.Setenv("BIND_ADDRESS", "127.0.0.1")
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", listener.Addr().(*net.TCPAddr).Port))
+
+	oldMetricsPort := MetricsPort
+	MetricsPort = 0
+	defer func() { MetricsPort = oldMetricsPort }()
+
+	err = Run(context.Background(), "test-version")
+	if err == nil || !strings.Contains(err.Error(), "failed to bind UI/API server") {
+		t.Fatalf("expected frontend bind failure, got %v", err)
+	}
+}
+
+func TestServerRunKeepsFrontendWhenMetricsPortConflicts(t *testing.T) {
+	port := availableTCPPort(t)
+
+	tmpDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tmpDir)
+	t.Setenv("BIND_ADDRESS", "127.0.0.1")
+	t.Setenv("FRONTEND_PORT", fmt.Sprintf("%d", port))
+
+	oldMetricsPort := MetricsPort
+	MetricsPort = port
+	defer func() { MetricsPort = oldMetricsPort }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Run(ctx, "test-version")
+	}()
+
+	waitForHTTPStatus(t, fmt.Sprintf("http://127.0.0.1:%d/api/health", port), http.StatusOK)
+
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for Run to shut down")
 	}
 }
 
