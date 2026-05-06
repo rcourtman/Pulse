@@ -526,6 +526,12 @@ Frontend resource adapters must preserve that same availability identity on
 both REST and realtime paths: a thin `network-endpoint` update with
 availability data is still `platformType=availability`, `sourceType=api`, and
 must not regress to a generic platform badge in infrastructure rows or drawers.
+Infrastructure row presentation must also consume that availability payload as
+operator evidence, not only as badge identity. `network-endpoint` rows should
+surface the probe method, latest latency or failure result, and recent check
+timing from either the top-level availability field or the live-state
+`platformData.availability` mirror, so REST and realtime paths answer what was
+measured without requiring the drawer.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata

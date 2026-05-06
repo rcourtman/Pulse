@@ -971,6 +971,13 @@ surplus width is redistributed across peer metric, source, uptime, and action
 columns instead of being dumped into the first column and wasting operator
 visible table density.
 That hot-path contract now includes policy badge rendering on resource rows.
+Agentless availability evidence belongs on that same bounded row path.
+Infrastructure `network-endpoint` rows may replace otherwise empty host metric
+slots with compact probe method/result text and may add one compact resource
+subline for latency, failure, and recent check timing, but they must derive
+that text from the existing resource payload and shared presentation helper
+instead of adding a per-row fetch, extra hydration pass, or unbounded badge
+stack.
 The infrastructure summary hot path is now explicit shared ownership too:
 `InfrastructureSummary.tsx` stays a render shell,
 `useInfrastructureSummaryState.ts` owns chart polling and cache lifecycle, and

@@ -2808,3 +2808,9 @@ agentless endpoints must also stay on the shared settings form vocabulary:
 presets may fill protocol, port, and path defaults, but display badges and
 drawers still derive `Availability` and `Network Endpoint` labels from the
 shared resource presentation helpers rather than from preset-local copy.
+Infrastructure rows for those same agentless endpoints must surface probe
+evidence directly in the row, not just as a green status dot or an
+`Availability` badge. The shared row presentation must expose the probe method,
+latest latency or failure result, and recent check timing from the canonical
+availability payload so operators can understand what was actually measured
+without opening the drawer.

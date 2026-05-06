@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
@@ -125,6 +125,10 @@ describe('UnifiedResourceTable performance contract', () => {
     localStorage.clear();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('Fixture profile validation', () => {
     for (const [profile, count] of Object.entries(PROFILES)) {
       it(`builds profile ${profile} with stable size and type distribution`, () => {
@@ -215,6 +219,48 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getByText('Unraid')).toBeInTheDocument();
       });
       expect(queryByText('Docker')).toBeNull();
+    });
+
+    it('surfaces availability probe evidence directly in network endpoint rows', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-05-06T13:00:20Z').getTime());
+      const resources = [
+        makeResource(1, {
+          type: 'network-endpoint',
+          name: 'MQTT power meter',
+          displayName: 'MQTT power meter',
+          platformId: 'mock-availability-mqtt-meter',
+          platformType: 'availability',
+          sourceType: 'api',
+          status: 'online',
+          cpu: undefined,
+          memory: undefined,
+          disk: undefined,
+          platformData: {
+            sources: ['availability'],
+            availability: {
+              protocol: 'tcp',
+              port: 1883,
+              available: true,
+              latencyMillis: 7,
+              lastChecked: '2026-05-06T13:00:06Z',
+            },
+          },
+        }),
+      ];
+
+      const { getByText, getAllByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(getByText('TCP 1883 - 7 ms - checked 14s ago')).toBeInTheDocument();
+      });
+      expect(getAllByText('7 ms').length).toBeGreaterThanOrEqual(1);
     });
 
     it('adapts host columns from the measured table surface width instead of the window width', async () => {
