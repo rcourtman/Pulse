@@ -420,8 +420,11 @@ bypass the API fail-closed execution gate.
     unified finding and investigation-record context on follow-up turns, that
     stored reference is still an adjacent AI/runtime context selector and must
     not become backup freshness, restore support, recovery execution authority,
-    or storage-local lifecycle state. Structured action or approval references
-    carried by that handoff are also adjacent AI/runtime review metadata only;
+    or storage-local lifecycle state. Clearing that handoff when the current
+    finding no longer resolves is adjacent AI/runtime invalidation, not a
+    recovery freshness or restore-support decision. Structured action or
+    approval references carried by that handoff are also adjacent AI/runtime
+    review metadata only;
     storage and recovery surfaces must not reinterpret approval IDs, fix IDs,
     risk, or target labels as restore support, backup freshness, recovery
     execution authority, or a storage-local approval bypass. Any refreshed

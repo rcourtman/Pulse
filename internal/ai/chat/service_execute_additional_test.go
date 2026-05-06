@@ -800,6 +800,66 @@ func TestRefreshHandoffActionApprovalStatusRejectsCrossOrgApproval(t *testing.T)
 	}
 }
 
+func TestService_ClearModelHandoffContextInvalidatesUnpinnedActionScope(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	if err := store.SetModelHandoffFindingID(session.ID, "finding-123"); err != nil {
+		t.Fatalf("SetModelHandoffFindingID failed: %v", err)
+	}
+	if err := store.SetModelHandoffContext(session.ID, "[Finding Context]\nID: finding-123"); err != nil {
+		t.Fatalf("SetModelHandoffContext failed: %v", err)
+	}
+	if err := store.SetModelHandoffResources(session.ID, []HandoffResource{{
+		ID:   "vm-100",
+		Name: "web-server",
+		Type: "vm",
+		Node: "pve-1",
+	}}); err != nil {
+		t.Fatalf("SetModelHandoffResources failed: %v", err)
+	}
+
+	resolvedCtx := store.GetResolvedContext(session.ID)
+	resolvedCtx.AddResolvedResource(tools.ResourceRegistration{
+		Kind:        "vm",
+		ProviderUID: "100",
+		HostName:    "pve-1",
+		Name:        "web-server",
+	})
+	resolvedCtx.AddResolvedResource(tools.ResourceRegistration{
+		Kind:        "vm",
+		ProviderUID: "101",
+		HostName:    "pve-1",
+		Name:        "pinned-vm",
+	})
+	resolvedCtx.PinResource("vm:pve-1:101")
+
+	svc := &Service{
+		sessions: store,
+		started:  true,
+	}
+	if err := svc.ClearModelHandoffContext(context.Background(), session.ID); err != nil {
+		t.Fatalf("ClearModelHandoffContext failed: %v", err)
+	}
+
+	if got, err := store.GetModelHandoffFindingID(session.ID); err != nil {
+		t.Fatalf("GetModelHandoffFindingID failed: %v", err)
+	} else if got != "" {
+		t.Fatalf("handoff finding ID after clear = %q, want empty", got)
+	}
+	if _, ok := resolvedCtx.GetResourceByID("vm:pve-1:100"); ok {
+		t.Fatalf("stale handoff resource remained in resolved context")
+	}
+	if _, ok := resolvedCtx.GetResourceByID("vm:pve-1:101"); !ok {
+		t.Fatalf("pinned user resource should survive handoff invalidation")
+	}
+}
+
 func TestService_ExecuteStream_HandoffResourceHydratesResolvedContext(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)

@@ -1610,6 +1610,24 @@ func (s *Service) GetModelHandoffFindingID(ctx context.Context, sessionID string
 	return sessions.GetModelHandoffFindingID(sessionID)
 }
 
+// ClearModelHandoffContext invalidates product-originated model-only handoff
+// state after its source record can no longer be resolved. Unpinned resolved
+// resources are cleared with it so stale Patrol handoffs cannot remain action
+// scope on follow-up turns.
+func (s *Service) ClearModelHandoffContext(ctx context.Context, sessionID string) error {
+	s.mu.RLock()
+	sessions := s.sessions
+	s.mu.RUnlock()
+
+	if sessions == nil {
+		return fmt.Errorf("service not started")
+	}
+
+	err := sessions.ClearModelHandoffContext(sessionID)
+	sessions.ClearSessionState(sessionID, true)
+	return err
+}
+
 // AbortSession aborts an ongoing session
 func (s *Service) AbortSession(ctx context.Context, sessionID string) error {
 	s.mu.RLock()

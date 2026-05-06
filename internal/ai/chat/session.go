@@ -572,6 +572,15 @@ func (s *SessionStore) clearModelHandoffContextLocked(id string) error {
 	return s.writeSession(*data)
 }
 
+// ClearModelHandoffContext removes product-originated model-only handoff
+// metadata while leaving the user-authored message history intact.
+func (s *SessionStore) ClearModelHandoffContext(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.clearModelHandoffContextLocked(id)
+}
+
 // UpdateLastMessage updates the last message in a session (for streaming updates)
 func (s *SessionStore) UpdateLastMessage(id string, msg Message) error {
 	s.mu.Lock()

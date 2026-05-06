@@ -44,6 +44,7 @@ type AIService interface {
 	DeleteSession(ctx context.Context, sessionID string) error
 	GetMessages(ctx context.Context, sessionID string) ([]chat.Message, error)
 	GetModelHandoffFindingID(ctx context.Context, sessionID string) (string, error)
+	ClearModelHandoffContext(ctx context.Context, sessionID string) error
 	AbortSession(ctx context.Context, sessionID string) error
 	SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
 	GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error)
@@ -1185,13 +1186,23 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if findingID != "" {
+		findingResolved := false
 		store := h.GetUnifiedStoreForOrg(GetOrgID(ctx))
 		if store != nil {
 			if f := store.Get(findingID); f != nil {
+				findingResolved = true
 				handoffContext = buildUnifiedFindingChatContext(f)
 				handoffResources = buildUnifiedFindingHandoffResources(f)
 				handoffActions = buildUnifiedFindingHandoffActions(f)
 			}
+		}
+		if !findingResolved {
+			if sessionID := strings.TrimSpace(req.SessionID); sessionID != "" {
+				if err := svc.ClearModelHandoffContext(ctx, sessionID); err != nil {
+					log.Debug().Err(err).Str("session_id", sessionID).Str("finding_id", findingID).Msg("Unable to clear stale Assistant finding handoff context")
+				}
+			}
+			findingID = ""
 		}
 	}
 

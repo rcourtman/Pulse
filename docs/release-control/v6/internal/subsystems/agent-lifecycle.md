@@ -364,7 +364,9 @@ profile and assignment columns, but embedded table framing must route through
    stores the originating finding ID to refresh the current unified finding and
    investigation record on follow-up turns, that stored reference remains an
    AI/runtime context selector and still cannot become agent enrollment,
-   lifecycle, or command-websocket authority. Structured Assistant handoff action
+   lifecycle, or command-websocket authority. Clearing that stored handoff when
+   the finding no longer resolves is also AI/runtime invalidation, not an agent
+   lifecycle transition. Structured Assistant handoff action
    references from the same Patrol finding remain AI/runtime review metadata
    only; lifecycle code must not treat approval IDs, fix IDs, risk, or
    target-resource labels from that handoff as agent command grants, enrollment

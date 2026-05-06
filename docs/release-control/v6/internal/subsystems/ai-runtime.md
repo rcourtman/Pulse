@@ -189,7 +189,11 @@ runtime cost control, and shared AI transport surfaces.
     persist as session model-context metadata so follow-up turns can refresh the
     current unified finding and investigation record before model execution;
     those references remain model-only context selectors, not saved user text or
-    lifecycle authority. Assistant runtime may also hydrate canonical
+    lifecycle authority. If the referenced finding no longer resolves through
+    the current unified finding store, Assistant must invalidate the stored
+    model-only handoff and unpinned handoff-seeded resource scope instead of
+    falling back to stale investigation context. Assistant runtime may also
+    hydrate canonical
     resource-policy context for those handoff resources, using the same
     unified-resource resolution and policy presentation helpers that govern
     mention prefetch and provider-bound redaction; that context remains

@@ -93,6 +93,16 @@ func (m *MockAIService) GetModelHandoffFindingID(ctx context.Context, sessionID 
 	return "", nil
 }
 
+func (m *MockAIService) ClearModelHandoffContext(ctx context.Context, sessionID string) error {
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "ClearModelHandoffContext" {
+			args := m.Called(ctx, sessionID)
+			return args.Error(0)
+		}
+	}
+	return nil
+}
+
 func (m *MockAIService) AbortSession(ctx context.Context, sessionID string) error {
 	args := m.Called(ctx, sessionID)
 	return args.Error(0)
@@ -726,6 +736,43 @@ func TestHandleChat_RefreshesStoredFindingContextForFollowUp(t *testing.T) {
 			assert.Contains(t, reqArg.HandoffContext, "Investigation Outcome: resolved")
 			assert.Contains(t, reqArg.HandoffContext, "User Note: Operator confirmed the maintenance window completed.")
 			assert.NotContains(t, reqArg.HandoffContext, "User message: What changed?")
+		})
+
+	body := `{"prompt":"What changed?","session_id":"session-123"}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestHandleChat_ClearsStoredFindingContextWhenFollowUpFindingMissing(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+	h.SetUnifiedStore(unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig()))
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("GetModelHandoffFindingID", mock.Anything, "session-123").
+		Return("finding-missing", nil)
+	mockSvc.
+		On("ClearModelHandoffContext", mock.Anything, "session-123").
+		Return(nil)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "session-123", reqArg.SessionID)
+			assert.Equal(t, "", reqArg.FindingID)
+			assert.Equal(t, "What changed?", reqArg.Prompt)
+			assert.Equal(t, "", reqArg.HandoffContext)
+			assert.Empty(t, reqArg.HandoffResources)
+			assert.Empty(t, reqArg.HandoffActions)
 		})
 
 	body := `{"prompt":"What changed?","session_id":"session-123"}`

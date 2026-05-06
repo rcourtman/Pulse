@@ -760,7 +760,10 @@ the canonical monitored-system blocked payload.
    finding ID as model-context metadata so later turns in the same Assistant
    session can refresh the current unified finding and investigation record
    before model execution; that reference is not lifecycle authority and must not
-   be persisted as user text. Chat execution may also hydrate canonical
+   be persisted as user text. If that reference no longer resolves through the
+   current unified finding store, the API/chat boundary must clear the stored
+   handoff context and unpinned handoff-seeded resource scope rather than
+   replaying stale investigation state. Chat execution may also hydrate canonical
    resource-policy context for those resources through unified-resource
    resolution and shared policy presentation helpers, but the resulting handling
    guidance is read-only, model-only context and must not become saved user text,

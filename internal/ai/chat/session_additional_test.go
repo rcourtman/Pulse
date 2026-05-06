@@ -318,6 +318,74 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	}
 }
 
+func TestSessionStore_ClearModelHandoffContext(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := store.SetModelHandoffFindingID(session.ID, "finding-123"); err != nil {
+		t.Fatalf("SetModelHandoffFindingID failed: %v", err)
+	}
+	if err := store.SetModelHandoffContext(session.ID, "[Finding Context]\nID: finding-123"); err != nil {
+		t.Fatalf("SetModelHandoffContext failed: %v", err)
+	}
+	if err := store.SetModelHandoffResources(session.ID, []HandoffResource{{
+		ID:   "vm-100",
+		Name: "web-server",
+		Type: "vm",
+	}}); err != nil {
+		t.Fatalf("SetModelHandoffResources failed: %v", err)
+	}
+	if err := store.SetModelHandoffActions(session.ID, []HandoffAction{{
+		FindingID:  "finding-123",
+		ApprovalID: "approval-123",
+		FixID:      "fix-123",
+	}}); err != nil {
+		t.Fatalf("SetModelHandoffActions failed: %v", err)
+	}
+	if err := store.AddMessage(session.ID, Message{Role: "user", Content: "What changed?"}); err != nil {
+		t.Fatalf("AddMessage failed: %v", err)
+	}
+
+	if err := store.ClearModelHandoffContext(session.ID); err != nil {
+		t.Fatalf("ClearModelHandoffContext failed: %v", err)
+	}
+
+	if got, err := store.GetModelHandoffFindingID(session.ID); err != nil {
+		t.Fatalf("GetModelHandoffFindingID failed: %v", err)
+	} else if got != "" {
+		t.Fatalf("handoff finding ID after clear = %q, want empty", got)
+	}
+	if got, err := store.GetModelHandoffContext(session.ID); err != nil {
+		t.Fatalf("GetModelHandoffContext failed: %v", err)
+	} else if got != "" {
+		t.Fatalf("handoff context after clear = %q, want empty", got)
+	}
+	if got, err := store.GetModelHandoffResources(session.ID); err != nil {
+		t.Fatalf("GetModelHandoffResources failed: %v", err)
+	} else if len(got) != 0 {
+		t.Fatalf("handoff resources after clear = %#v, want empty", got)
+	}
+	if got, err := store.GetModelHandoffActions(session.ID); err != nil {
+		t.Fatalf("GetModelHandoffActions failed: %v", err)
+	} else if len(got) != 0 {
+		t.Fatalf("handoff actions after clear = %#v, want empty", got)
+	}
+
+	messages, err := store.GetMessages(session.ID)
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	if len(messages) != 1 || messages[0].Content != "What changed?" {
+		t.Fatalf("messages after handoff clear = %#v, want user history retained", messages)
+	}
+}
+
 func TestSessionStore_ResolvedContextLifecycle(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
