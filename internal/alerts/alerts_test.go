@@ -698,6 +698,50 @@ func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
 	}
 }
 
+func TestClearAlertByCanonicalAliasRemovesActiveState(t *testing.T) {
+	m := newTestManager(t)
+	resourceID := "guest-200"
+	canonicalState := buildCanonicalStateID(resourceID, "metric-threshold:cpu")
+	now := time.Now()
+	alert := &Alert{
+		ID:              "legacy-guest-200-cpu",
+		Type:            "cpu",
+		Level:           AlertLevelWarning,
+		ResourceID:      resourceID,
+		CanonicalSpecID: "metric-threshold:cpu",
+		CanonicalKind:   "metric_threshold",
+		CanonicalState:  canonicalState,
+		ResourceName:    "guest-200",
+		StartTime:       now.Add(-time.Minute),
+		LastSeen:        now,
+	}
+
+	m.mu.Lock()
+	m.setActiveAlertNoLock(alert.ID, alert)
+	m.pendingAlerts[canonicalState] = now
+	m.suppressedUntil[canonicalState] = now.Add(time.Minute)
+	m.alertRateLimit[canonicalState] = []time.Time{now}
+	m.mu.Unlock()
+
+	if ok := m.ClearAlert(canonicalState); !ok {
+		t.Fatalf("expected manual clear by canonical alias to succeed")
+	}
+
+	m.mu.RLock()
+	_, active := m.getActiveAlertNoLock(canonicalState)
+	_, pending := m.pendingAlerts[canonicalState]
+	_, suppressed := m.suppressedUntil[canonicalState]
+	_, rateLimited := m.alertRateLimit[canonicalState]
+	m.mu.RUnlock()
+
+	if active {
+		t.Fatal("expected canonical alias clear to remove active alert")
+	}
+	if pending || suppressed || rateLimited {
+		t.Fatalf("expected canonical alias clear to remove tracking state: pending=%v suppressed=%v rateLimited=%v", pending, suppressed, rateLimited)
+	}
+}
+
 func TestAddRecentlyResolvedUsesCanonicalStorageKey(t *testing.T) {
 	m := newTestManager(t)
 

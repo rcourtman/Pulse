@@ -70,6 +70,7 @@ operator-facing alert routing behavior for live runtime alerts.
 48. `internal/alerts/config_runtime.go`
 49. `internal/alerts/active_persistence.go`
 50. `internal/alerts/tracking_cleanup.go`
+51. `internal/alerts/active_lifecycle.go`
 
 ## Shared Boundaries
 
@@ -242,6 +243,11 @@ file owns stale flapping, suppression, pending-alert, offline-confirmation,
 Docker tracking, rate-limit, recent-alert, acknowledgement, and stale active
 alert cleanup; future cleanup rules should extend that owner rather than
 mixing cleanup into resource evaluators.
+Active-alert lifecycle now lives in `internal/alerts/active_lifecycle.go`.
+That file owns acknowledgement and unacknowledgement, manual active-alert
+clearing, preserved alert state during rebuilds, poll-confirmed offline
+recovery clears, resolved-alert registration, and no-lock active-alert removal
+helpers; future active-alert lifecycle changes should extend that owner.
 Alert notification policy now lives in `internal/alerts/notification_policy.go`.
 That file owns dispatch suppression, flapping suppression, quiet-hours
 suppression, monitor-only notification suppression, cooldown decisions, and
