@@ -110,10 +110,12 @@ Patrol-specific presentation helpers.
    command payloads inside governed approval/remediation context rather than
    rendering them as handoff copy. Assistant may also enrich that same handoff
    with canonical resource-policy guidance, canonical resource-relationship
-   context, and recent canonical resource-timeline changes for explanation, but
-   Patrol must keep the visible finding and drawer briefing tied to the shared
-   investigation payload rather than forking a Patrol-local policy, topology, or
-   timeline summary.
+   context, and recent canonical resource-timeline changes for explanation;
+   Assistant resolves those timeline lookups through the current canonical
+   unified-resource model before falling back to handoff IDs. Patrol must keep
+   the visible finding and drawer briefing tied to the shared investigation
+   payload rather than forking a Patrol-local policy, topology, or timeline
+   summary.
 
 ## Current State
 

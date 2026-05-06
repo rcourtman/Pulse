@@ -707,7 +707,7 @@ func TestBuildHandoffResourceTimelineContextUsesRelatedCanonicalChanges(t *testi
 		ID:   "vm-100",
 		Name: "web-server",
 		Type: "vm",
-	}}, store, now)
+	}}, nil, store, now)
 	if !strings.Contains(contextText, "vm-100: **State transition** running") {
 		t.Fatalf("timeline context missing direct change: %q", contextText)
 	}
@@ -716,6 +716,44 @@ func TestBuildHandoffResourceTimelineContextUsesRelatedCanonicalChanges(t *testi
 	}
 	if strings.Contains(contextText, "Approval ID") {
 		t.Fatalf("timeline context should not include approval metadata: %q", contextText)
+	}
+}
+
+func TestBuildHandoffResourceTimelineContextResolvesCanonicalResourceReferences(t *testing.T) {
+	now := time.Now()
+	store := unifiedresources.NewMemoryStore()
+	if err := store.RecordChange(unifiedresources.ResourceChange{
+		ID:            "change-canonical",
+		ResourceID:    "vm:node1:104",
+		ObservedAt:    now.Add(-3 * time.Minute),
+		Kind:          unifiedresources.ChangeStateTransition,
+		From:          "running",
+		To:            "degraded",
+		SourceType:    unifiedresources.SourcePulseDiff,
+		SourceAdapter: unifiedresources.AdapterProxmox,
+		Confidence:    unifiedresources.ConfidenceHigh,
+	}); err != nil {
+		t.Fatalf("RecordChange failed: %v", err)
+	}
+
+	provider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeVM: {{
+			ID:     "vm:node1:104",
+			Type:   unifiedresources.ResourceTypeVM,
+			Name:   "finance-vm",
+			Status: unifiedresources.StatusOnline,
+		}},
+	}}
+
+	contextText := buildHandoffResourceTimelineContext([]HandoffResource{{
+		Name: "finance-vm",
+		Type: "vm",
+	}}, provider, store, now)
+	if !strings.Contains(contextText, "vm:node1:104: **State transition** running") {
+		t.Fatalf("timeline context missing provider-resolved canonical change: %q", contextText)
+	}
+	if !strings.Contains(contextText, "Timeline Boundary: Recent changes are read-only canonical resource timeline context") {
+		t.Fatalf("timeline context missing boundary: %q", contextText)
 	}
 }
 

@@ -529,7 +529,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	s.mu.RUnlock()
 	handoffContext = mergeHandoffResourcePolicyContext(handoffContext, handoffResources, handoffResourceProvider)
 	handoffContext = mergeHandoffResourceRelationshipContext(handoffContext, handoffResources, handoffResourceProvider)
-	handoffContext = mergeHandoffResourceTimelineContext(handoffContext, handoffResources, s.actionAuditStore, time.Now())
+	handoffContext = mergeHandoffResourceTimelineContext(handoffContext, handoffResources, handoffResourceProvider, s.actionAuditStore, time.Now())
 	handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)
 	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
 
@@ -1003,8 +1003,8 @@ func mergeHandoffActionContext(handoffContext string, handoffActions []HandoffAc
 	}
 }
 
-func mergeHandoffResourceTimelineContext(handoffContext string, handoffResources []HandoffResource, store unifiedresources.ResourceStore, now time.Time) string {
-	timelineContext := buildHandoffResourceTimelineContext(handoffResources, store, now)
+func mergeHandoffResourceTimelineContext(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider, store unifiedresources.ResourceStore, now time.Time) string {
+	timelineContext := buildHandoffResourceTimelineContext(handoffResources, provider, store, now)
 	switch {
 	case strings.TrimSpace(handoffContext) == "":
 		return timelineContext
@@ -1015,9 +1015,9 @@ func mergeHandoffResourceTimelineContext(handoffContext string, handoffResources
 	}
 }
 
-func buildHandoffResourceTimelineContext(handoffResources []HandoffResource, store unifiedresources.ResourceStore, now time.Time) string {
-	resources := normalizeHandoffResources(handoffResources)
-	if len(resources) == 0 || store == nil {
+func buildHandoffResourceTimelineContext(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider, store unifiedresources.ResourceStore, now time.Time) string {
+	resourceIDs := canonicalHandoffTimelineResourceIDs(handoffResources, provider)
+	if len(resourceIDs) == 0 || store == nil {
 		return ""
 	}
 	if now.IsZero() {
@@ -1029,13 +1029,9 @@ func buildHandoffResourceTimelineContext(handoffResources []HandoffResource, sto
 		totalLimit       = 8
 	)
 	since := now.Add(-24 * time.Hour)
-	changes := make([]unifiedresources.ResourceChange, 0, len(resources)*perResourceLimit)
+	changes := make([]unifiedresources.ResourceChange, 0, len(resourceIDs)*perResourceLimit)
 	seen := make(map[string]struct{})
-	for _, resource := range resources {
-		resourceID := strings.TrimSpace(resource.ID)
-		if resourceID == "" {
-			continue
-		}
+	for _, resourceID := range resourceIDs {
 		recent, err := store.GetRecentChangesFiltered(resourceID, since, perResourceLimit, unifiedresources.ResourceChangeFilters{IncludeRelated: true})
 		if err != nil {
 			log.Debug().
@@ -1068,6 +1064,39 @@ func buildHandoffResourceTimelineContext(handoffResources []HandoffResource, sto
 		return ""
 	}
 	return contextText + "\nTimeline Boundary: Recent changes are read-only canonical resource timeline context; they are not approval or execution authority."
+}
+
+func canonicalHandoffTimelineResourceIDs(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) []string {
+	resources := normalizeHandoffResources(handoffResources)
+	if len(resources) == 0 {
+		return nil
+	}
+
+	ids := make([]string, 0, len(resources))
+	seen := make(map[string]struct{}, len(resources))
+	for _, handoffResource := range resources {
+		resourceID := strings.TrimSpace(handoffResource.ID)
+		if provider != nil {
+			if resource, ok := tools.CanonicalHandoffUnifiedResource(provider, handoffResource.ID, handoffResource.Name, handoffResource.Type, handoffResource.Node); ok {
+				if canonicalID := strings.TrimSpace(resource.ID); canonicalID != "" {
+					resourceID = canonicalID
+				}
+			}
+		}
+		if resourceID == "" {
+			continue
+		}
+		key := strings.ToLower(resourceID)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		ids = append(ids, resourceID)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return ids
 }
 
 func handoffResourceTimelineChangeKey(change unifiedresources.ResourceChange) string {

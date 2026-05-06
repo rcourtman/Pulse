@@ -169,7 +169,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"refreshHandoffActionApprovalStatus(handoffActions, s.orgID)",
 		"mergeHandoffResourcePolicyContext(handoffContext, handoffResources, handoffResourceProvider)",
 		"mergeHandoffResourceRelationshipContext(handoffContext, handoffResources, handoffResourceProvider)",
-		"mergeHandoffResourceTimelineContext(handoffContext, handoffResources, s.actionAuditStore, time.Now())",
+		"mergeHandoffResourceTimelineContext(handoffContext, handoffResources, handoffResourceProvider, s.actionAuditStore, time.Now())",
 		"handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)",
 		"s.hydrateHandoffResources(session.ID, handoffResources, sessions, unifiedResourceProvider)",
 		"injectHandoffContextIntoLatestUserMessage(messages, handoffContext)",

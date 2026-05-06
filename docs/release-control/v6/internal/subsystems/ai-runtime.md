@@ -195,10 +195,12 @@ runtime cost control, and shared AI transport surfaces.
     but those topology facts remain read-only explanation context and do not
     grant action authority. Assistant runtime may also hydrate recent changes for
     those handoff resources from the canonical unified-resource timeline as
-    model-only context on each turn, but those timeline facts remain read-only
-    explanation context and do not grant action authority. The runtime may also
-    persist structured pending-action and approval references from the same
-    investigation record as
+    model-only context on each turn; it must resolve product-originated handoff
+    references through the canonical unified-resource provider before querying
+    timeline changes, with raw handoff IDs used only as a compatibility fallback.
+    Those timeline facts remain read-only explanation context and do not grant
+    action authority. The runtime may also persist structured pending-action and
+    approval references from the same investigation record as
     model-context metadata, but those references are review context only: they
     must not include raw command text, must not grant approval or execution
     authority, and must route any operator decision back through the governed

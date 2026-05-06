@@ -765,9 +765,12 @@ the canonical monitored-system blocked payload.
    unified-resource relationship presentation and parent-edge synthesis, but
    topology context is read-only and must not become saved user text or action
    authority. Chat execution may also hydrate recent changes for those handoff
-   resources from the canonical unified-resource timeline, but the resulting
-   context is read-only, model-only explanation data and must not become saved
-   user text or action authority. The backend may also carry structured
+   resources from the canonical unified-resource timeline, but it must resolve
+   product-originated resource references through the canonical unified-resource
+   provider before querying timeline changes, with raw handoff IDs used only as a
+   compatibility fallback. The resulting context is read-only, model-only
+   explanation data and must not become saved user text or action authority. The
+   backend may also carry structured
    pending-action and approval references from the investigation record into chat
    execution, but those references must omit raw proposed-fix commands, remain
    model-only review context, and leave approval/execution authority with the

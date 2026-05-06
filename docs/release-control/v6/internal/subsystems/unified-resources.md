@@ -1000,6 +1000,13 @@ canonical parent edge through `ResourceRelationshipsWithCanonicalParent(...)`,
 and call `FormatResourceRelationshipContext(...)` rather than rebuilding
 relationship markdown in chat or Patrol-local helpers. The resulting topology
 block remains model-only explanation context, not action authority.
+Assistant finding handoffs are also part of the canonical resource-timeline
+contract: when recent-change context is hydrated for a handoff resource, chat
+execution should resolve the resource through the current unified-resource
+provider before calling `GetRecentChangesFiltered(...)`, with raw handoff IDs
+used only as a compatibility fallback. That keeps Patrol-originated discussion
+anchored to canonical resource identity instead of lane-local IDs or display
+names.
 The same shared relationship presenter also owns the compact change-timeline
 relationship summary used by resource change records, so change `from` and
 `to` values stay aligned with the canonical relationship labels instead of
