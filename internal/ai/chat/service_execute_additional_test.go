@@ -292,8 +292,9 @@ func TestService_ExecuteStream_HandoffResourceHydratesResolvedContext(t *testing
 	}
 
 	req := ExecuteRequest{
-		SessionID: "sess-handoff-resource",
-		Prompt:    "What should I do next?",
+		SessionID:      "sess-handoff-resource",
+		Prompt:         "What should I do next?",
+		HandoffContext: "[Finding Context]\nID: finding-123",
 		HandoffResources: []HandoffResource{{
 			ID:   vmResource.ID,
 			Name: "web-server",
@@ -315,6 +316,35 @@ func TestService_ExecuteStream_HandoffResourceHydratesResolvedContext(t *testing
 	}
 	if _, err := resolved.ValidateResourceForAction(info.GetResourceID(), "restart"); err != nil {
 		t.Fatalf("expected handoff VM to allow governed restart action: %v", err)
+	}
+
+	reloadedStore, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to reload session store: %v", err)
+	}
+	reloadedSvc := &Service{
+		cfg:                     &config.AIConfig{ChatModel: "openai:test"},
+		sessions:                reloadedStore,
+		executor:                executor,
+		agenticLoop:             loop,
+		provider:                provider,
+		unifiedResourceProvider: unifiedProvider,
+		started:                 true,
+	}
+	followUpReq := ExecuteRequest{
+		SessionID: "sess-handoff-resource",
+		Prompt:    "Can you restart it?",
+	}
+	if err := reloadedSvc.ExecuteStream(context.Background(), followUpReq, func(StreamEvent) {}); err != nil {
+		t.Fatalf("follow-up ExecuteStream failed: %v", err)
+	}
+	reloadedResolved := reloadedStore.GetResolvedContext("sess-handoff-resource")
+	reloadedInfo, found := reloadedResolved.GetResolvedResourceByAlias("web-server")
+	if !found {
+		t.Fatalf("expected stored handoff resource to rehydrate by alias after session reload")
+	}
+	if _, err := reloadedResolved.ValidateResourceForAction(reloadedInfo.GetResourceID(), "restart"); err != nil {
+		t.Fatalf("expected rehydrated handoff VM to allow governed restart action: %v", err)
 	}
 }
 

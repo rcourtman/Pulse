@@ -157,9 +157,12 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	chatServiceText := string(chatServiceSource)
 	for _, required := range []string{
 		"handoffContext := strings.TrimSpace(req.HandoffContext)",
+		"handoffResources := normalizeHandoffResources(req.HandoffResources)",
 		"sessions.SetModelHandoffContext(session.ID, handoffContext)",
 		"sessions.GetModelHandoffContext(session.ID)",
-		"s.hydrateHandoffResources(session.ID, req.HandoffResources, sessions, unifiedResourceProvider)",
+		"sessions.SetModelHandoffResources(session.ID, handoffResources)",
+		"sessions.GetModelHandoffResources(session.ID)",
+		"s.hydrateHandoffResources(session.ID, handoffResources, sessions, unifiedResourceProvider)",
 		"injectHandoffContextIntoLatestUserMessage(messages, handoffContext)",
 		"User message: ",
 	} {
@@ -173,6 +176,9 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"ModelContext *sessionModelContext",
 		"SetModelHandoffContext",
 		"GetModelHandoffContext",
+		"SetModelHandoffResources",
+		"GetModelHandoffResources",
+		"HandoffResources []HandoffResource",
 	} {
 		if !strings.Contains(chatSessionText, required) {
 			t.Fatalf("chat session store must persist model-only handoff metadata outside messages: missing %q", required)

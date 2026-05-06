@@ -51,8 +51,37 @@ type sessionData struct {
 }
 
 type sessionModelContext struct {
-	HandoffContext string    `json:"handoff_context,omitempty"`
-	UpdatedAt      time.Time `json:"updated_at,omitempty"`
+	HandoffContext   string            `json:"handoff_context,omitempty"`
+	HandoffResources []HandoffResource `json:"handoff_resources,omitempty"`
+	UpdatedAt        time.Time         `json:"updated_at,omitempty"`
+}
+
+func normalizeHandoffResources(resources []HandoffResource) []HandoffResource {
+	if len(resources) == 0 {
+		return nil
+	}
+
+	normalized := make([]HandoffResource, 0, len(resources))
+	seen := make(map[string]struct{}, len(resources))
+	for _, resource := range resources {
+		resource.ID = strings.TrimSpace(resource.ID)
+		resource.Name = strings.TrimSpace(resource.Name)
+		resource.Type = strings.TrimSpace(resource.Type)
+		resource.Node = strings.TrimSpace(resource.Node)
+		if resource.ID == "" && resource.Name == "" {
+			continue
+		}
+		key := strings.ToLower(resource.Type + "\x00" + resource.ID + "\x00" + resource.Name + "\x00" + resource.Node)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, resource)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }
 
 const maxSessionIDLength = 128
@@ -320,9 +349,38 @@ func (s *SessionStore) SetModelHandoffContext(id, handoffContext string) error {
 	}
 
 	now := time.Now()
-	data.ModelContext = &sessionModelContext{
-		HandoffContext: handoffContext,
-		UpdatedAt:      now,
+	if data.ModelContext == nil {
+		data.ModelContext = &sessionModelContext{}
+	}
+	data.ModelContext.HandoffContext = handoffContext
+	data.ModelContext.UpdatedAt = now
+	data.UpdatedAt = now
+
+	return s.writeSession(*data)
+}
+
+// SetModelHandoffResources stores product-originated resource references for
+// future turns. These references are not authority by themselves; chat execution
+// re-resolves them through the canonical unified-resource model before use.
+func (s *SessionStore) SetModelHandoffResources(id string, handoffResources []HandoffResource) error {
+	resources := normalizeHandoffResources(handoffResources)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if data.ModelContext == nil {
+		data.ModelContext = &sessionModelContext{}
+	}
+	data.ModelContext.HandoffResources = resources
+	data.ModelContext.UpdatedAt = now
+	if strings.TrimSpace(data.ModelContext.HandoffContext) == "" && len(data.ModelContext.HandoffResources) == 0 {
+		data.ModelContext = nil
 	}
 	data.UpdatedAt = now
 
@@ -344,12 +402,30 @@ func (s *SessionStore) GetModelHandoffContext(id string) (string, error) {
 	return strings.TrimSpace(data.ModelContext.HandoffContext), nil
 }
 
+// GetModelHandoffResources returns stored handoff resource references for a
+// session. Callers must rehydrate them through canonical resource registration
+// before using them for action validation.
+func (s *SessionStore) GetModelHandoffResources(id string) ([]HandoffResource, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return nil, err
+	}
+	if data.ModelContext == nil {
+		return nil, nil
+	}
+	return normalizeHandoffResources(data.ModelContext.HandoffResources), nil
+}
+
 func (s *SessionStore) clearModelHandoffContextLocked(id string) error {
 	data, err := s.readSession(id)
 	if err != nil {
 		return err
 	}
-	if data.ModelContext == nil || strings.TrimSpace(data.ModelContext.HandoffContext) == "" {
+	if data.ModelContext == nil ||
+		(strings.TrimSpace(data.ModelContext.HandoffContext) == "" && len(normalizeHandoffResources(data.ModelContext.HandoffResources)) == 0) {
 		return nil
 	}
 

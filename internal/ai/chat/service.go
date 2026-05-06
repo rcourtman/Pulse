@@ -449,11 +449,27 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	log.Debug().Str("session_id", session.ID).Msg("[ChatService] Session ensured")
 
 	handoffContext := strings.TrimSpace(req.HandoffContext)
+	handoffResources := normalizeHandoffResources(req.HandoffResources)
 	if handoffContext != "" {
 		if err := sessions.SetModelHandoffContext(session.ID, handoffContext); err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff context")
 		}
+		if err := sessions.SetModelHandoffResources(session.ID, handoffResources); err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff resources")
+		}
 	} else {
+		if len(handoffResources) > 0 {
+			if err := sessions.SetModelHandoffResources(session.ID, handoffResources); err != nil {
+				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff resources")
+			}
+		} else {
+			storedHandoffResources, err := sessions.GetModelHandoffResources(session.ID)
+			if err != nil {
+				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff resources")
+			} else {
+				handoffResources = storedHandoffResources
+			}
+		}
 		storedHandoffContext, err := sessions.GetModelHandoffContext(session.ID)
 		if err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff context")
@@ -507,7 +523,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		executor = baseExecutor.Clone()
 		executor.SetControlLevel(effectiveControlLevel)
 	}
-	s.hydrateHandoffResources(session.ID, req.HandoffResources, sessions, unifiedResourceProvider)
+	s.hydrateHandoffResources(session.ID, handoffResources, sessions, unifiedResourceProvider)
 
 	// Per-request autonomous mode override (used by investigation to avoid
 	// mutating shared service state from concurrent goroutines).
