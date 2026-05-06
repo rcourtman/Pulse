@@ -115,9 +115,14 @@ Patrol-specific presentation helpers.
    timeline lookups through the current canonical unified-resource model before
    falling back to handoff IDs. If the referenced finding is no longer current,
    Assistant must drop the stored handoff instead of continuing from stale
-   Patrol context. Patrol must keep the visible finding and drawer briefing tied
-   to the shared investigation payload rather than forking a Patrol-local
-   lifecycle, policy, topology, or timeline summary.
+   Patrol context. Assistant handoff context must also carry the unified
+   finding's current lifecycle and recency facts, including active/resolved/
+   snoozed/dismissed/suppressed state, detection/last-seen/resolution
+   timestamps, recurrence/regression, and recent lifecycle events, rather than
+   treating the investigation conclusion as the whole current record. Patrol
+   must keep the visible finding and drawer briefing tied to the shared
+   investigation payload rather than forking a Patrol-local lifecycle, policy,
+   topology, or timeline summary.
 
 ## Current State
 

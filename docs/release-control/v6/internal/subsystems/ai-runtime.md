@@ -192,8 +192,12 @@ runtime cost control, and shared AI transport surfaces.
     lifecycle authority. If the referenced finding no longer resolves through
     the current unified finding store, Assistant must invalidate the stored
     model-only handoff and unpinned handoff-seeded resource scope instead of
-    falling back to stale investigation context. Assistant runtime may also
-    hydrate canonical
+    falling back to stale investigation context. The refreshed finding context
+    must include unified finding lifecycle and recency facts such as active,
+    resolved, snoozed, dismissed or suppressed state, detection/last-seen/
+    resolved timestamps, recurrence, regression, and recent lifecycle events so
+    Assistant explains the current Patrol record rather than only the original
+    investigation narrative. Assistant runtime may also hydrate canonical
     resource-policy context for those handoff resources, using the same
     unified-resource resolution and policy presentation helpers that govern
     mention prefetch and provider-bound redaction; that context remains

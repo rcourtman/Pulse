@@ -794,22 +794,125 @@ func buildUnifiedFindingChatContext(f *unified.UnifiedFinding) string {
 	appendChatContextLine(&b, "[Finding Context]", "")
 	appendChatContextLine(&b, "ID", f.ID)
 	appendChatContextLine(&b, "Title", f.Title)
+	appendChatContextLine(&b, "Finding Status", unifiedFindingChatStatus(f, time.Now()))
+	appendChatContextLine(&b, "Source", string(f.Source))
 	appendChatContextLine(&b, "Severity", string(f.Severity))
 	appendChatContextLine(&b, "Category", string(f.Category))
 	appendChatContextLine(&b, "Resource", formatChatResource(f.ResourceName, f.ResourceType))
 	appendChatContextLine(&b, "Resource ID", f.ResourceID)
+	if !f.DetectedAt.IsZero() {
+		appendChatContextLine(&b, "Finding Detected At", f.DetectedAt.Format(time.RFC3339))
+	}
+	if !f.LastSeenAt.IsZero() {
+		appendChatContextLine(&b, "Finding Last Seen At", f.LastSeenAt.Format(time.RFC3339))
+	}
+	if f.ResolvedAt != nil {
+		appendChatContextLine(&b, "Finding Resolved At", f.ResolvedAt.Format(time.RFC3339))
+	}
+	if f.SnoozedUntil != nil {
+		appendChatContextLine(&b, "Finding Snoozed Until", f.SnoozedUntil.Format(time.RFC3339))
+	}
+	if strings.TrimSpace(f.DismissedReason) != "" {
+		appendChatContextLine(&b, "Finding Dismissed Reason", f.DismissedReason)
+	}
+	if f.Suppressed {
+		appendChatContextLine(&b, "Finding Suppressed", "true")
+	}
+	if f.TimesRaised > 0 {
+		appendChatContextLine(&b, "Finding Times Raised", strconv.Itoa(f.TimesRaised))
+	}
 	appendChatContextLine(&b, "Description", f.Description)
 	appendChatContextLine(&b, "Recommendation", f.Recommendation)
 	appendChatContextLine(&b, "Evidence", f.Evidence)
+	appendChatContextLine(&b, "AI Context", f.AIContext)
+	if f.AIConfidence > 0 {
+		appendChatContextLine(&b, "AI Confidence", fmt.Sprintf("%.2f", f.AIConfidence))
+	}
+	if f.AIEnhancedAt != nil {
+		appendChatContextLine(&b, "AI Enhanced At", f.AIEnhancedAt.Format(time.RFC3339))
+	}
+	appendChatContextLine(&b, "Root Cause ID", f.RootCauseID)
+	appendStringListChatContext(&b, "Correlated Finding", f.CorrelatedIDs)
+	appendChatContextLine(&b, "Remediation ID", f.RemediationID)
 	appendChatContextLine(&b, "Investigation Status", f.InvestigationStatus)
 	appendChatContextLine(&b, "Investigation Outcome", f.InvestigationOutcome)
+	if f.LastInvestigatedAt != nil {
+		appendChatContextLine(&b, "Last Investigated At", f.LastInvestigatedAt.Format(time.RFC3339))
+	}
+	if f.InvestigationAttempts > 0 {
+		appendChatContextLine(&b, "Investigation Attempts", strconv.Itoa(f.InvestigationAttempts))
+	}
+	appendChatContextLine(&b, "Loop State", f.LoopState)
+	if f.RegressionCount > 0 {
+		appendChatContextLine(&b, "Regression Count", strconv.Itoa(f.RegressionCount))
+	}
+	if f.LastRegressionAt != nil {
+		appendChatContextLine(&b, "Last Regression At", f.LastRegressionAt.Format(time.RFC3339))
+	}
 	appendChatContextLine(&b, "User Note", f.UserNote)
 	if f.AcknowledgedAt != nil {
-		appendChatContextLine(&b, "Acknowledged At", f.AcknowledgedAt.Format(time.RFC3339))
+		appendChatContextLine(&b, "Finding Acknowledged At", f.AcknowledgedAt.Format(time.RFC3339))
 	}
 	appendChatContextLine(&b, "Node", f.Node)
+	appendUnifiedFindingLifecycleEventContext(&b, f.Lifecycle)
 	appendInvestigationRecordChatContext(&b, f.InvestigationRecord)
 	return b.String()
+}
+
+func unifiedFindingChatStatus(f *unified.UnifiedFinding, now time.Time) string {
+	if f == nil {
+		return ""
+	}
+	if f.ResolvedAt != nil {
+		return "resolved"
+	}
+	if f.SnoozedUntil != nil && (now.IsZero() || now.Before(*f.SnoozedUntil)) {
+		return "snoozed"
+	}
+	if f.Suppressed {
+		return "suppressed"
+	}
+	if strings.TrimSpace(f.DismissedReason) != "" {
+		return "dismissed"
+	}
+	return "active"
+}
+
+func appendUnifiedFindingLifecycleEventContext(b *strings.Builder, events []unified.UnifiedFindingLifecycleEvent) {
+	if len(events) == 0 {
+		return
+	}
+
+	start := 0
+	if len(events) > findingChatContextListLimit {
+		start = len(events) - findingChatContextListLimit
+	}
+	for idx, event := range events[start:] {
+		parts := make([]string, 0, 4)
+		if !event.At.IsZero() {
+			parts = append(parts, event.At.Format(time.RFC3339))
+		}
+		eventType := strings.TrimSpace(event.Type)
+		if eventType != "" {
+			parts = append(parts, eventType)
+		}
+		message := strings.TrimSpace(event.Message)
+		if message != "" {
+			parts = append(parts, message)
+		}
+		from := strings.TrimSpace(event.From)
+		to := strings.TrimSpace(event.To)
+		if from != "" || to != "" {
+			parts = append(parts, from+" -> "+to)
+		}
+		if len(parts) == 0 {
+			continue
+		}
+		appendChatContextLine(b, fmt.Sprintf("Lifecycle Event %d", idx+1), strings.Join(parts, " | "))
+	}
+	if start > 0 {
+		appendChatContextLine(b, "Lifecycle Additional Count", strconv.Itoa(start))
+	}
 }
 
 func appendInvestigationRecordChatContext(b *strings.Builder, rec *aicontracts.InvestigationRecord) {

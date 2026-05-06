@@ -424,7 +424,9 @@ bypass the API fail-closed execution gate.
     finding no longer resolves is adjacent AI/runtime invalidation, not a
     recovery freshness or restore-support decision. Structured action or
     approval references carried by that handoff are also adjacent AI/runtime
-    review metadata only;
+    review metadata only. Unified finding lifecycle facts carried by the same
+    handoff remain Patrol/AI review metadata and must not become backup recency,
+    restore support, or storage-local lifecycle state.
     storage and recovery surfaces must not reinterpret approval IDs, fix IDs,
     risk, or target labels as restore support, backup freshness, recovery
     execution authority, or a storage-local approval bypass. Any refreshed

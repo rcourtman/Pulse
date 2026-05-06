@@ -763,7 +763,12 @@ the canonical monitored-system blocked payload.
    be persisted as user text. If that reference no longer resolves through the
    current unified finding store, the API/chat boundary must clear the stored
    handoff context and unpinned handoff-seeded resource scope rather than
-   replaying stale investigation state. Chat execution may also hydrate canonical
+   replaying stale investigation state. The chat handoff payload must carry the
+   unified finding's lifecycle and recency state, including active/resolved/
+   snoozed/dismissed/suppressed status, detection/last-seen/resolution
+   timestamps, recurrence/regression facts, and recent lifecycle events, so API
+   consumers do not reduce Assistant context to an outdated investigation
+   summary. Chat execution may also hydrate canonical
    resource-policy context for those resources through unified-resource
    resolution and shared policy presentation helpers, but the resulting handling
    guidance is read-only, model-only context and must not become saved user text,

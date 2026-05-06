@@ -576,7 +576,11 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 	h.defaultService = mockSvc
 
 	detectedAt := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	lastSeenAt := detectedAt.Add(2 * time.Minute)
 	completedAt := detectedAt.Add(3 * time.Minute)
+	lastInvestigatedAt := detectedAt.Add(4 * time.Minute)
+	aiEnhancedAt := detectedAt.Add(5 * time.Minute)
+	lastRegressionAt := detectedAt.Add(6 * time.Minute)
 	store := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
 	store.AddFromAI(&unified.UnifiedFinding{
 		ID:                    "finding-123",
@@ -592,10 +596,32 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 		Recommendation:        "Review the backup job.",
 		Evidence:              "cpu=96%",
 		DetectedAt:            detectedAt,
-		LastSeenAt:            detectedAt,
+		LastSeenAt:            lastSeenAt,
+		AIContext:             "The spike overlaps the nightly backup job.",
+		RootCauseID:           "finding-root",
+		CorrelatedIDs:         []string{"finding-storage"},
+		RemediationID:         "remediation-123",
+		AIConfidence:          0.87,
+		AIEnhancedAt:          &aiEnhancedAt,
 		InvestigationStatus:   "completed",
 		InvestigationOutcome:  "fix_queued",
+		LastInvestigatedAt:    &lastInvestigatedAt,
 		InvestigationAttempts: 1,
+		LoopState:             "awaiting_approval",
+		Lifecycle: []unified.UnifiedFindingLifecycleEvent{{
+			At:      detectedAt,
+			Type:    "created",
+			Message: "Patrol opened the finding",
+		}, {
+			At:      completedAt,
+			Type:    "investigation_completed",
+			Message: "Fix queued for approval",
+			From:    "investigating",
+			To:      "fix_queued",
+		}},
+		RegressionCount:  2,
+		LastRegressionAt: &lastRegressionAt,
+		TimesRaised:      3,
 		InvestigationRecord: &aicontracts.InvestigationRecord{
 			ID:        "investigation-123",
 			FindingID: "finding-123",
@@ -649,6 +675,22 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.Equal(t, "What happened?", reqArg.Prompt)
 			assert.Contains(t, reqArg.HandoffContext, "[Finding Context]")
 			assert.Contains(t, reqArg.HandoffContext, "[Investigation Record]")
+			assert.Contains(t, reqArg.HandoffContext, "Finding Status: active")
+			assert.Contains(t, reqArg.HandoffContext, "Source: ai-patrol")
+			assert.Contains(t, reqArg.HandoffContext, "Finding Detected At: 2026-05-06T12:00:00Z")
+			assert.Contains(t, reqArg.HandoffContext, "Finding Last Seen At: 2026-05-06T12:02:00Z")
+			assert.Contains(t, reqArg.HandoffContext, "Finding Times Raised: 3")
+			assert.Contains(t, reqArg.HandoffContext, "AI Context: The spike overlaps the nightly backup job.")
+			assert.Contains(t, reqArg.HandoffContext, "AI Confidence: 0.87")
+			assert.Contains(t, reqArg.HandoffContext, "Root Cause ID: finding-root")
+			assert.Contains(t, reqArg.HandoffContext, "Correlated Finding 1: finding-storage")
+			assert.Contains(t, reqArg.HandoffContext, "Remediation ID: remediation-123")
+			assert.Contains(t, reqArg.HandoffContext, "Last Investigated At: 2026-05-06T12:04:00Z")
+			assert.Contains(t, reqArg.HandoffContext, "Investigation Attempts: 1")
+			assert.Contains(t, reqArg.HandoffContext, "Loop State: awaiting_approval")
+			assert.Contains(t, reqArg.HandoffContext, "Regression Count: 2")
+			assert.Contains(t, reqArg.HandoffContext, "Last Regression At: 2026-05-06T12:06:00Z")
+			assert.Contains(t, reqArg.HandoffContext, "Lifecycle Event 2: 2026-05-06T12:03:00Z | investigation_completed | Fix queued for approval | investigating -> fix_queued")
 			assert.Contains(t, reqArg.HandoffContext, "Resource ID: vm-100")
 			assert.Contains(t, reqArg.HandoffContext, "Subject Resource ID: vm-100")
 			assert.Contains(t, reqArg.HandoffContext, "Conclusion: Backup job saturated CPU.")
@@ -732,6 +774,10 @@ func TestHandleChat_RefreshesStoredFindingContextForFollowUp(t *testing.T) {
 			assert.Equal(t, "finding-123", reqArg.FindingID)
 			assert.Equal(t, "What changed?", reqArg.Prompt)
 			assert.Contains(t, reqArg.HandoffContext, "[Finding Context]")
+			assert.Contains(t, reqArg.HandoffContext, "Finding Status: resolved")
+			assert.Contains(t, reqArg.HandoffContext, "Finding Detected At: 2026-05-06T12:30:00Z")
+			assert.Contains(t, reqArg.HandoffContext, "Finding Last Seen At: 2026-05-06T13:00:00Z")
+			assert.Contains(t, reqArg.HandoffContext, "Finding Resolved At: 2026-05-06T13:00:00Z")
 			assert.Contains(t, reqArg.HandoffContext, "Title: Backup pressure resolved")
 			assert.Contains(t, reqArg.HandoffContext, "Investigation Outcome: resolved")
 			assert.Contains(t, reqArg.HandoffContext, "User Note: Operator confirmed the maintenance window completed.")
@@ -783,6 +829,19 @@ func TestHandleChat_ClearsStoredFindingContextWhenFollowUpFindingMissing(t *test
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	mockSvc.AssertExpectations(t)
+}
+
+func TestUnifiedFindingChatStatusLifecycleStates(t *testing.T) {
+	now := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	resolvedAt := now.Add(-time.Minute)
+	snoozedUntil := now.Add(time.Hour)
+
+	assert.Equal(t, "active", unifiedFindingChatStatus(&unified.UnifiedFinding{}, now))
+	assert.Equal(t, "resolved", unifiedFindingChatStatus(&unified.UnifiedFinding{ResolvedAt: &resolvedAt}, now))
+	assert.Equal(t, "snoozed", unifiedFindingChatStatus(&unified.UnifiedFinding{SnoozedUntil: &snoozedUntil}, now))
+	assert.Equal(t, "dismissed", unifiedFindingChatStatus(&unified.UnifiedFinding{DismissedReason: "noise"}, now))
+	assert.Equal(t, "suppressed", unifiedFindingChatStatus(&unified.UnifiedFinding{Suppressed: true}, now))
+	assert.Equal(t, "suppressed", unifiedFindingChatStatus(&unified.UnifiedFinding{DismissedReason: "noise", Suppressed: true}, now))
 }
 
 func TestHandleChat_DropsLegacyMentionTypes(t *testing.T) {
