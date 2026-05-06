@@ -913,6 +913,9 @@ func TestHandleChat_RecoversLivePatrolApprovalForFindingHandoffAction(t *testing
 				TargetResourceType: "vm",
 				TargetNode:         "pve-1",
 			}}, reqArg.HandoffActions)
+			assert.Contains(t, reqArg.HandoffContext, "Operator Decision: review governed approval approval-live before execution; proposed fix fix-123; risk high; destructive true")
+			assert.Contains(t, reqArg.HandoffContext, "Action Posture: approval approval-live; proposed fix fix-123; risk high; destructive true")
+			assert.NotContains(t, reqArg.HandoffContext, "Action Posture: proposed fix fix-123; risk medium")
 			assert.NotContains(t, reqArg.HandoffContext, "systemctl restart workload.service")
 			assert.NotContains(t, fmt.Sprintf("%#v", reqArg.HandoffActions), "systemctl restart workload.service")
 		})

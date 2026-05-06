@@ -112,6 +112,9 @@ Patrol-specific presentation helpers.
    the durable record lacks the current approval reference, but Patrol
    presentation must still keep command payloads inside governed
    approval/remediation context rather than rendering them as handoff copy.
+   Assistant's operator decision and approval/proposed-fix posture must derive
+   from the same structured handoff action after that recovery, so the
+   briefing cannot contradict the action reference passed to chat execution.
    Assistant may also hydrate the referenced action plan or action audit so the
    handoff explains current action lifecycle state, requester, capability,
    approval policy, plan expiry, preflight/dry-run posture, and terminal
@@ -152,7 +155,9 @@ Patrol-specific presentation helpers.
    for that finding, the visible Assistant briefing may include only safe
    approval metadata such as approval ID, pending status, risk, requested time,
    expiry, and target label; it must not copy the approval command payload into
-   Assistant drawer prose. The assembled handoff must still pass
+   Assistant drawer prose. The model-only runtime briefing must apply that same
+   recovered approval reference when framing the operator decision and action
+   posture. The assembled handoff must still pass
    through the Assistant runtime's
    resource-policy sanitizer before prompt injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or

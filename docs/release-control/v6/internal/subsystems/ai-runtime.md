@@ -246,10 +246,14 @@ runtime cost control, and shared AI transport surfaces.
     does not yet carry the latest approval ID. Those references are review
     context only: they must not include raw command text, must not grant
     approval or execution authority, and must route any operator decision back
-    through the governed approval/remediation flow. When those references include
-    an approval ID, Assistant runtime may refresh a current status snapshot from
-    the canonical approval store on each turn, but it must enforce org scoping
-    and still omit the approval command payload.
+    through the governed approval/remediation flow. The operator briefing's
+    decision and action-posture text must derive from those same structured
+    action references after live-approval recovery, so Assistant does not tell
+    the operator that no governed action is ready while a recovered approval is
+    present. When those references include an approval ID, Assistant runtime may
+    refresh a current status snapshot from the canonical approval store on each
+    turn, but it must enforce org scoping and still omit the approval command
+    payload.
     When those references resolve to a governed action plan or action audit,
     Assistant runtime must hydrate the canonical action ID, lifecycle state,
     requester, capability, approval policy, plan expiry, preflight/dry-run

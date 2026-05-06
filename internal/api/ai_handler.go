@@ -794,13 +794,13 @@ type unifiedRelatedFindingContext struct {
 	Finding *unified.UnifiedFinding
 }
 
-func buildUnifiedFindingChatContext(f *unified.UnifiedFinding, lookup unifiedFindingLookup) string {
+func buildUnifiedFindingChatContext(f *unified.UnifiedFinding, lookup unifiedFindingLookup, handoffActions []chat.HandoffAction) string {
 	if f == nil {
 		return ""
 	}
 
 	var b strings.Builder
-	appendUnifiedFindingOperatorBriefingContext(&b, f)
+	appendUnifiedFindingOperatorBriefingContext(&b, f, handoffActions)
 	appendChatContextLine(&b, "[Finding Context]", "")
 	appendChatContextLine(&b, "ID", f.ID)
 	appendChatContextLine(&b, "Title", f.Title)
@@ -961,7 +961,7 @@ func formatUnifiedRelatedFindingSummary(f *unified.UnifiedFinding) string {
 	return strings.Join(parts, " | ")
 }
 
-func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.UnifiedFinding) {
+func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.UnifiedFinding, handoffActions []chat.HandoffAction) {
 	if b == nil || f == nil {
 		return
 	}
@@ -993,10 +993,10 @@ func appendUnifiedFindingOperatorBriefingContext(b *strings.Builder, f *unified.
 	}
 	appendChatContextLine(b, "Current Conclusion", unifiedFindingBriefingConclusion(f))
 	appendChatContextLine(b, "Recommended Next Step", unifiedFindingBriefingNextStep(f))
-	if decision := unifiedFindingBriefingOperatorDecision(f); decision != "" {
+	if decision := unifiedFindingBriefingOperatorDecision(f, handoffActions); decision != "" {
 		appendChatContextLine(b, "Operator Decision", decision)
 	}
-	appendChatContextLine(b, "Action Posture", unifiedFindingBriefingActionPosture(f))
+	appendChatContextLine(b, "Action Posture", unifiedFindingBriefingActionPosture(f, handoffActions))
 	appendChatContextLine(b, "Operator Boundary", "Treat Patrol data as product context for explanation and review; do not invent commands, expose raw command text, or treat chat as approval or execution authority.")
 	appendChatContextLine(b, "", "")
 }
@@ -1280,12 +1280,18 @@ func unifiedFindingBriefingNextStep(f *unified.UnifiedFinding) string {
 	return "Explain what Patrol knows and identify the next evidence to verify before remediation."
 }
 
-func unifiedFindingBriefingOperatorDecision(f *unified.UnifiedFinding) string {
+func unifiedFindingBriefingOperatorDecision(f *unified.UnifiedFinding, handoffActions []chat.HandoffAction) string {
 	if f == nil {
 		return ""
 	}
 	if unifiedFindingChatStatus(f, time.Now()) == "resolved" {
 		return "Finding is resolved; explain the resolution and monitoring follow-up without proposing execution."
+	}
+
+	if action, ok := unifiedFindingPrimaryHandoffAction(f, handoffActions); ok {
+		if decision := unifiedFindingHandoffActionOperatorDecision(action); decision != "" {
+			return decision
+		}
 	}
 
 	rec := f.InvestigationRecord
@@ -1410,9 +1416,19 @@ func formatBriefingStringList(values []string, limit int, itemName string) strin
 	return strings.Join(parts, "; ")
 }
 
-func unifiedFindingBriefingActionPosture(f *unified.UnifiedFinding) string {
+func unifiedFindingBriefingActionPosture(f *unified.UnifiedFinding, handoffActions []chat.HandoffAction) string {
 	if f == nil {
 		return ""
+	}
+
+	if action, ok := unifiedFindingPrimaryHandoffAction(f, handoffActions); ok {
+		if posture := unifiedFindingHandoffActionPosture(action); posture != "" {
+			parts := []string{posture}
+			if remediationID := strings.TrimSpace(f.RemediationID); remediationID != "" {
+				parts = append(parts, "remediation "+remediationID)
+			}
+			return strings.Join(parts, "; ")
+		}
 	}
 
 	rec := f.InvestigationRecord
@@ -1440,6 +1456,102 @@ func unifiedFindingBriefingActionPosture(f *unified.UnifiedFinding) string {
 	}
 	if len(parts) == 0 {
 		return "No governed action is ready; keep the response investigative."
+	}
+	return strings.Join(parts, "; ")
+}
+
+func unifiedFindingPrimaryHandoffAction(f *unified.UnifiedFinding, handoffActions []chat.HandoffAction) (chat.HandoffAction, bool) {
+	if len(handoffActions) == 0 {
+		return chat.HandoffAction{}, false
+	}
+	findingID := ""
+	if f != nil {
+		findingID = strings.TrimSpace(f.ID)
+	}
+	for _, action := range handoffActions {
+		if !handoffActionHasBriefingValue(action) {
+			continue
+		}
+		actionFindingID := strings.TrimSpace(action.FindingID)
+		if findingID == "" || strings.EqualFold(actionFindingID, findingID) {
+			return action, true
+		}
+	}
+	return chat.HandoffAction{}, false
+}
+
+func handoffActionHasBriefingValue(action chat.HandoffAction) bool {
+	for _, value := range []string{
+		action.ApprovalID,
+		action.ApprovalStatus,
+		action.ActionID,
+		action.ActionState,
+		action.FixID,
+		action.Description,
+	} {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return action.Destructive || action.ApprovalConsumed || action.ActionRequiresApproval
+}
+
+func unifiedFindingHandoffActionOperatorDecision(action chat.HandoffAction) string {
+	parts := make([]string, 0, 6)
+	if approvalID := strings.TrimSpace(action.ApprovalID); approvalID != "" {
+		parts = append(parts, "review governed approval "+approvalID+" before execution")
+	} else if actionID := strings.TrimSpace(action.ActionID); actionID != "" {
+		parts = append(parts, "review governed action "+actionID+" before execution")
+	} else if strings.TrimSpace(action.FixID) != "" || strings.TrimSpace(action.Description) != "" {
+		parts = append(parts, "review the proposed fix before execution")
+	}
+	if status := strings.TrimSpace(action.ApprovalStatus); status != "" {
+		parts = append(parts, "approval status "+status)
+	}
+	if state := strings.TrimSpace(action.ActionState); state != "" {
+		parts = append(parts, "action state "+state)
+	}
+	if fixID := strings.TrimSpace(action.FixID); fixID != "" {
+		parts = append(parts, "proposed fix "+fixID)
+	} else if description := strings.TrimSpace(action.Description); description != "" {
+		parts = append(parts, "proposed fix recorded")
+	}
+	if risk := strings.TrimSpace(action.RiskLevel); risk != "" {
+		parts = append(parts, "risk "+risk)
+	}
+	if action.Destructive {
+		parts = append(parts, "destructive true")
+	}
+	return strings.Join(parts, "; ")
+}
+
+func unifiedFindingHandoffActionPosture(action chat.HandoffAction) string {
+	parts := make([]string, 0, 8)
+	if approvalID := strings.TrimSpace(action.ApprovalID); approvalID != "" {
+		parts = append(parts, "approval "+approvalID)
+	}
+	if status := strings.TrimSpace(action.ApprovalStatus); status != "" {
+		parts = append(parts, "approval status "+status)
+	}
+	if action.ApprovalConsumed {
+		parts = append(parts, "approval consumed true")
+	}
+	if actionID := strings.TrimSpace(action.ActionID); actionID != "" {
+		parts = append(parts, "action "+actionID)
+	}
+	if state := strings.TrimSpace(action.ActionState); state != "" {
+		parts = append(parts, "action state "+state)
+	}
+	if fixID := strings.TrimSpace(action.FixID); fixID != "" {
+		parts = append(parts, "proposed fix "+fixID)
+	} else if description := strings.TrimSpace(action.Description); description != "" {
+		parts = append(parts, "proposed fix recorded")
+	}
+	if risk := strings.TrimSpace(action.RiskLevel); risk != "" {
+		parts = append(parts, "risk "+risk)
+	}
+	if action.Destructive {
+		parts = append(parts, "destructive true")
 	}
 	return strings.Join(parts, "; ")
 }
@@ -2014,9 +2126,9 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		if store != nil {
 			if f := store.Get(findingID); f != nil {
 				findingResolved = true
-				handoffContext = buildUnifiedFindingChatContext(f, store)
-				handoffResources = buildUnifiedFindingHandoffResources(f, store)
 				handoffActions = buildUnifiedFindingHandoffActions(f, orgID)
+				handoffContext = buildUnifiedFindingChatContext(f, store, handoffActions)
+				handoffResources = buildUnifiedFindingHandoffResources(f, store)
 			}
 		}
 		if !findingResolved {

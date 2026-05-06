@@ -320,7 +320,10 @@ the canonical monitored-system blocked payload.
     references may use the current live Patrol investigation-fix approval for
     the finding when that approval is newer than the approval ID on the durable
     record, but the payload may carry only IDs, status/risk/target metadata, and
-    fix/action references, never the approval command payload. Related finding
+    fix/action references, never the approval command payload. The operator
+    decision and action-posture lines in the briefing must derive from those
+    same structured action references after recovery so the briefing cannot
+    contradict the handoff action payload. Related finding
     context must resolve from the current unified finding store, stay bounded
     and deduplicated, include current recency and latest lifecycle facts, and
     seed only structured handoff resources for canonical policy, state,
@@ -841,8 +844,11 @@ the canonical monitored-system blocked payload.
    and remediation APIs. Chat execution may refresh approval status snapshots for
    those references from the canonical approval store, but that snapshot is
    read-only, org-scoped, and must not expose or infer the raw command. When the
-   reference resolves to a governed action plan or action
-   audit, chat execution must hydrate the canonical action ID, lifecycle state,
+   API handoff builder recovers a live approval, the model-only operator
+   briefing must use that recovered action reference for operator-decision and
+   action-posture text instead of falling back to stale investigation-record
+   approval posture. When the reference resolves to a governed action plan or
+   action audit, chat execution must hydrate the canonical action ID, lifecycle state,
    requester, capability, approval policy, plan expiry, preflight/dry-run
    summary, and terminal success/failure state from the action-audit store so
    API consumers do not mistake the original approval snapshot for current
@@ -2958,8 +2964,11 @@ canonical operator-facing frame for Assistant: it carries the finding summary,
 resource, priority, current attention reason, current recency facts, bounded
 evidence and verification summaries, investigation confidence, recommended next
 step, and operator-decision framing plus approval/proposed-fix posture without
-raw command text. Patrol's frontend Assistant drawer briefing must use that same
-operator frame for visible handoffs from findings, while the downstream chat
+raw command text. That approval/proposed-fix posture must come from the same
+structured action reference sent to chat execution, including any recovered live
+Patrol approval, so visible and model-only handoffs stay consistent. Patrol's
+frontend Assistant drawer briefing must use that same operator frame for
+visible handoffs from findings, while the downstream chat
 service hydrates live resource state, timeline, and action audit context around
 that same handoff. Frontend Patrol handoff helpers may consume current pending
 approval list payloads only as safe metadata for that visible briefing: approval
