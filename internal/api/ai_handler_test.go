@@ -818,6 +818,114 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestHandleChat_RecoversLivePatrolApprovalForFindingHandoffAction(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	prevStore := approval.GetStore()
+	approvalStore, err := approval.NewStore(approval.StoreConfig{
+		DataDir:        t.TempDir(),
+		DefaultTimeout: 10 * time.Minute,
+		MaxApprovals:   10,
+	})
+	assert.NoError(t, err)
+	approval.SetStore(approvalStore)
+	t.Cleanup(func() {
+		approval.SetStore(prevStore)
+	})
+
+	assert.NoError(t, approvalStore.CreateApproval(&approval.ApprovalRequest{
+		ID:         "approval-live",
+		ToolID:     "investigation_fix",
+		Command:    "systemctl restart workload.service",
+		TargetType: "vm",
+		TargetID:   "finding-123",
+		TargetName: "web-server",
+		Context:    "Restart the workload service after backup saturation clears.",
+		RiskLevel:  approval.RiskHigh,
+	}))
+
+	detectedAt := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	store := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
+	store.AddFromAI(&unified.UnifiedFinding{
+		ID:                   "finding-123",
+		Source:               unified.SourceAIPatrol,
+		Severity:             unified.SeverityCritical,
+		Category:             unified.CategoryPerformance,
+		ResourceID:           "vm-100",
+		ResourceName:         "web-server",
+		ResourceType:         "vm",
+		Node:                 "pve-1",
+		Title:                "High CPU usage",
+		Description:          "CPU stayed above 95%.",
+		InvestigationStatus:  "completed",
+		InvestigationOutcome: "fix_queued",
+		LoopState:            "awaiting_approval",
+		InvestigationRecord: &aicontracts.InvestigationRecord{
+			ID:        "investigation-123",
+			FindingID: "finding-123",
+			Subject: aicontracts.InvestigationRecordSubject{
+				ResourceID:   "vm-100",
+				ResourceName: "web-server",
+				ResourceType: "vm",
+				Node:         "pve-1",
+			},
+			Trigger: aicontracts.InvestigationRecordTrigger{
+				Title:      "High CPU usage",
+				DetectedAt: detectedAt,
+			},
+			Status:     aicontracts.InvestigationStatusCompleted,
+			Outcome:    aicontracts.OutcomeFixQueued,
+			Confidence: aicontracts.InvestigationRecordConfidenceHigh,
+			Conclusion: "Backup job saturated CPU.",
+			ProposedFix: &aicontracts.InvestigationRecordFix{
+				ID:          "fix-123",
+				Description: "Restart the workload service",
+				Commands:    []string{"systemctl restart workload.service"},
+				RiskLevel:   "medium",
+				TargetHost:  "pve-1",
+				Destructive: true,
+			},
+			StartedAt: detectedAt,
+		},
+	})
+	h.SetUnifiedStore(store)
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, []chat.HandoffAction{{
+				FindingID:          "finding-123",
+				RecordID:           "investigation-123",
+				ApprovalID:         "approval-live",
+				FixID:              "fix-123",
+				Description:        "Restart the workload service",
+				RiskLevel:          "high",
+				Destructive:        true,
+				TargetHost:         "pve-1",
+				TargetResourceID:   "vm-100",
+				TargetResourceName: "web-server",
+				TargetResourceType: "vm",
+				TargetNode:         "pve-1",
+			}}, reqArg.HandoffActions)
+			assert.NotContains(t, reqArg.HandoffContext, "systemctl restart workload.service")
+			assert.NotContains(t, fmt.Sprintf("%#v", reqArg.HandoffActions), "systemctl restart workload.service")
+		})
+
+	body := `{"prompt":"What approval is waiting?","finding_id":"finding-123"}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestHandleChat_RefreshesStoredFindingContextForFollowUp(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)

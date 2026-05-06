@@ -424,7 +424,9 @@ bypass the API fail-closed execution gate.
     finding no longer resolves is adjacent AI/runtime invalidation, not a
     recovery freshness or restore-support decision. Structured action or
     approval references carried by that handoff are also adjacent AI/runtime
-    review metadata only. Unified finding lifecycle facts, latest lifecycle
+    review metadata only, including when Assistant recovers the current live
+    Patrol approval by finding ID before building model-only action context.
+    Unified finding lifecycle facts, latest lifecycle
     event briefing lines, and detailed lifecycle context carried by the same
     handoff remain Patrol/AI review metadata and must not become backup recency,
     restore support, or storage-local lifecycle state. Primary finding

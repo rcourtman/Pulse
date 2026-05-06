@@ -241,13 +241,15 @@ runtime cost control, and shared AI transport surfaces.
     Those timeline facts remain read-only explanation context and do not grant
     action authority. The runtime may also persist structured pending-action and
     approval references from the same investigation record as
-    model-context metadata, but those references are review context only: they
-    must not include raw command text, must not grant approval or execution
-    authority, and must route any operator decision back through the governed
-    approval/remediation flow. When
-    those references include an approval ID, Assistant runtime may refresh a
-    current status snapshot from the canonical approval store on each turn, but
-    it must enforce org scoping and still omit the approval command payload.
+    model-context metadata, and the API handoff builder may recover the current
+    live Patrol investigation-fix approval by finding ID when the durable record
+    does not yet carry the latest approval ID. Those references are review
+    context only: they must not include raw command text, must not grant
+    approval or execution authority, and must route any operator decision back
+    through the governed approval/remediation flow. When those references include
+    an approval ID, Assistant runtime may refresh a current status snapshot from
+    the canonical approval store on each turn, but it must enforce org scoping
+    and still omit the approval command payload.
     When those references resolve to a governed action plan or action audit,
     Assistant runtime must hydrate the canonical action ID, lifecycle state,
     requester, capability, approval policy, plan expiry, preflight/dry-run

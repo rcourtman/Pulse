@@ -107,13 +107,16 @@ Patrol-specific presentation helpers.
    only structured action references such as approval ID, fix ID, risk, target,
    and resource identity; approval and execution authority stays with the
    governed approval/remediation surfaces. Assistant may refresh the referenced
-   approval's current status for review, but Patrol presentation must still keep
-   command payloads inside governed approval/remediation context rather than
-   rendering them as handoff copy. Assistant may also hydrate the referenced
-   action plan or action audit so the handoff explains current action lifecycle
-   state, requester, capability, approval policy, plan expiry, preflight/dry-run
-   posture, and terminal success/failure without treating approval as execution
-   authority or exposing raw command/execution payloads. Assistant may also
+   approval's current status for review, and the backend handoff builder may
+   recover a live pending Patrol investigation-fix approval by finding ID when
+   the durable record lacks the current approval reference, but Patrol
+   presentation must still keep command payloads inside governed
+   approval/remediation context rather than rendering them as handoff copy.
+   Assistant may also hydrate the referenced action plan or action audit so the
+   handoff explains current action lifecycle state, requester, capability,
+   approval policy, plan expiry, preflight/dry-run posture, and terminal
+   success/failure without treating approval as execution authority or exposing
+   raw command/execution payloads. Assistant may also
    enrich that same handoff with refreshed unified finding and
    investigation-record state, canonical resource-policy guidance, current
    canonical resource-state and capability context, canonical

@@ -1646,29 +1646,50 @@ func buildUnifiedFindingHandoffResources(f *unified.UnifiedFinding, lookup unifi
 	return resources
 }
 
-func buildUnifiedFindingHandoffActions(f *unified.UnifiedFinding) []chat.HandoffAction {
-	if f == nil || f.InvestigationRecord == nil {
+func buildUnifiedFindingHandoffActions(f *unified.UnifiedFinding, orgID string) []chat.HandoffAction {
+	if f == nil {
 		return nil
 	}
 
 	rec := f.InvestigationRecord
-	if strings.TrimSpace(rec.ApprovalID) == "" && rec.ProposedFix == nil {
+	liveApproval := livePatrolApprovalForFinding(f.ID, orgID)
+	if rec == nil && liveApproval == nil {
 		return nil
 	}
 
 	action := chat.HandoffAction{
 		FindingID:          f.ID,
-		RecordID:           rec.ID,
-		ApprovalID:         rec.ApprovalID,
-		TargetResourceID:   rec.Subject.ResourceID,
-		TargetResourceName: rec.Subject.ResourceName,
-		TargetResourceType: rec.Subject.ResourceType,
-		TargetNode:         rec.Subject.Node,
+		TargetResourceID:   f.ResourceID,
+		TargetResourceName: f.ResourceName,
+		TargetResourceType: f.ResourceType,
+		TargetNode:         f.Node,
 	}
-	if rec.ProposedFix != nil {
+	if rec != nil {
+		action.RecordID = rec.ID
+		action.ApprovalID = rec.ApprovalID
+		action.TargetResourceID = firstNonEmptyString(rec.Subject.ResourceID, action.TargetResourceID)
+		action.TargetResourceName = firstNonEmptyString(rec.Subject.ResourceName, action.TargetResourceName)
+		action.TargetResourceType = firstNonEmptyString(rec.Subject.ResourceType, action.TargetResourceType)
+		action.TargetNode = firstNonEmptyString(rec.Subject.Node, action.TargetNode)
+	}
+	if liveApproval != nil {
+		action.ApprovalID = strings.TrimSpace(liveApproval.ID)
+		if risk := strings.TrimSpace(string(liveApproval.RiskLevel)); risk != "" {
+			action.RiskLevel = risk
+		}
+		if action.TargetResourceName == "" {
+			action.TargetResourceName = strings.TrimSpace(liveApproval.TargetName)
+		}
+		if action.TargetResourceType == "" && !strings.EqualFold(strings.TrimSpace(liveApproval.TargetID), strings.TrimSpace(f.ID)) {
+			action.TargetResourceType = strings.TrimSpace(liveApproval.TargetType)
+		}
+	}
+	if rec != nil && rec.ProposedFix != nil {
 		action.FixID = rec.ProposedFix.ID
 		action.Description = rec.ProposedFix.Description
-		action.RiskLevel = rec.ProposedFix.RiskLevel
+		if strings.TrimSpace(action.RiskLevel) == "" {
+			action.RiskLevel = rec.ProposedFix.RiskLevel
+		}
 		action.Destructive = rec.ProposedFix.Destructive
 		action.TargetHost = rec.ProposedFix.TargetHost
 	}
@@ -1679,6 +1700,45 @@ func buildUnifiedFindingHandoffActions(f *unified.UnifiedFinding) []chat.Handoff
 		return nil
 	}
 	return []chat.HandoffAction{action}
+}
+
+func livePatrolApprovalForFinding(findingID, orgID string) *approval.ApprovalRequest {
+	findingID = strings.TrimSpace(findingID)
+	if findingID == "" {
+		return nil
+	}
+	store := approval.GetStore()
+	if store == nil {
+		return nil
+	}
+
+	var selected *approval.ApprovalRequest
+	for _, req := range store.GetPendingApprovalsForOrg(orgID) {
+		if req == nil {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(req.ToolID), "investigation_fix") {
+			continue
+		}
+		if strings.TrimSpace(req.TargetID) != findingID {
+			continue
+		}
+		if selected == nil ||
+			req.RequestedAt.After(selected.RequestedAt) ||
+			(req.RequestedAt.Equal(selected.RequestedAt) && strings.TrimSpace(req.ID) > strings.TrimSpace(selected.ID)) {
+			selected = req
+		}
+	}
+	return selected
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if normalized := strings.TrimSpace(value); normalized != "" {
+			return normalized
+		}
+	}
+	return ""
 }
 
 func formatChatResource(name, resourceType string) string {
@@ -1949,13 +2009,14 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	if findingID != "" {
 		findingResolved := false
-		store := h.GetUnifiedStoreForOrg(GetOrgID(ctx))
+		orgID := GetOrgID(ctx)
+		store := h.GetUnifiedStoreForOrg(orgID)
 		if store != nil {
 			if f := store.Get(findingID); f != nil {
 				findingResolved = true
 				handoffContext = buildUnifiedFindingChatContext(f, store)
 				handoffResources = buildUnifiedFindingHandoffResources(f, store)
-				handoffActions = buildUnifiedFindingHandoffActions(f)
+				handoffActions = buildUnifiedFindingHandoffActions(f, orgID)
 			}
 		}
 		if !findingResolved {

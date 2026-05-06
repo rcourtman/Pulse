@@ -316,11 +316,15 @@ the canonical monitored-system blocked payload.
     Context]`, structured handoff resources, related root-cause/correlation
     finding context, and structured handoff actions model-only, with the
     briefing summarizing operator next steps, latest lifecycle event, and
-    governed action posture without raw command text. Related finding context
-    must resolve from the current unified finding store, stay bounded and
-    deduplicated, include current recency and latest lifecycle facts, and seed
-    only structured handoff resources for canonical policy, state, topology,
-    and timeline hydration. Chat execution owns
+    governed action posture without raw command text. Structured handoff action
+    references may use the current live Patrol investigation-fix approval for
+    the finding when that approval is newer than the approval ID on the durable
+    record, but the payload may carry only IDs, status/risk/target metadata, and
+    fix/action references, never the approval command payload. Related finding
+    context must resolve from the current unified finding store, stay bounded
+    and deduplicated, include current recency and latest lifecycle facts, and
+    seed only structured handoff resources for canonical policy, state,
+    topology, and timeline hydration. Chat execution owns
     resource-policy sanitization of the assembled model-only handoff before
     prompt injection, so API payload builders may pass structured product
     context without turning raw resource identity into user-authored text or
@@ -830,12 +834,14 @@ the canonical monitored-system blocked payload.
    explanation data and must not become saved user text or action authority. The
    backend may also carry structured
    pending-action and approval references from the investigation record into chat
-   execution, but those references must omit raw proposed-fix commands, remain
-   model-only review context, and leave approval/execution authority with the
-   governed approval and remediation APIs. Chat execution may refresh approval
-   status snapshots for those references from the canonical approval store, but
-   that snapshot is read-only, org-scoped, and must not expose or infer the raw
-   command. When the reference resolves to a governed action plan or action
+   execution, and may recover the current live Patrol investigation-fix approval
+   for the finding when the durable record has no current approval ID, but those
+   references must omit raw proposed-fix commands, remain model-only review
+   context, and leave approval/execution authority with the governed approval
+   and remediation APIs. Chat execution may refresh approval status snapshots for
+   those references from the canonical approval store, but that snapshot is
+   read-only, org-scoped, and must not expose or infer the raw command. When the
+   reference resolves to a governed action plan or action
    audit, chat execution must hydrate the canonical action ID, lifecycle state,
    requester, capability, approval policy, plan expiry, preflight/dry-run
    summary, and terminal success/failure state from the action-audit store so
