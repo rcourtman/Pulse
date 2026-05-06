@@ -448,6 +448,20 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	log.Debug().Str("session_id", session.ID).Msg("[ChatService] Session ensured")
 
+	handoffContext := strings.TrimSpace(req.HandoffContext)
+	if handoffContext != "" {
+		if err := sessions.SetModelHandoffContext(session.ID, handoffContext); err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff context")
+		}
+	} else {
+		storedHandoffContext, err := sessions.GetModelHandoffContext(session.ID)
+		if err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff context")
+		} else {
+			handoffContext = storedHandoffContext
+		}
+	}
+
 	// Add user message
 	userMsg := Message{
 		ID:        uuid.New().String(),
@@ -471,7 +485,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("message_count", len(messages)).
 		Msg("[ChatService] Got messages, calling agentic loop")
 
-	injectHandoffContextIntoLatestUserMessage(messages, req.HandoffContext)
+	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
 
 	// Determine which model/loop to use for this request.
 	selectedModel := ""

@@ -176,9 +176,11 @@ runtime cost control, and shared AI transport surfaces.
     investigation context. When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
-    message; proposed-fix command text must stay out of both the persisted chat
-    message and the model-only handoff context, and command payloads remain
-    approval-context data, not conversational copy.
+    message; the model-only handoff may persist as session metadata so
+    same-session follow-up turns keep the Patrol finding context without
+    mutating saved user messages. Proposed-fix command text must stay out of
+    both the persisted chat message and the model-only handoff context, and
+    command payloads remain approval-context data, not conversational copy.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not
     mutate chat control settings, execute tools, or reveal raw command payloads.

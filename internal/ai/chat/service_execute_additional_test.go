@@ -163,6 +163,111 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	var capturedRequests [][]providers.Message
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			capturedRequests = append(capturedRequests, append([]providers.Message(nil), req.Messages...))
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "noted"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	svc := &Service{
+		cfg:         &config.AIConfig{ChatModel: "openai:test"},
+		sessions:    store,
+		executor:    executor,
+		agenticLoop: loop,
+		provider:    provider,
+		started:     true,
+	}
+
+	handoffContext := "[Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup."
+	firstReq := ExecuteRequest{
+		SessionID:      "sess-handoff-followup",
+		Prompt:         "What happened?",
+		HandoffContext: handoffContext,
+	}
+	if err := svc.ExecuteStream(context.Background(), firstReq, func(StreamEvent) {}); err != nil {
+		t.Fatalf("first ExecuteStream failed: %v", err)
+	}
+
+	secondReq := ExecuteRequest{
+		SessionID: "sess-handoff-followup",
+		Prompt:    "What should I do next?",
+	}
+	if err := svc.ExecuteStream(context.Background(), secondReq, func(StreamEvent) {}); err != nil {
+		t.Fatalf("second ExecuteStream failed: %v", err)
+	}
+
+	stored, err := store.GetMessages("sess-handoff-followup")
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	var storedUserMessages []string
+	for _, msg := range stored {
+		if msg.Role == "user" {
+			storedUserMessages = append(storedUserMessages, msg.Content)
+		}
+	}
+	if len(storedUserMessages) != 2 {
+		t.Fatalf("stored user messages = %d, want 2", len(storedUserMessages))
+	}
+	for _, content := range storedUserMessages {
+		if strings.Contains(content, "[Finding Context]") {
+			t.Fatalf("stored user message should not include handoff context: %q", content)
+		}
+	}
+	if storedUserMessages[0] != "What happened?" || storedUserMessages[1] != "What should I do next?" {
+		t.Fatalf("stored user messages = %#v, want clean prompts", storedUserMessages)
+	}
+
+	if len(capturedRequests) != 2 {
+		t.Fatalf("provider request count = %d, want 2", len(capturedRequests))
+	}
+	firstModelUserContent := latestProviderUserContent(t, capturedRequests[0])
+	if !strings.Contains(firstModelUserContent, "[Finding Context]") {
+		t.Fatalf("first provider turn missing handoff context: %q", firstModelUserContent)
+	}
+	if !strings.Contains(firstModelUserContent, "User message: What happened?") {
+		t.Fatalf("first provider turn missing clean user message: %q", firstModelUserContent)
+	}
+	secondModelUserContent := latestProviderUserContent(t, capturedRequests[1])
+	if !strings.Contains(secondModelUserContent, "[Finding Context]") {
+		t.Fatalf("follow-up provider turn missing stored handoff context: %q", secondModelUserContent)
+	}
+	if !strings.Contains(secondModelUserContent, "User message: What should I do next?") {
+		t.Fatalf("follow-up provider turn missing clean user message: %q", secondModelUserContent)
+	}
+}
+
+func latestProviderUserContent(t *testing.T, messages []providers.Message) string {
+	t.Helper()
+
+	for idx := len(messages) - 1; idx >= 0; idx-- {
+		if messages[idx].Role == "user" {
+			return messages[idx].Content
+		}
+	}
+	t.Fatal("expected provider request to include a user message")
+	return ""
+}
+
 func TestService_ExecuteStream_PrefetchMentionsAndOverrideModel(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)

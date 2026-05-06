@@ -42,11 +42,17 @@ type SessionStore struct {
 
 // sessionData is the on-disk format for a session
 type sessionData struct {
-	ID        string    `json:"id"`
-	Title     string    `json:"title"`
-	Messages  []Message `json:"messages"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           string               `json:"id"`
+	Title        string               `json:"title"`
+	Messages     []Message            `json:"messages"`
+	ModelContext *sessionModelContext `json:"model_context,omitempty"`
+	CreatedAt    time.Time            `json:"created_at"`
+	UpdatedAt    time.Time            `json:"updated_at"`
+}
+
+type sessionModelContext struct {
+	HandoffContext string    `json:"handoff_context,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at,omitempty"`
 }
 
 const maxSessionIDLength = 128
@@ -294,6 +300,61 @@ func (s *SessionStore) AddMessage(id string, msg Message) error {
 		data.Title = generateTitle(msg.Content)
 	}
 
+	return s.writeSession(*data)
+}
+
+// SetModelHandoffContext stores model-only handoff context for future turns.
+// It is intentionally session metadata, not a user-authored chat message.
+func (s *SessionStore) SetModelHandoffContext(id, handoffContext string) error {
+	handoffContext = strings.TrimSpace(handoffContext)
+	if handoffContext == "" {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	data.ModelContext = &sessionModelContext{
+		HandoffContext: handoffContext,
+		UpdatedAt:      now,
+	}
+	data.UpdatedAt = now
+
+	return s.writeSession(*data)
+}
+
+// GetModelHandoffContext returns model-only handoff context for a session.
+func (s *SessionStore) GetModelHandoffContext(id string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return "", err
+	}
+	if data.ModelContext == nil {
+		return "", nil
+	}
+	return strings.TrimSpace(data.ModelContext.HandoffContext), nil
+}
+
+func (s *SessionStore) clearModelHandoffContextLocked(id string) error {
+	data, err := s.readSession(id)
+	if err != nil {
+		return err
+	}
+	if data.ModelContext == nil || strings.TrimSpace(data.ModelContext.HandoffContext) == "" {
+		return nil
+	}
+
+	data.ModelContext = nil
+	data.UpdatedAt = time.Now()
 	return s.writeSession(*data)
 }
 
@@ -596,6 +657,9 @@ func (s *SessionStore) ClearSessionState(sessionID string, keepPinned bool) {
 	if !keepPinned {
 		delete(s.sessionToolSets, sessionID)
 		delete(s.knowledgeAccumulators, sessionID)
+		if err := s.clearModelHandoffContextLocked(sessionID); err != nil {
+			log.Warn().Err(err).Str("session_id", sessionID).Msg("[SessionStore] Failed to clear model handoff context")
+		}
 	}
 
 	// Reset FSM coherently with context state

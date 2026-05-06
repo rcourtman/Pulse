@@ -41,6 +41,67 @@ func TestSessionStore_KnowledgeAndToolSets(t *testing.T) {
 	}
 }
 
+func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	initial, err := store.GetModelHandoffContext(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffContext failed: %v", err)
+	}
+	if initial != "" {
+		t.Fatalf("initial handoff context = %q, want empty", initial)
+	}
+
+	handoffContext := "  [Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup.  "
+	if err := store.SetModelHandoffContext(session.ID, handoffContext); err != nil {
+		t.Fatalf("SetModelHandoffContext failed: %v", err)
+	}
+	got, err := store.GetModelHandoffContext(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffContext failed: %v", err)
+	}
+	if got != strings.TrimSpace(handoffContext) {
+		t.Fatalf("handoff context = %q, want trimmed %q", got, strings.TrimSpace(handoffContext))
+	}
+
+	if err := store.AddMessage(session.ID, Message{Role: "user", Content: "What happened?"}); err != nil {
+		t.Fatalf("AddMessage failed: %v", err)
+	}
+	messages, err := store.GetMessages(session.ID)
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	if len(messages) != 1 || messages[0].Content != "What happened?" {
+		t.Fatalf("stored messages = %#v, want clean user prompt only", messages)
+	}
+
+	store.ClearSessionState(session.ID, true)
+	got, err = store.GetModelHandoffContext(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffContext after keep-pinned clear failed: %v", err)
+	}
+	if got == "" {
+		t.Fatalf("expected keep-pinned context clear to retain model handoff")
+	}
+
+	store.ClearSessionState(session.ID, false)
+	got, err = store.GetModelHandoffContext(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffContext after full clear failed: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("handoff context after full clear = %q, want empty", got)
+	}
+}
+
 func TestSessionStore_ResolvedContextLifecycle(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
