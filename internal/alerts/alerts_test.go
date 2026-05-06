@@ -6511,15 +6511,22 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 	m.mu.Lock()
 	m.activeAlerts["test-alert-1"] = &Alert{ID: "test-alert-1", Type: "cpu-usage"}
 	m.activeAlerts["test-alert-2"] = &Alert{ID: "test-alert-2", Type: "memory-usage"}
+	m.activeAlertAlias["canonical-test-alert-1"] = "test-alert-1"
 	m.pendingAlerts["pending-1"] = time.Now()
 	m.recentAlerts["recent-1"] = &Alert{ID: "recent-1", Type: "disk-usage"}
 	m.suppressedUntil["suppressed-1"] = time.Now().Add(time.Hour)
 	m.alertRateLimit["rate-1"] = []time.Time{time.Now()}
 	m.nodeOfflineCount["node-1"] = 3
 	m.offlineConfirmations["node-1"] = 2
+	m.offlineRecoveryConfirmations["test-alert-1"] = 2
 	m.dockerOfflineCount["docker-1"] = 1
 	m.dockerStateConfirm["docker-1"] = 1
+	m.dockerRestartTracking["docker-1"] = &dockerRestartRecord{}
+	m.dockerLastExitCode["docker-1"] = 137
+	m.dockerUpdateFirstSeen["docker-1"] = time.Now()
+	m.dockerUpdateFirstSeenByIdentity["docker-1"] = time.Now()
 	m.ackState["test-alert-1"] = ackRecord{acknowledged: true, user: "testuser", time: time.Now()}
+	m.ackStateByCanonical["canonical-test-alert-1"] = ackRecord{acknowledged: true, user: "testuser", time: time.Now()}
 	m.mu.Unlock()
 
 	m.resolvedMutex.Lock()
@@ -6536,6 +6543,9 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 	m.mu.RLock()
 	if len(m.activeAlerts) != 0 {
 		t.Errorf("expected activeAlerts to be empty, got %d", len(m.activeAlerts))
+	}
+	if len(m.activeAlertAlias) != 0 {
+		t.Errorf("expected activeAlertAlias to be empty, got %d", len(m.activeAlertAlias))
 	}
 	if len(m.pendingAlerts) != 0 {
 		t.Errorf("expected pendingAlerts to be empty, got %d", len(m.pendingAlerts))
@@ -6555,14 +6565,32 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 	if len(m.offlineConfirmations) != 0 {
 		t.Errorf("expected offlineConfirmations to be empty, got %d", len(m.offlineConfirmations))
 	}
+	if len(m.offlineRecoveryConfirmations) != 0 {
+		t.Errorf("expected offlineRecoveryConfirmations to be empty, got %d", len(m.offlineRecoveryConfirmations))
+	}
 	if len(m.dockerOfflineCount) != 0 {
 		t.Errorf("expected dockerOfflineCount to be empty, got %d", len(m.dockerOfflineCount))
 	}
 	if len(m.dockerStateConfirm) != 0 {
 		t.Errorf("expected dockerStateConfirm to be empty, got %d", len(m.dockerStateConfirm))
 	}
+	if len(m.dockerRestartTracking) != 0 {
+		t.Errorf("expected dockerRestartTracking to be empty, got %d", len(m.dockerRestartTracking))
+	}
+	if len(m.dockerLastExitCode) != 0 {
+		t.Errorf("expected dockerLastExitCode to be empty, got %d", len(m.dockerLastExitCode))
+	}
+	if len(m.dockerUpdateFirstSeen) != 0 {
+		t.Errorf("expected dockerUpdateFirstSeen to be empty, got %d", len(m.dockerUpdateFirstSeen))
+	}
+	if len(m.dockerUpdateFirstSeenByIdentity) != 0 {
+		t.Errorf("expected dockerUpdateFirstSeenByIdentity to be empty, got %d", len(m.dockerUpdateFirstSeenByIdentity))
+	}
 	if len(m.ackState) != 0 {
 		t.Errorf("expected ackState to be empty, got %d", len(m.ackState))
+	}
+	if len(m.ackStateByCanonical) != 0 {
+		t.Errorf("expected ackStateByCanonical to be empty, got %d", len(m.ackStateByCanonical))
 	}
 	m.mu.RUnlock()
 
