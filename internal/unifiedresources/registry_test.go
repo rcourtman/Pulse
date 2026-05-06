@@ -101,6 +101,63 @@ func TestResourceRegistry_ListByType_Empty(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_IngestRecordsPreservesAvailabilityEndpoints(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		{
+			SourceID: "energy-meter",
+			Resource: Resource{
+				Type:     ResourceTypeNetworkEndpoint,
+				Name:     "Energy meter",
+				Status:   StatusOffline,
+				LastSeen: now,
+				Sources:  []DataSource{SourceAvailability},
+				Availability: &AvailabilityData{
+					TargetID:            "energy-meter",
+					Address:             "192.0.2.44",
+					Protocol:            "icmp",
+					Enabled:             true,
+					Available:           false,
+					ConsecutiveFailures: 2,
+					FailureThreshold:    2,
+				},
+				Incidents: []ResourceIncident{{
+					Provider: "availability",
+					NativeID: "energy-meter",
+					Code:     "availability_unreachable",
+					Severity: storagehealth.RiskCritical,
+					Source:   "availability",
+					Summary:  "Energy meter is unreachable by ICMP probe",
+				}},
+			},
+			Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.44"}},
+		},
+	})
+
+	got := rr.ListByType(ResourceTypeNetworkEndpoint)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 network endpoint, got %d", len(got))
+	}
+	resource := got[0]
+	if resource.Availability == nil {
+		t.Fatal("expected availability metadata")
+	}
+	if resource.Availability.TargetID != "energy-meter" {
+		t.Fatalf("target id = %q, want energy-meter", resource.Availability.TargetID)
+	}
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want %q", resource.Status, StatusOffline)
+	}
+	if len(resource.Incidents) != 1 || resource.Incidents[0].Code != "availability_unreachable" {
+		t.Fatalf("expected availability incident, got %+v", resource.Incidents)
+	}
+	if resource.Canonical == nil || resource.Canonical.PrimaryID != "availability:energy-meter" {
+		t.Fatalf("canonical identity = %+v, want primary availability:energy-meter", resource.Canonical)
+	}
+}
+
 func TestResourceRegistry_ListUsesDeterministicNameTieBreakers(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)

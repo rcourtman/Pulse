@@ -87,6 +87,8 @@ func CanonicalResourceType(resourceType string) string {
 		return "pool"
 	case "dataset":
 		return "dataset"
+	case "network-endpoint":
+		return "network-endpoint"
 	default:
 		return ""
 	}

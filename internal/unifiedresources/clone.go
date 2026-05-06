@@ -41,6 +41,7 @@ func cloneResource(in *Resource) Resource {
 	out.Ceph = cloneCephMeta(in.Ceph)
 	out.TrueNAS = cloneTrueNASData(in.TrueNAS)
 	out.VMware = cloneVMwareData(in.VMware)
+	out.Availability = cloneAvailabilityData(in.Availability)
 	out.FacetCounts = resourceFacetCounts(out)
 	RefreshCanonicalMetadata(&out)
 	return out
@@ -242,6 +243,14 @@ func clonePMGData(in *PMGData) *PMGData {
 	out.SpamDistribution = clonePMGSpamBucketMetaSlice(in.SpamDistribution)
 	out.RelayDomains = clonePMGRelayDomainMetaSlice(in.RelayDomains)
 	out.DomainStats = clonePMGDomainStatMetaSlice(in.DomainStats)
+	return &out
+}
+
+func cloneAvailabilityData(in *AvailabilityData) *AvailabilityData {
+	if in == nil {
+		return nil
+	}
+	out := *in
 	return &out
 }
 

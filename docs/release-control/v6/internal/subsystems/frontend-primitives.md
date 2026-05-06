@@ -161,6 +161,7 @@ work extends shared components instead of creating new local variants.
 130. `frontend-modern/src/utils/platformSupportManifest.ts`
 131. `frontend-modern/src/utils/sourcePlatformOptions.ts`
 132. `frontend-modern/src/utils/sourcePlatforms.ts`
+133. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
 
 ## Shared Boundaries
 
@@ -2790,3 +2791,10 @@ the normalised (not canonical) path when resolving Proxmox agent and path
 checks so that deep links such as `/settings/infrastructure/platforms/proxmox/pbs`
 resolve to the correct agent before the canonical-redirect fires, rather than
 after it has already collapsed the path.
+The shared frontend source/platform vocabulary now also includes
+`availability` as an agentless infrastructure source and `network-endpoint` as
+the canonical resource projection. Picker cards, source labels, badges, and
+settings add-flow copy must use the shared onboarding and source-platform
+helpers instead of feature-local wording, so availability probes stay visually
+aligned with the single Infrastructure settings surface without pretending to
+be a host agent install.

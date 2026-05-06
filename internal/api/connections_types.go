@@ -22,14 +22,15 @@ const (
 type ConnectionType string
 
 const (
-	ConnectionTypePVE        ConnectionType = "pve"
-	ConnectionTypePBS        ConnectionType = "pbs"
-	ConnectionTypePMG        ConnectionType = "pmg"
-	ConnectionTypeVMware     ConnectionType = "vmware"
-	ConnectionTypeTrueNAS    ConnectionType = "truenas"
-	ConnectionTypeAgent      ConnectionType = "agent"
-	ConnectionTypeDocker     ConnectionType = "docker"
-	ConnectionTypeKubernetes ConnectionType = "kubernetes"
+	ConnectionTypePVE          ConnectionType = "pve"
+	ConnectionTypePBS          ConnectionType = "pbs"
+	ConnectionTypePMG          ConnectionType = "pmg"
+	ConnectionTypeVMware       ConnectionType = "vmware"
+	ConnectionTypeTrueNAS      ConnectionType = "truenas"
+	ConnectionTypeAgent        ConnectionType = "agent"
+	ConnectionTypeDocker       ConnectionType = "docker"
+	ConnectionTypeKubernetes   ConnectionType = "kubernetes"
+	ConnectionTypeAvailability ConnectionType = "availability"
 )
 
 // ConnectionSource records how a connection entered Pulse.

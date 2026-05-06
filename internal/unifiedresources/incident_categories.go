@@ -32,8 +32,13 @@ func IncidentCategoryForResource(resource *Resource, incident ResourceIncident) 
 		return IncidentCategoryRecoverability
 	case "disk_failed", "disk_unavailable", "disk_smart_failed", "disk_wearout", "disk_health":
 		return IncidentCategoryDiskHealth
+	case "availability_unreachable":
+		return IncidentCategoryAvailability
 	}
 
+	if resource.Type == ResourceTypeNetworkEndpoint || resource.Availability != nil {
+		return IncidentCategoryAvailability
+	}
 	if resource.Type == ResourceTypePhysicalDisk {
 		return IncidentCategoryDiskHealth
 	}

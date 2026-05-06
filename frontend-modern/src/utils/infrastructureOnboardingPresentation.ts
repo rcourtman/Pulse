@@ -9,7 +9,7 @@ import {
 
 export type InfrastructureOnboardingConnectionType = Extract<
   ConnectionType,
-  'agent' | 'pve' | 'pbs' | 'pmg' | 'truenas' | 'vmware'
+  'agent' | 'availability' | 'pve' | 'pbs' | 'pmg' | 'truenas' | 'vmware'
 >;
 
 export interface InfrastructureOnboardingProductPresentation {
@@ -47,10 +47,12 @@ interface BaseProductPresentation {
   sourceStrategy: InfrastructureSourceStrategy;
   autoDetect: boolean;
   sourcePlatformId?: string;
+  primaryMode?: PlatformPrimaryMode;
+  canonicalProjections?: readonly string[];
   defaultSurfaceKeys: readonly string[];
 }
 
-export type InfrastructureSourceStrategy = 'api' | 'agent' | 'api-agent';
+export type InfrastructureSourceStrategy = 'api' | 'agent' | 'api-agent' | 'probe';
 
 export interface InfrastructureSourceStrategyPresentation {
   label: string;
@@ -89,6 +91,11 @@ const SOURCE_STRATEGY_PRESENTATION: Record<
     summary: 'Platform API, agent optional',
     detail:
       'Starts with platform API inventory and adds Pulse Agent only where node-local telemetry is needed.',
+  },
+  probe: {
+    label: 'Availability probe',
+    summary: 'Agentless probe',
+    detail: 'Uses ICMP, TCP, or HTTP checks for devices that cannot run Pulse Agent.',
   },
 };
 
@@ -165,6 +172,17 @@ const PRODUCT_PRESENTATION: Record<
     sourcePlatformId: 'proxmox-pmg',
     defaultSurfaceKeys: ['mailStats', 'queues', 'quarantine', 'domainStats'],
   },
+  availability: {
+    label: 'Network endpoint',
+    bestFor: 'Devices that expose ICMP, TCP, or HTTP but cannot run Pulse Agent',
+    coverage: 'Agentless availability checks and downtime alerts',
+    catalogDescription: 'Ping, TCP port, and HTTP availability checks',
+    sourceStrategy: 'probe',
+    autoDetect: false,
+    primaryMode: 'api-backed',
+    canonicalProjections: ['network-endpoint'],
+    defaultSurfaceKeys: ['availability'],
+  },
 };
 
 const governanceStateForType = (
@@ -186,6 +204,7 @@ const API_PRODUCT_ORDER: InfrastructureOnboardingConnectionType[] = [
   'pve',
   'pbs',
   'pmg',
+  'availability',
 ];
 
 const SOURCE_MANAGER_PRODUCT_ORDER: InfrastructureOnboardingConnectionType[] = [
@@ -266,8 +285,8 @@ const SOURCE_PICKER_GROUPS: InfrastructureSourcePickerGroupPresentation[] = [
   {
     id: 'host-monitoring',
     label: 'Host monitoring',
-    description: 'Low-overhead machine telemetry and local service discovery.',
-    types: ['agent'],
+    description: 'Low-overhead machine telemetry and simple availability checks.',
+    types: ['agent', 'availability'],
   },
 ];
 
@@ -275,13 +294,15 @@ export const getInfrastructureOnboardingProductPresentation = (
   type: InfrastructureOnboardingConnectionType,
 ): InfrastructureOnboardingProductPresentation => {
   const manifestEntry = manifestEntryForType(type);
+  const presentation = PRODUCT_PRESENTATION[type];
   return {
     type,
-    ...PRODUCT_PRESENTATION[type],
+    ...presentation,
     governanceState: manifestEntry?.governanceState ?? governanceStateForType(type),
     readinessStage: manifestEntry?.readinessStage ?? 'supported',
-    primaryMode: manifestEntry?.primaryMode ?? 'agent-backed',
-    canonicalProjections: manifestEntry?.canonicalProjections ?? ['agent'],
+    primaryMode: manifestEntry?.primaryMode ?? presentation.primaryMode ?? 'agent-backed',
+    canonicalProjections: manifestEntry?.canonicalProjections ??
+      presentation.canonicalProjections ?? ['agent'],
     supportFloor:
       manifestEntry?.supportFloor ??
       ({
@@ -358,7 +379,7 @@ export const getInfrastructureEmptyStateSummary = (): string =>
   'Choose an infrastructure source to start monitoring your environment.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Supported source types include VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and standalone hosts through Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts.';
+  'Supported source types include VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, network endpoints, and standalone hosts through Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts.';
 
 export const getInfrastructureCoverageCompleteActionPresentation =
   (): InfrastructureCoverageCompleteActionPresentation => ({

@@ -557,6 +557,7 @@ func (m *Monitor) registerBuiltInPollProviders() {
 	_ = m.RegisterPollProvider(newPVEPollProvider())
 	_ = m.RegisterPollProvider(newPBSPollProvider())
 	_ = m.RegisterPollProvider(newPMGPollProvider())
+	_ = m.RegisterPollProvider(newAvailabilityPollProvider())
 }
 
 func (m *Monitor) pollProviderSnapshot() []PollProvider {
@@ -619,6 +620,7 @@ func (m *Monitor) pollProviderSnapshotWithBuiltins() []PollProvider {
 		newPVEPollProvider(),
 		newPBSPollProvider(),
 		newPMGPollProvider(),
+		newAvailabilityPollProvider(),
 	}
 	for _, provider := range builtins {
 		if provider == nil {
@@ -670,6 +672,8 @@ func (m *Monitor) getPollProvider(instanceType InstanceType) PollProvider {
 		return newPBSPollProvider()
 	case InstanceTypePMG:
 		return newPMGPollProvider()
+	case InstanceTypeAvailability:
+		return newAvailabilityPollProvider()
 	default:
 		return nil
 	}

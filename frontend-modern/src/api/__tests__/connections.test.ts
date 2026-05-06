@@ -263,4 +263,19 @@ describe('ConnectionsAPI', () => {
     });
     expect(result).toEqual(response);
   });
+
+  it('routes availability pause and remove actions to availability targets', async () => {
+    mockedApiFetchJSON.mockResolvedValueOnce({ success: true });
+    await ConnectionsAPI.setEnabled('availability:sensor/1', false);
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith('/api/availability-targets/sensor%2F1', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled: false }),
+    });
+
+    mockedApiFetchJSON.mockResolvedValueOnce({ success: true });
+    await ConnectionsAPI.remove('availability:sensor/1');
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith('/api/availability-targets/sensor%2F1', {
+      method: 'DELETE',
+    });
+  });
 });

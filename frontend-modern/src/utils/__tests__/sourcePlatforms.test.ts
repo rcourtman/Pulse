@@ -149,6 +149,7 @@ describe('sourcePlatforms', () => {
       expect(resolvePlatformTypeFromSources(['agent', 'vmware'])).toBe('vmware-vsphere');
       expect(resolvePlatformTypeFromSources(['agent', 'truenas'])).toBe('truenas');
       expect(resolvePlatformTypeFromSources(['agent'])).toBe('agent');
+      expect(resolvePlatformTypeFromSources(['availability'])).toBe('generic');
       expect(resolvePlatformTypeFromSources(['custom-source'])).toBeUndefined();
     });
   });
@@ -160,6 +161,7 @@ describe('sourcePlatforms', () => {
       expect(resolveSourceTypeFromSources(['agent', 'proxmox'])).toBe('hybrid');
       expect(resolveSourceTypeFromSources(['agent', 'vmware'])).toBe('hybrid');
       expect(resolveSourceTypeFromSources(['agent', 'truenas'])).toBe('hybrid');
+      expect(resolveSourceTypeFromSources(['availability'])).toBe('api');
       expect(resolveSourceTypeFromSources(['custom-source'])).toBe('api');
     });
   });

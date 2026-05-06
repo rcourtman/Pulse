@@ -202,6 +202,50 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.connectionsHandlers.HandleProbe))(w, req)
 	})
 
+	// Agentless availability target management
+	r.mux.HandleFunc("/api/availability-targets", func(w http.ResponseWriter, req *http.Request) {
+		if r.availabilityHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "availability_unavailable", "Availability target service unavailable", nil)
+			return
+		}
+		switch req.Method {
+		case http.MethodGet:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.availabilityHandlers.HandleList))(w, req)
+		case http.MethodPost:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleAdd))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	r.mux.HandleFunc("/api/availability-targets/test", func(w http.ResponseWriter, req *http.Request) {
+		if r.availabilityHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "availability_unavailable", "Availability target service unavailable", nil)
+			return
+		}
+		if req.Method == http.MethodPost {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleTestConnection))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	r.mux.HandleFunc("/api/availability-targets/", func(w http.ResponseWriter, req *http.Request) {
+		if r.availabilityHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "availability_unavailable", "Availability target service unavailable", nil)
+			return
+		}
+		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleTestSavedConnection))(w, req)
+		} else if req.Method == http.MethodDelete {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleDelete))(w, req)
+		} else if req.Method == http.MethodPut {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleUpdate))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// TrueNAS connection management
 	r.mux.HandleFunc("/api/truenas/connections", func(w http.ResponseWriter, req *http.Request) {
 		if r.trueNASHandlers == nil {

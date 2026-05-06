@@ -904,6 +904,7 @@ type Monitor struct {
 	pveClients                 map[string]PVEClientInterface
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
+	availabilityStatuses       map[string]AvailabilityProbeStatus
 	pollProviders              map[InstanceType]PollProvider
 	pollMetrics                *PollMetrics
 	scheduler                  *AdaptiveScheduler
@@ -1462,6 +1463,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pveClients:                 make(map[string]PVEClientInterface),
 		pbsClients:                 make(map[string]*pbs.Client),
 		pmgClients:                 make(map[string]*pmg.Client),
+		availabilityStatuses:       make(map[string]AvailabilityProbeStatus),
 		pollProviders:              make(map[InstanceType]PollProvider),
 		pollMetrics:                getPollMetrics(),
 		scheduler:                  scheduler,
@@ -4946,6 +4948,9 @@ func monitorPlatformType(resource unifiedresources.Resource, resourceType string
 	if resource.TrueNAS != nil {
 		return "truenas"
 	}
+	if resource.Availability != nil {
+		return "generic"
+	}
 	switch resourceType {
 	case "vm", "system-container", "storage", "pool":
 		return "proxmox-pve"
@@ -5019,6 +5024,15 @@ func monitorPlatformID(resource unifiedresources.Resource, resourceType string) 
 	case "pmg":
 		if resource.PMG != nil && strings.TrimSpace(resource.PMG.Hostname) != "" {
 			return strings.TrimSpace(resource.PMG.Hostname)
+		}
+	case "network-endpoint":
+		if resource.Availability != nil {
+			if targetID := strings.TrimSpace(resource.Availability.TargetID); targetID != "" {
+				return targetID
+			}
+			if address := strings.TrimSpace(resource.Availability.Address); address != "" {
+				return address
+			}
 		}
 	}
 	return resource.ID
@@ -5211,6 +5225,9 @@ func monitorIdentity(resource unifiedresources.Resource, fallbackName string) *m
 	}
 	if hostname == "" && resource.Proxmox != nil {
 		hostname = strings.TrimSpace(resource.Proxmox.NodeName)
+	}
+	if hostname == "" && resource.Availability != nil {
+		hostname = strings.TrimSpace(resource.Availability.Address)
 	}
 	if hostname == "" {
 		for _, candidate := range resource.Identity.Hostnames {
@@ -5421,6 +5438,26 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 			"shared":   false,
 			"enabled":  true,
 			"active":   resource.Status == unifiedresources.StatusOnline,
+		}
+	case "network-endpoint":
+		if resource.Availability != nil {
+			payload = map[string]interface{}{
+				"targetId":            resource.Availability.TargetID,
+				"address":             resource.Availability.Address,
+				"protocol":            resource.Availability.Protocol,
+				"port":                resource.Availability.Port,
+				"path":                resource.Availability.Path,
+				"enabled":             resource.Availability.Enabled,
+				"available":           resource.Availability.Available,
+				"lastChecked":         resource.Availability.LastChecked,
+				"lastSuccess":         resource.Availability.LastSuccess,
+				"latencyMillis":       resource.Availability.LatencyMillis,
+				"consecutiveFailures": resource.Availability.ConsecutiveFailures,
+				"lastError":           resource.Availability.LastError,
+				"failureThreshold":    resource.Availability.FailureThreshold,
+				"pollIntervalSeconds": resource.Availability.PollIntervalSeconds,
+				"timeoutMillis":       resource.Availability.TimeoutMillis,
+			}
 		}
 	}
 

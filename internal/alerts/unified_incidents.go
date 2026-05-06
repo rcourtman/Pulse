@@ -232,6 +232,8 @@ func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) b
 		return len(resource.Incidents) > 0
 	case unifiedresources.ResourceTypePBS:
 		return len(resource.Incidents) > 0
+	case unifiedresources.ResourceTypeNetworkEndpoint:
+		return len(resource.Incidents) > 0
 	default:
 		return false
 	}
@@ -324,6 +326,8 @@ func unifiedIncidentInstance(resource unifiedresources.Resource) string {
 		return "PBS"
 	case resource.VMware != nil:
 		return "VMware"
+	case resource.Availability != nil:
+		return "Availability"
 	case resource.Storage != nil && strings.TrimSpace(resource.Storage.Platform) != "":
 		platform := strings.TrimSpace(resource.Storage.Platform)
 		if platform == "" {

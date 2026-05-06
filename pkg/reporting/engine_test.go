@@ -48,6 +48,12 @@ func TestCSVGenerator_Generate(t *testing.T) {
 	}
 }
 
+func TestCanonicalResourceTypeIncludesAgentlessAvailabilityEndpoints(t *testing.T) {
+	if got := CanonicalResourceType("network-endpoint"); got != "network-endpoint" {
+		t.Fatalf("CanonicalResourceType() = %q, want network-endpoint", got)
+	}
+}
+
 func TestPDFGenerator_Generate(t *testing.T) {
 	data := createTestReportData()
 

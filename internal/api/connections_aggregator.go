@@ -55,6 +55,8 @@ type aggregatorInputs struct {
 	pmgInstances         []config.PMGInstance
 	vmwareInstances      []config.VMwareVCenterInstance
 	truenasInstances     []config.TrueNASInstance
+	availabilityTargets  []config.AvailabilityTarget
+	availabilityStatuses map[string]monitoring.AvailabilityProbeStatus
 	hosts                []models.Host
 	instanceHealth       map[string]monitoring.InstanceHealth
 	expectedAgentVersion string
@@ -72,7 +74,7 @@ func buildConnections(in aggregatorInputs) []Connection {
 
 	out := make([]Connection, 0,
 		len(in.pveInstances)+len(in.pbsInstances)+len(in.pmgInstances)+
-			len(in.vmwareInstances)+len(in.truenasInstances)+len(in.hosts))
+			len(in.vmwareInstances)+len(in.truenasInstances)+len(in.availabilityTargets)+len(in.hosts))
 
 	for _, pve := range in.pveInstances {
 		out = append(out, buildPVEConnection(pve, in.instanceHealth, now))
@@ -88,6 +90,9 @@ func buildConnections(in aggregatorInputs) []Connection {
 	}
 	for _, tn := range in.truenasInstances {
 		out = append(out, buildTrueNASConnection(tn, in.instanceHealth, now))
+	}
+	for _, target := range in.availabilityTargets {
+		out = append(out, buildAvailabilityConnection(target, in.availabilityStatuses[target.ID], now))
 	}
 	for _, host := range in.hosts {
 		out = append(out, buildAgentConnection(host, in.expectedAgentVersion, now))
@@ -261,6 +266,27 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
+	})
+}
+
+func buildAvailabilityConnection(target config.AvailabilityTarget, status monitoring.AvailabilityProbeStatus, now time.Time) Connection {
+	target = config.NormalizeAvailabilityTarget(target)
+	state, reason, lastSeen, lastError := deriveAvailabilityConnectionState(target, status, now)
+	return withFleetGovernance(Connection{
+		ID:           "availability:" + target.ID,
+		Type:         ConnectionTypeAvailability,
+		Name:         target.DisplayName(),
+		Address:      target.Address,
+		HostAliases:  appendNormalizedHosts(nil, target.Address, target.ProbeAddress()),
+		State:        state,
+		StateReason:  reason,
+		Enabled:      target.Enabled,
+		Surfaces:     []string{"availability"},
+		Scope:        map[string]bool{"availability": true},
+		LastSeen:     lastSeen,
+		LastError:    lastError,
+		Source:       ConnectionSourceManual,
+		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: false, SupportsTest: true},
 	})
 }
 
@@ -511,6 +537,48 @@ func deriveConnectionState(enabled bool, h monitoring.InstanceHealth, now time.T
 	}
 
 	return ConnectionStateActive, "", lastSeen, lastError
+}
+
+func deriveAvailabilityConnectionState(target config.AvailabilityTarget, status monitoring.AvailabilityProbeStatus, now time.Time) (ConnectionState, string, *time.Time, *ConnectionError) {
+	var lastSeen *time.Time
+	if !status.LastSuccess.IsZero() {
+		t := status.LastSuccess
+		lastSeen = &t
+	}
+
+	var lastError *ConnectionError
+	if strings.TrimSpace(status.LastError) != "" && !status.LastChecked.IsZero() {
+		lastError = &ConnectionError{
+			At:       status.LastChecked,
+			Message:  status.LastError,
+			Category: "availability",
+		}
+	}
+
+	if !target.Enabled {
+		return ConnectionStatePaused, "paused by user", lastSeen, lastError
+	}
+	if status.LastChecked.IsZero() {
+		return ConnectionStatePending, "awaiting first probe", nil, nil
+	}
+	if !status.Available {
+		threshold := target.EffectiveFailureThreshold()
+		reason := fmt.Sprintf("probe failed %d/%d times", status.ConsecutiveFailures, threshold)
+		if status.LastError != "" {
+			reason = status.LastError
+		}
+		return ConnectionStateUnreachable, reason, lastSeen, lastError
+	}
+	if lastSeen != nil {
+		staleThreshold := time.Duration(target.EffectivePollIntervalSecs()*2) * time.Second
+		if staleThreshold < connectionStaleThreshold {
+			staleThreshold = connectionStaleThreshold
+		}
+		if now.Sub(*lastSeen) > staleThreshold {
+			return ConnectionStateStale, fmt.Sprintf("no successful probe in %s", now.Sub(*lastSeen).Round(time.Second)), lastSeen, lastError
+		}
+	}
+	return ConnectionStateActive, "", lastSeen, nil
 }
 
 func sourceFromString(s string) ConnectionSource {

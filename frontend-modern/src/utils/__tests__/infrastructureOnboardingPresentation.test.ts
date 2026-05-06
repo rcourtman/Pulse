@@ -60,15 +60,31 @@ describe('infrastructureOnboardingPresentation', () => {
       label: 'API first',
       summary: 'Platform API, agent optional',
     });
+    expect(getInfrastructureSourceStrategyPresentation('probe')).toMatchObject({
+      label: 'Availability probe',
+      summary: 'Agentless probe',
+    });
 
     expect(getInfrastructureOnboardingProductPresentation('vmware').sourceStrategy).toBe('api');
+    expect(getInfrastructureOnboardingProductPresentation('truenas').sourceStrategy).toBe('api');
     expect(getInfrastructureOnboardingProductPresentation('pbs').sourceStrategy).toBe('api-agent');
+    expect(getInfrastructureOnboardingProductPresentation('availability')).toMatchObject({
+      sourceStrategy: 'probe',
+      primaryMode: 'api-backed',
+      canonicalProjections: ['network-endpoint'],
+    });
   });
 
   it('keeps supported API products separate from the admitted VMware path', () => {
     expect(
       getInfrastructureApiProductsByGovernanceState('supported').map((product) => product.label),
-    ).toEqual(['TrueNAS SCALE', 'Proxmox VE', 'Proxmox Backup Server', 'Proxmox Mail Gateway']);
+    ).toEqual([
+      'TrueNAS SCALE',
+      'Proxmox VE',
+      'Proxmox Backup Server',
+      'Proxmox Mail Gateway',
+      'Network endpoint',
+    ]);
 
     expect(
       getInfrastructureApiProductsByGovernanceState('admitted').map((product) => product.label),
@@ -101,6 +117,11 @@ describe('infrastructureOnboardingPresentation', () => {
         type: 'pmg',
         label: 'Proxmox Mail Gateway',
         actionLabel: 'Add Proxmox Mail Gateway',
+      }),
+      expect.objectContaining({
+        type: 'availability',
+        label: 'Network endpoint',
+        actionLabel: 'Add Network endpoint',
       }),
       expect.objectContaining({
         type: 'agent',
@@ -140,9 +161,12 @@ describe('infrastructureOnboardingPresentation', () => {
       {
         id: 'host-monitoring',
         label: 'Host monitoring',
-        description: 'Low-overhead machine telemetry and local service discovery.',
-        types: ['agent'],
-        products: [expect.objectContaining({ type: 'agent', label: 'Pulse Agent' })],
+        description: 'Low-overhead machine telemetry and simple availability checks.',
+        types: ['agent', 'availability'],
+        products: [
+          expect.objectContaining({ type: 'agent', label: 'Pulse Agent' }),
+          expect.objectContaining({ type: 'availability', label: 'Network endpoint' }),
+        ],
       },
     ]);
 
@@ -160,6 +184,7 @@ describe('infrastructureOnboardingPresentation', () => {
         'Proxmox VE',
         'Proxmox Backup Server',
         'Proxmox Mail Gateway',
+        'Network endpoint',
         'Pulse Agent hosts',
         'Docker',
         'Kubernetes',

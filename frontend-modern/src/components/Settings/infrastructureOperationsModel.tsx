@@ -128,6 +128,8 @@ export const getCapabilitySurfaceLabel = (capability: AgentCapability) => {
       return 'PMG data';
     case 'truenas':
       return 'TrueNAS data';
+    case 'availability':
+      return 'Availability data';
     default:
       return getAgentCapabilityLabel(capability);
   }
@@ -180,7 +182,7 @@ export const getStopMonitoringSurfaces = (row: UnifiedAgentRow) => {
 };
 
 export const isPlatformConnectionsCapability = (capability: AgentCapability) =>
-  ['proxmox', 'pbs', 'pmg', 'truenas'].includes(capability);
+  ['proxmox', 'pbs', 'pmg', 'truenas', 'availability'].includes(capability);
 
 export const getPlatformConnectionsViewForCapability = (
   capability: AgentCapability,
@@ -192,6 +194,8 @@ export const getPlatformConnectionsViewForCapability = (
       return 'proxmox';
     case 'truenas':
       return 'truenas';
+    case 'availability':
+      return null;
     default:
       return null;
   }
@@ -422,6 +426,7 @@ const agentCapabilityFromSurfaceKind = (
     case 'pbs':
     case 'pmg':
     case 'truenas':
+    case 'availability':
       return kind;
     default:
       return 'agent';

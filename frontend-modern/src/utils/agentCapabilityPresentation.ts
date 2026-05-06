@@ -5,7 +5,8 @@ export type AgentCapability =
   | 'proxmox'
   | 'pbs'
   | 'pmg'
-  | 'truenas';
+  | 'truenas'
+  | 'availability';
 
 export function getAgentCapabilityLabel(capability: AgentCapability): string {
   switch (capability) {
@@ -23,6 +24,8 @@ export function getAgentCapabilityLabel(capability: AgentCapability): string {
       return 'PMG';
     case 'truenas':
       return 'TrueNAS';
+    case 'availability':
+      return 'Availability';
   }
 }
 
@@ -36,6 +39,8 @@ export function getAgentCapabilityBadgeClass(capability: AgentCapability): strin
       return 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300';
     case 'truenas':
       return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300';
+    case 'availability':
+      return 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300';
     case 'kubernetes':
       return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
     default:

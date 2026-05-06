@@ -112,6 +112,7 @@ cross-source deduplication.
 88. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
 89. `internal/unifiedresources/kubernetes_metric_ids.go`
 90. `internal/unifiedresources/policy_posture.go`
+91. `internal/unifiedresources/clone.go`
 
 ## Shared Boundaries
 
@@ -136,10 +137,15 @@ cross-source deduplication.
     v5 Docker users can still find the runtime surface while Podman-backed
     rows are not mislabeled as Docker-only.
 17. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
-
 ## Extension Points
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
+   Agentless availability endpoints enter the model as
+   `ResourceTypeNetworkEndpoint` with `SourceAvailability` and
+   `AvailabilityData`. Canonical identity must prefer the saved target id as
+   `availability:<target-id>`, keep the probe address as hostname/platform
+   identity when no stronger identity exists, and preserve availability payloads
+   through clone, merge, API transport, and frontend decode paths.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
    Infrastructure table platform presentation extends through
@@ -510,6 +516,12 @@ canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface, including the
 shared VMware signal-metadata and `resource-incident` timeline vocabulary that
 canonical resources expose to alerts, AI, and frontend consumers.
+Agentless availability checks are now canonical resources rather than
+connection-only status rows. `SourceAvailability` emits `network-endpoint`
+records with the saved target id, probe address, protocol, cadence, last check,
+failure count, and threshold in `AvailabilityData`. Registry merge policy must
+preserve that payload and incident state without trying to fold endpoints into
+hosts, VMs, or storage resources solely because an address matches.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata

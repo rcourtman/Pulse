@@ -43,6 +43,7 @@ management, and fleet control surfaces.
 20. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`
 21. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`
 22. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`
+22a. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
 23. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
 24. `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
 25. `frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx`
@@ -156,6 +157,13 @@ platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks
 the connection disabled, lifecycle surfaces must treat a canonical zero-delta
 or removal-only preview as a valid save path instead of holding the dialog in
 an add-only posture.
+Agentless availability targets belong to the infrastructure source-management
+surface but are not host-agent lifecycle. The lifecycle UI may expose them from
+Add infrastructure, Manage, and the connections ledger, but it must keep their
+credential slot on the availability target API and must not ask for SSH, setup
+tokens, auto-registration, agent profiles, or install commands. Their managed
+rows are platform-connection-style rows whose lifecycle actions are pause,
+test, edit, and remove only.
 The lifecycle-owned onboarding presentation helper must consume the governed
 platform support manifest for readiness stage, primary mode, canonical
 projections, and support-floor posture.

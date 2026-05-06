@@ -22,6 +22,7 @@ export const CANONICAL_RESOURCE_TYPES = [
   'pmg',
   'physical_disk',
   'ceph',
+  'network-endpoint',
 ] as const satisfies readonly ResourceType[];
 
 export const INVALID_RESOURCE_TYPE_ERROR = `Invalid resource type. Valid types: ${CANONICAL_RESOURCE_TYPES.join(', ')}`;

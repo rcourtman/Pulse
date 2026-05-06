@@ -7,6 +7,7 @@ export type ConnectionType =
   | 'pmg'
   | 'vmware'
   | 'truenas'
+  | 'availability'
   | 'agent'
   | 'docker'
   | 'kubernetes';
@@ -188,6 +189,12 @@ export class ConnectionsAPI {
           body: JSON.stringify({ enabled }),
         });
         return;
+      case 'availability':
+        await apiFetchJSON(`/api/availability-targets/${encodeURIComponent(suffix)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ enabled }),
+        });
+        return;
       case 'agent':
       case 'docker':
       case 'kubernetes':
@@ -214,6 +221,11 @@ export class ConnectionsAPI {
         return;
       case 'truenas':
         await apiFetchJSON(`/api/truenas/connections/${encodeURIComponent(suffix)}`, {
+          method: 'DELETE',
+        });
+        return;
+      case 'availability':
+        await apiFetchJSON(`/api/availability-targets/${encodeURIComponent(suffix)}`, {
           method: 'DELETE',
         });
         return;

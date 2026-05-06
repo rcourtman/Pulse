@@ -42,6 +42,7 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   pmg: 'Proxmox Mail Gateway',
   vmware: getInfrastructureOnboardingProductPresentation('vmware').label,
   truenas: getInfrastructureOnboardingProductPresentation('truenas').label,
+  availability: getInfrastructureOnboardingProductPresentation('availability').label,
   agent: 'Pulse Agent',
   docker: 'Docker',
   kubernetes: 'Kubernetes',

@@ -193,6 +193,47 @@ func TestEscalationDeliveryDefersToCanonicalAlertSuppression(t *testing.T) {
 	}
 }
 
+func TestAvailabilityProviderStaysOnCanonicalMonitoringPath(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"scheduler.go": {
+			`InstanceTypeAvailability InstanceType = "availability"`,
+		},
+		"monitor.go": {
+			"availabilityStatuses       map[string]AvailabilityProbeStatus",
+			"availabilityStatuses:       make(map[string]AvailabilityProbeStatus)",
+		},
+		"poll_providers.go": {
+			"_ = m.RegisterPollProvider(newAvailabilityPollProvider())",
+			"newAvailabilityPollProvider(),",
+			"case InstanceTypeAvailability:",
+			"return newAvailabilityPollProvider()",
+		},
+		"availability_poller.go": {
+			"func newAvailabilityPollProvider() PollProvider {",
+			"func (availabilityPollProvider) SupplementalSource() unifiedresources.DataSource {",
+			"return unifiedresources.SourceAvailability",
+			"func (availabilityPollProvider) SupplementalRecords(m *Monitor, orgID string) []unifiedresources.IngestRecord {",
+			"Type:         unifiedresources.ResourceTypeNetworkEndpoint,",
+			"Sources:      []unifiedresources.DataSource{unifiedresources.SourceAvailability},",
+			"Availability: data,",
+			"m.recordTaskResult(InstanceTypeAvailability, target.ID, nil)",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"monitor.go": {

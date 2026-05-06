@@ -1003,6 +1003,8 @@ func unifiedSeedSources(resources []unified.Resource) map[unified.DataSource]str
 			sources[unified.SourceTrueNAS] = struct{}{}
 		case resource.VMware != nil:
 			sources[unified.SourceVMware] = struct{}{}
+		case resource.Availability != nil:
+			sources[unified.SourceAvailability] = struct{}{}
 		}
 	}
 	return sources
@@ -1800,6 +1802,8 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 		return []unified.ResourceType{unified.ResourceTypeCeph}
 	case "physical_disk", "physical-disk", "physicaldisk", "disk":
 		return []unified.ResourceType{unified.ResourceTypePhysicalDisk}
+	case "network-endpoint", "network-endpoints", "endpoint", "endpoints", "availability":
+		return []unified.ResourceType{unified.ResourceTypeNetworkEndpoint}
 	default:
 		return nil
 	}
@@ -1825,6 +1829,8 @@ func parseSources(raw string) map[unified.DataSource]struct{} {
 			result[unified.SourceTrueNAS] = struct{}{}
 		case "vmware", "vmware-vsphere":
 			result[unified.SourceVMware] = struct{}{}
+		case "availability":
+			result[unified.SourceAvailability] = struct{}{}
 		}
 	}
 	return result

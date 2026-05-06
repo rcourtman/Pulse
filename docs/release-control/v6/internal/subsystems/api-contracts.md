@@ -94,6 +94,9 @@ product API routes free of maintainer commercial analytics.
 60. `internal/api/connections_probe.go`
 61. `frontend-modern/src/api/connections.ts`
 62. `frontend-modern/src/api/hostedSignup.ts`
+63. `internal/api/availability_handlers.go`
+64. `frontend-modern/src/api/availabilityTargets.ts`
+65. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
 
 ## Shared Boundaries
 
@@ -130,6 +133,15 @@ product API routes free of maintainer commercial analytics.
     navigate to canonical destinations, but must not import or call local
     `upgradeMetrics`, `conversionEvents`, or infrastructure onboarding metrics
     wrappers.
+    Agentless availability targets share this same settings/API boundary as
+    platform-connection-managed infrastructure, not host-install lifecycle.
+    `internal/api/availability_handlers.go` owns CRUD and test payloads for
+    `/api/availability-targets`, while
+    `frontend-modern/src/api/availabilityTargets.ts` and
+    `AvailabilityTargetSlot.tsx` own the browser transport shape. Connections
+    ledger rows with type `availability` must route pause, remove, and test
+    actions to those availability-target endpoints and must not reuse node,
+    SSH, or Pulse Agent setup payloads.
 13. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 16. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 17. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
@@ -3392,6 +3404,12 @@ alongside `proxmox`, `pbs`, and `pmg`, and the settings reporting/install
 surfaces must keep those platform-managed rows navigable back to platform
 connections instead of presenting host uninstall or stop-monitoring actions
 that only apply to `agent`, `docker`, and `kubernetes`.
+Agentless availability targets extend that platform-managed distinction. The
+API contract for `availability` rows is an address/protocol probe target plus
+runtime status, projected through the connections ledger and unified resources
+as a `network-endpoint`. Browser callers may test unsaved or saved targets, but
+the persisted target list remains owned by `/api/availability-targets` and
+must not be reconstructed from resource snapshots or monitored-system counts.
 That same shared metrics-history contract now also owns physical-disk live I/O
 windows. `internal/api/router.go` must accept `resourceType=disk` on
 `/api/metrics-store/history`, keep `30m` as a valid compact live range, and

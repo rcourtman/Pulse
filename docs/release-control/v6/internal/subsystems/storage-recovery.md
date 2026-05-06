@@ -827,6 +827,12 @@ now surface `poolsDegraded` and `disksFailing` health indicators alongside
 pool/disk counts. `RecoverySummary.tsx` gains an aggregate health-state summary
 row. These additions project from existing websocket pool/disk state; they must
 not introduce new API polling or widen the storage-fetch boundary.
+Agentless availability endpoints are adjacent infrastructure context only, not
+storage or recovery inventory. Storage/recovery consumers may receive
+`network-endpoint` resources through shared unified-resource snapshots, but
+they must not fold those endpoints into protected-item counts, storage health
+rollups, recovery evidence, or storage/recovery licensing or readiness
+messages unless a separately governed storage/recovery relationship is added.
 That same owned summary path now also runs through
 `useStorageSummaryCharts.ts`: the storage page owns one page-scoped summary
 range and one shared storage-summary history fetch, and both the sticky

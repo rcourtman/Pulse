@@ -165,6 +165,59 @@ func TestBuildConnections_AgentStateFromLastSeen(t *testing.T) {
 	}
 }
 
+func TestBuildConnections_AvailabilityTargetStateFromProbeStatus(t *testing.T) {
+	checkedAt := time.Date(2026, 5, 6, 10, 0, 0, 0, time.UTC)
+	in := aggregatorInputs{
+		availabilityTargets: []config.AvailabilityTarget{
+			{
+				ID:               "sensor-1",
+				Name:             "Energy monitor",
+				Address:          "192.0.2.10",
+				Protocol:         config.AvailabilityProbeICMP,
+				Enabled:          true,
+				FailureThreshold: 2,
+			},
+		},
+		availabilityStatuses: map[string]monitoring.AvailabilityProbeStatus{
+			"sensor-1": {
+				TargetID:            "sensor-1",
+				Available:           false,
+				LastChecked:         checkedAt,
+				ConsecutiveFailures: 1,
+				LastError:           "timeout",
+			},
+		},
+		now: checkedAt.Add(5 * time.Second),
+	}
+
+	got := buildConnections(in)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 connection, got %d", len(got))
+	}
+	connection := got[0]
+	if connection.ID != "availability:sensor-1" {
+		t.Fatalf("ID = %q, want availability:sensor-1", connection.ID)
+	}
+	if connection.Type != ConnectionTypeAvailability {
+		t.Fatalf("Type = %q, want availability", connection.Type)
+	}
+	if connection.State != ConnectionStateUnreachable {
+		t.Fatalf("State = %q, want unreachable", connection.State)
+	}
+	if connection.LastError == nil || connection.LastError.Category != "availability" {
+		t.Fatalf("LastError = %+v, want availability category", connection.LastError)
+	}
+	if !reflect.DeepEqual(connection.Surfaces, []string{"availability"}) {
+		t.Fatalf("Surfaces = %+v, want [availability]", connection.Surfaces)
+	}
+	if !connection.Capabilities.SupportsPause || connection.Capabilities.SupportsScope || !connection.Capabilities.SupportsTest {
+		t.Fatalf("Capabilities = %+v, want pause/test without scope", connection.Capabilities)
+	}
+	if !reflect.DeepEqual(connection.HostAliases, []string{"192.0.2.10"}) {
+		t.Fatalf("HostAliases = %+v, want endpoint address", connection.HostAliases)
+	}
+}
+
 func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testing.T) {
 	now := time.Now()
 	in := aggregatorInputs{

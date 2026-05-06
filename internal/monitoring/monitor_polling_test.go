@@ -1908,6 +1908,84 @@ func TestCustomPollProviderIntegration(t *testing.T) {
 	}
 }
 
+func TestAvailabilityPollProviderPublishesSupplementalNetworkEndpoints(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:               "energy-meter",
+		Name:             "Energy meter",
+		Address:          "192.0.2.44",
+		Protocol:         config.AvailabilityProbeICMP,
+		Enabled:          true,
+		PollIntervalSecs: 30,
+		TimeoutMillis:    750,
+		FailureThreshold: 2,
+	})
+	if err := persistence.SaveAvailabilityTargets([]config.AvailabilityTarget{target}); err != nil {
+		t.Fatalf("SaveAvailabilityTargets() error = %v", err)
+	}
+
+	monitor := &Monitor{
+		configPersist: persistence,
+		availabilityStatuses: map[string]AvailabilityProbeStatus{
+			target.ID: {
+				TargetID:            target.ID,
+				Name:                target.Name,
+				Address:             target.Address,
+				Protocol:            string(target.Protocol),
+				Enabled:             true,
+				Available:           false,
+				LastChecked:         time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC),
+				ConsecutiveFailures: 2,
+				FailureThreshold:    2,
+				LastError:           "icmp probe failed",
+			},
+		},
+	}
+
+	provider := monitor.getPollProvider(InstanceTypeAvailability)
+	if provider == nil {
+		t.Fatal("expected built-in availability poll provider")
+	}
+	if got := provider.Type(); got != InstanceTypeAvailability {
+		t.Fatalf("provider type = %q, want %q", got, InstanceTypeAvailability)
+	}
+	if got := provider.ListInstances(monitor); len(got) != 1 || got[0] != target.ID {
+		t.Fatalf("instances = %+v, want [%s]", got, target.ID)
+	}
+
+	supplemental, ok := provider.(SupplementalRecordsPollProvider)
+	if !ok {
+		t.Fatalf("availability provider must publish supplemental records")
+	}
+	if source := supplemental.SupplementalSource(); source != unifiedresources.SourceAvailability {
+		t.Fatalf("supplemental source = %q, want %q", source, unifiedresources.SourceAvailability)
+	}
+
+	records := supplemental.SupplementalRecords(monitor, "default")
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(records))
+	}
+	record := records[0]
+	if record.SourceID != target.ID {
+		t.Fatalf("record source id = %q, want %q", record.SourceID, target.ID)
+	}
+	if record.Resource.Type != unifiedresources.ResourceTypeNetworkEndpoint {
+		t.Fatalf("resource type = %q, want %q", record.Resource.Type, unifiedresources.ResourceTypeNetworkEndpoint)
+	}
+	if record.Resource.Availability == nil {
+		t.Fatal("expected availability metadata")
+	}
+	if record.Resource.Availability.TargetID != target.ID {
+		t.Fatalf("availability target id = %q, want %q", record.Resource.Availability.TargetID, target.ID)
+	}
+	if record.Resource.Status != unifiedresources.StatusOffline {
+		t.Fatalf("resource status = %q, want %q", record.Resource.Status, unifiedresources.StatusOffline)
+	}
+	if len(record.Resource.Incidents) != 1 || record.Resource.Incidents[0].Code != "availability_unreachable" {
+		t.Fatalf("expected availability incident, got %+v", record.Resource.Incidents)
+	}
+}
+
 func TestUpdateResourceStore_IngestsSupplementalRecords(t *testing.T) {
 	store := &testSupplementalResourceStore{}
 	provider := &testSupplementalPollProvider{

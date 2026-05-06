@@ -48,7 +48,13 @@ describe('Resource Type Guards', () => {
   });
 
   describe('isInfrastructure', () => {
-    const infrastructureTypes: ResourceType[] = ['agent', 'docker-host', 'k8s-node', 'k8s-cluster'];
+    const infrastructureTypes: ResourceType[] = [
+      'agent',
+      'docker-host',
+      'k8s-node',
+      'k8s-cluster',
+      'network-endpoint',
+    ];
     const nonInfrastructureTypes: ResourceType[] = [
       'vm',
       'system-container',
@@ -77,7 +83,13 @@ describe('Resource Type Guards', () => {
       'pod',
       'jail',
     ];
-    const nonWorkloadTypes: ResourceType[] = ['agent', 'docker-host', 'storage', 'pbs'];
+    const nonWorkloadTypes: ResourceType[] = [
+      'agent',
+      'docker-host',
+      'network-endpoint',
+      'storage',
+      'pbs',
+    ];
 
     it.each(workloadTypes)('returns true for %s', (type) => {
       const resource = createResource({ type });
@@ -92,7 +104,13 @@ describe('Resource Type Guards', () => {
 
   describe('isStorage', () => {
     const storageTypes: ResourceType[] = ['storage', 'datastore', 'pool', 'dataset'];
-    const nonStorageTypes: ResourceType[] = ['vm', 'agent', 'system-container', 'docker-host'];
+    const nonStorageTypes: ResourceType[] = [
+      'vm',
+      'agent',
+      'system-container',
+      'docker-host',
+      'network-endpoint',
+    ];
 
     it.each(storageTypes)('returns true for %s', (type) => {
       const resource = createResource({ type });

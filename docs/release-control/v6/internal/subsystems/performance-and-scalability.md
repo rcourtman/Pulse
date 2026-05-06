@@ -485,6 +485,12 @@ splits. `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` add
 alerting count derived from `activeAlerts`. These additions must remain
 read-only projections from existing websocket state — they must not introduce
 new polling loops or widen fetch scope on the hot-path boundary.
+Agentless availability endpoints participate in the same unified-resource
+consumer hot path as other infrastructure resources. Adding
+`network-endpoint` to resource queries, filters, and summary counts must reuse
+the existing unified-resource hydration and websocket paths; frontend
+consumers must not add an endpoint-specific polling loop or a second table
+model just to show availability status.
 
 This lane already has strong evidence and guardrails, but it still trails on
 score because critical hot paths need more complete protection and verification.

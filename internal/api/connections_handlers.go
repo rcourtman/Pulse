@@ -63,14 +63,19 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 		if tn, err := persistence.LoadTrueNASConfig(); err == nil {
 			inputs.truenasInstances = tn
 		}
+		if availability, err := persistence.LoadAvailabilityTargets(); err == nil {
+			inputs.availabilityTargets = availability
+		}
 	}
 
 	if monitor != nil {
 		inputs.hosts = monitor.HostsSnapshot()
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
+		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
 	} else {
 		inputs.hosts = []models.Host{}
 		inputs.instanceHealth = map[string]monitoring.InstanceHealth{}
+		inputs.availabilityStatuses = map[string]monitoring.AvailabilityProbeStatus{}
 	}
 	inputs.expectedAgentVersion = currentAgentTargetVersion()
 

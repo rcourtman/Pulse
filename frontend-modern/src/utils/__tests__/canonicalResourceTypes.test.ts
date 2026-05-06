@@ -11,6 +11,7 @@ describe('canonicalResourceTypes', () => {
     expect(CANONICAL_RESOURCE_TYPES).toContain('agent');
     expect(CANONICAL_RESOURCE_TYPES).toContain('physical_disk');
     expect(CANONICAL_RESOURCE_TYPES).toContain('ceph');
+    expect(CANONICAL_RESOURCE_TYPES).toContain('network-endpoint');
   });
 
   it('normalizes manual input consistently', () => {
@@ -21,6 +22,7 @@ describe('canonicalResourceTypes', () => {
   it('validates only canonical v6 resource types', () => {
     expect(isCanonicalResourceType('vm')).toBe(true);
     expect(isCanonicalResourceType('physical_disk')).toBe(true);
+    expect(isCanonicalResourceType('network-endpoint')).toBe(true);
     expect(isCanonicalResourceType('host')).toBe(false);
     expect(isCanonicalResourceType('lxc')).toBe(false);
   });

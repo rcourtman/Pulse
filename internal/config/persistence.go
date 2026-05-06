@@ -34,6 +34,7 @@ type ConfigPersistence struct {
 	nodesFile            string
 	trueNASFile          string
 	vmwareFile           string
+	availabilityFile     string
 	systemFile           string
 	ssoFile              string
 	apiTokensFile        string
@@ -97,6 +98,7 @@ type resolvedConfigPersistencePaths struct {
 	nodesFile            string
 	trueNASFile          string
 	vmwareFile           string
+	availabilityFile     string
 	systemFile           string
 	ssoFile              string
 	apiTokensFile        string
@@ -148,6 +150,10 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	vmwareFile, err := resolveLeaf("vmware.enc")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve vmware.enc: %w", err)
+	}
+	availabilityFile, err := resolveLeaf("availability_targets.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve availability_targets.enc: %w", err)
 	}
 	systemFile, err := resolveLeaf("system.json")
 	if err != nil {
@@ -206,6 +212,7 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 		nodesFile:            nodesFile,
 		trueNASFile:          trueNASFile,
 		vmwareFile:           vmwareFile,
+		availabilityFile:     availabilityFile,
 		systemFile:           systemFile,
 		ssoFile:              ssoFile,
 		apiTokensFile:        apiTokensFile,
@@ -256,6 +263,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		nodesFile:            resolvedPaths.nodesFile,
 		trueNASFile:          resolvedPaths.trueNASFile,
 		vmwareFile:           resolvedPaths.vmwareFile,
+		availabilityFile:     resolvedPaths.availabilityFile,
 		systemFile:           resolvedPaths.systemFile,
 		ssoFile:              resolvedPaths.ssoFile,
 		apiTokensFile:        resolvedPaths.apiTokensFile,
@@ -636,6 +644,29 @@ func (c *ConfigPersistence) SaveVMwareConfig(instances []VMwareVCenterInstance) 
 // storage.
 func (c *ConfigPersistence) LoadVMwareConfig() ([]VMwareVCenterInstance, error) {
 	return loadSlice[VMwareVCenterInstance](c, c.vmwareFile, true)
+}
+
+// SaveAvailabilityTargets persists agentless availability target configuration
+// to encrypted storage.
+func (c *ConfigPersistence) SaveAvailabilityTargets(targets []AvailabilityTarget) error {
+	normalized := make([]AvailabilityTarget, 0, len(targets))
+	for _, target := range targets {
+		normalized = append(normalized, NormalizeAvailabilityTarget(target))
+	}
+	return saveJSON(c, c.availabilityFile, normalized, true)
+}
+
+// LoadAvailabilityTargets loads agentless availability target configuration
+// from encrypted storage.
+func (c *ConfigPersistence) LoadAvailabilityTargets() ([]AvailabilityTarget, error) {
+	targets, err := loadSlice[AvailabilityTarget](c, c.availabilityFile, true)
+	if err != nil {
+		return nil, err
+	}
+	for i := range targets {
+		targets[i] = NormalizeAvailabilityTarget(targets[i])
+	}
+	return targets, nil
 }
 
 // SaveAPITokens persists API token metadata to disk.

@@ -129,6 +129,14 @@ export const readSourcePlatformFlags = (sources?: string[]): SourcePlatformFlags
   return flags;
 };
 
+const hasGenericSource = (sources?: string[]): boolean =>
+  Boolean(
+    sources?.some((source) => {
+      const normalized = normalizeSourcePlatformKey(source) || source.toLowerCase();
+      return normalized === 'availability' || normalized === 'generic';
+    }),
+  );
+
 export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType | undefined => {
   const flags = readSourcePlatformFlags(sources);
   if (flags.hasProxmox) return 'proxmox-pve';
@@ -139,6 +147,7 @@ export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType
   if (flags.hasKubernetes) return 'kubernetes';
   if (flags.hasDocker) return 'docker';
   if (flags.hasAgent) return 'agent';
+  if (hasGenericSource(sources)) return 'generic';
   return undefined;
 };
 
@@ -151,7 +160,8 @@ export const resolveSourceTypeFromSources = (sources?: string[]): SourceType => 
     flags.hasPbs ||
     flags.hasPmg ||
     flags.hasTrueNAS ||
-    flags.hasVMware;
+    flags.hasVMware ||
+    hasGenericSource(sources);
   if (flags.hasAgent && hasOther) return 'hybrid';
   if (flags.hasAgent) return 'agent';
   return 'api';

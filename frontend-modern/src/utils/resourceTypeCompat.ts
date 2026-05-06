@@ -14,7 +14,8 @@ export type CanonicalFrontendResourceType =
   | 'k8s-node'
   | 'k8s-cluster'
   | 'k8s-deployment'
-  | 'k8s-service';
+  | 'k8s-service'
+  | 'network-endpoint';
 
 const asNormalizedString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -33,6 +34,10 @@ export const canonicalizeFrontendResourceType = (
     case 'hosts':
     case 'truenas':
       return 'agent';
+    case 'availability':
+    case 'endpoint':
+    case 'network_endpoint':
+      return 'network-endpoint';
     case 'docker':
       return 'app-container';
     case 'dockerhost':
@@ -67,6 +72,7 @@ export const canonicalizeFrontendResourceType = (
     case 'k8s-cluster':
     case 'k8s-deployment':
     case 'k8s-service':
+    case 'network-endpoint':
       return normalized;
     default:
       return undefined;

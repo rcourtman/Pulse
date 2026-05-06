@@ -11,6 +11,7 @@ describe('agentCapabilityPresentation', () => {
     expect(getAgentCapabilityLabel('kubernetes')).toBe('Kubernetes');
     expect(getAgentCapabilityLabel('proxmox')).toBe('Proxmox');
     expect(getAgentCapabilityLabel('truenas')).toBe('TrueNAS');
+    expect(getAgentCapabilityLabel('availability')).toBe('Availability');
   });
 
   it('uses canonical capability badge tones', () => {
@@ -18,5 +19,6 @@ describe('agentCapabilityPresentation', () => {
     expect(getAgentCapabilityBadgeClass('kubernetes')).toContain('emerald-100');
     expect(getAgentCapabilityBadgeClass('agent')).toContain('blue-100');
     expect(getAgentCapabilityBadgeClass('truenas')).toContain('cyan-100');
+    expect(getAgentCapabilityBadgeClass('availability')).toContain('sky-100');
   });
 });

@@ -73,6 +73,60 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	assertAlertMissing(t, m, alertID)
 }
 
+func TestSyncUnifiedResourceIncidentsSupportsAvailabilityEndpoints(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resource := unifiedresources.Resource{
+		ID:      "availability:energy-meter",
+		Type:    unifiedresources.ResourceTypeNetworkEndpoint,
+		Name:    "Energy meter",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceAvailability},
+		Availability: &unifiedresources.AvailabilityData{
+			TargetID:            "energy-meter",
+			Address:             "192.0.2.44",
+			Protocol:            "icmp",
+			Enabled:             true,
+			Available:           false,
+			ConsecutiveFailures: 2,
+			FailureThreshold:    2,
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "availability",
+			NativeID: "energy-meter",
+			Code:     "availability_unreachable",
+			Severity: storagehealth.RiskCritical,
+			Source:   "availability",
+			Summary:  "Energy meter is unreachable by ICMP probe",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := unifiedIncidentAlertID(resource, resource.Incidents[0])
+	assertAlertPresent(t, m, alertID)
+
+	m.mu.RLock()
+	alert := testRequireActiveAlert(t, m, alertID)
+	m.mu.RUnlock()
+
+	if alert.Type != "resource-incident" {
+		t.Fatalf("alert type = %q, want resource-incident", alert.Type)
+	}
+	if alert.ResourceID != resource.ID {
+		t.Fatalf("resource id = %q, want %q", alert.ResourceID, resource.ID)
+	}
+	if alert.Instance != "Availability" {
+		t.Fatalf("instance = %q, want Availability", alert.Instance)
+	}
+	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryAvailability {
+		t.Fatalf("incidentCategory = %v, want %q", got, unifiedresources.IncidentCategoryAvailability)
+	}
+	if got := alert.Metadata["incidentProvider"]; got != "availability" {
+		t.Fatalf("incidentProvider = %v, want availability", got)
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsKeepsInstanceScopedNodeDisplayNames(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

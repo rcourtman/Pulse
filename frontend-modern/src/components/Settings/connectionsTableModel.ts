@@ -164,11 +164,12 @@ const SURFACE_LABELS: Record<string, string> = {
   datasets: 'Datasets',
   pools: 'Pools',
   replication: 'Replication',
+  availability: 'Availability',
 };
 
 export const surfaceLabel = (key: string): string => SURFACE_LABELS[key] ?? key;
 
-export type InfrastructureSourceKind = 'api' | 'agent' | 'both' | 'unknown';
+export type InfrastructureSourceKind = 'api' | 'agent' | 'both' | 'probe' | 'unknown';
 
 export interface InfrastructureSourcePresentation {
   label: string;
@@ -194,6 +195,12 @@ const SOURCE_PRESENTATION: Record<InfrastructureSourceKind, InfrastructureSource
     badgeClassName:
       'inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200',
     title: 'Data collected via the platform API and Pulse Agent',
+  },
+  probe: {
+    label: 'Probe',
+    badgeClassName:
+      'inline-flex items-center rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-200',
+    title: 'Data collected by an agentless availability probe',
   },
   unknown: {
     label: '—',

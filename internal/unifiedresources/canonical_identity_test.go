@@ -100,6 +100,51 @@ func TestRefreshCanonicalIdentityFallsBackWithoutTargets(t *testing.T) {
 	}
 }
 
+func TestRefreshCanonicalIdentityUsesAvailabilityTargetIdentity(t *testing.T) {
+	resource := Resource{
+		ID:   "availability:energy-meter",
+		Type: ResourceTypeNetworkEndpoint,
+		Name: "Energy meter",
+		Availability: &AvailabilityData{
+			TargetID: "energy-meter",
+			Address:  "192.0.2.44",
+			Protocol: "icmp",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.DisplayName; got != "Energy meter" {
+		t.Fatalf("displayName = %q, want Energy meter", got)
+	}
+	if got := resource.Canonical.Hostname; got != "192.0.2.44" {
+		t.Fatalf("hostname = %q, want 192.0.2.44", got)
+	}
+	if got := resource.Canonical.PlatformID; got != "192.0.2.44" {
+		t.Fatalf("platformId = %q, want 192.0.2.44", got)
+	}
+	if got := resource.Canonical.PrimaryID; got != "availability:energy-meter" {
+		t.Fatalf("primaryId = %q, want availability:energy-meter", got)
+	}
+
+	wantAliases := []string{
+		"availability:energy-meter",
+		"energy-meter",
+		"192.0.2.44",
+	}
+	if len(resource.Canonical.Aliases) != len(wantAliases) {
+		t.Fatalf("aliases len = %d, want %d (%v)", len(resource.Canonical.Aliases), len(wantAliases), resource.Canonical.Aliases)
+	}
+	for i, want := range wantAliases {
+		if got := resource.Canonical.Aliases[i]; got != want {
+			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
+		}
+	}
+}
+
 func TestRefreshCanonicalIdentityPrefersProxmoxNodePrimaryIDForAgentResources(t *testing.T) {
 	resource := Resource{
 		ID:   "agent-1",

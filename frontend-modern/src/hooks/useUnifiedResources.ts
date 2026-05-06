@@ -12,6 +12,7 @@ import type {
   ResourceFacetCounts,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
+  ResourceAvailabilityMeta,
   ResourcePBSMeta,
   ResourcePolicyPostureSummary,
   ResourceStatus,
@@ -33,7 +34,8 @@ import {
 } from '@/utils/sourcePlatforms';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
-const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=agent,docker-host,pbs,pmg,k8s-cluster,k8s-node';
+const DEFAULT_UNIFIED_RESOURCES_QUERY =
+  'type=agent,docker-host,pbs,pmg,k8s-cluster,k8s-node,network-endpoint';
 const STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY =
   'type=storage,pbs,pmg,vm,system-container,pod,agent,k8s-cluster,k8s-node,physical_disk,ceph';
 const UNIFIED_RESOURCES_PAGE_LIMIT = 100;
@@ -350,6 +352,24 @@ type APIResource = {
     recentTaskSummary?: string;
     snapshotCount?: number;
   };
+  availability?: {
+    targetId?: string;
+    name?: string;
+    address?: string;
+    protocol?: string;
+    port?: number;
+    path?: string;
+    enabled?: boolean;
+    available?: boolean;
+    lastChecked?: string;
+    lastSuccess?: string;
+    latencyMillis?: number;
+    consecutiveFailures?: number;
+    lastError?: string;
+    failureThreshold?: number;
+    pollIntervalSeconds?: number;
+    timeoutMillis?: number;
+  };
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;
   physicalDisk?: {
@@ -503,6 +523,7 @@ const resolveType = (value?: string): ResourceType => {
     case 'pbs':
     case 'pmg':
     case 'ceph':
+    case 'network-endpoint':
       return canonicalFrontendType;
     case 'disk':
       return 'physical_disk';
@@ -530,6 +551,10 @@ const resolveType = (value?: string): ResourceType => {
     case 'physical_disk':
     case 'physical-disk':
       return 'physical_disk';
+    case 'network-endpoint':
+    case 'network_endpoint':
+    case 'availability':
+      return 'network-endpoint';
     default:
       return 'agent';
   }
@@ -634,6 +659,7 @@ const toResource = (v2: APIResource): Resource => {
     kubernetes: v2.kubernetes,
     vmware: v2.vmware as ResourceVMwareMeta | undefined,
     pbs: v2.pbs as ResourcePBSMeta | undefined,
+    availability: v2.availability as ResourceAvailabilityMeta | undefined,
     physicalDisk: v2.physicalDisk,
     storage: v2.storage as ResourceStorageMeta | undefined,
     proxmox: v2.proxmox
@@ -703,6 +729,7 @@ const toResource = (v2: APIResource): Resource => {
       pmg: v2.pmg,
       kubernetes: v2.kubernetes,
       vmware: v2.vmware,
+      availability: v2.availability,
       physicalDisk: v2.physicalDisk,
       ceph: v2.ceph,
       metrics: v2.metrics,

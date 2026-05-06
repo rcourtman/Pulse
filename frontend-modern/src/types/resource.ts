@@ -46,11 +46,12 @@ export type ResourceType =
   | 'pbs' // Proxmox Backup Server
   | 'pmg' // Proxmox Mail Gateway
   | 'physical_disk' // Physical disk
-  | 'ceph'; // Ceph cluster
+  | 'ceph' // Ceph cluster
+  | 'network-endpoint'; // Agentless availability endpoint
 
 // Platform types - which system the resource comes from
 export const PLATFORM_TYPES = GENERATED_PLATFORM_TYPE_KEYS;
-export type PlatformType = GeneratedPlatformType;
+export type PlatformType = GeneratedPlatformType | 'generic';
 
 // Source types - how data is collected
 export type SourceType =
@@ -505,6 +506,25 @@ export interface ResourceVMwareMeta {
   snapshotCount?: number;
 }
 
+export interface ResourceAvailabilityMeta {
+  targetId?: string;
+  name?: string;
+  address?: string;
+  protocol?: string;
+  port?: number;
+  path?: string;
+  enabled?: boolean;
+  available?: boolean;
+  lastChecked?: string;
+  lastSuccess?: string;
+  latencyMillis?: number;
+  consecutiveFailures?: number;
+  lastError?: string;
+  failureThreshold?: number;
+  pollIntervalSeconds?: number;
+  timeoutMillis?: number;
+}
+
 /**
  * The core unified Resource type.
  * This is what the frontend receives from WebSocket state.resources[].
@@ -578,6 +598,7 @@ export interface Resource {
   vmware?: ResourceVMwareMeta;
   proxmox?: ResourceProxmoxMeta;
   pbs?: ResourcePBSMeta;
+  availability?: ResourceAvailabilityMeta;
   physicalDisk?: ResourcePhysicalDiskMeta;
   storage?: ResourceStorageMeta;
 
@@ -589,7 +610,7 @@ export interface Resource {
  * Helper type guards
  */
 export function isInfrastructure(r: Resource): boolean {
-  return ['agent', 'docker-host', 'k8s-cluster', 'k8s-node'].includes(r.type);
+  return ['agent', 'docker-host', 'k8s-cluster', 'k8s-node', 'network-endpoint'].includes(r.type);
 }
 
 export function isWorkload(r: Resource): boolean {

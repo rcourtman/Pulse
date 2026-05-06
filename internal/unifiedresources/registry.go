@@ -17,14 +17,15 @@ import (
 const autoMergeThreshold = 0.85
 
 var defaultStaleThresholds = map[DataSource]time.Duration{
-	SourceProxmox: 60 * time.Second,
-	SourceAgent:   60 * time.Second,
-	SourceDocker:  120 * time.Second,
-	SourcePBS:     120 * time.Second,
-	SourcePMG:     120 * time.Second,
-	SourceK8s:     120 * time.Second,
-	SourceTrueNAS: 120 * time.Second,
-	SourceVMware:  120 * time.Second,
+	SourceProxmox:      60 * time.Second,
+	SourceAgent:        60 * time.Second,
+	SourceDocker:       120 * time.Second,
+	SourcePBS:          120 * time.Second,
+	SourcePMG:          120 * time.Second,
+	SourceK8s:          120 * time.Second,
+	SourceTrueNAS:      120 * time.Second,
+	SourceVMware:       120 * time.Second,
+	SourceAvailability: 120 * time.Second,
 }
 
 // IngestRecord is a source-native resource entry normalized for registry ingestion.
@@ -86,6 +87,7 @@ func NewRegistry(store ResourceStore) *ResourceRegistry {
 	rr.bySource[SourceK8s] = make(map[string]string)
 	rr.bySource[SourceTrueNAS] = make(map[string]string)
 	rr.bySource[SourceVMware] = make(map[string]string)
+	rr.bySource[SourceAvailability] = make(map[string]string)
 
 	rr.loadOverrides()
 	return rr
@@ -483,6 +485,10 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 		}
 	case SourceVMware:
 		return seededVMwareSourceID(resource)
+	case SourceAvailability:
+		if resource.Availability != nil {
+			return strings.TrimSpace(resource.Availability.TargetID)
+		}
 	}
 
 	return ""
@@ -1269,6 +1275,8 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 		existing.PMG = incoming.PMG
 	case SourceVMware:
 		existing.VMware = mergeVMwareData(existing.VMware, incoming.VMware)
+	case SourceAvailability:
+		existing.Availability = incoming.Availability
 	}
 
 	existing.Sources = addSource(existing.Sources, source)
@@ -2119,6 +2127,9 @@ func sourcePriority(source DataSource) int {
 
 func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataSource) ResourceStatus {
 	if existing == "" || existing == StatusUnknown {
+		return incoming
+	}
+	if source == SourceAvailability {
 		return incoming
 	}
 	if sourcePriority(source) >= sourcePriority(SourceAgent) {

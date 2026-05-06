@@ -14,9 +14,10 @@ import (
 type InstanceType string
 
 const (
-	InstanceTypePVE InstanceType = "pve"
-	InstanceTypePBS InstanceType = "pbs"
-	InstanceTypePMG InstanceType = "pmg"
+	InstanceTypePVE          InstanceType = "pve"
+	InstanceTypePBS          InstanceType = "pbs"
+	InstanceTypePMG          InstanceType = "pmg"
+	InstanceTypeAvailability InstanceType = "availability"
 )
 
 // StalenessSource provides normalized freshness hints for an instance.

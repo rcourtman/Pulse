@@ -170,6 +170,12 @@ directory once and then resolve only the fixed `alert-history.json` and
 before any filesystem read, write, rename, or delete. Future history-persistence
 changes must not reintroduce raw `filepath.Join(dataDir, ...)` joins from
 caller-supplied directories or ad hoc history filenames.
+Agentless availability incidents now enter alerts through the same unified
+resource incident bridge as storage, PBS, VM, and host resource incidents.
+`network-endpoint` resources with `SourceAvailability` incidents must create
+canonical `resource-incident` alerts with provider display `Availability`;
+availability alerting must not introduce a second endpoint-only evaluator or
+alert identity family outside `internal/alerts/unified_incidents.go`.
 
 Notification transport, provider delivery, queue safety, and notification API
 transport now live under the explicit `notifications` subsystem inside the

@@ -8,6 +8,7 @@ describe('toReportingResourceType', () => {
     expect(toReportingResourceType('system-container')).toBe('system-container');
     expect(toReportingResourceType('app-container')).toBe('app-container');
     expect(toReportingResourceType('docker-host')).toBe('docker-host');
+    expect(toReportingResourceType('network-endpoint')).toBe('network-endpoint');
     expect(toReportingResourceType('storage')).toBe('storage');
   });
 

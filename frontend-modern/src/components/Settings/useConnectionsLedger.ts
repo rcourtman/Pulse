@@ -30,6 +30,7 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   pmg: 'Proxmox Mail Gateway',
   vmware: 'VMware vCenter',
   truenas: 'TrueNAS SCALE',
+  availability: 'Network Endpoint',
   agent: 'Pulse Unified Agent',
   docker: 'Docker',
   kubernetes: 'Kubernetes',
@@ -76,6 +77,7 @@ const EDITABLE_CONNECTION_TYPES: readonly ConnectionType[] = [
   'pmg',
   'vmware',
   'truenas',
+  'availability',
 ];
 
 const CONNECTION_STATE_SEVERITY: Record<ConnectionState, number> = {
@@ -107,6 +109,7 @@ const coverageLabelsFor = (connections: readonly Connection[]): string[] => {
 const subtitleFor = (connections: readonly Connection[], primaryConnection: Connection): string => {
   const hasPlatformAPI = connections.some((connection) => PLATFORM_API_TYPES.has(connection.type));
   const hasPulseAgent = connections.some((connection) => connection.type === 'agent');
+  const hasAvailabilityProbe = connections.some((connection) => connection.type === 'availability');
 
   if (hasPlatformAPI && hasPulseAgent) {
     return 'via platform API and Pulse Agent';
@@ -119,6 +122,9 @@ const subtitleFor = (connections: readonly Connection[], primaryConnection: Conn
   if (hasPulseAgent) {
     return 'via Pulse Agent';
   }
+  if (hasAvailabilityProbe) {
+    return 'via availability probe';
+  }
 
   const productLabel = CONNECTION_TYPE_LABELS[primaryConnection.type] ?? primaryConnection.type;
   return `via ${productLabel}`;
@@ -127,9 +133,11 @@ const subtitleFor = (connections: readonly Connection[], primaryConnection: Conn
 const sourceFor = (connections: readonly Connection[]): InfrastructureSourceKind => {
   const hasPlatformAPI = connections.some((connection) => PLATFORM_API_TYPES.has(connection.type));
   const hasPulseAgent = connections.some((connection) => connection.type === 'agent');
+  const hasAvailabilityProbe = connections.some((connection) => connection.type === 'availability');
   if (hasPlatformAPI && hasPulseAgent) return 'both';
   if (hasPlatformAPI) return 'api';
   if (hasPulseAgent) return 'agent';
+  if (hasAvailabilityProbe) return 'probe';
   return 'unknown';
 };
 

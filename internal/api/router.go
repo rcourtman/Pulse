@@ -74,6 +74,7 @@ type Router struct {
 	trueNASHandlers                 *TrueNASHandlers
 	vmwareHandlers                  *VMwareHandlers
 	connectionsHandlers             *ConnectionsHandlers
+	availabilityHandlers            *AvailabilityHandlers
 	notificationHandlers            *NotificationHandlers
 	notificationQueueHandlers       *NotificationQueueHandlers
 	dockerAgentHandlers             *DockerAgentHandlers
@@ -381,6 +382,10 @@ func (r *Router) setupRoutes() {
 	}
 	r.connectionsHandlers = NewConnectionsHandlers(
 		r.configHandlers.getConfig,
+		r.configHandlers.getPersistence,
+		r.configHandlers.getMonitor,
+	)
+	r.availabilityHandlers = NewAvailabilityHandlers(
 		r.configHandlers.getPersistence,
 		r.configHandlers.getMonitor,
 	)

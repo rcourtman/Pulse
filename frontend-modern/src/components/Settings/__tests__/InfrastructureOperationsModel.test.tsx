@@ -7,6 +7,8 @@ import useInfrastructureInstallStateSource from '../useInfrastructureInstallStat
 import {
   INSTALL_PROFILE_OPTIONS,
   getCapabilityManagementPath,
+  getCapabilitySurfaceLabel,
+  getPlatformConnectionsViewForCapability,
   hasMachineInstallActions,
   getPowerShellInstallProfileEnvFromFlags,
   getStopMonitoringScopeLabel,
@@ -133,6 +135,38 @@ describe('infrastructure operations model', () => {
     expect(row.installFlags).toEqual([]);
     expect(hasMachineInstallActions(row)).toBe(false);
     expect(getCapabilityManagementPath('truenas')).toBe('/settings/infrastructure');
+  });
+
+  it('treats availability probes as agentless platform-managed items', () => {
+    const item: ConnectedInfrastructureItem = {
+      id: 'availability:energy-meter',
+      name: 'Energy meter',
+      hostname: '192.0.2.44',
+      status: 'active',
+      surfaces: [
+        {
+          id: 'availability:energy-meter',
+          kind: 'availability',
+          label: 'Availability data',
+          detail: 'Pulse is checking this network endpoint with an agentless probe.',
+          idLabel: 'Target ID',
+          idValue: 'energy-meter',
+        },
+      ],
+    };
+
+    const row = rowFromConnectedInfrastructureItem(item, {
+      label: 'N/A',
+      detail: '',
+      category: 'na',
+    });
+
+    expect(row.capabilities).toEqual(['availability']);
+    expect(row.installFlags).toEqual([]);
+    expect(hasMachineInstallActions(row)).toBe(false);
+    expect(getCapabilitySurfaceLabel('availability')).toBe('Availability data');
+    expect(getCapabilityManagementPath('availability')).toBe('/settings/infrastructure');
+    expect(getPlatformConnectionsViewForCapability('availability')).toBeNull();
   });
 
   it('maps install-profile flags into PowerShell installer env assignments', () => {

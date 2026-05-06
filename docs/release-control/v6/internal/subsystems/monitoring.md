@@ -52,6 +52,8 @@ truth for live infrastructure data.
 28. `internal/monitoring/guest_disk_stability.go`
 29. `internal/monitoring/mock_metrics_history.go`
 30. `internal/monitoring/mock_chart_history.go`
+31. `internal/monitoring/availability_poller.go`
+32. `internal/monitoring/scheduler.go`
 
 ## Shared Boundaries
 
@@ -77,6 +79,13 @@ truth for live infrastructure data.
    `Disabled=false` must remain the migration-safe default for existing
    `nodes.json` content; the poller must never create a client or mark an
    instance reachable when `Disabled` is true.
+12. Add or change agentless availability monitoring only through the
+   poll-provider path. `internal/monitoring/availability_poller.go` owns ICMP,
+   TCP, and HTTP probes, provider health, scheduler task construction, and
+   supplemental unified-resource records for saved availability targets.
+   Failed endpoint probes are observed runtime state for that target; they
+   must publish provider health and incidents without dead-lettering the
+   scheduler task itself.
 
 ## Forbidden Paths
 
@@ -113,6 +122,14 @@ This subsystem now sits under the dedicated core monitoring runtime lane so
 discovery, metrics-history correctness, and platform-specific runtime coverage
 can be governed as first-class product work instead of staying diluted inside
 architecture coherence.
+That same monitoring boundary now owns agentless availability targets as a
+first-class provider, not as a settings-only helper. Saved availability targets
+load from the config persistence boundary, schedule through
+`InstanceTypeAvailability`, and publish `SourceAvailability`
+`network-endpoint` supplemental records for unified-resource consumers. ICMP is
+the default low-overhead check, while TCP and HTTP are canonical fallbacks for
+devices or runtimes where ICMP is unavailable or the useful signal is a port or
+web interface.
 That same monitoring boundary also owns the escalation callback bridge into the
 alerts delivery layer. Monitor-owned escalation handling may still publish
 canonical escalation state to websocket consumers, but notification fan-out

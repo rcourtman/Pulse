@@ -445,7 +445,7 @@ func normalizeMonitoredSystemLedgerReasonStatus(status string) string {
 
 func normalizeMonitoredSystemLedgerSource(source string) string {
 	switch source {
-	case "agent", "docker", "kubernetes", "pbs", "pmg", "proxmox", "truenas", "vmware":
+	case "agent", "availability", "docker", "kubernetes", "pbs", "pmg", "proxmox", "truenas", "vmware":
 		return source
 	default:
 		return ""

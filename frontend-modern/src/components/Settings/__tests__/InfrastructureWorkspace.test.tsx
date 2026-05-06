@@ -144,6 +144,10 @@ vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
   ),
 }));
 
+vi.mock('../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot', () => ({
+  AvailabilityTargetSlot: () => <div data-testid="availability-section">availability</div>,
+}));
+
 vi.mock('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot', () => ({
   TrueNASCredentialSlot: () => <div data-testid="truenas-section">truenas</div>,
 }));
@@ -688,6 +692,14 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(screen.getByTestId('truenas-section')).toBeInTheDocument();
+  });
+
+  it('renders the agentless availability target route from the shared workspace', async () => {
+    routeState.search = '?add=availability';
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.getByTestId('availability-section')).toBeInTheDocument();
   });
 
   it('opens the manage dialog directly from an existing source card', async () => {

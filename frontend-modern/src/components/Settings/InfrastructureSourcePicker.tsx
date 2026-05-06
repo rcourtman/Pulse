@@ -1,5 +1,5 @@
 import { Component, For, Show } from 'solid-js';
-import { Archive, Cpu, Database, Mail, Search, Server, ServerCog } from 'lucide-solid';
+import { Activity, Archive, Cpu, Database, Mail, Search, Server, ServerCog } from 'lucide-solid';
 import type { InfrastructureOnboardingConnectionType } from '@/utils/infrastructureOnboardingPresentation';
 import {
   getInfrastructureSourcePickerGroups,
@@ -22,6 +22,7 @@ const CARD_ICON: Record<InfrastructureOnboardingConnectionType, Component<{ clas
   pbs: Archive,
   pmg: Mail,
   agent: Cpu,
+  availability: Activity,
 };
 
 export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerProps> = (props) => {

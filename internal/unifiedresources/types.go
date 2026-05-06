@@ -65,6 +65,7 @@ type Resource struct {
 	Ceph         *CephMeta         `json:"ceph,omitempty"`
 	TrueNAS      *TrueNASData      `json:"truenas,omitempty"`
 	VMware       *VMwareData       `json:"vmware,omitempty"`
+	Availability *AvailabilityData `json:"availability,omitempty"`
 }
 
 // ResourceFacetCounts captures the total count of each resource facet that
@@ -122,6 +123,7 @@ const (
 	ResourceTypePMG             ResourceType = "pmg"
 	ResourceTypeCeph            ResourceType = "ceph"
 	ResourceTypePhysicalDisk    ResourceType = "physical_disk"
+	ResourceTypeNetworkEndpoint ResourceType = "network-endpoint"
 )
 
 // CanonicalResourceType normalizes resource type spellings into the internal
@@ -166,14 +168,15 @@ const (
 type DataSource string
 
 const (
-	SourceProxmox DataSource = "proxmox"
-	SourceAgent   DataSource = "agent"
-	SourceDocker  DataSource = "docker"
-	SourcePBS     DataSource = "pbs"
-	SourcePMG     DataSource = "pmg"
-	SourceK8s     DataSource = "kubernetes"
-	SourceTrueNAS DataSource = "truenas"
-	SourceVMware  DataSource = "vmware"
+	SourceProxmox      DataSource = "proxmox"
+	SourceAgent        DataSource = "agent"
+	SourceDocker       DataSource = "docker"
+	SourcePBS          DataSource = "pbs"
+	SourcePMG          DataSource = "pmg"
+	SourceK8s          DataSource = "kubernetes"
+	SourceTrueNAS      DataSource = "truenas"
+	SourceVMware       DataSource = "vmware"
+	SourceAvailability DataSource = "availability"
 )
 
 // SourceStatus describes the freshness of data from a source.
@@ -1009,6 +1012,26 @@ type TrueNASData struct {
 	ProtectionSummary     string       `json:"protectionSummary,omitempty"`
 	RebuildInProgress     bool         `json:"rebuildInProgress,omitempty"`
 	RebuildSummary        string       `json:"rebuildSummary,omitempty"`
+}
+
+// AvailabilityData contains agentless endpoint probe metadata for a resource.
+type AvailabilityData struct {
+	TargetID            string    `json:"targetId,omitempty"`
+	Name                string    `json:"name,omitempty"`
+	Address             string    `json:"address,omitempty"`
+	Protocol            string    `json:"protocol,omitempty"`
+	Port                int       `json:"port,omitempty"`
+	Path                string    `json:"path,omitempty"`
+	Enabled             bool      `json:"enabled"`
+	Available           bool      `json:"available"`
+	LastChecked         time.Time `json:"lastChecked,omitempty"`
+	LastSuccess         time.Time `json:"lastSuccess,omitempty"`
+	LatencyMillis       int64     `json:"latencyMillis,omitempty"`
+	ConsecutiveFailures int       `json:"consecutiveFailures,omitempty"`
+	LastError           string    `json:"lastError,omitempty"`
+	FailureThreshold    int       `json:"failureThreshold,omitempty"`
+	PollIntervalSeconds int       `json:"pollIntervalSeconds,omitempty"`
+	TimeoutMillis       int       `json:"timeoutMillis,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

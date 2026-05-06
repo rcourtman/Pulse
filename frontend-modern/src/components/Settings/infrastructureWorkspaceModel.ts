@@ -4,6 +4,7 @@ export type InfrastructureAddStep =
   | 'pve'
   | 'pbs'
   | 'pmg'
+  | 'availability'
   | 'truenas'
   | 'vmware';
 export type InfrastructurePanelStep = 'pick' | InfrastructureAddStep;
@@ -31,6 +32,7 @@ export function normalizeInfrastructurePanelStep(
     case 'pve':
     case 'pbs':
     case 'pmg':
+    case 'availability':
     case 'truenas':
     case 'vmware':
       return value!.trim() as InfrastructurePanelStep;
@@ -43,17 +45,13 @@ export function buildInfrastructureWorkspacePath(): string {
   return INFRASTRUCTURE_BASE_PATH;
 }
 
-export function buildInfrastructureOnboardingPath(
-  step: InfrastructurePanelStep = 'agent',
-): string {
+export function buildInfrastructureOnboardingPath(step: InfrastructurePanelStep = 'agent'): string {
   const params = new URLSearchParams();
   params.set(INFRASTRUCTURE_ADD_QUERY_PARAM, step);
   return `${INFRASTRUCTURE_BASE_PATH}?${params.toString()}`;
 }
 
-export function deriveAddStepFromLegacyPath(
-  pathname: string,
-): InfrastructurePanelStep | null {
+export function deriveAddStepFromLegacyPath(pathname: string): InfrastructurePanelStep | null {
   if (matchesPathPrefix(pathname, LEGACY_INSTALL_PATH)) return 'agent';
   if (matchesExactPath(pathname, LEGACY_PLATFORMS_PATH)) return 'pick';
   return null;
@@ -68,7 +66,10 @@ export function deriveAddStepFromLocation(
   pathname: string,
   search: string,
 ): InfrastructurePanelStep | null {
-  if (pathname === INFRASTRUCTURE_BASE_PATH || pathname.startsWith(`${INFRASTRUCTURE_BASE_PATH}/`)) {
+  if (
+    pathname === INFRASTRUCTURE_BASE_PATH ||
+    pathname.startsWith(`${INFRASTRUCTURE_BASE_PATH}/`)
+  ) {
     const stepFromQuery = deriveAddStepFromSearch(search);
     if (stepFromQuery) {
       return stepFromQuery;

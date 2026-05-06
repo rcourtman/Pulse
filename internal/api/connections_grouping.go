@@ -791,6 +791,8 @@ func connectionTypePriority(typ ConnectionType) int {
 		return 3
 	case ConnectionTypeAgent:
 		return 4
+	case ConnectionTypeAvailability:
+		return 5
 	case ConnectionTypePBS:
 		return 10
 	case ConnectionTypePMG:

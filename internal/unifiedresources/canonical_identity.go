@@ -58,6 +58,9 @@ func canonicalPrimaryID(resource Resource) string {
 	if identity := canonicalVMwarePrimaryID(resource); identity != "" {
 		return identity
 	}
+	if targetID := strings.TrimSpace(canonicalAvailabilityTargetID(resource)); targetID != "" {
+		return "availability:" + targetID
+	}
 	return strings.TrimSpace(resource.ID)
 }
 
@@ -85,6 +88,8 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 		canonicalPMGInstanceID(resource),
 		canonicalVMwareManagedObjectID(resource),
 		canonicalVMwareHostUUID(resource),
+		canonicalAvailabilityTargetID(resource),
+		canonicalAvailabilityAddress(resource),
 		platformID,
 		hostname,
 		strings.TrimSpace(resource.Identity.MachineID),
@@ -102,6 +107,7 @@ func canonicalPlatformID(resource Resource) string {
 		canonicalPBSHostname(resource),
 		canonicalPMGHostname(resource),
 		canonicalTrueNASHostname(resource),
+		canonicalAvailabilityAddress(resource),
 		canonicalKubernetesPlatformID(resource),
 		resource.Name,
 		resource.ID,
@@ -116,6 +122,7 @@ func canonicalHostname(resource Resource) string {
 		canonicalPBSHostname(resource),
 		canonicalPMGHostname(resource),
 		canonicalTrueNASHostname(resource),
+		canonicalAvailabilityAddress(resource),
 	)
 }
 
@@ -159,6 +166,20 @@ func canonicalTrueNASHostname(resource Resource) string {
 		return ""
 	}
 	return strings.TrimSpace(resource.TrueNAS.Hostname)
+}
+
+func canonicalAvailabilityTargetID(resource Resource) string {
+	if resource.Availability == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.Availability.TargetID)
+}
+
+func canonicalAvailabilityAddress(resource Resource) string {
+	if resource.Availability == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.Availability.Address)
 }
 
 func canonicalKubernetesPlatformID(resource Resource) string {
