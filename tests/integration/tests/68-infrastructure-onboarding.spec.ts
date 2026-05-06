@@ -88,10 +88,6 @@ async function recordUpgradeMetricEvents(
 }
 
 async function prepareOnboardingPage(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    localStorage.setItem("pulse_whats_new_v2_shown", "true");
-  });
-
   await stubConnectionsList(page);
 }
 

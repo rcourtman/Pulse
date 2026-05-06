@@ -315,11 +315,10 @@ abuse controls, `docs/PRIVACY.md` and the shipped
 `frontend-modern/public/docs/PRIVACY.md` copy must say so explicitly rather
 than implying the server stores nothing at all.
 That same rule also applies to the short in-product summary on the shared
-General settings privacy surface and the whats-new disclosure copy. Those
-surfaces may stay concise, but they must not claim a stronger privacy posture
-than the governed docs; if telemetry rows are retained for a fixed window and
-IP addresses are not stored rather than “never seen,” the summary copy must
-say that plainly.
+General settings privacy surface. That surface may stay concise, but it must
+not claim a stronger privacy posture than the governed docs; if telemetry rows
+are retained for a fixed window and IP addresses are not stored rather than
+“never seen,” the summary copy must say that plainly.
 That same shared trust boundary now also owns the TLS floor used by pinned-
 fingerprint runtime clients. `pkg/tlsutil/fingerprint.go` may support
 certificate-fingerprint capture and verification for self-signed deployments,

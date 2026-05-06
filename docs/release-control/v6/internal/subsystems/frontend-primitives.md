@@ -1062,7 +1062,6 @@ and existing alert-history shells instead of introducing VMware-only labels,
 badges, or panel copy just because the underlying signal came from vSphere.
 That same shared settings and modal boundary now also owns the public usage-data
 vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
-`frontend-modern/src/components/shared/whatsNewModalModel.ts`,
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts`, and
 `frontend-modern/src/utils/systemSettingsPresentation.ts` must present one
 explicit `Usage data and privacy` model centered on `Anonymous outbound
@@ -1725,60 +1724,10 @@ runtime, and `frontend-modern/src/components/shared/searchTipsPopoverModel.ts`
 owns trigger variant, label/id defaults, hover policy, and trigger/popover
 class selection. Future search-tips work should extend those owners instead of
 pushing listener lifecycle or trigger policy back into the shared shell.
-The shared what's-new modal now follows that same owner split.
-`frontend-modern/src/components/shared/WhatsNewModal.tsx` stays the render
-shell, `frontend-modern/src/components/shared/useWhatsNewModalState.ts` owns
-local-storage dismissal, session dismissal, step progression, spotlight target
-resolution, direct stop selection, and overlay placement/runtime behavior, and
-`frontend-modern/src/components/shared/whatsNewModalModel.ts` owns the feature
-tour catalog, telemetry copy, labels, and canonical docs/privacy links. Future
-what's-new work should extend those owners instead of pushing dismissal state,
-spotlight runtime, product copy, or external links back into the shared shell.
-The v6 welcome surface is one guided spotlight tour, not a modal plus a second
-dashboard-only migration hint: it must dim the live app, glow the real
-primary-navigation target being described, and keep route-orientation copy on
-the existing welcome flow instead of layering a duplicate in-product banner.
-Its primary job is fast route orientation. The modal should explain what each
-top-level area is for in plain product language, so operators can understand
-the new navigation in one pass without needing historical layout context.
-That copy should stay direct and present-tense. Each guided step should say
-what the destination does, not depend on v5 comparisons, migration framing, or
-older information architecture to make sense.
-The Infrastructure tour step must describe the source model directly: platform
-API inventory, Pulse Agent telemetry, and discovered candidates are managed as
-infrastructure sources in one place.
-That guided welcome surface should stay compact. The canonical shape is a
-coachmark-sized card centered on the current destination with one short
-step-specific sentence, a small clickable step strip, and minimal footer
-controls. It must not grow back into a large sectioned explainer when one
-sentence would do the job.
-The guided stop map inside that welcome surface is interactive, not decorative:
-operators must be able to jump directly to any tour step from the stop list,
-and desktop layouts may widen the panel enough to keep step labels readable
-without overlapping or collapsing into clipped pills. That map should read as
-numbered wayfinding, not placeholder onboarding chrome: concise numeric badges
-plus section titles are preferred over repeated `Stop N` copy or other filler
-labels that add noise without helping orientation.
-That same welcome surface must stay inside Pulse's existing flat visual
-language. The shell, step map, telemetry note, and supporting actions should
-use bordered flat fills and normal app radii instead of gradient washes,
-glassmorphism, or other marketing-style promo chrome that drifts from the rest
-of the product.
-Secondary disclosures such as telemetry must stay subordinate to that
-orientation job: keep them as footer-level links into the canonical
-privacy/settings surfaces, and do not let them crowd out the migration
-wayfinding copy. The supporting docs CTA on that surface should likewise stay
-route-oriented: use a neutral `Navigation guide` label and plain present-tense
-copy that helps operators understand the current IA, rather than reviving
-`Migration guide` branding that pulls the tour back into v5 historical framing.
-That state owner now also owns public-demo suppression: the modal must stay
-closed until `sessionPresentationPolicyResolved()` is true and must fail closed
-when `presentationPolicyIsDemoMode()` resolves true, so the public demo does
-not front-load product migration onboarding ahead of the actual surface.
-Canonical customer disclosures inside those shared shells now route through
-`frontend-modern/src/utils/docsLinks.ts`, so settings and what's-new privacy
-links resolve to shipped `/docs/...` assets instead of hard-coded GitHub
-`main` URLs that can drift from the running build.
+Canonical customer disclosures inside shared shells route through
+`frontend-modern/src/utils/docsLinks.ts`, so settings privacy links resolve to
+shipped `/docs/...` assets instead of hard-coded GitHub `main` URLs that can
+drift from the running build.
 The shared summary strip primitives now follow that same owner split.
 `frontend-modern/src/components/shared/SummaryPanel.tsx` and
 `frontend-modern/src/components/shared/SummaryMetricCard.tsx` stay the render

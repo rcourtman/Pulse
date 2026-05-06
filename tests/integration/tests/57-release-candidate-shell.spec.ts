@@ -18,10 +18,6 @@ test.describe('Release candidate shell', () => {
 
     await waitForPulseReady(page);
 
-    await page.addInitScript(() => {
-      localStorage.setItem('pulse_whats_new_v2_shown', 'true');
-    });
-
     await page.route('**/api/security/status', (route) =>
       route.fulfill({
         status: 200,

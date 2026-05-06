@@ -173,10 +173,6 @@ async function configureMonitoredSystemBillingFixtures(
   const runtimeCapabilities =
     fixtures.runtimeCapabilities ?? MONITORED_SYSTEM_RUNTIME_CAPABILITIES;
 
-  await page.addInitScript(() => {
-    localStorage.setItem("pulse_whats_new_v2_shown", "true");
-  });
-
   await page.route("**/api/security/status", async (route) => {
     await route.fulfill({
       status: 200,

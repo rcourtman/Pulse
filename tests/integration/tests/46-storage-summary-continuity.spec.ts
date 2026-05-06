@@ -98,9 +98,6 @@ test.describe.serial('Storage summary chart continuity', () => {
 
     fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
 
-    await page.addInitScript(() => {
-      localStorage.setItem('pulse_whats_new_v2_shown', 'true');
-    });
     await page.goto('/storage', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/storage/);
     await expect(page.getByTestId('storage-summary')).toBeVisible();

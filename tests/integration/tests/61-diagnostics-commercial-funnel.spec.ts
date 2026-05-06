@@ -165,7 +165,6 @@ test("renders the commercial funnel diagnostics card in the browser", async ({
       }),
     );
     sessionStorage.setItem("pulse_auth_user", "admin");
-    localStorage.setItem("pulse_whats_new_v2_shown", "true");
   });
 
   await page.route("**/api/security/status", async (route) => {

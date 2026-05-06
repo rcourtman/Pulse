@@ -36,8 +36,6 @@ import infrastructureSelectorSource from '@/components/shared/InfrastructureSele
 import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
 import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
 import progressBarSource from '@/components/shared/ProgressBar.tsx?raw';
-import whatsNewModalSource from '@/components/shared/WhatsNewModal.tsx?raw';
-import whatsNewModalModelSource from '@/components/shared/whatsNewModalModel.ts?raw';
 import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
 import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
 import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
@@ -102,7 +100,6 @@ import infrastructureDetailsDrawerStateSource from '@/components/shared/useInfra
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
 import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
-import whatsNewModalStateSource from '@/components/shared/useWhatsNewModalState.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 import searchInputEnhancementsStateSource from '@/components/shared/useSearchInputEnhancements.ts?raw';
@@ -1307,39 +1304,6 @@ describe('shared primitive guardrails', () => {
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverPositionClass');
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerVariant');
     expect(searchTipsPopoverModelSource).toContain('shouldSearchTipsPopoverOpenOnHover');
-  });
-
-  it('keeps whats new modal on shell, runtime, and model owners', () => {
-    expect(whatsNewModalSource).toContain('useWhatsNewModalState');
-    expect(whatsNewModalSource).toContain('useDialogState');
-    expect(whatsNewModalSource).toContain('WHATS_NEW_FEATURE_CARDS');
-    expect(whatsNewModalSource).toContain('Portal');
-    expect(whatsNewModalSource).not.toContain('createLocalStorageBooleanSignal');
-    expect(whatsNewModalSource).not.toContain('createSignal');
-    expect(whatsNewModalSource).not.toContain('WHATS_NEW_NAV_V2_SHOWN');
-    expect(whatsNewModalSource).not.toContain('Migration guide');
-    expect(whatsNewModalSource).not.toContain(
-      'https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md',
-    );
-
-    expect(whatsNewModalStateSource).toContain('export function useWhatsNewModalState');
-    expect(whatsNewModalStateSource).toContain('createLocalStorageBooleanSignal');
-    expect(whatsNewModalStateSource).toContain('createSignal');
-    expect(whatsNewModalStateSource).toContain('createMemo');
-    expect(whatsNewModalStateSource).toContain('STORAGE_KEYS.WHATS_NEW_NAV_V2_SHOWN');
-    expect(whatsNewModalStateSource).toContain('sessionPresentationPolicyResolved');
-    expect(whatsNewModalStateSource).toContain('presentationPolicyIsDemoMode');
-    expect(whatsNewModalStateSource).toContain('handleClose');
-    expect(whatsNewModalStateSource).toContain('handleNext');
-    expect(whatsNewModalStateSource).toContain('spotlightStyle');
-
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_FEATURE_CARDS');
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_URL');
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_PRIVACY_URL');
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
-    expect(whatsNewModalModelSource).toContain('MIGRATION_GUIDE_DOC_URL');
-    expect(whatsNewModalModelSource).toContain('Telemetry details');
-    expect(whatsNewModalModelSource).toContain("title: 'Infrastructure'");
   });
 
   it('keeps dialog stack visibility in the shared dialog runtime', () => {

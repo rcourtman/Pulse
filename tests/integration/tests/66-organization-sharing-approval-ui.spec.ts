@@ -81,7 +81,6 @@ test.describe('Organization sharing approval UI', () => {
     };
 
     await page.addInitScript((orgId) => {
-      localStorage.setItem('pulse_whats_new_v2_shown', 'true');
       sessionStorage.setItem('pulse_org_id', orgId);
       localStorage.setItem('pulse_org_id', orgId);
       document.cookie = `pulse_org_id=${encodeURIComponent(orgId)}; Path=/; SameSite=Lax`;

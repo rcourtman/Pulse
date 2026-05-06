@@ -53,7 +53,6 @@ async function applyThemePreference(
     localStorage.setItem('pulseThemePreference', pref);
     localStorage.setItem('darkMode', String(pref === 'dark'));
     localStorage.removeItem('pulse_dark_mode');
-    localStorage.setItem('pulse_whats_new_v2_shown', 'true');
     if (forceLoggedOut) {
       localStorage.setItem('just_logged_out', 'true');
     }

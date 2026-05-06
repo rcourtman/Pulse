@@ -110,7 +110,6 @@ test.describe.serial('Infrastructure column layout', () => {
 
     await page.setViewportSize({ width: 1920, height: 1200 });
     await page.addInitScript(() => {
-      localStorage.setItem('pulse_whats_new_v2_shown', 'true');
       localStorage.setItem('fullWidthMode', 'full-width');
     });
 

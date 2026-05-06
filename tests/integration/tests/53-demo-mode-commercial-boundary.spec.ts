@@ -231,10 +231,6 @@ base.describe('Demo mode commercial boundary', () => {
     let billingStateRequests = 0;
     let checkoutStartRequests = 0;
 
-    await page.addInitScript(() => {
-      localStorage.setItem('pulse_whats_new_v2_shown', 'true');
-    });
-
     await page.route('**/api/security/status', async (route) => {
       await route.fulfill({
         status: 200,
@@ -424,9 +420,6 @@ base.describe('Managed demo runtime commercial boundary', () => {
   base(
     'hides commercial surfaces and APIs without browser route stubs',
     async ({ page }) => {
-      await page.addInitScript(() => {
-        localStorage.setItem('pulse_whats_new_v2_shown', 'true');
-      });
       await ensureAuthenticated(page);
 
       const hiddenCommercialRequests = trackBrowserRequests(

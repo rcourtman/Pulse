@@ -3553,7 +3553,6 @@
               "frontend-modern/src/components/shared/__tests__/TagBadges.test.tsx",
               "frontend-modern/src/components/shared/__tests__/UpgradeLink.test.tsx",
               "frontend-modern/src/components/shared/__tests__/WebInterfaceUrlField.test.tsx",
-              "frontend-modern/src/components/shared/__tests__/WhatsNewModal.test.tsx",
               "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
               "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",

@@ -139,9 +139,6 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     );
 
     await ensureMockModeEnabled(page);
-    await page.addInitScript(() => {
-      localStorage.setItem("pulse_whats_new_v2_shown", "true");
-    });
 
     await page.goto("/workloads?type=vm&platform=proxmox-pve", {
       waitUntil: "domcontentloaded",

@@ -9,10 +9,8 @@ import Sun from 'lucide-solid/icons/sun';
 import Moon from 'lucide-solid/icons/moon';
 import Thermometer from 'lucide-solid/icons/thermometer';
 import Maximize2 from 'lucide-solid/icons/maximize-2';
-import Compass from 'lucide-solid/icons/compass';
 import { temperatureStore } from '@/utils/temperature';
 import { layoutStore } from '@/utils/layout';
-import { WHATS_NEW_REOPEN_EVENT } from '@/components/shared/whatsNewModalModel';
 import {
   PVE_POLLING_MAX_SECONDS,
   PVE_POLLING_MIN_SECONDS,
@@ -166,31 +164,6 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             class="shrink-0"
             onChange={() => layoutStore.toggle()}
           />
-        </div>
-
-        {/* Reopen Navigation Guide */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
-              <Compass class="w-5 h-5 text-slate-500" strokeWidth={2} />
-            </div>
-            <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">Navigation guide</p>
-              <p class="text-xs text-muted line-clamp-2">
-                Replay the four-stop walkthrough of Infrastructure, Workloads, Storage, and
-                Recovery.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent(WHATS_NEW_REOPEN_EVENT));
-            }}
-            class="shrink-0 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-          >
-            Reopen
-          </button>
         </div>
       </SettingsPanel>
 

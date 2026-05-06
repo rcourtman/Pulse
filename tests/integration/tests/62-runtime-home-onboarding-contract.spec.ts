@@ -39,12 +39,6 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe("runtime-home onboarding contract", () => {
   test.setTimeout(180_000);
 
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("pulse_whats_new_v2_shown", "true");
-    });
-  });
-
   test("normalizes the agent install handoff onto the shared infrastructure workspace", async ({
     page,
   }) => {

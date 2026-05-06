@@ -351,10 +351,6 @@ async function configureBillingFixtures(
 ) {
   const activationState = options.activationState ?? { current: false };
 
-  await page.addInitScript(() => {
-    localStorage.setItem("pulse_whats_new_v2_shown", "true");
-  });
-
   await context.route("**/api/security/status", async (route) => {
     await fulfillJSON(route, {
       hasAuthentication: true,

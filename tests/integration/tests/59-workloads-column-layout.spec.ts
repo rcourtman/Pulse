@@ -139,9 +139,6 @@ test.describe.serial('Workloads column layout', () => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
 
     await page.setViewportSize({ width: 1440, height: 1200 });
-    await page.addInitScript(() => {
-      localStorage.setItem('pulse_whats_new_v2_shown', 'true');
-    });
 
     await ensureMockModeEnabled(page);
     await page.goto('/workloads', { waitUntil: 'domcontentloaded' });

@@ -359,9 +359,6 @@ export async function ensureFirstRunExperience(
   page: Page,
   options: CompleteSetupWizardOptions = {},
 ) {
-  await page.addInitScript(() => {
-    localStorage.setItem("pulse_whats_new_v2_shown", "true");
-  });
   await waitForPulseReady(page);
   const completionTarget = options.completionTarget ?? "install";
 
@@ -506,24 +503,7 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     .toBe("authenticated");
 }
 
-/**
- * Dismiss the WhatsNew modal that appears on first visit by marking it as seen
- * in localStorage. This prevents the "fixed inset-0 z-50" overlay from blocking
- * clicks (logout button, row clicks, etc.) in tests.
- */
-export async function dismissWhatsNewModal(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.setItem("pulse_whats_new_v2_shown", "true");
-  });
-}
-
 export async function ensureAuthenticated(page: Page) {
-  // Pre-set the WhatsNew modal localStorage key via an init script that runs before
-  // any page script on every navigation. This prevents the "fixed inset-0 z-50"
-  // overlay from appearing and blocking clicks (logout, row taps, etc.) in tests.
-  await page.addInitScript(() => {
-    localStorage.setItem("pulse_whats_new_v2_shown", "true");
-  });
   await waitForPulseReady(page);
   await maybeCompleteSetupWizard(page);
   await login(page);

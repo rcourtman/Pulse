@@ -134,10 +134,6 @@ test.describe('Offline Proxmox node visibility', () => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
     fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
 
-    await page.addInitScript(() => {
-      localStorage.setItem('pulse_whats_new_v2_shown', 'true');
-    });
-
     await page.route('**/api/resources**', async (route) => {
       const requestUrl = new URL(route.request().url());
 

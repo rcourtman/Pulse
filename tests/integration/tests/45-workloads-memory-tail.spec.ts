@@ -68,15 +68,6 @@ async function ensureMockModeEnabled(page: import('@playwright/test').Page): Pro
   }
 }
 
-async function dismissWhatsNewModal(page: import('@playwright/test').Page): Promise<void> {
-  const modalTitle = page.getByText('Welcome to Pulse v6');
-  if (!(await modalTitle.isVisible().catch(() => false))) {
-    return;
-  }
-  await page.getByRole('button', { name: 'Skip tour' }).click();
-  await expect(modalTitle).toHaveCount(0);
-}
-
 function average(values: number[]): number {
   if (values.length === 0) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -161,7 +152,6 @@ test.describe.serial('Workloads memory tail', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('workloads-summary')).toBeVisible();
-    await dismissWhatsNewModal(page);
 
     const response = await responsePromise;
     expect(response.ok()).toBeTruthy();

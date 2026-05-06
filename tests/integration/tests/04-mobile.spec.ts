@@ -1,5 +1,5 @@
 import { test, expect, devices } from '@playwright/test';
-import { dismissWhatsNewModal, ensureAuthenticated } from './helpers';
+import { ensureAuthenticated } from './helpers';
 
 const getViewportWidth = async (page: import('@playwright/test').Page): Promise<number> => {
   const size = page.viewportSize();
@@ -13,7 +13,6 @@ test.describe('Mobile viewport flows', () => {
   });
 
   test('bottom nav bar is visible on mobile', async ({ page }) => {
-    await dismissWhatsNewModal(page);
     await page.goto('/infrastructure');
     await expect(page.locator('#root')).toBeVisible();
 
@@ -39,7 +38,6 @@ test.describe('Mobile viewport flows', () => {
   });
 
   test('MobileNavBar has safe-area padding on nav', async ({ page }) => {
-    await dismissWhatsNewModal(page);
     await page.goto('/infrastructure');
     await expect(page.locator('#root')).toBeVisible();
 
@@ -55,8 +53,6 @@ test.describe('Mobile viewport flows', () => {
   });
 
   test('Infrastructure filter bar does not overflow horizontally', async ({ page }) => {
-    // Prevent WhatsNew modal from blocking the page.
-    await dismissWhatsNewModal(page);
     await page.goto('/infrastructure');
 
     await expect(page.getByTestId('infrastructure-page')).toBeVisible();
@@ -71,7 +67,6 @@ test.describe('Mobile viewport flows', () => {
   });
 
   test('Infrastructure table wrapper enables horizontal overflow when needed', async ({ page }) => {
-    await dismissWhatsNewModal(page);
     await page.goto('/infrastructure');
 
     await expect(page.getByTestId('infrastructure-page')).toBeVisible();
@@ -104,8 +99,6 @@ test.describe('Mobile viewport flows', () => {
   });
 
   test('Tapping a resource row opens the detail drawer', async ({ page }) => {
-    // Prevent WhatsNew modal from intercepting row clicks.
-    await dismissWhatsNewModal(page);
     await page.goto('/infrastructure');
 
     await expect(page.getByTestId('infrastructure-page')).toBeVisible();
