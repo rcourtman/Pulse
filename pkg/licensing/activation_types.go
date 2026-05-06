@@ -148,19 +148,21 @@ func grantClaimsToLicenseWithContinuity(
 
 // ActivateInstallationRequest is the payload sent to POST /v1/activate.
 type ActivateInstallationRequest struct {
-	ActivationKey       string `json:"activation_key"`
-	InstanceName        string `json:"instance_name,omitempty"`
-	InstanceFingerprint string `json:"instance_fingerprint"`
-	ClientVersion       string `json:"client_version,omitempty"`
+	ActivationKey       string           `json:"activation_key"`
+	InstanceName        string           `json:"instance_name,omitempty"`
+	InstanceFingerprint string           `json:"instance_fingerprint"`
+	ClientVersion       string           `json:"client_version,omitempty"`
+	Runtime             *RuntimeIdentity `json:"runtime,omitempty"`
 }
 
 // ExchangeLegacyLicenseRequest is the payload sent to POST /v1/licenses/exchange.
 // It converts a legacy v5 JWT-style license into the v6 activation/grant model.
 type ExchangeLegacyLicenseRequest struct {
-	LegacyLicenseKey    string `json:"-"`
-	InstanceName        string `json:"instance_name,omitempty"`
-	InstanceFingerprint string `json:"instance_fingerprint"`
-	ClientVersion       string `json:"client_version,omitempty"`
+	LegacyLicenseKey    string           `json:"-"`
+	InstanceName        string           `json:"instance_name,omitempty"`
+	InstanceFingerprint string           `json:"instance_fingerprint"`
+	ClientVersion       string           `json:"client_version,omitempty"`
+	Runtime             *RuntimeIdentity `json:"runtime,omitempty"`
 }
 
 // MarshalJSON emits the canonical v6 contract field `legacy_license_token`.
@@ -168,26 +170,29 @@ type ExchangeLegacyLicenseRequest struct {
 // paths that still decoded `legacy_license_key`.
 func (r ExchangeLegacyLicenseRequest) MarshalJSON() ([]byte, error) {
 	type exchangeLegacyLicenseRequestWire struct {
-		LegacyLicenseToken  string `json:"legacy_license_token"`
-		InstanceName        string `json:"instance_name,omitempty"`
-		InstanceFingerprint string `json:"instance_fingerprint"`
-		ClientVersion       string `json:"client_version,omitempty"`
+		LegacyLicenseToken  string           `json:"legacy_license_token"`
+		InstanceName        string           `json:"instance_name,omitempty"`
+		InstanceFingerprint string           `json:"instance_fingerprint"`
+		ClientVersion       string           `json:"client_version,omitempty"`
+		Runtime             *RuntimeIdentity `json:"runtime,omitempty"`
 	}
 	return json.Marshal(exchangeLegacyLicenseRequestWire{
 		LegacyLicenseToken:  r.LegacyLicenseKey,
 		InstanceName:        r.InstanceName,
 		InstanceFingerprint: r.InstanceFingerprint,
 		ClientVersion:       r.ClientVersion,
+		Runtime:             r.Runtime,
 	})
 }
 
 func (r *ExchangeLegacyLicenseRequest) UnmarshalJSON(data []byte) error {
 	type exchangeLegacyLicenseRequestWire struct {
-		LegacyLicenseToken  string `json:"legacy_license_token"`
-		LegacyLicenseKey    string `json:"legacy_license_key"`
-		InstanceName        string `json:"instance_name,omitempty"`
-		InstanceFingerprint string `json:"instance_fingerprint"`
-		ClientVersion       string `json:"client_version,omitempty"`
+		LegacyLicenseToken  string           `json:"legacy_license_token"`
+		LegacyLicenseKey    string           `json:"legacy_license_key"`
+		InstanceName        string           `json:"instance_name,omitempty"`
+		InstanceFingerprint string           `json:"instance_fingerprint"`
+		ClientVersion       string           `json:"client_version,omitempty"`
+		Runtime             *RuntimeIdentity `json:"runtime,omitempty"`
 	}
 	var wire exchangeLegacyLicenseRequestWire
 	if err := json.Unmarshal(data, &wire); err != nil {
@@ -200,6 +205,7 @@ func (r *ExchangeLegacyLicenseRequest) UnmarshalJSON(data []byte) error {
 	r.InstanceName = wire.InstanceName
 	r.InstanceFingerprint = wire.InstanceFingerprint
 	r.ClientVersion = wire.ClientVersion
+	r.Runtime = wire.Runtime
 	return nil
 }
 
@@ -253,10 +259,11 @@ type RefreshHints struct {
 
 // RefreshGrantRequest is the payload sent to POST /v1/grants/refresh.
 type RefreshGrantRequest struct {
-	InstallationID      string `json:"installation_id"`
-	InstanceFingerprint string `json:"instance_fingerprint"`
-	CurrentGrantJTI     string `json:"current_grant_jti,omitempty"`
-	ClientVersion       string `json:"client_version,omitempty"`
+	InstallationID      string           `json:"installation_id"`
+	InstanceFingerprint string           `json:"instance_fingerprint"`
+	CurrentGrantJTI     string           `json:"current_grant_jti,omitempty"`
+	ClientVersion       string           `json:"client_version,omitempty"`
+	Runtime             *RuntimeIdentity `json:"runtime,omitempty"`
 }
 
 // RefreshGrantResponse is the payload returned from the grant refresh endpoint.

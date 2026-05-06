@@ -117,13 +117,14 @@ cloud-specific enforcement rules.
 2. `frontend-modern/src/useAppRuntimeState.ts` shared with `performance-and-scalability`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
 3. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 4. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-   That same shared licensing boundary also owns installation-version
-   continuity for authenticated v6 installs: `internal/api/router.go` and
-   `internal/api/licensing_handlers.go` must hand the canonical process
-   version into `pkg/licensing/service.go` and `pkg/licensing/grant_refresh.go`,
-   and cloud-paid transport must send that value on activate, legacy exchange,
-   and grant refresh instead of inferring install version from browser state,
-   dev build metadata, or anonymous telemetry.
+   That same shared licensing boundary also owns installation-version and
+   runtime-build continuity for authenticated v6 installs: `internal/api/router.go`
+   and `internal/api/licensing_handlers.go` must hand the canonical process
+   version and runtime identity into `pkg/licensing/service.go` and
+   `pkg/licensing/grant_refresh.go`, and cloud-paid transport must send those
+   values on activate, legacy exchange, and grant refresh instead of inferring
+   install version or paid-runtime status from browser state, dev build
+   metadata, public image tags, or anonymous telemetry.
 5. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 6. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
    That shared monitored-system presentation boundary also owns disabled

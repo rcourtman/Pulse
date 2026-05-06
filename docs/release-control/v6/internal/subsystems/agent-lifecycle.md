@@ -491,7 +491,12 @@ profile and assignment columns, but embedded table framing must route through
     commercial-owned `portal_handoff_id`, server-resolved checkout intent, purchase-return tokens,
     activation-bridge form state, owned billing purchase-arrival states, or
     demo-hidden commercial route policy as installer credentials,
-    registration state, or fleet enrollment authority. The same adjacent
+    registration state, or fleet enrollment authority. The adjacent licensing
+    boundary also owns public-vs-Pro runtime build attribution for activated
+    installs; lifecycle and fleet surfaces may read the resulting
+    entitlement/runtime-capability posture, but must not infer paid runtime
+    status from agent install commands, public image tags, or local lifecycle
+    inventory. The same adjacent
     commercial boundary also owns purchase-start unavailability recovery:
     lifecycle-adjacent surfaces may coexist with that shared browser route, but
     they must not strand install or fleet flows on a raw Pulse Account error

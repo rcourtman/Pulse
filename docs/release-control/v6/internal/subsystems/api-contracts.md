@@ -215,12 +215,13 @@ product API routes free of maintainer commercial analytics.
 38. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 39. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
     That same shared licensing boundary also owns authenticated
-    install-version attribution: `internal/api/router.go` must hand the
-    canonical process `serverVersion` into `internal/api/licensing_handlers.go`,
-    and the shared licensing runtime must carry that exact value through
-    `/v1/activate`, `/v1/licenses/exchange`, and `/v1/grants/refresh` so
-    migrated installs can be attributed to exact builds without inventing a
-    second version source or trusting browser-supplied version hints.
+    install-version and runtime-build attribution: `internal/api/router.go`
+    must hand the canonical process `serverVersion` and normalized runtime
+    identity into `internal/api/licensing_handlers.go`, and the shared
+    licensing runtime must carry those exact values through `/v1/activate`,
+    `/v1/licenses/exchange`, and `/v1/grants/refresh` so migrated installs can
+    be attributed to exact builds and public-vs-Pro runtime status without
+    inventing a second version source or trusting browser-supplied hints.
     That same shared licensing boundary also owns self-hosted purchase-return
     framing. `/auth/license-purchase-start` and
     `/auth/license-purchase-activate` may return operators only to the
@@ -1218,6 +1219,11 @@ execute. Billing entitlements may still report the licensed feature set, but
 browser feature gates must use the runtime-capabilities contract for executable
 truth and show the paid-runtime-required action instead of treating the license
 as inactive.
+The same runtime identity must also flow to the license server during
+activation, legacy exchange, and grant refresh so support/audit tooling can
+differentiate a paid customer running the public community binary from one
+running the private Pulse Pro runtime even when both artifacts share a version
+tag.
 That same shared licensing contract also owns internal runtime-only
 capabilities. Release demo runtimes may use the internal `demo_fixtures`
 entitlement to authorize mock fixture data and `/api/system/mock-mode`

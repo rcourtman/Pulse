@@ -586,7 +586,12 @@ bypass the API fail-closed execution gate.
     `portal_handoff_id`, server-resolved checkout intent, purchase-return tokens, activation-bridge
     callbacks, owned billing purchase-arrival states, or demo-hidden
     commercial route policy as recovery identity, restore proof, preview
-    framing, or backup/recovery-local transport. That same adjacent commercial
+    framing, or backup/recovery-local transport. The adjacent licensing
+    boundary also owns public-vs-Pro runtime build attribution for activated
+    installs; storage and recovery surfaces may consume runtime-capability
+    blocks, but must not infer paid runtime status from restore context,
+    provider inventory, public image tags, or backup transport state. That same
+    adjacent commercial
     boundary also owns the canonical self-hosted purchase intent label:
     storage- and recovery-adjacent surfaces may observe `self_hosted_plan`, but
     they must not emit or reinterpret legacy `max_monitored_systems` intent or

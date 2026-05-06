@@ -219,6 +219,7 @@ func TestExchangeLegacyLicenseRequestJSONCompatibility(t *testing.T) {
 		InstanceName:        "pulse-node",
 		InstanceFingerprint: "fp-123",
 		ClientVersion:       "6.0.0-rc.2",
+		Runtime:             CloneRuntimeIdentity(ProRuntimeIdentity()),
 	}
 
 	data, err := json.Marshal(req)
@@ -236,6 +237,13 @@ func TestExchangeLegacyLicenseRequestJSONCompatibility(t *testing.T) {
 	if _, hasLegacyKey := raw["legacy_license_key"]; hasLegacyKey {
 		t.Fatal("legacy_license_key should not be emitted by MarshalJSON")
 	}
+	runtime, ok := raw["runtime"].(map[string]any)
+	if !ok {
+		t.Fatalf("runtime = %#v, want object", raw["runtime"])
+	}
+	if got := runtime["build"]; got != RuntimeBuildPro {
+		t.Fatalf("runtime.build = %v, want %s", got, RuntimeBuildPro)
+	}
 
 	for _, field := range []string{"legacy_license_token", "legacy_license_key"} {
 		t.Run("unmarshal "+field, func(t *testing.T) {
@@ -244,6 +252,9 @@ func TestExchangeLegacyLicenseRequestJSONCompatibility(t *testing.T) {
 				"instance_name":        "pulse-node",
 				"instance_fingerprint": "fp-123",
 				"client_version":       "6.0.0-rc.2",
+				"runtime": map[string]any{
+					"build": RuntimeBuildCommunity,
+				},
 			}
 			body, err := json.Marshal(payload)
 			if err != nil {
@@ -259,6 +270,9 @@ func TestExchangeLegacyLicenseRequestJSONCompatibility(t *testing.T) {
 			}
 			if decoded.InstanceFingerprint != "fp-123" {
 				t.Fatalf("InstanceFingerprint = %q, want fp-123", decoded.InstanceFingerprint)
+			}
+			if decoded.Runtime == nil || decoded.Runtime.Build != RuntimeBuildCommunity {
+				t.Fatalf("Runtime build = %#v, want %q", decoded.Runtime, RuntimeBuildCommunity)
 			}
 		})
 	}

@@ -58,6 +58,9 @@ func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 				if req.ClientVersion != expectedClientVersion {
 					t.Fatalf("ClientVersion = %q, want %q", req.ClientVersion, expectedClientVersion)
 				}
+				if req.Runtime == nil || req.Runtime.Build != RuntimeBuildPro {
+					t.Fatalf("Runtime build = %#v, want %q", req.Runtime, RuntimeBuildPro)
+				}
 
 				w.WriteHeader(http.StatusCreated)
 				_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
@@ -82,6 +85,7 @@ func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 
 			svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
 			svc.SetClientVersion(expectedClientVersion)
+			svc.SetRuntimeIdentity(ProRuntimeIdentity())
 
 			lic, err := svc.Activate(licenseKey)
 			if err != nil {
@@ -140,6 +144,9 @@ func TestServiceActivateWithKey_SendsClientVersion(t *testing.T) {
 		if req.ClientVersion != expectedClientVersion {
 			t.Fatalf("ClientVersion = %q, want %q", req.ClientVersion, expectedClientVersion)
 		}
+		if req.Runtime == nil || req.Runtime.Build != RuntimeBuildPro {
+			t.Fatalf("Runtime build = %#v, want %q", req.Runtime, RuntimeBuildPro)
+		}
 
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
@@ -165,6 +172,7 @@ func TestServiceActivateWithKey_SendsClientVersion(t *testing.T) {
 	svc := NewService()
 	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
 	svc.SetClientVersion(expectedClientVersion)
+	svc.SetRuntimeIdentity(ProRuntimeIdentity())
 
 	if _, err := svc.Activate("ppk_live_native_test"); err != nil {
 		t.Fatalf("Activate: %v", err)

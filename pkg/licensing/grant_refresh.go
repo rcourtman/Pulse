@@ -183,6 +183,7 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	state := s.activationState
 	persistence := s.persistence
 	clientVersion := s.clientVersion
+	runtimeIdentity := NormalizeRuntimeIdentity(s.runtimeIdentity)
 	s.mu.RUnlock()
 
 	if client == nil {
@@ -197,6 +198,7 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 		InstanceFingerprint: state.InstanceFingerprint,
 		CurrentGrantJTI:     state.GrantJTI,
 		ClientVersion:       clientVersion,
+		Runtime:             CloneRuntimeIdentity(runtimeIdentity),
 	}
 
 	resp, err := client.RefreshGrant(ctx, state.InstallationID, state.InstallationToken, req)

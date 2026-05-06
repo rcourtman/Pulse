@@ -48,6 +48,9 @@ func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
 		if req.ClientVersion != expectedClientVersion {
 			t.Fatalf("ClientVersion = %q, want %q", req.ClientVersion, expectedClientVersion)
 		}
+		if req.Runtime == nil || req.Runtime.Build != RuntimeBuildCommunity {
+			t.Fatalf("Runtime build = %#v, want %q", req.Runtime, RuntimeBuildCommunity)
+		}
 		json.NewEncoder(w).Encode(RefreshGrantResponse{
 			Grant: GrantEnvelope{
 				JWT:       newGrantJWT,

@@ -99,6 +99,11 @@ type Service struct {
 	// Canonical runtime version supplied by the owning process. This is used for
 	// authenticated installation/version attribution on activation and refresh.
 	clientVersion string
+
+	// Canonical runtime build supplied by the owning process. This is separate
+	// from version so support can distinguish public/community binaries from
+	// private Pulse Pro binaries even when they share a release tag.
+	runtimeIdentity RuntimeIdentity
 }
 
 // DefaultGracePeriod is the duration after license expiration during which
@@ -108,7 +113,8 @@ const DefaultGracePeriod = 7 * 24 * time.Hour
 // NewService creates a new license service.
 func NewService() *Service {
 	return &Service{
-		gracePeriod: DefaultGracePeriod,
+		gracePeriod:     DefaultGracePeriod,
+		runtimeIdentity: CommunityRuntimeIdentity(),
 	}
 }
 
@@ -235,6 +241,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 	client := s.serverClient
 	persistence := s.persistence
 	clientVersion := s.clientVersion
+	runtimeIdentity := NormalizeRuntimeIdentity(s.runtimeIdentity)
 	s.mu.RUnlock()
 
 	if client == nil {
@@ -253,6 +260,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 		InstanceFingerprint: fingerprint,
 		InstanceName:        hostname,
 		ClientVersion:       clientVersion,
+		Runtime:             CloneRuntimeIdentity(runtimeIdentity),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -272,6 +280,7 @@ func (s *Service) ActivateLegacyLicense(legacyLicenseKey string) (*License, erro
 	client := s.serverClient
 	persistence := s.persistence
 	clientVersion := s.clientVersion
+	runtimeIdentity := NormalizeRuntimeIdentity(s.runtimeIdentity)
 	s.mu.RUnlock()
 
 	if client == nil {
@@ -289,6 +298,7 @@ func (s *Service) ActivateLegacyLicense(legacyLicenseKey string) (*License, erro
 		InstanceFingerprint: fingerprint,
 		InstanceName:        hostname,
 		ClientVersion:       clientVersion,
+		Runtime:             CloneRuntimeIdentity(runtimeIdentity),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -397,6 +407,14 @@ func (s *Service) SetClientVersion(version string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clientVersion = strings.TrimSpace(version)
+}
+
+// SetRuntimeIdentity records the canonical runtime build for authenticated
+// installation attribution on activation and grant refresh.
+func (s *Service) SetRuntimeIdentity(identity RuntimeIdentity) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runtimeIdentity = NormalizeRuntimeIdentity(identity)
 }
 
 // SetPersistence sets the persistence reference for activation state save/load.

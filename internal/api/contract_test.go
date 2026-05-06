@@ -6099,6 +6099,17 @@ func TestContract_SelfHostedCommunityRuntimeCapabilitiesJSONSnapshot(t *testing.
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_LicenseHandlersPassRuntimeIdentityToActivationService(t *testing.T) {
+	source, err := os.ReadFile("licensing_handlers.go")
+	if err != nil {
+		t.Fatalf("read licensing_handlers.go: %v", err)
+	}
+	text := string(source)
+	if count := strings.Count(text, "SetRuntimeIdentity(h.currentRuntimeIdentity())"); count < 2 {
+		t.Fatalf("expected cached and new tenant services to receive runtime identity, count=%d", count)
+	}
+}
+
 func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
 		Valid:       true,

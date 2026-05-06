@@ -511,6 +511,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 	if v, ok := h.services.Load(orgID); ok {
 		svc := v.(*licenseService)
 		svc.SetClientVersion(h.runtimeVersion)
+		svc.SetRuntimeIdentity(h.currentRuntimeIdentity())
 		if err := h.ensureEvaluatorForOrg(orgID, svc); err != nil {
 			log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to refresh license evaluator for org")
 		}
@@ -532,6 +533,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 
 	service := newLicenseService()
 	service.SetClientVersion(h.runtimeVersion)
+	service.SetRuntimeIdentity(h.currentRuntimeIdentity())
 
 	// Wire license server client and persistence so activation / refresh can use them.
 	lsClient := newLicenseServerClientFromLicensing("")
