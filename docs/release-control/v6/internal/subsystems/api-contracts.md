@@ -317,8 +317,9 @@ the canonical monitored-system blocked payload.
     briefing summarizing operator next steps, latest lifecycle event, and
     governed action posture without raw command text. Related finding context
     must resolve from the current unified finding store, stay bounded and
-    deduplicated, and seed only structured handoff resources for canonical
-    policy, state, topology, and timeline hydration. Chat execution owns
+    deduplicated, include current recency and latest lifecycle facts, and seed
+    only structured handoff resources for canonical policy, state, topology,
+    and timeline hydration. Chat execution owns
     resource-policy sanitization of the assembled model-only handoff before
     prompt injection, so API payload builders may pass structured product
     context without turning raw resource identity into user-authored text or
@@ -787,10 +788,11 @@ the canonical monitored-system blocked payload.
    handoff state, while the detailed lifecycle list must stay bounded and
    model-only. Chat execution may also resolve root-cause and correlated finding
    IDs from that current unified finding into compact related-finding summaries
-   and structured handoff resources, but those related records remain
-   model-only explanation context and must not become saved user text,
-   disclosure authority, lifecycle authority, approval authority, or execution
-   authority. Chat execution may also hydrate canonical
+   and structured handoff resources. Those related summaries may include the
+   related record's current recency and latest lifecycle facts, but those
+   related records remain model-only explanation context and must not become
+   saved user text, disclosure authority, lifecycle authority, approval
+   authority, or execution authority. Chat execution may also hydrate canonical
    resource-policy context for those resources through unified-resource
    resolution and shared policy presentation helpers, but the resulting handling
    guidance is read-only, model-only context and must not become saved user text,

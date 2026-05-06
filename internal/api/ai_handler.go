@@ -949,6 +949,9 @@ func formatUnifiedRelatedFindingSummary(f *unified.UnifiedFinding) string {
 	if resource := formatUnifiedFindingBriefingResource(f); resource != "" {
 		parts = append(parts, "resource "+resource)
 	}
+	if recency := formatUnifiedFindingBriefingRecency(f); recency != "" {
+		parts = append(parts, "recency "+recency)
+	}
 	if investigation := formatUnifiedFindingBriefingInvestigation(f); investigation != "" {
 		parts = append(parts, "investigation "+investigation)
 	}
@@ -1049,6 +1052,48 @@ func formatUnifiedFindingBriefingPriority(f *unified.UnifiedFinding) string {
 	}
 	if f.RegressionCount > 0 {
 		parts = append(parts, fmt.Sprintf("regressed %d times", f.RegressionCount))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func formatUnifiedFindingBriefingRecency(f *unified.UnifiedFinding) string {
+	if f == nil {
+		return ""
+	}
+
+	parts := make([]string, 0, 8)
+	if !f.DetectedAt.IsZero() {
+		parts = append(parts, "detected "+f.DetectedAt.Format(time.RFC3339))
+	}
+	if !f.LastSeenAt.IsZero() {
+		parts = append(parts, "last seen "+f.LastSeenAt.Format(time.RFC3339))
+	}
+	if f.ResolvedAt != nil {
+		parts = append(parts, "resolved "+f.ResolvedAt.Format(time.RFC3339))
+	}
+	if f.SnoozedUntil != nil {
+		parts = append(parts, "snoozed until "+f.SnoozedUntil.Format(time.RFC3339))
+	}
+	if strings.TrimSpace(f.DismissedReason) != "" {
+		parts = append(parts, "dismissed "+strings.TrimSpace(f.DismissedReason))
+	}
+	if f.Suppressed {
+		parts = append(parts, "suppressed")
+	}
+	if f.TimesRaised > 1 {
+		parts = append(parts, fmt.Sprintf("raised %d times", f.TimesRaised))
+	}
+	if f.RegressionCount > 0 {
+		parts = append(parts, fmt.Sprintf("regressed %d times", f.RegressionCount))
+	}
+	if f.LastRegressionAt != nil {
+		parts = append(parts, "last regression "+f.LastRegressionAt.Format(time.RFC3339))
+	}
+	if f.AcknowledgedAt != nil {
+		parts = append(parts, "acknowledged "+f.AcknowledgedAt.Format(time.RFC3339))
+	}
+	if latestLifecycle := formatUnifiedFindingLatestLifecycleEvent(f.Lifecycle); latestLifecycle != "" {
+		parts = append(parts, "latest lifecycle "+latestLifecycle)
 	}
 	return strings.Join(parts, "; ")
 }

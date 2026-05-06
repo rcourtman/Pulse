@@ -193,8 +193,10 @@ runtime cost control, and shared AI transport surfaces.
     correlated finding IDs, Assistant may resolve those related findings through
     the current unified finding store and include compact related-finding
     summaries plus their structured handoff resources as model-only explanation
-    context. Those related findings must be deduplicated, bounded, refreshed
-    from current store state, and treated only as context for the same operator
+    context. Those summaries must carry current recency facts and latest
+    lifecycle state from the related record rather than only title/resource
+    prose. Those related findings must be deduplicated, bounded, refreshed from
+    current store state, and treated only as context for the same operator
     conversation; they do not grant approval, lifecycle, disclosure, or
     execution authority. If the referenced finding no longer resolves through
     the current unified finding store, Assistant must invalidate the stored
@@ -963,10 +965,11 @@ latest lifecycle event, and governed action posture as operator guidance, while
 leaving detailed lifecycle history, current resource-state, timeline,
 related-finding, and action-audit hydration in the existing canonical AI
 runtime handoff builders. Related root-cause and
-correlated finding records may be summarized from current unified finding state
-and may seed their own handoff resources for canonical policy, state, topology,
-and timeline hydration. That related context is explanation and review context
-only, not approval or execution authority. Detailed lifecycle events are
+correlated finding records may be summarized from current unified finding state,
+including their recency and latest lifecycle facts, and may seed their own
+handoff resources for canonical policy, state, topology, and timeline
+hydration. That related context is explanation and review context only, not
+approval or execution authority. Detailed lifecycle events are
 likewise current Patrol review context only. The assembled briefing, lifecycle,
 and related context are policy-sanitized by the chat handoff runtime before
 prompt injection, so governed resource names, IDs, aliases, nodes, paths, and

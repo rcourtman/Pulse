@@ -159,6 +159,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"appendUnifiedFindingRelatedContext(&b, f, lookup)",
 		"[Related Finding Context]",
 		"Related Finding Boundary",
+		"formatUnifiedFindingBriefingRecency(f)",
+		"latest lifecycle",
 		`appendChatContextLine(&b, "Remediation ID", f.RemediationID)`,
 		`appendChatContextLine(&b, "Last Investigated At", f.LastInvestigatedAt.Format(time.RFC3339))`,
 		`appendChatContextLine(&b, "Investigation Attempts", strconv.Itoa(f.InvestigationAttempts))`,

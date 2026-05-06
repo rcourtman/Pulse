@@ -680,6 +680,13 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 		AIConfidence:         0.74,
 		InvestigationStatus:  "completed",
 		InvestigationOutcome: "root_cause",
+		Lifecycle: []unified.UnifiedFindingLifecycleEvent{{
+			At:      detectedAt.Add(-2 * time.Minute),
+			Type:    "correlated",
+			Message: "Backup latency identified",
+			From:    "detected",
+			To:      "root_cause",
+		}},
 	})
 	store.AddFromAI(&unified.UnifiedFinding{
 		ID:                   "finding-storage",
@@ -743,8 +750,8 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.Contains(t, reqArg.HandoffContext, "Root Cause ID: finding-root")
 			assert.Contains(t, reqArg.HandoffContext, "Correlated Finding 1: finding-storage")
 			assert.Contains(t, reqArg.HandoffContext, "[Related Finding Context]")
-			assert.Contains(t, reqArg.HandoffContext, "Root Cause Finding: finding-root | Backup storage pressure (warning, capacity, active) | resource backup-store (storage) [storage-100] on pve-1 | investigation completed; outcome root_cause; ai confidence 0.74 | conclusion Backup storage pressure preceded the workload CPU saturation.")
-			assert.Contains(t, reqArg.HandoffContext, "Correlated Finding 1: finding-storage | Datastore latency (warning, capacity, active) | resource vm-datastore (storage) [storage-200] on pve-2 | investigation completed; outcome resolved; confidence medium | conclusion Datastore latency recovered after backup completion.")
+			assert.Contains(t, reqArg.HandoffContext, "Root Cause Finding: finding-root | Backup storage pressure (warning, capacity, active) | resource backup-store (storage) [storage-100] on pve-1 | recency detected 2026-05-06T11:55:00Z; last seen 2026-05-06T12:02:00Z; latest lifecycle 2026-05-06T11:58:00Z | correlated | Backup latency identified | detected -> root_cause | investigation completed; outcome root_cause; ai confidence 0.74 | conclusion Backup storage pressure preceded the workload CPU saturation.")
+			assert.Contains(t, reqArg.HandoffContext, "Correlated Finding 1: finding-storage | Datastore latency (warning, capacity, active) | resource vm-datastore (storage) [storage-200] on pve-2 | recency detected 2026-05-06T11:56:00Z; last seen 2026-05-06T12:02:00Z | investigation completed; outcome resolved; confidence medium | conclusion Datastore latency recovered after backup completion.")
 			assert.Contains(t, reqArg.HandoffContext, "Related Finding Boundary: Related findings are current unified finding context for explanation only")
 			assert.Contains(t, reqArg.HandoffContext, "Remediation ID: remediation-123")
 			assert.Contains(t, reqArg.HandoffContext, "Last Investigated At: 2026-05-06T12:04:00Z")
