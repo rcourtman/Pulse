@@ -57,6 +57,7 @@ operator-facing alert routing behavior for live runtime alerts.
 35. `internal/alerts/notification_policy.go`
 36. `internal/alerts/read_model.go`
 37. `internal/alerts/pmg.go`
+38. `internal/alerts/docker.go`
 
 ## Shared Boundaries
 
@@ -229,6 +230,11 @@ connectivity evaluation, PMG queue and per-node queue checks, quarantine growth
 tracking, and mail-rate anomaly detection; future Proxmox Mail Gateway alert
 behavior should extend that resource checker owner rather than adding more PMG
 logic to the central Manager file.
+Docker alert evaluation now lives in `internal/alerts/docker.go`. That file
+owns Docker host connectivity, container state and health, container metric
+projection, service gap/update-state checks, image-update timing, and Docker
+tracking cleanup; future Docker alert behavior should extend that resource
+checker owner rather than expanding the central Manager file.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial

@@ -3101,6 +3101,7 @@ func TestDockerResourceID(t *testing.T) {
 		want        string
 	}{
 		{name: "both ids present", hostID: "host1", containerID: "abc", want: "docker:host1/abc"},
+		{name: "trims ids", hostID: " host1 ", containerID: " abc ", want: "docker:host1/abc"},
 		{name: "missing host id", hostID: "", containerID: "abc", want: "docker:container/abc"},
 		{name: "missing container id", hostID: "host1", containerID: "", want: "docker:host1"},
 		{name: "both missing", hostID: "", containerID: "", want: "docker:unknown"},
