@@ -64,6 +64,7 @@ operator-facing alert routing behavior for live runtime alerts.
 42. `internal/alerts/host.go`
 43. `internal/alerts/backup_snapshot.go`
 44. `internal/alerts/disk_health.go`
+45. `internal/alerts/metric_runtime.go`
 
 ## Shared Boundaries
 
@@ -273,6 +274,12 @@ Proxmox disk health alert evaluation now lives in
 identity, disk health assessment alerts, known-firmware health suppression, and
 SSD wearout alerts; future Proxmox disk-health behavior should extend that
 checker owner rather than expanding the central Manager file.
+Shared metric threshold runtime now lives in
+`internal/alerts/metric_runtime.go`. That file owns metric threshold lookup,
+per-metric delay resolution, legacy metric alert creation/update/clear
+behavior, metric runtime options, alert key sanitation, and metric delta
+helpers; future metric-threshold behavior should extend that owner rather than
+adding shared metric logic back to the central Manager file.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial

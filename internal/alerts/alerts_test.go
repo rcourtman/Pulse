@@ -170,6 +170,36 @@ func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 	}
 }
 
+func TestMetricRuntimeStoresOptionsOnCanonicalAlert(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.SuppressionWindow = 0
+	m.config.MinimumDelta = 0
+	m.mu.Unlock()
+
+	threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.checkMetric("metric-runtime-res", "Runtime Resource", "node1", "inst1", "guest", "cpu", 95, threshold, &metricOptions{
+		Message:     "custom metric runtime message",
+		MonitorOnly: true,
+		Metadata: map[string]interface{}{
+			"source": "metric-runtime-test",
+		},
+	})
+
+	alert := testRequireActiveAlert(t, m, buildCanonicalStateID("metric-runtime-res", "metric-threshold:cpu"))
+	if alert.Message != "custom metric runtime message" {
+		t.Fatalf("alert message = %q, want custom metric runtime message", alert.Message)
+	}
+	if got, ok := alert.Metadata["monitorOnly"].(bool); !ok || !got {
+		t.Fatalf("monitorOnly metadata = %#v, want true", alert.Metadata["monitorOnly"])
+	}
+	if got := alert.Metadata["source"]; got != "metric-runtime-test" {
+		t.Fatalf("source metadata = %#v, want metric-runtime-test", got)
+	}
+}
+
 func TestCheckMetricUsesCanonicalTrackingKeyForExistingAlertState(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
