@@ -259,6 +259,114 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteStream_HandoffResourcePolicyContextIsModelOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	state := models.StateSnapshot{
+		VMs: []models.VM{{
+			ID:          "vm:node1:104",
+			VMID:        104,
+			Name:        "finance-vm",
+			Node:        "node1",
+			Status:      "running",
+			IPAddresses: []string{"10.0.0.40"},
+			Tags:        []string{"pii"},
+		}},
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state)
+	vmResources := registry.ListByType(unifiedresources.ResourceTypeVM)
+	if len(vmResources) != 1 {
+		t.Fatalf("expected one canonical VM resource, got %d", len(vmResources))
+	}
+	vmResource := vmResources[0]
+	unifiedProvider := unifiedresources.NewUnifiedAIAdapter(registry)
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{UnifiedResourceProvider: unifiedProvider})
+	var capturedMessages []providers.Message
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			capturedMessages = append([]providers.Message(nil), req.Messages...)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "noted"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	svc := &Service{
+		cfg:                     &config.AIConfig{ChatModel: "openai:test"},
+		sessions:                store,
+		executor:                executor,
+		agenticLoop:             loop,
+		provider:                provider,
+		unifiedResourceProvider: unifiedProvider,
+		started:                 true,
+	}
+
+	req := ExecuteRequest{
+		SessionID:      "sess-handoff-policy",
+		Prompt:         "What happened?",
+		HandoffContext: "[Finding Context]\nID: finding-123\nConclusion: finance-vm is overloaded.",
+		HandoffResources: []HandoffResource{{
+			ID:   vmResource.ID,
+			Name: "finance-vm",
+			Type: "vm",
+			Node: "node1",
+		}},
+	}
+	if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	stored, err := store.GetMessages("sess-handoff-policy")
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	if len(stored) == 0 {
+		t.Fatal("expected stored messages")
+	}
+	if stored[0].Content != "What happened?" {
+		t.Fatalf("stored user message = %q, want clean prompt", stored[0].Content)
+	}
+	if strings.Contains(stored[0].Content, "Resource Policy Context") {
+		t.Fatalf("stored user message should not include resource policy context: %q", stored[0].Content)
+	}
+
+	if len(capturedMessages) == 0 {
+		t.Fatal("expected provider messages")
+	}
+	modelUserContent := capturedMessages[len(capturedMessages)-1].Content
+	if !strings.Contains(modelUserContent, "[Resource Policy Context]") {
+		t.Fatalf("model user content missing resource policy context: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Policy: sensitivity=Restricted, routing=Local Only") {
+		t.Fatalf("model user content missing canonical policy summary: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Redactions: Hostname, IP Address, Platform ID, Alias") {
+		t.Fatalf("model user content missing canonical redaction summary: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Policy Boundary: Resource policy is read-only data-handling context") {
+		t.Fatalf("model user content missing policy boundary: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "redacted by policy") {
+		t.Fatalf("external provider request should redact raw governed resource identity: %q", modelUserContent)
+	}
+	if strings.Contains(modelUserContent, "finance-vm") || strings.Contains(modelUserContent, "10.0.0.40") {
+		t.Fatalf("model user content leaked governed resource identity: %q", modelUserContent)
+	}
+}
+
 func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testing.T) {
 	installTestApprovalStore(t, &approval.ApprovalRequest{
 		ID:         "approval-123",

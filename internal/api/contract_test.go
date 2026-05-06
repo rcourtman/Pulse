@@ -167,10 +167,13 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"sessions.SetModelHandoffActions(session.ID, handoffActions)",
 		"sessions.GetModelHandoffActions(session.ID)",
 		"refreshHandoffActionApprovalStatus(handoffActions, s.orgID)",
+		"mergeHandoffResourcePolicyContext(handoffContext, handoffResources, handoffResourceProvider)",
 		"mergeHandoffResourceTimelineContext(handoffContext, handoffResources, s.actionAuditStore, time.Now())",
 		"handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)",
 		"s.hydrateHandoffResources(session.ID, handoffResources, sessions, unifiedResourceProvider)",
 		"injectHandoffContextIntoLatestUserMessage(messages, handoffContext)",
+		"Resource Policy Context",
+		"Policy Boundary",
 		"Timeline Boundary",
 		"Approval Status",
 		"Action Boundary",
@@ -214,6 +217,9 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	toolsQueryText := string(toolsQuerySource)
 	if !strings.Contains(toolsQueryText, "func CanonicalHandoffResourceRegistration(provider UnifiedResourceProvider") {
 		t.Fatal("AI tools runtime must own canonical handoff resource registration")
+	}
+	if !strings.Contains(toolsQueryText, "func CanonicalHandoffUnifiedResource(provider UnifiedResourceProvider") {
+		t.Fatal("AI tools runtime must own canonical handoff unified resource resolution")
 	}
 }
 

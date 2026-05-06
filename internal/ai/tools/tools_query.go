@@ -2544,14 +2544,16 @@ func canonicalStorageRegistration(resource unifiedresources.Resource) (ResourceR
 	}, true
 }
 
-// CanonicalHandoffResourceRegistration resolves a product-originated resource
-// handoff into the same governed registration shape used by explicit resource
-// reads. It intentionally fails closed when the resource cannot be found in the
-// unified provider, because invented registrations would bypass capability and
-// executor policy.
-func CanonicalHandoffResourceRegistration(provider UnifiedResourceProvider, resourceID, resourceName, resourceType, node string) (ResourceRegistration, bool) {
+// CanonicalHandoffUnifiedResource resolves a product-originated resource handoff
+// into the canonical unified-resource record used by downstream governance.
+func CanonicalHandoffUnifiedResource(provider UnifiedResourceProvider, resourceID, resourceName, resourceType, node string) (unifiedresources.Resource, bool) {
+	resource, _, ok := canonicalHandoffUnifiedResource(provider, resourceID, resourceName, resourceType, node)
+	return resource, ok
+}
+
+func canonicalHandoffUnifiedResource(provider UnifiedResourceProvider, resourceID, resourceName, resourceType, node string) (unifiedresources.Resource, string, bool) {
 	if provider == nil {
-		return ResourceRegistration{}, false
+		return unifiedresources.Resource{}, "", false
 	}
 
 	refs := appendUniqueStrings(nil, resourceID, resourceName)
@@ -2567,27 +2569,54 @@ func CanonicalHandoffResourceRegistration(provider UnifiedResourceProvider, reso
 	case "agent", "docker-host":
 		refs = appendUniqueStrings(refs, node)
 		if resource, ok := findCanonicalResourceByReference(provider.GetByType(unifiedresources.ResourceTypeAgent), refs...); ok {
-			return canonicalAgentRegistration(resource)
+			return resource, normalizedType, true
 		}
 	case "vm":
 		if resource, ok := findCanonicalGuestResourceByReferences(provider, "vm", refs...); ok {
-			return canonicalGuestRegistration("vm", resource)
+			return resource, normalizedType, true
 		}
 	case "system-container", "lxc":
 		if resource, ok := findCanonicalGuestResourceByReferences(provider, "system-container", refs...); ok {
-			return canonicalGuestRegistration("system-container", resource)
+			return resource, normalizedType, true
 		}
 	case "app-container":
 		if resource, ok := findCanonicalAppContainerResourceByReferences(provider, refs...); ok {
-			return resolvedAppContainerRegistration(resource)
+			return resource, normalizedType, true
 		}
 	case "storage":
 		if resource, ok := findCanonicalResourceByReference(canonicalStoragePoolResources(provider), refs...); ok {
-			return canonicalStorageRegistration(resource)
+			return resource, normalizedType, true
 		}
 	}
 
-	return ResourceRegistration{}, false
+	return unifiedresources.Resource{}, normalizedType, false
+}
+
+// CanonicalHandoffResourceRegistration resolves a product-originated resource
+// handoff into the same governed registration shape used by explicit resource
+// reads. It intentionally fails closed when the resource cannot be found in the
+// unified provider, because invented registrations would bypass capability and
+// executor policy.
+func CanonicalHandoffResourceRegistration(provider UnifiedResourceProvider, resourceID, resourceName, resourceType, node string) (ResourceRegistration, bool) {
+	resource, normalizedType, ok := canonicalHandoffUnifiedResource(provider, resourceID, resourceName, resourceType, node)
+	if !ok {
+		return ResourceRegistration{}, false
+	}
+
+	switch normalizedType {
+	case "agent", "docker-host":
+		return canonicalAgentRegistration(resource)
+	case "vm":
+		return canonicalGuestRegistration("vm", resource)
+	case "system-container", "lxc":
+		return canonicalGuestRegistration("system-container", resource)
+	case "app-container":
+		return resolvedAppContainerRegistration(resource)
+	case "storage":
+		return canonicalStorageRegistration(resource)
+	default:
+		return ResourceRegistration{}, false
+	}
 }
 
 func findCanonicalResourceByReference(resources []unifiedresources.Resource, references ...string) (unifiedresources.Resource, bool) {

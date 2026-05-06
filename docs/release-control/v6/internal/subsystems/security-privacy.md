@@ -153,7 +153,7 @@ controls as normal product settings.
    behavior changes. Hosted commercial URL overrides must remain absolute
    HTTP(S) URLs, with plain HTTP limited to loopback development origins.
 8. Keep the Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits.
-9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, and any retained legacy managed-model compatibility text must use the shared resource-policy redaction helper before leaving the local trust boundary. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
+9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, handoff context, and any retained legacy managed-model compatibility text must use the shared resource-policy redaction helper before leaving the local trust boundary. Assistant handoffs may surface canonical policy handling guidance for product-originated resources, but that guidance is model-only context and must not become disclosure authority. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
 10. Keep the canonical and frontend-served privacy disclosures aligned with
     the actual AI transport boundary: self-managed installs must describe local
     providers as staying on the operator network, non-local providers as direct
@@ -207,9 +207,11 @@ informational and non-commercial so free/self-hosted operators are not shown
 paywall, trial, upgrade, or monitoring-limit prompts inside a privacy surface.
 That posture is now enforced at the AI provider boundary too: non-local model
 requests must be sanitized from the same resource-policy metadata that powers
-the Data Handling surface. Hosted quickstart traffic is retired from the Pulse
-runtime, so privacy governance must not describe a live public hosted-model
-proxy for normal self-hosted v6 installs.
+the Data Handling surface. Assistant finding handoffs may hydrate policy
+guidance for the handed-over resources from that same metadata, but it remains
+read-only model context and cannot authorize raw identifier disclosure. Hosted
+quickstart traffic is retired from the Pulse runtime, so privacy governance must
+not describe a live public hosted-model proxy for normal self-hosted v6 installs.
 That shared settings boundary now also has an explicit split of responsibilities:
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts` remains the
 canonical owner for customer-visible telemetry and auth/privacy runtime state,

@@ -524,6 +524,10 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist refreshed handoff action status")
 		}
 	}
+	s.mu.RLock()
+	handoffResourceProvider := s.unifiedResourceProvider
+	s.mu.RUnlock()
+	handoffContext = mergeHandoffResourcePolicyContext(handoffContext, handoffResources, handoffResourceProvider)
 	handoffContext = mergeHandoffResourceTimelineContext(handoffContext, handoffResources, s.actionAuditStore, time.Now())
 	handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)
 	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
@@ -841,6 +845,84 @@ func injectHandoffContextIntoLatestUserMessage(messages []Message, handoffContex
 	}
 }
 
+func mergeHandoffResourcePolicyContext(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
+	policyContext := buildHandoffResourcePolicyContext(handoffResources, provider)
+	switch {
+	case strings.TrimSpace(handoffContext) == "":
+		return policyContext
+	case policyContext == "":
+		return strings.TrimSpace(handoffContext)
+	default:
+		return strings.TrimSpace(handoffContext) + "\n\n" + policyContext
+	}
+}
+
+func buildHandoffResourcePolicyContext(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
+	resources := normalizeHandoffResources(handoffResources)
+	if len(resources) == 0 || provider == nil {
+		return ""
+	}
+
+	var b strings.Builder
+	seen := make(map[string]struct{}, len(resources))
+	count := 0
+	for _, handoffResource := range resources {
+		resource, ok := tools.CanonicalHandoffUnifiedResource(provider, handoffResource.ID, handoffResource.Name, handoffResource.Type, handoffResource.Node)
+		if !ok {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(string(resource.Type)) + "\x00" + strings.TrimSpace(resource.ID))
+		if key == "\x00" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		policy, aiSafeSummary := unifiedresources.CanonicalGovernanceMetadata(&resource)
+		if policy == nil && strings.TrimSpace(aiSafeSummary) == "" {
+			continue
+		}
+		if b.Len() == 0 {
+			b.WriteString("[Resource Policy Context]")
+		}
+		count++
+
+		label := unifiedresources.ResourcePolicyLabel(resource.Name, aiSafeSummary, policy)
+		if label == "" {
+			label = "resource"
+		}
+		resourceType := strings.TrimSpace(string(unifiedresources.ContractResourceType(resource)))
+		if resourceType == "" {
+			resourceType = strings.TrimSpace(string(resource.Type))
+		}
+
+		contextLabel := "Resource Policy"
+		if count > 1 {
+			contextLabel = fmt.Sprintf("Resource Policy %d", count)
+		}
+		appendHandoffContextLine(&b, contextLabel, label)
+		appendHandoffContextLine(&b, contextLabel+" Type", resourceType)
+		for _, line := range unifiedresources.ResourcePolicySummaryLines(policy) {
+			if line = strings.TrimSpace(line); line != "" {
+				if b.Len() > 0 {
+					b.WriteByte('\n')
+				}
+				b.WriteString(line)
+			}
+		}
+		if summary := strings.TrimSpace(aiSafeSummary); summary != "" && summary != label {
+			appendHandoffContextLine(&b, contextLabel+" AI-safe Summary", summary)
+		}
+	}
+	if count == 0 {
+		return ""
+	}
+	appendHandoffContextLine(&b, "Policy Boundary", "Resource policy is read-only data-handling context; local-only and redaction guidance must not be bypassed and does not grant approval or execution authority.")
+	return strings.TrimSpace(b.String())
+}
+
 func mergeHandoffActionContext(handoffContext string, handoffActions []HandoffAction) string {
 	actionContext := buildHandoffActionContext(handoffActions)
 	switch {
@@ -940,26 +1022,26 @@ func buildHandoffActionContext(handoffActions []HandoffAction) string {
 		if len(actions) > 1 {
 			label = fmt.Sprintf("Pending Action %d", idx+1)
 		}
-		appendHandoffActionLine(&b, label+" Finding ID", action.FindingID)
-		appendHandoffActionLine(&b, label+" Record ID", action.RecordID)
-		appendHandoffActionLine(&b, label+" Approval ID", action.ApprovalID)
-		appendHandoffActionLine(&b, label+" Approval Status", action.ApprovalStatus)
-		appendHandoffActionLine(&b, label+" Approval Requested At", action.ApprovalRequestedAt)
-		appendHandoffActionLine(&b, label+" Approval Expires At", action.ApprovalExpiresAt)
-		appendHandoffActionLine(&b, label+" Approval Decided At", action.ApprovalDecidedAt)
+		appendHandoffContextLine(&b, label+" Finding ID", action.FindingID)
+		appendHandoffContextLine(&b, label+" Record ID", action.RecordID)
+		appendHandoffContextLine(&b, label+" Approval ID", action.ApprovalID)
+		appendHandoffContextLine(&b, label+" Approval Status", action.ApprovalStatus)
+		appendHandoffContextLine(&b, label+" Approval Requested At", action.ApprovalRequestedAt)
+		appendHandoffContextLine(&b, label+" Approval Expires At", action.ApprovalExpiresAt)
+		appendHandoffContextLine(&b, label+" Approval Decided At", action.ApprovalDecidedAt)
 		if action.ApprovalConsumed {
-			appendHandoffActionLine(&b, label+" Approval Consumed", "true")
+			appendHandoffContextLine(&b, label+" Approval Consumed", "true")
 		}
-		appendHandoffActionLine(&b, label+" Fix ID", action.FixID)
-		appendHandoffActionLine(&b, label+" Proposed Fix", action.Description)
-		appendHandoffActionLine(&b, label+" Risk", action.RiskLevel)
+		appendHandoffContextLine(&b, label+" Fix ID", action.FixID)
+		appendHandoffContextLine(&b, label+" Proposed Fix", action.Description)
+		appendHandoffContextLine(&b, label+" Risk", action.RiskLevel)
 		if action.Destructive {
-			appendHandoffActionLine(&b, label+" Destructive", "true")
+			appendHandoffContextLine(&b, label+" Destructive", "true")
 		}
-		appendHandoffActionLine(&b, label+" Target Host", action.TargetHost)
-		appendHandoffActionLine(&b, label+" Target Resource", formatHandoffActionResource(action))
+		appendHandoffContextLine(&b, label+" Target Host", action.TargetHost)
+		appendHandoffContextLine(&b, label+" Target Resource", formatHandoffActionResource(action))
 	}
-	appendHandoffActionLine(&b, "Action Boundary", "Review and approval must stay in governed approval/remediation flows; this reference is not command authority and must not be used to infer raw command text.")
+	appendHandoffContextLine(&b, "Action Boundary", "Review and approval must stay in governed approval/remediation flows; this reference is not command authority and must not be used to infer raw command text.")
 	return strings.TrimSpace(b.String())
 }
 
@@ -1023,7 +1105,7 @@ func formatHandoffActionTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339)
 }
 
-func appendHandoffActionLine(b *strings.Builder, label, value string) {
+func appendHandoffContextLine(b *strings.Builder, label, value string) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return
