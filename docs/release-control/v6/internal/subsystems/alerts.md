@@ -58,6 +58,8 @@ operator-facing alert routing behavior for live runtime alerts.
 36. `internal/alerts/read_model.go`
 37. `internal/alerts/pmg.go`
 38. `internal/alerts/docker.go`
+39. `internal/alerts/pbs.go`
+40. `internal/alerts/storage.go`
 
 ## Shared Boundaries
 
@@ -235,6 +237,16 @@ owns Docker host connectivity, container state and health, container metric
 projection, service gap/update-state checks, image-update timing, and Docker
 tracking cleanup; future Docker alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
+PBS alert evaluation now lives in `internal/alerts/pbs.go`. That file owns PBS
+connectivity normalization, PBS metric projection, PBS metric cleanup, and PBS
+offline lifecycle handling; future PBS alert behavior should extend that
+resource checker owner rather than expanding the central Manager file.
+Storage alert evaluation now lives in `internal/alerts/storage.go`. That file
+owns storage connectivity handling, storage usage projection, ZFS pool/device
+health checks, and storage offline lifecycle handling; future storage alert
+behavior should extend that resource checker owner while shared storage-health
+assessment helpers remain package-level until host and storage health paths are
+separated cleanly.
 Commercial alert handoffs now follow the same shared navigation boundary.
 `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
 the canonical `ai_alerts` destination from the shared license/commercial

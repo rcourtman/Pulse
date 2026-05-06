@@ -30,6 +30,58 @@ func ptrTime(t time.Time) *time.Time {
 	return &tt
 }
 
+func TestPBSOfflineNormalizesStatusAndConnectionHealth(t *testing.T) {
+	tests := []struct {
+		name string
+		pbs  models.PBSInstance
+		want bool
+	}{
+		{
+			name: "status offline",
+			pbs:  models.PBSInstance{Status: " OFFLINE "},
+			want: true,
+		},
+		{
+			name: "connection health error",
+			pbs:  models.PBSInstance{Status: "online", ConnectionHealth: " Error "},
+			want: true,
+		},
+		{
+			name: "connection health failed",
+			pbs:  models.PBSInstance{Status: "online", ConnectionHealth: "FAILED"},
+			want: true,
+		},
+		{
+			name: "connection health unhealthy",
+			pbs:  models.PBSInstance{Status: "online", ConnectionHealth: " unhealthy "},
+			want: true,
+		},
+		{
+			name: "online and healthy",
+			pbs:  models.PBSInstance{Status: "online", ConnectionHealth: "healthy"},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isPBSOffline(tt.pbs); got != tt.want {
+				t.Fatalf("isPBSOffline() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatZFSDeviceResourceNamePreservesDevicePath(t *testing.T) {
+	got := formatZFSDeviceResourceName("local-zfs", "data", "/dev/sda4")
+	if got != "local-zfs (data, /dev/sda4)" {
+		t.Fatalf("formatZFSDeviceResourceName() = %q, want %q", got, "local-zfs (data, /dev/sda4)")
+	}
+	if strings.Contains(got, "//") {
+		t.Fatalf("expected formatted resource name not to contain doubled slash, got %q", got)
+	}
+}
+
 // newTestManager creates a Manager with an isolated temp directory for testing.
 // It uses os.Setenv with a mutex to safely handle parallel tests that call // t.Parallel()
 // before invoking this function (t.Setenv cannot be used after t.Parallel).
