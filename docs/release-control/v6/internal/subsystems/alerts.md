@@ -67,6 +67,7 @@ operator-facing alert routing behavior for live runtime alerts.
 45. `internal/alerts/metric_runtime.go`
 46. `internal/alerts/health_assessment.go`
 47. `internal/alerts/guest.go`
+48. `internal/alerts/config_runtime.go`
 
 ## Shared Boundaries
 
@@ -223,6 +224,12 @@ helpers now live under `internal/alerts/config/`; the parent `alerts` package
 may re-export aliases and wrappers for compatibility, but consumer packages
 must keep importing `internal/alerts` unless they are explicitly taking
 ownership of alert configuration internals.
+Alert configuration runtime now lives in `internal/alerts/config_runtime.go`.
+That file owns `UpdateConfig` normalization and activation-state migration,
+global disable cleanup, active alert reevaluation after threshold changes,
+threshold override cloning and merge behavior, and hysteresis defaults; future
+config-driven runtime behavior should extend that owner rather than expanding
+the central Manager file.
 Alert notification policy now lives in `internal/alerts/notification_policy.go`.
 That file owns dispatch suppression, flapping suppression, quiet-hours
 suppression, monitor-only notification suppression, cooldown decisions, and

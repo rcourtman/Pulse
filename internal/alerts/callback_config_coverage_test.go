@@ -442,6 +442,33 @@ func TestMigrateActivationState(t *testing.T) {
 	})
 }
 
+func TestUpdateConfigPreservesExistingActivationStateWhenOmitted(t *testing.T) {
+	m := newTestManager(t)
+	activatedAt := time.Now().Add(-time.Hour)
+
+	m.mu.Lock()
+	m.config.ActivationState = ActivationActive
+	m.config.ActivationTime = &activatedAt
+	cfg := m.config
+	m.mu.Unlock()
+
+	cfg.ActivationState = ""
+	cfg.ActivationTime = nil
+
+	m.UpdateConfig(cfg)
+
+	got := m.GetConfig()
+	if got.ActivationState != ActivationActive {
+		t.Fatalf("expected activation state %q, got %q", ActivationActive, got.ActivationState)
+	}
+	if got.ActivationTime == nil {
+		t.Fatal("expected activation time to be preserved")
+	}
+	if !got.ActivationTime.Equal(activatedAt) {
+		t.Fatalf("expected activation time %s, got %s", activatedAt, got.ActivationTime)
+	}
+}
+
 func TestValidateQuietHoursTimezone(t *testing.T) {
 	t.Run("invalid timezone disables quiet hours", func(t *testing.T) {
 		cfg := AlertConfig{
