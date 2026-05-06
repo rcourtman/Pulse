@@ -3,7 +3,9 @@ import { formatRelativeTime } from '@/utils/format';
 
 export interface AvailabilityProbePresentation {
   methodLabel: string;
+  targetLabel: string | null;
   resultLabel: string;
+  netIoLabel: string;
   rowLabel: string;
   detailLabel: string;
   toneClassName: string;
@@ -26,7 +28,7 @@ export const getAvailabilityProbeMethodLabel = (
   availability?: ResourceAvailabilityMeta | null,
 ): string => {
   const protocol = normalizeAvailabilityProtocol(availability?.protocol);
-  if (protocol === 'icmp') return 'Ping';
+  if (protocol === 'icmp') return 'ICMP';
   if (protocol === 'tcp') {
     return availability?.port ? `TCP ${availability.port}` : 'TCP';
   }
@@ -37,6 +39,21 @@ export const getAvailabilityProbeMethodLabel = (
   return protocol ? protocol.toUpperCase() : 'Probe';
 };
 
+export const getAvailabilityProbeTargetLabel = (
+  availability?: ResourceAvailabilityMeta | null,
+): string | null => {
+  const protocol = normalizeAvailabilityProtocol(availability?.protocol);
+  if (protocol === 'tcp') {
+    const port = availability?.port;
+    return typeof port === 'number' && Number.isFinite(port) && port > 0 ? String(port) : null;
+  }
+  if (protocol === 'http' || protocol === 'https') {
+    const path = (availability?.path ?? '').trim();
+    return path || null;
+  }
+  return null;
+};
+
 const getAvailabilityProbeFailureLabel = (availability: ResourceAvailabilityMeta): string => {
   const lastError = (availability.lastError ?? '').trim();
   const normalizedError = lastError.toLowerCase();
@@ -45,7 +62,7 @@ const getAvailabilityProbeFailureLabel = (availability: ResourceAvailabilityMeta
   }
   const httpStatus = lastError.match(/\b([45]\d{2})\b/);
   if (httpStatus) {
-    return `HTTP ${httpStatus[1]}`;
+    return httpStatus[1];
   }
   return 'failed';
 };
@@ -112,7 +129,9 @@ export const getAvailabilityProbePresentation = (
   }
 
   const methodLabel = getAvailabilityProbeMethodLabel(availability);
+  const targetLabel = getAvailabilityProbeTargetLabel(availability);
   const resultLabel = getAvailabilityProbeResultLabel(resource, availability);
+  const netIoLabel = targetLabel ? `${targetLabel}: ${resultLabel}` : resultLabel;
   const checked = formatRelativeTime(availability.lastChecked);
   const failures = getFailureCountLabel(availability);
   const detailParts = [`${methodLabel} - ${resultLabel}`];
@@ -124,13 +143,13 @@ export const getAvailabilityProbePresentation = (
   }
   if (availability.lastError) detailParts.push(availability.lastError);
 
-  const rowLabel = checked
-    ? `${methodLabel} - ${resultLabel} - checked ${checked}`
-    : `${methodLabel} - ${resultLabel}`;
+  const rowLabel = checked ? `${netIoLabel} - checked ${checked}` : netIoLabel;
 
   return {
     methodLabel,
+    targetLabel,
     resultLabel,
+    netIoLabel,
     rowLabel,
     detailLabel: detailParts.join(' - '),
     toneClassName: getAvailabilityProbeToneClassName(resource, availability),

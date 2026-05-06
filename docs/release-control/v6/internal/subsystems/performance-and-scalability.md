@@ -971,14 +971,18 @@ surplus width is redistributed across peer metric, source, uptime, and action
 columns instead of being dumped into the first column and wasting operator
 visible table density.
 That hot-path contract now includes policy badge rendering on resource rows.
+Policy-rich table rows must collapse to a single inline policy summary chip
+instead of stacking sensitivity and routing badges inside the resource column.
 Agentless availability evidence belongs on that same bounded row path.
 Infrastructure `network-endpoint` rows may replace otherwise empty host metric
-slots with one compact inline probe method/result readout. Recent check timing,
-latency history, and fuller failure context may stay in bounded tooltip or
-drawer detail, but the table must not duplicate the same probe evidence across
-the resource identity cell and metric cells. That text must derive from the
-existing resource payload and shared presentation helper instead of adding a
-per-row fetch, extra hydration pass, or unbounded badge stack.
+slots with one compact inline target/result readout, while the System column
+owns the protocol identity badge (`ICMP`, `TCP`, or `HTTP`). Recent check
+timing, latency history, and fuller failure context may stay in bounded
+tooltip or drawer detail, but the table must not duplicate the same probe
+protocol and result text across the resource identity cell and metric cells.
+That text must derive from the existing resource payload and shared
+presentation helper instead of adding a per-row fetch, extra hydration pass, or
+unbounded badge stack.
 The infrastructure summary hot path is now explicit shared ownership too:
 `InfrastructureSummary.tsx` stays a render shell,
 `useInfrastructureSummaryState.ts` owns chart polling and cache lifecycle, and
@@ -990,8 +994,10 @@ The summary API feeding that hot path must also normalize mixed-resolution
 history into equal-time summary buckets before it reaches the shell/runtime
 owners, so long-range cards do not bunch recent higher-resolution samples at
 the right edge.
-It now also includes the compact resource-facet summary chips rendered next
-to policy metadata, and those chips must stay within the same bounded
+It now also includes compact resource-facet summary chips rendered next to
+policy metadata, and table-row uses must set an explicit visible chip limit
+with overflow disclosure instead of allowing mock-rich resource rows to wrap
+an unbounded badge list. Those chips must stay within the same bounded
 windowing and mounted-row budget proved by
 `UnifiedResourceTable.performance.contract.test.tsx`.
 The same facet summary contract applies to the service-resource rows inside

@@ -258,9 +258,10 @@ describe('UnifiedResourceTable performance contract', () => {
       ));
 
       await waitFor(() => {
-        expect(getByText('TCP 1883:')).toBeInTheDocument();
+        expect(getByText('1883:')).toBeInTheDocument();
         expect(getByText('7 ms')).toBeInTheDocument();
       });
+      expect(queryByText('TCP 1883:')).toBeNull();
       expect(queryByText('TCP 1883 - 7 ms - checked 14s ago')).toBeNull();
       expect(getAllByText('7 ms')).toHaveLength(1);
     });
@@ -408,6 +409,35 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getByText('Proxmox adapter 1')).toBeInTheDocument();
       expect(queryByText('Capabilities 1')).toBeNull();
       expect(queryByText('Relationships 1')).toBeNull();
+    });
+
+    it('collapses resource facet badges behind an overflow chip when a table row sets a visible limit', async () => {
+      const { getByText, queryByText } = render(() => (
+        <ResourceFacetSummary
+          counts={{
+            recentChanges: 3,
+            recentChangeKinds: {
+              restart: 2,
+              config_update: 1,
+              metric_anomaly: 1,
+            },
+            recentChangeSourceTypes: {
+              platform_event: 1,
+              pulse_diff: 2,
+            },
+            recentChangeSourceAdapters: {
+              docker_adapter: 2,
+              proxmox_adapter: 1,
+            },
+          }}
+          recentChanges={[]}
+          maxVisibleBadges={1}
+        />
+      ));
+
+      expect(getByText('Timeline 3')).toBeInTheDocument();
+      expect(getByText('+7')).toBeInTheDocument();
+      expect(queryByText('Config update 1')).toBeNull();
     });
 
     it('formats sensor labels through the shared resource detail mapper helper', () => {
@@ -668,8 +698,10 @@ describe('UnifiedResourceTable performance contract', () => {
 
       expect(bodyQueries.queryByText('Internal')).not.toBeInTheDocument();
       expect(bodyQueries.queryByText('Cloud Summary')).not.toBeInTheDocument();
-      expect(bodyQueries.getByText('Sensitive')).toBeInTheDocument();
-      expect(bodyQueries.getByText('Local First')).toBeInTheDocument();
+      const policyBadge = bodyQueries.getByText('Sensitive');
+      expect(policyBadge).toBeInTheDocument();
+      expect(policyBadge.closest('[title]')?.getAttribute('title')).toContain('Local First');
+      expect(bodyQueries.queryByText('Local First')).not.toBeInTheDocument();
     });
 
     it('renders facet summary badges without changing the Profile S row budget', async () => {
@@ -730,8 +762,9 @@ describe('UnifiedResourceTable performance contract', () => {
       });
       await waitFor(() => {
         expect(getByText('Timeline 3')).toBeInTheDocument();
-        expect(getByText('Config update 1')).toBeInTheDocument();
+        expect(getByText('+7')).toBeInTheDocument();
       });
+      expect(container.querySelector('tbody')?.textContent).not.toContain('Config update 1');
       await waitFor(() => {
         expect(getBodyRowCount(container)).toBe(PROFILES.S);
       });

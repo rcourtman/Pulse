@@ -528,11 +528,14 @@ availability data is still `platformType=availability`, `sourceType=api`, and
 must not regress to a generic platform badge in infrastructure rows or drawers.
 Infrastructure row presentation must also consume that availability payload as
 operator evidence, not only as badge identity. `network-endpoint` rows should
-surface one visible probe readout, method plus latest latency or failure
-result, from either the top-level availability field or the live-state
-`platformData.availability` mirror. Recent check timing and fuller failure
-context may stay in tooltip or drawer detail, but the table row must not show
-the same probe evidence in both the resource identity cell and metric cell.
+surface one visible probe readout from either the top-level availability field
+or the live-state `platformData.availability` mirror: the System column uses
+the probe protocol as the compact identity badge (`ICMP`, `TCP`, or `HTTP`),
+while the metric cell shows only the target detail and latest latency or
+failure result, such as `6053: 11 ms`, `/status: 503`, `3 ms`, or `timed out`.
+Recent check timing and fuller failure context may stay in tooltip or drawer
+detail, but the table row must not duplicate the same probe protocol and
+result text across both identity and metric cells.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata
@@ -723,7 +726,7 @@ defaults. The shared resource graph must therefore see one coherent mock
 platform set regardless of whether a platform is snapshot-backed or
 supplemental-provider-backed.
 Agentless availability fixtures join that same graph-owned seed contract:
-mock UPS, MQTT, HTTP, and controller endpoints must project as
+mock UPS, MQTT, ESPHome, HTTP, and controller endpoints must project as
 `SourceAvailability` `network-endpoint` resources with real availability
 payloads, incidents, and source status rather than as generic host rows or
 settings-only sample data.
@@ -1599,10 +1602,14 @@ must preserve both canonical unified-resource semantics and the table
 performance proof route. The shared resource table and resource drawer now
 surface compact timeline summary chips, so facet presentation changes must
 continue to flow through the same governed resource-row surface rather than
-inventing a separate ad hoc summary path. Those row summaries now prefer
-canonical `facetCounts` on the resource object when available, so the backend
-list/read shapes remain the source of truth instead of forcing the frontend to
-infer totals only from loaded slices. The drawer now fetches those facets
+inventing a separate ad hoc summary path. Dense table rows must bound those
+chips with an explicit visible limit and overflow label, while policy-rich
+table rows collapse sensitivity/routing posture into a single inline summary
+chip so mock-rich canonical resources cannot stack badges inside the resource
+column. Those row summaries now prefer canonical `facetCounts` on the
+resource object when available, so the backend list/read shapes remain the
+source of truth instead of forcing the frontend to infer totals only from
+loaded slices. The drawer now fetches those facets
 through one backend bundle endpoint, and that shared facet bundle preserves
 the timeline slice plus recent-change counts so the overview card and history
 summary can report the loaded history instead of collapsing to the currently

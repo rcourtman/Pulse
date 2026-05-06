@@ -230,13 +230,26 @@ const getAvailabilitySystemIdentityBadge = (
 
   if (!isAvailabilityEndpoint) return null;
 
-  const protocol = trimString(availability?.protocol).toUpperCase();
+  const protocol = trimString(availability?.protocol);
+  const normalizedProtocol = protocol.toLowerCase();
+  const protocolLabel =
+    normalizedProtocol === 'icmp'
+      ? 'ICMP'
+      : normalizedProtocol === 'tcp'
+        ? 'TCP'
+        : normalizedProtocol === 'http' || normalizedProtocol === 'https'
+          ? normalizedProtocol.toUpperCase()
+          : protocol.toUpperCase() || 'Probe';
   const address = trimString(availability?.address);
-  const port = Number.isFinite(availability?.port) && availability?.port ? `:${availability.port}` : '';
+  const port =
+    Number.isFinite(availability?.port) && availability?.port ? `:${availability.port}` : '';
   return {
-    label: 'Availability',
+    label: protocolLabel,
     classes: `${baseBadge} ${availabilityBadgeClasses}`,
-    title: titleFromParts(protocol || 'Availability', address ? `${address}${port}` : undefined),
+    title: titleFromParts(
+      `${protocolLabel} availability probe`,
+      address ? `${address}${port}` : undefined,
+    ),
   };
 };
 

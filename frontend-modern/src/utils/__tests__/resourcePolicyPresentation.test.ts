@@ -64,7 +64,25 @@ describe('resourcePolicyPresentation utils', () => {
           redact: ['hostname'],
         },
       }).map((badge) => badge.label),
-    ).toEqual(['Sensitive', 'Local First']);
+    ).toEqual(['Sensitive']);
+    expect(
+      getResourcePolicyTableBadges({
+        sensitivity: 'sensitive',
+        routing: {
+          scope: 'local-first',
+          redact: ['hostname'],
+        },
+      })[0]?.title,
+    ).toContain('Local First');
+    expect(
+      getResourcePolicyTableBadges({
+        sensitivity: 'internal',
+        routing: {
+          scope: 'cloud-summary',
+          redact: ['hostname'],
+        },
+      }).map((badge) => badge.label),
+    ).toEqual(['Redacted']);
 
     expect(
       hasDefaultResourcePolicyPosture({

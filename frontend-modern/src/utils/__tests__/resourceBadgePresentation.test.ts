@@ -111,7 +111,7 @@ describe('resourceBadgePresentation', () => {
     expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('PVE');
   });
 
-  it('uses availability identity for agentless network endpoints', () => {
+  it('uses probe protocol identity for agentless network endpoints', () => {
     const resource = makeResource({
       type: 'network-endpoint',
       platformType: 'generic',
@@ -127,12 +127,34 @@ describe('resourceBadgePresentation', () => {
     });
 
     expect(getInfrastructureSystemIdentityBadges(resource).map((badge) => badge.label)).toEqual([
-      'Availability',
+      'TCP',
     ]);
     expect(getInfrastructureSystemIdentityBadges(resource)[0]?.title).toBe(
-      'TCP power-meter-01.lab.local:1883',
+      'TCP availability probe power-meter-01.lab.local:1883',
     );
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('Availability');
+    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('TCP');
+  });
+
+  it('uses ICMP identity for ping-only availability endpoints', () => {
+    const resource = makeResource({
+      type: 'network-endpoint',
+      platformType: 'generic',
+      sourceType: 'api',
+      platformData: {
+        sources: ['availability'],
+        availability: {
+          protocol: 'icmp',
+          address: 'ups-rack-a.lab.local',
+        },
+      },
+    });
+
+    expect(getInfrastructureSystemIdentityBadges(resource).map((badge) => badge.label)).toEqual([
+      'ICMP',
+    ]);
+    expect(getInfrastructureSystemIdentityBadges(resource)[0]?.title).toBe(
+      'ICMP availability probe ups-rack-a.lab.local',
+    );
   });
 
   it('falls back to reported OS identity for agent-only systems', () => {

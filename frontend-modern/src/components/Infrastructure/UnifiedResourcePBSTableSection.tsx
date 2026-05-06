@@ -202,7 +202,8 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                         <ResourceFacetSummary
                           recentChanges={resource.recentChanges}
                           counts={resource.facetCounts}
-                          class="mt-0.5"
+                          maxVisibleBadges={1}
+                          class="hidden max-w-[48%] shrink-0 flex-nowrap overflow-hidden lg:flex"
                         />
                       </div>
                     </TableCell>

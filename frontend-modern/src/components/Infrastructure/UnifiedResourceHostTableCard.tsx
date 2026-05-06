@@ -374,7 +374,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                             size="xs"
                           />
                           <div class="flex min-w-0 flex-1 flex-col">
-                            <div class="flex min-w-0 items-baseline gap-1">
+                            <div class="flex min-w-0 items-center gap-1">
                               <span
                                 class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
                                 title={displayName()}
@@ -386,23 +386,25 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                                   ({resource.name})
                                 </span>
                               </Show>
+                              <For each={policyBadges()}>
+                                {(badge) => (
+                                  <span
+                                    class={`${badge.className} max-w-[44%] shrink-0 overflow-hidden px-1`}
+                                    title={badge.title}
+                                  >
+                                    <span class="min-w-0 truncate">{badge.label}</span>
+                                  </span>
+                                )}
+                              </For>
+                              <Show when={policyBadges().length === 0}>
+                                <ResourceFacetSummary
+                                  recentChanges={resource.recentChanges}
+                                  counts={resource.facetCounts}
+                                  maxVisibleBadges={1}
+                                  class="hidden max-w-[48%] shrink-0 flex-nowrap overflow-hidden lg:flex"
+                                />
+                              </Show>
                             </div>
-                            <Show when={policyBadges().length > 0}>
-                              <div class="mt-0.5 flex flex-wrap gap-1">
-                                <For each={policyBadges()}>
-                                  {(badge) => (
-                                    <span class={badge.className} title={badge.title}>
-                                      {badge.label}
-                                    </span>
-                                  )}
-                                </For>
-                              </div>
-                            </Show>
-                            <ResourceFacetSummary
-                              recentChanges={resource.recentChanges}
-                              counts={resource.facetCounts}
-                              class="mt-0.5"
-                            />
                           </div>
                           <Show when={workloadsHref()}>
                             {(href) => (
@@ -531,14 +533,29 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                                   class="mx-auto inline-flex max-w-full min-w-0 items-baseline justify-center gap-1 whitespace-nowrap text-[11px] leading-tight"
                                   title={probe().detailLabel}
                                 >
-                                  <span class="min-w-0 truncate text-muted">
-                                    {probe().methodLabel}:
-                                  </span>
-                                  <span
-                                    class={`shrink-0 font-medium tabular-nums ${probe().toneClassName}`}
+                                  <Show
+                                    when={probe().targetLabel}
+                                    fallback={
+                                      <span
+                                        class={`font-medium tabular-nums ${probe().toneClassName}`}
+                                      >
+                                        {probe().resultLabel}
+                                      </span>
+                                    }
                                   >
-                                    {probe().resultLabel}
-                                  </span>
+                                    {(targetLabel) => (
+                                      <>
+                                        <span class="min-w-0 truncate text-muted">
+                                          {targetLabel()}:
+                                        </span>
+                                        <span
+                                          class={`shrink-0 font-medium tabular-nums ${probe().toneClassName}`}
+                                        >
+                                          {probe().resultLabel}
+                                        </span>
+                                      </>
+                                    )}
+                                  </Show>
                                 </div>
                               )}
                             </Show>

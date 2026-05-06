@@ -95,6 +95,12 @@ const routingPresentation: Record<
   },
 };
 
+const redactionBadgePresentation: Pick<PolicyBadgePresentation, 'label' | 'title' | 'className'> = {
+  label: 'Redacted',
+  title: 'Resource identity fields are redacted before governed handling.',
+  className: `${badgeBaseClass} bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300`,
+};
+
 const redactionLabels: Record<ResourceRedactionHint, string> = {
   hostname: 'Hostname',
   'ip-address': 'IP Address',
@@ -111,19 +117,45 @@ export const getResourcePolicyBadges = (policy?: ResourcePolicy): PolicyBadgePre
 export const hasDefaultResourcePolicyPosture = (policy?: ResourcePolicy): boolean =>
   Boolean(
     policy &&
-      policy.sensitivity === 'internal' &&
-      policy.routing.scope === 'cloud-summary' &&
-      (policy.routing.redact?.length ?? 0) === 0,
+    policy.sensitivity === 'internal' &&
+    policy.routing.scope === 'cloud-summary' &&
+    (policy.routing.redact?.length ?? 0) === 0,
   );
 
-export const getResourcePolicyTableBadges = (policy?: ResourcePolicy): PolicyBadgePresentation[] => {
+export const getResourcePolicyTableBadges = (
+  policy?: ResourcePolicy,
+): PolicyBadgePresentation[] => {
   if (!policy) return [];
 
   if (hasDefaultResourcePolicyPosture(policy)) {
     return [];
   }
 
-  return getResourcePolicyBadges(policy);
+  const sensitivity = sensitivityPresentation[policy.sensitivity];
+  const routing = routingPresentation[policy.routing.scope];
+  const redactions = getResourcePolicyRedactionLabels(policy);
+  const hasNonDefaultSensitivity = policy.sensitivity !== 'internal';
+  const hasNonDefaultRouting = policy.routing.scope !== 'cloud-summary';
+  const primary = hasNonDefaultSensitivity
+    ? sensitivity
+    : hasNonDefaultRouting
+      ? routing
+      : redactionBadgePresentation;
+  const redactionTitle = redactions.length > 0 ? `Redacts ${redactions.join(', ')}.` : undefined;
+
+  return [
+    {
+      label: primary.label,
+      className: primary.className,
+      title: [
+        `${sensitivity.label}: ${sensitivity.title}`,
+        `${routing.label}: ${routing.title}`,
+        redactionTitle,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    },
+  ];
 };
 
 export const getResourceSensitivityLabel = (sensitivity?: ResourceSensitivity): string =>
@@ -133,7 +165,7 @@ export const getResourceRoutingScopeLabel = (scope?: ResourceRoutingScope): stri
   scope ? routingPresentation[scope].label : 'Unrouted';
 
 export const getResourceRedactionHintLabel = (hint?: ResourceRedactionHint): string =>
-  hint ? redactionLabels[hint] ?? hint : 'Unclassified';
+  hint ? (redactionLabels[hint] ?? hint) : 'Unclassified';
 
 export const getResourcePolicyRedactionLabels = (policy?: ResourcePolicy): string[] =>
   (policy?.routing.redact ?? []).map((hint) => getResourceRedactionHintLabel(hint));

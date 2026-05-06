@@ -19,6 +19,7 @@ export interface ResourceFacetSummaryProps {
   recentChanges?: readonly ResourceChange[] | null;
   counts?: ResourceFacetCounts | null;
   showTimeline?: boolean;
+  maxVisibleBadges?: number;
   class?: string;
   testId?: string;
 }
@@ -104,6 +105,23 @@ export const ResourceFacetSummary: Component<ResourceFacetSummaryProps> = (props
       showTimeline: props.showTimeline ?? true,
     }),
   );
+  const visibleBadgeLimit = createMemo(() => {
+    const limit = props.maxVisibleBadges;
+    return typeof limit === 'number' && Number.isFinite(limit) && limit >= 0
+      ? Math.floor(limit)
+      : null;
+  });
+  const visibleBadges = createMemo(() => {
+    const limit = visibleBadgeLimit();
+    return limit === null ? badges() : badges().slice(0, limit);
+  });
+  const hiddenBadges = createMemo(() => badges().slice(visibleBadges().length));
+  const hiddenBadgeCount = createMemo(() => hiddenBadges().length);
+  const hiddenBadgeTitle = createMemo(() =>
+    hiddenBadges()
+      .map((badge) => badge.title)
+      .join(', '),
+  );
 
   return (
     <Show when={badges().length > 0}>
@@ -111,13 +129,22 @@ export const ResourceFacetSummary: Component<ResourceFacetSummaryProps> = (props
         data-testid={props.testId ?? 'resource-facet-summary'}
         class={`flex flex-wrap gap-1 ${props.class ?? ''}`}
       >
-        <For each={badges()}>
+        <For each={visibleBadges()}>
           {(badge) => (
             <span class={badge.className} title={badge.title}>
               {badge.label}
             </span>
           )}
         </For>
+        <Show when={hiddenBadgeCount() > 0}>
+          <span
+            class={`${badgeBase} bg-surface-alt text-muted`}
+            aria-label={`Additional resource changes: ${hiddenBadgeTitle()}`}
+            title={hiddenBadgeTitle()}
+          >
+            +{hiddenBadgeCount()}
+          </span>
+        </Show>
       </div>
     </Show>
   );

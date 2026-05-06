@@ -27,8 +27,8 @@ const makeAvailabilityResource = (overrides?: Partial<Resource>): Resource => ({
 });
 
 describe('availabilityProbePresentation', () => {
-  it('labels ICMP as ping so agentless rows explain the probe method plainly', () => {
-    expect(getAvailabilityProbeMethodLabel({ protocol: 'icmp' })).toBe('Ping');
+  it('labels ICMP by protocol so the system badge and probe detail agree', () => {
+    expect(getAvailabilityProbeMethodLabel({ protocol: 'icmp' })).toBe('ICMP');
   });
 
   it('builds compact row evidence for a successful TCP availability probe', () => {
@@ -38,8 +38,10 @@ describe('availabilityProbePresentation', () => {
 
     expect(presentation).toMatchObject({
       methodLabel: 'TCP 1883',
+      targetLabel: '1883',
       resultLabel: '7 ms',
-      rowLabel: 'TCP 1883 - 7 ms - checked 14s ago',
+      netIoLabel: '1883: 7 ms',
+      rowLabel: '1883: 7 ms - checked 14s ago',
     });
     expect(presentation?.detailLabel).toContain('TCP 1883 - 7 ms');
     expect(presentation?.toneClassName).toContain('emerald');
@@ -66,8 +68,10 @@ describe('availabilityProbePresentation', () => {
 
     expect(presentation).toMatchObject({
       methodLabel: 'TCP 6053',
+      targetLabel: '6053',
       resultLabel: '11 ms',
-      rowLabel: 'TCP 6053 - 11 ms - checked 5s ago',
+      netIoLabel: '6053: 11 ms',
+      rowLabel: '6053: 11 ms - checked 5s ago',
     });
   });
 
@@ -90,12 +94,43 @@ describe('availabilityProbePresentation', () => {
     );
 
     expect(presentation).toMatchObject({
-      methodLabel: 'Ping',
+      methodLabel: 'ICMP',
+      targetLabel: null,
       resultLabel: 'timed out',
-      rowLabel: 'Ping - timed out - checked 11s ago',
+      netIoLabel: 'timed out',
+      rowLabel: 'timed out - checked 11s ago',
     });
     expect(presentation?.detailLabel).toContain('3/2 failures');
     expect(presentation?.detailLabel).toContain('icmp probe timed out');
     expect(presentation?.toneClassName).toContain('red');
+  });
+
+  it('uses the HTTP path as the network evidence target without repeating the protocol', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-05-06T13:00:20Z').getTime());
+
+    const presentation = getAvailabilityProbePresentation(
+      makeAvailabilityResource({
+        status: 'degraded',
+        availability: {
+          protocol: 'http',
+          path: '/status',
+          available: false,
+          lastChecked: '2026-05-06T13:00:02Z',
+          consecutiveFailures: 1,
+          failureThreshold: 2,
+          lastError: 'http probe returned 503 Service Unavailable',
+        },
+      }),
+    );
+
+    expect(presentation).toMatchObject({
+      methodLabel: 'HTTP /status',
+      targetLabel: '/status',
+      resultLabel: '503',
+      netIoLabel: '/status: 503',
+      rowLabel: '/status: 503 - checked 18s ago',
+    });
+    expect(presentation?.detailLabel).toContain('HTTP /status - 503');
+    expect(presentation?.detailLabel).toContain('http probe returned 503 Service Unavailable');
   });
 });
