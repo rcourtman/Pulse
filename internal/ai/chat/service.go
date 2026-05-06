@@ -471,6 +471,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("message_count", len(messages)).
 		Msg("[ChatService] Got messages, calling agentic loop")
 
+	injectHandoffContextIntoLatestUserMessage(messages, req.HandoffContext)
+
 	// Determine which model/loop to use for this request.
 	selectedModel := ""
 	configuredModel := ""
@@ -761,6 +763,26 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	streamCallback(StreamEvent{Type: "done", Data: doneData})
 
 	return nil
+}
+
+func injectHandoffContextIntoLatestUserMessage(messages []Message, handoffContext string) {
+	contextText := strings.TrimSpace(handoffContext)
+	if contextText == "" || len(messages) == 0 {
+		return
+	}
+
+	for idx := len(messages) - 1; idx >= 0; idx-- {
+		if messages[idx].Role != "user" {
+			continue
+		}
+		userText := strings.TrimSpace(messages[idx].Content)
+		if userText == "" {
+			messages[idx].Content = contextText
+			return
+		}
+		messages[idx].Content = contextText + "\n\n---\nUser message: " + userText
+		return
+	}
 }
 
 // PatrolRequest represents a patrol execution request within the chat service

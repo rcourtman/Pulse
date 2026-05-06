@@ -94,6 +94,75 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	var capturedMessages []providers.Message
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			capturedMessages = append([]providers.Message(nil), req.Messages...)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "noted"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	svc := &Service{
+		cfg:         &config.AIConfig{ChatModel: "openai:test"},
+		sessions:    store,
+		executor:    executor,
+		agenticLoop: loop,
+		provider:    provider,
+		started:     true,
+	}
+
+	req := ExecuteRequest{
+		SessionID:      "sess-handoff",
+		Prompt:         "What happened?",
+		HandoffContext: "[Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup.",
+	}
+	if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	stored, err := store.GetMessages("sess-handoff")
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	if len(stored) == 0 {
+		t.Fatal("expected stored messages")
+	}
+	if stored[0].Content != "What happened?" {
+		t.Fatalf("stored user message = %q, want clean prompt", stored[0].Content)
+	}
+	if strings.Contains(stored[0].Content, "[Finding Context]") {
+		t.Fatalf("stored user message should not include handoff context: %q", stored[0].Content)
+	}
+
+	if len(capturedMessages) == 0 {
+		t.Fatal("expected provider messages")
+	}
+	modelUserContent := capturedMessages[len(capturedMessages)-1].Content
+	if !strings.Contains(modelUserContent, "[Finding Context]") {
+		t.Fatalf("model user content missing handoff context: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "User message: What happened?") {
+		t.Fatalf("model user content missing clean user message: %q", modelUserContent)
+	}
+}
+
 func TestService_ExecuteStream_PrefetchMentionsAndOverrideModel(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)

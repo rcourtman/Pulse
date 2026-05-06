@@ -116,6 +116,41 @@ func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T)
 	}
 }
 
+func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
+	handlerSource, err := os.ReadFile(filepath.Clean("ai_handler.go"))
+	if err != nil {
+		t.Fatalf("read ai_handler.go: %v", err)
+	}
+	chatServiceSource, err := os.ReadFile(filepath.Clean("../ai/chat/service.go"))
+	if err != nil {
+		t.Fatalf("read chat service: %v", err)
+	}
+
+	handlerText := string(handlerSource)
+	for _, required := range []string{
+		"handoffContext = buildUnifiedFindingChatContext(f)",
+		"Prompt:         req.Prompt",
+		"HandoffContext: handoffContext",
+	} {
+		if !strings.Contains(handlerText, required) {
+			t.Fatalf("ai_handler.go must preserve model-only finding handoff contract: missing %q", required)
+		}
+	}
+	if strings.Contains(handlerText, "prompt = findingCtx +") {
+		t.Fatal("ai_handler.go must not prepend finding context into the persisted prompt")
+	}
+
+	chatServiceText := string(chatServiceSource)
+	for _, required := range []string{
+		"injectHandoffContextIntoLatestUserMessage(messages, req.HandoffContext)",
+		"User message: ",
+	} {
+		if !strings.Contains(chatServiceText, required) {
+			t.Fatalf("chat service must inject handoff context into model-only turn: missing %q", required)
+		}
+	}
+}
+
 func TestContract_ProxmoxSetupScriptUsesPrivilegeSeparatedTokenACLs(t *testing.T) {
 	storagePerms := `
 pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin

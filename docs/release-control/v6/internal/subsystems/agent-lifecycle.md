@@ -356,7 +356,10 @@ profile and assignment columns, but embedded table framing must route through
    command policy, or fleet-control authority. Assistant chat enrichment from
    `finding_id` follows the same rule: lifecycle-owned command execution and
    agent auto-approval policy stay canonical in the agent/runtime owners, not
-   in Patrol investigation-record prompt text.
+   in Patrol investigation-record prompt text. Model-only Assistant handoff
+   context for a Patrol finding is also not agent lifecycle state and must not
+   be used as enrollment evidence, command-websocket identity, or installer
+   authority.
    The same isolation rule applies to CSRF token-store behavior in
    `internal/api/csrf_store.go`: lifecycle-adjacent browser flows may rely on
    the shared API/security layer to keep parallel replacement-token retries

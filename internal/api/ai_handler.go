@@ -1074,14 +1074,15 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Augment prompt with finding context when discussing a specific finding
-	prompt := req.Prompt
+	// Build model-only finding context when discussing a specific finding. The
+	// chat service injects this into the current model turn without persisting it
+	// as the user's authored prompt, so conversation history stays readable.
+	handoffContext := ""
 	if req.FindingID != "" {
 		store := h.GetUnifiedStoreForOrg(GetOrgID(ctx))
 		if store != nil {
 			if f := store.Get(req.FindingID); f != nil {
-				findingCtx := buildUnifiedFindingChatContext(f)
-				prompt = findingCtx + "\n\n---\nUser message: " + prompt
+				handoffContext = buildUnifiedFindingChatContext(f)
 			}
 		}
 	}
@@ -1089,11 +1090,12 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// Stream from AI chat service
 	serviceSentDone := false
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
-		Prompt:         prompt,
+		Prompt:         req.Prompt,
 		SessionID:      req.SessionID,
 		Model:          req.Model,
 		Mentions:       chatMentions,
 		FindingID:      req.FindingID,
+		HandoffContext: handoffContext,
 		AutonomousMode: req.AutonomousMode,
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
