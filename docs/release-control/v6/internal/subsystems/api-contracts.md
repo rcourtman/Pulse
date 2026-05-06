@@ -411,6 +411,11 @@ the canonical monitored-system blocked payload.
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the shared `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx` card, so the AI summary page renders the governed policy-posture counts while the resource drawer stays on per-resource policy lines instead of carrying duplicate posture UI loops
    and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so recent-change, learned-correlation, and policy-coverage summary text stays derived from the canonical AI payload in one place instead of as hook-local count and pluralization logic
+   and that same Patrol investigation-context owner, so visible Assistant
+   drawer handoffs may include live pending-approval metadata only as safe
+   operator context: approval ID, status, risk, requested/expiry timestamps,
+   and target label are allowed, while approval command payloads stay inside
+   governed approval/remediation surfaces
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
@@ -2950,7 +2955,10 @@ step, and operator-decision framing plus approval/proposed-fix posture without
 raw command text. Patrol's frontend Assistant drawer briefing must use that same
 operator frame for visible handoffs from findings, while the downstream chat
 service hydrates live resource state, timeline, and action audit context around
-that same handoff.
+that same handoff. Frontend Patrol handoff helpers may consume current pending
+approval list payloads only as safe metadata for that visible briefing: approval
+ID, status, risk, request/expiry timestamps, and target label are allowed, while
+approval command text remains inside the governed approval/remediation surface.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

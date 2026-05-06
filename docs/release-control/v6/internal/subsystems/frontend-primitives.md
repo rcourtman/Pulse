@@ -816,6 +816,10 @@ frontend primitive boundary.
     Patrol finding handoffs should still provide that briefing from current
     finding facts when a durable Patrol investigation record is not attached
     yet, rather than opening the shared drawer as empty generic chat.
+    When the feature helper adds live approval state to the generic drawer
+    briefing, it may pass only safe approval metadata into
+    `AIChatContextBriefing`; raw approval commands remain owned by the governed
+    approval/remediation panels.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like

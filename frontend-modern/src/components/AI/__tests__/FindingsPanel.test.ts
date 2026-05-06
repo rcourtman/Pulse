@@ -47,6 +47,8 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('buildPatrolAssistantFindingBriefing');
     expect(findingsPanelSource).toContain('briefing,');
     expect(findingsPanelSource).toContain('investigationRecord: finding.investigationRecord');
+    expect(findingsPanelSource).toContain('pendingApproval: pendingApproval');
+    expect(findingsPanelSource).toContain('await aiIntelligenceStore.loadPendingApprovals()');
   });
 });
 

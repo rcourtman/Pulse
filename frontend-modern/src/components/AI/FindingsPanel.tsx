@@ -417,10 +417,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     setEditingNoteId(null);
   };
 
-  const handleDiscussWithAssistant = (finding: UnifiedFinding, e: Event) => {
+  const handleDiscussWithAssistant = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
+    await aiIntelligenceStore.loadPendingApprovals();
     const subject = getFindingSubjectPresentation(finding).label;
     const title = getFindingTitlePresentation(finding).label;
+    const pendingApproval = aiIntelligenceStore.patrolPendingApprovals.find(
+      (approval) => approval.toolId === 'investigation_fix' && approval.targetId === finding.id,
+    );
     const prompt = buildPatrolAssistantFindingPrompt({
       title,
       subject,
@@ -437,6 +441,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       regressionCount: finding.regressionCount,
       lastRegressionAt: finding.lastRegressionAt,
       remediationId: finding.remediationPlanId,
+      pendingApproval: pendingApproval
+        ? {
+            id: pendingApproval.id,
+            status: pendingApproval.status,
+            riskLevel: pendingApproval.riskLevel,
+            requestedAt: pendingApproval.requestedAt,
+            expiresAt: pendingApproval.expiresAt,
+            targetName: pendingApproval.targetName,
+          }
+        : undefined,
       investigationRecord: finding.investigationRecord,
     });
     aiChatStore.openWithPrompt(prompt, {

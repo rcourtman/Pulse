@@ -145,7 +145,11 @@ Patrol-specific presentation helpers.
    structured investigation record is not available yet, the same Patrol-owned
    helper must still brief the operator from current finding facts such as
    active status, severity, recurrence, and loop state instead of opening a
-   generic empty Assistant drawer. The assembled handoff must still pass
+   generic empty Assistant drawer. When a live pending Patrol approval exists
+   for that finding, the visible Assistant briefing may include only safe
+   approval metadata such as approval ID, pending status, risk, requested time,
+   expiry, and target label; it must not copy the approval command payload into
+   Assistant drawer prose. The assembled handoff must still pass
    through the Assistant runtime's
    resource-policy sanitizer before prompt injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or

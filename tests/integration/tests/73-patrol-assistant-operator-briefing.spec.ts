@@ -45,6 +45,37 @@ test.describe("Patrol Assistant operator briefing", () => {
   test("shows attention and operator-decision context in the Assistant drawer", async ({
     page,
   }) => {
+    const approvalRequestedAt = new Date(Date.now() - 60_000).toISOString();
+    const approvalExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+
+    await page.route("**/api/security/status", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          hasAuthentication: true,
+          hasHTTPS: true,
+          apiTokenConfigured: true,
+          exportProtected: true,
+          hideLocalLogin: false,
+          publicAccess: false,
+          requiresAuth: true,
+          ssoEnabled: false,
+          ssoProviders: [],
+          sessionCapabilities: {
+            assistantEnabled: true,
+            demoMode: false,
+          },
+          presentationPolicy: {
+            demoMode: false,
+            readOnly: false,
+            hideCommercial: false,
+            hideUpgrade: false,
+          },
+        }),
+      });
+    });
+
     await page.route("**/api/resources**", async (route) => {
       const requestUrl = new URL(route.request().url());
       if (requestUrl.pathname !== "/api/resources") {
@@ -334,7 +365,23 @@ test.describe("Patrol Assistant operator briefing", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ approvals: [] }),
+        body: JSON.stringify({
+          approvals: [
+            {
+              id: "approval-1",
+              toolId: "investigation_fix",
+              command: "systemctl restart workload.service",
+              targetType: "host",
+              targetId: "finding-operator-briefing",
+              targetName: "web-server",
+              context: "Restart the workload service",
+              riskLevel: "high",
+              status: "pending",
+              requestedAt: approvalRequestedAt,
+              expiresAt: approvalExpiresAt,
+            },
+          ],
+        }),
       });
     });
 
@@ -360,16 +407,16 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(assistantContext).toBeVisible();
     await expect(assistantContext).toContainText("Operator briefing attached");
     await expect(assistantContext).toContainText(
-      "Attention: active critical finding; regressed 2 times; last regression 2026-05-06T12:06:00Z; loop awaiting approval; approval approval-1; destructive proposed fix; fix queued for governed review",
+      "Attention: active critical finding; regressed 2 times; last regression 2026-05-06T12:06:00Z; loop awaiting approval; approval approval-1; live approval pending; destructive proposed fix; fix queued for governed review",
     );
     await expect(assistantContext).toContainText(
-      "Decision: review governed approval approval-1 before execution; proposed fix fix-1; risk medium; destructive true",
+      `Decision: review live governed approval approval-1 before execution; approval pending; target web-server; expires ${approvalExpiresAt}; requested ${approvalRequestedAt}; proposed fix fix-1; risk high; destructive true`,
     );
     await expect(assistantContext).toContainText(
       "Command details stay in approval context; destructive actions require governed approval.",
     );
     await expect(
-      page.getByText("systemctl restart workload.service"),
+      assistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });

@@ -158,6 +158,9 @@ describe('patrolInvestigationContextModel', () => {
   });
 
   it('builds a drawer briefing for Assistant handoff without exposing raw commands', () => {
+    const approvalRequestedAt = new Date(Date.now() - 60_000).toISOString();
+    const approvalExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+
     const briefing = buildPatrolAssistantFindingBriefing({
       title: 'High CPU usage',
       subject: 'web-server',
@@ -168,6 +171,14 @@ describe('patrolInvestigationContextModel', () => {
       regressionCount: 2,
       lastRegressionAt: '2026-05-06T12:06:00Z',
       remediationId: 'remediation-1',
+      pendingApproval: {
+        id: 'approval-1',
+        status: 'pending',
+        riskLevel: 'high',
+        requestedAt: approvalRequestedAt,
+        expiresAt: approvalExpiresAt,
+        targetName: 'web-server',
+      },
       investigationRecord: {
         id: 'record-1',
         finding_id: 'finding-1',
@@ -199,10 +210,10 @@ describe('patrolInvestigationContextModel', () => {
       subject: 'High CPU usage on web-server',
       statusLabel: 'Completed · Fix Queued · High confidence',
       detailLines: [
-        'Attention: active critical finding; regressed 2 times; last regression 2026-05-06T12:06:00Z; loop awaiting approval; approval approval-1; destructive proposed fix; fix queued for governed review',
+        'Attention: active critical finding; regressed 2 times; last regression 2026-05-06T12:06:00Z; loop awaiting approval; approval approval-1; live approval pending; destructive proposed fix; fix queued for governed review',
         'Backup job saturated CPU.',
         'Approve a controlled restart after the backup completes.',
-        'Decision: review governed approval approval-1 before execution; proposed fix fix-1; risk medium; destructive true',
+        `Decision: review live governed approval approval-1 before execution; approval pending; target web-server; expires ${approvalExpiresAt}; requested ${approvalRequestedAt}; proposed fix fix-1; risk high; destructive true`,
       ],
       evidence: ['CPU stayed above 95% for 10 minutes', 'Verified: CPU returned below 50%'],
       actionLabel: 'Restart the workload service',

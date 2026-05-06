@@ -47,6 +47,15 @@ export interface PatrolAssistantFindingPromptInput {
   investigationRecord?: InvestigationRecord | null;
 }
 
+export interface PatrolAssistantApprovalBriefingInput {
+  id?: string | null;
+  status?: string | null;
+  riskLevel?: string | null;
+  requestedAt?: string | null;
+  expiresAt?: string | null;
+  targetName?: string | null;
+}
+
 export interface PatrolAssistantFindingBriefingInput {
   title: string;
   subject: string;
@@ -57,6 +66,7 @@ export interface PatrolAssistantFindingBriefingInput {
   regressionCount?: number | null;
   lastRegressionAt?: string | null;
   remediationId?: string | null;
+  pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
 }
 
@@ -248,6 +258,10 @@ function buildPatrolAssistantAttentionReason(
   if (approvalId) {
     parts.push(`approval ${approvalId}`);
   }
+  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
+  if (pendingApproval.status === 'pending') {
+    parts.push('live approval pending');
+  }
   if (record.proposedFix?.destructive) {
     parts.push('destructive proposed fix');
   }
@@ -291,9 +305,24 @@ function buildPatrolAssistantOperatorDecision(
 
   const record = input.investigationRecord;
   if (record) {
-    const approvalId = normalizeText(record.approval_id);
+    const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
+    const approvalId = pendingApproval.id || normalizeText(record.approval_id);
     if (approvalId) {
-      const parts = [`review governed approval ${approvalId} before execution`];
+      const parts = [
+        `review ${pendingApproval.status === 'pending' ? 'live ' : ''}governed approval ${approvalId} before execution`,
+      ];
+      if (pendingApproval.status) {
+        parts.push(`approval ${pendingApproval.status}`);
+      }
+      if (pendingApproval.targetName) {
+        parts.push(`target ${pendingApproval.targetName}`);
+      }
+      if (pendingApproval.expiresAt) {
+        parts.push(`expires ${pendingApproval.expiresAt}`);
+      }
+      if (pendingApproval.requestedAt) {
+        parts.push(`requested ${pendingApproval.requestedAt}`);
+      }
       if (record.proposed_fix) {
         const fixId = normalizeText(record.proposed_fix.id);
         if (fixId) {
@@ -301,7 +330,7 @@ function buildPatrolAssistantOperatorDecision(
         } else if (normalizeText(record.proposed_fix.description)) {
           parts.push('proposed fix recorded');
         }
-        const risk = normalizeText(record.proposed_fix.risk_level);
+        const risk = pendingApproval.riskLevel || normalizeText(record.proposed_fix.risk_level);
         if (risk) {
           parts.push(`risk ${risk}`);
         }
@@ -340,6 +369,21 @@ function buildPatrolAssistantOperatorDecision(
     }
   }
 
+  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
+  if (pendingApproval.id) {
+    const parts = [`Review live governed approval ${pendingApproval.id} before execution.`];
+    if (pendingApproval.status) {
+      parts.push(`Status: ${pendingApproval.status}.`);
+    }
+    if (pendingApproval.targetName) {
+      parts.push(`Target: ${pendingApproval.targetName}.`);
+    }
+    if (pendingApproval.expiresAt) {
+      parts.push(`Expires: ${pendingApproval.expiresAt}.`);
+    }
+    return parts.join(' ');
+  }
+
   const remediationId = normalizeText(input.remediationId);
   if (remediationId) {
     return `Review governed remediation ${remediationId} before execution.`;
@@ -373,6 +417,19 @@ function buildPatrolAssistantSafetyNote(
     return 'Destructive actions require governed approval.';
   }
   return undefined;
+}
+
+function normalizeApprovalBriefing(
+  approval?: PatrolAssistantApprovalBriefingInput | null,
+): Required<PatrolAssistantApprovalBriefingInput> {
+  return {
+    id: normalizeText(approval?.id),
+    status: normalizeText(approval?.status).toLowerCase(),
+    riskLevel: normalizeText(approval?.riskLevel).toLowerCase(),
+    requestedAt: normalizeText(approval?.requestedAt),
+    expiresAt: normalizeText(approval?.expiresAt),
+    targetName: normalizeText(approval?.targetName),
+  };
 }
 
 function normalizeCorrelationCount(correlations?: CorrelationsResponse | null): number {
