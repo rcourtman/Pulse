@@ -627,6 +627,8 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.Equal(t, "What happened?", reqArg.Prompt)
 			assert.Contains(t, reqArg.HandoffContext, "[Finding Context]")
 			assert.Contains(t, reqArg.HandoffContext, "[Investigation Record]")
+			assert.Contains(t, reqArg.HandoffContext, "Resource ID: vm-100")
+			assert.Contains(t, reqArg.HandoffContext, "Subject Resource ID: vm-100")
 			assert.Contains(t, reqArg.HandoffContext, "Conclusion: Backup job saturated CPU.")
 			assert.Contains(t, reqArg.HandoffContext, "Recommended Action: Approve a controlled service restart after backup completion.")
 			assert.Contains(t, reqArg.HandoffContext, "Evidence 1: metrics: CPU stayed above 95% for 10 minutes")
@@ -634,6 +636,12 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.Contains(t, reqArg.HandoffContext, "Proposed Fix Commands: 1 command recorded for approval context")
 			assert.NotContains(t, reqArg.HandoffContext, "User message: What happened?")
 			assert.NotContains(t, reqArg.HandoffContext, "systemctl restart workload.service")
+			assert.Equal(t, []chat.HandoffResource{{
+				ID:   "vm-100",
+				Name: "web-server",
+				Type: "vm",
+				Node: "pve-1",
+			}}, reqArg.HandoffResources)
 		})
 
 	body := `{"prompt":"What happened?","finding_id":"finding-123"}`

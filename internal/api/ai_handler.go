@@ -794,7 +794,8 @@ func buildUnifiedFindingChatContext(f *unified.UnifiedFinding) string {
 	appendChatContextLine(&b, "Title", f.Title)
 	appendChatContextLine(&b, "Severity", string(f.Severity))
 	appendChatContextLine(&b, "Category", string(f.Category))
-	appendChatContextLine(&b, "Resource", fmt.Sprintf("%s (%s)", f.ResourceName, f.ResourceType))
+	appendChatContextLine(&b, "Resource", formatChatResource(f.ResourceName, f.ResourceType))
+	appendChatContextLine(&b, "Resource ID", f.ResourceID)
 	appendChatContextLine(&b, "Description", f.Description)
 	appendChatContextLine(&b, "Recommendation", f.Recommendation)
 	appendChatContextLine(&b, "Evidence", f.Evidence)
@@ -821,6 +822,9 @@ func appendInvestigationRecordChatContext(b *strings.Builder, rec *aicontracts.I
 	appendChatContextLine(b, "Status", string(rec.Status))
 	appendChatContextLine(b, "Outcome", string(rec.Outcome))
 	appendChatContextLine(b, "Confidence", string(rec.Confidence))
+	appendChatContextLine(b, "Subject Resource", formatChatResource(rec.Subject.ResourceName, rec.Subject.ResourceType))
+	appendChatContextLine(b, "Subject Resource ID", rec.Subject.ResourceID)
+	appendChatContextLine(b, "Subject Node", rec.Subject.Node)
 	appendChatContextLine(b, "Conclusion", rec.Conclusion)
 	appendChatContextLine(b, "Recommended Action", rec.RecommendedAction)
 	appendChatContextLine(b, "Trigger", rec.Trigger.Title)
@@ -856,6 +860,62 @@ func appendInvestigationRecordChatContext(b *strings.Builder, rec *aicontracts.I
 		default:
 			appendChatContextLine(b, "Proposed Fix Commands", fmt.Sprintf("%d commands recorded for approval context", len(rec.ProposedFix.Commands)))
 		}
+	}
+}
+
+func buildUnifiedFindingHandoffResources(f *unified.UnifiedFinding) []chat.HandoffResource {
+	if f == nil {
+		return nil
+	}
+
+	resources := make([]chat.HandoffResource, 0, 2)
+	add := func(resource chat.HandoffResource) {
+		resource.ID = strings.TrimSpace(resource.ID)
+		resource.Name = strings.TrimSpace(resource.Name)
+		resource.Type = strings.TrimSpace(resource.Type)
+		resource.Node = strings.TrimSpace(resource.Node)
+		if resource.ID == "" && resource.Name == "" {
+			return
+		}
+		key := strings.ToLower(resource.Type + "\x00" + resource.ID + "\x00" + resource.Name + "\x00" + resource.Node)
+		for _, existing := range resources {
+			existingKey := strings.ToLower(strings.TrimSpace(existing.Type) + "\x00" + strings.TrimSpace(existing.ID) + "\x00" + strings.TrimSpace(existing.Name) + "\x00" + strings.TrimSpace(existing.Node))
+			if existingKey == key {
+				return
+			}
+		}
+		resources = append(resources, resource)
+	}
+
+	add(chat.HandoffResource{
+		ID:   f.ResourceID,
+		Name: f.ResourceName,
+		Type: f.ResourceType,
+		Node: f.Node,
+	})
+	if f.InvestigationRecord != nil {
+		add(chat.HandoffResource{
+			ID:   f.InvestigationRecord.Subject.ResourceID,
+			Name: f.InvestigationRecord.Subject.ResourceName,
+			Type: f.InvestigationRecord.Subject.ResourceType,
+			Node: f.InvestigationRecord.Subject.Node,
+		})
+	}
+	return resources
+}
+
+func formatChatResource(name, resourceType string) string {
+	name = strings.TrimSpace(name)
+	resourceType = strings.TrimSpace(resourceType)
+	switch {
+	case name != "" && resourceType != "":
+		return fmt.Sprintf("%s (%s)", name, resourceType)
+	case name != "":
+		return name
+	case resourceType != "":
+		return resourceType
+	default:
+		return ""
 	}
 }
 
@@ -1078,11 +1138,13 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// chat service injects this into the current model turn without persisting it
 	// as the user's authored prompt, so conversation history stays readable.
 	handoffContext := ""
+	var handoffResources []chat.HandoffResource
 	if req.FindingID != "" {
 		store := h.GetUnifiedStoreForOrg(GetOrgID(ctx))
 		if store != nil {
 			if f := store.Get(req.FindingID); f != nil {
 				handoffContext = buildUnifiedFindingChatContext(f)
+				handoffResources = buildUnifiedFindingHandoffResources(f)
 			}
 		}
 	}
@@ -1090,13 +1152,14 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// Stream from AI chat service
 	serviceSentDone := false
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
-		Prompt:         req.Prompt,
-		SessionID:      req.SessionID,
-		Model:          req.Model,
-		Mentions:       chatMentions,
-		FindingID:      req.FindingID,
-		HandoffContext: handoffContext,
-		AutonomousMode: req.AutonomousMode,
+		Prompt:           req.Prompt,
+		SessionID:        req.SessionID,
+		Model:            req.Model,
+		Mentions:         chatMentions,
+		FindingID:        req.FindingID,
+		HandoffContext:   handoffContext,
+		HandoffResources: handoffResources,
+		AutonomousMode:   req.AutonomousMode,
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
 			serviceSentDone = true

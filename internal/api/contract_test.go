@@ -129,12 +129,22 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read chat session store: %v", err)
 	}
+	chatTypesSource, err := os.ReadFile(filepath.Clean("../ai/chat/types.go"))
+	if err != nil {
+		t.Fatalf("read chat types: %v", err)
+	}
+	toolsQuerySource, err := os.ReadFile(filepath.Clean("../ai/tools/tools_query.go"))
+	if err != nil {
+		t.Fatalf("read AI tools query runtime: %v", err)
+	}
 
 	handlerText := string(handlerSource)
 	for _, required := range []string{
 		"handoffContext = buildUnifiedFindingChatContext(f)",
-		"Prompt:         req.Prompt",
-		"HandoffContext: handoffContext",
+		"handoffResources = buildUnifiedFindingHandoffResources(f)",
+		"Prompt:",
+		"HandoffContext:",
+		"HandoffResources: handoffResources",
 	} {
 		if !strings.Contains(handlerText, required) {
 			t.Fatalf("ai_handler.go must preserve model-only finding handoff contract: missing %q", required)
@@ -149,6 +159,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"handoffContext := strings.TrimSpace(req.HandoffContext)",
 		"sessions.SetModelHandoffContext(session.ID, handoffContext)",
 		"sessions.GetModelHandoffContext(session.ID)",
+		"s.hydrateHandoffResources(session.ID, req.HandoffResources, sessions, unifiedResourceProvider)",
 		"injectHandoffContextIntoLatestUserMessage(messages, handoffContext)",
 		"User message: ",
 	} {
@@ -166,6 +177,21 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		if !strings.Contains(chatSessionText, required) {
 			t.Fatalf("chat session store must persist model-only handoff metadata outside messages: missing %q", required)
 		}
+	}
+
+	chatTypesText := string(chatTypesSource)
+	for _, required := range []string{
+		"type HandoffResource struct",
+		"HandoffResources []HandoffResource",
+	} {
+		if !strings.Contains(chatTypesText, required) {
+			t.Fatalf("chat request must carry structured handoff resource scope outside messages: missing %q", required)
+		}
+	}
+
+	toolsQueryText := string(toolsQuerySource)
+	if !strings.Contains(toolsQueryText, "func CanonicalHandoffResourceRegistration(provider UnifiedResourceProvider") {
+		t.Fatal("AI tools runtime must own canonical handoff resource registration")
 	}
 }
 

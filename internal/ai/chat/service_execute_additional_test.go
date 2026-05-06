@@ -256,6 +256,68 @@ func TestService_ExecuteStream_ReusesModelHandoffContextAcrossFollowUps(t *testi
 	}
 }
 
+func TestService_ExecuteStream_HandoffResourceHydratesResolvedContext(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "vm:node1:101", VMID: 101, Name: "web-server", Node: "node1", Status: "running"},
+		},
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state)
+	vmResources := registry.ListByType(unifiedresources.ResourceTypeVM)
+	if len(vmResources) != 1 {
+		t.Fatalf("expected one canonical VM resource, got %d", len(vmResources))
+	}
+	vmResource := vmResources[0]
+	unifiedProvider := unifiedresources.NewUnifiedAIAdapter(registry)
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{UnifiedResourceProvider: unifiedProvider})
+	provider := &stubServiceProvider{}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	svc := &Service{
+		cfg:                     &config.AIConfig{ChatModel: "openai:test"},
+		sessions:                store,
+		executor:                executor,
+		agenticLoop:             loop,
+		provider:                provider,
+		unifiedResourceProvider: unifiedProvider,
+		started:                 true,
+	}
+
+	req := ExecuteRequest{
+		SessionID: "sess-handoff-resource",
+		Prompt:    "What should I do next?",
+		HandoffResources: []HandoffResource{{
+			ID:   vmResource.ID,
+			Name: "web-server",
+			Type: "vm",
+			Node: "node1",
+		}},
+	}
+	if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	resolved := store.GetResolvedContext("sess-handoff-resource")
+	info, found := resolved.GetResolvedResourceByAlias("web-server")
+	if !found {
+		t.Fatalf("expected handoff resource to be registered by alias")
+	}
+	if !resolved.WasRecentlyAccessed(info.GetResourceID(), time.Minute) {
+		t.Fatalf("expected handoff resource to be marked as explicitly accessed")
+	}
+	if _, err := resolved.ValidateResourceForAction(info.GetResourceID(), "restart"); err != nil {
+		t.Fatalf("expected handoff VM to allow governed restart action: %v", err)
+	}
+}
+
 func latestProviderUserContent(t *testing.T, messages []providers.Message) string {
 	t.Helper()
 

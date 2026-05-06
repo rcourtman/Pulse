@@ -2544,6 +2544,85 @@ func canonicalStorageRegistration(resource unifiedresources.Resource) (ResourceR
 	}, true
 }
 
+// CanonicalHandoffResourceRegistration resolves a product-originated resource
+// handoff into the same governed registration shape used by explicit resource
+// reads. It intentionally fails closed when the resource cannot be found in the
+// unified provider, because invented registrations would bypass capability and
+// executor policy.
+func CanonicalHandoffResourceRegistration(provider UnifiedResourceProvider, resourceID, resourceName, resourceType, node string) (ResourceRegistration, bool) {
+	if provider == nil {
+		return ResourceRegistration{}, false
+	}
+
+	refs := appendUniqueStrings(nil, resourceID, resourceName)
+	normalizedType := strings.TrimSpace(strings.ToLower(resourceType))
+	switch normalizedType {
+	case "node":
+		normalizedType = "agent"
+	case "physical-disk":
+		normalizedType = "physical_disk"
+	}
+
+	switch normalizedType {
+	case "agent", "docker-host":
+		refs = appendUniqueStrings(refs, node)
+		if resource, ok := findCanonicalResourceByReference(provider.GetByType(unifiedresources.ResourceTypeAgent), refs...); ok {
+			return canonicalAgentRegistration(resource)
+		}
+	case "vm":
+		if resource, ok := findCanonicalGuestResourceByReferences(provider, "vm", refs...); ok {
+			return canonicalGuestRegistration("vm", resource)
+		}
+	case "system-container", "lxc":
+		if resource, ok := findCanonicalGuestResourceByReferences(provider, "system-container", refs...); ok {
+			return canonicalGuestRegistration("system-container", resource)
+		}
+	case "app-container":
+		if resource, ok := findCanonicalAppContainerResourceByReferences(provider, refs...); ok {
+			return resolvedAppContainerRegistration(resource)
+		}
+	case "storage":
+		if resource, ok := findCanonicalResourceByReference(canonicalStoragePoolResources(provider), refs...); ok {
+			return canonicalStorageRegistration(resource)
+		}
+	}
+
+	return ResourceRegistration{}, false
+}
+
+func findCanonicalResourceByReference(resources []unifiedresources.Resource, references ...string) (unifiedresources.Resource, bool) {
+	for _, ref := range references {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		for _, resource := range resources {
+			if matchesCanonicalResourceReference(resource, ref, resourceDisplayName(resource), resource.Name) {
+				return resource, true
+			}
+		}
+	}
+	return unifiedresources.Resource{}, false
+}
+
+func findCanonicalGuestResourceByReferences(provider UnifiedResourceProvider, kind string, references ...string) (unifiedresources.Resource, bool) {
+	for _, ref := range references {
+		if resource, ok := findCanonicalGuestResource(provider, kind, ref); ok {
+			return resource, true
+		}
+	}
+	return unifiedresources.Resource{}, false
+}
+
+func findCanonicalAppContainerResourceByReferences(provider UnifiedResourceProvider, references ...string) (unifiedresources.Resource, bool) {
+	for _, ref := range references {
+		if resource, _, ok := findCanonicalAppContainerResource(provider, ref); ok {
+			return resource, true
+		}
+	}
+	return unifiedresources.Resource{}, false
+}
+
 func findCanonicalResourceByID(resources []unifiedresources.Resource, resourceID string) (unifiedresources.Resource, bool) {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" {

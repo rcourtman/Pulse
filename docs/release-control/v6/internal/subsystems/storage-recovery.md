@@ -413,8 +413,10 @@ bypass the API fail-closed execution gate.
     only as adjacent investigation context, not as a recovery support verdict
     or restore execution contract. If that guidance is passed as model-only
     Assistant handoff context instead of persisted prompt text, the boundary is
-    unchanged: it still cannot become backup freshness, restore eligibility, or
-    storage-local recovery authority.
+    unchanged. If the same handoff seeds Assistant resolved-resource scope, that
+    scope remains AI/runtime action-validation context only and still cannot
+    become backup freshness, restore eligibility, or storage-local recovery
+    authority.
     That same adjacent `internal/api/` boundary still carries Patrol-run
     execution identity. Storage and recovery may observe shared Patrol
     transport through `internal/api/chat_service_adapter.go`, but they must not

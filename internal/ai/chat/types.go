@@ -90,16 +90,27 @@ type StructuredMention struct {
 	Node string `json:"node,omitempty"` // Proxmox node or parent host
 }
 
+// HandoffResource represents an explicit product-originated resource handoff.
+// Unlike model-only handoff text, this is used only to seed session-scoped
+// resource validation from canonical unified-resource registrations.
+type HandoffResource struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+	Type string `json:"type,omitempty"`
+	Node string `json:"node,omitempty"`
+}
+
 // ExecuteRequest represents a chat execution request
 type ExecuteRequest struct {
-	Prompt         string              `json:"prompt"`
-	SessionID      string              `json:"session_id,omitempty"`
-	Model          string              `json:"model,omitempty"`
-	Mentions       []StructuredMention `json:"mentions,omitempty"`
-	FindingID      string              `json:"finding_id,omitempty"`      // Pre-populate finding context for "Discuss" flow
-	HandoffContext string              `json:"handoff_context,omitempty"` // Model-only context for scoped handoffs; not persisted as user-authored text.
-	MaxTurns       int                 `json:"max_turns,omitempty"`       // Override max agentic turns (0 = use default)
-	AutonomousMode *bool               `json:"autonomous_mode,omitempty"` // Per-request autonomous override (nil = use service default)
+	Prompt           string              `json:"prompt"`
+	SessionID        string              `json:"session_id,omitempty"`
+	Model            string              `json:"model,omitempty"`
+	Mentions         []StructuredMention `json:"mentions,omitempty"`
+	FindingID        string              `json:"finding_id,omitempty"`        // Pre-populate finding context for "Discuss" flow
+	HandoffContext   string              `json:"handoff_context,omitempty"`   // Model-only context for scoped handoffs; not persisted as user-authored text.
+	HandoffResources []HandoffResource   `json:"handoff_resources,omitempty"` // Product-originated resources to seed governed session validation.
+	MaxTurns         int                 `json:"max_turns,omitempty"`         // Override max agentic turns (0 = use default)
+	AutonomousMode   *bool               `json:"autonomous_mode,omitempty"`   // Per-request autonomous override (nil = use service default)
 }
 
 // QuestionAnswer represents a user's answer to a question

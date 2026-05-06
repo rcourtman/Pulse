@@ -507,6 +507,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		executor = baseExecutor.Clone()
 		executor.SetControlLevel(effectiveControlLevel)
 	}
+	s.hydrateHandoffResources(session.ID, req.HandoffResources, sessions, unifiedResourceProvider)
 
 	// Per-request autonomous mode override (used by investigation to avoid
 	// mutating shared service state from concurrent goroutines).
@@ -796,6 +797,45 @@ func injectHandoffContextIntoLatestUserMessage(messages []Message, handoffContex
 		}
 		messages[idx].Content = contextText + "\n\n---\nUser message: " + userText
 		return
+	}
+}
+
+func (s *Service) hydrateHandoffResources(sessionID string, handoffResources []HandoffResource, sessions *SessionStore, provider tools.UnifiedResourceProvider) {
+	if len(handoffResources) == 0 || sessions == nil || provider == nil {
+		return
+	}
+
+	resolvedCtx := sessions.GetResolvedContext(sessionID)
+	seen := make(map[string]struct{}, len(handoffResources))
+	for _, resource := range handoffResources {
+		key := strings.ToLower(strings.TrimSpace(resource.Type) + "\x00" + strings.TrimSpace(resource.ID) + "\x00" + strings.TrimSpace(resource.Name))
+		if key == "\x00\x00" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		reg, ok := tools.CanonicalHandoffResourceRegistration(provider, resource.ID, resource.Name, resource.Type, resource.Node)
+		if !ok {
+			log.Debug().
+				Str("session_id", sessionID).
+				Str("resource_id", resource.ID).
+				Str("resource_name", resource.Name).
+				Str("resource_type", resource.Type).
+				Msg("[ChatService] Skipped unresolved handoff resource")
+			continue
+		}
+		resolvedCtx.AddResolvedResource(reg)
+		if resolved, ok := resolvedCtx.GetResolvedResourceByAlias(reg.Name); ok {
+			resolvedCtx.MarkExplicitAccess(resolved.GetResourceID())
+			log.Debug().
+				Str("session_id", sessionID).
+				Str("resource_id", resolved.GetResourceID()).
+				Str("resource_name", reg.Name).
+				Msg("[ChatService] Hydrated handoff resource into resolved context")
+		}
 	}
 }
 
