@@ -15,6 +15,7 @@ import type {
   RemediationPlan,
   CircuitBreakerStatus,
   UnifiedFindingRecord,
+  InvestigationRecord,
   ApprovalRequest,
   ApprovalExecutionResult,
   ApprovalDecisionResult,
@@ -137,6 +138,7 @@ export interface UnifiedFinding {
     | 'fix_verification_unknown';
   lastInvestigatedAt?: string;
   investigationAttempts?: number;
+  investigationRecord?: InvestigationRecord;
   loopState?: string;
   lifecycle?: Array<{
     at: string;
@@ -313,6 +315,7 @@ export const aiIntelligenceStore = {
           investigationOutcome: validateInvestigationOutcome(item.investigation_outcome),
           lastInvestigatedAt: item.last_investigated_at || undefined,
           investigationAttempts: item.investigation_attempts || 0,
+          investigationRecord: item.investigation_record,
           loopState: item.loop_state || undefined,
           lifecycle: item.lifecycle || [],
           regressionCount: item.regression_count || 0,

@@ -55,6 +55,22 @@ func TestEmptyInvestigationSession_UsesCanonicalEmptyCollections(t *testing.T) {
 	}
 }
 
+func TestEmptyInvestigationRecord_UsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptyInvestigationRecord())
+	if err != nil {
+		t.Fatalf("marshal empty investigation record: %v", err)
+	}
+	if !strings.Contains(string(payload), `"evidence":[]`) {
+		t.Fatalf("expected empty investigation record to retain evidence array, got %s", payload)
+	}
+	if !strings.Contains(string(payload), `"verification":[]`) {
+		t.Fatalf("expected empty investigation record to retain verification array, got %s", payload)
+	}
+	if !strings.Contains(string(payload), `"tools_used":[]`) {
+		t.Fatalf("expected empty investigation record to retain tools_used array, got %s", payload)
+	}
+}
+
 func TestEmptyFix_UsesCanonicalEmptyCollections(t *testing.T) {
 	payload, err := json.Marshal(EmptyFix())
 	if err != nil {

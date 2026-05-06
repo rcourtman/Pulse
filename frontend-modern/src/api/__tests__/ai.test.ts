@@ -69,6 +69,17 @@ describe('AIAPI', () => {
           description: 'high',
           detected_at: '2026-03-01T00:00:00Z',
           alert_identifier: 'canonical-alert-1',
+          investigation_record: {
+            id: 'investigation-1',
+            finding_id: 'f1',
+            subject: { resource_id: 'r1' },
+            trigger: { detected_at: '2026-03-01T00:00:00Z' },
+            status: 'completed',
+            evidence: [],
+            verification: [],
+            tools_used: [],
+            started_at: '2026-03-01T00:00:00Z',
+          },
         },
       ],
       count: 1,
@@ -78,6 +89,10 @@ describe('AIAPI', () => {
 
     expect(result.findings[0]).toMatchObject({
       alertIdentifier: 'canonical-alert-1',
+      investigation_record: {
+        id: 'investigation-1',
+        finding_id: 'f1',
+      },
     });
   });
 

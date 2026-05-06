@@ -122,6 +122,114 @@ func (s InvestigationSession) NormalizeCollections() InvestigationSession {
 }
 
 // ---------------------------------------------------------------------------
+// Investigation record
+// ---------------------------------------------------------------------------
+
+// InvestigationRecordConfidence is the confidence level for a durable
+// investigation record.
+type InvestigationRecordConfidence string
+
+const (
+	InvestigationRecordConfidenceLow    InvestigationRecordConfidence = "low"
+	InvestigationRecordConfidenceMedium InvestigationRecordConfidence = "medium"
+	InvestigationRecordConfidenceHigh   InvestigationRecordConfidence = "high"
+)
+
+// InvestigationRecord is the durable product-facing summary of a Patrol
+// investigation. It is intentionally separate from InvestigationSession:
+// sessions are execution details, while records are the stable context that
+// Patrol, Assistant, unified findings, persistence, and audit surfaces can share.
+type InvestigationRecord struct {
+	ID                string                        `json:"id"`
+	FindingID         string                        `json:"finding_id"`
+	SessionID         string                        `json:"session_id,omitempty"`
+	Subject           InvestigationRecordSubject    `json:"subject"`
+	Trigger           InvestigationRecordTrigger    `json:"trigger"`
+	Status            InvestigationStatus           `json:"status"`
+	Outcome           InvestigationOutcome          `json:"outcome,omitempty"`
+	Confidence        InvestigationRecordConfidence `json:"confidence,omitempty"`
+	Evidence          []InvestigationRecordEvidence `json:"evidence"`
+	Conclusion        string                        `json:"conclusion,omitempty"`
+	RecommendedAction string                        `json:"recommended_action,omitempty"`
+	ProposedFix       *InvestigationRecordFix       `json:"proposed_fix,omitempty"`
+	Verification      []string                      `json:"verification"`
+	ToolsUsed         []string                      `json:"tools_used"`
+	StartedAt         time.Time                     `json:"started_at"`
+	CompletedAt       *time.Time                    `json:"completed_at,omitempty"`
+	ApprovalID        string                        `json:"approval_id,omitempty"`
+	Error             string                        `json:"error,omitempty"`
+}
+
+// InvestigationRecordSubject identifies the infrastructure object under
+// investigation.
+type InvestigationRecordSubject struct {
+	ResourceID   string `json:"resource_id"`
+	ResourceName string `json:"resource_name,omitempty"`
+	ResourceType string `json:"resource_type,omitempty"`
+	Node         string `json:"node,omitempty"`
+}
+
+// InvestigationRecordTrigger captures the Patrol finding that caused the
+// investigation to run.
+type InvestigationRecordTrigger struct {
+	FindingKey  string    `json:"finding_key,omitempty"`
+	Source      string    `json:"source,omitempty"`
+	Severity    string    `json:"severity,omitempty"`
+	Category    string    `json:"category,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	DetectedAt  time.Time `json:"detected_at"`
+	Description string    `json:"description,omitempty"`
+}
+
+// InvestigationRecordEvidence points to evidence Patrol used or generated
+// during investigation.
+type InvestigationRecordEvidence struct {
+	ID      string `json:"id,omitempty"`
+	Kind    string `json:"kind"`
+	Summary string `json:"summary,omitempty"`
+}
+
+// InvestigationRecordFix is the durable, product-facing version of a proposed
+// remediation fix.
+type InvestigationRecordFix struct {
+	ID          string   `json:"id"`
+	Description string   `json:"description"`
+	Commands    []string `json:"commands"`
+	RiskLevel   string   `json:"risk_level,omitempty"`
+	Destructive bool     `json:"destructive"`
+	TargetHost  string   `json:"target_host,omitempty"`
+	Rationale   string   `json:"rationale,omitempty"`
+}
+
+func EmptyInvestigationRecord() InvestigationRecord {
+	return InvestigationRecord{}.NormalizeCollections()
+}
+
+func (r InvestigationRecord) NormalizeCollections() InvestigationRecord {
+	if r.Evidence == nil {
+		r.Evidence = []InvestigationRecordEvidence{}
+	}
+	if r.Verification == nil {
+		r.Verification = []string{}
+	}
+	if r.ToolsUsed == nil {
+		r.ToolsUsed = []string{}
+	}
+	if r.ProposedFix != nil {
+		normalizedFix := r.ProposedFix.NormalizeCollections()
+		r.ProposedFix = &normalizedFix
+	}
+	return r
+}
+
+func (f InvestigationRecordFix) NormalizeCollections() InvestigationRecordFix {
+	if f.Commands == nil {
+		f.Commands = []string{}
+	}
+	return f
+}
+
+// ---------------------------------------------------------------------------
 // Fix
 // ---------------------------------------------------------------------------
 

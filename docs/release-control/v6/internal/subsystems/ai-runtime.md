@@ -41,6 +41,7 @@ runtime cost control, and shared AI transport surfaces.
 19. `frontend-modern/src/stores/aiRuntimeState.ts`
 20. `frontend-modern/src/stores/aiChat.ts`
 21. `docs/AI.md`
+22. `pkg/aicontracts/investigation.go`
 
 ## Shared Boundaries
 
@@ -167,6 +168,12 @@ runtime cost control, and shared AI transport surfaces.
     accept providers that omit `[DONE]` only after a terminal `finish_reason`,
     but it must not emit `done` or executable tool calls from partial tool-call
     builders when the stream closes before that terminal provider state.
+16. Keep Patrol investigations product-facing through the shared
+    `aicontracts.InvestigationRecord` contract. Patrol may keep
+    `InvestigationSession` as execution detail, but Assistant handoff,
+    unified findings, persistence, and approval/remediation context must use
+    the durable investigation record when they need operator-facing
+    investigation context.
 
 ## Current State
 

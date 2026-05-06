@@ -42,6 +42,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -2526,7 +2527,36 @@ func TestContract_FindingJSONSnapshot(t *testing.T) {
 		InvestigationOutcome:   "fix_queued",
 		LastInvestigatedAt:     &lastInvestigated,
 		InvestigationAttempts:  2,
-		LoopState:              "remediation_planned",
+		InvestigationRecord: &aicontracts.InvestigationRecord{
+			ID:        "investigation-1",
+			FindingID: "finding-1",
+			Subject: aicontracts.InvestigationRecordSubject{
+				ResourceID:   "vm-100",
+				ResourceName: "web-server",
+				ResourceType: "vm",
+				Node:         "pve-1",
+			},
+			Trigger: aicontracts.InvestigationRecordTrigger{
+				FindingKey:  "cpu-high",
+				Source:      "ai-analysis",
+				Severity:    "critical",
+				Category:    "performance",
+				Title:       "High CPU usage",
+				DetectedAt:  now,
+				Description: "CPU sustained above 95%",
+			},
+			Status:            aicontracts.InvestigationStatusCompleted,
+			Outcome:           aicontracts.OutcomeFixQueued,
+			Confidence:        aicontracts.InvestigationRecordConfidenceMedium,
+			Evidence:          []aicontracts.InvestigationRecordEvidence{{Kind: "finding_evidence", Summary: "cpu=96%"}},
+			Conclusion:        "CPU sustained above 95%",
+			RecommendedAction: "Investigate processes and load",
+			Verification:      []string{},
+			ToolsUsed:         []string{"ssh.exec"},
+			StartedAt:         now,
+			ApprovalID:        "approval-1",
+		},
+		LoopState: "remediation_planned",
 		Lifecycle: []ai.FindingLifecycleEvent{
 			{
 				At:      now,
@@ -2580,6 +2610,7 @@ func TestContract_FindingJSONSnapshot(t *testing.T) {
 		"investigation_outcome":"fix_queued",
 		"last_investigated_at":"2026-02-08T13:29:15Z",
 		"investigation_attempts":2,
+		"investigation_record":{"id":"investigation-1","finding_id":"finding-1","subject":{"resource_id":"vm-100","resource_name":"web-server","resource_type":"vm","node":"pve-1"},"trigger":{"finding_key":"cpu-high","source":"ai-analysis","severity":"critical","category":"performance","title":"High CPU usage","detected_at":"2026-02-08T13:14:15Z","description":"CPU sustained above 95%"},"status":"completed","outcome":"fix_queued","confidence":"medium","evidence":[{"kind":"finding_evidence","summary":"cpu=96%"}],"conclusion":"CPU sustained above 95%","recommended_action":"Investigate processes and load","verification":[],"tools_used":["ssh.exec"],"started_at":"2026-02-08T13:14:15Z","approval_id":"approval-1"},
 		"loop_state":"remediation_planned",
 		"lifecycle":[{"at":"2026-02-08T13:14:15Z","type":"state_change","message":"Moved to investigating","from":"detected","to":"investigating","metadata":{"from":"detected","to":"investigating"}}],
 		"regression_count":1,

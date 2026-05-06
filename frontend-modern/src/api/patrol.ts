@@ -5,6 +5,7 @@
 
 import { apiFetchJSON } from '@/utils/apiClient';
 import { arrayOrEmpty, promoteLegacyAlertIdentifier } from './responseUtils';
+import type { InvestigationRecord } from './ai';
 
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory =
@@ -46,6 +47,7 @@ export interface Finding {
   investigation_outcome?: InvestigationOutcome;
   last_investigated_at?: string;
   investigation_attempts: number;
+  investigation_record?: InvestigationRecord;
 }
 
 export type InvestigationStatus =

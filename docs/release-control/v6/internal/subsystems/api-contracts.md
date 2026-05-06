@@ -97,6 +97,10 @@ product API routes free of maintainer commercial analytics.
 63. `internal/api/availability_handlers.go`
 64. `frontend-modern/src/api/availabilityTargets.ts`
 65. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
+66. `pkg/aicontracts/investigation.go`
+67. `internal/api/ai_intelligence_handlers.go`
+68. `frontend-modern/src/api/ai.ts`
+69. `frontend-modern/src/api/patrol.ts`
 
 ## Shared Boundaries
 
@@ -268,7 +272,6 @@ product API routes free of maintainer commercial analytics.
 50. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 51. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 52. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
-
 The platform-connections API contract also owns inactive monitored-system
 candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
 test, add, and update payloads must serialize through the shared ledger client
@@ -737,6 +740,10 @@ the canonical monitored-system blocked payload.
    generic hosted AI quota, anonymous Community entitlement, trial CTA,
    account-backed activation support, or full-chat entitlement in normal
    self-hosted v6 GA UI
+   and the structured investigation-record contract, so unified findings may
+   expose `investigation_record` only through the shared
+   `aicontracts.InvestigationRecord` payload shape, with frontend API types
+   and backend contract tests updated in the same slice as any field change.
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the main Patrol page composition boundary, so once that governed

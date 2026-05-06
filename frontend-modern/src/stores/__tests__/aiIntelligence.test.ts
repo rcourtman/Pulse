@@ -61,6 +61,26 @@ describe('aiIntelligenceStore', () => {
           detected_at: '2026-03-01T00:00:00Z',
           last_seen_at: '2026-03-05T00:00:00Z',
           alertIdentifier: 'instance:node:100::metric/cpu',
+          investigation_record: {
+            id: 'investigation-1',
+            finding_id: 'finding-1',
+            subject: {
+              resource_id: 'instance:node:100',
+              resource_name: 'vm-100',
+              resource_type: 'vm',
+            },
+            trigger: {
+              detected_at: '2026-03-01T00:00:00Z',
+              title: 'CPU high',
+            },
+            status: 'completed',
+            outcome: 'fix_queued',
+            confidence: 'medium',
+            evidence: [],
+            verification: [],
+            tools_used: [],
+            started_at: '2026-03-05T00:00:00Z',
+          },
         },
       ],
       count: 1,
@@ -72,6 +92,10 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.findings[0]).toMatchObject({
       alertIdentifier: 'instance:node:100::metric/cpu',
       lastSeenAt: '2026-03-05T00:00:00Z',
+      investigationRecord: {
+        id: 'investigation-1',
+        finding_id: 'finding-1',
+      },
     });
   });
 

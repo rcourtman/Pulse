@@ -170,6 +170,10 @@ regression protection.
    already-authenticated request context or caller token and must not add
    monitor scans, persistence reads, or other broad hot-path work before the
    route-local handler owns the mutation.
+   Patrol investigation-record fan-out through shared router callbacks follows
+   the same bounded-work rule: the callback may copy the already-materialized
+   durable record into unified findings, but it must not add broad resource
+   scans, model calls, or persistence walks to protected request setup paths.
    Retiring self-hosted trial acquisition follows that same rule: removing
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather

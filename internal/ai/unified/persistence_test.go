@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 func TestUnifiedFindingJSONCanonicalOutput(t *testing.T) {
@@ -17,8 +19,15 @@ func TestUnifiedFindingJSONCanonicalOutput(t *testing.T) {
 		ResourceID:      "res-1",
 		Title:           "High CPU",
 		AlertIdentifier: "instance:node:100::metric/cpu",
-		DetectedAt:      time.Now(),
-		LastSeenAt:      time.Now(),
+		InvestigationRecord: &aicontracts.InvestigationRecord{
+			ID:        "investigation-1",
+			FindingID: "f1",
+			Status:    aicontracts.InvestigationStatusCompleted,
+			Evidence:  []aicontracts.InvestigationRecordEvidence{},
+			ToolsUsed: []string{},
+		},
+		DetectedAt: time.Now(),
+		LastSeenAt: time.Now(),
 	}
 
 	raw, err := json.Marshal(finding)
@@ -32,6 +41,9 @@ func TestUnifiedFindingJSONCanonicalOutput(t *testing.T) {
 	}
 	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
+	}
+	if _, ok := payload["investigation_record"]; !ok {
+		t.Fatalf("expected investigation_record in canonical payload, got %#v", payload)
 	}
 	if _, ok := payload["alert_id"]; ok {
 		t.Fatalf("did not expect legacy alert_id in canonical payload, got %#v", payload["alert_id"])

@@ -1234,6 +1234,19 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 		pushCb = p.pushNotifyCallback
 		p.mu.RUnlock()
 		if latest := p.findings.Get(f.ID); latest != nil {
+			var latestInvestigation *InvestigationSession
+			if orchestrator != nil {
+				latestInvestigation = orchestrator.GetInvestigationByFinding(latest.ID)
+			}
+			if record := BuildFindingInvestigationRecord(latest, latestInvestigation); record != nil {
+				if p.findings.UpdateInvestigationRecord(latest.ID, record) {
+					if refreshed := p.findings.Get(latest.ID); refreshed != nil {
+						latest = refreshed
+					} else {
+						latest.InvestigationRecord = record
+					}
+				}
+			}
 			if pushUnified != nil {
 				pushUnified(latest)
 			}
@@ -1247,12 +1260,10 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 				case string(InvestigationOutcomeFixQueued):
 					approvalID := ""
 					riskLevel := ""
-					if orchestrator != nil {
-						if inv := orchestrator.GetInvestigationByFinding(latest.ID); inv != nil {
-							approvalID = inv.ApprovalID
-							if inv.ProposedFix != nil {
-								riskLevel = inv.ProposedFix.RiskLevel
-							}
+					if latestInvestigation != nil {
+						approvalID = latestInvestigation.ApprovalID
+						if latestInvestigation.ProposedFix != nil {
+							riskLevel = latestInvestigation.ProposedFix.RiskLevel
 						}
 					}
 					if approvalID == "" {

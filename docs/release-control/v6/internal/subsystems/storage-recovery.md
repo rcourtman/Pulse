@@ -404,6 +404,11 @@ bypass the API fail-closed execution gate.
     shared settings helpers, and they must not treat vendor model IDs or
     quickstart upstream-model defaults as part of storage/recovery transport
     ownership or route behavior.
+    Structured Patrol investigation records follow that same adjacent-boundary
+    rule. Storage and recovery surfaces may consume the resource context in a
+    shared `investigation_record`, but they must not reinterpret that record as
+    recovery freshness, restore support, backup cadence, or storage-local
+    action authority.
     That same adjacent `internal/api/` boundary still carries Patrol-run
     execution identity. Storage and recovery may observe shared Patrol
     transport through `internal/api/chat_service_adapter.go`, but they must not

@@ -353,6 +353,60 @@ export class AIAPI {
 // Phase 7 Type Definitions
 // ============================================
 
+export interface InvestigationRecordSubject {
+  resource_id: string;
+  resource_name?: string;
+  resource_type?: string;
+  node?: string;
+}
+
+export interface InvestigationRecordTrigger {
+  finding_key?: string;
+  source?: string;
+  severity?: string;
+  category?: string;
+  title?: string;
+  detected_at: string;
+  description?: string;
+}
+
+export interface InvestigationRecordEvidence {
+  id?: string;
+  kind: string;
+  summary?: string;
+}
+
+export interface InvestigationRecordFix {
+  id: string;
+  description: string;
+  commands?: string[];
+  risk_level?: string;
+  destructive: boolean;
+  target_host?: string;
+  rationale?: string;
+}
+
+export interface InvestigationRecord {
+  id: string;
+  finding_id: string;
+  session_id?: string;
+  subject: InvestigationRecordSubject;
+  trigger: InvestigationRecordTrigger;
+  status: string;
+  outcome?: string;
+  confidence?: 'low' | 'medium' | 'high';
+  evidence: InvestigationRecordEvidence[];
+  conclusion?: string;
+  recommended_action?: string;
+  proposed_fix?: InvestigationRecordFix;
+  verification: string[];
+  tools_used: string[];
+  started_at: string;
+  completed_at?: string;
+  approval_id?: string;
+  error?: string;
+}
+
 export interface UnifiedFindingRecord {
   id: string;
   source: string;
@@ -384,6 +438,7 @@ export interface UnifiedFindingRecord {
   investigation_outcome?: string;
   last_investigated_at?: string;
   investigation_attempts?: number;
+  investigation_record?: InvestigationRecord;
   loop_state?: string;
   lifecycle?: Array<{
     at: string;

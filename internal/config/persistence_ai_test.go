@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 func TestPersistence_AIFindings(t *testing.T) {
@@ -25,6 +27,14 @@ func TestPersistence_AIFindings(t *testing.T) {
 		ID:          "id1",
 		Description: "analysis",
 		DetectedAt:  time.Now(),
+		InvestigationRecord: &aicontracts.InvestigationRecord{
+			ID:        "investigation-1",
+			FindingID: "id1",
+			Status:    aicontracts.InvestigationStatusCompleted,
+			Outcome:   aicontracts.OutcomeFixQueued,
+			Evidence:  []aicontracts.InvestigationRecordEvidence{},
+			ToolsUsed: []string{},
+		},
 	}
 	data.Findings["id1"] = record
 
@@ -36,6 +46,8 @@ func TestPersistence_AIFindings(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, loaded.Findings, 1)
 	assert.Equal(t, "analysis", loaded.Findings["id1"].Description)
+	require.NotNil(t, loaded.Findings["id1"].InvestigationRecord)
+	assert.Equal(t, "investigation-1", loaded.Findings["id1"].InvestigationRecord.ID)
 
 	// Test Corrupt file (Unmarshal error)
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai_findings.json"), []byte("{invalid"), 0644))
@@ -53,6 +65,13 @@ func TestAIFindingRecordJSONCanonicalOutput(t *testing.T) {
 		AlertIdentifier: "instance:node:100::metric/cpu",
 		DetectedAt:      time.Now(),
 		LastSeenAt:      time.Now(),
+		InvestigationRecord: &aicontracts.InvestigationRecord{
+			ID:        "investigation-1",
+			FindingID: "finding-1",
+			Status:    aicontracts.InvestigationStatusCompleted,
+			Evidence:  []aicontracts.InvestigationRecordEvidence{},
+			ToolsUsed: []string{},
+		},
 	}
 
 	raw, err := json.Marshal(record)
@@ -61,6 +80,7 @@ func TestAIFindingRecordJSONCanonicalOutput(t *testing.T) {
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(raw, &payload))
 	assert.Equal(t, "instance:node:100::metric/cpu", payload["alert_identifier"])
+	require.Contains(t, payload, "investigation_record")
 	_, hasLegacy := payload["alert_id"]
 	assert.False(t, hasLegacy)
 

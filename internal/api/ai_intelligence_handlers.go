@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1161,6 +1162,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 		InvestigationOutcome   string                                 `json:"investigation_outcome,omitempty"`
 		LastInvestigatedAt     *time.Time                             `json:"last_investigated_at,omitempty"`
 		InvestigationAttempts  int                                    `json:"investigation_attempts,omitempty"`
+		InvestigationRecord    *aicontracts.InvestigationRecord       `json:"investigation_record,omitempty"`
 		LoopState              string                                 `json:"loop_state,omitempty"`
 		Lifecycle              []unified.UnifiedFindingLifecycleEvent `json:"lifecycle"`
 		RegressionCount        int                                    `json:"regression_count,omitempty"`
@@ -1246,6 +1248,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			InvestigationOutcome:   f.InvestigationOutcome,
 			LastInvestigatedAt:     f.LastInvestigatedAt,
 			InvestigationAttempts:  f.InvestigationAttempts,
+			InvestigationRecord:    f.InvestigationRecord,
 			LoopState:              f.LoopState,
 			Lifecycle:              f.Lifecycle,
 			RegressionCount:        f.RegressionCount,

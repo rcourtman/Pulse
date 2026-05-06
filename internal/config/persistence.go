@@ -19,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -2178,6 +2179,8 @@ func decodeOptionalJSONBool(raw json.RawMessage) (bool, bool) {
 	return value, true
 }
 
+const aiFindingsDataVersion = 4
+
 // AIFindingsData represents persisted AI findings with metadata
 type AIFindingsData struct {
 	// Version for future migrations
@@ -2234,12 +2237,13 @@ type AIFindingRecord struct {
 	Suppressed      bool   `json:"suppressed"`
 
 	// Investigation fields - tracks autonomous AI investigation of findings
-	InvestigationSessionID string     `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string     `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int        `json:"investigation_attempts"`
-	LoopState              string     `json:"loop_state,omitempty"`
+	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string                           `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string                           `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time                       `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int                              `json:"investigation_attempts"`
+	InvestigationRecord    *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`
+	LoopState              string                           `json:"loop_state,omitempty"`
 	Lifecycle              []struct {
 		At       time.Time         `json:"at"`
 		Type     string            `json:"type"`
@@ -2296,7 +2300,7 @@ func (c *ConfigPersistence) SaveAIFindingsWithSuppression(findings map[string]*A
 	}
 
 	data := AIFindingsData{
-		Version:          3, // Bumped from 2: persisted suppression rules alongside findings
+		Version:          aiFindingsDataVersion, // v4 persists structured investigation records alongside findings.
 		LastSaved:        time.Now(),
 		Findings:         findings,
 		SuppressionRules: suppressionRules,
@@ -2332,7 +2336,7 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		if os.IsNotExist(err) {
 			// Return empty data if file doesn't exist
 			return &AIFindingsData{
-				Version:          3,
+				Version:          aiFindingsDataVersion,
 				Findings:         make(map[string]*AIFindingRecord),
 				SuppressionRules: make(map[string]*AISuppressionRuleRecord),
 			}, nil
@@ -2355,7 +2359,7 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		log.Error().Err(err).Str("file", c.aiFindingsFile).Msg("Failed to parse AI findings file")
 		// Return empty data on parse error rather than failing
 		return &AIFindingsData{
-			Version:          3,
+			Version:          aiFindingsDataVersion,
 			Findings:         make(map[string]*AIFindingRecord),
 			SuppressionRules: make(map[string]*AISuppressionRuleRecord),
 		}, nil
@@ -2374,13 +2378,13 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		oldCount := len(findingsData.Findings)
 		findingsData.Findings = make(map[string]*AIFindingRecord)
 		findingsData.SuppressionRules = make(map[string]*AISuppressionRuleRecord)
-		findingsData.Version = 3
+		findingsData.Version = aiFindingsDataVersion
 		findingsData.LastSaved = time.Now()
 
 		if oldCount > 0 {
 			log.Info().
 				Int("cleared_count", oldCount).
-				Msg("AI findings cleared due to schema upgrade (v1 -> v3)")
+				Msg("AI findings cleared due to schema upgrade (v1 -> v4)")
 		}
 
 		// Persist the migrated (empty) file immediately to avoid re-migrating on restart
@@ -2401,8 +2405,28 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		}
 		c.mu.Unlock()
 	} else if findingsData.Version < 3 {
-		// v2 -> v3: keep findings; start persisting explicit suppression rules.
-		findingsData.Version = 3
+		// v2 -> v4: keep findings; start persisting explicit suppression rules and investigation records.
+		findingsData.Version = aiFindingsDataVersion
+		findingsData.LastSaved = time.Now()
+		c.mu.Lock()
+		if jsonData, err := json.Marshal(findingsData); err == nil {
+			if c.crypto != nil {
+				encrypted, encErr := c.crypto.Encrypt(jsonData)
+				if encErr != nil {
+					log.Warn().Err(encErr).Msg("Failed to encrypt migrated AI findings — skipping write to avoid plaintext storage")
+					c.mu.Unlock()
+					return &findingsData, nil
+				}
+				jsonData = encrypted
+			}
+			if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist migrated AI findings file")
+			}
+		}
+		c.mu.Unlock()
+	} else if findingsData.Version < aiFindingsDataVersion {
+		// v3 -> v4: keep findings and start writing structured investigation records.
+		findingsData.Version = aiFindingsDataVersion
 		findingsData.LastSaved = time.Now()
 		c.mu.Lock()
 		if jsonData, err := json.Marshal(findingsData); err == nil {

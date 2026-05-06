@@ -3,6 +3,8 @@ package unified
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 func TestUnifiedStore_AddFromAlert(t *testing.T) {
@@ -158,6 +160,51 @@ func TestUnifiedStore_AddFromAI(t *testing.T) {
 	retrieved := store.Get("ai-finding-1")
 	if retrieved == nil {
 		t.Error("Expected to retrieve finding")
+	}
+}
+
+func TestUnifiedStore_AddFromAI_MergesInvestigationRecord(t *testing.T) {
+	store := NewUnifiedStore(DefaultAlertToFindingConfig())
+	initial := &UnifiedFinding{
+		ID:           "finding-1",
+		Source:       SourceAIPatrol,
+		Severity:     SeverityWarning,
+		Category:     CategoryPerformance,
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		Title:        "High CPU",
+		Description:  "CPU high",
+		DetectedAt:   time.Now(),
+		LastSeenAt:   time.Now(),
+	}
+	store.AddFromAI(initial)
+
+	record := &aicontracts.InvestigationRecord{
+		ID:        "investigation-1",
+		FindingID: "finding-1",
+		Status:    aicontracts.InvestigationStatusCompleted,
+		Outcome:   aicontracts.OutcomeFixQueued,
+		Evidence:  []aicontracts.InvestigationRecordEvidence{},
+		ToolsUsed: []string{},
+	}
+	updated, isNew := store.AddFromAI(&UnifiedFinding{
+		ID:                  "finding-1",
+		Source:              SourceAIPatrol,
+		Severity:            SeverityWarning,
+		Category:            CategoryPerformance,
+		ResourceID:          "vm-100",
+		ResourceName:        "vm-100",
+		Title:               "High CPU",
+		Description:         "CPU high",
+		InvestigationRecord: record,
+		DetectedAt:          time.Now(),
+		LastSeenAt:          time.Now(),
+	})
+	if isNew {
+		t.Fatal("expected merge into existing finding")
+	}
+	if updated.InvestigationRecord == nil || updated.InvestigationRecord.ID != "investigation-1" {
+		t.Fatalf("expected investigation record to merge, got %#v", updated.InvestigationRecord)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 const legacyFindingAlertIDField = "alert_id"
@@ -212,8 +213,16 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 		Title:           "CPU high",
 		Description:     "cpu usage high",
 		AlertIdentifier: "instance:node:100::metric/cpu",
-		DetectedAt:      time.Now(),
-		LastSeenAt:      time.Now(),
+		InvestigationRecord: &aicontracts.InvestigationRecord{
+			ID:        "investigation-1",
+			FindingID: "finding-1",
+			Status:    aicontracts.InvestigationStatusCompleted,
+			Outcome:   aicontracts.OutcomeFixQueued,
+			Evidence:  []aicontracts.InvestigationRecordEvidence{},
+			ToolsUsed: []string{},
+		},
+		DetectedAt: time.Now(),
+		LastSeenAt: time.Now(),
 	})
 
 	handler := &AISettingsHandler{}
@@ -257,5 +266,12 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 	}
 	if _, ok := finding["lifecycle"]; !ok {
 		t.Fatalf("expected lifecycle to be present, got %#v", finding)
+	}
+	record, ok := finding["investigation_record"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected investigation_record object, got %#v", finding["investigation_record"])
+	}
+	if record["id"] != "investigation-1" {
+		t.Fatalf("expected investigation record ID, got %#v", record)
 	}
 }

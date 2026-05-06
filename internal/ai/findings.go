@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // Investigation limits for automatic finding investigation.
@@ -133,52 +135,54 @@ type Finding struct {
 	Suppressed      bool   `json:"suppressed"`                 // Permanently suppress similar findings for this resource
 
 	// Investigation fields - tracks autonomous AI investigation of findings
-	InvestigationSessionID string                  `json:"investigation_session_id,omitempty"` // Chat session ID if being investigated
-	InvestigationStatus    string                  `json:"investigation_status,omitempty"`     // pending, running, completed, failed, needs_attention
-	InvestigationOutcome   string                  `json:"investigation_outcome,omitempty"`    // resolved, fix_queued, fix_executed, fix_failed, fix_verified, fix_verification_failed, needs_attention, cannot_fix
-	LastInvestigatedAt     *time.Time              `json:"last_investigated_at,omitempty"`     // When last investigation completed
-	InvestigationAttempts  int                     `json:"investigation_attempts"`             // Number of investigation attempts
-	LoopState              string                  `json:"loop_state,omitempty"`               // detected, investigating, remediating, resolved, etc.
-	Lifecycle              []FindingLifecycleEvent `json:"lifecycle,omitempty"`                // Bounded, append-only lifecycle log
-	RegressionCount        int                     `json:"regression_count,omitempty"`         // Times the issue reappeared after resolution
-	LastRegressionAt       *time.Time              `json:"last_regression_at,omitempty"`       // Timestamp of most recent regression
+	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"` // Chat session ID if being investigated
+	InvestigationStatus    string                           `json:"investigation_status,omitempty"`     // pending, running, completed, failed, needs_attention
+	InvestigationOutcome   string                           `json:"investigation_outcome,omitempty"`    // resolved, fix_queued, fix_executed, fix_failed, fix_verified, fix_verification_failed, needs_attention, cannot_fix
+	LastInvestigatedAt     *time.Time                       `json:"last_investigated_at,omitempty"`     // When last investigation completed
+	InvestigationAttempts  int                              `json:"investigation_attempts"`             // Number of investigation attempts
+	InvestigationRecord    *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`     // Durable contextual summary for Assistant/unified intelligence
+	LoopState              string                           `json:"loop_state,omitempty"`               // detected, investigating, remediating, resolved, etc.
+	Lifecycle              []FindingLifecycleEvent          `json:"lifecycle,omitempty"`                // Bounded, append-only lifecycle log
+	RegressionCount        int                              `json:"regression_count,omitempty"`         // Times the issue reappeared after resolution
+	LastRegressionAt       *time.Time                       `json:"last_regression_at,omitempty"`       // Timestamp of most recent regression
 }
 
 type findingJSON struct {
-	ID                     string                  `json:"id"`
-	Key                    string                  `json:"key,omitempty"`
-	Severity               FindingSeverity         `json:"severity"`
-	Category               FindingCategory         `json:"category"`
-	ResourceID             string                  `json:"resource_id"`
-	ResourceName           string                  `json:"resource_name"`
-	ResourceType           string                  `json:"resource_type"`
-	Node                   string                  `json:"node,omitempty"`
-	Title                  string                  `json:"title"`
-	Description            string                  `json:"description"`
-	Recommendation         string                  `json:"recommendation,omitempty"`
-	Evidence               string                  `json:"evidence,omitempty"`
-	Source                 string                  `json:"source,omitempty"`
-	DetectedAt             time.Time               `json:"detected_at"`
-	LastSeenAt             time.Time               `json:"last_seen_at"`
-	ResolvedAt             *time.Time              `json:"resolved_at,omitempty"`
-	AutoResolved           bool                    `json:"auto_resolved"`
-	ResolveReason          string                  `json:"resolve_reason,omitempty"`
-	AcknowledgedAt         *time.Time              `json:"acknowledged_at,omitempty"`
-	SnoozedUntil           *time.Time              `json:"snoozed_until,omitempty"`
-	AlertIdentifier        string                  `json:"alert_identifier,omitempty"`
-	DismissedReason        string                  `json:"dismissed_reason,omitempty"`
-	UserNote               string                  `json:"user_note,omitempty"`
-	TimesRaised            int                     `json:"times_raised"`
-	Suppressed             bool                    `json:"suppressed"`
-	InvestigationSessionID string                  `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string                  `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string                  `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time              `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int                     `json:"investigation_attempts"`
-	LoopState              string                  `json:"loop_state,omitempty"`
-	Lifecycle              []FindingLifecycleEvent `json:"lifecycle,omitempty"`
-	RegressionCount        int                     `json:"regression_count,omitempty"`
-	LastRegressionAt       *time.Time              `json:"last_regression_at,omitempty"`
+	ID                     string                           `json:"id"`
+	Key                    string                           `json:"key,omitempty"`
+	Severity               FindingSeverity                  `json:"severity"`
+	Category               FindingCategory                  `json:"category"`
+	ResourceID             string                           `json:"resource_id"`
+	ResourceName           string                           `json:"resource_name"`
+	ResourceType           string                           `json:"resource_type"`
+	Node                   string                           `json:"node,omitempty"`
+	Title                  string                           `json:"title"`
+	Description            string                           `json:"description"`
+	Recommendation         string                           `json:"recommendation,omitempty"`
+	Evidence               string                           `json:"evidence,omitempty"`
+	Source                 string                           `json:"source,omitempty"`
+	DetectedAt             time.Time                        `json:"detected_at"`
+	LastSeenAt             time.Time                        `json:"last_seen_at"`
+	ResolvedAt             *time.Time                       `json:"resolved_at,omitempty"`
+	AutoResolved           bool                             `json:"auto_resolved"`
+	ResolveReason          string                           `json:"resolve_reason,omitempty"`
+	AcknowledgedAt         *time.Time                       `json:"acknowledged_at,omitempty"`
+	SnoozedUntil           *time.Time                       `json:"snoozed_until,omitempty"`
+	AlertIdentifier        string                           `json:"alert_identifier,omitempty"`
+	DismissedReason        string                           `json:"dismissed_reason,omitempty"`
+	UserNote               string                           `json:"user_note,omitempty"`
+	TimesRaised            int                              `json:"times_raised"`
+	Suppressed             bool                             `json:"suppressed"`
+	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string                           `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string                           `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time                       `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int                              `json:"investigation_attempts"`
+	InvestigationRecord    *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`
+	LoopState              string                           `json:"loop_state,omitempty"`
+	Lifecycle              []FindingLifecycleEvent          `json:"lifecycle,omitempty"`
+	RegressionCount        int                              `json:"regression_count,omitempty"`
+	LastRegressionAt       *time.Time                       `json:"last_regression_at,omitempty"`
 }
 
 func (f Finding) MarshalJSON() ([]byte, error) {
@@ -214,6 +218,7 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		InvestigationOutcome:   f.InvestigationOutcome,
 		LastInvestigatedAt:     f.LastInvestigatedAt,
 		InvestigationAttempts:  f.InvestigationAttempts,
+		InvestigationRecord:    f.InvestigationRecord,
 		LoopState:              f.LoopState,
 		Lifecycle:              f.Lifecycle,
 		RegressionCount:        f.RegressionCount,
@@ -258,6 +263,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		InvestigationOutcome:   payload.InvestigationOutcome,
 		LastInvestigatedAt:     payload.LastInvestigatedAt,
 		InvestigationAttempts:  payload.InvestigationAttempts,
+		InvestigationRecord:    payload.InvestigationRecord,
 		LoopState:              payload.LoopState,
 		Lifecycle:              payload.Lifecycle,
 		RegressionCount:        payload.RegressionCount,
@@ -991,6 +997,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			existing.InvestigationOutcome = ""
 			existing.LastInvestigatedAt = nil
 			existing.InvestigationAttempts = 0
+			existing.InvestigationRecord = nil
 			existing.RegressionCount++
 			now := time.Now()
 			existing.LastRegressionAt = &now
@@ -1255,6 +1262,29 @@ func (s *FindingsStore) Undismiss(id string) bool {
 	}
 	s.syncLoopStateLocked(f)
 
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// UpdateInvestigationRecord stores the durable investigation record for a finding.
+func (s *FindingsStore) UpdateInvestigationRecord(id string, record *aicontracts.InvestigationRecord) bool {
+	s.mu.Lock()
+
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.InvestigationRecord = record
+	meta := map[string]string{}
+	if record != nil {
+		meta["record_id"] = record.ID
+		meta["status"] = string(record.Status)
+		meta["outcome"] = string(record.Outcome)
+	}
+	s.appendLifecycleLocked(f, "investigation_record_updated", "Investigation record updated", f.LoopState, f.LoopState, meta)
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true

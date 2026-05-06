@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // FindingSource identifies where a finding originated
@@ -96,15 +98,16 @@ type UnifiedFinding struct {
 	AIEnhancedAt  *time.Time `json:"ai_enhanced_at,omitempty"` // When AI analyzed
 
 	// Investigation fields (autonomous patrol investigation)
-	InvestigationSessionID string                         `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string                         `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string                         `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time                     `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int                            `json:"investigation_attempts,omitempty"`
-	LoopState              string                         `json:"loop_state,omitempty"`
-	Lifecycle              []UnifiedFindingLifecycleEvent `json:"lifecycle,omitempty"`
-	RegressionCount        int                            `json:"regression_count,omitempty"`
-	LastRegressionAt       *time.Time                     `json:"last_regression_at,omitempty"`
+	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string                           `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string                           `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time                       `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int                              `json:"investigation_attempts,omitempty"`
+	InvestigationRecord    *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`
+	LoopState              string                           `json:"loop_state,omitempty"`
+	Lifecycle              []UnifiedFindingLifecycleEvent   `json:"lifecycle,omitempty"`
+	RegressionCount        int                              `json:"regression_count,omitempty"`
+	LastRegressionAt       *time.Time                       `json:"last_regression_at,omitempty"`
 
 	// Timestamps
 	DetectedAt time.Time  `json:"detected_at"`
@@ -121,48 +124,49 @@ type UnifiedFinding struct {
 }
 
 type unifiedFindingJSON struct {
-	ID                     string                         `json:"id"`
-	Source                 FindingSource                  `json:"source"`
-	Severity               UnifiedSeverity                `json:"severity"`
-	Category               UnifiedCategory                `json:"category"`
-	ResourceID             string                         `json:"resource_id"`
-	ResourceName           string                         `json:"resource_name"`
-	ResourceType           string                         `json:"resource_type"`
-	Node                   string                         `json:"node,omitempty"`
-	Title                  string                         `json:"title"`
-	Description            string                         `json:"description"`
-	Recommendation         string                         `json:"recommendation,omitempty"`
-	Evidence               string                         `json:"evidence,omitempty"`
-	AlertIdentifier        string                         `json:"alert_identifier,omitempty"`
-	AlertType              string                         `json:"alert_type,omitempty"`
-	Value                  float64                        `json:"value,omitempty"`
-	Threshold              float64                        `json:"threshold,omitempty"`
-	IsThreshold            bool                           `json:"is_threshold"`
-	AIContext              string                         `json:"ai_context,omitempty"`
-	RootCauseID            string                         `json:"root_cause_id,omitempty"`
-	CorrelatedIDs          []string                       `json:"correlated_ids,omitempty"`
-	RemediationID          string                         `json:"remediation_id,omitempty"`
-	AIConfidence           float64                        `json:"ai_confidence,omitempty"`
-	EnhancedByAI           bool                           `json:"enhanced_by_ai"`
-	AIEnhancedAt           *time.Time                     `json:"ai_enhanced_at,omitempty"`
-	InvestigationSessionID string                         `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string                         `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string                         `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time                     `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int                            `json:"investigation_attempts,omitempty"`
-	LoopState              string                         `json:"loop_state,omitempty"`
-	Lifecycle              []UnifiedFindingLifecycleEvent `json:"lifecycle,omitempty"`
-	RegressionCount        int                            `json:"regression_count,omitempty"`
-	LastRegressionAt       *time.Time                     `json:"last_regression_at,omitempty"`
-	DetectedAt             time.Time                      `json:"detected_at"`
-	LastSeenAt             time.Time                      `json:"last_seen_at"`
-	ResolvedAt             *time.Time                     `json:"resolved_at,omitempty"`
-	AcknowledgedAt         *time.Time                     `json:"acknowledged_at,omitempty"`
-	SnoozedUntil           *time.Time                     `json:"snoozed_until,omitempty"`
-	DismissedReason        string                         `json:"dismissed_reason,omitempty"`
-	UserNote               string                         `json:"user_note,omitempty"`
-	Suppressed             bool                           `json:"suppressed"`
-	TimesRaised            int                            `json:"times_raised"`
+	ID                     string                           `json:"id"`
+	Source                 FindingSource                    `json:"source"`
+	Severity               UnifiedSeverity                  `json:"severity"`
+	Category               UnifiedCategory                  `json:"category"`
+	ResourceID             string                           `json:"resource_id"`
+	ResourceName           string                           `json:"resource_name"`
+	ResourceType           string                           `json:"resource_type"`
+	Node                   string                           `json:"node,omitempty"`
+	Title                  string                           `json:"title"`
+	Description            string                           `json:"description"`
+	Recommendation         string                           `json:"recommendation,omitempty"`
+	Evidence               string                           `json:"evidence,omitempty"`
+	AlertIdentifier        string                           `json:"alert_identifier,omitempty"`
+	AlertType              string                           `json:"alert_type,omitempty"`
+	Value                  float64                          `json:"value,omitempty"`
+	Threshold              float64                          `json:"threshold,omitempty"`
+	IsThreshold            bool                             `json:"is_threshold"`
+	AIContext              string                           `json:"ai_context,omitempty"`
+	RootCauseID            string                           `json:"root_cause_id,omitempty"`
+	CorrelatedIDs          []string                         `json:"correlated_ids,omitempty"`
+	RemediationID          string                           `json:"remediation_id,omitempty"`
+	AIConfidence           float64                          `json:"ai_confidence,omitempty"`
+	EnhancedByAI           bool                             `json:"enhanced_by_ai"`
+	AIEnhancedAt           *time.Time                       `json:"ai_enhanced_at,omitempty"`
+	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string                           `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string                           `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time                       `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int                              `json:"investigation_attempts,omitempty"`
+	InvestigationRecord    *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`
+	LoopState              string                           `json:"loop_state,omitempty"`
+	Lifecycle              []UnifiedFindingLifecycleEvent   `json:"lifecycle,omitempty"`
+	RegressionCount        int                              `json:"regression_count,omitempty"`
+	LastRegressionAt       *time.Time                       `json:"last_regression_at,omitempty"`
+	DetectedAt             time.Time                        `json:"detected_at"`
+	LastSeenAt             time.Time                        `json:"last_seen_at"`
+	ResolvedAt             *time.Time                       `json:"resolved_at,omitempty"`
+	AcknowledgedAt         *time.Time                       `json:"acknowledged_at,omitempty"`
+	SnoozedUntil           *time.Time                       `json:"snoozed_until,omitempty"`
+	DismissedReason        string                           `json:"dismissed_reason,omitempty"`
+	UserNote               string                           `json:"user_note,omitempty"`
+	Suppressed             bool                             `json:"suppressed"`
+	TimesRaised            int                              `json:"times_raised"`
 }
 
 func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
@@ -197,6 +201,7 @@ func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
 		InvestigationOutcome:   f.InvestigationOutcome,
 		LastInvestigatedAt:     f.LastInvestigatedAt,
 		InvestigationAttempts:  f.InvestigationAttempts,
+		InvestigationRecord:    f.InvestigationRecord,
 		LoopState:              f.LoopState,
 		Lifecycle:              f.Lifecycle,
 		RegressionCount:        f.RegressionCount,
@@ -249,6 +254,7 @@ func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
 		InvestigationOutcome:   payload.InvestigationOutcome,
 		LastInvestigatedAt:     payload.LastInvestigatedAt,
 		InvestigationAttempts:  payload.InvestigationAttempts,
+		InvestigationRecord:    payload.InvestigationRecord,
 		LoopState:              payload.LoopState,
 		Lifecycle:              payload.Lifecycle,
 		RegressionCount:        payload.RegressionCount,
@@ -618,6 +624,7 @@ func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool
 		existing.InvestigationOutcome = finding.InvestigationOutcome
 		existing.LastInvestigatedAt = finding.LastInvestigatedAt
 		existing.InvestigationAttempts = finding.InvestigationAttempts
+		existing.InvestigationRecord = finding.InvestigationRecord
 		existing.LoopState = finding.LoopState
 		existing.Lifecycle = finding.Lifecycle
 		existing.RegressionCount = finding.RegressionCount

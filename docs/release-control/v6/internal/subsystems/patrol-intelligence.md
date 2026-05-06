@@ -94,6 +94,11 @@ Patrol-specific presentation helpers.
    Pro-locked helper text, investigation outcome labels, and run-history badges
    must present the paid capability as safe remediation or remediation actions,
    not as a broad automation promise.
+8. Keep the Patrol store aligned with the shared structured investigation
+   record when transport carries one. `frontend-modern/src/stores/aiIntelligence.ts`
+   may retain `investigationRecord` as data for Assistant handoff and future
+   Patrol presentation, but visible Patrol copy must still flow through the
+   governed Patrol presentation helpers before the record becomes UI.
 
 ## Current State
 
