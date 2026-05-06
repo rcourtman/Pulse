@@ -157,24 +157,39 @@ func TestAvailabilityHandlersListReturnsMockTargetsInMockMode(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&listed); err != nil {
 		t.Fatalf("decode listed targets: %v", err)
 	}
-	if len(listed) < 4 {
+	if len(listed) < 5 {
 		t.Fatalf("expected mock availability targets, got %+v", listed)
 	}
 	foundMQTT := false
+	foundESPHome := false
 	for _, target := range listed {
-		if target.ID != "mock-availability-mqtt-meter" {
-			continue
-		}
-		foundMQTT = true
-		if target.Protocol != config.AvailabilityProbeTCP || target.Port != 1883 {
-			t.Fatalf("unexpected MQTT target: %+v", target.AvailabilityTarget)
-		}
-		if target.Status == nil || !target.Status.Available {
-			t.Fatalf("expected successful MQTT status, got %+v", target.Status)
+		switch target.ID {
+		case "mock-availability-mqtt-meter":
+			foundMQTT = true
+			if target.Protocol != config.AvailabilityProbeTCP || target.Port != 1883 {
+				t.Fatalf("unexpected MQTT target: %+v", target.AvailabilityTarget)
+			}
+			if target.Status == nil || !target.Status.Available {
+				t.Fatalf("expected successful MQTT status, got %+v", target.Status)
+			}
+		case "mock-availability-esphome-greenhouse":
+			foundESPHome = true
+			if target.Name != "ESPHome greenhouse sensor" {
+				t.Fatalf("unexpected ESPHome target name: %+v", target.AvailabilityTarget)
+			}
+			if target.Protocol != config.AvailabilityProbeTCP || target.Port != 6053 {
+				t.Fatalf("unexpected ESPHome target: %+v", target.AvailabilityTarget)
+			}
+			if target.Status == nil || !target.Status.Available {
+				t.Fatalf("expected successful ESPHome status, got %+v", target.Status)
+			}
 		}
 	}
 	if !foundMQTT {
 		t.Fatalf("expected MQTT power meter target, got %+v", listed)
+	}
+	if !foundESPHome {
+		t.Fatalf("expected ESPHome greenhouse sensor target, got %+v", listed)
 	}
 }
 

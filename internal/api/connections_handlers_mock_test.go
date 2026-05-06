@@ -49,6 +49,14 @@ func TestConnectionsHandleListIncludesMockAvailabilityTargets(t *testing.T) {
 		t.Fatalf("unexpected MQTT connection state: %+v", mqtt)
 	}
 
+	esphome, ok := byID["availability:mock-availability-esphome-greenhouse"]
+	if !ok {
+		t.Fatalf("expected mock ESPHome availability connection, got %+v", response.Connections)
+	}
+	if esphome.Type != ConnectionTypeAvailability || esphome.State != ConnectionStateActive {
+		t.Fatalf("unexpected ESPHome connection state: %+v", esphome)
+	}
+
 	door, ok := byID["availability:mock-availability-door-controller"]
 	if !ok {
 		t.Fatalf("expected mock door controller availability connection, got %+v", response.Connections)

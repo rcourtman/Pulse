@@ -180,6 +180,23 @@ func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 		},
 		{
 			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
+				ID:               "mock-availability-esphome-greenhouse",
+				Name:             "ESPHome greenhouse sensor",
+				Address:          "greenhouse-sensor.lab.local",
+				Protocol:         mockAvailabilityProbeTCP,
+				Port:             6053,
+				Enabled:          true,
+				PollIntervalSecs: 30,
+				TimeoutMillis:    1500,
+				FailureThreshold: 2,
+			}),
+			Available:     true,
+			LastChecked:   base.Add(-5 * time.Second),
+			LastSuccess:   base.Add(-5 * time.Second),
+			LatencyMillis: 11,
+		},
+		{
+			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
 				ID:               "mock-availability-solar-inverter",
 				Name:             "Solar inverter web panel",
 				Address:          "http://solar-inverter.lab.local/",
@@ -366,6 +383,9 @@ func availabilityFixtureTags(target AvailabilityTargetFixture) []string {
 	case mockAvailabilityProbeTCP:
 		if target.Port == 1883 {
 			tags = append(tags, "mqtt")
+		}
+		if target.Port == 6053 || strings.Contains(strings.ToLower(target.displayName()), "esphome") {
+			tags = append(tags, "esphome")
 		}
 	}
 	return tags

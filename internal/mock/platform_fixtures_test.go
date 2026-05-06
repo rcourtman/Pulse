@@ -3,6 +3,7 @@ package mock
 import (
 	"fmt"
 	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -70,11 +71,14 @@ func TestFixtureGraphProjectsAvailabilityFixturesAsNetworkEndpoints(t *testing.T
 	}
 
 	var mqtt *unifiedresources.Resource
+	var esphome *unifiedresources.Resource
 	var door *unifiedresources.Resource
 	for i := range resources {
 		switch resources[i].Name {
 		case "MQTT power meter":
 			mqtt = &resources[i]
+		case "ESPHome greenhouse sensor":
+			esphome = &resources[i]
 		case "Workshop door controller":
 			door = &resources[i]
 		}
@@ -87,6 +91,15 @@ func TestFixtureGraphProjectsAvailabilityFixturesAsNetworkEndpoints(t *testing.T
 	}
 	if mqtt.Availability == nil || mqtt.Availability.Protocol != "tcp" || mqtt.Availability.Port != 1883 {
 		t.Fatalf("unexpected MQTT availability metadata: %+v", mqtt.Availability)
+	}
+	if esphome == nil {
+		t.Fatal("expected ESPHome greenhouse sensor availability endpoint")
+	}
+	if esphome.Availability == nil || esphome.Availability.Protocol != "tcp" || esphome.Availability.Port != 6053 {
+		t.Fatalf("unexpected ESPHome availability metadata: %+v", esphome.Availability)
+	}
+	if !slices.Contains(esphome.Tags, "esphome") {
+		t.Fatalf("expected ESPHome availability tag, got %+v", esphome.Tags)
 	}
 	if door == nil {
 		t.Fatal("expected workshop door controller availability endpoint")
