@@ -189,12 +189,16 @@ runtime cost control, and shared AI transport surfaces.
     for those handoff resources, using the same unified-resource resolution and
     policy presentation helpers that govern mention prefetch and provider-bound
     redaction; that context remains model-only handling guidance, not saved user
-    text or disclosure authority. Assistant runtime may also hydrate recent
-    changes for those handoff resources from the canonical unified-resource
-    timeline as model-only context on each turn, but those timeline facts remain
-    read-only explanation context and do not grant action authority. The runtime
-    may also persist structured pending-action and approval references from the
-    same investigation record as
+    text or disclosure authority. Assistant runtime may also hydrate canonical
+    relationship context for those handoff resources through
+    `FormatResourceRelationshipContext(...)` and canonical parent-edge synthesis,
+    but those topology facts remain read-only explanation context and do not
+    grant action authority. Assistant runtime may also hydrate recent changes for
+    those handoff resources from the canonical unified-resource timeline as
+    model-only context on each turn, but those timeline facts remain read-only
+    explanation context and do not grant action authority. The runtime may also
+    persist structured pending-action and approval references from the same
+    investigation record as
     model-context metadata, but those references are review context only: they
     must not include raw command text, must not grant approval or execution
     authority, and must route any operator decision back through the governed

@@ -528,6 +528,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	handoffResourceProvider := s.unifiedResourceProvider
 	s.mu.RUnlock()
 	handoffContext = mergeHandoffResourcePolicyContext(handoffContext, handoffResources, handoffResourceProvider)
+	handoffContext = mergeHandoffResourceRelationshipContext(handoffContext, handoffResources, handoffResourceProvider)
 	handoffContext = mergeHandoffResourceTimelineContext(handoffContext, handoffResources, s.actionAuditStore, time.Now())
 	handoffContext = mergeHandoffActionContext(handoffContext, handoffActions)
 	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
@@ -920,6 +921,73 @@ func buildHandoffResourcePolicyContext(handoffResources []HandoffResource, provi
 		return ""
 	}
 	appendHandoffContextLine(&b, "Policy Boundary", "Resource policy is read-only data-handling context; local-only and redaction guidance must not be bypassed and does not grant approval or execution authority.")
+	return strings.TrimSpace(b.String())
+}
+
+func mergeHandoffResourceRelationshipContext(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
+	relationshipContext := buildHandoffResourceRelationshipContext(handoffResources, provider)
+	switch {
+	case strings.TrimSpace(handoffContext) == "":
+		return relationshipContext
+	case relationshipContext == "":
+		return strings.TrimSpace(handoffContext)
+	default:
+		return strings.TrimSpace(handoffContext) + "\n\n" + relationshipContext
+	}
+}
+
+func buildHandoffResourceRelationshipContext(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
+	resources := normalizeHandoffResources(handoffResources)
+	if len(resources) == 0 || provider == nil {
+		return ""
+	}
+
+	var b strings.Builder
+	seen := make(map[string]struct{}, len(resources))
+	count := 0
+	for _, handoffResource := range resources {
+		resource, ok := tools.CanonicalHandoffUnifiedResource(provider, handoffResource.ID, handoffResource.Name, handoffResource.Type, handoffResource.Node)
+		if !ok {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(string(resource.Type)) + "\x00" + strings.TrimSpace(resource.ID))
+		if key == "\x00" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		resource.Relationships = unifiedresources.ResourceRelationshipsWithCanonicalParent(resource)
+		relationshipContext := strings.TrimSpace(unifiedresources.FormatResourceRelationshipContext(&resource, 3))
+		if relationshipContext == "" {
+			continue
+		}
+		if b.Len() == 0 {
+			b.WriteString("[Resource Relationship Context]")
+		}
+		count++
+
+		policy, aiSafeSummary := unifiedresources.CanonicalGovernanceMetadata(&resource)
+		label := unifiedresources.ResourcePolicyLabel(resource.Name, aiSafeSummary, policy)
+		if label == "" {
+			label = "resource"
+		}
+		contextLabel := "Resource Relationships For"
+		if count > 1 {
+			contextLabel = fmt.Sprintf("Resource Relationships %d For", count)
+		}
+		appendHandoffContextLine(&b, contextLabel, label)
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(relationshipContext)
+	}
+	if count == 0 {
+		return ""
+	}
+	appendHandoffContextLine(&b, "Relationship Boundary", "Relationships are read-only canonical topology context; they are not approval or execution authority.")
 	return strings.TrimSpace(b.String())
 }
 

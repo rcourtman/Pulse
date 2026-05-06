@@ -993,6 +993,13 @@ That same resource model now also owns the canonical
 resolve the resource and hand the model the relationship list instead of
 rebuilding the relationship section header, ordering, or freshness wording
 locally.
+Assistant finding handoffs are part of that same relationship-context contract:
+when the runtime needs topology context for product-originated handoff
+resources, it should resolve the canonical unified resource, synthesize the
+canonical parent edge through `ResourceRelationshipsWithCanonicalParent(...)`,
+and call `FormatResourceRelationshipContext(...)` rather than rebuilding
+relationship markdown in chat or Patrol-local helpers. The resulting topology
+block remains model-only explanation context, not action authority.
 The same shared relationship presenter also owns the compact change-timeline
 relationship summary used by resource change records, so change `from` and
 `to` values stay aligned with the canonical relationship labels instead of

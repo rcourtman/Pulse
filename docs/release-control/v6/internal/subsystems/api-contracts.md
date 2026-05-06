@@ -761,17 +761,20 @@ the canonical monitored-system blocked payload.
    resolution and shared policy presentation helpers, but the resulting handling
    guidance is read-only, model-only context and must not become saved user text,
    disclosure authority, or action authority. Chat execution may also hydrate
-   recent changes for those handoff resources from the canonical
-   unified-resource timeline, but the resulting context is read-only, model-only
-   explanation data and must not become saved user text or action authority. The
-   backend may also carry structured pending-action and approval references from
-   the investigation record into chat execution, but those references must omit
-   raw proposed-fix commands, remain model-only review context, and leave
-   approval/execution authority with the governed approval and remediation APIs.
-   Chat execution may refresh approval status snapshots for those references
-   from the canonical approval store, but that snapshot is read-only,
-   org-scoped, and must not expose or infer the raw command. Frontend handoff
-   briefings must derive from
+   canonical relationship context for those resources through shared
+   unified-resource relationship presentation and parent-edge synthesis, but
+   topology context is read-only and must not become saved user text or action
+   authority. Chat execution may also hydrate recent changes for those handoff
+   resources from the canonical unified-resource timeline, but the resulting
+   context is read-only, model-only explanation data and must not become saved
+   user text or action authority. The backend may also carry structured
+   pending-action and approval references from the investigation record into chat
+   execution, but those references must omit raw proposed-fix commands, remain
+   model-only review context, and leave approval/execution authority with the
+   governed approval and remediation APIs. Chat execution may refresh approval
+   status snapshots for those references from the canonical approval store, but
+   that snapshot is read-only, org-scoped, and must not expose or infer the raw
+   command. Frontend handoff briefings must derive from
    the same shared investigation payload rather than inventing a second
    finding-context transport shape.
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip

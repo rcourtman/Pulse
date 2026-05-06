@@ -19,6 +19,14 @@ type stubServiceProvider struct {
 	streamFn func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
 }
 
+type handoffUnifiedProvider struct {
+	resources map[unifiedresources.ResourceType][]unifiedresources.Resource
+}
+
+func (p handoffUnifiedProvider) GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource {
+	return append([]unifiedresources.Resource(nil), p.resources[t]...)
+}
+
 func installTestApprovalStore(t *testing.T, req *approval.ApprovalRequest) {
 	t.Helper()
 	previous := approval.GetStore()
@@ -364,6 +372,128 @@ func TestService_ExecuteStream_HandoffResourcePolicyContextIsModelOnly(t *testin
 	}
 	if strings.Contains(modelUserContent, "finance-vm") || strings.Contains(modelUserContent, "10.0.0.40") {
 		t.Fatalf("model user content leaked governed resource identity: %q", modelUserContent)
+	}
+}
+
+func TestService_ExecuteStream_HandoffResourceRelationshipContextIsModelOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	now := time.Now()
+	unifiedProvider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeVM: {{
+			ID:     "finance-vm",
+			Type:   unifiedresources.ResourceTypeVM,
+			Name:   "finance-vm",
+			Status: unifiedresources.StatusOnline,
+			Tags:   []string{"pii"},
+			Relationships: []unifiedresources.ResourceRelationship{{
+				SourceID:   "finance-vm",
+				TargetID:   "secret-storage",
+				Type:       unifiedresources.RelDependsOn,
+				Confidence: 0.85,
+				Active:     true,
+				Discoverer: "pulse_correlation",
+				ObservedAt: now.Add(-30 * time.Minute),
+				LastSeenAt: now.Add(-10 * time.Minute),
+				Metadata:   map[string]any{"role": "database"},
+			}},
+		}},
+		unifiedresources.ResourceTypeStorage: {{
+			ID:     "secret-storage",
+			Type:   unifiedresources.ResourceTypeStorage,
+			Name:   "secret-storage",
+			Status: unifiedresources.StatusOnline,
+			Tags:   []string{"backup"},
+		}},
+	}}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{UnifiedResourceProvider: unifiedProvider})
+	var capturedMessages []providers.Message
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			capturedMessages = append([]providers.Message(nil), req.Messages...)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "noted"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	svc := &Service{
+		cfg:                     &config.AIConfig{ChatModel: "openai:test"},
+		sessions:                store,
+		executor:                executor,
+		agenticLoop:             loop,
+		provider:                provider,
+		unifiedResourceProvider: unifiedProvider,
+		started:                 true,
+	}
+
+	req := ExecuteRequest{
+		SessionID:      "sess-handoff-relationship",
+		Prompt:         "Why did this happen?",
+		HandoffContext: "[Finding Context]\nID: finding-123\nConclusion: finance-vm has storage latency.",
+		HandoffResources: []HandoffResource{{
+			ID:   "finance-vm",
+			Name: "finance-vm",
+			Type: "vm",
+		}},
+	}
+	if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	stored, err := store.GetMessages("sess-handoff-relationship")
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	if len(stored) == 0 {
+		t.Fatal("expected stored messages")
+	}
+	if stored[0].Content != "Why did this happen?" {
+		t.Fatalf("stored user message = %q, want clean prompt", stored[0].Content)
+	}
+	if strings.Contains(stored[0].Content, "Resource Relationship Context") {
+		t.Fatalf("stored user message should not include relationship context: %q", stored[0].Content)
+	}
+
+	if len(capturedMessages) == 0 {
+		t.Fatal("expected provider messages")
+	}
+	modelUserContent := capturedMessages[len(capturedMessages)-1].Content
+	if !strings.Contains(modelUserContent, "[Resource Relationship Context]") {
+		t.Fatalf("model user content missing relationship context: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "### Resource Relationships") {
+		t.Fatalf("model user content missing canonical relationship heading: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Depends on") {
+		t.Fatalf("model user content missing canonical relationship label: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "discoverer pulse_correlation") {
+		t.Fatalf("model user content missing relationship provenance: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "metadata present") {
+		t.Fatalf("model user content missing relationship metadata marker: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Relationship Boundary: Relationships are read-only canonical topology context") {
+		t.Fatalf("model user content missing relationship boundary: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "redacted by policy") {
+		t.Fatalf("external provider request should redact governed relationship identity: %q", modelUserContent)
+	}
+	if strings.Contains(modelUserContent, "finance-vm") || strings.Contains(modelUserContent, "secret-storage") {
+		t.Fatalf("model user content leaked governed relationship identity: %q", modelUserContent)
 	}
 }
 
