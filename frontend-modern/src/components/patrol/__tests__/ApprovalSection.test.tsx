@@ -128,8 +128,55 @@ describe('ApprovalSection', () => {
         targetType: 'host',
         targetId: 'host-1',
         findingId: 'finding-1',
+        autonomousMode: false,
       },
     );
+  });
+
+  it('opens Assistant from a pending Patrol approval without carrying raw command text', async () => {
+    state.pendingApprovals = [
+      {
+        id: 'approval-1',
+        toolId: 'investigation_fix',
+        command: 'systemctl restart nginx',
+        targetType: 'investigation',
+        targetId: 'finding-1',
+        targetName: 'node-1',
+        context: 'Restart the workload service',
+        riskLevel: 'high',
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+      },
+    ];
+
+    render(() => (
+      <ApprovalSection
+        findingId="finding-1"
+        investigationOutcome="fix_queued"
+        findingTitle="CPU saturation"
+        resourceName="node-1"
+        resourceType="agent"
+        resourceId="agent-1"
+      />
+    ));
+
+    fireEvent.click(await screen.findByRole('button', { name: /fix with assistant/i }));
+
+    expect(openWithPromptMock).toHaveBeenCalledTimes(1);
+    const [prompt, context] = openWithPromptMock.mock.calls[0];
+    expect(prompt).toContain('queued a governed fix for review');
+    expect(prompt).toContain('**Approval:** approval-1');
+    expect(prompt).toContain('**Approval status:** pending');
+    expect(prompt).toContain('**Risk level:** high');
+    expect(prompt).not.toContain('systemctl restart nginx');
+    expect(prompt).not.toContain('Please execute this fix');
+    expect(context).toEqual({
+      targetType: 'agent',
+      targetId: 'agent-1',
+      findingId: 'finding-1',
+      autonomousMode: false,
+    });
   });
 
   it('recreates and executes a queued fix when autofix is available', async () => {

@@ -2974,6 +2974,9 @@ that same handoff. Frontend Patrol handoff helpers may consume current pending
 approval list payloads only as safe metadata for that visible briefing: approval
 ID, status, risk, request/expiry timestamps, and target label are allowed, while
 approval command text remains inside the governed approval/remediation surface.
+Patrol approval-row Assistant prompts must use the same safe metadata boundary
+and set `autonomousMode:false` for the request-local chat handoff; they must not
+paste raw approval or proposed-fix command text into the authored chat prompt.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

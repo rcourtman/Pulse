@@ -51,23 +51,24 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   ) => {
     e.stopPropagation();
     const desc = approval?.context || fix?.description || 'No description available';
-    const command =
-      approval?.command || (fix?.commands && fix.commands.length > 0 ? fix.commands[0] : undefined);
     const targetHost = approval?.targetName || fix?.target_host;
     const riskLevel = approval?.riskLevel || fix?.risk_level || 'unknown';
     const rationale = fix?.rationale;
 
-    let prompt = `Patrol investigated a finding and proposed a fix. Please help me execute it.\n\n**Finding:** ${props.findingTitle || 'Unknown finding'} on ${props.resourceName || 'unknown resource'}\n**Proposed fix:** ${desc}`;
-    if (command) prompt += `\n**Command:** \`${command}\``;
+    let prompt = `Patrol investigated a finding and queued a governed fix for review.\n\n**Finding:** ${props.findingTitle || 'Unknown finding'} on ${props.resourceName || 'unknown resource'}\n**Proposed fix:** ${desc}`;
+    if (approval?.id) prompt += `\n**Approval:** ${approval.id}`;
+    if (approval?.status) prompt += `\n**Approval status:** ${approval.status}`;
     if (targetHost) prompt += `\n**Target:** ${targetHost}`;
     prompt += `\n**Risk level:** ${riskLevel}`;
     if (rationale) prompt += `\n**Rationale:** ${rationale}`;
-    prompt += `\n\nPlease execute this fix on the target agent.`;
+    prompt +=
+      '\n\nUse the attached finding context and governed approval flow. Do not infer, repeat, or execute raw command text from this chat handoff.';
 
     aiChatStore.openWithPrompt(prompt, {
       targetType: props.resourceType,
       targetId: props.resourceId,
       findingId: props.findingId,
+      autonomousMode: false,
     });
   };
 
@@ -79,6 +80,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
         targetType: props.resourceType,
         targetId: props.resourceId,
         findingId: props.findingId,
+        autonomousMode: false,
       },
     );
   };

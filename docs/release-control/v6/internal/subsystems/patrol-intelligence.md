@@ -157,8 +157,11 @@ Patrol-specific presentation helpers.
    expiry, and target label; it must not copy the approval command payload into
    Assistant drawer prose. The model-only runtime briefing must apply that same
    recovered approval reference when framing the operator decision and action
-   posture. The assembled handoff must still pass
-   through the Assistant runtime's
+   posture. Inline Patrol approval actions that open Assistant must follow the
+   same rule: pass approval ID/status/risk/target as review context, force the
+   request-local approval-required mode, and never paste the approval command or
+   proposed-fix command text into the chat prompt. The assembled handoff must
+   still pass through the Assistant runtime's
    resource-policy sanitizer before prompt injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
    addresses outside the canonical policy boundary.

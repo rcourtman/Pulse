@@ -819,7 +819,11 @@ frontend primitive boundary.
     When the feature helper adds live approval state to the generic drawer
     briefing, it may pass only safe approval metadata into
     `AIChatContextBriefing`; raw approval commands remain owned by the governed
-    approval/remediation panels.
+    approval/remediation panels. Patrol approval-row Assistant prompts must
+    follow that same drawer primitive contract: safe approval metadata may enter
+    the prompt and context, but raw command text stays out and the scoped
+    request must pass `autonomousMode:false` instead of changing the user's
+    persistent Assistant control level.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like
