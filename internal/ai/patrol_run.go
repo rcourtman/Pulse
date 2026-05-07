@@ -365,7 +365,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	// Check if we can run LLM analysis (AI-only patrol)
 	if !canRunLLM {
-		reason := "AI not configured - set up a provider in Settings > Pulse Assistant"
+		reason := patrolProviderNotConfiguredReason
 		if aiServiceEnabled && !llmAllowed {
 			reason = "circuit breaker is open"
 			GetPatrolMetrics().RecordCircuitBlock()
@@ -768,7 +768,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	canRunLLM := aiServiceEnabled && llmAllowed
 
 	if !canRunLLM {
-		reason := "AI not configured - set up a provider in Settings > Pulse Assistant"
+		reason := patrolProviderNotConfiguredReason
 		if aiServiceEnabled && !llmAllowed {
 			reason = "circuit breaker is open"
 			GetPatrolMetrics().RecordCircuitBlock()

@@ -7,6 +7,7 @@ import (
 )
 
 const patrolRuntimeFailureDetailLimit = 2000
+const patrolProviderNotConfiguredReason = "Patrol provider not configured - open Assistant & Patrol provider settings, configure a provider, and choose a Patrol model that supports tools"
 
 type patrolRuntimeFailure struct {
 	Title          string

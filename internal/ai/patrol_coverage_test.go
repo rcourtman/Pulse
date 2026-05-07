@@ -203,3 +203,21 @@ func TestPatrol_RunPatrol_AIRequired(t *testing.T) {
 		t.Error("Expected error count > 0 or unhealthy status when chat service unavailable")
 	}
 }
+
+func TestPatrol_RunPatrol_AIUnavailableUsesProviderSettingsGuidance(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{ID: "node1", Name: "node1", Status: "online"},
+			},
+		},
+	}
+	ps := NewPatrolService(nil, stateProvider)
+
+	ps.runPatrol(context.Background())
+
+	status := ps.GetStatus()
+	if status.BlockedReason != patrolProviderNotConfiguredReason {
+		t.Fatalf("blocked reason = %q, want %q", status.BlockedReason, patrolProviderNotConfiguredReason)
+	}
+}

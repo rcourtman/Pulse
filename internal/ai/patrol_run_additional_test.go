@@ -204,7 +204,7 @@ func TestPatrolService_RunScopedPatrol_EarlyPaths(t *testing.T) {
 	ps.stateProvider = mockPatrolStateProvider{state: models.StateSnapshot{Nodes: []models.Node{{ID: "node1", Name: "node1"}}}}
 	ps.runScopedPatrol(context.Background(), PatrolScope{ResourceIDs: []string{"node1"}, ResourceTypes: []string{"node"}})
 	status := ps.GetStatus()
-	if status.BlockedReason == "" {
-		t.Fatalf("expected blocked reason when AI unavailable")
+	if status.BlockedReason != patrolProviderNotConfiguredReason {
+		t.Fatalf("blocked reason = %q, want %q", status.BlockedReason, patrolProviderNotConfiguredReason)
 	}
 }

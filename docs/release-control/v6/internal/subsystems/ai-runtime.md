@@ -104,6 +104,9 @@ runtime cost control, and shared AI transport surfaces.
    surfaced as the synthetic Patrol runtime finding, and preserved on patrol
    run records as structured error summary/detail instead of collapsing to
    generic analysis-failed copy.
+   Unavailable-provider blocked states must direct operators to Assistant &
+   Patrol provider settings and tool-capable Patrol model selection, not
+   legacy `Settings > Pulse Assistant` copy.
 4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
    External provider-bound unified-resource context must enforce the same
@@ -1180,6 +1183,9 @@ The Patrol runtime now also exports a canonical `runtime_state` alongside
 legacy managed-credit block conditions remain part of the governed runtime
 contract instead of being inferred later from the last successful patrol
 summary.
+When missing provider configuration blocks Patrol, `blocked_reason` must point
+to Assistant & Patrol provider settings and tool-capable Patrol model
+selection.
 That runtime-state contract must be derived from live Patrol runtime inputs,
 not only from the last failed run attempt, and the backend must clear any stale
 managed-credit block once a provider or local model configuration returns.
