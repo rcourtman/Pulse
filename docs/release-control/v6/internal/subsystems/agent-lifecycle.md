@@ -180,6 +180,10 @@ from governed Pulse Agent host profiles. Host/appliance compatibility such as
 Unraid is presented as an agent install/profile path sourced from the manifest
 `agent_host_profiles` section, not as `PLATFORM_TYPE_KEYS` membership or a
 peer API-backed platform.
+Agent runtime normalization must use that same governed host-profile manifest:
+profile identity tokens and runtime platform fallback values such as
+`unraid` -> `linux` are generated into the runtime resolver instead of being
+redeclared in host-agent or settings-table branches.
 The lifecycle-owned infrastructure source manager also owns platform/system
 grouping as source-management content, but not its table band presentation:
 `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` must

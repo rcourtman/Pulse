@@ -48,8 +48,6 @@ const prettifyPlatform = (platform?: string | null): string | null => {
       return 'macOS';
     case 'freebsd':
       return 'FreeBSD';
-    case 'unraid':
-      return 'Unraid';
     default:
       return platform?.trim() ?? null;
   }

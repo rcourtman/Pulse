@@ -21,6 +21,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -997,9 +998,10 @@ func normalisePlatform(platform string) string {
 	switch platform {
 	case "darwin":
 		return "macos"
-	case "unraid":
-		return "linux"
 	default:
+		if runtimePlatform := platformsupport.RuntimePlatformForHostIdentityToken(platform); runtimePlatform != "" {
+			return runtimePlatform
+		}
 		return platform
 	}
 }

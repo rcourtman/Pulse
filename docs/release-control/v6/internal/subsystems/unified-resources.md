@@ -616,6 +616,10 @@ that platform projection for shared identity/presentation use only; a profile
 such as Unraid may label a Pulse Agent host, but it must not enter
 `PlatformType`, `PLATFORM_TYPE_KEYS`, unified-resource source filters, or
 canonical top-level platform identity.
+Host-profile runtime fallback values are generated beside those labels so
+agent-backed appliance reports can normalize to canonical runtime platforms
+such as `linux` without making the appliance profile a unified-resource
+platform.
 That same shared source boundary also applies when unified seeds and
 supplemental providers coexist. If a canonical unified-resource seed omits an
 owned supplemental source such as TrueNAS or VMware, the shared resource API
@@ -1572,8 +1576,10 @@ rather than a stale approval snapshot. That read remains model-only review
 context and must not expose raw command text or raw execution output.
 Patrol queued-fix approvals are producers of the same unified action-audit
 records: the approval adapter may seed planned and pending lifecycle events for
-the governed action, but the durable identity, state transitions, and history
-remain owned by this store rather than by a Patrol-specific audit ledger.
+the governed action, and those initial request/lifecycle records must identify
+`pulse_patrol` as the producer. The durable action identity, state transitions,
+and history remain owned by this store rather than by a Patrol-specific audit
+ledger or by Assistant-local requester inference.
 That same ownership boundary applies to incident-adjacent runtime history:
 durable backend facts about what changed on a resource belong in
 `ResourceChange` and the shared unified-resource store, while

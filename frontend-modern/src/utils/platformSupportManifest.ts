@@ -12,6 +12,7 @@ import {
   SOURCE_AGENT_HOST_PROFILE_HOST_IDENTITY_TOKENS,
   SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES,
   SOURCE_AGENT_HOST_PROFILE_READINESS_STAGE,
+  SOURCE_AGENT_HOST_PROFILE_RUNTIME_PLATFORM,
   SOURCE_AGENT_HOST_PROFILE_STORAGE_FAMILY,
   SOURCE_AGENT_HOST_PROFILE_SUPPORT_FLOOR,
   SOURCE_PLATFORM_CANONICAL_PROJECTIONS,
@@ -30,6 +31,7 @@ import {
   SUPPORTED_PLATFORM_IDS,
   type AgentHostProfileGovernanceState,
   type AgentHostProfileReadinessStage,
+  type AgentHostProfileRuntimePlatform,
   type AgentHostProfileSupportFloor,
   type AgentHostProfileSupportFloorValue,
   type GeneratedAgentHostProfileId,
@@ -51,6 +53,7 @@ export type SourceAgentHostProfileManifestEntry = GeneratedAgentHostProfileManif
 export type {
   AgentHostProfileGovernanceState,
   AgentHostProfileReadinessStage,
+  AgentHostProfileRuntimePlatform,
   AgentHostProfileSupportFloor,
   AgentHostProfileSupportFloorValue,
   GeneratedAgentHostProfileId as AgentHostProfileId,
@@ -92,6 +95,7 @@ export {
   SOURCE_AGENT_HOST_PROFILE_HOST_IDENTITY_TOKENS,
   SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES,
   SOURCE_AGENT_HOST_PROFILE_READINESS_STAGE,
+  SOURCE_AGENT_HOST_PROFILE_RUNTIME_PLATFORM,
   SOURCE_AGENT_HOST_PROFILE_STORAGE_FAMILY,
   SOURCE_AGENT_HOST_PROFILE_SUPPORT_FLOOR,
   SOURCE_PLATFORM_CANONICAL_PROJECTIONS,
@@ -136,6 +140,14 @@ export const getAgentHostProfileManifestEntry = (
 export const getAgentHostProfileFamily = (value: string | null | undefined): string | null => {
   const manifestProfile = getAgentHostProfileManifestEntry(value);
   return manifestProfile?.family ?? null;
+};
+
+export const getAgentHostProfileRuntimePlatform = (
+  value: string | null | undefined,
+): AgentHostProfileRuntimePlatform | null => {
+  const manifestProfile = getAgentHostProfileManifestEntry(value);
+  if (!manifestProfile) return null;
+  return SOURCE_AGENT_HOST_PROFILE_RUNTIME_PLATFORM[manifestProfile.id];
 };
 
 export const getSourcePlatformStorageFamily = (

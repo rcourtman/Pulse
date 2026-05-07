@@ -775,6 +775,8 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Tower')).toBeInTheDocument();
     expect(screen.getByText('Unraid 7.1.0')).toBeInTheDocument();
     expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
+    expect(towerAgent.agentIdentity?.hostProfile).toBe('unraid');
+    expect(towerAgent.agentIdentity?.platform).toBe('linux');
 
     fireEvent.click(screen.getByRole('button', { name: /^Manage$/i }));
 

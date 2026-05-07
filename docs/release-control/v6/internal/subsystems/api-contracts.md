@@ -434,10 +434,12 @@ the canonical monitored-system blocked payload.
    `internal/api/ai_handlers.go` must enter that same API-owned model at queue
    time: the approval adapter must attach a governed `ActionPlan`, persist the
    initial action audit as `planned` then `pending_approval`, and keep the
-   approval ID, action ID, dry-run/preflight posture, and lifecycle trail
-   available for Assistant handoff and resource action-history hydration.
-   Queuing the approval must not execute the fix or create a Patrol-local audit
-   record that bypasses `/api/actions` and the shared action-audit store.
+   approval ID, action ID, requester identity, dry-run/preflight posture, and
+   lifecycle trail available for Assistant handoff and resource action-history
+   hydration. Queueing a Patrol investigation fix must stamp the action request
+   and initial lifecycle events as `pulse_patrol`; it must not execute the fix,
+   create a Patrol-local audit record that bypasses `/api/actions`, or present
+   Patrol-origin proposals as generic Assistant-origin actions.
    Action execution is API-owned as the next explicit contract:
    `POST /api/actions/{id}/execute` may only start execution for an approved
    action or an approval-free executable plan, must atomically persist the
@@ -812,6 +814,10 @@ the canonical monitored-system blocked payload.
     `linux`, while `agentIdentity.hostProfile` carries the governed profile id
     such as `unraid`; frontend clients must not re-promote those profile ids
     into first-class platform types.
+    The API aggregator must resolve host-profile identity tokens and runtime
+    platform fallback values through the generated platform-support backend
+    projection in `internal/platformsupport/manifest_generated.go`, so payload
+    normalization cannot drift into API-local Unraid or appliance branches.
     `pulse fleet connections` may read that same `GET /api/connections`
     payload as a deterministic CLI adapter for agent-ready operations, but it
     must remain a read-only view over the canonical connections ledger rather
