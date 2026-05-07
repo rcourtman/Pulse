@@ -45,6 +45,7 @@ const patrolWorkspaceSource = readFileSync(
 describe('FindingsPanel assistant handoff', () => {
   it('routes Patrol investigation records into the Assistant briefing context', () => {
     expect(findingsPanelSource).toContain('buildPatrolAssistantFindingBriefing');
+    expect(findingsPanelSource).toContain('buildPatrolAssistantFindingHandoffActions');
     expect(findingsPanelSource).toContain('buildPatrolAssistantApprovalBriefingInput');
     expect(findingsPanelSource).toContain('buildPatrolAssistantProposedFixBriefingInput');
     expect(findingsPanelSource).toContain('briefing,');
@@ -53,6 +54,9 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('investigationRecord: finding.investigationRecord');
     expect(findingsPanelSource).toContain('pendingApproval: pendingApprovalBriefing');
     expect(findingsPanelSource).toContain('proposedFix,');
+    expect(findingsPanelSource).toContain(
+      'handoffActions: handoffActions.length > 0 ? handoffActions : undefined',
+    );
     expect(findingsPanelSource).toContain('AIAPI.getInvestigation(finding.id)');
     expect(findingsPanelSource).toContain('await aiIntelligenceStore.loadPendingApprovals()');
     expect(findingsPanelSource).toContain('patrolAssistantFindingHandoffRequiresApprovalMode');

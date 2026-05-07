@@ -4,6 +4,7 @@ import type { RemediationPlan } from '@/api/ai';
 import {
   buildPatrolAssessmentAssistantHandoff,
   buildPatrolAssistantFindingBriefing,
+  buildPatrolAssistantFindingHandoffActions,
   buildPatrolAssistantFindingPrompt,
   buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolInvestigationContextSummary,
@@ -508,6 +509,75 @@ describe('patrolInvestigationContextModel', () => {
     expect(prompt).toContain('destructive action');
     expect(prompt).toContain('safest next step');
     expect(prompt).not.toContain('systemctl restart nginx');
+  });
+
+  it('builds finding-level Assistant handoff actions without raw command text', () => {
+    const actions = buildPatrolAssistantFindingHandoffActions({
+      id: 'finding-1',
+      title: 'Nginx down',
+      resourceId: 'agent-1',
+      resourceName: 'node-1',
+      resourceType: 'agent',
+      pendingApproval: {
+        id: 'approval-1',
+        status: 'pending',
+        riskLevel: 'high',
+        requestedAt: '2026-05-06T12:00:00Z',
+        expiresAt: '2026-05-06T12:10:00Z',
+        targetName: 'node-1',
+        actionId: 'restart-nginx',
+        actionApprovalPolicy: 'operator',
+        actionPlanExpiresAt: '2026-05-06T12:10:00Z',
+        actionPlanMessage: 'Restart nginx after validating load balancer drain.',
+        actionPreflight: 'Would restart nginx on node-1.',
+        actionDryRunSummary: 'One service restart would be attempted.',
+      },
+      proposedFix: buildPatrolAssistantProposedFixBriefingInput({
+        description: 'Restart nginx',
+        commands: ['systemctl restart nginx'],
+        riskLevel: 'high',
+        targetHost: 'node-1',
+        destructive: false,
+      }),
+    });
+
+    expect(actions).toEqual([
+      {
+        findingId: 'finding-1',
+        recordId: undefined,
+        approvalId: 'approval-1',
+        approvalStatus: 'pending',
+        approvalRequestedAt: '2026-05-06T12:00:00Z',
+        approvalExpiresAt: '2026-05-06T12:10:00Z',
+        actionId: 'restart-nginx',
+        actionApprovalPolicy: 'operator',
+        actionRequiresApproval: true,
+        actionPlanExpiresAt: '2026-05-06T12:10:00Z',
+        actionPlanMessage: 'Restart nginx after validating load balancer drain.',
+        actionPreflight: 'Would restart nginx on node-1.',
+        actionDryRunSummary: 'One service restart would be attempted.',
+        fixId: undefined,
+        description: 'Restart nginx',
+        riskLevel: 'high',
+        destructive: false,
+        targetHost: 'node-1',
+        targetResourceId: 'agent-1',
+        targetResourceName: 'node-1',
+        targetResourceType: 'agent',
+        targetNode: undefined,
+      },
+    ]);
+    expect(JSON.stringify(actions)).not.toContain('systemctl restart nginx');
+  });
+
+  it('skips finding-level Assistant handoff actions when no governed action exists', () => {
+    expect(
+      buildPatrolAssistantFindingHandoffActions({
+        id: 'finding-1',
+        title: 'High CPU usage',
+        resourceId: 'agent-1',
+      }),
+    ).toEqual([]);
   });
 
   it('builds a drawer briefing for Assistant handoff without exposing raw commands', () => {

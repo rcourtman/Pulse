@@ -19,6 +19,7 @@ import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import {
   buildPatrolAssistantFindingBriefing,
+  buildPatrolAssistantFindingHandoffActions,
   buildPatrolAssistantFindingPrompt,
   buildPatrolAssistantApprovalBriefingInput,
   buildPatrolAssistantProposedFixBriefingInput,
@@ -513,6 +514,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       proposedFix,
       investigationRecord: finding.investigationRecord,
     });
+    const handoffActions = buildPatrolAssistantFindingHandoffActions({
+      id: finding.id,
+      title,
+      description: finding.description,
+      severity: finding.severity,
+      status: finding.status,
+      resourceId: finding.resourceId,
+      resourceName: finding.resourceName,
+      resourceType: finding.resourceType,
+      investigationStatus: finding.investigationStatus,
+      investigationOutcome: finding.investigationOutcome,
+      loopState: finding.loopState,
+      pendingApproval: pendingApprovalBriefing,
+      proposedFix,
+      investigationRecord: finding.investigationRecord,
+    });
     const requiresApprovalMode = patrolAssistantFindingHandoffRequiresApprovalMode({
       investigationOutcome: finding.investigationOutcome,
       remediationId: finding.remediationPlanId,
@@ -524,6 +541,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       targetId: finding.resourceId,
       findingId: finding.id,
       briefing,
+      handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
       autonomousMode: requiresApprovalMode ? false : undefined,
     });
   };

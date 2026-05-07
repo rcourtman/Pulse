@@ -454,6 +454,13 @@ export function buildPatrolAssessmentAssistantHandoff(
   };
 }
 
+export function buildPatrolAssistantFindingHandoffActions(
+  finding: PatrolAssessmentAssistantFindingInput,
+): AIChatHandoffAction[] {
+  const action = buildPatrolFindingHandoffAction(finding);
+  return action ? [action] : [];
+}
+
 function buildPatrolAssessmentAssistantPrompt(
   input: PatrolAssessmentAssistantHandoffInput,
   title: string,
@@ -796,60 +803,66 @@ function buildPatrolAssessmentHandoffActions(
 
   for (const finding of normalizeAssessmentFindings(input.activeFindings)) {
     if (actions.length >= MAX_ASSESSMENT_HANDOFF_ACTIONS) break;
-
-    const pendingApproval = normalizeApprovalBriefing(finding.pendingApproval);
-    const proposedFix = normalizeProposedFixBriefing(finding.proposedFix);
-    const record = finding.investigationRecord;
-    const recordFix = record?.proposed_fix;
-    const approvalId = pendingApproval.id || normalizeText(record?.approval_id);
-    const fixId = normalizeText(recordFix?.id);
-    const description =
-      normalizeText(proposedFix?.description) || normalizeText(recordFix?.description);
-
-    if (!approvalId && !fixId && !description && !pendingApproval.actionId) {
-      continue;
-    }
-
-    actions.push({
-      findingId: normalizeText(finding.id) || normalizeText(record?.finding_id) || undefined,
-      recordId: normalizeText(record?.id) || undefined,
-      approvalId: approvalId || undefined,
-      approvalStatus: pendingApproval.status || undefined,
-      approvalRequestedAt: pendingApproval.requestedAt || undefined,
-      approvalExpiresAt: pendingApproval.expiresAt || undefined,
-      actionId: pendingApproval.actionId || undefined,
-      actionApprovalPolicy: pendingApproval.actionApprovalPolicy || undefined,
-      actionRequiresApproval: Boolean(approvalId),
-      actionPlanExpiresAt: pendingApproval.actionPlanExpiresAt || undefined,
-      actionPlanMessage: pendingApproval.actionPlanMessage || undefined,
-      actionPreflight: pendingApproval.actionPreflight || undefined,
-      actionDryRunSummary: pendingApproval.actionDryRunSummary || undefined,
-      fixId: fixId || undefined,
-      description: description || undefined,
-      riskLevel:
-        pendingApproval.riskLevel ||
-        normalizeText(finding.proposedFix?.riskLevel) ||
-        normalizeText(recordFix?.risk_level) ||
-        undefined,
-      destructive: Boolean(proposedFix?.destructive || recordFix?.destructive),
-      targetHost:
-        normalizeText(proposedFix?.targetHost) ||
-        normalizeText(recordFix?.target_host) ||
-        pendingApproval.targetName ||
-        undefined,
-      targetResourceId:
-        normalizeText(finding.resourceId || record?.subject?.resource_id) || undefined,
-      targetResourceName:
-        normalizeText(finding.resourceName || record?.subject?.resource_name) ||
-        pendingApproval.targetName ||
-        undefined,
-      targetResourceType:
-        normalizeText(finding.resourceType || record?.subject?.resource_type) || undefined,
-      targetNode: normalizeText(record?.subject?.node) || undefined,
-    });
+    const action = buildPatrolFindingHandoffAction(finding);
+    if (action) actions.push(action);
   }
 
   return actions;
+}
+
+function buildPatrolFindingHandoffAction(
+  finding: PatrolAssessmentAssistantFindingInput,
+): AIChatHandoffAction | undefined {
+  const pendingApproval = normalizeApprovalBriefing(finding.pendingApproval);
+  const proposedFix = normalizeProposedFixBriefing(finding.proposedFix);
+  const record = finding.investigationRecord;
+  const recordFix = record?.proposed_fix;
+  const approvalId = pendingApproval.id || normalizeText(record?.approval_id);
+  const fixId = normalizeText(recordFix?.id);
+  const description =
+    normalizeText(proposedFix?.description) || normalizeText(recordFix?.description);
+
+  if (!approvalId && !fixId && !description && !pendingApproval.actionId) {
+    return undefined;
+  }
+
+  return {
+    findingId: normalizeText(finding.id) || normalizeText(record?.finding_id) || undefined,
+    recordId: normalizeText(record?.id) || undefined,
+    approvalId: approvalId || undefined,
+    approvalStatus: pendingApproval.status || undefined,
+    approvalRequestedAt: pendingApproval.requestedAt || undefined,
+    approvalExpiresAt: pendingApproval.expiresAt || undefined,
+    actionId: pendingApproval.actionId || undefined,
+    actionApprovalPolicy: pendingApproval.actionApprovalPolicy || undefined,
+    actionRequiresApproval: Boolean(approvalId),
+    actionPlanExpiresAt: pendingApproval.actionPlanExpiresAt || undefined,
+    actionPlanMessage: pendingApproval.actionPlanMessage || undefined,
+    actionPreflight: pendingApproval.actionPreflight || undefined,
+    actionDryRunSummary: pendingApproval.actionDryRunSummary || undefined,
+    fixId: fixId || undefined,
+    description: description || undefined,
+    riskLevel:
+      pendingApproval.riskLevel ||
+      normalizeText(finding.proposedFix?.riskLevel) ||
+      normalizeText(recordFix?.risk_level) ||
+      undefined,
+    destructive: Boolean(proposedFix?.destructive || recordFix?.destructive),
+    targetHost:
+      normalizeText(proposedFix?.targetHost) ||
+      normalizeText(recordFix?.target_host) ||
+      pendingApproval.targetName ||
+      undefined,
+    targetResourceId:
+      normalizeText(finding.resourceId || record?.subject?.resource_id) || undefined,
+    targetResourceName:
+      normalizeText(finding.resourceName || record?.subject?.resource_name) ||
+      pendingApproval.targetName ||
+      undefined,
+    targetResourceType:
+      normalizeText(finding.resourceType || record?.subject?.resource_type) || undefined,
+    targetNode: normalizeText(record?.subject?.node) || undefined,
+  };
 }
 
 function normalizeAssessmentFindings(
