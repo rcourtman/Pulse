@@ -781,6 +781,9 @@ approval consumers must treat the approval queue as `soonest expiry first`,
 then higher risk, then older request time, rather than inheriting raw API
 order. Approval-linked findings must follow that same ordering so multi-approval
 `Review` actions jump to the most urgent finding instead of an arbitrary one.
+Malformed or missing approval timestamps must sort after valid timestamps and
+must not produce non-deterministic comparator results in the shared urgency
+utility.
 Patrol fix approvals also inherit the unified action-governance preflight
 contract: queued fixes must keep their plan-level dry-run availability, safety
 checks, verification steps, approval policy, and action id in the shared

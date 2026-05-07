@@ -5,10 +5,10 @@ export interface ApprovalRiskPresentation {
 
 const APPROVAL_RISK_SORT_ORDER: Record<string, number> = {
   critical: 0,
-  high: 0,
-  medium: 1,
-  low: 2,
-  unknown: 3,
+  high: 1,
+  medium: 2,
+  low: 3,
+  unknown: 4,
 };
 
 function normalizeApprovalRiskLevel(level?: string): string {
@@ -50,16 +50,29 @@ export function getApprovalRiskSortOrder(level?: string): number {
   return APPROVAL_RISK_SORT_ORDER[normalized] ?? APPROVAL_RISK_SORT_ORDER.unknown;
 }
 
+function getApprovalTimestampSortValue(value?: string | null): number {
+  const parsed = Date.parse(value ?? '');
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
+
+function compareApprovalTimestamps(a?: string | null, b?: string | null): number {
+  const aValue = getApprovalTimestampSortValue(a);
+  const bValue = getApprovalTimestampSortValue(b);
+
+  if (aValue === bValue) return 0;
+  return aValue < bValue ? -1 : 1;
+}
+
 export function sortPendingApprovalsByUrgency<
-  T extends { expiresAt: string; requestedAt: string; riskLevel?: string },
+  T extends { expiresAt?: string | null; requestedAt?: string | null; riskLevel?: string },
 >(approvals: T[]): T[] {
   return [...approvals].sort((a, b) => {
-    const expiryDiff = new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime();
+    const expiryDiff = compareApprovalTimestamps(a.expiresAt, b.expiresAt);
     if (expiryDiff !== 0) return expiryDiff;
 
     const riskDiff = getApprovalRiskSortOrder(a.riskLevel) - getApprovalRiskSortOrder(b.riskLevel);
     if (riskDiff !== 0) return riskDiff;
 
-    return new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime();
+    return compareApprovalTimestamps(a.requestedAt, b.requestedAt);
   });
 }
