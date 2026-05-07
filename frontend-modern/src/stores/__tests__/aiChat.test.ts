@@ -126,6 +126,31 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.autonomousMode).toBe(false);
   });
 
+  it('preserves model-only handoff context and resources for pre-filled prompts', () => {
+    aiChatStore.openWithPrompt('discuss this incident', {
+      targetType: 'storage',
+      targetId: 'storage-1',
+      autonomousMode: false,
+      handoffContext:
+        '[Alert Incident Context]\nTimeline Event 1: 2026-05-07T00:02:00Z | Command | Command event recorded',
+      handoffResources: [{ id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' }],
+    });
+
+    expect(aiChatStore.context.initialPrompt).toBe('discuss this incident');
+    expect(aiChatStore.context.handoffContext).toContain('[Alert Incident Context]');
+    expect(aiChatStore.context.handoffResources).toEqual([
+      { id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' },
+    ]);
+
+    aiChatStore.clearInitialPrompt();
+
+    expect(aiChatStore.context.initialPrompt).toBeUndefined();
+    expect(aiChatStore.context.handoffContext).toContain('Command event recorded');
+    expect(aiChatStore.context.handoffResources).toEqual([
+      { id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' },
+    ]);
+  });
+
   it('focusInput returns false when closed and true when open with a registered element', () => {
     const textarea = document.createElement('textarea');
     document.body.appendChild(textarea);

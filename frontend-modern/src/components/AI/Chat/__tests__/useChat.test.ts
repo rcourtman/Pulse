@@ -230,6 +230,37 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('passes model-only handoff context and resource references to the API', async () => {
+      mockChat.mockResolvedValue(undefined);
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      await chat.sendMessage('explain this incident', undefined, undefined, {
+        autonomousMode: false,
+        handoffContext: '[Alert Incident Context]\nIncident ID: incident-1',
+        handoffResources: [
+          {
+            id: 'storage-1',
+            name: 'tank',
+            type: 'storage',
+            node: 'nas-1',
+          },
+        ],
+      });
+
+      const chatCall = mockChat.mock.calls[0];
+      expect(chatCall[7]).toBe(false);
+      expect(chatCall[8]).toBe('[Alert Incident Context]\nIncident ID: incident-1');
+      expect(chatCall[9]).toEqual([
+        {
+          id: 'storage-1',
+          name: 'tank',
+          type: 'storage',
+          node: 'nas-1',
+        },
+      ]);
+      dispose();
+    });
+
     it('aborts current stream when sending mid-stream', async () => {
       // First call: capture signal so we can verify it was aborted
       let capturedSignal: AbortSignal | undefined;

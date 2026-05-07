@@ -775,23 +775,70 @@ func canonicalizeChatMentionType(raw string) string {
 
 // ChatRequest represents a chat request
 type ChatRequest struct {
-	Prompt         string        `json:"prompt"`
-	SessionID      string        `json:"session_id,omitempty"`
-	Model          string        `json:"model,omitempty"`
-	Mentions       []ChatMention `json:"mentions,omitempty"`
-	FindingID      string        `json:"finding_id,omitempty"`
-	AutonomousMode *bool         `json:"autonomous_mode,omitempty"`
+	Prompt           string                 `json:"prompt"`
+	SessionID        string                 `json:"session_id,omitempty"`
+	Model            string                 `json:"model,omitempty"`
+	Mentions         []ChatMention          `json:"mentions,omitempty"`
+	FindingID        string                 `json:"finding_id,omitempty"`
+	HandoffContext   string                 `json:"handoff_context,omitempty"`
+	HandoffResources []chat.HandoffResource `json:"handoff_resources,omitempty"`
+	AutonomousMode   *bool                  `json:"autonomous_mode,omitempty"`
 }
 
-func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool {
-	if strings.TrimSpace(findingID) == "" {
-		return requested
-	}
+const (
+	chatRequestHandoffContextMaxBytes = 16 * 1024
+	chatRequestHandoffResourceLimit   = 8
+)
+
+func chatAutonomousModeForScopedHandoff(requested *bool, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool {
 	if strings.TrimSpace(handoffContext) == "" && len(handoffResources) == 0 && len(handoffActions) == 0 {
 		return requested
 	}
 	approvalRequired := false
 	return &approvalRequired
+}
+
+func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool {
+	return chatAutonomousModeForScopedHandoff(requested, handoffContext, handoffResources, handoffActions)
+}
+
+func normalizeChatRequestHandoffContext(raw string) string {
+	context := strings.TrimSpace(raw)
+	if len(context) <= chatRequestHandoffContextMaxBytes {
+		return context
+	}
+	return strings.TrimSpace(context[:chatRequestHandoffContextMaxBytes]) + "\n[Handoff Context Truncated]"
+}
+
+func normalizeChatRequestHandoffResources(raw []chat.HandoffResource) []chat.HandoffResource {
+	resources := make([]chat.HandoffResource, 0, min(len(raw), chatRequestHandoffResourceLimit))
+	for _, resource := range raw {
+		if len(resources) >= chatRequestHandoffResourceLimit {
+			break
+		}
+		id := trimChatHandoffField(resource.ID, 256)
+		name := trimChatHandoffField(resource.Name, 256)
+		resourceType := canonicalizeChatMentionType(resource.Type)
+		node := trimChatHandoffField(resource.Node, 256)
+		if id == "" && name == "" {
+			continue
+		}
+		resources = append(resources, chat.HandoffResource{
+			ID:   id,
+			Name: name,
+			Type: resourceType,
+			Node: node,
+		})
+	}
+	return resources
+}
+
+func trimChatHandoffField(raw string, limit int) string {
+	value := strings.TrimSpace(raw)
+	if len(value) <= limit {
+		return value
+	}
+	return strings.TrimSpace(value[:limit])
 }
 
 const findingChatContextListLimit = 5
@@ -2119,8 +2166,8 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// Build model-only finding context when discussing a specific finding. The
 	// chat service injects this into the current model turn without persisting it
 	// as the user's authored prompt, so conversation history stays readable.
-	handoffContext := ""
-	var handoffResources []chat.HandoffResource
+	handoffContext := normalizeChatRequestHandoffContext(req.HandoffContext)
+	handoffResources := normalizeChatRequestHandoffResources(req.HandoffResources)
 	var handoffActions []chat.HandoffAction
 	findingID := strings.TrimSpace(req.FindingID)
 	if findingID == "" && strings.TrimSpace(req.SessionID) != "" {
@@ -2149,6 +2196,9 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			findingID = ""
+			handoffContext = ""
+			handoffResources = nil
+			handoffActions = nil
 		}
 	}
 

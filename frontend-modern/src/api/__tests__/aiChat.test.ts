@@ -143,4 +143,57 @@ describe('AIChatAPI', () => {
       }),
     );
   });
+
+  it('includes model-only handoff context and resource references when supplied', async () => {
+    const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIChatAPI.chat(
+      'discuss incident',
+      'session-3',
+      undefined,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      false,
+      '[Alert Incident Context]\nIncident ID: incident-1',
+      [
+        {
+          id: 'storage-1',
+          name: 'tank',
+          type: 'storage',
+          node: 'nas-1',
+        },
+      ],
+    );
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/ai/chat',
+      expect.objectContaining({
+        body: JSON.stringify({
+          prompt: 'discuss incident',
+          session_id: 'session-3',
+          model: undefined,
+          autonomous_mode: false,
+          handoff_context: '[Alert Incident Context]\nIncident ID: incident-1',
+          handoff_resources: [
+            {
+              id: 'storage-1',
+              name: 'tank',
+              type: 'storage',
+              node: 'nas-1',
+            },
+          ],
+        }),
+      }),
+    );
+  });
 });

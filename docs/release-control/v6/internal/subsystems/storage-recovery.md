@@ -403,6 +403,13 @@ bypass the API fail-closed execution gate.
     `finding_id` handoffs with model-only Patrol briefing, resource, or action
     context is Assistant action-governance, not a storage/recovery approval,
     recovery freshness, or restore-command signal.
+    Alert and incident Assistant handoffs that send bounded model-only
+    `handoff_context` and `handoff_resources` through `/api/ai/chat` without a
+    `finding_id` stay on that same adjacent AI/runtime boundary. Storage and
+    recovery surfaces may consume the explanation context, but must not treat
+    the handoff resource reference as backup freshness, restore eligibility,
+    recovery execution authority, storage health truth, or a storage-local
+    approval shortcut.
     That same adjacent boundary also keeps the retired Patrol quickstart
     contract out of storage/recovery ownership: shared AI handlers no longer
     expose active quickstart credit, token, or hosted-model provider state, and

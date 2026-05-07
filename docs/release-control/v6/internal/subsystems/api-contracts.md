@@ -100,7 +100,8 @@ product API routes free of maintainer commercial analytics.
 66. `pkg/aicontracts/investigation.go`
 67. `internal/api/ai_intelligence_handlers.go`
 68. `frontend-modern/src/api/ai.ts`
-69. `frontend-modern/src/api/patrol.ts`
+69. `frontend-modern/src/api/aiChat.ts`
+70. `frontend-modern/src/api/patrol.ts`
 
 ## Shared Boundaries
 
@@ -1835,6 +1836,15 @@ overrides. Dashboard Pulse Brief and other scoped handoffs may include
 execution for that exchange, but the transport must treat the field as a
 request override only and must not mutate the user's persistent AI control
 setting.
+The same chat payload boundary now carries scoped product handoff context:
+`handoff_context` is bounded model-only text and `handoff_resources` are
+structured resource references used to seed canonical resource-policy, state,
+relationship, and timeline hydration. Frontend handoff builders may send these
+fields for owned alert or incident context, but the backend must not persist
+them as user-authored message text and must treat them as explanation/review
+context only. When a Patrol `finding_id` resolves, backend-refreshed durable
+finding context replaces any browser-supplied handoff text so the model cannot
+continue from stale or spoofed Patrol context.
 Patrol finding handoffs are stricter than ordinary chat requests: when
 `finding_id` resolves to model-only Patrol briefing, resource, or action
 context, `internal/api/ai_handler.go` must clamp the request-local autonomous

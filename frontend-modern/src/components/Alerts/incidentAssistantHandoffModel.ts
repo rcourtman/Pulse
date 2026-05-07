@@ -45,6 +45,15 @@ export function buildAlertIncidentAssistantHandoff({
   const events = sanitizeIncidentEvents(incident.events ?? []);
   const eventCount = events.length;
   const eventCountLabel = `${eventCount} timeline event${eventCount === 1 ? '' : 's'}`;
+  const handoffContext = buildIncidentAssistantModelContext({
+    incident,
+    events,
+    resourceLabel,
+    levelLabel,
+    statusLabel,
+    durationText,
+    eventCountLabel,
+  });
 
   const prompt = [
     `Discuss this ${levelLabel} alert incident from Pulse Alerts.`,
@@ -73,6 +82,15 @@ export function buildAlertIncidentAssistantHandoff({
       targetType,
       targetId: incident.resourceId,
       autonomousMode: false,
+      handoffContext,
+      handoffResources: [
+        {
+          id: incident.resourceId,
+          name: resourceLabel,
+          type: targetType,
+          node: incident.node,
+        },
+      ],
       briefing: {
         sourceLabel: 'Pulse Alerts',
         title: 'Incident timeline attached',
@@ -110,6 +128,58 @@ export function buildAlertIncidentAssistantHandoff({
   };
 }
 
+function buildIncidentAssistantModelContext({
+  incident,
+  events,
+  resourceLabel,
+  levelLabel,
+  statusLabel,
+  durationText,
+  eventCountLabel,
+}: {
+  incident: Incident;
+  events: SanitizedIncidentEvent[];
+  resourceLabel: string;
+  levelLabel: string;
+  statusLabel: string;
+  durationText: string;
+  eventCountLabel: string;
+}): string {
+  const eventLines = events
+    .slice(0, MAX_CONTEXT_EVENTS)
+    .map((event, index) =>
+      formatContextLine(
+        `Timeline Event ${index + 1}`,
+        `${event.timestamp} | ${formatIncidentLabel(event.type)} | ${event.summary}`,
+      ),
+    );
+
+  return [
+    '[Alert Incident Context]',
+    'Source: Pulse Alerts incident timeline',
+    formatContextLine('Incident ID', incident.id),
+    formatContextLine('Alert Identifier', incident.alertIdentifier),
+    formatContextLine('Alert Type', incident.alertType),
+    formatContextLine('Alert Level', levelLabel),
+    formatContextLine('Incident Status', statusLabel),
+    formatContextLine('Resource', resourceLabel),
+    formatContextLine('Resource ID', incident.resourceId),
+    formatContextLine('Resource Type', incident.resourceType),
+    formatContextLine('Node', incident.node),
+    formatContextLine('Instance', incident.instance),
+    formatContextLine('Opened At', incident.openedAt),
+    formatContextLine('Closed At', incident.closedAt),
+    formatContextLine('Duration', durationText),
+    formatContextLine('Timeline Summary', eventCountLabel),
+    formatContextLine('Message', incident.message),
+    ...eventLines,
+    'Timeline Boundary: Command events are summarized only; raw command details and output stay in the incident or governed approval surface.',
+    'Operator Boundary: This incident handoff is model-only context for explanation and review. Diagnostics, remediation, and any command execution require explicit operator approval.',
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+}
+
 function sanitizeIncidentEvents(events: IncidentEvent[]): SanitizedIncidentEvent[] {
   return events.map((event) => ({
     id: event.id,
@@ -127,6 +197,15 @@ function sanitizeIncidentEventSummary(event: IncidentEvent): string {
 
   const summary = event.summary.trim();
   return summary.length > 0 ? summary : 'Timeline event recorded';
+}
+
+function formatContextLine(
+  label: string,
+  value?: string | number | boolean | null,
+): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const text = String(value).trim();
+  return text ? `${label}: ${text}` : undefined;
 }
 
 function formatIncidentDuration(openedAt: string, closedAt: string | undefined, now: Date): string {

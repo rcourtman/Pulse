@@ -569,6 +569,44 @@ func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestHandleChat_PassesScopedHandoffContext(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "discuss incident", reqArg.Prompt)
+			assert.Equal(t, "", reqArg.FindingID)
+			assert.Contains(t, reqArg.HandoffContext, "[Alert Incident Context]")
+			assert.Contains(t, reqArg.HandoffContext, "Incident ID: incident-1")
+			assert.Contains(t, reqArg.HandoffContext, "Timeline Event 1: Command | Command event recorded")
+			assert.NotContains(t, reqArg.HandoffContext, "systemctl")
+			assert.Equal(t, []chat.HandoffResource{{
+				ID:   "storage-1",
+				Name: "tank",
+				Type: "storage",
+				Node: "nas-1",
+			}}, reqArg.HandoffResources)
+			if assert.NotNil(t, reqArg.AutonomousMode) {
+				assert.False(t, *reqArg.AutonomousMode)
+			}
+		})
+
+	body := `{"prompt":"discuss incident","autonomous_mode":true,"handoff_context":"[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command | Command event recorded","handoff_resources":[{"id":"storage-1","name":"tank","type":"storage","node":"nas-1"}]}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)

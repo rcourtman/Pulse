@@ -813,6 +813,10 @@ frontend primitive boundary.
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
     feature-owned helpers must provide the source labels, attention reason,
     evidence summaries, operator-decision copy, action copy, and safety note.
+    When those feature-owned helpers attach backend model-only context, the
+    drawer store may carry only bounded handoff text and structured resource
+    references for the shared chat transport; approval, lifecycle, and command
+    authority remain with the owning runtime surfaces.
     Patrol finding handoffs should still provide that briefing from current
     finding facts when a durable Patrol investigation record is not attached
     yet, rather than opening the shared drawer as empty generic chat.
@@ -1052,6 +1056,9 @@ primitives must not fork that string or revive removed nested route labels.
 The shared Assistant drawer owns source-named approval banners for governed
 handoffs. Patrol handoffs render as Patrol, and alert plus alert incident
 timeline handoffs render as alert investigations rather than dashboard briefs.
+Those same drawer handoffs may carry model-only chat context and resource
+references to the backend, but the drawer remains a presentation and transport
+owner rather than the source of approval or execution truth.
 
 `SettingsTab` no longer includes `infrastructure-connections` or
 `infrastructure-install`. The single `infrastructure-systems` entry in

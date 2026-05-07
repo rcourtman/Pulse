@@ -80,11 +80,20 @@ const {
       autonomousMode: undefined,
       context: undefined,
       briefing: undefined,
+      handoffContext: undefined,
+      handoffResources: undefined,
     } as {
       initialPrompt?: string;
       findingId?: string;
       autonomousMode?: boolean;
       context?: Record<string, unknown>;
+      handoffContext?: string;
+      handoffResources?: Array<{
+        id: string;
+        name?: string;
+        type?: string;
+        node?: string;
+      }>;
       briefing?: {
         sourceLabel: string;
         title: string;
@@ -1088,6 +1097,59 @@ describe('AIChat', () => {
       expect(
         screen.queryByText(/Approval required for this dashboard brief/),
       ).not.toBeInTheDocument();
+    });
+
+    it('passes model-only handoff context and resources on submit', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'gpt-4',
+        chat_model: '',
+        control_level: 'autonomous',
+        autonomous_mode: true,
+        discovery_enabled: true,
+      });
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        autonomousMode: false,
+        handoffContext:
+          '[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command event recorded',
+        handoffResources: [
+          {
+            id: 'storage-1',
+            name: 'tank',
+            type: 'storage',
+            node: 'nas-1',
+          },
+        ],
+        briefing: {
+          sourceLabel: 'Pulse Alerts',
+          title: 'Incident timeline attached',
+        },
+      };
+
+      renderChat();
+
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      fireEvent.input(textarea, { target: { value: 'what happened here?' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'what happened here?',
+        undefined,
+        undefined,
+        {
+          autonomousMode: false,
+          handoffContext:
+            '[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command event recorded',
+          handoffResources: [
+            {
+              id: 'storage-1',
+              name: 'tank',
+              type: 'storage',
+              node: 'nas-1',
+            },
+          ],
+        },
+      );
     });
   });
 

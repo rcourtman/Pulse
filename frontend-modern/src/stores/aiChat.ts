@@ -16,6 +16,13 @@ export interface AIChatContextBriefing {
   safetyNote?: string;
 }
 
+export interface AIChatHandoffResource {
+  id: string;
+  name?: string;
+  type?: string;
+  node?: string;
+}
+
 export interface AIChatContext {
   targetType?: string;
   targetId?: string;
@@ -23,6 +30,8 @@ export interface AIChatContext {
   initialPrompt?: string;
   findingId?: string; // If opened from AI Insights "Get Help", the finding ID to resolve on success
   briefing?: AIChatContextBriefing;
+  handoffContext?: string;
+  handoffResources?: AIChatHandoffResource[];
   // Per-request execution mode override; false keeps scoped handoffs approval-required.
   autonomousMode?: boolean;
 }

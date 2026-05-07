@@ -23,6 +23,13 @@ export interface ChatMention {
   node?: string;
 }
 
+export interface ChatHandoffResource {
+  id: string;
+  name?: string;
+  type?: string;
+  node?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -200,6 +207,8 @@ export class AIChatAPI {
     mentions?: ChatMention[],
     findingId?: string,
     autonomousMode?: boolean,
+    handoffContext?: string,
+    handoffResources?: ChatHandoffResource[],
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
@@ -216,6 +225,12 @@ export class AIChatAPI {
     }
     if (typeof autonomousMode === 'boolean') {
       body.autonomous_mode = autonomousMode;
+    }
+    if (handoffContext && handoffContext.trim()) {
+      body.handoff_context = handoffContext;
+    }
+    if (handoffResources && handoffResources.length > 0) {
+      body.handoff_resources = handoffResources;
     }
 
     const response = await apiFetch(`${this.baseUrl}/chat`, {

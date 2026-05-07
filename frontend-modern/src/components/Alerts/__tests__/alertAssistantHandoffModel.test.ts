@@ -37,6 +37,14 @@ describe('alertAssistantHandoffModel', () => {
       targetType: 'vm',
       targetId: 'vm-101',
       autonomousMode: false,
+      handoffResources: [
+        {
+          id: 'vm-101',
+          name: 'app-vm',
+          type: 'vm',
+          node: 'pve1',
+        },
+      ],
       briefing: {
         sourceLabel: 'Pulse Alerts',
         title: 'Alert investigation attached',
@@ -60,6 +68,10 @@ describe('alertAssistantHandoffModel', () => {
         vmid: 101,
       },
     });
+    expect(handoff.context.handoffContext).toContain('[Alert Investigation Context]');
+    expect(handoff.context.handoffContext).toContain('Source: Pulse Alerts active alert');
+    expect(handoff.context.handoffContext).toContain('Alert Identifier: alert-1');
+    expect(handoff.context.handoffContext).toContain('Operator Boundary:');
     expect(JSON.stringify(handoff)).not.toContain('systemctl');
   });
 

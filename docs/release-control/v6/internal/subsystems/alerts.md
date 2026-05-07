@@ -110,14 +110,18 @@ operator-facing alert routing behavior for live runtime alerts.
    `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` and
    `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`;
    these handoffs must preserve alert context, force request-scoped approval
-   mode, and render a visible Alerts-owned briefing in the Assistant drawer
-   without transferring raw command payloads.
+   mode, send bounded model-only handoff context plus structured resource
+   references through the shared Assistant chat transport, and render a visible
+   Alerts-owned briefing in the Assistant drawer without transferring raw
+   command payloads.
 8. Add or change Pulse Assistant incident timeline handoffs through
    `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
    and `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`;
    these handoffs must preserve sanitized incident facts and timeline event
-   summaries, force request-scoped approval mode, and keep raw command/output
-   details in the incident or approval surface rather than the chat handoff.
+   summaries, force request-scoped approval mode, send the same sanitized facts
+   as model-only handoff context plus structured resource references through
+   the shared Assistant chat transport, and keep raw command/output details in
+   the incident or approval surface rather than the chat handoff.
 
 ## Forbidden Paths
 
@@ -707,8 +711,9 @@ and `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`. Future incident
 timeline control flow should land in that feature hook instead of being forked
 back into either alert surface. Alert incident timeline handoffs into Pulse
 Assistant are now owned by the Alerts incident handoff model and carry only
-sanitized incident facts plus event summaries; raw command and output details
-stay in the incident timeline or approval surface.
+sanitized incident facts plus event summaries into both the visible drawer
+briefing and the backend model-only handoff context; raw command and output
+details stay in the incident timeline or approval surface.
 
 Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`

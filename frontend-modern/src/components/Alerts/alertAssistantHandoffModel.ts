@@ -37,6 +37,15 @@ export function buildAlertAssistantHandoff({
         : undefined,
     resourceId: alert.resourceId,
   });
+  const handoffContext = buildAlertAssistantModelContext({
+    alert,
+    alertIdentifier,
+    currentValue,
+    thresholdValue,
+    durationText,
+    nodeLabel,
+    levelLabel,
+  });
 
   const prompt = `Investigate this ${alert.level.toUpperCase()} alert:
 
@@ -59,6 +68,15 @@ Please:
       targetType,
       targetId: alert.resourceId,
       autonomousMode: false,
+      handoffContext,
+      handoffResources: [
+        {
+          id: alert.resourceId,
+          name: alert.resourceName,
+          type: targetType,
+          node: alert.node,
+        },
+      ],
       briefing: {
         sourceLabel: 'Pulse Alerts',
         title: 'Alert investigation attached',
@@ -83,6 +101,49 @@ Please:
       },
     },
   };
+}
+
+function buildAlertAssistantModelContext({
+  alert,
+  alertIdentifier,
+  currentValue,
+  thresholdValue,
+  durationText,
+  nodeLabel,
+  levelLabel,
+}: {
+  alert: Alert;
+  alertIdentifier: string;
+  currentValue: string;
+  thresholdValue: string;
+  durationText: string;
+  nodeLabel: string;
+  levelLabel: string;
+}): string {
+  return [
+    '[Alert Investigation Context]',
+    'Source: Pulse Alerts active alert',
+    formatContextLine('Alert Identifier', alertIdentifier),
+    formatContextLine('Alert Type', alert.type),
+    formatContextLine('Alert Level', levelLabel),
+    formatContextLine('Alert Status', 'active'),
+    formatContextLine('Resource', alert.resourceName),
+    formatContextLine('Resource ID', alert.resourceId),
+    formatContextLine('Current Value', currentValue),
+    formatContextLine('Threshold', thresholdValue),
+    formatContextLine('Duration', durationText),
+    formatContextLine('Node', nodeLabel),
+    formatContextLine('Message', alert.message),
+    'Operator Boundary: This alert handoff is model-only context for explanation and review. Diagnostics, remediation, and any command execution require explicit operator approval.',
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+}
+
+function formatContextLine(label: string, value?: string | number | null): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const text = String(value).trim();
+  return text ? `${label}: ${text}` : undefined;
 }
 
 function formatAlertDuration(startTime: string, now: Date): string {

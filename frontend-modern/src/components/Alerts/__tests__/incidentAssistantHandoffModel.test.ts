@@ -53,6 +53,14 @@ describe('incidentAssistantHandoffModel', () => {
       targetType: 'app-container',
       targetId: 'docker:app-1',
       autonomousMode: false,
+      handoffResources: [
+        {
+          id: 'docker:app-1',
+          name: 'checkout-api',
+          type: 'app-container',
+          node: 'edge-1',
+        },
+      ],
       briefing: {
         sourceLabel: 'Pulse Alerts',
         title: 'Incident timeline attached',
@@ -95,6 +103,11 @@ describe('incidentAssistantHandoffModel', () => {
         ],
       },
     });
+    expect(handoff.context.handoffContext).toContain('[Alert Incident Context]');
+    expect(handoff.context.handoffContext).toContain('Source: Pulse Alerts incident timeline');
+    expect(handoff.context.handoffContext).toContain('Timeline Event 1:');
+    expect(handoff.context.handoffContext).toContain('Command | Command event recorded');
+    expect(handoff.context.handoffContext).toContain('Timeline Boundary:');
     expect(JSON.stringify(handoff)).not.toContain('systemctl');
     expect(JSON.stringify(handoff)).not.toContain('secret-value');
   });

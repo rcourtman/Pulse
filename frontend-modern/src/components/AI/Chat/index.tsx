@@ -57,7 +57,7 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { useChat } from './hooks/useChat';
+import { useChat, type SendMessageOptions } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
@@ -665,9 +665,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Pass findingId from context on the first message, clear after success
     const ctx = aiChatStore.context;
     const findingId = ctx.findingId;
-    const sendOptions =
-      typeof ctx.autonomousMode === 'boolean' ? { autonomousMode: ctx.autonomousMode } : undefined;
-    const sendPromise = sendOptions
+    const sendOptions: SendMessageOptions = {};
+    if (typeof ctx.autonomousMode === 'boolean') {
+      sendOptions.autonomousMode = ctx.autonomousMode;
+    }
+    if (ctx.handoffContext && ctx.handoffContext.trim()) {
+      sendOptions.handoffContext = ctx.handoffContext;
+    }
+    if (ctx.handoffResources && ctx.handoffResources.length > 0) {
+      sendOptions.handoffResources = ctx.handoffResources;
+    }
+    const hasSendOptions =
+      typeof sendOptions.autonomousMode === 'boolean' ||
+      Boolean(sendOptions.handoffContext) ||
+      Boolean(sendOptions.handoffResources?.length);
+    const sendPromise = hasSendOptions
       ? chat.sendMessage(prompt, mentionsForAPI, findingId, sendOptions)
       : chat.sendMessage(prompt, mentionsForAPI, findingId);
     sendPromise.then((ok) => {

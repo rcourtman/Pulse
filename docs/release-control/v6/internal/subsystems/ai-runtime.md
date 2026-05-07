@@ -27,21 +27,22 @@ runtime cost control, and shared AI transport surfaces.
 5. `internal/api/ai_hosted_runtime.go`
 6. `internal/api/ai_intelligence_handlers.go`
 7. `frontend-modern/src/api/ai.ts`
-8. `frontend-modern/src/api/patrol.ts`
-9. `frontend-modern/src/components/AI/AICostDashboard.tsx`
-10. `frontend-modern/src/components/AI/Chat/`
-11. `frontend-modern/src/utils/aiChatPresentation.ts`
-12. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
-13. `frontend-modern/src/utils/aiCostPresentation.ts`
-14. `frontend-modern/src/utils/aiExplorePresentation.ts`
-15. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
-16. `frontend-modern/src/utils/aiProviderPresentation.ts`
-17. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
-18. `frontend-modern/src/utils/textPresentation.ts`
-19. `frontend-modern/src/stores/aiRuntimeState.ts`
-20. `frontend-modern/src/stores/aiChat.ts`
-21. `docs/AI.md`
-22. `pkg/aicontracts/investigation.go`
+8. `frontend-modern/src/api/aiChat.ts`
+9. `frontend-modern/src/api/patrol.ts`
+10. `frontend-modern/src/components/AI/AICostDashboard.tsx`
+11. `frontend-modern/src/components/AI/Chat/`
+12. `frontend-modern/src/utils/aiChatPresentation.ts`
+13. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
+14. `frontend-modern/src/utils/aiCostPresentation.ts`
+15. `frontend-modern/src/utils/aiExplorePresentation.ts`
+16. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
+17. `frontend-modern/src/utils/aiProviderPresentation.ts`
+18. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
+19. `frontend-modern/src/utils/textPresentation.ts`
+20. `frontend-modern/src/stores/aiRuntimeState.ts`
+21. `frontend-modern/src/stores/aiChat.ts`
+22. `docs/AI.md`
+23. `pkg/aicontracts/investigation.go`
 
 ## Shared Boundaries
 
@@ -56,7 +57,7 @@ runtime cost control, and shared AI transport surfaces.
 
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
 2. Add or change canonical AI provider config, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go`
-3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go` and `frontend-modern/src/api/ai.ts`
+3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
 6. Add or change AI provider, control-level, chat/session, or explore-state presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
@@ -1078,6 +1079,14 @@ only governed prompt/context data, but the submitted chat request must set
 `autonomous_mode:false`, preserve the operator's persistent Assistant
 control-level setting, and disclose the temporary approval-required mode in
 the drawer instead of showing the generic Autonomous warning.
+Scoped Assistant handoffs that originate in owned product surfaces may also
+send bounded `handoff_context` text plus structured `handoff_resources` through
+`frontend-modern/src/api/aiChat.ts` and `/api/ai/chat`. That context is
+model-only session metadata, not saved user-authored message text, and the
+backend must clamp the exchange to approval-required mode whenever such scoped
+handoff context or resources are present. Patrol finding IDs remain stricter:
+when `finding_id` resolves, backend-refreshed durable Patrol context replaces
+browser-supplied handoff text.
 Direct alert-investigation runtime handoffs follow the same rule even when
 they bypass the chat drawer. `/api/ai/investigate-alert` must set
 `ai.ExecuteRequest.AutonomousMode` to false plus

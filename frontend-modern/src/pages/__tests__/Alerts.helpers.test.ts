@@ -19,6 +19,7 @@ import alertHistoryTableAlertRowSource from '@/features/alerts/AlertHistoryTable
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertResourceIncidentsPanelSource from '@/features/alerts/AlertResourceIncidentsPanel.tsx?raw';
+import alertAssistantHandoffModelSource from '@/components/Alerts/alertAssistantHandoffModel.ts?raw';
 import incidentAssistantHandoffButtonSource from '@/components/Alerts/IncidentAssistantHandoffButton.tsx?raw';
 import incidentAssistantHandoffModelSource from '@/components/Alerts/incidentAssistantHandoffModel.ts?raw';
 import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
@@ -473,7 +474,13 @@ describe('tab path helpers', () => {
     expect(incidentTimelinePanelSource).toContain('IncidentAssistantHandoffButton');
     expect(incidentAssistantHandoffButtonSource).toContain('buildAlertIncidentAssistantHandoff');
     expect(incidentAssistantHandoffButtonSource).toContain('aiChatStore.openWithPrompt');
+    expect(alertAssistantHandoffModelSource).toContain('handoffContext');
+    expect(alertAssistantHandoffModelSource).toContain('handoffResources');
+    expect(alertAssistantHandoffModelSource).toContain('[Alert Investigation Context]');
     expect(incidentAssistantHandoffModelSource).toContain('autonomousMode: false');
+    expect(incidentAssistantHandoffModelSource).toContain('handoffContext');
+    expect(incidentAssistantHandoffModelSource).toContain('handoffResources');
+    expect(incidentAssistantHandoffModelSource).toContain('[Alert Incident Context]');
     expect(incidentAssistantHandoffModelSource).toContain('Command event recorded');
     expect(incidentAssistantHandoffModelSource).not.toContain('details.command');
     expect(incidentAssistantHandoffModelSource).not.toContain('output_excerpt');
