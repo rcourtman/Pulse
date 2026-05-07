@@ -433,9 +433,9 @@ the canonical monitored-system blocked payload.
    and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so recent-change, learned-correlation, and policy-coverage summary text stays derived from the canonical AI payload in one place instead of as hook-local count and pluralization logic
    and that same Patrol investigation-context owner, so the current Patrol
    assessment summary may open Assistant with bounded model-only assessment,
-   verification, latest-run, supporting-context, active-finding, and resource
-   reference context instead of pasting page-local UI text or raw command
-   payloads into chat
+   verification, latest-run, supporting-context evidence, active-finding, and
+   resource reference context instead of pasting page-local UI text or raw
+   command payloads into chat
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,

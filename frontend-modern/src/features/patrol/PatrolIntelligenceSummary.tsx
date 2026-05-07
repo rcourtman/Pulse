@@ -231,6 +231,10 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         hasContext: state.hasInvestigationContext(),
         summaryText: state.investigationContextSummary(),
       },
+      supportingEvidence: {
+        recentChanges: state.intelligenceSummary()?.recent_changes,
+        correlations: state.correlations(),
+      },
       activeFindings: state.activePatrolFindings(),
     }),
   );

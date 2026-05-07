@@ -24,10 +24,13 @@ describe('PatrolIntelligenceSummary', () => {
     expect(context.autonomousMode).toBe(false);
     expect(context.handoffContext).toContain('[Patrol Assessment Context]');
     expect(context.handoffContext).toContain('Source: Pulse Patrol current assessment');
-    expect(context.handoffContext).toContain('Supporting Context: 1 recent change');
+    expect(context.handoffContext).toContain('Supporting Context: 2 recent changes');
+    expect(context.handoffContext).toContain('Recent Change 1: Metric anomaly');
+    expect(context.handoffContext).toContain('Correlation 1: Nightly backup job');
     expect(context.handoffContext).toContain('Finding 1: High CPU usage');
     expect(context.handoffResources).toEqual([
       { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
+      { id: 'backup-job', name: 'Nightly backup job', type: 'job', node: undefined },
     ]);
     expect(JSON.stringify(context)).not.toContain('systemctl restart workload.service');
   });
@@ -86,6 +89,22 @@ function createPatrolState(): PatrolIntelligenceState {
     blockedReason: () => undefined,
     circuitBreakerStatus: () => undefined,
     correlationTotal: () => 2,
+    correlations: () => [
+      {
+        source_id: 'backup-job',
+        source_name: 'Nightly backup job',
+        source_type: 'job',
+        target_id: 'vm-100',
+        target_name: 'web-server',
+        target_type: 'vm',
+        event_pattern: 'backup_started -> cpu_spike',
+        occurrences: 4,
+        avg_delay: 120000000000,
+        confidence: 0.92,
+        last_seen: '2026-05-06T12:08:00Z',
+        description: 'CPU pressure usually follows this backup job.',
+      },
+    ],
     hasInvestigationContext: () => true,
     initialSurfaceReady: () => true,
     intelligenceSummary: () => ({
@@ -95,7 +114,33 @@ function createPatrolState(): PatrolIntelligenceState {
         factors: [],
         prediction: 'Patrol surfaced one active critical finding.',
       },
-      recent_changes_count: 1,
+      recent_changes_count: 2,
+      recent_changes: [
+        {
+          id: 'change-1',
+          observedAt: '2026-05-06T12:08:00Z',
+          resourceId: 'vm-100',
+          kind: 'metric_anomaly',
+          sourceType: 'heuristic',
+          sourceAdapter: 'proxmox_adapter',
+          confidence: 'high',
+          relatedResources: ['backup-job'],
+          reason: 'CPU spike after backup job',
+        },
+        {
+          id: 'change-2',
+          observedAt: '2026-05-06T12:07:00Z',
+          resourceId: 'vm-100',
+          kind: 'command_executed',
+          sourceType: 'agent_action',
+          sourceAdapter: 'agent:ops-helper',
+          confidence: 'medium',
+          reason: 'systemctl restart workload.service',
+          metadata: {
+            command: 'systemctl restart workload.service',
+          },
+        },
+      ],
       policy_posture: {
         total_resources: 4,
         sensitivity_counts: {},
@@ -103,7 +148,7 @@ function createPatrolState(): PatrolIntelligenceState {
       },
     }),
     investigationContextSummary: () =>
-      '1 recent change · 2 correlations · 4 policy-covered resources',
+      '2 recent changes · 2 correlations · 4 policy-covered resources',
     patrolRunHistory: {
       value: () => [
         {
@@ -128,7 +173,7 @@ function createPatrolState(): PatrolIntelligenceState {
       sensitivity_counts: {},
       routing_counts: {},
     }),
-    recentChangeCount: () => 1,
+    recentChangeCount: () => 2,
     runtimeState: () => 'active',
     summaryStats: () => ({
       criticalFindings: 1,

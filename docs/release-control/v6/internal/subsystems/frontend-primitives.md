@@ -811,10 +811,10 @@ frontend primitive boundary.
     so shared drawer primitives stay shell-owned rather than becoming a
     Patrol-specific prompt formatter. Patrol assessment-level handoffs must use
     that same feature helper to attach bounded model-only assessment,
-    verification, latest-run, supporting-context, active-finding, and resource
-    reference context while forcing request-local approval-required mode, so the
-    shared drawer stays a generic shell rather than a Patrol summary prompt
-    builder. The drawer may render a generic
+    verification, latest-run, supporting-context evidence, active-finding, and
+    resource reference context while forcing request-local approval-required
+    mode, so the shared drawer stays a generic shell rather than a Patrol
+    summary prompt builder. The drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
     feature-owned helpers must provide the source labels, attention reason,
     evidence summaries, operator-decision copy, action copy, and safety note.

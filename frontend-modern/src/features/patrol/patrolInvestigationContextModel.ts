@@ -1,9 +1,21 @@
 import type {
   CorrelationsResponse,
   IntelligencePolicyPostureSummary,
+  ResourceCorrelation,
 } from '@/types/aiIntelligence';
 import type { InvestigationRecord, RemediationPlan } from '@/api/ai';
 import type { AIChatContext, AIChatContextBriefing, AIChatHandoffResource } from '@/stores/aiChat';
+import type { ResourceChange } from '@/types/resource';
+import {
+  formatResourceChangeKind,
+  sortResourceChangesByObservedAt,
+} from '@/utils/resourceChangePresentation';
+import {
+  formatResourceCorrelationEndpoint,
+  formatResourceCorrelationPattern,
+  formatResourceCorrelationSummary,
+  sortResourceCorrelations,
+} from '@/utils/resourceCorrelationPresentation';
 
 export interface PatrolInvestigationContextSummaryInput {
   recentChangesCount?: number | null;
@@ -142,6 +154,10 @@ export interface PatrolAssessmentAssistantHandoffInput {
     findingsSnapshotAvailable?: boolean | null;
   } | null;
   investigationContext?: PatrolInvestigationContextSummary | null;
+  supportingEvidence?: {
+    recentChanges?: ResourceChange[] | null;
+    correlations?: ResourceCorrelation[] | null;
+  } | null;
   activeFindings?: PatrolAssessmentAssistantFindingInput[] | null;
 }
 
@@ -151,6 +167,8 @@ export interface PatrolAssessmentAssistantHandoff {
 }
 
 const MAX_ASSESSMENT_FINDINGS = 5;
+const MAX_ASSESSMENT_RECENT_CHANGES = 3;
+const MAX_ASSESSMENT_CORRELATIONS = 3;
 const MAX_ASSESSMENT_RESOURCES = 8;
 
 export function buildPatrolInvestigationContextSummary(
@@ -259,6 +277,8 @@ export function buildPatrolAssessmentAssistantHandoff(
   const title = normalizeText(input.assessment?.title) || 'Pulse Patrol assessment';
   const description = normalizeText(input.assessment?.description);
   const handoffContext = buildPatrolAssessmentAssistantModelContext(input);
+  const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
+  const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
 
   return {
     prompt: [
@@ -274,13 +294,15 @@ export function buildPatrolAssessmentAssistantHandoff(
       targetId: 'pulse-patrol-assessment',
       autonomousMode: false,
       handoffContext,
-      handoffResources: buildPatrolAssessmentHandoffResources(input.activeFindings ?? []),
+      handoffResources: buildPatrolAssessmentHandoffResources(input),
       briefing: buildPatrolAssessmentAssistantBriefing(input),
       context: {
         source: 'pulse-patrol-assessment',
         activeFindingCount: normalizeNonNegativeCount(input.activeFindings?.length),
         recentChangeCount: input.investigationContext?.recentChangeCount ?? 0,
         correlationCount: input.investigationContext?.correlationCount ?? 0,
+        recentChangeDetailCount: recentChanges.length,
+        correlationDetailCount: correlations.length,
         governedResourceCount: input.investigationContext?.governedResourceCount ?? 0,
       },
     },
@@ -298,6 +320,15 @@ function buildPatrolAssessmentAssistantBriefing(
   const latestRun = formatAssessmentLatestRun(input);
   const contextSummary = normalizeText(input.investigationContext?.summaryText);
   const findings = normalizeAssessmentFindings(input.activeFindings);
+  const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
+  const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
+  const findingEvidence = findings.map(formatAssessmentFindingEvidence).filter(isNonEmptyString);
+  const supportingEvidence = [
+    ...recentChanges.map(formatAssessmentRecentChangeEvidence),
+    ...correlations.map(formatAssessmentCorrelationEvidence),
+  ]
+    .filter(isNonEmptyString)
+    .slice(0, 2);
 
   return {
     sourceLabel: 'Pulse Patrol',
@@ -307,7 +338,7 @@ function buildPatrolAssessmentAssistantBriefing(
     detailLines: [description, verification, latestRun, contextSummary]
       .filter(isNonEmptyString)
       .slice(0, 4),
-    evidence: findings.map(formatAssessmentFindingEvidence).filter(isNonEmptyString).slice(0, 4),
+    evidence: [...findingEvidence.slice(0, 3), ...supportingEvidence].slice(0, 5),
     actionLabel: 'Discuss Patrol assessment',
     safetyNote: 'Diagnostics and remediation require governed approval.',
   };
@@ -317,8 +348,20 @@ function buildPatrolAssessmentAssistantModelContext(
   input: PatrolAssessmentAssistantHandoffInput,
 ): string {
   const findings = normalizeAssessmentFindings(input.activeFindings);
+  const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
+  const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
   const totalFindingCount = normalizeNonNegativeCount(input.activeFindings?.length);
   const omittedFindingCount = Math.max(0, totalFindingCount - findings.length);
+  const totalRecentChangeCount = Math.max(
+    normalizeNonNegativeCount(input.investigationContext?.recentChangeCount),
+    (input.supportingEvidence?.recentChanges ?? []).length,
+  );
+  const omittedRecentChangeCount = Math.max(0, totalRecentChangeCount - recentChanges.length);
+  const totalCorrelationCount = Math.max(
+    normalizeNonNegativeCount(input.investigationContext?.correlationCount),
+    (input.supportingEvidence?.correlations ?? []).length,
+  );
+  const omittedCorrelationCount = Math.max(0, totalCorrelationCount - correlations.length);
 
   return [
     '[Patrol Assessment Context]',
@@ -335,6 +378,22 @@ function buildPatrolAssessmentAssistantModelContext(
     formatContextLine('Last Patrol', formatAssessmentRecency(input)),
     formatContextLine('Latest Run', formatAssessmentLatestRun(input)),
     formatContextLine('Supporting Context', input.investigationContext?.summaryText),
+    ...recentChanges.map((change, index) =>
+      formatAssessmentRecentChangeContextLine(change, index + 1),
+    ),
+    omittedRecentChangeCount > 0
+      ? `${omittedRecentChangeCount} additional recent change${
+          omittedRecentChangeCount === 1 ? '' : 's'
+        } omitted from this bounded handoff summary.`
+      : undefined,
+    ...correlations.map((correlation, index) =>
+      formatAssessmentCorrelationContextLine(correlation, index + 1),
+    ),
+    omittedCorrelationCount > 0
+      ? `${omittedCorrelationCount} additional correlation${
+          omittedCorrelationCount === 1 ? '' : 's'
+        } omitted from this bounded handoff summary.`
+      : undefined,
     ...findings.map((finding, index) => formatAssessmentFindingContextLine(finding, index + 1)),
     omittedFindingCount > 0
       ? `${omittedFindingCount} additional Patrol finding${omittedFindingCount === 1 ? '' : 's'} omitted from this bounded handoff summary.`
@@ -346,31 +405,75 @@ function buildPatrolAssessmentAssistantModelContext(
 }
 
 function buildPatrolAssessmentHandoffResources(
-  findings: PatrolAssessmentAssistantFindingInput[],
+  input: PatrolAssessmentAssistantHandoffInput,
 ): AIChatHandoffResource[] {
   const resources = new Map<string, AIChatHandoffResource>();
+  const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
+  const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
 
-  for (const finding of findings) {
-    const resource = getAssessmentFindingResource(finding);
-    if (!resource.id) continue;
+  for (const finding of normalizeAssessmentFindings(input.activeFindings)) {
+    addAssessmentHandoffResource(resources, getAssessmentFindingResource(finding));
+  }
 
-    const key = [resource.type, resource.id].filter(isNonEmptyString).join(':');
-    const existing = resources.get(key);
-    if (existing) {
-      resources.set(key, {
-        ...existing,
-        name: existing.name || resource.name,
-        type: existing.type || resource.type,
-        node: existing.node || resource.node,
+  for (const change of recentChanges) {
+    addAssessmentHandoffResource(resources, {
+      id: normalizeText(change.resourceId),
+    });
+    for (const relatedResource of change.relatedResources ?? []) {
+      addAssessmentHandoffResource(resources, {
+        id: normalizeText(relatedResource),
       });
-      continue;
     }
-    resources.set(key, resource);
+  }
 
-    if (resources.size >= MAX_ASSESSMENT_RESOURCES) break;
+  for (const correlation of correlations) {
+    addAssessmentHandoffResource(resources, {
+      id: normalizeText(correlation.source_id),
+      name: normalizeText(correlation.source_name) || undefined,
+      type: normalizeText(correlation.source_type) || undefined,
+    });
+    addAssessmentHandoffResource(resources, {
+      id: normalizeText(correlation.target_id),
+      name: normalizeText(correlation.target_name) || undefined,
+      type: normalizeText(correlation.target_type) || undefined,
+    });
   }
 
   return Array.from(resources.values());
+}
+
+function addAssessmentHandoffResource(
+  resources: Map<string, AIChatHandoffResource>,
+  resource: AIChatHandoffResource,
+): void {
+  const id = normalizeText(resource.id);
+  if (!id) return;
+
+  const normalizedResource: AIChatHandoffResource = {
+    id,
+    name: normalizeText(resource.name) || undefined,
+    type: normalizeText(resource.type) || undefined,
+    node: normalizeText(resource.node) || undefined,
+  };
+  const existingEntry = Array.from(resources.entries()).find(([, existing]) => {
+    if (existing.id !== id) return false;
+    if (!normalizedResource.type || !existing.type) return true;
+    return existing.type === normalizedResource.type;
+  });
+  const key =
+    existingEntry?.[0] ||
+    [normalizedResource.type, normalizedResource.id].filter(isNonEmptyString).join(':') ||
+    id;
+  const existing = existingEntry?.[1] || resources.get(key);
+
+  if (!existing && resources.size >= MAX_ASSESSMENT_RESOURCES) return;
+
+  resources.set(key, {
+    id,
+    name: existing?.name || normalizedResource.name,
+    type: existing?.type || normalizedResource.type,
+    node: existing?.node || normalizedResource.node,
+  });
 }
 
 function normalizeAssessmentFindings(
@@ -386,6 +489,32 @@ function normalizeAssessmentFindings(
       ),
     )
     .slice(0, MAX_ASSESSMENT_FINDINGS);
+}
+
+function normalizeAssessmentRecentChanges(changes?: ResourceChange[] | null): ResourceChange[] {
+  return sortResourceChangesByObservedAt(
+    (changes ?? []).filter((change) =>
+      Boolean(
+        normalizeText(change.id) || normalizeText(change.resourceId) || normalizeText(change.kind),
+      ),
+    ),
+  ).slice(0, MAX_ASSESSMENT_RECENT_CHANGES);
+}
+
+function normalizeAssessmentCorrelations(
+  correlations?: ResourceCorrelation[] | null,
+): ResourceCorrelation[] {
+  return sortResourceCorrelations(
+    (correlations ?? []).filter((correlation) =>
+      Boolean(
+        normalizeText(correlation.source_id) ||
+        normalizeText(correlation.source_name) ||
+        normalizeText(correlation.target_id) ||
+        normalizeText(correlation.target_name) ||
+        normalizeText(correlation.event_pattern),
+      ),
+    ),
+  ).slice(0, MAX_ASSESSMENT_CORRELATIONS);
 }
 
 function formatAssessmentHealth(input: PatrolAssessmentAssistantHandoffInput): string | undefined {
@@ -506,6 +635,133 @@ function formatAssessmentFindingEvidence(
     .join(' ');
   const resourceLabel = formatAssessmentResourceLabel(resource);
   return [title, resourceLabel, severityStatus].filter(isNonEmptyString).join(' · ');
+}
+
+function formatAssessmentRecentChangeEvidence(change: ResourceChange): string | undefined {
+  const summary = formatAssessmentRecentChangeSummary(change);
+  const resource = normalizeText(change.resourceId);
+  const observedAt = normalizeText(change.observedAt);
+  return [
+    summary,
+    resource ? `resource ${resource}` : undefined,
+    observedAt ? `observed ${observedAt}` : undefined,
+  ]
+    .filter(isNonEmptyString)
+    .join(' · ');
+}
+
+function formatAssessmentCorrelationEvidence(correlation: ResourceCorrelation): string | undefined {
+  const source = formatAssessmentCorrelationEndpoint(correlation, 'source');
+  const target = formatAssessmentCorrelationEndpoint(correlation, 'target');
+  const pattern = truncateContextText(formatResourceCorrelationPattern(correlation), 120);
+  return [
+    source && target ? `${source} to ${target}` : source || target,
+    pattern ? `pattern ${pattern}` : undefined,
+    formatResourceCorrelationSummary(correlation),
+  ]
+    .filter(isNonEmptyString)
+    .join(' · ');
+}
+
+function formatAssessmentRecentChangeContextLine(change: ResourceChange, index: number): string {
+  const relatedResources = (change.relatedResources ?? [])
+    .map(normalizeText)
+    .filter(isNonEmptyString)
+    .slice(0, 4);
+  const parts = [
+    formatAssessmentRecentChangeSummary(change),
+    normalizeText(change.id) ? `change ${normalizeText(change.id)}` : undefined,
+    normalizeText(change.resourceId) ? `resource ${normalizeText(change.resourceId)}` : undefined,
+    normalizeText(change.observedAt) ? `observed ${normalizeText(change.observedAt)}` : undefined,
+    normalizeText(change.occurredAt) ? `occurred ${normalizeText(change.occurredAt)}` : undefined,
+    normalizeText(change.sourceType)
+      ? `source ${formatIdentifierLabel(change.sourceType)?.toLowerCase()}`
+      : undefined,
+    normalizeText(change.sourceAdapter)
+      ? `adapter ${formatIdentifierLabel(change.sourceAdapter)}`
+      : undefined,
+    normalizeText(change.confidence)
+      ? `${formatIdentifierLabel(change.confidence)?.toLowerCase()} confidence`
+      : undefined,
+    normalizeText(change.actor) ? `actor ${truncateContextText(change.actor, 80)}` : undefined,
+    relatedResources.length > 0 ? `related ${relatedResources.join(', ')}` : undefined,
+  ].filter(isNonEmptyString);
+
+  return `Recent Change ${index}: ${parts.join('; ')}`;
+}
+
+function formatAssessmentCorrelationContextLine(
+  correlation: ResourceCorrelation,
+  index: number,
+): string {
+  const source = formatAssessmentCorrelationEndpoint(correlation, 'source');
+  const target = formatAssessmentCorrelationEndpoint(correlation, 'target');
+  const parts = [
+    source && target ? `${source} to ${target}` : source || target,
+    normalizeText(correlation.event_pattern)
+      ? `pattern ${truncateContextText(formatResourceCorrelationPattern(correlation), 140)}`
+      : undefined,
+    formatResourceCorrelationSummary(correlation),
+    normalizeText(correlation.last_seen)
+      ? `last seen ${normalizeText(correlation.last_seen)}`
+      : undefined,
+    normalizeText(correlation.description)
+      ? `description ${truncateContextText(correlation.description, 180)}`
+      : undefined,
+  ].filter(isNonEmptyString);
+
+  return `Correlation ${index}: ${parts.join('; ')}`;
+}
+
+function formatAssessmentRecentChangeSummary(change: ResourceChange): string {
+  const kind = formatResourceChangeKind(change.kind);
+  if (isCommandBearingResourceChange(change)) {
+    return `${kind}: execution event recorded`;
+  }
+
+  if (
+    (change.kind === 'state_transition' || change.kind === 'restart') &&
+    normalizeText(change.from) &&
+    normalizeText(change.to)
+  ) {
+    return `${kind}: ${truncateContextText(change.from, 80)} to ${truncateContextText(
+      change.to,
+      80,
+    )}`;
+  }
+
+  if (normalizeText(change.reason)) {
+    return `${kind}: ${truncateContextText(change.reason, 160)}`;
+  }
+
+  return `${kind}: ${normalizeText(change.resourceId) || normalizeText(change.id) || 'resource'}`;
+}
+
+function isCommandBearingResourceChange(change: ResourceChange): boolean {
+  return change.kind === 'command_executed' || change.kind === 'runbook_executed';
+}
+
+function formatAssessmentCorrelationEndpoint(
+  correlation: ResourceCorrelation,
+  role: 'source' | 'target',
+): string | undefined {
+  const label = normalizeText(formatResourceCorrelationEndpoint(correlation, role));
+  const id =
+    role === 'source' ? normalizeText(correlation.source_id) : normalizeText(correlation.target_id);
+  const type =
+    role === 'source'
+      ? normalizeText(correlation.source_type)
+      : normalizeText(correlation.target_type);
+  const displayLabel = label || id;
+  if (!displayLabel) return undefined;
+
+  const qualifiers = [
+    type ? formatIdentifierLabel(type)?.toLowerCase() : undefined,
+    id && id !== displayLabel ? id : undefined,
+  ]
+    .filter(isNonEmptyString)
+    .join(' ');
+  return qualifiers ? `${displayLabel} (${qualifiers})` : displayLabel;
 }
 
 function formatAssessmentFindingContextLine(
