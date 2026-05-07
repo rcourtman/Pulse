@@ -1,5 +1,9 @@
 export type InfrastructureAddStep =
   | 'agent'
+  | 'linux-host'
+  | 'unraid'
+  | 'docker'
+  | 'kubernetes'
   | 'detect'
   | 'pve'
   | 'pbs'
@@ -29,6 +33,10 @@ export function normalizeInfrastructurePanelStep(
     case 'pick':
     case 'detect':
     case 'agent':
+    case 'linux-host':
+    case 'unraid':
+    case 'docker':
+    case 'kubernetes':
     case 'pve':
     case 'pbs':
     case 'pmg':

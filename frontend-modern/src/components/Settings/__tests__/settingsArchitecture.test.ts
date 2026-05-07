@@ -498,12 +498,12 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('setupConfidenceAction');
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
     expect(infrastructureSourcePickerSource).toContain('Detect from address');
-    expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerGroups');
-    expect(infrastructureSourcePickerSource).toContain(
+    expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerItems');
+    expect(infrastructureSourcePickerSource).toContain('itemMatchesQuery');
+    expect(infrastructureSourcePickerSource).toContain('catalogDescription');
+    expect(infrastructureSourcePickerSource).not.toContain(
       'getInfrastructureSourceStrategyPresentation',
     );
-    expect(infrastructureSourcePickerSource).toContain('Unlocks');
-    expect(infrastructureSourcePickerSource).toContain('group.label');
     expect(settingsHeaderMetaSource).toContain(
       "description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.'",
     );
@@ -546,7 +546,7 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorStateSource).not.toContain('getSourcePlatformFamily');
     expect(infrastructureOnboardingPresentationSource).toContain('getSourcePlatformManifestEntry');
     expect(infrastructureOnboardingPresentationSource).toContain(
-      'getInfrastructureSourcePickerGroups',
+      'getInfrastructureSourcePickerItems',
     );
     expect(infrastructureOnboardingPresentationSource).toContain(
       'getInfrastructureSourceStrategyPresentation',

@@ -10,7 +10,8 @@ import {
   INFRASTRUCTURE_ONBOARDING_PATHS,
   getInfrastructureOnboardingProductPresentation,
   getInfrastructureSourceManagerProducts,
-  getInfrastructureSourcePickerGroups,
+  getInfrastructureSourcePickerItemPresentation,
+  getInfrastructureSourcePickerItems,
   getInfrastructureSourceStrategyPresentation,
   getInfrastructureSupportSummaryBadges,
 } from '@/utils/infrastructureOnboardingPresentation';
@@ -109,7 +110,7 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(getInfrastructureGovernanceBadgeLabel('supported', 'supported')).toBeNull();
   });
 
-  it('derives picker groups, auto-detect copy, and landing summaries from the shared helper', () => {
+  it('derives picker items, auto-detect copy, and landing summaries from the shared helper', () => {
     expect(getInfrastructureSourceManagerProducts()).toEqual([
       expect.objectContaining({
         type: 'vmware',
@@ -148,44 +149,50 @@ describe('infrastructureOnboardingPresentation', () => {
       }),
     ]);
 
-    expect(getInfrastructureSourcePickerGroups()).toEqual([
-      {
-        id: 'virtualization',
-        label: 'Virtualization',
-        description: 'Hypervisors, VM inventory, and cluster health.',
-        types: ['vmware', 'pve'],
-        products: [
-          expect.objectContaining({ type: 'vmware', label: 'VMware vCenter' }),
-          expect.objectContaining({ type: 'pve', label: 'Proxmox VE' }),
-        ],
-      },
-      {
-        id: 'storage',
-        label: 'Storage',
-        description: 'Storage appliances and dataset visibility.',
-        types: ['truenas'],
-        products: [expect.objectContaining({ type: 'truenas', label: 'TrueNAS SCALE' })],
-      },
-      {
-        id: 'backup-mail',
-        label: 'Backup and Mail',
-        description: 'Backup infrastructure and mail-gateway operations.',
-        types: ['pbs', 'pmg'],
-        products: [
-          expect.objectContaining({ type: 'pbs', label: 'Proxmox Backup Server' }),
-          expect.objectContaining({ type: 'pmg', label: 'Proxmox Mail Gateway' }),
-        ],
-      },
-      {
-        id: 'host-monitoring',
-        label: 'Host monitoring',
-        description: 'Low-overhead machine telemetry and simple availability checks.',
-        types: ['agent', 'availability'],
-        products: [
-          expect.objectContaining({ type: 'agent', label: 'Pulse Agent' }),
-          expect.objectContaining({ type: 'availability', label: 'Network endpoint' }),
-        ],
-      },
+    expect(getInfrastructureSourcePickerItems()).toEqual([
+      expect.objectContaining({
+        id: 'unraid',
+        connectionType: 'agent',
+        label: 'Unraid',
+        catalogDescription: 'Array health, disks, Docker, host telemetry',
+      }),
+      expect.objectContaining({
+        id: 'truenas',
+        connectionType: 'truenas',
+        label: 'TrueNAS SCALE',
+      }),
+      expect.objectContaining({ id: 'pve', connectionType: 'pve', label: 'Proxmox VE' }),
+      expect.objectContaining({ id: 'docker', connectionType: 'agent', label: 'Docker' }),
+      expect.objectContaining({
+        id: 'linux-host',
+        connectionType: 'agent',
+        label: 'Linux, macOS, Windows host',
+      }),
+      expect.objectContaining({
+        id: 'vmware',
+        connectionType: 'vmware',
+        label: 'VMware vCenter',
+      }),
+      expect.objectContaining({
+        id: 'kubernetes',
+        connectionType: 'agent',
+        label: 'Kubernetes',
+      }),
+      expect.objectContaining({
+        id: 'pbs',
+        connectionType: 'pbs',
+        label: 'Proxmox Backup Server',
+      }),
+      expect.objectContaining({
+        id: 'pmg',
+        connectionType: 'pmg',
+        label: 'Proxmox Mail Gateway',
+      }),
+      expect.objectContaining({
+        id: 'availability',
+        connectionType: 'availability',
+        label: 'Network endpoint',
+      }),
     ]);
 
     expect(getInfrastructureAutoDetectLabels()).toEqual([
@@ -226,6 +233,27 @@ describe('infrastructureOnboardingPresentation', () => {
     );
     expect(getInfrastructureEmptyStateDetail()).toContain('standalone hosts through Pulse Agent');
     expect(getInfrastructureEmptyStateDetail()).toContain('Docker and Kubernetes are discovered');
+  });
+
+  it('keeps user-facing agent-backed catalog choices on the agent setup route', () => {
+    expect(getInfrastructureSourcePickerItemPresentation('unraid')).toMatchObject({
+      routeStep: 'unraid',
+      connectionType: 'agent',
+      label: 'Unraid',
+      sourceStrategy: 'agent',
+      catalogDescription: 'Array health, disks, Docker, host telemetry',
+      searchAliases: expect.arrayContaining(['nas', 'home server']),
+    });
+    expect(getInfrastructureSourcePickerItemPresentation('docker')).toMatchObject({
+      routeStep: 'docker',
+      connectionType: 'agent',
+      label: 'Docker',
+    });
+    expect(getInfrastructureSourcePickerItemPresentation('kubernetes')).toMatchObject({
+      routeStep: 'kubernetes',
+      connectionType: 'agent',
+      label: 'Kubernetes',
+    });
   });
 
   it('owns the source-manager coverage-complete copy outside the component', () => {

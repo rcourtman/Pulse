@@ -17,6 +17,12 @@ describe('infrastructureWorkspaceModel', () => {
     expect(buildInfrastructureOnboardingPath('truenas')).toBe(
       '/settings/infrastructure?add=truenas',
     );
+    expect(buildInfrastructureOnboardingPath('unraid')).toBe(
+      '/settings/infrastructure?add=unraid',
+    );
+    expect(buildInfrastructureOnboardingPath('docker')).toBe(
+      '/settings/infrastructure?add=docker',
+    );
     expect(buildInfrastructureOnboardingPath('vmware')).toBe(
       '/settings/infrastructure?add=vmware',
     );
@@ -30,6 +36,10 @@ describe('infrastructureWorkspaceModel', () => {
     expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=pick')).toBe('pick');
     expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=truenas')).toBe(
       'truenas',
+    );
+    expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=unraid')).toBe('unraid');
+    expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=kubernetes')).toBe(
+      'kubernetes',
     );
   });
 });

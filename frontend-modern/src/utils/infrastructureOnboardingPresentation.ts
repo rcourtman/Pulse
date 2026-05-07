@@ -19,6 +19,7 @@ export interface InfrastructureOnboardingProductPresentation {
   bestFor: string;
   coverage: string;
   catalogDescription: string;
+  searchAliases: readonly string[];
   sourceStrategy: InfrastructureSourceStrategy;
   autoDetect: boolean;
   governanceState: PlatformGovernanceState;
@@ -33,11 +34,36 @@ export interface InfrastructureSourceManagerProductPresentation extends Infrastr
   actionLabel: string;
 }
 
-export interface InfrastructureSourcePickerGroupPresentation {
-  id: 'virtualization' | 'storage' | 'backup-mail' | 'host-monitoring';
+export type InfrastructureSourcePickerItemId =
+  | 'vmware'
+  | 'pve'
+  | 'truenas'
+  | 'unraid'
+  | 'pbs'
+  | 'pmg'
+  | 'linux-host'
+  | 'docker'
+  | 'kubernetes'
+  | 'availability';
+
+export type InfrastructureSourcePickerRouteStep = InfrastructureSourcePickerItemId;
+
+export interface InfrastructureSourcePickerItemPresentation {
+  id: InfrastructureSourcePickerItemId;
+  routeStep: InfrastructureSourcePickerRouteStep;
+  connectionType: InfrastructureOnboardingConnectionType;
   label: string;
-  description: string;
-  types: InfrastructureOnboardingConnectionType[];
+  bestFor: string;
+  coverage: string;
+  catalogDescription: string;
+  searchAliases: readonly string[];
+  sourceStrategy: InfrastructureSourceStrategy;
+  autoDetect: boolean;
+  governanceState: PlatformGovernanceState;
+  readinessStage: PlatformReadinessStage;
+  primaryMode: PlatformPrimaryMode;
+  canonicalProjections: readonly string[];
+  supportFloor: PlatformSupportFloor;
 }
 
 interface BaseProductPresentation {
@@ -45,6 +71,7 @@ interface BaseProductPresentation {
   bestFor: string;
   coverage: string;
   catalogDescription: string;
+  searchAliases?: readonly string[];
   sourceStrategy: InfrastructureSourceStrategy;
   autoDetect: boolean;
   sourcePlatformId?: string;
@@ -148,6 +175,7 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: `${getInfrastructureAgentHostProfileSupportText()} where you want low-overhead node-local telemetry.`,
     coverage: 'Low-overhead host telemetry, SMART, services, Docker, and Kubernetes',
     catalogDescription: 'Low-overhead host telemetry, services, Docker, Kubernetes',
+    searchAliases: ['host', 'server', 'machine', 'node', 'ubuntu', 'debian', 'windows', 'mac'],
     sourceStrategy: 'agent',
     autoDetect: false,
     defaultSurfaceKeys: ['host'],
@@ -157,6 +185,7 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: 'vCenter-managed VMware environments',
     coverage: 'VM inventory, ESXi host health, datastore status',
     catalogDescription: 'VM inventory, ESXi hosts, datastores',
+    searchAliases: ['vsphere', 'esxi', 'vcenter', 'vmware cluster'],
     sourceStrategy: 'api',
     autoDetect: true,
     sourcePlatformId: 'vmware-vsphere',
@@ -167,6 +196,7 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: 'TrueNAS appliances with API-backed management',
     coverage: 'Pools, datasets, apps, replications',
     catalogDescription: 'Pools, datasets, apps, replications',
+    searchAliases: ['nas', 'storage', 'zfs', 'truenas scale'],
     sourceStrategy: 'api',
     autoDetect: true,
     sourcePlatformId: 'truenas',
@@ -178,6 +208,7 @@ const PRODUCT_PRESENTATION: Record<
     coverage:
       'VMs, containers, storage, and cluster health through the Proxmox API. Install Pulse Agent only on nodes where you want full node-local telemetry such as temperatures and SMART data',
     catalogDescription: 'VMs, containers, storage, cluster health',
+    searchAliases: ['proxmox', 'pve', 'hypervisor', 'vm host', 'cluster'],
     sourceStrategy: 'api-agent',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pve',
@@ -189,6 +220,7 @@ const PRODUCT_PRESENTATION: Record<
     coverage:
       'Backup jobs, sync, verify, prune, and GC through the Proxmox API. Install Pulse Agent only where host-local telemetry is needed',
     catalogDescription: 'Backup jobs, sync, verify, prune, GC',
+    searchAliases: ['backup', 'proxmox backup', 'pbs'],
     sourceStrategy: 'api-agent',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pbs',
@@ -206,6 +238,7 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: 'Mail filtering and delivery operations',
     coverage: 'Mail stats, queues, quarantine, relay health',
     catalogDescription: 'Mail stats, queues, quarantine, relay health',
+    searchAliases: ['mail', 'email', 'gateway', 'proxmox mail', 'pmg'],
     sourceStrategy: 'api',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pmg',
@@ -216,12 +249,90 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: 'Devices that expose ICMP, TCP, or HTTP but cannot run Pulse Agent',
     coverage: 'Agentless availability checks and downtime alerts',
     catalogDescription: 'Ping, TCP port, and HTTP availability checks',
+    searchAliases: ['ping', 'tcp', 'http', 'endpoint', 'website', 'ip address'],
     sourceStrategy: 'probe',
     autoDetect: false,
     primaryMode: 'api-backed',
     canonicalProjections: ['network-endpoint'],
     defaultSurfaceKeys: ['availability'],
   },
+};
+
+const DEFAULT_AGENT_SUPPORT_FLOOR = {
+  setup: 'supported',
+  visibility: 'supported',
+  workloads: 'n/a',
+  storage: 'supported',
+  recovery: 'n/a',
+  alerts: 'supported',
+  assistantRead: 'supported',
+  assistantControl: 'supported',
+} satisfies PlatformSupportFloor;
+
+const AGENT_CATALOG_ITEMS: Record<
+  'linux-host' | 'unraid' | 'docker' | 'kubernetes',
+  Omit<
+    InfrastructureSourcePickerItemPresentation,
+    | 'id'
+    | 'connectionType'
+    | 'governanceState'
+    | 'readinessStage'
+    | 'primaryMode'
+    | 'canonicalProjections'
+    | 'supportFloor'
+  >
+> = {
+  'linux-host': {
+    routeStep: 'linux-host',
+    label: 'Linux, macOS, Windows host',
+    bestFor: 'Standalone machines where you want low-overhead node-local telemetry.',
+    coverage: 'Host telemetry, services, SMART, sensors, network metrics, and remote update state',
+    catalogDescription: 'Machine telemetry, services, SMART, sensors',
+    searchAliases: ['host', 'server', 'machine', 'node', 'ubuntu', 'debian', 'freebsd', 'windows'],
+    sourceStrategy: 'agent',
+    autoDetect: false,
+  },
+  unraid: {
+    routeStep: 'unraid',
+    label: 'Unraid',
+    bestFor: 'Unraid servers where array health and host-local telemetry both matter.',
+    coverage: 'Array health, disk posture, SMART, services, Docker containers, and host telemetry',
+    catalogDescription: 'Array health, disks, Docker, host telemetry',
+    searchAliases: ['nas', 'array', 'storage', 'home server', 'docker host'],
+    sourceStrategy: 'agent',
+    autoDetect: false,
+  },
+  docker: {
+    routeStep: 'docker',
+    label: 'Docker',
+    bestFor: 'Docker hosts where containers should be discovered from the machine running them.',
+    coverage: 'Docker inventory plus host CPU, memory, disk, network, services, and SMART telemetry',
+    catalogDescription: 'Containers plus host telemetry',
+    searchAliases: ['containers', 'container host', 'compose'],
+    sourceStrategy: 'agent',
+    autoDetect: false,
+  },
+  kubernetes: {
+    routeStep: 'kubernetes',
+    label: 'Kubernetes',
+    bestFor: 'Small clusters and lab nodes where Pulse Agent can collect cluster and node context.',
+    coverage: 'Kubernetes workload context plus node-local host telemetry from the agent',
+    catalogDescription: 'Workload context plus node telemetry',
+    searchAliases: ['k8s', 'pods', 'cluster', 'workloads'],
+    sourceStrategy: 'agent',
+    autoDetect: false,
+  },
+};
+
+const SOURCE_PICKER_PRODUCT_ITEMS: Partial<
+  Record<InfrastructureSourcePickerItemId, InfrastructureOnboardingConnectionType>
+> = {
+  vmware: 'vmware',
+  pve: 'pve',
+  truenas: 'truenas',
+  pbs: 'pbs',
+  pmg: 'pmg',
+  availability: 'availability',
 };
 
 const governanceStateForType = (
@@ -294,31 +405,17 @@ export const INFRASTRUCTURE_AGENT_DISCOVERY_LABELS = [
 
 export const INFRASTRUCTURE_AGENT_HOST_LABELS = getInfrastructureAgentHostProfileLabels();
 
-const SOURCE_PICKER_GROUPS: InfrastructureSourcePickerGroupPresentation[] = [
-  {
-    id: 'virtualization',
-    label: 'Virtualization',
-    description: 'Hypervisors, VM inventory, and cluster health.',
-    types: ['vmware', 'pve'],
-  },
-  {
-    id: 'storage',
-    label: 'Storage',
-    description: 'Storage appliances and dataset visibility.',
-    types: ['truenas'],
-  },
-  {
-    id: 'backup-mail',
-    label: 'Backup and Mail',
-    description: 'Backup infrastructure and mail-gateway operations.',
-    types: ['pbs', 'pmg'],
-  },
-  {
-    id: 'host-monitoring',
-    label: 'Host monitoring',
-    description: 'Low-overhead machine telemetry and simple availability checks.',
-    types: ['agent', 'availability'],
-  },
+const SOURCE_PICKER_ITEM_ORDER: InfrastructureSourcePickerItemId[] = [
+  'unraid',
+  'truenas',
+  'pve',
+  'docker',
+  'linux-host',
+  'vmware',
+  'kubernetes',
+  'pbs',
+  'pmg',
+  'availability',
 ];
 
 export const getInfrastructureOnboardingProductPresentation = (
@@ -329,24 +426,64 @@ export const getInfrastructureOnboardingProductPresentation = (
   return {
     type,
     ...presentation,
+    searchAliases: presentation.searchAliases ?? [],
     governanceState: manifestEntry?.governanceState ?? governanceStateForType(type),
     readinessStage: manifestEntry?.readinessStage ?? 'supported',
     primaryMode: manifestEntry?.primaryMode ?? presentation.primaryMode ?? 'agent-backed',
     canonicalProjections: manifestEntry?.canonicalProjections ??
       presentation.canonicalProjections ?? ['agent'],
-    supportFloor:
-      manifestEntry?.supportFloor ??
-      ({
-        setup: 'supported',
-        visibility: 'supported',
-        workloads: 'n/a',
-        storage: 'supported',
-        recovery: 'n/a',
-        alerts: 'supported',
-        assistantRead: 'supported',
-        assistantControl: 'supported',
-      } satisfies PlatformSupportFloor),
+    supportFloor: manifestEntry?.supportFloor ?? DEFAULT_AGENT_SUPPORT_FLOOR,
   };
+};
+
+export const getInfrastructureSourcePickerItemPresentation = (
+  id: InfrastructureSourcePickerItemId,
+): InfrastructureSourcePickerItemPresentation => {
+  const productType = SOURCE_PICKER_PRODUCT_ITEMS[id];
+  if (productType) {
+    const product = getInfrastructureOnboardingProductPresentation(productType);
+    return {
+      id,
+      routeStep: id,
+      connectionType: product.type,
+      label: product.label,
+      bestFor: product.bestFor,
+      coverage: product.coverage,
+      catalogDescription: product.catalogDescription,
+      sourceStrategy: product.sourceStrategy,
+      autoDetect: product.autoDetect,
+      searchAliases: product.searchAliases,
+      governanceState: product.governanceState,
+      readinessStage: product.readinessStage,
+      primaryMode: product.primaryMode,
+      canonicalProjections: product.canonicalProjections,
+      supportFloor: product.supportFloor,
+    };
+  }
+
+  const agentItem = AGENT_CATALOG_ITEMS[id as keyof typeof AGENT_CATALOG_ITEMS];
+  return {
+    id,
+    ...agentItem,
+    connectionType: 'agent',
+    governanceState: 'supported',
+    readinessStage: 'supported',
+    primaryMode: 'agent-backed',
+    canonicalProjections: ['agent'],
+    supportFloor: DEFAULT_AGENT_SUPPORT_FLOOR,
+  };
+};
+
+export const getInfrastructureSourcePickerItemForRouteStep = (
+  step: string | null | undefined,
+): InfrastructureSourcePickerItemPresentation | null => {
+  const normalized = (step || '').trim();
+  if (!normalized) return null;
+  for (const id of SOURCE_PICKER_ITEM_ORDER) {
+    const item = getInfrastructureSourcePickerItemPresentation(id);
+    if (item.routeStep === normalized) return item;
+  }
+  return null;
 };
 
 export const getInfrastructureSourceStrategyPresentation = (
@@ -376,15 +513,8 @@ export const getInfrastructureApiProductsByGovernanceState = (
     (product) => product.governanceState === governanceState,
   );
 
-export const getInfrastructureSourcePickerGroups = (): Array<
-  InfrastructureSourcePickerGroupPresentation & {
-    products: InfrastructureOnboardingProductPresentation[];
-  }
-> =>
-  SOURCE_PICKER_GROUPS.map((group) => ({
-    ...group,
-    products: group.types.map((type) => getInfrastructureOnboardingProductPresentation(type)),
-  }));
+export const getInfrastructureSourcePickerItems = (): InfrastructureSourcePickerItemPresentation[] =>
+  SOURCE_PICKER_ITEM_ORDER.map((id) => getInfrastructureSourcePickerItemPresentation(id));
 
 export const getInfrastructureAutoDetectLabels = (): string[] =>
   getInfrastructureApiProductPresentations()

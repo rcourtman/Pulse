@@ -618,16 +618,18 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getAllByText('Add infrastructure').length).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        'Choose how Pulse should collect from this system: platform API, Pulse Agent, or both.',
+        'Choose the system, platform, host, or service you want Pulse to monitor.',
       ),
     ).toBeInTheDocument();
+    expect(
+      within(dialog).getByPlaceholderText('Search Unraid, TrueNAS, Proxmox, Docker...'),
+    ).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Detect from address' })).toBeInTheDocument();
-    expect(within(dialog).getByText('Virtualization')).toBeInTheDocument();
-    expect(within(dialog).getAllByText('API inventory').length).toBeGreaterThan(0);
-    expect(within(dialog).getByText('Agent telemetry')).toBeInTheDocument();
-    expect(within(dialog).getAllByText('API first').length).toBeGreaterThan(0);
-    expect(within(dialog).getAllByText('Unlocks').length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Common choices')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Agent telemetry')).toBeNull();
+    expect(within(dialog).queryByText('API inventory')).toBeNull();
     expect(within(dialog).getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
+    expect(within(dialog).getByText('Unraid')).toBeInTheDocument();
   });
 
   it('routes the picker detect action into the detect dialog', async () => {

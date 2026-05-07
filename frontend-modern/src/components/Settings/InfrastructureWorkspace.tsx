@@ -44,6 +44,7 @@ import {
 } from './useInfrastructureOperationsState';
 import {
   getInfrastructureOnboardingProductPresentation,
+  getInfrastructureSourcePickerItemForRouteStep,
   getInfrastructureSourceStrategyPresentation,
   type InfrastructureOnboardingConnectionType,
 } from '@/utils/infrastructureOnboardingPresentation';
@@ -58,6 +59,10 @@ type ManagedAddTypeStep = Exclude<InfrastructureAddStep, 'detect'>;
 
 const ADD_STEP_TO_TYPE: Record<ManagedAddTypeStep, ConnectionType> = {
   agent: 'agent',
+  'linux-host': 'agent',
+  unraid: 'agent',
+  docker: 'agent',
+  kubernetes: 'agent',
   pve: 'pve',
   pbs: 'pbs',
   pmg: 'pmg',
@@ -70,6 +75,8 @@ const closeButtonClass =
   'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
 const buttonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
+
+const trimSentenceTerminal = (value: string): string => value.trim().replace(/\.+$/, '');
 
 const describeManagedSourceType = (type: ConnectionType | null): string => {
   if (!type) return 'Infrastructure';
@@ -116,6 +123,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (!step || step === 'pick' || step === 'detect') return null;
     return ADD_STEP_TO_TYPE[step as ManagedAddTypeStep];
   });
+  const activeCatalogItem = createMemo(() =>
+    getInfrastructureSourcePickerItemForRouteStep(routeStep()),
+  );
   const editingConnection = createMemo<Connection | null>(() => editingRow()?.connection ?? null);
   const attachedAgentConnections = createMemo(() =>
     (editingRow()?.attachedConnections ?? []).filter((connection) => connection.type === 'agent'),
@@ -797,13 +807,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const step = routeStep();
     if (!step || step === 'pick') return 'Add infrastructure';
     if (step === 'detect') return 'Detect infrastructure source';
+    const catalogItem = activeCatalogItem();
+    if (catalogItem) return `Add ${catalogItem.label}`;
     return `Add ${describeManagedSourceType(activeAddType())}`;
   });
 
   const addDialogDescription = createMemo(() => {
     const step = routeStep();
     if (!step || step === 'pick') {
-      return 'Choose how Pulse should collect from this system: platform API, Pulse Agent, or both.';
+      return 'Choose the system, platform, host, or service you want Pulse to monitor.';
     }
     if (step === 'detect') {
       return 'Probe an address and let Pulse open the matching credential flow when it recognizes the platform.';
@@ -817,11 +829,16 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (probed && probed.type === activeAddType()) {
       return `Pulse detected ${probed.host}. Review the endpoint, finish the credentials, and then save it as a monitored source.`;
     }
+    const catalogItem = activeCatalogItem();
+    if (catalogItem) {
+      const strategy = getInfrastructureSourceStrategyPresentation(catalogItem.sourceStrategy);
+      return `${strategy.label}. ${trimSentenceTerminal(catalogItem.bestFor)}. ${trimSentenceTerminal(catalogItem.coverage)}.`;
+    }
     const presentation = getInfrastructureOnboardingProductPresentation(
       activeAddType() as InfrastructureOnboardingConnectionType,
     );
     const strategy = getInfrastructureSourceStrategyPresentation(presentation.sourceStrategy);
-    return `${strategy.label}. ${presentation.bestFor}. ${presentation.coverage}.`;
+    return `${strategy.label}. ${trimSentenceTerminal(presentation.bestFor)}. ${trimSentenceTerminal(presentation.coverage)}.`;
   });
 
   const editDialogTitle = createMemo(() => {
@@ -923,9 +940,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               <Switch>
                 <Match when={routeStep() === 'pick'}>
                   <InfrastructureSourcePicker
-                    onSelectType={(type) => {
-                      openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep));
-                    }}
+                    onSelectStep={(step) => openAddFlow(step as ManagedAddTypeStep)}
                     onDetectFromAddress={() => openAddFlow('detect')}
                   />
                 </Match>
