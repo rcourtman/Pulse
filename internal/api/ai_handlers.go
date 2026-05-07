@@ -2240,6 +2240,8 @@ type AISettingsResponse struct {
 	// Discovery settings
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
+	// Current Patrol runtime readiness after this settings snapshot is applied.
+	PatrolReadiness *PatrolReadinessResponse `json:"patrol_readiness,omitempty"`
 }
 
 func EmptyAISettingsResponse() AISettingsResponse {
@@ -2578,10 +2580,10 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				if aiSettingsRequireModelResolution(settings) {
 					resolvedModel, resolveErr := ai.ResolveConfiguredModel(r.Context(), settings)
 					if resolveErr != nil {
-						http.Error(w, fmt.Sprintf("Failed to resolve provider model: %v", resolveErr), http.StatusBadGateway)
-						return
+						log.Warn().Err(resolveErr).Msg("Provider model resolution failed during enable; saving settings and reporting Patrol readiness instead")
+					} else {
+						settings.Model = resolvedModel
 					}
-					settings.Model = resolvedModel
 				}
 			}
 		}
@@ -2716,24 +2718,27 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	if aiSettingsRequireModelResolution(settings) {
 		resolvedModel, resolveErr := ai.ResolveConfiguredModel(r.Context(), settings)
 		if resolveErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to resolve provider model: %v", resolveErr), http.StatusBadGateway)
-			return
+			log.Warn().Err(resolveErr).Msg("Provider model resolution failed during settings update; saving settings and reporting Patrol readiness instead")
+		} else {
+			settings.Model = resolvedModel
 		}
-		settings.Model = resolvedModel
 	}
 	settings.NormalizeQuickstartModelAliases()
 	if settings.IsPatrolEnabled() && aiSettingsUpdateTouchesPatrolReadiness(req) {
 		readiness := ai.EvaluatePatrolConfigReadiness(settings)
 		if !readiness.Ready {
-			writePatrolReadinessNotReadyResponse(w, http.StatusBadRequest, readiness)
-			return
+			log.Info().
+				Str("cause", string(readiness.Cause)).
+				Str("provider", readiness.Provider).
+				Str("model", config.NormalizeQuickstartModelString(readiness.Model)).
+				Msg("AI settings saved with Patrol runtime readiness blocker")
 		}
 	}
 
 	// Save settings
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
-		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "ai_settings_save_failed", "Failed to save Assistant & Patrol settings", nil)
 		return
 	}
 
@@ -2785,6 +2790,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	aiService := h.GetAIService(r.Context())
 	hasAutoFixFeature := aiService.HasLicenseFeature(ai.FeatureAIAutoFix)
 	hasAlertAnalysisFeature := aiService.HasLicenseFeature(ai.FeatureAIAlerts)
+	patrolReadiness := patrolReadinessResponseFromConfigReadiness(ai.EvaluatePatrolConfigReadiness(settings))
 
 	// Return updated settings
 	response := AISettingsResponse{
@@ -2823,6 +2829,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		ProtectedGuests:        settings.GetProtectedGuests(),
 		DiscoveryEnabled:       settings.DiscoveryEnabled,
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
+		PatrolReadiness:        ptrToPatrolReadiness(patrolReadiness),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -4827,6 +4834,7 @@ type PatrolStatusResponse struct {
 	IntervalMs       int64                 `json:"interval_ms"` // Patrol interval in milliseconds
 	FixedCount       int                   `json:"fixed_count"` // Number of issues remediated by Patrol
 	BlockedReason    string                `json:"blocked_reason,omitempty"`
+	BlockedCause     string                `json:"blocked_cause,omitempty"`
 	BlockedAt        *time.Time            `json:"blocked_at,omitempty"`
 	// License status for Pro feature gating
 	LicenseRequired bool   `json:"license_required"` // True if Pro license needed for full features
@@ -4844,6 +4852,7 @@ type PatrolStatusResponse struct {
 type PatrolReadinessResponse struct {
 	Status   string                 `json:"status"`
 	Ready    bool                   `json:"ready"`
+	Cause    string                 `json:"cause,omitempty"`
 	Summary  string                 `json:"summary"`
 	Provider string                 `json:"provider,omitempty"`
 	Model    string                 `json:"model,omitempty"`
@@ -4853,6 +4862,7 @@ type PatrolReadinessResponse struct {
 type PatrolReadinessCheck struct {
 	ID      string `json:"id"`
 	Status  string `json:"status"`
+	Cause   string `json:"cause,omitempty"`
 	Label   string `json:"label"`
 	Message string `json:"message"`
 	Action  string `json:"action,omitempty"`
@@ -4866,10 +4876,11 @@ const (
 
 func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService *ai.Service, patrolAvailable bool) PatrolReadinessResponse {
 	checks := make([]PatrolReadinessCheck, 0, 4)
-	addCheck := func(id, status, label, message, action string) {
+	addCheck := func(id, status string, cause ai.PatrolFailureCause, label, message, action string) {
 		checks = append(checks, PatrolReadinessCheck{
 			ID:      id,
 			Status:  status,
+			Cause:   patrolFailureCauseResponse(cause),
 			Label:   label,
 			Message: message,
 			Action:  action,
@@ -4877,33 +4888,33 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 	}
 
 	if aiService == nil {
-		addCheck("service", patrolReadinessNotReady, "AI runtime service", "Pulse AI runtime service is not available.", "restart_service")
+		addCheck("service", patrolReadinessNotReady, ai.PatrolFailureCauseServiceUnavailable, "AI runtime service", "Pulse AI runtime service is not available.", "restart_service")
 		return summarizePatrolReadiness("", "", checks)
 	}
 	if !patrolAvailable {
-		addCheck("service", patrolReadinessNotReady, "Patrol service", "Pulse Patrol service is not available.", "restart_service")
+		addCheck("service", patrolReadinessNotReady, ai.PatrolFailureCauseServiceUnavailable, "Patrol service", "Pulse Patrol service is not available.", "restart_service")
 		return summarizePatrolReadiness("", "", checks)
 	}
-	addCheck("service", patrolReadinessReady, "Patrol service", "Pulse Patrol service is available.", "")
+	addCheck("service", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol service", "Pulse Patrol service is available.", "")
 
 	cfg, err := h.loadAIConfig(ctx)
 	if err != nil || cfg == nil {
-		addCheck("settings", patrolReadinessNotReady, "Settings persistence", "Pulse Assistant settings could not be loaded from persistence.", "open_provider_settings")
+		addCheck("settings", patrolReadinessNotReady, ai.PatrolFailureCauseSettingsPersistence, "Settings persistence", "Pulse Assistant settings could not be loaded from persistence.", "open_provider_settings")
 		return summarizePatrolReadiness("", "", checks)
 	}
-	addCheck("settings", patrolReadinessReady, "Settings persistence", "Pulse Assistant and Patrol settings are readable.", "")
+	addCheck("settings", patrolReadinessReady, ai.PatrolFailureCauseNone, "Settings persistence", "Pulse Assistant and Patrol settings are readable.", "")
 
 	if !cfg.Enabled {
-		addCheck("enabled", patrolReadinessNotReady, "Assistant enabled", "Pulse Assistant is disabled, so Patrol cannot run model-backed verification.", "open_provider_settings")
+		addCheck("enabled", patrolReadinessNotReady, ai.PatrolFailureCauseAssistantDisabled, "Assistant enabled", "Pulse Assistant is disabled, so Patrol cannot run model-backed verification.", "open_provider_settings")
 	} else {
-		addCheck("enabled", patrolReadinessReady, "Assistant enabled", "Pulse Assistant is enabled for Patrol verification.", "")
+		addCheck("enabled", patrolReadinessReady, ai.PatrolFailureCauseNone, "Assistant enabled", "Pulse Assistant is enabled for Patrol verification.", "")
 	}
 
 	if !cfg.IsConfigured() {
-		addCheck("provider", patrolReadinessNotReady, "Provider configured", "No AI provider is configured for Patrol.", "open_provider_settings")
+		addCheck("provider", patrolReadinessNotReady, ai.PatrolFailureCauseProviderNotConfigured, "Provider configured", "No AI provider is configured for Patrol.", "open_provider_settings")
 		return summarizePatrolReadiness("", "", checks)
 	}
-	addCheck("provider", patrolReadinessReady, "Provider configured", "At least one AI provider is configured.", "")
+	addCheck("provider", patrolReadinessReady, ai.PatrolFailureCauseNone, "Provider configured", "At least one AI provider is configured.", "")
 
 	model := strings.TrimSpace(cfg.GetPatrolModel())
 	if model == "" {
@@ -4911,36 +4922,39 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 	}
 	provider, _ := config.ParseModelString(model)
 	if model == "" || provider == "" || provider == config.AIProviderQuickstart {
-		addCheck("model", patrolReadinessNotReady, "Patrol model", "No concrete Patrol model is selected.", "open_provider_settings")
+		addCheck("model", patrolReadinessNotReady, ai.PatrolFailureCauseModelNotSelected, "Patrol model", "No concrete Patrol model is selected.", "open_provider_settings")
 		return summarizePatrolReadiness(provider, model, checks)
 	}
 	if !cfg.HasProvider(provider) {
-		addCheck("model", patrolReadinessNotReady, "Patrol model", fmt.Sprintf("The selected Patrol model uses %s, but that provider is not configured.", provider), "open_provider_settings")
+		addCheck("model", patrolReadinessNotReady, ai.PatrolFailureCauseModelProviderUnconfigured, "Patrol model", fmt.Sprintf("The selected Patrol model uses %s, but that provider is not configured.", provider), "open_provider_settings")
 		return summarizePatrolReadiness(provider, model, checks)
 	}
-	addCheck("model", patrolReadinessReady, "Patrol model", "Patrol has a model selected from a configured provider.", "")
+	addCheck("model", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol model", "Patrol has a model selected from a configured provider.", "")
 
-	toolStatus, toolMessage := ai.PatrolToolReadinessForModel(provider, model)
+	toolStatus, toolCause, toolMessage := ai.PatrolToolReadinessForModel(provider, model)
 	toolAction := ""
 	if toolStatus != patrolReadinessReady {
 		toolAction = "open_provider_settings"
 	}
-	addCheck("tools", toolStatus, "Patrol tools", toolMessage, toolAction)
+	addCheck("tools", toolStatus, toolCause, "Patrol tools", toolMessage, toolAction)
 
 	return summarizePatrolReadiness(provider, model, checks)
 }
 
 func summarizePatrolReadiness(provider, model string, checks []PatrolReadinessCheck) PatrolReadinessResponse {
 	status := patrolReadinessReady
+	cause := ""
 	summary := "Patrol is ready to run tool-backed verification."
 	for _, check := range checks {
 		if check.Status == patrolReadinessNotReady {
 			status = patrolReadinessNotReady
+			cause = check.Cause
 			summary = check.Message
 			break
 		}
 		if check.Status == patrolReadinessWarning && status == patrolReadinessReady {
 			status = patrolReadinessWarning
+			cause = check.Cause
 			summary = check.Message
 		}
 	}
@@ -4948,10 +4962,44 @@ func summarizePatrolReadiness(provider, model string, checks []PatrolReadinessCh
 	return PatrolReadinessResponse{
 		Status:   status,
 		Ready:    status != patrolReadinessNotReady,
+		Cause:    cause,
 		Summary:  summary,
 		Provider: provider,
 		Model:    model,
 		Checks:   checks,
+	}
+}
+
+func patrolFailureCauseResponse(cause ai.PatrolFailureCause) string {
+	if cause == "" || cause == ai.PatrolFailureCauseNone {
+		return ""
+	}
+	return string(cause)
+}
+
+func patrolReadinessResponseFromConfigReadiness(readiness ai.PatrolConfigReadiness) PatrolReadinessResponse {
+	action := ""
+	if !readiness.Ready {
+		action = "open_provider_settings"
+	}
+	cause := patrolFailureCauseResponse(readiness.Cause)
+	return PatrolReadinessResponse{
+		Status:   readiness.Status,
+		Ready:    readiness.Ready,
+		Cause:    cause,
+		Summary:  readiness.Summary,
+		Provider: readiness.Provider,
+		Model:    readiness.Model,
+		Checks: []PatrolReadinessCheck{
+			{
+				ID:      "configuration",
+				Status:  readiness.Status,
+				Cause:   cause,
+				Label:   "Patrol configuration",
+				Message: readiness.Summary,
+				Action:  action,
+			},
+		},
 	}
 }
 
@@ -4973,6 +5021,9 @@ func writePatrolServiceUnavailableResponse(w http.ResponseWriter) {
 
 func writePatrolReadinessNotReadyResponse(w http.ResponseWriter, statusCode int, readiness ai.PatrolConfigReadiness) {
 	details := map[string]string{"status": readiness.Status}
+	if cause := patrolFailureCauseResponse(readiness.Cause); cause != "" {
+		details["cause"] = cause
+	}
 	if readiness.Provider != "" {
 		details["provider"] = readiness.Provider
 	}
@@ -5084,6 +5135,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		IntervalMs:       status.IntervalMs,
 		FixedCount:       fixedCount,
 		BlockedReason:    status.BlockedReason,
+		BlockedCause:     patrolFailureCauseResponse(status.BlockedCause),
 		BlockedAt:        status.BlockedAt,
 		LicenseRequired:  !hasAutoFixFeature,
 		LicenseStatus:    licenseStatus,

@@ -218,6 +218,10 @@ profile and assignment columns, but embedded table framing must route through
    `internal/api/` route wiring: monitor-mode configuration and remediation
    entitlement payloads remain AI runtime/API-contract owned and must not create
    agent lifecycle authority, install-token scope, or fleet command semantics.
+   Patrol readiness and settings-save payload changes on those shared handlers
+   are also adjacent only: structured provider/model/tool causes may be exposed
+   to Patrol and Assistant, but they do not grant agent install, enrollment,
+   or fleet command authority.
    Hosted handoff subjects consumed through the shared API auth boundary must
    already be stable, non-email principals; lifecycle-adjacent routes must not
    recover authority from a blank handoff subject by falling back to contact

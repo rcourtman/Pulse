@@ -9,6 +9,7 @@ import {
   buildPatrolAssistantFindingHandoffActions,
   buildPatrolAssistantFindingPrompt,
   buildPatrolAssistantProposedFixBriefingInput,
+  buildPatrolConfigurationFailureHandoff,
   buildPatrolInvestigationContextSummary,
   buildPatrolRunAssistantHandoff,
   buildPatrolInvestigationRecordPresentation,
@@ -448,6 +449,57 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
     expect(JSON.stringify(handoff)).not.toContain('provider trace');
+  });
+
+  it('builds a model-only Assistant handoff for a Patrol configuration failure', () => {
+    const handoff = buildPatrolConfigurationFailureHandoff({
+      message: 'The selected Patrol model is a reasoning-only model family.',
+      code: 'patrol_readiness_not_ready',
+      status: 400,
+      details: {
+        cause: 'model_unsupported_tools',
+        provider: 'ollama',
+        command: 'systemctl restart pulse.service',
+      },
+      autonomyLevel: 'approval',
+      fullModeUnlocked: false,
+      investigationBudget: 10,
+      investigationTimeoutSec: 120,
+      readiness: {
+        status: 'not_ready',
+        cause: 'model_unsupported_tools',
+        summary: 'The selected Patrol model is a reasoning-only model family.',
+        provider: 'ollama',
+        model: 'ollama:deepseek-r1:7b',
+      },
+      runtimeState: 'active',
+    });
+
+    expect(handoff.prompt).toContain('Discuss this Pulse Patrol configuration failure');
+    expect(handoff.prompt).toContain('Do not infer, repeat, or execute raw command text');
+    expect(handoff.context.autonomousMode).toBe(false);
+    expect(handoff.context.handoffMetadata).toMatchObject({
+      kind: 'patrol_configuration_failure',
+      runtimeFailure: true,
+    });
+    expect(handoff.context.handoffContext).toContain('[Patrol Configuration Failure Context]');
+    expect(handoff.context.handoffContext).toContain('Server Code: patrol_readiness_not_ready');
+    expect(handoff.context.handoffContext).toContain('Provider: ollama');
+    expect(handoff.context.handoffContext).toContain('Model: ollama:deepseek-r1:7b');
+    expect(handoff.context.handoffContext).toContain(
+      'Command: sensitive or command detail withheld',
+    );
+    expect(handoff.context.briefing).toMatchObject({
+      sourceLabel: 'Pulse Patrol',
+      title: 'Patrol configuration failure attached',
+      actionLabel: 'Review Patrol configuration failure',
+      suggestedPrompts: [
+        'Explain why Patrol configuration failed',
+        'List provider or model checks',
+        'What should I change before retrying?',
+      ],
+    });
+    expect(JSON.stringify(handoff)).not.toContain('systemctl restart pulse.service');
   });
 
   it('builds operator-facing Patrol record presentation without exposing raw commands', () => {

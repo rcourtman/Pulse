@@ -19,6 +19,7 @@ import {
   loadAIRuntimeSettings,
   syncAIRuntimeSettings,
 } from '@/stores/aiRuntimeState';
+import { aiChatStore } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
@@ -27,9 +28,19 @@ import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
 import type { AISettings } from '@/types/ai';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { normalizePatrolRuntimeBlockedReason } from '@/utils/patrolRuntimePresentation';
-import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
+import {
+  buildPatrolConfigurationFailureHandoff,
+  buildPatrolInvestigationContextSummary,
+  type PatrolConfigurationFailureInput,
+} from './patrolInvestigationContextModel';
 
 type PatrolTab = 'findings' | 'history';
+
+type PatrolAPIError = Error & {
+  code?: string;
+  details?: Record<string, string>;
+  status?: number;
+};
 
 const patrolErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() ? error.message : fallback;
@@ -52,6 +63,8 @@ export function usePatrolIntelligenceState() {
   const [investigationTimeout, setInvestigationTimeout] = createSignal(300);
   const [showAdvancedSettings, setShowAdvancedSettings] = createSignal(false);
   const [isSavingAdvanced, setIsSavingAdvanced] = createSignal(false);
+  const [advancedSettingsError, setAdvancedSettingsError] =
+    createSignal<PatrolConfigurationFailureInput | null>(null);
   const [fullModeUnlocked, setFullModeUnlocked] = createSignal(false);
   const availableModels = aiRuntimeModels;
   const [patrolModel, setPatrolModel] = createSignal<string>('');
@@ -128,6 +141,7 @@ export function usePatrolIntelligenceState() {
 
   const handleClickOutside = (event: MouseEvent) => {
     if (advancedSettingsRef && !advancedSettingsRef.contains(event.target as Node)) {
+      if (advancedSettingsError()) return;
       setShowAdvancedSettings(false);
     }
   };
@@ -137,6 +151,7 @@ export function usePatrolIntelligenceState() {
       document.addEventListener('mousedown', handleClickOutside);
     } else {
       document.removeEventListener('mousedown', handleClickOutside);
+      setAdvancedSettingsError(null);
     }
   });
 
@@ -240,6 +255,7 @@ export function usePatrolIntelligenceState() {
       const updated = await AIAPI.updateSettings({ patrol_model: modelId });
       syncAIRuntimeSettings(updated);
       setPatrolModel(updated.patrol_model || modelId);
+      await refetchPatrolStatus();
     } catch (err) {
       console.error('Failed to update patrol model:', err);
       notificationStore.error(patrolErrorMessage(err, 'Failed to update patrol model'));
@@ -350,7 +366,9 @@ export function usePatrolIntelligenceState() {
     const readiness = patrolReadiness();
     return runtimeState() === 'active' && readiness !== null && readiness.status !== 'ready';
   });
-  const canTriggerPatrol = createMemo(() => runtimeState() === 'active' && !readinessBlocksPatrol());
+  const canTriggerPatrol = createMemo(
+    () => runtimeState() === 'active' && !readinessBlocksPatrol(),
+  );
   const triggerPatrolDisabledReason = createMemo(() => {
     if (runtimeState() === 'disabled') return 'Patrol is disabled';
     if (runtimeState() === 'blocked') return blockedReason() || 'Patrol is paused';
@@ -501,8 +519,37 @@ export function usePatrolIntelligenceState() {
     }
   }
 
+  const buildAdvancedSettingsFailure = (err: unknown): PatrolConfigurationFailureInput => {
+    const apiError = err as PatrolAPIError;
+    const message = patrolErrorMessage(err, 'Failed to save Patrol configuration');
+    const readiness = patrolReadiness();
+    return {
+      message,
+      code: apiError.code,
+      status: apiError.status,
+      details: apiError.details,
+      autonomyLevel: autonomyLevel(),
+      fullModeUnlocked: fullModeUnlocked(),
+      investigationBudget: investigationBudget(),
+      investigationTimeoutSec: investigationTimeout(),
+      readiness: readiness
+        ? {
+            status: readiness.status,
+            cause: readiness.cause,
+            summary: readiness.summary,
+            provider: readiness.provider,
+            model: readiness.model,
+          }
+        : null,
+      runtimeState: runtimeState(),
+      blockedReason: blockedReason(),
+      blockedCause: patrolStatus()?.blocked_cause,
+    };
+  };
+
   async function saveAdvancedSettings() {
     setIsSavingAdvanced(true);
+    setAdvancedSettingsError(null);
     try {
       let effectiveLevel = autonomyLevel();
       const inAutoFix = effectiveLevel === 'assisted' || effectiveLevel === 'full';
@@ -520,13 +567,24 @@ export function usePatrolIntelligenceState() {
         setAutonomyLevel(result.settings.autonomy_level);
         setFullModeUnlocked(result.settings.full_mode_unlocked);
       }
+      setAdvancedSettingsError(null);
       setShowAdvancedSettings(false);
     } catch (err) {
       console.error('Failed to save advanced settings:', err);
-      notificationStore.error((err as Error).message || 'Failed to save advanced settings');
+      const failure = buildAdvancedSettingsFailure(err);
+      setAdvancedSettingsError(failure);
+      await refetchPatrolStatus();
     } finally {
       setIsSavingAdvanced(false);
     }
+  }
+
+  function openAdvancedSettingsErrorInAssistant() {
+    const failure = advancedSettingsError();
+    if (!failure) return;
+    const handoff = buildPatrolConfigurationFailureHandoff(failure);
+    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+    setShowAdvancedSettings(false);
   }
 
   function startPolling() {
@@ -654,6 +712,7 @@ export function usePatrolIntelligenceState() {
     activeTab,
     activePatrolFindings,
     activityRefreshTrigger,
+    advancedSettingsError,
     alertAnalysisLocked,
     alertTriggeredAnalysis,
     autonomyLevel,
@@ -692,6 +751,7 @@ export function usePatrolIntelligenceState() {
     licenseRequired,
     loadAllData,
     manualRunRequested,
+    openAdvancedSettingsErrorInAssistant,
     patrolEnabledLocal,
     patrolAlertTriggers,
     patrolAnomalyTriggers,

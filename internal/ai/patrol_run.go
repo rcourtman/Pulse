@@ -251,8 +251,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		return
 	}
 	if reason := strings.TrimSpace(cfg.RuntimeBlockedReason); reason != "" {
-		p.setBlockedReason(reason)
-		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping run - runtime readiness blocked")
+		p.setBlockedReasonWithCause(reason, cfg.RuntimeBlockedCause)
+		log.Info().Str("reason", reason).Str("cause", string(cfg.RuntimeBlockedCause)).Msg("AI Patrol: Skipping run - runtime readiness blocked")
 		return
 	}
 
@@ -371,12 +371,14 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	// Check if we can run LLM analysis (AI-only patrol)
 	if !canRunLLM {
 		reason := patrolProviderNotConfiguredReason
+		cause := PatrolFailureCauseProviderNotConfigured
 		if aiServiceEnabled && !llmAllowed {
 			reason = "circuit breaker is open"
+			cause = PatrolFailureCauseCircuitOpen
 			GetPatrolMetrics().RecordCircuitBlock()
 		}
-		p.setBlockedReason(reason)
-		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping run - AI unavailable")
+		p.setBlockedReasonWithCause(reason, cause)
+		log.Info().Str("reason", reason).Str("cause", string(cause)).Msg("AI Patrol: Skipping run - AI unavailable")
 		return
 	}
 
@@ -621,8 +623,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		return
 	}
 	if reason := strings.TrimSpace(cfg.RuntimeBlockedReason); reason != "" {
-		p.setBlockedReason(reason)
-		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping scoped run - runtime readiness blocked")
+		p.setBlockedReasonWithCause(reason, cfg.RuntimeBlockedCause)
+		log.Info().Str("reason", reason).Str("cause", string(cfg.RuntimeBlockedCause)).Msg("AI Patrol: Skipping scoped run - runtime readiness blocked")
 		return
 	}
 
@@ -779,12 +781,14 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 	if !canRunLLM {
 		reason := patrolProviderNotConfiguredReason
+		cause := PatrolFailureCauseProviderNotConfigured
 		if aiServiceEnabled && !llmAllowed {
 			reason = "circuit breaker is open"
+			cause = PatrolFailureCauseCircuitOpen
 			GetPatrolMetrics().RecordCircuitBlock()
 		}
-		p.setBlockedReason(reason)
-		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping scoped run - AI unavailable")
+		p.setBlockedReasonWithCause(reason, cause)
+		log.Info().Str("reason", reason).Str("cause", string(cause)).Msg("AI Patrol: Skipping scoped run - AI unavailable")
 		return
 	}
 
@@ -1498,6 +1502,7 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 		ErrorCount:       p.errorCount,
 		IntervalMs:       intervalMs,
 		BlockedReason:    p.lastBlockedReason,
+		BlockedCause:     p.lastBlockedCause,
 	}
 	if p.triggerManager != nil {
 		triggerStatus := p.triggerManager.GetStatus()

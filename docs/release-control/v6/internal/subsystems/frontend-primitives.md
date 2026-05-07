@@ -709,7 +709,10 @@ frontend primitive boundary.
     names remain hidden from operators. The Patrol configuration popover is part
     of that shared feature-presentation boundary: it must stay viewport-bounded,
     expose an accessible dialog label, and pass backend save rejection reasons
-    through to the toast surface instead of replacing them with generic copy.
+    through as inline dialog state instead of replacing them with generic toast
+    copy. If that inline state opens Assistant, the Patrol feature must hand off
+    a source-named, model-only briefing and close the popover so the shared
+    Assistant drawer is not visually hidden behind feature chrome.
 19. Keep the shared `system-ai` settings shell product-first.
     `frontend-modern/src/components/Settings/AISettings.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,

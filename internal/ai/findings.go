@@ -117,6 +117,7 @@ type Finding struct {
 	Recommendation string          `json:"recommendation,omitempty"`
 	Evidence       string          `json:"evidence,omitempty"` // data/commands that led to this finding
 	Source         string          `json:"source,omitempty"`   // "ai-analysis" for LLM findings, empty for rule-based
+	FailureCause   string          `json:"failure_cause,omitempty"`
 	DetectedAt     time.Time       `json:"detected_at"`
 	LastSeenAt     time.Time       `json:"last_seen_at"`
 	ResolvedAt     *time.Time      `json:"resolved_at,omitempty"`
@@ -161,6 +162,7 @@ type findingJSON struct {
 	Recommendation         string                           `json:"recommendation,omitempty"`
 	Evidence               string                           `json:"evidence,omitempty"`
 	Source                 string                           `json:"source,omitempty"`
+	FailureCause           string                           `json:"failure_cause,omitempty"`
 	DetectedAt             time.Time                        `json:"detected_at"`
 	LastSeenAt             time.Time                        `json:"last_seen_at"`
 	ResolvedAt             *time.Time                       `json:"resolved_at,omitempty"`
@@ -201,6 +203,7 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		Recommendation:         f.Recommendation,
 		Evidence:               f.Evidence,
 		Source:                 f.Source,
+		FailureCause:           f.FailureCause,
 		DetectedAt:             f.DetectedAt,
 		LastSeenAt:             f.LastSeenAt,
 		ResolvedAt:             f.ResolvedAt,
@@ -246,6 +249,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		Recommendation:         payload.Recommendation,
 		Evidence:               payload.Evidence,
 		Source:                 payload.Source,
+		FailureCause:           payload.FailureCause,
 		DetectedAt:             payload.DetectedAt,
 		LastSeenAt:             payload.LastSeenAt,
 		ResolvedAt:             payload.ResolvedAt,

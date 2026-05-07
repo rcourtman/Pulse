@@ -144,6 +144,8 @@ type PatrolConfig struct {
 	// RuntimeBlockedReason explains why the configured Patrol runtime must not
 	// execute model-backed runs even though the schedule may be enabled.
 	RuntimeBlockedReason string `json:"runtime_blocked_reason,omitempty"`
+	// RuntimeBlockedCause is the stable machine-readable cause for the runtime block.
+	RuntimeBlockedCause PatrolFailureCause `json:"runtime_blocked_cause,omitempty"`
 }
 
 // GetInterval returns the effective patrol interval, handling migration from old config
@@ -296,6 +298,7 @@ func (p *PatrolService) SetConfig(cfg PatrolConfig) {
 	p.mu.Lock()
 	oldInterval := p.config.GetInterval()
 	oldBlockedReason := strings.TrimSpace(p.config.RuntimeBlockedReason)
+	oldBlockedCause := p.config.RuntimeBlockedCause
 	p.config = cfg
 	newInterval := cfg.GetInterval()
 	configCh := p.configChanged
@@ -303,9 +306,11 @@ func (p *PatrolService) SetConfig(cfg PatrolConfig) {
 	switch {
 	case newBlockedReason != "":
 		p.lastBlockedReason = newBlockedReason
+		p.lastBlockedCause = cfg.RuntimeBlockedCause
 		p.lastBlockedAt = time.Now()
-	case oldBlockedReason != "" && p.lastBlockedReason == oldBlockedReason:
+	case oldBlockedReason != "" && p.lastBlockedReason == oldBlockedReason && p.lastBlockedCause == oldBlockedCause:
 		p.lastBlockedReason = ""
+		p.lastBlockedCause = ""
 		p.lastBlockedAt = time.Time{}
 	}
 	p.mu.Unlock()

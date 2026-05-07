@@ -107,11 +107,16 @@ func (p *PatrolService) RejectManualActionForRuntimeFinding(findingID string, ac
 }
 
 func (p *PatrolService) setBlockedReason(reason string) {
+	p.setBlockedReasonWithCause(reason, "")
+}
+
+func (p *PatrolService) setBlockedReasonWithCause(reason string, cause PatrolFailureCause) {
 	if reason == "" {
 		return
 	}
 	p.mu.Lock()
 	p.lastBlockedReason = reason
+	p.lastBlockedCause = cause
 	p.lastBlockedAt = time.Now()
 	p.mu.Unlock()
 }
@@ -119,6 +124,7 @@ func (p *PatrolService) setBlockedReason(reason string) {
 func (p *PatrolService) clearBlockedReason() {
 	p.mu.Lock()
 	p.lastBlockedReason = ""
+	p.lastBlockedCause = ""
 	p.lastBlockedAt = time.Time{}
 	p.mu.Unlock()
 }

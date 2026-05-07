@@ -605,9 +605,14 @@ test.describe("Patrol runtime-state browser contract", () => {
           contentType: "application/json",
           body: JSON.stringify({
             error: "license_required",
+            code: "patrol_autonomy_pro_required",
             message: PATROL_AUTONOMY_PRO_REQUIRED,
             feature: "ai_autofix",
             upgrade_url: "https://www.pulseproxmox.com/pricing",
+            details: {
+              cause: "license_required",
+              command: "systemctl restart pulse.service",
+            },
           }),
         });
       },
@@ -635,6 +640,29 @@ test.describe("Patrol runtime-state browser contract", () => {
     await applyButton.click();
 
     await expect(page.getByText(PATROL_AUTONOMY_PRO_REQUIRED)).toBeVisible();
+    await expect(configPanel).toBeVisible();
+    const inlineError = configPanel.getByTestId("patrol-configuration-error");
+    await expect(inlineError).toBeVisible();
+    await expect(inlineError).toContainText(PATROL_AUTONOMY_PRO_REQUIRED);
+    await expect(inlineError).toContainText("patrol_autonomy_pro_required");
+    await inlineError
+      .getByTestId("patrol-configuration-error-assistant-button")
+      .click();
+    await expect(configPanel).toBeHidden();
+    const assistantContext = page.getByLabel("Assistant context");
+    await expect(assistantContext).toBeVisible();
+    await expect(assistantContext).toContainText(
+      "Patrol configuration failure attached",
+    );
+    await expect(assistantContext).toContainText(
+      "patrol_autonomy_pro_required",
+    );
+    await expect(assistantContext).toContainText(
+      "Command: sensitive or command detail withheld",
+    );
+    await expect(
+      assistantContext.getByText("systemctl restart pulse.service"),
+    ).toHaveCount(0);
     await expect(
       page.getByText("Failed to save advanced settings"),
     ).toHaveCount(0);

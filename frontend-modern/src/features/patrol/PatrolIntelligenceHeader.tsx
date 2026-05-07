@@ -2,6 +2,7 @@ import { createMemo, For, Show } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import PlayIcon from 'lucide-solid/icons/play';
 import CircleHelpIcon from 'lucide-solid/icons/circle-help';
+import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import XIcon from 'lucide-solid/icons/x';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
@@ -404,6 +405,35 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     </div>
 
                     <div class="pt-4 border-t border-border-subtle">
+                      <Show when={state.advancedSettingsError()}>
+                        {(failure) => (
+                          <div
+                            role="alert"
+                            data-testid="patrol-configuration-error"
+                            class="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2.5 text-red-950 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"
+                          >
+                            <p class="text-xs font-semibold">Patrol configuration was not saved</p>
+                            <p class="mt-1 text-xs leading-relaxed">{failure().message}</p>
+                            <Show when={failure().code || failure().readiness?.cause}>
+                              <p class="mt-1 text-[11px] leading-relaxed opacity-80">
+                                {[failure().code, failure().readiness?.cause]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </p>
+                            </Show>
+                            <button
+                              type="button"
+                              data-testid="patrol-configuration-error-assistant-button"
+                              onClick={state.openAdvancedSettingsErrorInAssistant}
+                              class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-950 transition-colors hover:bg-white dark:border-red-700 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-900/50"
+                            >
+                              <MessageSquareIcon class="h-3.5 w-3.5" />
+                              Discuss with Assistant
+                            </button>
+                          </div>
+                        )}
+                      </Show>
+
                       <button
                         onClick={state.saveAdvancedSettings}
                         disabled={state.isSavingAdvanced()}

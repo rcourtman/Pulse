@@ -63,10 +63,12 @@ describe('patrol api', () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'blocked',
       blocked_reason: 'Connect a provider to power Pulse Assistant and Patrol.',
+      blocked_cause: 'provider_not_configured',
       healthy: false,
       readiness: {
         status: 'not_ready',
         ready: false,
+        cause: 'model_unsupported_tools',
         summary:
           'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
         provider: 'ollama',
@@ -75,6 +77,7 @@ describe('patrol api', () => {
           {
             id: 'tools',
             status: 'not_ready',
+            cause: 'model_unsupported_tools',
             label: 'Patrol tools',
             message:
               'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
@@ -87,16 +90,19 @@ describe('patrol api', () => {
     await expect(getPatrolStatus()).resolves.toMatchObject({
       runtime_state: 'blocked',
       blocked_reason: 'Connect a provider to power Pulse Assistant and Patrol.',
+      blocked_cause: 'provider_not_configured',
       healthy: false,
       readiness: {
         status: 'not_ready',
         ready: false,
+        cause: 'model_unsupported_tools',
         provider: 'ollama',
         model: 'ollama:deepseek-r1:7b-llama-distill-q4_K_M',
         checks: [
           {
             id: 'tools',
             status: 'not_ready',
+            cause: 'model_unsupported_tools',
             action: 'open_provider_settings',
           },
         ],

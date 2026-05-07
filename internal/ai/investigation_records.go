@@ -34,6 +34,7 @@ func BuildFindingInvestigationRecord(f *Finding, session *InvestigationSession) 
 			Title:       strings.TrimSpace(f.Title),
 			DetectedAt:  f.DetectedAt,
 			Description: strings.TrimSpace(f.Description),
+			Cause:       strings.TrimSpace(f.FailureCause),
 		},
 		Status:            aicontracts.InvestigationStatus(strings.TrimSpace(f.InvestigationStatus)),
 		Outcome:           aicontracts.InvestigationOutcome(strings.TrimSpace(f.InvestigationOutcome)),

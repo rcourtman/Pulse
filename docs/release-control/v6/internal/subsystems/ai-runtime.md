@@ -111,10 +111,11 @@ runtime cost control, and shared AI transport surfaces.
    model, settings-persistence, and tool-calling prerequisites so the UI can
    block known-bad manual Patrol runs before they become generic runtime
    failures. The same `internal/ai` readiness evaluation must gate Patrol
-   runtime admission directly: readiness-sensitive settings saves, manual run
-   requests, scheduled ticks, and scoped alert/anomaly runs must fail or skip
-   before LLM execution when the selected Patrol model/provider is known
-   not-ready.
+   runtime admission directly: settings saves that are needed to recover a bad
+   provider/model selection must persist and return structured readiness cause
+   metadata, while manual run requests, scheduled ticks, and scoped
+   alert/anomaly runs must fail or skip before LLM execution when the selected
+   Patrol model/provider is known not-ready.
 4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
    External provider-bound unified-resource context must enforce the same

@@ -114,10 +114,11 @@ product API routes free of maintainer commercial analytics.
    The Patrol status payload owns Patrol readiness as structured API state:
    provider/model/settings/tool prerequisites must travel as bounded readiness
    checks instead of frontend-only heuristics or generic analysis-failed text.
-   `/api/settings/ai/update` and `/api/ai/patrol/run` must use that same
-   `patrol_readiness_not_ready` error taxonomy when they reject a known-bad
-   Patrol runtime configuration, with bounded `status`, `provider`, and
-   `model` details where available.
+   `/api/settings/ai/update` must persist recoverable provider/model changes
+   and return the same structured readiness cause in its settings payload, while
+   `/api/ai/patrol/run` must use the `patrol_readiness_not_ready` error taxonomy
+   when it rejects a known-bad Patrol runtime configuration. Bounded `status`,
+   `cause`, `provider`, and `model` details are the canonical transport shape.
 7. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
@@ -838,6 +839,11 @@ the canonical monitored-system blocked payload.
    may persist only `monitor` autonomy settings through
    `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and `full` return
    the canonical license-required response instead of a generic save failure
+   and the Patrol settings-save readiness contract, so
+   `/api/settings/ai/update` may save a selected Patrol provider/model even
+   when that model is not ready for tool-backed Patrol execution, but it must
+   echo `patrol_readiness` with stable `cause` metadata and execution routes
+   must continue to fail closed before model calls
    and the structured investigation-record contract, so unified findings may
    expose `investigation_record` only through the shared
    `aicontracts.InvestigationRecord` payload shape, with frontend API types

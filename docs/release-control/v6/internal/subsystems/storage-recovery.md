@@ -221,6 +221,10 @@ bypass the API fail-closed execution gate.
    those notes. Recovery-adjacent diagnostics consumers must preserve the
    source-specific Docker / Podman wording and recovery destinations governed
    by the shared diagnostics API contract.
+   When shared `internal/api/` handlers expose structured Patrol readiness or
+   provider/model/tool causes, storage and recovery surfaces may treat them only
+   as adjacent operator context and must not convert them into storage health,
+   recovery execution, or backup remediation authority.
    Shared Patrol autonomy routes may also touch broad `internal/api/` wiring,
    but monitor-mode AI configuration and remediation entitlement responses stay
    AI runtime/API-contract owned and must not become recovery-local policy,

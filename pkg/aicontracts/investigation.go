@@ -179,6 +179,7 @@ type InvestigationRecordTrigger struct {
 	Title       string    `json:"title,omitempty"`
 	DetectedAt  time.Time `json:"detected_at"`
 	Description string    `json:"description,omitempty"`
+	Cause       string    `json:"cause,omitempty"`
 }
 
 // InvestigationRecordEvidence points to evidence Patrol used or generated

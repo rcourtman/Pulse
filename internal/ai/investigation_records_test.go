@@ -24,6 +24,7 @@ func TestBuildFindingInvestigationRecord_FromSession(t *testing.T) {
 		Recommendation:         "Reduce CPU pressure",
 		Evidence:               "cpu=96%",
 		Source:                 "ai-analysis",
+		FailureCause:           string(PatrolFailureCauseModelUnsupportedTools),
 		DetectedAt:             detectedAt,
 		InvestigationSessionID: "chat-1",
 		InvestigationStatus:    string(InvestigationStatusCompleted),
@@ -64,6 +65,9 @@ func TestBuildFindingInvestigationRecord_FromSession(t *testing.T) {
 	}
 	if record.Trigger.FindingKey != "cpu-high" || record.Trigger.Title != "High CPU" {
 		t.Fatalf("unexpected trigger: %#v", record.Trigger)
+	}
+	if record.Trigger.Cause != string(PatrolFailureCauseModelUnsupportedTools) {
+		t.Fatalf("trigger cause = %q", record.Trigger.Cause)
 	}
 	if record.Conclusion != "Postgres was consuming CPU." {
 		t.Fatalf("conclusion = %q", record.Conclusion)

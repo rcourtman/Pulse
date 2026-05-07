@@ -12,6 +12,7 @@ const patrolProviderNotConfiguredReason = "Patrol provider not configured - open
 type patrolRuntimeFailure struct {
 	Title          string
 	Summary        string
+	Cause          PatrolFailureCause
 	Description    string
 	Recommendation string
 	Detail         string
@@ -29,6 +30,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	failure := patrolRuntimeFailure{
 		Title:          "Pulse Patrol: Provider analysis error",
 		Summary:        "Provider analysis error",
+		Cause:          PatrolFailureCauseProviderConnection,
 		Description:    "Pulse Patrol reached the configured provider, but the provider did not complete the Patrol analysis request.",
 		Recommendation: "Review the Patrol provider settings, selected model, and provider logs, then rerun Patrol after the provider path is healthy.",
 		Detail:         detail,
@@ -41,6 +43,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		strings.Contains(lower, "no endpoints found") && strings.Contains(lower, "tool"):
 		failure.Title = "Pulse Patrol: Selected model does not support Patrol tools"
 		failure.Summary = "Selected model does not support Patrol tools"
+		failure.Cause = PatrolFailureCauseModelUnsupportedTools
 		failure.Description = "Pulse Patrol reached the provider, but the selected model or routed endpoint rejected tool-calling. Patrol needs tool support to inspect resources and report governed findings."
 		failure.Recommendation = "Choose a Patrol model or provider route that supports tool calling. For OpenRouter, select an endpoint that supports tools/tool_choice, or switch to a local or BYOK model with tool support."
 	case strings.Contains(lower, "model") && (strings.Contains(lower, "not available") ||
@@ -49,11 +52,13 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		strings.Contains(lower, "no such model")):
 		failure.Title = "Pulse Patrol: Selected model unavailable"
 		failure.Summary = "Selected model unavailable"
+		failure.Cause = PatrolFailureCauseModelUnavailable
 		failure.Description = "Pulse Patrol reached the provider, but the configured Patrol model is not available from that provider path."
 		failure.Recommendation = "Open Patrol provider settings and choose one of the models currently returned by the provider, then rerun Patrol."
 	case isPatrolContextWindowError(err):
 		failure.Title = "Pulse Patrol: Selected model context window too small"
 		failure.Summary = "Selected model context window too small"
+		failure.Cause = PatrolFailureCauseContextWindowTooSmall
 		failure.Description = "The provider rejected Patrol analysis because the selected model could not fit the Patrol context after retrying with smaller context budgets."
 		failure.Recommendation = "Choose a model with a larger context window or run a narrower scoped Patrol check."
 	case strings.Contains(lower, "insufficient balance") ||
@@ -63,6 +68,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		strings.Contains(lower, "credit"):
 		failure.Title = "Pulse Patrol: Provider billing or quota issue"
 		failure.Summary = "Provider billing or quota issue"
+		failure.Cause = PatrolFailureCauseProviderBilling
 		failure.Description = "Pulse Patrol cannot analyze your infrastructure because the configured provider rejected the request for billing or quota reasons."
 		failure.Recommendation = "Resolve the billing or quota issue with your provider, or switch Patrol to a different provider or local model."
 	case strings.Contains(lower, "rate limit") ||
@@ -70,6 +76,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		strings.Contains(lower, "too many requests"):
 		failure.Title = "Pulse Patrol: Provider rate limited"
 		failure.Summary = "Provider rate limited"
+		failure.Cause = PatrolFailureCauseProviderRateLimited
 		failure.Description = "Pulse Patrol is being rate limited by the configured provider, so this analysis run could not complete."
 		failure.Recommendation = "Wait for the provider rate limit to reset, increase provider limits, or switch Patrol to another capable model."
 	case strings.Contains(lower, "401") ||
@@ -79,6 +86,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		strings.Contains(lower, "api key"):
 		failure.Title = "Pulse Patrol: Provider authentication issue"
 		failure.Summary = "Provider authentication issue"
+		failure.Cause = PatrolFailureCauseProviderAuth
 		failure.Description = "Pulse Patrol cannot analyze your infrastructure because the provider rejected the configured credentials or account access."
 		failure.Recommendation = "Check the API key or provider authentication in Patrol provider settings, then rerun Patrol."
 	case strings.Contains(lower, "not configured") ||
@@ -87,6 +95,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		strings.Contains(lower, "failed to create provider"):
 		failure.Title = "Pulse Patrol: Provider not ready"
 		failure.Summary = "Provider not ready"
+		failure.Cause = PatrolFailureCauseProviderNotConfigured
 		failure.Description = "Pulse Patrol could not start analysis because the Patrol provider runtime is not ready."
 		failure.Recommendation = "Open Patrol provider settings, complete provider configuration, verify the selected model, and rerun Patrol."
 	case strings.Contains(lower, "failed to connect") ||
@@ -97,6 +106,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		strings.Contains(lower, "timeout"):
 		failure.Title = "Pulse Patrol: Provider connection issue"
 		failure.Summary = "Provider connection issue"
+		failure.Cause = PatrolFailureCauseProviderConnection
 		failure.Description = "Pulse Patrol could not maintain a healthy connection to the configured provider during analysis."
 		failure.Recommendation = "Check provider reachability, base URL, firewall or proxy rules, and provider availability, then rerun Patrol."
 	}
@@ -121,6 +131,7 @@ func newPatrolRuntimeFailureFinding(failure patrolRuntimeFailure, now time.Time)
 		Description:    failure.Description,
 		Recommendation: failure.Recommendation,
 		Evidence:       failure.Evidence,
+		FailureCause:   string(failure.Cause),
 		DetectedAt:     now,
 		LastSeenAt:     now,
 	}

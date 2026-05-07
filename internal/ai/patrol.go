@@ -103,6 +103,7 @@ type PatrolStatus struct {
 	Healthy          bool               `json:"healthy"`
 	IntervalMs       int64              `json:"interval_ms"` // Patrol interval in milliseconds
 	BlockedReason    string             `json:"blocked_reason,omitempty"`
+	BlockedCause     PatrolFailureCause `json:"blocked_cause,omitempty"`
 	BlockedAt        *time.Time         `json:"blocked_at,omitempty"`
 }
 
@@ -457,6 +458,7 @@ type PatrolService struct {
 	resourcesChecked  int
 	errorCount        int
 	lastBlockedReason string
+	lastBlockedCause  PatrolFailureCause
 	lastBlockedAt     time.Time
 	nextScheduledAt   time.Time // Tracks actual next patrol time (accounts for ticker resets)
 

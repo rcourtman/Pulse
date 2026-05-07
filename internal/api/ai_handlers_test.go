@@ -133,7 +133,7 @@ func TestAISettingsHandler_PatrolReadinessFlagsReasoningOnlyModel(t *testing.T) 
 	require.Equal(t, patrolReadinessNotReady, toolCheck.Status)
 }
 
-func TestAISettingsHandler_UpdateSettingsRejectsNotReadyPatrolModel(t *testing.T) {
+func TestAISettingsHandler_UpdateSettingsPersistsNotReadyPatrolModelWithReadiness(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -152,18 +152,21 @@ func TestAISettingsHandler_UpdateSettingsRejectsNotReadyPatrolModel(t *testing.T
 	rec := httptest.NewRecorder()
 	handler.HandleUpdateAISettings(rec, req)
 
-	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
-	var payload APIError
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var payload AISettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	require.Equal(t, "patrol_readiness_not_ready", payload.Code)
-	require.Contains(t, payload.ErrorMessage, "reasoning-only model family")
-	require.Equal(t, patrolReadinessNotReady, payload.Details["status"])
-	require.Equal(t, "ollama", payload.Details["provider"])
-	require.Equal(t, model, payload.Details["model"])
+	require.True(t, payload.Enabled)
+	require.NotNil(t, payload.PatrolReadiness)
+	require.Equal(t, patrolReadinessNotReady, payload.PatrolReadiness.Status)
+	require.Equal(t, string(ai.PatrolFailureCauseModelUnsupportedTools), payload.PatrolReadiness.Cause)
+	require.Contains(t, payload.PatrolReadiness.Summary, "reasoning-only model family")
+	require.Equal(t, "ollama", payload.PatrolReadiness.Provider)
+	require.Equal(t, model, payload.PatrolReadiness.Model)
 
 	persisted, err := persistence.LoadAIConfig()
 	require.NoError(t, err)
-	require.False(t, persisted.Enabled)
+	require.True(t, persisted.Enabled)
+	require.Equal(t, model, persisted.PatrolModel)
 }
 
 func TestAISettingsHandler_UpdateSettingsDoesNotLockUnrelatedSavesBehindExistingPatrolReadiness(t *testing.T) {

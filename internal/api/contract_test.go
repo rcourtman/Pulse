@@ -9801,6 +9801,7 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 		IntervalMs:       21600000,
 		FixedCount:       2,
 		BlockedReason:    "Awaiting AI provider configuration",
+		BlockedCause:     string(ai.PatrolFailureCauseProviderNotConfigured),
 		BlockedAt:        &blockedAt,
 		LicenseRequired:  true,
 		LicenseStatus:    "none",
@@ -9808,6 +9809,7 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 		Readiness: &PatrolReadinessResponse{
 			Status:   patrolReadinessNotReady,
 			Ready:    false,
+			Cause:    string(ai.PatrolFailureCauseModelUnsupportedTools),
 			Summary:  "The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.",
 			Provider: "ollama",
 			Model:    "ollama:deepseek-r1:7b-llama-distill-q4_K_M",
@@ -9815,6 +9817,7 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 				{
 					ID:      "tools",
 					Status:  patrolReadinessNotReady,
+					Cause:   string(ai.PatrolFailureCauseModelUnsupportedTools),
 					Label:   "Patrol tools",
 					Message: "The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.",
 					Action:  "open_provider_settings",
@@ -9848,12 +9851,13 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 		"interval_ms":21600000,
 		"fixed_count":2,
 		"blocked_reason":"Awaiting AI provider configuration",
+		"blocked_cause":"provider_not_configured",
 		"blocked_at":"2026-03-12T09:45:00Z",
 		"license_required":true,
 		"license_status":"none",
 		"upgrade_url":"https://pulserelay.pro/upgrade?feature=ai_autofix",
 		"summary":{"critical":1,"warning":2,"watch":0,"info":4},
-		"readiness":{"status":"not_ready","ready":false,"summary":"The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.","provider":"ollama","model":"ollama:deepseek-r1:7b-llama-distill-q4_K_M","checks":[{"id":"tools","status":"not_ready","label":"Patrol tools","message":"The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.","action":"open_provider_settings"}]}
+		"readiness":{"status":"not_ready","ready":false,"cause":"model_unsupported_tools","summary":"The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.","provider":"ollama","model":"ollama:deepseek-r1:7b-llama-distill-q4_K_M","checks":[{"id":"tools","status":"not_ready","cause":"model_unsupported_tools","label":"Patrol tools","message":"The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.","action":"open_provider_settings"}]}
 	}`
 
 	assertJSONSnapshot(t, got, want)

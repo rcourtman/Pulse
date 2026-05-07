@@ -2424,7 +2424,7 @@
     },
     {
       "id": "RA27",
-      "summary": "Patrol readiness owns server-authored runtime and configuration safety: provider, model, settings-persistence, and tool-calling prerequisites must travel as structured `/api/ai/patrol/status`, settings-save, and Patrol action errors, and known not-ready states must block readiness-sensitive settings saves plus manual, scheduled, and scoped Patrol runs before they become generic interrupted-analysis failures.",
+      "summary": "Patrol readiness owns server-authored runtime and configuration safety: provider, model, settings-persistence, and tool-calling prerequisites must travel as structured `/api/ai/patrol/status`, settings-save, and Patrol action errors. Settings saves must persist recoverable provider/model changes while returning structured readiness, and known not-ready states must block manual, scheduled, and scoped Patrol runs before they become generic interrupted-analysis failures.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -2484,7 +2484,7 @@
             "test",
             "./internal/api",
             "-run",
-            "UpdateSettingsRejectsNotReadyPatrolModel|UpdateSettingsDoesNotLockUnrelatedSavesBehindExistingPatrolReadiness|HandleForcePatrol_BlocksNotReadyPatrolModel",
+            "UpdateSettingsPersistsNotReadyPatrolModelWithReadiness|UpdateSettingsDoesNotLockUnrelatedSavesBehindExistingPatrolReadiness|HandleForcePatrol_BlocksNotReadyPatrolModel",
             "-count=1"
           ]
         },
@@ -2533,7 +2533,22 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
           "kind": "file"
         },
         {
@@ -2563,7 +2578,22 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/patrol_readiness_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/ai/patrol_run.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_runtime_failure.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_runtime_failure_test.go",
           "kind": "file"
         },
         {

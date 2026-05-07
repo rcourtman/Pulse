@@ -23,6 +23,9 @@ func TestPatrolRuntimeFailureFromError_ClassifiesToolCallingUnsupported(t *testi
 	if failure.Summary != "Selected model does not support Patrol tools" {
 		t.Fatalf("unexpected summary %q", failure.Summary)
 	}
+	if failure.Cause != PatrolFailureCauseModelUnsupportedTools {
+		t.Fatalf("unexpected cause %q", failure.Cause)
+	}
 	if !strings.Contains(failure.Recommendation, "supports tool calling") {
 		t.Fatalf("expected recommendation to mention tool calling, got %q", failure.Recommendation)
 	}
@@ -42,6 +45,9 @@ func TestPatrolRuntimeFailureFromError_ClassifiesUnavailableModel(t *testing.T) 
 	if failure.Summary != "Selected model unavailable" {
 		t.Fatalf("unexpected summary %q", failure.Summary)
 	}
+	if failure.Cause != PatrolFailureCauseModelUnavailable {
+		t.Fatalf("unexpected cause %q", failure.Cause)
+	}
 	if !strings.Contains(failure.Recommendation, "models currently returned by the provider") {
 		t.Fatalf("unexpected recommendation %q", failure.Recommendation)
 	}
@@ -55,6 +61,9 @@ func TestPatrolRuntimeFailureFromError_DefaultIsActionable(t *testing.T) {
 	}
 	if failure.Summary != "Provider analysis error" {
 		t.Fatalf("unexpected summary %q", failure.Summary)
+	}
+	if failure.Cause != PatrolFailureCauseProviderConnection {
+		t.Fatalf("unexpected cause %q", failure.Cause)
 	}
 }
 
@@ -70,6 +79,9 @@ func TestNewPatrolRuntimeFailureFindingUsesCanonicalRuntimeIdentity(t *testing.T
 	}
 	if finding.Title != "Pulse Patrol: Provider rate limited" {
 		t.Fatalf("unexpected title %q", finding.Title)
+	}
+	if finding.FailureCause != string(PatrolFailureCauseProviderRateLimited) {
+		t.Fatalf("unexpected failure cause %q", finding.FailureCause)
 	}
 	if finding.LastSeenAt.Unix() != 123 {
 		t.Fatalf("unexpected last seen %v", finding.LastSeenAt)
@@ -117,6 +129,9 @@ func TestRunPatrolRecordsStructuredRuntimeFailure(t *testing.T) {
 	}
 	if finding.Title != "Pulse Patrol: Selected model does not support Patrol tools" {
 		t.Fatalf("unexpected runtime finding title %q", finding.Title)
+	}
+	if finding.FailureCause != string(PatrolFailureCauseModelUnsupportedTools) {
+		t.Fatalf("unexpected runtime finding cause %q", finding.FailureCause)
 	}
 }
 

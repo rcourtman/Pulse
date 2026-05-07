@@ -146,6 +146,7 @@ export type PatrolReadinessStatus = 'ready' | 'warning' | 'not_ready';
 export interface PatrolReadinessCheck {
   id: string;
   status: PatrolReadinessStatus;
+  cause?: string;
   label: string;
   message: string;
   action?: string;
@@ -154,6 +155,7 @@ export interface PatrolReadinessCheck {
 export interface PatrolReadiness {
   status: PatrolReadinessStatus;
   ready: boolean;
+  cause?: string;
   summary: string;
   provider?: string;
   model?: string;
@@ -186,6 +188,7 @@ export interface PatrolStatus {
   interval_ms: number; // Patrol interval in milliseconds
   fixed_count: number; // Number of issues remediated by Patrol
   blocked_reason?: string; // Canonical server-authored Patrol block reason.
+  blocked_cause?: string;
   blocked_at?: string;
   license_required?: boolean;
   license_status?: LicenseStatus;

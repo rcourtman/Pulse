@@ -2,6 +2,26 @@
 
 export type AIProvider = 'anthropic' | 'openai' | 'openrouter' | 'ollama' | 'deepseek' | 'gemini';
 export type AuthMethod = 'api_key' | 'oauth';
+export type PatrolReadinessStatus = 'ready' | 'warning' | 'not_ready';
+
+export interface PatrolReadinessCheck {
+  id: string;
+  status: PatrolReadinessStatus;
+  cause?: string;
+  label: string;
+  message: string;
+  action?: string;
+}
+
+export interface PatrolReadiness {
+  status: PatrolReadinessStatus;
+  ready: boolean;
+  cause?: string;
+  summary: string;
+  provider?: string;
+  model?: string;
+  checks: PatrolReadinessCheck[];
+}
 
 export interface ModelInfo {
   id: string;
@@ -54,6 +74,9 @@ export interface AISettings {
   // AI Discovery settings
   discovery_enabled?: boolean;
   discovery_interval_hours?: number;
+
+  // Current Pulse Patrol runtime readiness for this settings snapshot
+  patrol_readiness?: PatrolReadiness;
 }
 
 export interface AISettingsUpdateRequest {

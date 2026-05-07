@@ -84,9 +84,10 @@ Patrol-specific presentation helpers.
    managed credits or account-backed AI access.
    Server-authored Patrol readiness from the status payload is part of the
    Patrol product surface: warnings must be visible before a run starts, and
-   known not-ready states must block readiness-sensitive settings saves plus
-   manual, scheduled, and scoped Patrol runs instead of letting operators
-   discover provider/model/tool incompatibility through a failed run.
+   known not-ready states must keep recoverable provider/model settings saves
+   visible and actionable while blocking manual, scheduled, and scoped Patrol
+   runs instead of letting operators discover provider/model/tool
+   incompatibility through a failed run.
 5. Keep customer-facing Patrol naming product-first: page titles, route chrome,
    summary copy, actions, and empty states should lead with `Patrol` or
    `Pulse Patrol` rather than generic `AI` branding. Reserve `AI` terminology
@@ -350,13 +351,17 @@ That same browser proof now covers the Patrol configuration save contract.
 The advanced Patrol panel must stay within the desktop viewport, scroll its
 own contents to the Apply control, and surface the backend's concrete
 license/validation reason when a save is rejected instead of replacing it with
-a generic `Failed to save advanced settings` toast.
+a generic `Failed to save advanced settings` toast. That inline failure may
+handoff to Assistant only as model-only explanation context: raw command,
+script, credential, and provider-detail payloads stay redacted, Assistant opens
+with `autonomousMode:false`, and the configuration panel closes so the operator
+is not left behind an overlapping popover.
 The readiness contract now applies before Patrol work is admitted, not only
-after a page render: readiness-sensitive settings saves must reject known-bad
-Patrol runtime configurations, manual run requests must return the structured
-readiness reason if a stale UI still submits, and scheduled or scoped
-alert/anomaly runs must skip before calling the model while preserving the
-blocked reason in Patrol status.
+after a page render: recoverable Patrol provider/model settings saves must
+persist and echo structured readiness cause metadata, manual run requests must
+return the structured readiness reason if a stale UI still submits, and
+scheduled or scoped alert/anomaly runs must skip before calling the model while
+preserving the blocked reason and cause in Patrol status.
 That same Patrol-owned presentation rule also applies to the findings empty
 state: `frontend-modern/src/components/AI/FindingsPanel.tsx` must not treat
 `0 active findings` as equivalent to "your infrastructure looks healthy" when
