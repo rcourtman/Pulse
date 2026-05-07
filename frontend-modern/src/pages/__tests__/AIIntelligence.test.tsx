@@ -1102,12 +1102,19 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('Coverage incomplete').length).toBeGreaterThan(0);
+      expect(screen.getByText('Recommended next step')).toBeInTheDocument();
+      expect(screen.getByText('Verify full coverage')).toBeInTheDocument();
       expect(screen.getByText('No recent full patrol')).toBeInTheDocument();
       expect(screen.getAllByText(/Last activity/i)).toHaveLength(1);
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Last patrol/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Last:/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Partial verification')).not.toBeInTheDocument();

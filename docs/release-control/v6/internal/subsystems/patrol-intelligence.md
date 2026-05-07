@@ -485,6 +485,16 @@ estate. When there is exactly one active Patrol runtime finding, that same
 assessment copy should name the concrete runtime failure, such as
 `Provider billing or quota issue`, instead of reducing the state to a generic count of
 runtime findings.
+That primary assessment must also expose a single visible recommended next
+step derived from the same Patrol summary contract, not a page-local helper.
+`frontend-modern/src/utils/patrolSummaryPresentation.ts` owns that decision
+from pending governed approvals, Patrol runtime issues, active infrastructure
+findings, verification posture, and the current assessment tone. Pending
+approvals take priority over general triage, coverage-incomplete states must
+ask for full verification before any all-clear claim, runtime impairment must
+point the operator back to restoring Patrol visibility, and verified healthy
+states should fall back to continued scheduled monitoring rather than
+inviting generic Assistant chat.
 That same runtime-owned assessment must expose the fix path directly. When the
 primary Patrol issue is a Patrol runtime/provider problem rather than an
 infrastructure finding, the summary card should offer a direct `Open Patrol

@@ -46,6 +46,12 @@ export interface PatrolAssessmentAction {
   href: string;
 }
 
+export interface PatrolRecommendedNextStepPresentation {
+  title: string;
+  description: string;
+  tone: SemanticTone;
+}
+
 export interface PatrolSummaryMetricState {
   primaryLabel: string;
   primaryValue: number;
@@ -83,6 +89,8 @@ export const PATROL_NO_ISSUES_LABEL = 'No issues found';
 const QUIET_ICON_CONTAINER = 'bg-surface border-border';
 const QUIET_ICON = 'text-muted';
 const QUIET_VALUE = 'text-muted';
+const VERIFY_FULL_COVERAGE_DESCRIPTION =
+  'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.';
 
 const ACTIVE_PRESENTATION: Record<PatrolSummaryTone, PatrolSummaryPresentation> = {
   critical: {
@@ -260,6 +268,101 @@ export function getPatrolAssessmentAction(args: {
   }
 
   return undefined;
+}
+
+function formatPendingApprovalCount(count: number): string {
+  return `${count} governed Patrol approval${count === 1 ? '' : 's'}`;
+}
+
+function assessmentHasCoverageGap(assessment: PatrolAssessmentPresentation): boolean {
+  const title = assessment.title.trim().toLowerCase();
+  const description = assessment.description.trim().toLowerCase();
+  const compactLabel = assessment.compactLabel.trim().toLowerCase();
+  return (
+    title.includes('coverage incomplete') ||
+    description.includes('coverage incomplete') ||
+    compactLabel.includes('coverage incomplete')
+  );
+}
+
+export function getPatrolRecommendedNextStepPresentation(args: {
+  assessment: PatrolAssessmentPresentation;
+  verification: PatrolVerificationPresentation;
+  activeFindings?: PatrolAssessmentFinding[];
+  pendingApprovalCount?: number;
+}): PatrolRecommendedNextStepPresentation {
+  const classified = classifyActiveFindings(args.activeFindings);
+  const pendingApprovalCount = Math.max(0, args.pendingApprovalCount ?? 0);
+
+  if (pendingApprovalCount > 0) {
+    return {
+      title:
+        pendingApprovalCount === 1
+          ? 'Review the pending Patrol approval'
+          : 'Review pending Patrol approvals',
+      description: `Patrol is waiting on ${formatPendingApprovalCount(pendingApprovalCount)}. Review risk, dry-run posture, and expiry before approving or starting another remediation.`,
+      tone: 'warning',
+    };
+  }
+
+  if (classified.infrastructureTotal === 0 && classified.runtimeTotal > 0) {
+    return {
+      title: 'Restore Patrol visibility',
+      description:
+        'Fix the Patrol runtime issue and rerun Patrol before treating the infrastructure assessment as current.',
+      tone: args.assessment.tone,
+    };
+  }
+
+  if (classified.infrastructureCritical > 0) {
+    return {
+      title: 'Triage the critical finding',
+      description:
+        'Start with the highest-risk active finding, review the attached evidence and approval posture, then choose the safest governed action.',
+      tone: 'error',
+    };
+  }
+
+  if (classified.infrastructureTotal > 0) {
+    return {
+      title: 'Review active findings',
+      description:
+        'Use the findings workspace to prioritize current risk, recent changes, and any governed remediation before waiting for the next scheduled Patrol run.',
+      tone: 'warning',
+    };
+  }
+
+  if (assessmentHasCoverageGap(args.assessment)) {
+    return {
+      title: 'Verify full coverage',
+      description: VERIFY_FULL_COVERAGE_DESCRIPTION,
+      tone: args.assessment.tone,
+    };
+  }
+
+  if (args.verification.tone !== 'success') {
+    return {
+      title: 'Verify full coverage',
+      description: VERIFY_FULL_COVERAGE_DESCRIPTION,
+      tone: args.verification.tone,
+    };
+  }
+
+  if (args.assessment.tone !== 'success') {
+    return {
+      title: 'Review assessment evidence',
+      description:
+        'Review the supporting context or discuss the assessment with Assistant to understand why Patrol still marks it as needing attention.',
+      tone: args.assessment.tone,
+    };
+  }
+
+  return {
+    title: 'Keep Patrol monitoring',
+    description:
+      'Patrol has no active findings and has recent full-run verification. Keep scheduled Patrol enabled and let alert or anomaly triggers start scoped follow-up checks.',
+    tone: 'success',
+  };
 }
 
 function joinAssessmentParts(parts: string[]): string {

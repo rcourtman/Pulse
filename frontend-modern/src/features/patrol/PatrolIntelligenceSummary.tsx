@@ -9,6 +9,7 @@ import {
   getPatrolAssessmentAction,
   getPatrolAssessmentShellPresentation,
   getPatrolAssessmentPresentation,
+  getPatrolRecommendedNextStepPresentation,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
   getPatrolVerificationPresentation,
@@ -167,6 +168,14 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   const assessmentAction = createMemo(() =>
     getPatrolAssessmentAction({
       activeFindings: state.activePatrolFindings(),
+    }),
+  );
+  const recommendedNextStep = createMemo(() =>
+    getPatrolRecommendedNextStepPresentation({
+      assessment: assessment(),
+      verification: verification(),
+      activeFindings: state.activePatrolFindings(),
+      pendingApprovalCount: aiIntelligenceStore.patrolPendingApprovals.length,
     }),
   );
   const hasAttentionMetrics = createMemo(
@@ -367,6 +376,20 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                     <p class="mt-1.5 max-w-3xl text-sm leading-6 text-muted">
                       {assessment().description}
                     </p>
+                    <div
+                      data-testid="patrol-recommended-next-step"
+                      class={`mt-4 border-l-2 pl-3 ${getPatrolRecommendedNextStepAccentClass(recommendedNextStep().tone)}`}
+                    >
+                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                        Recommended next step
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-base-content">
+                        {recommendedNextStep().title}
+                      </p>
+                      <p class="mt-1 max-w-3xl text-sm leading-6 text-muted">
+                        {recommendedNextStep().description}
+                      </p>
+                    </div>
                     <div class="mt-4 flex flex-wrap items-center gap-2">
                       <Show when={assessmentAction()}>
                         {(action) => (
@@ -529,4 +552,19 @@ function buildPatrolAssessmentApprovalProposedFixBriefing(approval: ApprovalRequ
     targetHost: approval.targetName,
     commandCount: approval.command ? 1 : 0,
   });
+}
+
+function getPatrolRecommendedNextStepAccentClass(
+  tone: ReturnType<typeof getPatrolRecommendedNextStepPresentation>['tone'],
+) {
+  switch (tone) {
+    case 'success':
+      return 'border-emerald-400 dark:border-emerald-500';
+    case 'warning':
+      return 'border-amber-400 dark:border-amber-500';
+    case 'error':
+      return 'border-red-400 dark:border-red-500';
+    default:
+      return 'border-blue-400 dark:border-blue-500';
+  }
 }

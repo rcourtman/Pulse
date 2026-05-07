@@ -47,6 +47,13 @@ describe('PatrolIntelligenceSummary', () => {
 
     render(() => <PatrolIntelligenceSummary state={createPatrolState()} />);
 
+    expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
+      'Review the pending Patrol approval',
+    );
+    expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
+      'risk, dry-run posture, and expiry',
+    );
+
     fireEvent.click(screen.getByTestId('patrol-assessment-assistant-button'));
 
     await waitFor(() => expect(openWithPrompt).toHaveBeenCalledTimes(1));

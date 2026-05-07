@@ -222,6 +222,14 @@ path: SAML and OIDC provider creation stay on the same settings-shell control
 surface, while paid-plan copy and compatibility feature probes stay out of the
 frontend primitive boundary.
 
+Feature surfaces under `frontend-modern/src/features/` may own product-specific
+assessment and recommendation semantics, but they must keep those semantics in
+their governed presentation helpers and render them inside the shared neutral
+Pulse surface language rather than introducing page-local verdict bands or
+nested cards. Patrol's primary recommended next step follows this boundary:
+the Patrol helper owns the decision text, while the section component only
+renders a compact inline accent inside the existing assessment shell.
+
 1. Add shared primitives in `frontend-modern/src/components/shared/`
    Framed product table surfaces must consume the shared `TableCard` frame and
    `TableCardHeader` title/action band instead of composing page-local `Card`

@@ -3,6 +3,7 @@ import {
   getPatrolAssessmentPresentation,
   getPatrolAssessmentAction,
   getPatrolAssessmentShellPresentation,
+  getPatrolRecommendedNextStepPresentation,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
   getPatrolSummaryMetricState,
@@ -233,6 +234,93 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toBeUndefined();
+  });
+
+  it('turns pending approvals into the primary recommended next step', () => {
+    expect(
+      getPatrolRecommendedNextStepPresentation({
+        assessment: {
+          title: 'Critical issues detected',
+          description: 'Patrol surfaced one active critical finding.',
+          eyebrow: 'Patrol assessment',
+          compactLabel: 'Issues detected',
+          tone: 'error',
+        },
+        verification: {
+          title: 'Recently verified',
+          description: 'The most recent full patrol completed successfully.',
+          compactLabel: 'Recently verified',
+          tone: 'success',
+        },
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'critical',
+            resourceId: 'vm-100',
+            resourceName: 'web-1',
+            title: 'High CPU usage',
+          },
+        ] as never,
+        pendingApprovalCount: 1,
+      }),
+    ).toEqual({
+      title: 'Review the pending Patrol approval',
+      description:
+        'Patrol is waiting on 1 governed Patrol approval. Review risk, dry-run posture, and expiry before approving or starting another remediation.',
+      tone: 'warning',
+    });
+  });
+
+  it('recommends a full verification when Patrol has no active findings but coverage is incomplete', () => {
+    expect(
+      getPatrolRecommendedNextStepPresentation({
+        assessment: {
+          title: 'Coverage incomplete',
+          description: 'Patrol coverage is incomplete.',
+          eyebrow: 'Patrol assessment',
+          compactLabel: 'Coverage incomplete',
+          tone: 'warning',
+        },
+        verification: {
+          title: 'Recently verified',
+          description:
+            'The most recent full patrol completed successfully and checked 47 resources.',
+          compactLabel: 'Recently verified',
+          tone: 'success',
+        },
+      }),
+    ).toEqual({
+      title: 'Verify full coverage',
+      description:
+        'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
+      tone: 'warning',
+    });
+  });
+
+  it('keeps a verified healthy Patrol assessment in monitoring mode', () => {
+    expect(
+      getPatrolRecommendedNextStepPresentation({
+        assessment: {
+          title: 'No active issues detected',
+          description: 'Infrastructure is healthy with no significant issues detected.',
+          eyebrow: 'Patrol assessment',
+          compactLabel: 'No issues found',
+          tone: 'success',
+        },
+        verification: {
+          title: 'Recently verified',
+          description: 'The most recent full patrol completed successfully.',
+          compactLabel: 'Recently verified',
+          tone: 'success',
+        },
+        activeFindings: [],
+      }),
+    ).toEqual({
+      title: 'Keep Patrol monitoring',
+      description:
+        'Patrol has no active findings and has recent full-run verification. Keep scheduled Patrol enabled and let alert or anomaly triggers start scoped follow-up checks.',
+      tone: 'success',
+    });
   });
 
   it('splits infrastructure findings from patrol runtime issues in supporting metrics', () => {
