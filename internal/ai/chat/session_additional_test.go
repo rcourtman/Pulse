@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -315,6 +316,106 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	}
 	if gotFindingID != "" {
 		t.Fatalf("handoff finding ID after full clear = %q, want empty", gotFindingID)
+	}
+}
+
+func TestSessionStore_ListIncludesSafeHandoffSummary(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := store.SetModelHandoffFindingID(session.ID, " finding-123 "); err != nil {
+		t.Fatalf("SetModelHandoffFindingID failed: %v", err)
+	}
+	if err := store.SetModelHandoffContext(session.ID, "[Finding Context]\nID: finding-123\nConclusion: CPU saturated after backup."); err != nil {
+		t.Fatalf("SetModelHandoffContext failed: %v", err)
+	}
+	if err := store.SetModelHandoffResources(session.ID, []HandoffResource{{
+		ID:   " vm-100 ",
+		Name: " web-server ",
+		Type: " vm ",
+		Node: " pve-1 ",
+	}}); err != nil {
+		t.Fatalf("SetModelHandoffResources failed: %v", err)
+	}
+	if err := store.SetModelHandoffActions(session.ID, []HandoffAction{{
+		FindingID:              " finding-123 ",
+		ApprovalID:             " approval-123 ",
+		ApprovalStatus:         " pending ",
+		ActionID:               " action-123 ",
+		ActionState:            " awaiting_approval ",
+		ActionRequiresApproval: true,
+		ActionPreflight:        "systemctl restart web-server",
+		ActionResult:           "restart succeeded",
+		Description:            "Restart the workload service",
+		RiskLevel:              " medium ",
+		TargetResourceID:       " vm-100 ",
+		TargetResourceName:     " web-server ",
+		TargetResourceType:     " vm ",
+		TargetNode:             " pve-1 ",
+	}}); err != nil {
+		t.Fatalf("SetModelHandoffActions failed: %v", err)
+	}
+
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("sessions = %#v, want one session", sessions)
+	}
+
+	summary := sessions[0].HandoffSummary
+	if summary == nil {
+		t.Fatalf("expected handoff summary")
+	}
+	if summary.Kind != sessionHandoffKindPatrolFinding {
+		t.Fatalf("handoff kind = %q, want %q", summary.Kind, sessionHandoffKindPatrolFinding)
+	}
+	if summary.FindingID != "finding-123" {
+		t.Fatalf("finding ID = %q, want finding-123", summary.FindingID)
+	}
+	if !summary.HasModelContext {
+		t.Fatalf("expected summary to report model context")
+	}
+	if summary.ResourceCount != 1 || summary.PrimaryResource == nil || summary.PrimaryResource.ID != "vm-100" || summary.PrimaryResource.Name != "web-server" {
+		t.Fatalf("resource summary = %#v, want normalized primary resource", summary)
+	}
+	if summary.ActionCount != 1 || !summary.RequiresApproval {
+		t.Fatalf("action summary = %#v, want one approval-required action", summary)
+	}
+	if summary.LastKnownApprovalStatus != "pending" || summary.LastKnownActionState != "awaiting_approval" || summary.LastKnownActionRisk != "medium" {
+		t.Fatalf("action status summary = %#v, want normalized last-known status fields", summary)
+	}
+
+	retrieved, err := store.Get(session.ID)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if retrieved.HandoffSummary == nil || retrieved.HandoffSummary.FindingID != "finding-123" {
+		t.Fatalf("retrieved handoff summary = %#v, want same safe finding summary", retrieved.HandoffSummary)
+	}
+
+	payload, err := json.Marshal(sessions)
+	if err != nil {
+		t.Fatalf("Marshal sessions failed: %v", err)
+	}
+	publicJSON := string(payload)
+	for _, forbidden := range []string{
+		"CPU saturated",
+		"systemctl restart",
+		"restart succeeded",
+		"Restart the workload service",
+	} {
+		if strings.Contains(publicJSON, forbidden) {
+			t.Fatalf("public session JSON leaked %q: %s", forbidden, publicJSON)
+		}
 	}
 }
 

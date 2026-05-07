@@ -269,6 +269,14 @@ runtime cost control, and shared AI transport surfaces.
     rather than treating the original approval as the current action truth.
     That action snapshot remains model-only review context and must expose
     lifecycle status rather than raw execution output or command text.
+    The public chat session contract may expose only a bounded
+    `handoff_summary` for this private model-context metadata so reloaded
+    Assistant sessions can still be identified as scoped Patrol/product
+    handoffs. That summary may include the handoff kind, finding ID, resource
+    and action counts, a primary resource label, last-known approval/action
+    status, risk level, and timestamp, but it must not expose model-only
+    handoff text, action preflight/result bodies, remediation descriptions, raw
+    commands, or approval command payloads.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.

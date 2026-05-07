@@ -146,6 +146,66 @@ func modelContextEmpty(modelContext *sessionModelContext) bool {
 		len(normalizeHandoffActions(modelContext.HandoffActions)) == 0
 }
 
+const (
+	sessionHandoffKindPatrolFinding = "patrol_finding"
+	sessionHandoffKindScopedContext = "scoped_context"
+)
+
+func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHandoffSummary {
+	if modelContextEmpty(modelContext) {
+		return nil
+	}
+
+	resources := normalizeHandoffResources(modelContext.HandoffResources)
+	actions := normalizeHandoffActions(modelContext.HandoffActions)
+	findingID := strings.TrimSpace(modelContext.HandoffFindingID)
+	if findingID == "" {
+		for _, action := range actions {
+			if strings.TrimSpace(action.FindingID) != "" {
+				findingID = strings.TrimSpace(action.FindingID)
+				break
+			}
+		}
+	}
+
+	kind := sessionHandoffKindScopedContext
+	if findingID != "" {
+		kind = sessionHandoffKindPatrolFinding
+	}
+
+	summary := &SessionHandoffSummary{
+		Kind:            kind,
+		FindingID:       findingID,
+		HasModelContext: strings.TrimSpace(modelContext.HandoffContext) != "",
+		ResourceCount:   len(resources),
+		ActionCount:     len(actions),
+	}
+	if !modelContext.UpdatedAt.IsZero() {
+		updatedAt := modelContext.UpdatedAt
+		summary.UpdatedAt = &updatedAt
+	}
+	if len(resources) > 0 {
+		primaryResource := resources[0]
+		summary.PrimaryResource = &primaryResource
+	}
+	for _, action := range actions {
+		if !summary.RequiresApproval && (action.ActionRequiresApproval || strings.TrimSpace(action.ApprovalID) != "") {
+			summary.RequiresApproval = true
+		}
+		if summary.LastKnownApprovalStatus == "" {
+			summary.LastKnownApprovalStatus = strings.TrimSpace(action.ApprovalStatus)
+		}
+		if summary.LastKnownActionState == "" {
+			summary.LastKnownActionState = strings.TrimSpace(action.ActionState)
+		}
+		if summary.LastKnownActionRisk == "" {
+			summary.LastKnownActionRisk = strings.TrimSpace(action.RiskLevel)
+		}
+	}
+
+	return summary
+}
+
 const maxSessionIDLength = 128
 
 // NewSessionStore creates a new session store
@@ -250,11 +310,12 @@ func (s *SessionStore) List() ([]Session, error) {
 		}
 
 		sessions = append(sessions, Session{
-			ID:           data.ID,
-			Title:        data.Title,
-			CreatedAt:    data.CreatedAt,
-			UpdatedAt:    data.UpdatedAt,
-			MessageCount: len(data.Messages),
+			ID:             data.ID,
+			Title:          data.Title,
+			CreatedAt:      data.CreatedAt,
+			UpdatedAt:      data.UpdatedAt,
+			MessageCount:   len(data.Messages),
+			HandoffSummary: modelContextHandoffSummary(data.ModelContext),
 		})
 	}
 
@@ -303,11 +364,12 @@ func (s *SessionStore) Get(id string) (*Session, error) {
 	}
 
 	return &Session{
-		ID:           data.ID,
-		Title:        data.Title,
-		CreatedAt:    data.CreatedAt,
-		UpdatedAt:    data.UpdatedAt,
-		MessageCount: len(data.Messages),
+		ID:             data.ID,
+		Title:          data.Title,
+		CreatedAt:      data.CreatedAt,
+		UpdatedAt:      data.UpdatedAt,
+		MessageCount:   len(data.Messages),
+		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
 	}, nil
 }
 

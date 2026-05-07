@@ -977,7 +977,7 @@ Streaming variant of execute (used by the UI for incremental responses).
 ### Assistant Chat & Sessions
 - `GET /api/ai/status`
 - `POST /api/ai/chat` (streaming)
-- `GET /api/ai/sessions`
+- `GET /api/ai/sessions` returns session summaries; scoped Assistant handoffs may include a safe `handoff_summary` marker without model-only context text or command payloads.
 - `POST /api/ai/sessions`
 - `DELETE /api/ai/sessions/{id}`
 - `GET /api/ai/sessions/{id}/messages`

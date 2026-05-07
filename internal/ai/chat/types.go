@@ -13,11 +13,29 @@ import (
 
 // Session represents a chat session
 type Session struct {
-	ID           string    `json:"id"`
-	Title        string    `json:"title,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	MessageCount int       `json:"message_count,omitempty"`
+	ID             string                 `json:"id"`
+	Title          string                 `json:"title,omitempty"`
+	CreatedAt      time.Time              `json:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at"`
+	MessageCount   int                    `json:"message_count,omitempty"`
+	HandoffSummary *SessionHandoffSummary `json:"handoff_summary,omitempty"`
+}
+
+// SessionHandoffSummary is the browser-safe public summary of private
+// session-scoped model handoff metadata. It intentionally omits model-only
+// context text and raw remediation details.
+type SessionHandoffSummary struct {
+	Kind                    string           `json:"kind,omitempty"`
+	FindingID               string           `json:"finding_id,omitempty"`
+	HasModelContext         bool             `json:"has_model_context"`
+	ResourceCount           int              `json:"resource_count,omitempty"`
+	PrimaryResource         *HandoffResource `json:"primary_resource,omitempty"`
+	ActionCount             int              `json:"action_count,omitempty"`
+	RequiresApproval        bool             `json:"requires_approval,omitempty"`
+	LastKnownApprovalStatus string           `json:"last_known_approval_status,omitempty"`
+	LastKnownActionState    string           `json:"last_known_action_state,omitempty"`
+	LastKnownActionRisk     string           `json:"last_known_action_risk,omitempty"`
+	UpdatedAt               *time.Time       `json:"updated_at,omitempty"`
 }
 
 // Message represents a chat message

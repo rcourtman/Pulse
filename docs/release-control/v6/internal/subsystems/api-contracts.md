@@ -1892,6 +1892,13 @@ handoff text and same-finding resource/action references as secondary
 model-only review context, while dropping mismatched references and raw command
 payload lines so the model cannot continue from stale or spoofed Patrol
 authority.
+The `/api/ai/sessions` response may expose `handoff_summary` for sessions that
+carry private Assistant model-context metadata, but that payload is a safe
+reload marker only. It may carry the handoff kind, finding ID, counts,
+primary-resource label, last-known approval/action status, risk level, and
+summary timestamp; it must not serialize the model-only `handoff_context`,
+action preflight/result bodies, remediation descriptions, raw commands, or
+approval command payloads.
 Patrol finding handoffs are stricter than ordinary chat requests: when
 `finding_id` resolves to model-only Patrol briefing, resource, or action
 context, `internal/api/ai_handler.go` must clamp the request-local autonomous
