@@ -197,10 +197,19 @@ describe('ApprovalSection', () => {
         statusLabel: 'Pending approval · High risk',
         detailLines: expect.arrayContaining([
           expect.stringContaining('live approval pending'),
+          expect.stringContaining('Proposed fix: Restart the workload service'),
+          expect.stringContaining('1 command recorded for approval context'),
           expect.stringContaining('Review live governed approval approval-1 before execution'),
         ]),
-        actionLabel: 'Approval approval-1',
-        safetyNote: 'Execution requires the governed approval flow.',
+        actionLabel: 'Restart the workload service',
+        commandSummary: '1 command recorded for approval context',
+        safetyNote:
+          'Command details stay in approval context; execution requires the governed approval flow.',
+        suggestedPrompts: [
+          'Review approval risk and next step',
+          'Explain current finding status',
+          'Summarize remediation without command text',
+        ],
       }),
       autonomousMode: false,
     });

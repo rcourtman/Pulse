@@ -48,6 +48,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     const approvalRequestedAt = new Date(Date.now() - 60_000).toISOString();
     const approvalExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
     let includePendingApproval = true;
+    let includeUnifiedInvestigationRecord = true;
     let includeInvestigationProposedFix = false;
 
     await page.route("**/api/security/status", async (route) => {
@@ -262,42 +263,46 @@ test.describe("Patrol Assistant operator briefing", () => {
               investigation_status: "completed",
               investigation_outcome: "fix_queued",
               investigation_attempts: 1,
-              investigation_record: {
-                id: "record-1",
-                finding_id: "finding-operator-briefing",
-                subject: {
-                  resource_id: "host:web-server",
-                  resource_name: "web-server",
-                  resource_type: "host",
-                },
-                trigger: {
-                  detected_at: "2026-05-06T12:00:00Z",
-                  title: "High CPU usage",
-                },
-                status: "completed",
-                outcome: "fix_queued",
-                confidence: "high",
-                conclusion: "Backup job saturated CPU.",
-                recommended_action:
-                  "Approve a controlled restart after the backup completes.",
-                evidence: [
-                  {
-                    kind: "metrics",
-                    summary: "CPU stayed above 95% for 10 minutes",
-                  },
-                ],
-                proposed_fix: {
-                  id: "fix-1",
-                  description: "Restart the workload service",
-                  commands: ["systemctl restart workload.service"],
-                  risk_level: "medium",
-                  destructive: true,
-                },
-                verification: ["CPU returned below 50%"],
-                tools_used: [],
-                started_at: "2026-05-06T12:00:00Z",
-                approval_id: "approval-1",
-              },
+              ...(includeUnifiedInvestigationRecord
+                ? {
+                    investigation_record: {
+                      id: "record-1",
+                      finding_id: "finding-operator-briefing",
+                      subject: {
+                        resource_id: "host:web-server",
+                        resource_name: "web-server",
+                        resource_type: "host",
+                      },
+                      trigger: {
+                        detected_at: "2026-05-06T12:00:00Z",
+                        title: "High CPU usage",
+                      },
+                      status: "completed",
+                      outcome: "fix_queued",
+                      confidence: "high",
+                      conclusion: "Backup job saturated CPU.",
+                      recommended_action:
+                        "Approve a controlled restart after the backup completes.",
+                      evidence: [
+                        {
+                          kind: "metrics",
+                          summary: "CPU stayed above 95% for 10 minutes",
+                        },
+                      ],
+                      proposed_fix: {
+                        id: "fix-1",
+                        description: "Restart the workload service",
+                        commands: ["systemctl restart workload.service"],
+                        risk_level: "medium",
+                        destructive: true,
+                      },
+                      verification: ["CPU returned below 50%"],
+                      tools_used: [],
+                      started_at: "2026-05-06T12:00:00Z",
+                      approval_id: "approval-1",
+                    },
+                  }
+                : {}),
             },
           ],
           count: 1,
@@ -510,6 +515,7 @@ test.describe("Patrol Assistant operator briefing", () => {
       queuedAssistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
 
+    includeUnifiedInvestigationRecord = false;
     includeInvestigationProposedFix = true;
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByRole("button", { name: "Findings" })).toBeVisible();
@@ -517,6 +523,32 @@ test.describe("Patrol Assistant operator briefing", () => {
     await page.getByText("High CPU usage").click();
     const expiredFinding = page.locator("#finding-finding-operator-briefing");
     await expect(expiredFinding.getByText("approval expired")).toBeVisible();
+    await expiredFinding
+      .getByRole("button", { name: "Discuss with Assistant" })
+      .first()
+      .click();
+
+    const hydratedFindingAssistantContext =
+      page.getByLabel("Assistant context");
+    await expect(hydratedFindingAssistantContext).toBeVisible();
+    await expect(hydratedFindingAssistantContext).toContainText(
+      "Operator briefing attached",
+    );
+    await expect(hydratedFindingAssistantContext).toContainText("Fix Queued");
+    await expect(hydratedFindingAssistantContext).toContainText(
+      "Proposed fix: Restart the workload service; target web-server; high risk; 1 command recorded for approval context; destructive proposed fix; rationale Workload service stayed wedged after backup pressure.",
+    );
+    await expect(
+      hydratedFindingAssistantContext.getByRole("button", {
+        name: "Summarize remediation without command text",
+      }),
+    ).toBeVisible();
+    await expect(
+      hydratedFindingAssistantContext.getByText(
+        "systemctl restart workload.service",
+      ),
+    ).toHaveCount(0);
+
     await expiredFinding
       .getByRole("button", { name: "Fix with Assistant" })
       .last()

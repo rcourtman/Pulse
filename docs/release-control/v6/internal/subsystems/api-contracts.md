@@ -320,8 +320,9 @@ the canonical monitored-system blocked payload.
     governed action posture without raw command text. Structured handoff action
     references may use the current live Patrol investigation-fix approval for
     the finding when that approval is newer than the approval ID on the durable
-    record, but the payload may carry only IDs, status/risk/target metadata, and
-    fix/action references, never the approval command payload. Patrol
+    record, but the payload may carry only IDs, status/risk/target metadata,
+    safe generated approval summaries, command counts, and fix/action
+    references, never the approval command payload. Patrol
     remediation-plan handoffs must use the same boundary for frontend-authored
     prompts: plan status, risk, step labels, and command counts are allowed,
     while raw command and rollback command payloads remain in governed action
@@ -341,7 +342,11 @@ the canonical monitored-system blocked payload.
     recovery handoffs may use a still-available structured proposed-fix payload
     only as safe metadata: description, target, risk, rationale, destructive
     posture, and command count may enter the briefing, while raw command text
-    remains owned by governed remediation or approval surfaces. Direct
+    remains owned by governed remediation or approval surfaces. If the unified
+    finding list lacks a full investigation record, frontend finding-discussion
+    handoffs may hydrate the latest investigation session for the same safe
+    proposed-fix metadata, but they must not paste raw proposed-fix command text
+    into the authored prompt or visible briefing. Direct
     alert-investigation API handoffs through `internal/api/ai_handlers.go` must
     enforce that same request-scoped boundary by setting
     `ai.ExecuteRequest.AutonomousMode` to
@@ -453,8 +458,8 @@ the canonical monitored-system blocked payload.
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,
-   and target label are allowed, while approval command payloads stay inside
-   governed approval/remediation surfaces
+   target label, generated approval summary, and command count are allowed, while
+   approval command payloads stay inside governed approval/remediation surfaces
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior

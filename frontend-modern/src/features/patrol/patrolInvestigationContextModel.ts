@@ -77,6 +77,18 @@ export interface PatrolAssistantProposedFixBriefingInput {
   destructive?: boolean | null;
 }
 
+export interface PatrolAssistantProposedFixBriefingSource {
+  description?: string | null;
+  riskLevel?: string | null;
+  risk_level?: string | null;
+  targetHost?: string | null;
+  target_host?: string | null;
+  rationale?: string | null;
+  commandCount?: number | null;
+  commands?: readonly string[] | null;
+  destructive?: boolean | null;
+}
+
 export interface PatrolAssistantFindingBriefingInput {
   title: string;
   subject: string;
@@ -225,16 +237,9 @@ export function buildPatrolInvestigationRecordPresentation(
     };
   }
 
-  const proposedFix = record.proposed_fix
-    ? {
-        description: normalizeText(record.proposed_fix.description),
-        riskLabel: formatIdentifierLabel(record.proposed_fix.risk_level),
-        targetHost: normalizeText(record.proposed_fix.target_host),
-        rationale: normalizeText(record.proposed_fix.rationale),
-        commandSummary: formatCommandSummary(record.proposed_fix.commands?.length ?? 0),
-        destructive: Boolean(record.proposed_fix.destructive),
-      }
-    : undefined;
+  const proposedFix = normalizeProposedFixBriefing(
+    buildPatrolAssistantProposedFixBriefingInput(record.proposed_fix),
+  );
 
   return {
     hasRecord: true,
@@ -262,6 +267,39 @@ export function buildPatrolInvestigationRecordPresentation(
           : undefined,
     error: normalizeText(record.error),
   };
+}
+
+export function buildPatrolAssistantProposedFixBriefingInput(
+  source?: PatrolAssistantProposedFixBriefingSource | null,
+): PatrolAssistantProposedFixBriefingInput | undefined {
+  if (!source) return undefined;
+  const commandCount =
+    typeof source.commandCount === 'number'
+      ? source.commandCount
+      : Array.isArray(source.commands)
+        ? source.commands.length
+        : null;
+  const briefing = {
+    description: normalizeText(source.description),
+    riskLevel: normalizeText(source.riskLevel || source.risk_level),
+    targetHost: normalizeText(source.targetHost || source.target_host),
+    rationale: normalizeText(source.rationale),
+    commandCount: normalizeNonNegativeCount(commandCount),
+    destructive: typeof source.destructive === 'boolean' ? source.destructive : null,
+  };
+
+  if (
+    !briefing.description &&
+    !briefing.riskLevel &&
+    !briefing.targetHost &&
+    !briefing.rationale &&
+    !briefing.commandCount &&
+    briefing.destructive !== true
+  ) {
+    return undefined;
+  }
+
+  return briefing;
 }
 
 export function buildPatrolAssistantFindingPrompt(
@@ -1388,6 +1426,9 @@ function buildPatrolAssistantSafetyNote(
   const isDestructive = Boolean(proposedFix?.destructive);
   if (hasCommands && isDestructive) {
     return 'Command details stay in approval context; destructive actions require governed approval.';
+  }
+  if (hasCommands && pendingApproval?.id) {
+    return 'Command details stay in approval context; execution requires the governed approval flow.';
   }
   if (hasCommands) {
     return 'Command details stay in approval context.';

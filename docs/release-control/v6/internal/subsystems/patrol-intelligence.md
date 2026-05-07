@@ -156,14 +156,16 @@ Patrol-specific presentation helpers.
    generic empty Assistant drawer. When a live pending Patrol approval exists
    for that finding, the visible Assistant briefing may include only safe
    approval metadata such as approval ID, pending status, risk, requested time,
-   expiry, and target label; it must not copy the approval command payload into
-   Assistant drawer prose. The model-only runtime briefing must apply that same
+   expiry, target label, generated approval summary, and command count; it must
+   not copy the approval command payload into Assistant drawer prose. The
+   model-only runtime briefing must apply that same
    recovered approval reference when framing the operator decision and action
    posture. Inline Patrol approval actions that open Assistant must follow the
-   same rule: pass approval ID/status/risk/target as review context, force the
-   request-local approval-required mode, attach the Patrol-owned visible drawer
-   briefing for the pending approval, and never paste the approval command or
-   proposed-fix command text into the chat prompt. Remediation-plan Assistant
+   same rule: pass approval ID/status/risk/target plus safe summary/count
+   metadata as review context, force the request-local approval-required mode,
+   attach the Patrol-owned visible drawer briefing for the pending approval, and
+   never paste the approval command or proposed-fix command text into the chat
+   prompt. Remediation-plan Assistant
    handoffs follow the same boundary: step labels, plan status, risk, and command
    counts are allowed, safe suggested prompts may ask about plan risk,
    prerequisites, rollback, and verification, while command and rollback command
@@ -187,6 +189,12 @@ Patrol-specific presentation helpers.
    and command count. Raw command text remains in the governed remediation or
    approval panel, while Assistant gets enough context to explain approval
    recovery and risk without becoming an execution surface.
+   Generic finding-level Assistant handoffs must use that same safe metadata
+   boundary when the list response lacks a full investigation record: they may
+   hydrate the latest investigation session to recover proposed-fix summary,
+   risk, target, rationale, destructive posture, and command count, but they must
+   still keep command text out of both the user-authored prompt and visible
+   Assistant briefing.
    If the referenced finding is no longer current, Assistant must drop the
    stored handoff instead of continuing from stale Patrol context. Assistant
    handoff context must also carry the unified

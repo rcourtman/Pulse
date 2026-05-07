@@ -5,6 +5,7 @@ import {
   buildPatrolAssessmentAssistantHandoff,
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingPrompt,
+  buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolInvestigationContextSummary,
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRemediationPlanAssistantBriefing,
@@ -320,6 +321,27 @@ describe('patrolInvestigationContextModel', () => {
       },
     });
     expect(JSON.stringify(presentation)).not.toContain('systemctl restart workload.service');
+  });
+
+  it('normalizes safe proposed-fix briefing metadata without command text', () => {
+    const briefing = buildPatrolAssistantProposedFixBriefingInput({
+      description: 'Restart the workload service',
+      commands: ['systemctl restart workload.service'],
+      risk_level: 'high',
+      target_host: 'node-1',
+      rationale: 'Service stayed wedged after IO pressure.',
+      destructive: true,
+    });
+
+    expect(briefing).toEqual({
+      description: 'Restart the workload service',
+      riskLevel: 'high',
+      targetHost: 'node-1',
+      rationale: 'Service stayed wedged after IO pressure.',
+      commandCount: 1,
+      destructive: true,
+    });
+    expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
   });
 
   it('frames Assistant handoff around the structured Patrol record when one exists', () => {

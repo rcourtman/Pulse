@@ -20,13 +20,16 @@ import { aiChatStore } from '@/stores/aiChat';
 import {
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingPrompt,
+  buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantPrompt,
   patrolAssistantFindingHandoffRequiresApprovalMode,
+  type PatrolAssistantApprovalBriefingInput,
+  type PatrolAssistantProposedFixBriefingInput,
 } from '@/features/patrol/patrolInvestigationContextModel';
 import { useResources } from '@/hooks/useResources';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
-import type { RemediationPlan } from '@/api/ai';
+import { AIAPI, type ApprovalRequest, type RemediationPlan } from '@/api/ai';
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import { buildResolvedResourceSurfaceLinks } from '@/routing/resourceLinks';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
@@ -420,6 +423,55 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     setEditingNoteId(null);
   };
 
+  const buildLiveApprovalProposedFixBriefing = (
+    approval: ApprovalRequest | undefined,
+  ): PatrolAssistantProposedFixBriefingInput | undefined =>
+    buildPatrolAssistantProposedFixBriefingInput(
+      approval
+        ? {
+            description: approval.context,
+            riskLevel: approval.riskLevel,
+            targetHost: approval.targetName,
+            commandCount: approval.command ? 1 : 0,
+          }
+        : null,
+    );
+
+  const loadLatestInvestigationProposedFixBriefing = async (
+    finding: UnifiedFinding,
+    pendingApprovalBriefing: PatrolAssistantApprovalBriefingInput | undefined,
+  ): Promise<PatrolAssistantProposedFixBriefingInput | undefined> => {
+    if (finding.investigationRecord?.proposed_fix) {
+      return undefined;
+    }
+    const hasInvestigationPointer = Boolean(
+      finding.investigationOutcome ||
+      finding.investigationSessionId ||
+      finding.lastInvestigatedAt ||
+      pendingApprovalBriefing?.id,
+    );
+    if (!hasInvestigationPointer) {
+      return undefined;
+    }
+    if (
+      !patrolAssistantFindingHandoffRequiresApprovalMode({
+        investigationOutcome: finding.investigationOutcome,
+        remediationId: finding.remediationPlanId,
+        pendingApproval: pendingApprovalBriefing,
+        investigationRecord: finding.investigationRecord,
+      })
+    ) {
+      return undefined;
+    }
+
+    try {
+      const investigation = await AIAPI.getInvestigation(finding.id);
+      return buildPatrolAssistantProposedFixBriefingInput(investigation?.proposed_fix);
+    } catch {
+      return undefined;
+    }
+  };
+
   const handleDiscussWithAssistant = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
     await aiIntelligenceStore.loadPendingApprovals();
@@ -438,6 +490,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           targetName: pendingApproval.targetName,
         }
       : undefined;
+    const latestInvestigationProposedFix = await loadLatestInvestigationProposedFixBriefing(
+      finding,
+      pendingApprovalBriefing,
+    );
+    const proposedFix =
+      latestInvestigationProposedFix || buildLiveApprovalProposedFixBriefing(pendingApproval);
     const prompt = buildPatrolAssistantFindingPrompt({
       title,
       subject,
@@ -456,6 +514,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       lastRegressionAt: finding.lastRegressionAt,
       remediationId: finding.remediationPlanId,
       pendingApproval: pendingApprovalBriefing,
+      proposedFix,
       investigationRecord: finding.investigationRecord,
     });
     const requiresApprovalMode = patrolAssistantFindingHandoffRequiresApprovalMode({

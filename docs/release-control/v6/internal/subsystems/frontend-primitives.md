@@ -840,9 +840,13 @@ frontend primitive boundary.
     yet, rather than opening the shared drawer as empty generic chat.
     When the feature helper adds live approval state to the generic drawer
     briefing, it may pass only safe approval metadata into
-    `AIChatContextBriefing`; raw approval commands remain owned by the governed
-    approval/remediation panels. The shared approval-required drawer banner must
-    derive its subject from that briefing or structured finding context, so
+    `AIChatContextBriefing`, including generated approval summaries and command
+    counts when available; raw approval commands remain owned by the governed
+    approval/remediation panels. If the generic finding-level helper hydrates
+    latest investigation detail to recover proposed-fix context, it may pass only
+    safe summary fields and command counts into the drawer briefing. The shared
+    approval-required drawer banner must derive its subject from that briefing or
+    structured finding context, so
     Patrol handoffs render as Patrol handoffs or Patrol findings, and alert
     handoffs render as alert investigations, rather than generic dashboard
     briefs. Patrol approval-row Assistant prompts must

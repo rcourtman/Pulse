@@ -12,7 +12,11 @@ import { aiChatStore } from '@/stores/aiChat';
 import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
-import { buildPatrolAssistantFindingBriefing } from '@/features/patrol/patrolInvestigationContextModel';
+import {
+  buildPatrolAssistantFindingBriefing,
+  buildPatrolAssistantProposedFixBriefingInput,
+  type PatrolAssistantProposedFixBriefingSource,
+} from '@/features/patrol/patrolInvestigationContextModel';
 import { RemediationStatus } from './RemediationStatus';
 
 interface ApprovalSectionProps {
@@ -22,15 +26,6 @@ interface ApprovalSectionProps {
   resourceName?: string;
   resourceType?: string;
   resourceId?: string;
-}
-
-interface AssistantBriefingFixSource {
-  description?: string | null;
-  commands?: string[] | null;
-  target_host?: string | null;
-  risk_level?: string | null;
-  rationale?: string | null;
-  destructive?: boolean | null;
 }
 
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
@@ -50,7 +45,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   const approvalBriefing = (
     approval: ApprovalRequest | null,
-    fix?: AssistantBriefingFixSource | null,
+    fix?: PatrolAssistantProposedFixBriefingSource | null,
   ) =>
     buildPatrolAssistantFindingBriefing({
       title: props.findingTitle || 'Patrol finding',
@@ -68,21 +63,22 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             targetName: approval.targetName,
           }
         : null,
-      proposedFix: fix
-        ? {
-            description: fix.description,
-            riskLevel: fix.risk_level,
-            targetHost: fix.target_host,
-            rationale: fix.rationale,
-            commandCount: fix.commands?.length ?? 0,
-            destructive: fix.destructive,
-          }
-        : null,
+      proposedFix: buildPatrolAssistantProposedFixBriefingInput(
+        fix ||
+          (approval
+            ? {
+                description: approval.context,
+                riskLevel: approval.riskLevel,
+                targetHost: approval.targetName,
+                commandCount: approval.command ? 1 : 0,
+              }
+            : null),
+      ),
     });
 
   const handleFixWithAssistant = (
     approval: ApprovalRequest | null,
-    fix: AssistantBriefingFixSource | null,
+    fix: PatrolAssistantProposedFixBriefingSource | null,
     e: Event,
   ) => {
     e.stopPropagation();
