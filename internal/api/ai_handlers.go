@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
@@ -1873,7 +1874,11 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	// Create approval adapter from the global approval store
 	var approvalAdapter aicontracts.OrchestratorApprovalStore
 	if approvalStoreInst := approval.GetStore(); approvalStoreInst != nil {
-		approvalAdapter = &orchestratorApprovalAdapter{store: approvalStoreInst, orgID: approval.NormalizeOrgID(orgID)}
+		approvalAdapter = &orchestratorApprovalAdapter{
+			store:            approvalStoreInst,
+			orgID:            approval.NormalizeOrgID(orgID),
+			actionAuditStore: chatService.GetActionAuditStore(),
+		}
 	}
 
 	// Get config for investigation settings
@@ -2084,8 +2089,9 @@ func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
 // orchestratorApprovalAdapter wraps *approval.Store to implement
 // aicontracts.OrchestratorApprovalStore.
 type orchestratorApprovalAdapter struct {
-	store *approval.Store
-	orgID string
+	store            *approval.Store
+	orgID            string
+	actionAuditStore unifiedresources.ResourceStore
 }
 
 func (a *orchestratorApprovalAdapter) Create(appr *aicontracts.OrchestratorApproval) error {
@@ -2115,7 +2121,12 @@ func (a *orchestratorApprovalAdapter) Create(appr *aicontracts.OrchestratorAppro
 	if req.TargetName == "" {
 		req.TargetName = appr.Description
 	}
-	return a.store.CreateApproval(req)
+	tools.AttachApprovalActionPlan(req, time.Now().UTC())
+	if err := a.store.CreateApproval(req); err != nil {
+		return err
+	}
+	tools.RecordPendingApprovalAction(a.actionAuditStore, req)
+	return nil
 }
 
 // patrolFixVerifierAdapter wraps *ai.PatrolService to implement

@@ -166,6 +166,10 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read ai_handler.go: %v", err)
 	}
+	settingsHandlerSource, err := os.ReadFile(filepath.Clean("ai_handlers.go"))
+	if err != nil {
+		t.Fatalf("read ai_handlers.go: %v", err)
+	}
 	chatServiceSource, err := os.ReadFile(filepath.Clean("../ai/chat/service.go"))
 	if err != nil {
 		t.Fatalf("read chat service: %v", err)
@@ -271,6 +275,17 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		t.Fatal("ai_handler.go must not prepend finding context into the persisted prompt")
 	}
 
+	settingsHandlerText := string(settingsHandlerSource)
+	for _, required := range []string{
+		"actionAuditStore: chatService.GetActionAuditStore()",
+		"tools.AttachApprovalActionPlan(req, time.Now().UTC())",
+		"tools.RecordPendingApprovalAction(a.actionAuditStore, req)",
+	} {
+		if !strings.Contains(settingsHandlerText, required) {
+			t.Fatalf("ai_handlers.go must preserve Patrol queued-fix action-audit seeding: missing %q", required)
+		}
+	}
+
 	patrolHandoffText := string(patrolHandoffSource)
 	for _, required := range []string{
 		"func BuildPatrolRunAssistantHandoff(run PatrolRunRecord) PatrolRunAssistantHandoff",
@@ -300,6 +315,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"sessions.GetModelHandoffResources(session.ID)",
 		"sessions.SetModelHandoffActions(session.ID, handoffActions)",
 		"sessions.GetModelHandoffActions(session.ID)",
+		"GetActionAuditStore",
 		"refreshHandoffActionStatus(handoffActions, s.orgID, s.actionAuditStore)",
 		"HydrateHandoffActionFromApproval(&actions[idx], req)",
 		"func HydrateHandoffActionFromApproval(action *HandoffAction, req *approval.ApprovalRequest)",

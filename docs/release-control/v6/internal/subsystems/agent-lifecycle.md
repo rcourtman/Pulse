@@ -283,6 +283,10 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle state. Patrol finding handoffs that force approval-required mode
    from a non-empty `finding_id` are likewise AI/runtime governance, not an
    agent command grant or lifecycle authorization primitive.
+   Patrol queued-fix approvals may now seed the shared action-audit store with
+   planned and pending lifecycle evidence, but lifecycle surfaces must treat
+   those records as action-governance context only; they do not create install,
+   enrollment, assignment, or fleet-command authority.
    Lifecycle flows must not reintroduce anonymous bootstrap identity,
    tenant-local commercial-owner surrogates, or fake activation records when
    they traverse those shared handlers. They also must not infer tenant

@@ -1570,6 +1570,10 @@ action-audit state from this same store when an approval reference resolves to
 a governed action, so chat follow-ups describe the canonical lifecycle record
 rather than a stale approval snapshot. That read remains model-only review
 context and must not expose raw command text or raw execution output.
+Patrol queued-fix approvals are producers of the same unified action-audit
+records: the approval adapter may seed planned and pending lifecycle events for
+the governed action, but the durable identity, state transitions, and history
+remain owned by this store rather than by a Patrol-specific audit ledger.
 That same ownership boundary applies to incident-adjacent runtime history:
 durable backend facts about what changed on a resource belong in
 `ResourceChange` and the shared unified-resource store, while

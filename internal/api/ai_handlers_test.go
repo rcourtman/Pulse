@@ -2740,6 +2740,59 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 	})
 }
 
+func TestOrchestratorApprovalAdapterRecordsPendingActionAudit(t *testing.T) {
+	approvalStore, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+
+	actionStore := unifiedresources.NewMemoryStore()
+	adapter := &orchestratorApprovalAdapter{
+		store:            approvalStore,
+		orgID:            "tenant-1",
+		actionAuditStore: actionStore,
+	}
+
+	err = adapter.Create(&aicontracts.OrchestratorApproval{
+		ID:          "approval-investigation-1",
+		FindingID:   "finding-123",
+		Command:     "systemctl restart nginx",
+		TargetHost:  "web-1",
+		Description: "Restart nginx after Patrol investigation",
+		RiskLevel:   "high",
+	})
+	require.NoError(t, err)
+
+	req, ok := approvalStore.GetApproval("approval-investigation-1")
+	require.True(t, ok, "expected approval to be persisted")
+	require.NotNil(t, req.Plan, "expected Patrol investigation approval to carry a governed action plan")
+	require.NotEmpty(t, req.Plan.ActionID)
+	require.Equal(t, req.ID, req.Plan.RequestID)
+	require.True(t, req.Plan.RequiresApproval)
+	require.Equal(t, unifiedresources.ApprovalAdmin, req.Plan.ApprovalPolicy)
+	require.NotNil(t, req.Preflight)
+	require.NotNil(t, req.ContextConfidence)
+
+	audit, ok, err := actionStore.GetActionAudit(req.Plan.ActionID)
+	require.NoError(t, err)
+	require.True(t, ok, "expected queued Patrol fix approval to seed action audit")
+	require.Equal(t, unifiedresources.ActionStatePending, audit.State)
+	require.Equal(t, req.ID, audit.Request.RequestID)
+	require.Equal(t, "investigation:finding-123", audit.Request.ResourceID)
+	require.Equal(t, "pulse_assistant", audit.Request.RequestedBy)
+	require.NotNil(t, audit.Plan.Preflight)
+
+	events, err := actionStore.GetActionLifecycleEvents(req.Plan.ActionID, time.Time{}, 10)
+	require.NoError(t, err)
+	states := map[unifiedresources.ActionState]bool{}
+	for _, event := range events {
+		states[event.State] = true
+	}
+	require.True(t, states[unifiedresources.ActionStatePlanned], "missing planned lifecycle event: %#v", events)
+	require.True(t, states[unifiedresources.ActionStatePending], "missing pending lifecycle event: %#v", events)
+}
+
 func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}

@@ -1373,23 +1373,6 @@ func createApprovalRecordForOrgWithExecutor(e *PulseToolExecutor, orgID, command
 
 	approvalID := uuid.NewString()
 	now := time.Now().UTC()
-	capabilityName := approvalCapabilityForTargetType(targetType)
-	resourceID := approvalAuditResourceID(targetType, targetID, targetName)
-	actionID := uuid.NewString()
-	plan := unifiedresources.ActionPlan{
-		ActionID:             actionID,
-		RequestID:            approvalID,
-		Allowed:              true,
-		RequiresApproval:     true,
-		ApprovalPolicy:       unifiedresources.ApprovalAdmin,
-		PredictedBlastRadius: approvalBlastRadius(targetType, command),
-		RollbackAvailable:    approvalRollbackAvailable(targetType, command),
-		Message:              strings.TrimSpace(context),
-		PlannedAt:            now,
-		ExpiresAt:            now.Add(5 * time.Minute),
-		PlanHash:             approvalPlanHash(actionID, approvalID, capabilityName, resourceID, command, targetType, targetID, context),
-	}
-
 	req := &approval.ApprovalRequest{
 		ID:         approvalID,
 		OrgID:      strings.TrimSpace(orgID),
@@ -1398,10 +1381,8 @@ func createApprovalRecordForOrgWithExecutor(e *PulseToolExecutor, orgID, command
 		TargetID:   targetID,
 		TargetName: targetName,
 		Context:    context,
-		Plan:       &plan,
 	}
-	req.ContextConfidence = approvalContextConfidence(req)
-	req.Preflight = approvalPreflight(req)
+	AttachApprovalActionPlan(req, now)
 
 	if err := store.CreateApproval(req); err != nil {
 		log.Warn().Err(err).Msg("failed to create approval record")

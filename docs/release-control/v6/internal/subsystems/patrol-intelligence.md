@@ -848,6 +848,10 @@ Patrol fix approvals also inherit the unified action-governance preflight
 contract: queued fixes must keep their plan-level dry-run availability, safety
 checks, verification steps, approval policy, and action id in the shared
 approval/action-audit model instead of storing Patrol-only execution context.
+The investigation approval adapter must seed the unified action-audit store
+with planned and pending lifecycle evidence when it creates the approval, so
+Assistant handoffs and resource timelines can hydrate the same canonical
+action record before any operator decision or execution occurs.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches

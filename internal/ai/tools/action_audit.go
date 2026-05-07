@@ -509,13 +509,95 @@ func (e *PulseToolExecutor) recordApprovalDecisionAtomically(approvalID string, 
 }
 
 func (e *PulseToolExecutor) recordPendingApprovalAction(req *approval.ApprovalRequest) {
-	if e == nil || req == nil || req.Plan == nil {
+	if e == nil {
+		return
+	}
+	RecordPendingApprovalAction(e.actionAuditStore, req)
+}
+
+// AttachApprovalActionPlan normalizes an approval request onto the shared
+// action-governance model before it is persisted by the approval store.
+func AttachApprovalActionPlan(req *approval.ApprovalRequest, now time.Time) {
+	if req == nil {
+		return
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	req.ID = strings.TrimSpace(req.ID)
+	if req.ID == "" {
+		req.ID = uuid.NewString()
+	}
+	capabilityName := approvalCapabilityForTargetType(req.TargetType)
+	resourceID := approvalAuditResourceID(req.TargetType, req.TargetID, req.TargetName)
+	if req.Plan == nil {
+		actionID := uuid.NewString()
+		req.Plan = &unifiedresources.ActionPlan{
+			ActionID:             actionID,
+			RequestID:            req.ID,
+			Allowed:              true,
+			RequiresApproval:     true,
+			ApprovalPolicy:       unifiedresources.ApprovalAdmin,
+			PredictedBlastRadius: approvalBlastRadius(req.TargetType, req.Command),
+			RollbackAvailable:    approvalRollbackAvailable(req.TargetType, req.Command),
+			Message:              strings.TrimSpace(req.Context),
+			PlannedAt:            now,
+			PlanHash:             approvalPlanHash(actionID, req.ID, capabilityName, resourceID, req.Command, req.TargetType, req.TargetID, req.Context),
+		}
+	}
+	if strings.TrimSpace(req.Plan.ActionID) == "" {
+		req.Plan.ActionID = uuid.NewString()
+	}
+	if strings.TrimSpace(req.Plan.RequestID) == "" {
+		req.Plan.RequestID = req.ID
+	}
+	if req.Plan.PlannedAt.IsZero() {
+		req.Plan.PlannedAt = now
+	}
+	if strings.TrimSpace(req.Plan.Message) == "" {
+		req.Plan.Message = strings.TrimSpace(req.Context)
+	}
+	req.Plan.Allowed = true
+	req.Plan.RequiresApproval = true
+	if req.Plan.ApprovalPolicy == "" {
+		req.Plan.ApprovalPolicy = unifiedresources.ApprovalAdmin
+	}
+	if strings.TrimSpace(req.Plan.PlanHash) == "" {
+		req.Plan.PlanHash = approvalPlanHash(req.Plan.ActionID, req.Plan.RequestID, capabilityName, resourceID, req.Command, req.TargetType, req.TargetID, req.Context)
+	}
+	req.ContextConfidence = approvalContextConfidence(req)
+	req.Preflight = approvalPreflight(req)
+	req.Plan.Preflight = req.Preflight
+}
+
+// RecordPendingApprovalAction persists the planned and pending audit state for
+// a newly-created governed approval request.
+func RecordPendingApprovalAction(store unifiedresources.ResourceStore, req *approval.ApprovalRequest) {
+	if store == nil || req == nil || req.Plan == nil {
 		return
 	}
 	record := actionAuditRecordFromApproval(req, unifiedresources.ActionStatePending, approvalAuditActor)
-	e.recordActionAudit(record)
-	e.recordActionLifecycle(req.Plan.ActionID, unifiedresources.ActionStatePlanned, approvalAuditActor, strings.TrimSpace(req.Context))
-	e.recordActionLifecycle(req.Plan.ActionID, unifiedresources.ActionStatePending, approvalAuditActor, "waiting for approval")
+	if err := store.RecordActionAudit(record); err != nil {
+		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to persist pending approval action")
+		return
+	}
+	recordApprovalLifecycle(store, req.Plan.ActionID, unifiedresources.ActionStatePlanned, strings.TrimSpace(req.Context))
+	recordApprovalLifecycle(store, req.Plan.ActionID, unifiedresources.ActionStatePending, "waiting for approval")
+}
+
+func recordApprovalLifecycle(store unifiedresources.ResourceStore, actionID string, state unifiedresources.ActionState, message string) {
+	event := unifiedresources.ActionLifecycleEvent{
+		ActionID:  strings.TrimSpace(actionID),
+		State:     state,
+		Timestamp: time.Now().UTC(),
+		Actor:     approvalAuditActor,
+		Message:   strings.TrimSpace(message),
+	}
+	if err := store.RecordActionLifecycleEvent(event); err != nil {
+		log.Warn().Err(err).Str("action_id", actionID).Str("state", string(state)).Msg("failed to persist pending approval lifecycle event")
+	}
 }
 
 func mergeApprovedActionPlan(approved unifiedresources.ActionPlan, fallback unifiedresources.ActionPlan) unifiedresources.ActionPlan {

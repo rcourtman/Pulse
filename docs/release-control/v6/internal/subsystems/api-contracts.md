@@ -430,6 +430,14 @@ the canonical monitored-system blocked payload.
    atomically. It must not invoke the capability driver, create an
    `executing`/`completed` event, or attach an execution result; execution
    requires a later explicit execution contract.
+   Patrol investigation-fix approvals produced through
+   `internal/api/ai_handlers.go` must enter that same API-owned model at queue
+   time: the approval adapter must attach a governed `ActionPlan`, persist the
+   initial action audit as `planned` then `pending_approval`, and keep the
+   approval ID, action ID, dry-run/preflight posture, and lifecycle trail
+   available for Assistant handoff and resource action-history hydration.
+   Queuing the approval must not execute the fix or create a Patrol-local audit
+   record that bypasses `/api/actions` and the shared action-audit store.
    Action execution is API-owned as the next explicit contract:
    `POST /api/actions/{id}/execute` may only start execution for an approved
    action or an approval-free executable plan, must atomically persist the

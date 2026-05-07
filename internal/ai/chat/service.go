@@ -2179,6 +2179,16 @@ func (s *Service) GetModelHandoffMetadata(ctx context.Context, sessionID string)
 	return sessions.GetModelHandoffMetadata(sessionID)
 }
 
+// GetActionAuditStore returns the durable action-audit store used by the chat runtime.
+func (s *Service) GetActionAuditStore() unifiedresources.ResourceStore {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.actionAuditStore
+}
+
 // ClearModelHandoffContext invalidates product-originated model-only handoff
 // state after its source record can no longer be resolved. Unpinned resolved
 // resources are cleared with it so stale Patrol handoffs cannot remain action

@@ -1115,6 +1115,11 @@ recovery may treat the resulting Assistant session as incident context, but
 must not reinterpret the finding ID or approval-required chat mode as backup
 freshness, restore authorization, storage remediation permission, or recovery
 transport state.
+Patrol queued-fix approvals that seed shared action-audit records follow the
+same rule: storage and recovery may display the resulting action history as
+incident-adjacent context, but they must not treat the pending action state,
+approval policy, or preflight posture as recovery proof or storage-local
+execution permission.
 That same storage ownership also includes the shared storage-source presentation
 contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and

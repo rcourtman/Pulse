@@ -84,6 +84,80 @@ func TestExecuteCommandWithAuditUsesExecutionStateMachine(t *testing.T) {
 	agentServer.AssertExpectations(t)
 }
 
+func TestAttachApprovalActionPlanRecordsPendingActionAudit(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	now := time.Date(2026, 5, 7, 9, 30, 0, 0, time.UTC)
+	req := &approval.ApprovalRequest{
+		ID:         " approval-patrol-queued ",
+		OrgID:      "tenant-1",
+		ToolID:     "investigation_fix",
+		Command:    "systemctl restart nginx",
+		TargetType: "investigation",
+		TargetID:   "finding-123",
+		TargetName: "web-1",
+		Context:    "Restart nginx after Patrol investigation",
+		RiskLevel:  approval.RiskHigh,
+	}
+
+	AttachApprovalActionPlan(req, now)
+
+	if req.ID != "approval-patrol-queued" {
+		t.Fatalf("approval id = %q", req.ID)
+	}
+	if req.Plan == nil {
+		t.Fatal("expected governed action plan")
+	}
+	if req.Plan.ActionID == "" {
+		t.Fatalf("expected action id: %#v", req.Plan)
+	}
+	if req.Plan.RequestID != req.ID {
+		t.Fatalf("plan request id = %q, want %q", req.Plan.RequestID, req.ID)
+	}
+	if !req.Plan.Allowed || !req.Plan.RequiresApproval || req.Plan.ApprovalPolicy != unifiedresources.ApprovalAdmin {
+		t.Fatalf("approval plan posture = %#v", req.Plan)
+	}
+	if !req.Plan.PlannedAt.Equal(now) {
+		t.Fatalf("planned at = %s, want %s", req.Plan.PlannedAt, now)
+	}
+	if req.Preflight == nil || req.ContextConfidence == nil || req.Plan.Preflight != req.Preflight {
+		t.Fatalf("expected preflight and context confidence on approval: %#v", req)
+	}
+
+	RecordPendingApprovalAction(store, req)
+
+	audit, ok, err := store.GetActionAudit(req.Plan.ActionID)
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected pending approval action audit")
+	}
+	if audit.State != unifiedresources.ActionStatePending {
+		t.Fatalf("audit state = %q, want pending", audit.State)
+	}
+	if audit.Request.RequestID != req.ID {
+		t.Fatalf("audit request id = %q, want %q", audit.Request.RequestID, req.ID)
+	}
+	if audit.Request.ResourceID != "investigation:finding-123" {
+		t.Fatalf("audit resource id = %q", audit.Request.ResourceID)
+	}
+	if audit.Request.RequestedBy != approvalAuditActor {
+		t.Fatalf("audit requested by = %q", audit.Request.RequestedBy)
+	}
+
+	events, err := store.GetActionLifecycleEvents(req.Plan.ActionID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	states := map[unifiedresources.ActionState]bool{}
+	for _, event := range events {
+		states[event.State] = true
+	}
+	if !states[unifiedresources.ActionStatePlanned] || !states[unifiedresources.ActionStatePending] {
+		t.Fatalf("expected planned and pending lifecycle states, got %#v", events)
+	}
+}
+
 func TestExecuteNativeActionWithApprovedAuditRecordsDecisionBeforeExecution(t *testing.T) {
 	actionStore := unifiedresources.NewMemoryStore()
 	approvalStore, err := approval.NewStore(approval.StoreConfig{
