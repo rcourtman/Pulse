@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	pulseutils "github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
@@ -489,24 +490,22 @@ func connectionAgentIdentityForHost(host models.Host) *ConnectionAgentIdentity {
 }
 
 func connectionAgentPlatformForHost(host models.Host, hostProfile string) string {
-	platform := strings.TrimSpace(host.Platform)
-	if hostProfile == "unraid" && (platform == "" || strings.EqualFold(platform, "unraid")) {
-		return "linux"
-	}
-	return platform
+	return platformsupport.NormalizeRuntimePlatformForAgentHostProfile(hostProfile, host.Platform)
 }
 
 func connectionAgentHostProfileForHost(host models.Host) string {
 	if host.Unraid != nil {
-		return "unraid"
+		return connectionAgentHostProfileIDFromIdentity("unraid")
 	}
-	if strings.EqualFold(strings.TrimSpace(host.OSName), "unraid") {
-		return "unraid"
+	return connectionAgentHostProfileIDFromIdentity(host.OSName, host.Platform)
+}
+
+func connectionAgentHostProfileIDFromIdentity(values ...string) string {
+	profile, ok := platformsupport.AgentHostProfileForIdentity(values...)
+	if !ok {
+		return ""
 	}
-	if strings.EqualFold(strings.TrimSpace(host.Platform), "unraid") {
-		return "unraid"
-	}
-	return ""
+	return profile.ID
 }
 
 func connectionHostAliasesForAgent(host models.Host, name, address string) []string {

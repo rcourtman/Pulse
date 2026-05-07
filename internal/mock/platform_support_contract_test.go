@@ -11,13 +11,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 )
 
 var (
 	numberedPlatformListRE     = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
 	currentSupportMatrixRE     = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
 	currentSupportSetupRowRE   = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+([^|]+?)\\s+\\|")
-	agentHostProfileTableRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|")
+	agentHostProfileTableRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|")
 )
 
 type platformSupportManifest struct {
@@ -33,6 +35,7 @@ type agentHostProfileManifestEntry struct {
 	GovernanceState    string            `json:"governance_state"`
 	ReadinessStage     string            `json:"readiness_stage"`
 	HostIdentityTokens []string          `json:"host_identity_tokens"`
+	RuntimePlatform    string            `json:"runtime_platform"`
 	SupportFloor       map[string]string `json:"support_floor"`
 	StorageFamily      string            `json:"storage_family"`
 }
@@ -121,6 +124,14 @@ func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
 		manifestAgentHostProfileHostIdentityTokensByState(t, manifest, "supported"),
 	); diff != "" {
 		t.Fatalf("agent host profile host-identity tokens drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		agentHostProfileFieldMap(agentHostProfiles, func(profile agentHostProfileSectionEntry) []string {
+			return []string{profile.RuntimePlatform}
+		}),
+		manifestAgentHostProfileRuntimePlatformsByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("agent host profile runtime-platform fallback drifted from the canonical support model:\n%s", diff)
 	}
 	if diff := diffPlatformFieldMap(
 		agentHostProfileFieldMap(agentHostProfiles, func(profile agentHostProfileSectionEntry) []string {
@@ -257,6 +268,9 @@ func TestUnraidRemainsInPresentationOnlyVocabularyAndAgentHostProfiles(t *testin
 	if diff := diffPlatformSets([]string{"unraid"}, profile.HostIdentityTokens); diff != "" {
 		t.Fatalf("unraid host identity tokens drifted from the host-profile model:\n%s", diff)
 	}
+	if profile.RuntimePlatform != "linux" {
+		t.Fatalf("unraid runtime platform = %q, want linux", profile.RuntimePlatform)
+	}
 	if profile.StorageFamily != "onprem" {
 		t.Fatalf("unraid storage family = %q, want onprem", profile.StorageFamily)
 	}
@@ -271,9 +285,53 @@ func TestUnraidRemainsInPresentationOnlyVocabularyAndAgentHostProfiles(t *testin
 	}
 	if !strings.Contains(
 		model,
-		"| `unraid` | `Unraid` | `supported` | `supported` | `unraid` | `onprem` |",
+		"| `unraid` | `Unraid` | `supported` | `supported` | `unraid` | `linux` | `onprem` |",
 	) {
 		t.Fatal("expected platform support model to keep the unraid host-profile row")
+	}
+}
+
+func TestPlatformSupportBackendProjectionMatchesSupportManifest(t *testing.T) {
+	manifest := loadPlatformSupportManifest(t)
+	profiles := platformsupport.AgentHostProfiles()
+
+	gotIDs := make([]string, 0, len(profiles))
+	gotTokens := make(map[string][]string, len(profiles))
+	gotRuntimePlatforms := make(map[string][]string, len(profiles))
+	for _, profile := range profiles {
+		if profile.GovernanceState != "supported" {
+			continue
+		}
+		gotIDs = append(gotIDs, profile.ID)
+		gotTokens[profile.ID] = append([]string(nil), profile.HostIdentityTokens...)
+		gotRuntimePlatforms[profile.ID] = []string{profile.RuntimePlatform}
+	}
+
+	if diff := diffPlatformSets(manifestAgentHostProfileIDsByState(t, manifest, "supported"), gotIDs); diff != "" {
+		t.Fatalf("backend agent host profile ids drifted from manifest:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		manifestAgentHostProfileHostIdentityTokensByState(t, manifest, "supported"),
+		gotTokens,
+	); diff != "" {
+		t.Fatalf("backend agent host profile identity tokens drifted from manifest:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		manifestAgentHostProfileRuntimePlatformsByState(t, manifest, "supported"),
+		gotRuntimePlatforms,
+	); diff != "" {
+		t.Fatalf("backend agent host profile runtime platforms drifted from manifest:\n%s", diff)
+	}
+
+	profile, ok := platformsupport.AgentHostProfileForIdentity("Unraid")
+	if !ok {
+		t.Fatal("expected backend projection to resolve Unraid identity token")
+	}
+	if profile.ID != "unraid" || profile.RuntimePlatform != "linux" {
+		t.Fatalf("backend Unraid profile = %+v, want id=unraid runtime=linux", profile)
+	}
+	if got := platformsupport.NormalizeRuntimePlatformForAgentHostProfile("unraid", "unraid"); got != "linux" {
+		t.Fatalf("backend runtime normalization = %q, want linux", got)
 	}
 }
 
@@ -610,6 +668,7 @@ type agentHostProfileSectionEntry struct {
 	GovernanceState    string
 	ReadinessStage     string
 	HostIdentityTokens []string
+	RuntimePlatform    string
 	StorageFamily      string
 }
 
@@ -638,7 +697,7 @@ func parseAgentHostProfileSection(
 		}
 
 		matches := agentHostProfileTableRowRE.FindStringSubmatch(line)
-		if len(matches) != 7 {
+		if len(matches) != 8 {
 			continue
 		}
 
@@ -647,7 +706,8 @@ func parseAgentHostProfileSection(
 			GovernanceState:    matches[3],
 			ReadinessStage:     matches[4],
 			HostIdentityTokens: parseInlineTokenList(matches[5]),
-			StorageFamily:      matches[6],
+			RuntimePlatform:    matches[6],
+			StorageFamily:      matches[7],
 		}
 	}
 
@@ -802,6 +862,20 @@ func manifestAgentHostProfileHostIdentityTokensByState(
 			return append([]string(nil), profile.HostIdentityTokens...)
 		},
 		fmt.Sprintf("manifest agent host profile identity tokens with state %s", governanceState),
+	)
+}
+
+func manifestAgentHostProfileRuntimePlatformsByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) map[string][]string {
+	return manifestAgentHostProfileFieldMap(
+		t,
+		manifest,
+		governanceState,
+		func(profile agentHostProfileManifestEntry) []string { return []string{profile.RuntimePlatform} },
+		fmt.Sprintf("manifest agent host profile runtime platforms with state %s", governanceState),
 	)
 }
 

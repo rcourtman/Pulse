@@ -37,6 +37,7 @@ SUPPORT_FLOOR_FIELDS = (
 VALID_SUPPORT_FLOOR_VALUES = {"supported", "augmentation-only", "read-only", "n/a"}
 VALID_AGENT_HOST_PROFILE_GOVERNANCE_STATES = {"supported", "presentation-only"}
 VALID_AGENT_HOST_PROFILE_READINESS_STAGES = {"supported", "presentation-only"}
+VALID_AGENT_HOST_PROFILE_RUNTIME_PLATFORMS = {"linux", "macos", "windows", "freebsd"}
 
 
 def require_dict(value: Any, label: str) -> dict[str, Any]:
@@ -160,6 +161,17 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
                 f"presentation-only agent host profile {profile_id} must not declare host identity tokens"
             )
 
+        runtime_platform = require_lowercase_identifier(
+            record.get("runtime_platform"),
+            f"agent_host_profiles[{index}].runtime_platform",
+        )
+        if runtime_platform not in VALID_AGENT_HOST_PROFILE_RUNTIME_PLATFORMS:
+            raise ValueError(
+                "expected agent_host_profiles["
+                f"{index}].runtime_platform to be one of "
+                f"{sorted(VALID_AGENT_HOST_PROFILE_RUNTIME_PLATFORMS)}"
+            )
+
         support_floor = normalize_support_floor(
             record.get("support_floor"),
             f"agent_host_profiles[{index}].support_floor",
@@ -188,6 +200,7 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
                 "governanceState": governance_state,
                 "readinessStage": readiness_stage,
                 "hostIdentityTokens": host_identity_tokens,
+                "runtimePlatform": runtime_platform,
                 "supportFloor": support_floor,
                 "storageFamily": storage_family,
             }
@@ -394,6 +407,9 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     agent_host_profile_storage_family_by_id = {
         profile["id"]: profile["storageFamily"] for profile in agent_host_profiles
     }
+    agent_host_profile_runtime_platform_by_id = {
+        profile["id"]: profile["runtimePlatform"] for profile in agent_host_profiles
+    }
     primary_mode_by_id = {
         platform["id"]: platform["primaryMode"] for platform in platforms
     }
@@ -456,6 +472,7 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         "agentHostProfileHostIdentityTokensById": agent_host_profile_host_identity_tokens_by_id,
         "agentHostProfileSupportFloorById": agent_host_profile_support_floor_by_id,
         "agentHostProfileStorageFamilyById": agent_host_profile_storage_family_by_id,
+        "agentHostProfileRuntimePlatformById": agent_host_profile_runtime_platform_by_id,
         "familyById": family_by_id,
         "readinessStageById": readiness_stage_by_id,
         "primaryModeById": primary_mode_by_id,
@@ -535,6 +552,10 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
             "SOURCE_AGENT_HOST_PROFILE_STORAGE_FAMILY",
             normalized["agentHostProfileStorageFamilyById"],
         ),
+        render_const(
+            "SOURCE_AGENT_HOST_PROFILE_RUNTIME_PLATFORM",
+            normalized["agentHostProfileRuntimePlatformById"],
+        ),
         render_const("SOURCE_PLATFORM_FAMILY", normalized["familyById"]),
         render_const("SOURCE_PLATFORM_READINESS_STAGE", normalized["readinessStageById"]),
         render_const("SOURCE_PLATFORM_PRIMARY_MODE", normalized["primaryModeById"]),
@@ -565,6 +586,8 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         "  (typeof SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES)[number]['supportFloor'];\n",
         "export type AgentHostProfileSupportFloorValue =\n"
         "  AgentHostProfileSupportFloor[keyof AgentHostProfileSupportFloor];\n",
+        "export type AgentHostProfileRuntimePlatform =\n"
+        "  (typeof SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES)[number]['runtimePlatform'];\n",
         "export type SourcePlatformStorageFamily =\n"
         "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['storageFamily'];\n",
         "export type GeneratedPlatformType = (typeof PLATFORM_TYPE_KEYS)[number];\n",

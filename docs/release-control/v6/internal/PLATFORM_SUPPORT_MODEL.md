@@ -105,8 +105,11 @@ Agent host profiles must define:
 3. governance state
 4. readiness stage
 5. host identity tokens
-6. support-floor row
-7. optional storage family
+6. runtime platform fallback (the canonical agent runtime platform string used
+   when a profile-tagged host reports a non-canonical or empty runtime
+   platform — e.g. Unraid agents report `linux`)
+7. support-floor row
+8. optional storage family
 
 ## Canonical Ingestion Modes
 
@@ -255,9 +258,9 @@ Support floor fields are recorded in this order: `setup`, `visibility`,
 `workloads`, `storage`, `recovery`, `alerts`, `assistant_read`,
 `assistant_control`.
 
-| Profile | Family | Governance | Readiness | Host identity tokens | Storage family | Support floor |
-| --- | --- | --- | --- | --- | --- | --- |
-| `unraid` | `Unraid` | `supported` | `supported` | `unraid` | `onprem` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+| Profile | Family | Governance | Readiness | Host identity tokens | Runtime platform | Storage family | Support floor |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `unraid` | `Unraid` | `supported` | `supported` | `unraid` | `linux` | `onprem` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
 
 ### Current support rows
 
@@ -287,13 +290,16 @@ supported, admitted, and presentation-only platform vocabulary declared here,
 plus the canonical platform-family, readiness-stage, primary-mode,
 onboarding-path, projection, and support-floor classification for supported
 and admitted platforms, and the separate machine-readable agent host profile
-classification for supported host/appliance profiles. Tests and shared
-frontend vocabulary may consume that manifest, and the tracked frontend
-projection in `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-must be generated from it, but neither projection may introduce platform ids,
-host profile ids, governance states, families, readiness stages, primary
-modes, onboarding paths, projections, support-floor claims, or host identity
-tokens that are not declared in this document.
+classification (including the runtime-platform fallback) for supported
+host/appliance profiles. Tests and shared frontend vocabulary may consume that
+manifest, and the tracked frontend projection in
+`frontend-modern/src/utils/platformSupportManifest.generated.ts` and the
+tracked backend projection in
+`internal/platformsupport/manifest_generated.go` must be generated from it,
+but neither projection may introduce platform ids, host profile ids,
+governance states, families, readiness stages, primary modes, onboarding
+paths, projections, support-floor claims, host identity tokens, or runtime
+platform fallbacks that are not declared in this document.
 
 ### Runtime variants
 

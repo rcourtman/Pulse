@@ -616,6 +616,10 @@ that platform projection for shared identity/presentation use only; a profile
 such as Unraid may label a Pulse Agent host, but it must not enter
 `PlatformType`, `PLATFORM_TYPE_KEYS`, unified-resource source filters, or
 canonical top-level platform identity.
+Host-profile runtime fallback values are generated beside those labels so
+agent-backed appliance reports can normalize to canonical runtime platforms
+such as `linux` without making the appliance profile a unified-resource
+platform.
 That same shared source boundary also applies when unified seeds and
 supplemental providers coexist. If a canonical unified-resource seed omits an
 owned supplemental source such as TrueNAS or VMware, the shared resource API

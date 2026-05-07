@@ -18,6 +18,7 @@
       "host_identity_tokens": [
         "unraid"
       ],
+      "runtime_platform": "linux",
       "support_floor": {
         "setup": "supported",
         "visibility": "supported",

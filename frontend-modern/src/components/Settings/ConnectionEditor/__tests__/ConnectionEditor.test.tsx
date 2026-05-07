@@ -86,10 +86,13 @@ describe('ConnectionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
 
     await waitFor(() =>
-      expect(
-        screen.getByText(/No supported API-backed platform detected/i),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/No supported API-backed platform detected/i)).toBeInTheDocument(),
     );
+    const normalizedBodyText = document.body.textContent?.replace(/\s+/g, ' ') ?? '';
+    expect(normalizedBodyText).toContain(
+      'Choose a source type instead. If this is one of the supported Linux, macOS, Windows, FreeBSD, and Unraid host/appliance profiles',
+    );
+    expect(normalizedBodyText).not.toContain('if this is this is');
 
     fireEvent.click(screen.getByRole('button', { name: /Choose a source type instead/i }));
     expect(onBackToCatalog).toHaveBeenCalledTimes(1);
@@ -110,6 +113,12 @@ describe('ConnectionEditor', () => {
     const agentButton = await screen.findByRole('button', {
       name: /install pulse agent instead/i,
     });
+    const normalizedBodyText = document.body.textContent?.replace(/\s+/g, ' ') ?? '';
+    expect(normalizedBodyText).toContain(
+      'If this is one of the supported Linux, macOS, Windows, FreeBSD, and Unraid host/appliance profiles',
+    );
+    expect(normalizedBodyText).not.toContain('catalog below, or if this is');
+
     fireEvent.click(agentButton);
 
     expect(screen.getByTestId('slot').textContent).toBe('slot:agent');
@@ -121,7 +130,12 @@ describe('ConnectionEditor', () => {
   it('reopens the detect form from a selected credential slot', async () => {
     mockedProbe.mockResolvedValueOnce({
       candidates: [
-        { type: 'truenas', host: 'https://truenas.lab', port: 443, hints: { product: 'TrueNAS SCALE' } },
+        {
+          type: 'truenas',
+          host: 'https://truenas.lab',
+          port: 443,
+          hints: { product: 'TrueNAS SCALE' },
+        },
       ],
       probedMs: 142,
     });

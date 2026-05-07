@@ -804,6 +804,10 @@ the canonical monitored-system blocked payload.
     `linux`, while `agentIdentity.hostProfile` carries the governed profile id
     such as `unraid`; frontend clients must not re-promote those profile ids
     into first-class platform types.
+    The API aggregator must resolve host-profile identity tokens and runtime
+    platform fallback values through the generated platform-support backend
+    projection in `internal/platformsupport/manifest_generated.go`, so payload
+    normalization cannot drift into API-local Unraid or appliance branches.
     `pulse fleet connections` may read that same `GET /api/connections`
     payload as a deterministic CLI adapter for agent-ready operations, but it
     must remain a read-only view over the canonical connections ledger rather

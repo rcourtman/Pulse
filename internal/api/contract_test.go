@@ -12859,6 +12859,9 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal agent Connection: %v", err)
 	}
+	if conn.AgentIdentity.Platform == conn.AgentIdentity.HostProfile {
+		t.Fatalf("agent platform must remain runtime platform, got profile id %q", conn.AgentIdentity.Platform)
+	}
 
 	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","hostAliases":["host-1","192.168.0.2"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-04-22T12:00:00Z","source":"agent","agentIdentity":{"hostname":"host-1","platform":"linux","hostProfile":"unraid","osName":"Unraid","osVersion":"7.1.0","kernelVersion":"6.12.0","architecture":"x86_64","reportIp":"192.168.0.2","commandsEnabled":true},"agentVersion":"6.0.0","expectedAgentVersion":"6.0.2","agentUpdateAvailable":true,"fleet":{"enrollmentState":"enrolled","livenessState":"active","versionDrift":"behind","adapterHealth":"healthy","configRollout":"reported","credentialStatus":"verified","updateStatus":"update-available","remoteControl":"enabled"},"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
 	assertJSONSnapshot(t, body, want)

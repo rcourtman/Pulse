@@ -552,6 +552,11 @@ bypass the API fail-closed execution gate.
     `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json` through
     `frontend-modern/src/utils/platformSupportManifest.ts`, not from
     storage-local hard-coded provider arrays.
+    Agent host-profile appliance identity is adjacent context for storage
+    rows, not a storage-local platform classifier: Unraid storage may render
+    through the generated host-profile label and runtime platform fallback, but
+    storage/recovery must not reintroduce `unraid` as a first-class provider or
+    recovery platform.
 32. Keep agentless availability endpoints neutral on the shared unified-resource and API contracts. When `internal/api/availability_handlers.go`, `internal/api/connections_handlers.go`, `internal/api/platform_mock_connections.go`, or `frontend-modern/src/hooks/useUnifiedResources.ts` surface `network-endpoint` availability resources, storage and recovery may consume their liveness as infrastructure context only; they must not reinterpret ping/TCP/HTTP endpoints as storage providers, backup targets, recovery repositories, or protected-workload evidence.
 33. Keep infrastructure summary chart bucketing presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets for operator-facing summary cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples as recovery freshness windows, backup cadence, or restore evidence.
 34. Keep workload chart downsampling presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets for operator-facing workload cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples as recovery freshness windows, backup cadence, or restore evidence.

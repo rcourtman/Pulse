@@ -512,6 +512,9 @@ Platform = QNAP
 		if agent.osVersion != "7.1.0" {
 			t.Fatalf("osVersion = %q, want %q", agent.osVersion, "7.1.0")
 		}
+		if got := normalisePlatform("unraid"); got != "linux" {
+			t.Fatalf("normalisePlatform(unraid) = %q, want linux", got)
+		}
 	})
 }
 

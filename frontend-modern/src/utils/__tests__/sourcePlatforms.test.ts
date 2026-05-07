@@ -13,6 +13,7 @@ import {
   PLATFORM_TYPE_KEYS,
   PRESENTATION_ONLY_PLATFORM_IDS,
   getAgentHostProfileFamily,
+  getAgentHostProfileRuntimePlatform,
   getSourcePlatformCanonicalProjections,
   getSourcePlatformReadinessStage,
   getSourcePlatformSupportFloor,
@@ -147,6 +148,7 @@ describe('sourcePlatforms', () => {
     it('keeps Unraid as an agent host profile instead of a platform type', () => {
       expect(AGENT_HOST_PROFILE_IDS).toEqual(['unraid']);
       expect(getAgentHostProfileFamily('unraid')).toBe('Unraid');
+      expect(getAgentHostProfileRuntimePlatform('unraid')).toBe('linux');
       expect(PLATFORM_TYPE_KEYS).not.toContain('unraid');
       expect(PRESENTATION_ONLY_PLATFORM_IDS).toContain('unraid');
     });

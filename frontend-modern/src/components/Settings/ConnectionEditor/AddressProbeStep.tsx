@@ -69,12 +69,7 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
         <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           <div class="font-medium">No supported API-backed platform detected at that address.</div>
           <div class="mt-1 text-xs">
-            <Show
-              when={props.onChooseSourceTypeInstead}
-              fallback={
-                <span>Pick a supported product from the catalog below, or if this is </span>
-              }
-            >
+            <Show when={props.onChooseSourceTypeInstead}>
               <button
                 type="button"
                 onClick={props.onChooseSourceTypeInstead}
@@ -82,9 +77,9 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
               >
                 Choose a source type instead
               </button>
-              <span>, or if this is </span>
+              <span>. </span>
             </Show>
-            this is one of the supported {getInfrastructureAgentHostProfileSupportText()},{' '}
+            If this is one of the supported {getInfrastructureAgentHostProfileSupportText()},{' '}
             <Show
               when={props.onInstallAgent}
               fallback={<span class="font-medium">install Pulse Agent instead</span>}
