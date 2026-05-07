@@ -48,6 +48,8 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('buildPatrolAssistantApprovalBriefingInput');
     expect(findingsPanelSource).toContain('buildPatrolAssistantProposedFixBriefingInput');
     expect(findingsPanelSource).toContain('briefing,');
+    expect(findingsPanelSource).toContain('investigationOutcome: finding.investigationOutcome');
+    expect(findingsPanelSource).toContain('remediationId: finding.remediationPlanId');
     expect(findingsPanelSource).toContain('investigationRecord: finding.investigationRecord');
     expect(findingsPanelSource).toContain('pendingApproval: pendingApprovalBriefing');
     expect(findingsPanelSource).toContain('proposedFix,');

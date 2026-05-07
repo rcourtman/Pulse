@@ -455,6 +455,61 @@ describe('patrolInvestigationContextModel', () => {
     ).toContain('Use that record as the main context before suggesting next actions.');
   });
 
+  it('leads finding prompts with live governed approval context without command text', () => {
+    const prompt = buildPatrolAssistantFindingPrompt({
+      title: 'High CPU usage',
+      subject: 'web-server',
+      description: 'CPU stayed above 95%.',
+      pendingApproval: {
+        id: 'approval-1',
+        status: 'pending',
+        riskLevel: 'high',
+        targetName: 'web-server',
+        actionApprovalPolicy: 'operator',
+        actionPreflight: 'Service restart would be attempted after health checks.',
+        actionDryRunSummary: 'Dry run completed with one restart action.',
+      },
+      proposedFix: buildPatrolAssistantProposedFixBriefingInput({
+        description: 'Restart the workload service',
+        commands: ['systemctl restart workload.service'],
+        riskLevel: 'high',
+        targetHost: 'web-server',
+      }),
+    });
+
+    expect(prompt).toContain('Start by reviewing governed approval approval-1');
+    expect(prompt).toContain('approval status pending');
+    expect(prompt).toContain('high risk');
+    expect(prompt).toContain('approval policy attached');
+    expect(prompt).toContain('dry-run posture attached');
+    expect(prompt).toContain('safest next step');
+    expect(prompt).not.toContain('systemctl restart workload.service');
+  });
+
+  it('leads finding prompts with proposed-fix posture without command text', () => {
+    const prompt = buildPatrolAssistantFindingPrompt({
+      title: 'Nginx down',
+      subject: 'node-1',
+      description: 'The service stopped responding.',
+      investigationOutcome: 'fix_queued',
+      remediationId: 'remediation-1',
+      proposedFix: buildPatrolAssistantProposedFixBriefingInput({
+        description: 'Restart nginx',
+        commands: ['systemctl restart nginx'],
+        riskLevel: 'medium',
+        targetHost: 'node-1',
+        destructive: true,
+      }),
+    });
+
+    expect(prompt).toContain('Start by reviewing the governed proposed fix');
+    expect(prompt).toContain('medium risk');
+    expect(prompt).toContain('1 command recorded for approval context');
+    expect(prompt).toContain('destructive action');
+    expect(prompt).toContain('safest next step');
+    expect(prompt).not.toContain('systemctl restart nginx');
+  });
+
   it('builds a drawer briefing for Assistant handoff without exposing raw commands', () => {
     const approvalRequestedAt = new Date(Date.now() - 60_000).toISOString();
     const approvalExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();

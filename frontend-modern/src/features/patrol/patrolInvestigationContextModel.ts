@@ -61,6 +61,10 @@ export interface PatrolAssistantFindingPromptInput {
   title: string;
   subject: string;
   description: string;
+  investigationOutcome?: string | null;
+  remediationId?: string | null;
+  pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
+  proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
 }
 
@@ -343,16 +347,77 @@ export function buildPatrolAssistantFindingPrompt(
   const subject = normalizeText(input.subject) || 'the affected resource';
   const description = normalizeText(input.description);
   const hasRecord = Boolean(input.investigationRecord?.id);
+  const actionInstruction = buildPatrolAssistantFindingActionPromptInstruction(input);
 
   let prompt = `I'd like to discuss this Patrol finding: "${title}" on ${subject}.`;
   if (hasRecord) {
     prompt +=
       '\n\nPulse Patrol has a structured investigation record for this finding. Use that record as the main context before suggesting next actions.';
   }
+  if (actionInstruction) {
+    prompt += `\n\n${actionInstruction}`;
+  }
   if (description) {
     prompt += `\n\n${description}`;
   }
   return prompt;
+}
+
+function buildPatrolAssistantFindingActionPromptInstruction(
+  input: PatrolAssistantFindingPromptInput,
+): string | undefined {
+  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
+  const record = buildPatrolInvestigationRecordPresentation(input.investigationRecord);
+  const proposedFix = record.proposedFix || normalizeProposedFixBriefing(input.proposedFix);
+  const remediationId = normalizeText(input.remediationId);
+  const outcome = normalizeText(input.investigationOutcome || input.investigationRecord?.outcome);
+  const normalizedOutcome = outcome.toLowerCase();
+
+  if (pendingApproval.id) {
+    const contextParts = [
+      pendingApproval.status ? `approval status ${pendingApproval.status}` : undefined,
+      pendingApproval.riskLevel ? `${pendingApproval.riskLevel} risk` : undefined,
+      pendingApproval.targetName
+        ? `target ${truncateContextText(pendingApproval.targetName, 120)}`
+        : undefined,
+      pendingApproval.actionApprovalPolicy ? 'approval policy attached' : undefined,
+      pendingApproval.actionPreflight || pendingApproval.actionDryRunSummary
+        ? 'dry-run posture attached'
+        : undefined,
+    ].filter(isNonEmptyString);
+
+    return `Start by reviewing governed approval ${pendingApproval.id}${
+      contextParts.length > 0 ? ` (${contextParts.join('; ')})` : ''
+    }. Use the attached Patrol context to explain prerequisites, risk, and the safest next step before any execution.`;
+  }
+
+  const hasGovernedActionPosture = Boolean(
+    proposedFix ||
+    remediationId ||
+    normalizeText(input.investigationRecord?.approval_id) ||
+    GOVERNED_ACTION_OUTCOMES.has(normalizedOutcome),
+  );
+  if (!hasGovernedActionPosture) {
+    return undefined;
+  }
+
+  const contextParts = [
+    proposedFix?.description
+      ? `proposed fix ${truncateContextText(proposedFix.description, 120)}`
+      : undefined,
+    proposedFix?.riskLabel ? `${proposedFix.riskLabel.toLowerCase()} risk` : undefined,
+    proposedFix?.targetHost
+      ? `target ${truncateContextText(proposedFix.targetHost, 120)}`
+      : undefined,
+    proposedFix?.commandSummary,
+    proposedFix?.destructive ? 'destructive action' : undefined,
+    remediationId ? `remediation ${truncateContextText(remediationId, 120)}` : undefined,
+    outcome ? `outcome ${formatIdentifierLabel(outcome)?.toLowerCase() || outcome}` : undefined,
+  ].filter(isNonEmptyString);
+
+  return `Start by reviewing the governed proposed fix or action posture${
+    contextParts.length > 0 ? ` (${contextParts.join('; ')})` : ''
+  }. Use the attached Patrol context to explain risk, prerequisites, and the safest next step without repeating command text.`;
 }
 
 export function buildPatrolAssessmentAssistantHandoff(

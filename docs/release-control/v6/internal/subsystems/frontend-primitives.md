@@ -821,8 +821,9 @@ frontend primitive boundary.
     model-only refresh, but the shared drawer stays a generic shell rather than
     a Patrol summary prompt builder. The Patrol helper may turn those same safe
     references into visible action labels, safety notes, and approval-aware
-    suggested prompts or first-turn prompt emphasis, but it must not expose raw
-    command or execution payloads.
+    suggested prompts or first-turn prompt emphasis for assessment and
+    finding-level handoffs, but it must not expose raw command or execution
+    payloads.
     The
     drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but

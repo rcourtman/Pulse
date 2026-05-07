@@ -467,7 +467,11 @@ the canonical monitored-system blocked payload.
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,
    target label, generated approval summary, and command count are allowed, while
-   approval command payloads stay inside governed approval/remediation surfaces
+   approval command payloads stay inside governed approval/remediation surfaces,
+   and finding-level first-turn prompt emphasis may be derived from the same
+   bounded metadata only so Assistant starts by reviewing approval status, risk,
+   dry-run posture, proposed-fix posture, and safest next step without receiving
+   raw command or execution payloads
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior

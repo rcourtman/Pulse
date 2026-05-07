@@ -492,6 +492,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       title,
       subject,
       description: finding.description,
+      investigationOutcome: finding.investigationOutcome,
+      remediationId: finding.remediationPlanId,
+      pendingApproval: pendingApprovalBriefing,
+      proposedFix,
       investigationRecord: finding.investigationRecord,
     });
     const briefing = buildPatrolAssistantFindingBriefing({

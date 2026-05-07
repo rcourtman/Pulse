@@ -161,7 +161,11 @@ Patrol-specific presentation helpers.
    not copy the approval command payload into Assistant drawer prose. The
    model-only runtime briefing must apply that same
    recovered approval reference when framing the operator decision and action
-   posture. Inline Patrol approval actions that open Assistant must follow the
+   posture. The initial visible prompt for a Patrol finding must lead with that
+   governed approval or proposed-fix review instruction when safe metadata is
+   attached, so the operator starts from approval status, risk, dry-run posture,
+   and safest-next-step review instead of generic incident discussion. Inline
+   Patrol approval actions that open Assistant must follow the
    same rule: pass approval ID/status/risk/target plus safe summary/count
    metadata as review context, force the request-local approval-required mode,
    attach the Patrol-owned visible drawer briefing for the pending approval, and
