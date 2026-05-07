@@ -151,6 +151,25 @@ const (
 	sessionHandoffKindScopedContext = "scoped_context"
 )
 
+func handoffActionCurrentlyRequiresApproval(action HandoffAction) bool {
+	approvalStatus := strings.ToLower(strings.TrimSpace(action.ApprovalStatus))
+	actionState := strings.ToLower(strings.TrimSpace(action.ActionState))
+
+	if approvalStatus == "pending" && !action.ApprovalConsumed {
+		return true
+	}
+	switch actionState {
+	case "pending_approval", "awaiting_approval":
+		return approvalStatus == "" || approvalStatus == "pending"
+	case "approved", "rejected", "executing", "completed", "failed", "planned":
+		return false
+	}
+	if approvalStatus != "" || strings.TrimSpace(action.ApprovalID) != "" {
+		return false
+	}
+	return action.ActionRequiresApproval
+}
+
 func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHandoffSummary {
 	if modelContextEmpty(modelContext) {
 		return nil
@@ -189,7 +208,7 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 		summary.PrimaryResource = &primaryResource
 	}
 	for _, action := range actions {
-		if !summary.RequiresApproval && (action.ActionRequiresApproval || strings.TrimSpace(action.ApprovalID) != "") {
+		if !summary.RequiresApproval && handoffActionCurrentlyRequiresApproval(action) {
 			summary.RequiresApproval = true
 		}
 		if summary.LastKnownApprovalStatus == "" {

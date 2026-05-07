@@ -419,6 +419,76 @@ func TestSessionStore_ListIncludesSafeHandoffSummary(t *testing.T) {
 	}
 }
 
+func TestModelContextHandoffSummaryRequiresApprovalOnlyForCurrentPendingApproval(t *testing.T) {
+	tests := []struct {
+		name             string
+		action           HandoffAction
+		requiresApproval bool
+	}{
+		{
+			name: "pending approval",
+			action: HandoffAction{
+				ApprovalID:             "approval-pending",
+				ApprovalStatus:         "pending",
+				ActionState:            "pending_approval",
+				ActionRequiresApproval: true,
+			},
+			requiresApproval: true,
+		},
+		{
+			name: "legacy awaiting approval state",
+			action: HandoffAction{
+				ApprovalID:             "approval-awaiting",
+				ActionState:            "awaiting_approval",
+				ActionRequiresApproval: true,
+			},
+			requiresApproval: true,
+		},
+		{
+			name: "approved completed action",
+			action: HandoffAction{
+				ApprovalID:             "approval-approved",
+				ApprovalStatus:         "approved",
+				ActionState:            "completed",
+				ActionRequiresApproval: true,
+			},
+			requiresApproval: false,
+		},
+		{
+			name: "denied historical action",
+			action: HandoffAction{
+				ApprovalID:             "approval-denied",
+				ApprovalStatus:         "denied",
+				ActionState:            "rejected",
+				ActionRequiresApproval: true,
+			},
+			requiresApproval: false,
+		},
+		{
+			name: "approval reference without current pending state",
+			action: HandoffAction{
+				ApprovalID:             "approval-unknown",
+				ActionRequiresApproval: true,
+			},
+			requiresApproval: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary := modelContextHandoffSummary(&sessionModelContext{
+				HandoffActions: []HandoffAction{tt.action},
+			})
+			if summary == nil {
+				t.Fatalf("summary is nil")
+			}
+			if summary.RequiresApproval != tt.requiresApproval {
+				t.Fatalf("requires approval = %v, want %v; summary=%#v", summary.RequiresApproval, tt.requiresApproval, summary)
+			}
+		})
+	}
+}
+
 func TestSessionStore_ClearModelHandoffContext(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {

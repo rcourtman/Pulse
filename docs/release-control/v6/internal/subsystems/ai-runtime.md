@@ -279,7 +279,11 @@ runtime cost control, and shared AI transport surfaces.
     and action counts, a primary resource label, last-known approval/action
     status, risk level, and timestamp, but it must not expose model-only
     handoff text, action preflight/result bodies, remediation descriptions, raw
-    commands, or approval command payloads.
+    commands, or approval command payloads. Its `requires_approval` field is a
+    current operator-decision flag only: pending approval states may set it, but
+    approved, denied, rejected, executing, completed, failed, expired, or
+    otherwise historical action references must remain action context without
+    being relabeled as requiring approval.
     When the Assistant drawer restores any session from that `handoff_summary`,
     it must restore the scoped request-local approval boundary as well as the
     safe visible briefing: the next chat turn must carry

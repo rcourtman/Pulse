@@ -268,8 +268,8 @@ func TestService_ListSessionsRefreshesHandoffActionSummary(t *testing.T) {
 	if summary.LastKnownActionState != string(unifiedresources.ActionStateCompleted) {
 		t.Fatalf("action state = %q, want completed", summary.LastKnownActionState)
 	}
-	if !summary.RequiresApproval || summary.ActionCount != 1 {
-		t.Fatalf("action summary = %#v, want approval-required action context", summary)
+	if summary.RequiresApproval || summary.ActionCount != 1 {
+		t.Fatalf("action summary = %#v, want completed action context without approval requirement", summary)
 	}
 
 	actions, err := store.GetModelHandoffActions(session.ID)

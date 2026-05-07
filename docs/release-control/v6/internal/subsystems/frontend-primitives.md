@@ -186,7 +186,10 @@ work extends shared components instead of creating new local variants.
    `handoffContext`, `handoffResources`, and `handoffActions` while preserving
    the safe visible briefing and scoped approval-required posture, so later
    turns rely on backend session hydration instead of resending stale browser
-   context.
+   context. The drawer must treat `handoff_summary.requires_approval` as a
+   current pending-decision flag, not a historical action marker, so completed
+   or rejected handoff actions render as action context rather than pending
+   approval.
 9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless

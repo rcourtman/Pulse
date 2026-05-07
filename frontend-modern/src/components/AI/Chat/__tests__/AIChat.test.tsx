@@ -700,6 +700,67 @@ describe('AIChat', () => {
       expect(restoredContext.handoffActions).toBeUndefined();
     });
 
+    it('shows completed Patrol actions as action context instead of pending approval', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 's-patrol-complete',
+          title: 'Completed remediation follow-up',
+          created_at: '',
+          updated_at: '',
+          message_count: 6,
+          handoff_summary: {
+            kind: 'patrol_finding',
+            finding_id: 'finding-complete',
+            has_model_context: true,
+            resource_count: 1,
+            primary_resource: {
+              id: 'host:web-server',
+              name: 'web-server',
+              type: 'host',
+              node: 'pve-1',
+            },
+            action_count: 1,
+            requires_approval: false,
+            last_known_approval_status: 'approved',
+            last_known_action_state: 'completed',
+            last_known_action_risk: 'medium',
+          },
+        },
+      ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+        expect(screen.getByText('Action context')).toBeInTheDocument();
+        expect(screen.getByText(/approval approved/)).toBeInTheDocument();
+        expect(screen.queryByText('Approval required')).not.toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('Completed remediation follow-up'));
+
+      await waitFor(() => {
+        expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
+          expect.objectContaining({
+            findingId: 'finding-complete',
+            autonomousMode: false,
+            context: expect.objectContaining({
+              requiresApproval: false,
+              lastKnownActionState: 'completed',
+            }),
+            briefing: expect.objectContaining({
+              actionLabel: 'Governed action context',
+              commandSummary: expect.stringContaining('action completed'),
+            }),
+          }),
+        );
+      });
+    });
+
     it('keeps restored Patrol handoffs approval-bound without queued actions', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
