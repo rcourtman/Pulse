@@ -292,6 +292,9 @@ runtime cost control, and shared AI transport surfaces.
     an operator decision surface, so it must not leave stale pending/approval
     labels in the drawer after the governed action moved on, and it must still
     omit raw commands, preflight bodies, and execution output.
+    The Assistant drawer must also fetch that current session list before
+    opening the session picker instead of presenting mount-time cached
+    summaries as the operator's decision surface.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.

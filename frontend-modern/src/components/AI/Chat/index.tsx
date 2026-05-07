@@ -910,6 +910,32 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setShowSessions(false);
   };
 
+  const handleToggleSessions = async () => {
+    const next = !showSessions();
+    if (!next) {
+      setShowSessions(false);
+      return;
+    }
+
+    if (sessionButtonRef) {
+      const rect = sessionButtonRef.getBoundingClientRect();
+      setSessionDropdownPosition({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
+    }
+
+    try {
+      await refreshSessions();
+    } catch (error) {
+      logger.error('[AIChat] Failed to refresh sessions before opening picker:', error);
+      notificationStore.error('Failed to refresh assistant sessions');
+      return;
+    }
+
+    setShowSessions(true);
+  };
+
   // Load session
   const handleLoadSession = async (sessionId: string) => {
     const session = sessions().find((candidate) => candidate.id === sessionId);
@@ -1146,15 +1172,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <button
                   ref={sessionButtonRef}
                   onClick={() => {
-                    const next = !showSessions();
-                    if (next && sessionButtonRef) {
-                      const rect = sessionButtonRef.getBoundingClientRect();
-                      setSessionDropdownPosition({
-                        top: rect.bottom + 4,
-                        right: window.innerWidth - rect.right,
-                      });
-                    }
-                    setShowSessions(next);
+                    void handleToggleSessions();
                   }}
                   class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
                   title={AI_CHAT_SESSION_MENU_TITLE}

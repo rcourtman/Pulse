@@ -557,16 +557,39 @@ describe('AIChat', () => {
       });
     });
 
-    it('opens session picker on click', () => {
+    it('opens session picker on click', async () => {
       renderChat();
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
-      expect(screen.getByText('New session')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('New session')).toBeInTheDocument();
+      });
     });
 
-    it('shows "No previous assistant sessions" when empty', () => {
+    it('shows "No previous assistant sessions" when empty', async () => {
       renderChat();
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
-      expect(screen.getByText('No previous assistant sessions')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('No previous assistant sessions')).toBeInTheDocument();
+      });
+    });
+
+    it('refreshes sessions before opening the picker', async () => {
+      mockAIChatAPI.listSessions
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: 's-fresh', title: 'Fresh session', created_at: '', updated_at: '', message_count: 1 },
+        ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledTimes(1);
+      });
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledTimes(2);
+        expect(screen.getByText('Fresh session')).toBeInTheDocument();
+      });
     });
 
     it('lists sessions in the dropdown', async () => {
@@ -579,10 +602,12 @@ describe('AIChat', () => {
         expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
       });
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
-      expect(screen.getByText('Session One')).toBeInTheDocument();
-      expect(screen.getByText('Session Two')).toBeInTheDocument();
-      expect(screen.getByText('5 messages')).toBeInTheDocument();
-      expect(screen.getByText('3 messages')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Session One')).toBeInTheDocument();
+        expect(screen.getByText('Session Two')).toBeInTheDocument();
+        expect(screen.getByText('5 messages')).toBeInTheDocument();
+        expect(screen.getByText('3 messages')).toBeInTheDocument();
+      });
     });
 
     it('loads a session when clicked in the dropdown', async () => {
@@ -594,6 +619,9 @@ describe('AIChat', () => {
         expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
       });
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      await waitFor(() => {
+        expect(screen.getByText('Session One')).toBeInTheDocument();
+      });
       fireEvent.click(screen.getByText('Session One'));
       expect(mockChat.loadSession).toHaveBeenCalledWith('s1');
     });
@@ -632,9 +660,11 @@ describe('AIChat', () => {
       });
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
 
-      expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
-      expect(screen.getByText('Approval required')).toBeInTheDocument();
-      expect(screen.getByText(/approval pending/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+        expect(screen.getByText('Approval required')).toBeInTheDocument();
+        expect(screen.getByText(/approval pending/)).toBeInTheDocument();
+      });
 
       fireEvent.click(screen.getByText('High CPU follow-up'));
 
@@ -696,8 +726,10 @@ describe('AIChat', () => {
       });
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
 
-      expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
-      expect(screen.getByText('Context attached')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+        expect(screen.getByText('Context attached')).toBeInTheDocument();
+      });
 
       fireEvent.click(screen.getByText('Context-only Patrol follow-up'));
 
@@ -750,6 +782,9 @@ describe('AIChat', () => {
         expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
       });
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      await waitFor(() => {
+        expect(screen.getByText('Session One')).toBeInTheDocument();
+      });
       fireEvent.click(screen.getByText('Session One'));
 
       await waitFor(() => {
@@ -1482,7 +1517,9 @@ describe('AIChat', () => {
           expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
         });
         fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
-        expect(screen.getByText('Session One')).toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.getByText('Session One')).toBeInTheDocument();
+        });
 
         // Find the delete button inside the session row
         const sessionRow = screen.getByText('Session One').closest('[class*="group"]')!;
