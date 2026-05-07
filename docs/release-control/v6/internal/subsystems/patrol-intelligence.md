@@ -495,6 +495,13 @@ ask for full verification before any all-clear claim, runtime impairment must
 point the operator back to restoring Patrol visibility, and verified healthy
 states should fall back to continued scheduled monitoring rather than
 inviting generic Assistant chat.
+When that recommendation has an immediate governed operator path, the same
+helper must also declare the bounded action kind. The summary card may map
+those action kinds only to existing Patrol controls: run a full Patrol,
+review approval-scoped findings, review active findings, open Patrol provider
+settings, or open the Patrol-owned Assistant assessment handoff. It must not
+invent page-local remediation, approval, or execution authority from
+recommendation text.
 That same runtime-owned assessment must expose the fix path directly. When the
 primary Patrol issue is a Patrol runtime/provider problem rather than an
 infrastructure finding, the summary card should offer a direct `Open Patrol

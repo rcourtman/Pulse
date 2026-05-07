@@ -46,9 +46,23 @@ export interface PatrolAssessmentAction {
   href: string;
 }
 
+export type PatrolRecommendedNextStepActionKind =
+  | 'discuss_assessment'
+  | 'open_provider_settings'
+  | 'review_approvals'
+  | 'review_findings'
+  | 'run_patrol';
+
+export interface PatrolRecommendedNextStepAction {
+  kind: PatrolRecommendedNextStepActionKind;
+  label: string;
+  href?: string;
+}
+
 export interface PatrolRecommendedNextStepPresentation {
   title: string;
   description: string;
+  action?: PatrolRecommendedNextStepAction;
   tone: SemanticTone;
 }
 
@@ -301,15 +315,25 @@ export function getPatrolRecommendedNextStepPresentation(args: {
           ? 'Review the pending Patrol approval'
           : 'Review pending Patrol approvals',
       description: `Patrol is waiting on ${formatPendingApprovalCount(pendingApprovalCount)}. Review risk, dry-run posture, and expiry before approving or starting another remediation.`,
+      action: {
+        kind: 'review_approvals',
+        label: 'Review approvals',
+      },
       tone: 'warning',
     };
   }
 
   if (classified.infrastructureTotal === 0 && classified.runtimeTotal > 0) {
+    const action = getPatrolProviderSettingsAction();
     return {
       title: 'Restore Patrol visibility',
       description:
         'Fix the Patrol runtime issue and rerun Patrol before treating the infrastructure assessment as current.',
+      action: {
+        kind: 'open_provider_settings',
+        label: action.label,
+        href: action.href,
+      },
       tone: args.assessment.tone,
     };
   }
@@ -319,6 +343,10 @@ export function getPatrolRecommendedNextStepPresentation(args: {
       title: 'Triage the critical finding',
       description:
         'Start with the highest-risk active finding, review the attached evidence and approval posture, then choose the safest governed action.',
+      action: {
+        kind: 'review_findings',
+        label: 'Review findings',
+      },
       tone: 'error',
     };
   }
@@ -328,6 +356,10 @@ export function getPatrolRecommendedNextStepPresentation(args: {
       title: 'Review active findings',
       description:
         'Use the findings workspace to prioritize current risk, recent changes, and any governed remediation before waiting for the next scheduled Patrol run.',
+      action: {
+        kind: 'review_findings',
+        label: 'Review findings',
+      },
       tone: 'warning',
     };
   }
@@ -336,6 +368,10 @@ export function getPatrolRecommendedNextStepPresentation(args: {
     return {
       title: 'Verify full coverage',
       description: VERIFY_FULL_COVERAGE_DESCRIPTION,
+      action: {
+        kind: 'run_patrol',
+        label: 'Run Patrol',
+      },
       tone: args.assessment.tone,
     };
   }
@@ -344,6 +380,10 @@ export function getPatrolRecommendedNextStepPresentation(args: {
     return {
       title: 'Verify full coverage',
       description: VERIFY_FULL_COVERAGE_DESCRIPTION,
+      action: {
+        kind: 'run_patrol',
+        label: 'Run Patrol',
+      },
       tone: args.verification.tone,
     };
   }
@@ -353,6 +393,10 @@ export function getPatrolRecommendedNextStepPresentation(args: {
       title: 'Review assessment evidence',
       description:
         'Review the supporting context or discuss the assessment with Assistant to understand why Patrol still marks it as needing attention.',
+      action: {
+        kind: 'discuss_assessment',
+        label: 'Discuss with Assistant',
+      },
       tone: args.assessment.tone,
     };
   }

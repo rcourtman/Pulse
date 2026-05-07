@@ -572,7 +572,10 @@ the canonical monitored-system blocked payload.
     step without adding another API field: the frontend summary contract derives
     the recommendation from existing overall-health, run-history, active
     finding, runtime, and pending-approval state, so the API remains the source
-    of facts while Patrol presentation owns the operator decision wording.
+    of facts while Patrol presentation owns the operator decision wording and
+    bounded action kind. Those action kinds map back to existing API-backed
+    Patrol controls and approval/finding filters; recommendation transport
+    must not become a new execution or approval API.
 17. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
 18. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
     That same shared auth boundary also owns hosted handoff authorization. `internal/api/cloud_handoff.go`,

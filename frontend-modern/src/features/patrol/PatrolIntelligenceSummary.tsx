@@ -5,8 +5,9 @@ import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
+import PlayIcon from 'lucide-solid/icons/play';
+import SettingsIcon from 'lucide-solid/icons/settings';
 import {
-  getPatrolAssessmentAction,
   getPatrolAssessmentShellPresentation,
   getPatrolAssessmentPresentation,
   getPatrolRecommendedNextStepPresentation,
@@ -15,6 +16,7 @@ import {
   getPatrolVerificationPresentation,
   getPatrolSummaryPresentation,
   getPatrolSummaryMetricState,
+  type PatrolRecommendedNextStepAction,
 } from '@/utils/patrolSummaryPresentation';
 import {
   getPatrolLatestRunPresentation,
@@ -165,11 +167,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       activeFindings: state.activePatrolFindings(),
     }),
   );
-  const assessmentAction = createMemo(() =>
-    getPatrolAssessmentAction({
-      activeFindings: state.activePatrolFindings(),
-    }),
-  );
   const recommendedNextStep = createMemo(() =>
     getPatrolRecommendedNextStepPresentation({
       assessment: assessment(),
@@ -177,6 +174,36 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       activeFindings: state.activePatrolFindings(),
       pendingApprovalCount: aiIntelligenceStore.patrolPendingApprovals.length,
     }),
+  );
+  const recommendedNextStepAction = createMemo(() => recommendedNextStep().action);
+  const recommendedNextStepActionDisabled = createMemo(() => {
+    const action = recommendedNextStepAction();
+    return (
+      action?.kind === 'run_patrol' &&
+      (state.isTriggeringPatrol() ||
+        !state.canTriggerPatrol() ||
+        state.manualRunRequested() ||
+        state.patrolStream.isStreaming())
+    );
+  });
+  const recommendedNextStepActionLabel = createMemo(() => {
+    const action = recommendedNextStepAction();
+    if (action?.kind !== 'run_patrol') {
+      return action?.label;
+    }
+
+    if (state.isTriggeringPatrol()) {
+      return 'Starting...';
+    }
+
+    if (state.manualRunRequested() || state.patrolStream.isStreaming()) {
+      return 'Running...';
+    }
+
+    return action.label;
+  });
+  const showAssessmentAssistantButton = createMemo(
+    () => recommendedNextStepAction()?.kind !== 'discuss_assessment',
   );
   const hasAttentionMetrics = createMemo(
     () => metricState().primaryValue > 0 || metricState().secondaryValue > 0,
@@ -280,6 +307,29 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
     await aiIntelligenceStore.loadPendingApprovals();
     const handoff = assessmentAssistantHandoff();
     aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+  };
+
+  const handleRecommendedNextStepAction = (action: PatrolRecommendedNextStepAction) => {
+    switch (action.kind) {
+      case 'discuss_assessment':
+        void handleDiscussAssessment();
+        return;
+      case 'review_approvals':
+        state.setSelectedRun(null);
+        state.setActiveTab('findings');
+        state.setFindingsFilterOverride('approvals');
+        return;
+      case 'review_findings':
+        state.setSelectedRun(null);
+        state.setActiveTab('findings');
+        state.setFindingsFilterOverride('active');
+        return;
+      case 'run_patrol':
+        void state.handleRunPatrol();
+        return;
+      case 'open_provider_settings':
+        return;
+    }
   };
 
   const renderAssessmentIcon = () => {
@@ -389,28 +439,62 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                       <p class="mt-1 max-w-3xl text-sm leading-6 text-muted">
                         {recommendedNextStep().description}
                       </p>
-                    </div>
-                    <div class="mt-4 flex flex-wrap items-center gap-2">
-                      <Show when={assessmentAction()}>
+                      <Show when={recommendedNextStepAction()}>
                         {(action) => (
-                          <a
-                            href={action().href}
-                            class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover"
-                          >
-                            {action().label}
-                          </a>
+                          <div class="mt-3">
+                            <Show
+                              when={action().href}
+                              fallback={
+                                <button
+                                  type="button"
+                                  data-testid="patrol-recommended-next-step-action"
+                                  disabled={recommendedNextStepActionDisabled()}
+                                  title={
+                                    action().kind === 'run_patrol'
+                                      ? state.triggerPatrolDisabledReason()
+                                      : undefined
+                                  }
+                                  class="inline-flex items-center gap-1.5 rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:border-border disabled:bg-surface-alt disabled:text-muted"
+                                  onClick={() => handleRecommendedNextStepAction(action())}
+                                >
+                                  {renderRecommendedNextStepActionIcon(
+                                    action(),
+                                    state.isTriggeringPatrol() ||
+                                      state.manualRunRequested() ||
+                                      state.patrolStream.isStreaming(),
+                                  )}
+                                  <span>{recommendedNextStepActionLabel()}</span>
+                                </button>
+                              }
+                            >
+                              {(href) => (
+                                <a
+                                  href={href()}
+                                  data-testid="patrol-recommended-next-step-action"
+                                  class="inline-flex items-center gap-1.5 rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+                                >
+                                  {renderRecommendedNextStepActionIcon(action(), false)}
+                                  <span>{action().label}</span>
+                                </a>
+                              )}
+                            </Show>
+                          </div>
                         )}
                       </Show>
-                      <button
-                        type="button"
-                        data-testid="patrol-assessment-assistant-button"
-                        class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                        title="Discuss current Patrol assessment"
-                        onClick={handleDiscussAssessment}
-                      >
-                        <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
-                        <span>Discuss with Assistant</span>
-                      </button>
+                    </div>
+                    <div class="mt-4 flex flex-wrap items-center gap-2">
+                      <Show when={showAssessmentAssistantButton()}>
+                        <button
+                          type="button"
+                          data-testid="patrol-assessment-assistant-button"
+                          class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                          title="Discuss current Patrol assessment"
+                          onClick={handleDiscussAssessment}
+                        >
+                          <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
+                          <span>Discuss with Assistant</span>
+                        </button>
+                      </Show>
                     </div>
                   </div>
                 </div>
@@ -566,5 +650,25 @@ function getPatrolRecommendedNextStepAccentClass(
       return 'border-red-400 dark:border-red-500';
     default:
       return 'border-blue-400 dark:border-blue-500';
+  }
+}
+
+function renderRecommendedNextStepActionIcon(
+  action: PatrolRecommendedNextStepAction,
+  running: boolean,
+) {
+  const iconClass = `h-4 w-4 ${running && action.kind === 'run_patrol' ? 'animate-pulse' : ''}`;
+
+  switch (action.kind) {
+    case 'open_provider_settings':
+      return <SettingsIcon class={iconClass} aria-hidden="true" />;
+    case 'run_patrol':
+      return <PlayIcon class={iconClass} aria-hidden="true" />;
+    case 'discuss_assessment':
+      return <MessageSquareIcon class={iconClass} aria-hidden="true" />;
+    case 'review_approvals':
+      return <CheckCircleIcon class={iconClass} aria-hidden="true" />;
+    case 'review_findings':
+      return <ActivityIcon class={iconClass} aria-hidden="true" />;
   }
 }

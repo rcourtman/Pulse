@@ -267,6 +267,10 @@ describe('getPatrolSummaryPresentation', () => {
       title: 'Review the pending Patrol approval',
       description:
         'Patrol is waiting on 1 governed Patrol approval. Review risk, dry-run posture, and expiry before approving or starting another remediation.',
+      action: {
+        kind: 'review_approvals',
+        label: 'Review approvals',
+      },
       tone: 'warning',
     });
   });
@@ -293,6 +297,49 @@ describe('getPatrolSummaryPresentation', () => {
       title: 'Verify full coverage',
       description:
         'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
+      action: {
+        kind: 'run_patrol',
+        label: 'Run Patrol',
+      },
+      tone: 'warning',
+    });
+  });
+
+  it('routes Patrol runtime recommendations to provider settings', () => {
+    expect(
+      getPatrolRecommendedNextStepPresentation({
+        assessment: {
+          title: 'Patrol runtime issue',
+          description: 'Patrol has an active runtime issue: Provider billing or quota issue.',
+          eyebrow: 'Patrol assessment',
+          compactLabel: 'Patrol runtime issue',
+          tone: 'warning',
+        },
+        verification: {
+          title: 'No recent full patrol',
+          description: 'Patrol has not completed a recent full verification run yet.',
+          compactLabel: 'Verification pending',
+          tone: 'info',
+        },
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Provider billing or quota issue',
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      title: 'Restore Patrol visibility',
+      description:
+        'Fix the Patrol runtime issue and rerun Patrol before treating the infrastructure assessment as current.',
+      action: {
+        kind: 'open_provider_settings',
+        label: 'Open Patrol provider settings',
+        href: '/settings/system-ai',
+      },
       tone: 'warning',
     });
   });

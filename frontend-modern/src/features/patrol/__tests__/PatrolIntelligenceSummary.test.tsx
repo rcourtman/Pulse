@@ -45,7 +45,8 @@ describe('PatrolIntelligenceSummary', () => {
       },
     ]);
 
-    render(() => <PatrolIntelligenceSummary state={createPatrolState()} />);
+    const patrolState = createPatrolState();
+    render(() => <PatrolIntelligenceSummary state={patrolState} />);
 
     expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
       'Review the pending Patrol approval',
@@ -53,6 +54,12 @@ describe('PatrolIntelligenceSummary', () => {
     expect(screen.getByTestId('patrol-recommended-next-step').textContent).toContain(
       'risk, dry-run posture, and expiry',
     );
+
+    fireEvent.click(screen.getByTestId('patrol-recommended-next-step-action'));
+
+    expect(patrolState.setSelectedRun).toHaveBeenCalledWith(null);
+    expect(patrolState.setActiveTab).toHaveBeenCalledWith('findings');
+    expect(patrolState.setFindingsFilterOverride).toHaveBeenCalledWith('approvals');
 
     fireEvent.click(screen.getByTestId('patrol-assessment-assistant-button'));
 
@@ -162,6 +169,7 @@ function createPatrolState(): PatrolIntelligenceState {
       },
     ],
     blockedReason: () => undefined,
+    canTriggerPatrol: () => true,
     circuitBreakerStatus: () => undefined,
     correlationTotal: () => 2,
     correlations: () => [
@@ -182,6 +190,7 @@ function createPatrolState(): PatrolIntelligenceState {
     ],
     hasInvestigationContext: () => true,
     initialSurfaceReady: () => true,
+    isTriggeringPatrol: () => false,
     intelligenceSummary: () => ({
       overall_health: {
         grade: 'B',
@@ -224,6 +233,8 @@ function createPatrolState(): PatrolIntelligenceState {
     }),
     investigationContextSummary: () =>
       '2 recent changes · 2 correlations · 4 policy-covered resources',
+    handleRunPatrol: vi.fn(),
+    manualRunRequested: () => false,
     patrolRunHistory: {
       value: () => [
         {
@@ -250,6 +261,12 @@ function createPatrolState(): PatrolIntelligenceState {
     }),
     recentChangeCount: () => 2,
     runtimeState: () => 'active',
+    patrolStream: {
+      isStreaming: () => false,
+    },
+    setActiveTab: vi.fn(),
+    setFindingsFilterOverride: vi.fn(),
+    setSelectedRun: vi.fn(),
     summaryStats: () => ({
       criticalFindings: 1,
       warningFindings: 0,
@@ -257,5 +274,6 @@ function createPatrolState(): PatrolIntelligenceState {
       fixedCount: 0,
       hasAnyPatrolFindings: true,
     }),
+    triggerPatrolDisabledReason: () => '',
   } as unknown as PatrolIntelligenceState;
 }

@@ -228,7 +228,10 @@ their governed presentation helpers and render them inside the shared neutral
 Pulse surface language rather than introducing page-local verdict bands or
 nested cards. Patrol's primary recommended next step follows this boundary:
 the Patrol helper owns the decision text, while the section component only
-renders a compact inline accent inside the existing assessment shell.
+renders a compact inline accent and one bounded action inside the existing
+assessment shell. Feature-owned recommendation actions may use the shared
+button/link shape, but they must not create a second full-width action band or
+nest another card inside the primary Pulse surface.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
    Framed product table surfaces must consume the shared `TableCard` frame and

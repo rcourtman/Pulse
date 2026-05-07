@@ -1104,6 +1104,9 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getAllByText('Coverage incomplete').length).toBeGreaterThan(0);
       expect(screen.getByText('Recommended next step')).toBeInTheDocument();
       expect(screen.getByText('Verify full coverage')).toBeInTheDocument();
+      expect(screen.getByTestId('patrol-recommended-next-step-action')).toHaveTextContent(
+        'Run Patrol',
+      );
       expect(screen.getByText('No recent full patrol')).toBeInTheDocument();
       expect(screen.getAllByText(/Last activity/i)).toHaveLength(1);
       expect(findingsPanelState.latestProps).not.toBeNull();
