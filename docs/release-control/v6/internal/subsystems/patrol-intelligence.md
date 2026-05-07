@@ -243,6 +243,16 @@ Patrol-specific presentation helpers.
    frame Assistant as explanation, prioritization, and safe next-step review
    rather than a generic reactive chat
    box.
+   Patrol run-history entries may also open Assistant for a selected run, but
+   that handoff must flow through the same Patrol-owned investigation-context
+   model rather than a row-local prompt. The handoff may pass bounded run
+   history facts such as run ID/type/status, trigger, timing, coverage, scope,
+   findings snapshot availability, outcome counts, tool/triage effort,
+   `error_summary`, `error_detail`, sanitized Patrol analysis, and scoped
+   resource references as model-only context. It must force request-local
+   approval-required mode, present a source-named visible drawer briefing, and
+   frame Assistant as explanation and next-step review rather than execution or
+   automatic retry authority.
 
 ## Current State
 
@@ -306,6 +316,15 @@ references from a generic assessment discussion, including approval-policy and
 dry-run posture when available, and its initial prompt must prioritize those
 approvals or action references before broader assessment discussion while
 command payloads stay out of the drawer.
+Run-history rows now follow that same Assistant handoff model. A selected
+`frontend-modern/src/components/patrol/RunHistoryEntry.tsx` row may open
+Assistant through
+`frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` with a
+`[Patrol Run Context]` block, scoped resource references, runtime failure
+summary/detail when present, bounded outcome and coverage facts, and a visible
+`Patrol run attached` drawer briefing. The row must not create a second
+prompt-only Assistant shortcut or imply that Assistant can retry Patrol,
+change provider configuration, or execute remediation from run-history context.
 That active-runtime label must stay operational rather than verdict-like: the
 header chip should communicate that Patrol is enabled or available, not imply
 that infrastructure health is currently good merely because the runtime is on.

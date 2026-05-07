@@ -831,7 +831,13 @@ frontend primitive boundary.
     that same feature helper to attach bounded model-only assessment,
     verification, latest-run, supporting-context evidence, active-finding, and
     resource reference context while forcing request-local approval-required
-    mode. Active-finding entries in that assessment handoff may add live pending
+    mode. Patrol run-history handoffs must also use that feature helper rather
+    than a row-local Assistant prompt, so the shared drawer receives only a
+    generic visible briefing plus bounded model-only run context, scoped
+    resource references, runtime failure summary/detail, and
+    `autonomousMode:false` while the Patrol feature remains the source of run
+    copy and retry/configuration guidance. Active-finding entries in that
+    assessment handoff may add live pending
     approval posture only as safe structured metadata: approval ID, pending
     status, risk, target, requested/expiry timestamps, action plan identity,
     approval policy, plan expiry, dry-run posture, and command count. Those

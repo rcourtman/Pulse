@@ -931,6 +931,12 @@ the canonical monitored-system blocked payload.
    `error_summary` and `error_detail` whenever an erroring run has structured
    provider, model, tool, context-window, quota, auth, rate-limit, or
    connectivity failure context
+   and the Patrol run-history Assistant handoff contract, so frontend
+   run-history consumers may pass a bounded `[Patrol Run Context]` block,
+   scoped resource references, run outcome/coverage facts, sanitized analysis,
+   and structured runtime failure summary/detail as model-only chat context
+   while forcing request-local approval-required mode and leaving retries,
+   configuration changes, and remediation authority outside the chat payload
    and the main Patrol page composition boundary, so once that governed
    secondary area exists inside the summary shell the same payloads must not
    also drive a second page-level status strip elsewhere on the route

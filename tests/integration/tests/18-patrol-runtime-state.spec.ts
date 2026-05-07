@@ -633,9 +633,9 @@ test.describe("Patrol runtime-state browser contract", () => {
     await applyButton.click();
 
     await expect(page.getByText(PATROL_AUTONOMY_PRO_REQUIRED)).toBeVisible();
-    await expect(page.getByText("Failed to save advanced settings")).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByText("Failed to save advanced settings"),
+    ).toHaveCount(0);
   });
 
   test("surfaces scoped trigger context inside the summary and split trigger controls on the Patrol page", async ({
@@ -682,5 +682,16 @@ test.describe("Patrol runtime-state browser contract", () => {
       page.getByText("Selected model does not support Patrol tools"),
     ).toBeVisible();
     await expect(page.getByText(/tool_choice/)).toBeVisible();
+
+    await page.getByTestId("patrol-run-assistant-button").click();
+    const assistantContext = page.getByLabel("Assistant context");
+    await expect(assistantContext).toBeVisible();
+    await expect(assistantContext).toContainText("Patrol run attached");
+    await expect(assistantContext).toContainText(
+      "Review Patrol runtime failure",
+    );
+    await expect(assistantContext).toContainText(
+      "Selected model does not support Patrol tools",
+    );
   });
 });

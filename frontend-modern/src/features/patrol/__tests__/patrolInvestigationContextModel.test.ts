@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RemediationPlan } from '@/api/ai';
+import type { PatrolRunRecord } from '@/api/patrol';
 
 import {
   buildPatrolAssessmentAssistantHandoff,
@@ -9,6 +10,7 @@ import {
   buildPatrolAssistantFindingPrompt,
   buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolInvestigationContextSummary,
+  buildPatrolRunAssistantHandoff,
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantPrompt,
@@ -362,6 +364,83 @@ describe('patrolInvestigationContextModel', () => {
       'Review pending approvals and safest next step',
     );
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
+  });
+
+  it('builds a model-only Assistant handoff for a Patrol run runtime failure', () => {
+    const run: PatrolRunRecord = {
+      id: 'run-runtime-error',
+      started_at: '2026-05-07T12:00:00Z',
+      completed_at: '2026-05-07T12:00:03Z',
+      duration_ms: 3000,
+      type: 'scoped',
+      trigger_reason: 'alert_fired',
+      scope_resource_ids: ['vm-100'],
+      effective_scope_resource_ids: ['vm-100'],
+      scope_resource_types: ['vm'],
+      resources_checked: 1,
+      nodes_checked: 0,
+      guests_checked: 1,
+      docker_checked: 0,
+      storage_checked: 0,
+      hosts_checked: 0,
+      truenas_checked: 0,
+      pbs_checked: 0,
+      pmg_checked: 0,
+      kubernetes_checked: 0,
+      new_findings: 0,
+      existing_findings: 0,
+      rejected_findings: 0,
+      resolved_findings: 0,
+      auto_fix_count: 0,
+      findings_summary: 'Runtime failure prevented analysis.',
+      finding_ids: [],
+      error_count: 1,
+      error_summary: 'Selected model does not support Patrol tools',
+      error_detail:
+        "agentic patrol failed: API error (404): No endpoints found that support the provided 'tool_choice' value.",
+      status: 'error',
+      triage_flags: 0,
+      triage_skipped_llm: false,
+      tool_call_count: 1,
+      ai_analysis: '<｜DSML｜trace>provider trace</｜DSML｜trace>Visible runtime summary.',
+    };
+
+    const handoff = buildPatrolRunAssistantHandoff(run);
+
+    expect(handoff.prompt).toContain('Discuss this Pulse Patrol run');
+    expect(handoff.prompt).toContain('Start by explaining the Patrol runtime failure');
+    expect(handoff.context.autonomousMode).toBe(false);
+    expect(handoff.context).toMatchObject({
+      targetType: 'patrol-run',
+      targetId: 'run-runtime-error',
+      context: {
+        source: 'pulse-patrol-run',
+        runId: 'run-runtime-error',
+        effectiveStatus: 'error',
+        errorCount: 1,
+        resourcesChecked: 1,
+        findingSnapshotCount: 0,
+        handoffResourceCount: 1,
+      },
+    });
+    expect(handoff.context.handoffResources).toEqual([{ id: 'vm-100', type: 'vm' }]);
+    expect(handoff.context.handoffContext).toContain('[Patrol Run Context]');
+    expect(handoff.context.handoffContext).toContain('Source: Pulse Patrol run history');
+    expect(handoff.context.handoffContext).toContain('Run Type: Scoped run');
+    expect(handoff.context.handoffContext).toContain('Runtime Failure: Selected model');
+    expect(handoff.context.handoffContext).toContain('tool_choice');
+    expect(handoff.context.handoffContext).toContain('Patrol Analysis: Visible runtime summary.');
+    expect(handoff.context.briefing).toMatchObject({
+      sourceLabel: 'Pulse Patrol',
+      title: 'Patrol run attached',
+      actionLabel: 'Review Patrol runtime failure',
+      suggestedPrompts: [
+        'Explain why this Patrol run failed',
+        'List provider or model checks',
+        'What should I retry after fixing it?',
+      ],
+    });
+    expect(JSON.stringify(handoff)).not.toContain('provider trace');
   });
 
   it('builds operator-facing Patrol record presentation without exposing raw commands', () => {

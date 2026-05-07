@@ -1,12 +1,13 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { RunHistoryEntry } from '../RunHistoryEntry';
 
-const { findingsPanelState } = vi.hoisted(() => ({
+const { findingsPanelState, openWithPromptMock } = vi.hoisted(() => ({
   findingsPanelState: {
     latestProps: null as Record<string, unknown> | null,
   },
+  openWithPromptMock: vi.fn(),
 }));
 
 vi.mock('@/components/AI/FindingsPanel', () => ({
@@ -36,6 +37,12 @@ vi.mock('../RunToolCallTrace', () => ({
 
 vi.mock('@/components/AI/aiChatUtils', () => ({
   renderMarkdown: (content: string) => content,
+}));
+
+vi.mock('@/stores/aiChat', () => ({
+  aiChatStore: {
+    openWithPrompt: openWithPromptMock,
+  },
 }));
 
 describe('RunHistoryEntry', () => {
@@ -88,6 +95,7 @@ describe('RunHistoryEntry', () => {
 
   beforeEach(() => {
     findingsPanelState.latestProps = null;
+    openWithPromptMock.mockReset();
   });
 
   afterEach(() => {
@@ -184,13 +192,13 @@ describe('RunHistoryEntry', () => {
     expect(screen.queryByText('• 1 resources')).not.toBeInTheDocument();
     expect(screen.queryByText('Scoped to 2 resources')).not.toBeInTheDocument();
     expect(
-      screen.getByText((_, element) =>
-        element?.tagName === 'P' &&
-        (element.textContent?.includes('Checked 1 of 2 scoped resources') ??
-          false) &&
-        (element.textContent?.includes('453ms') ?? false) &&
-        (element.textContent?.includes('Patrol completed with issues requiring review.') ??
-          false),
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          (element.textContent?.includes('Checked 1 of 2 scoped resources') ?? false) &&
+          (element.textContent?.includes('453ms') ?? false) &&
+          (element.textContent?.includes('Patrol completed with issues requiring review.') ??
+            false),
       ),
     ).toBeInTheDocument();
   });
@@ -219,6 +227,57 @@ describe('RunHistoryEntry', () => {
     expect(screen.getByText('error')).toBeInTheDocument();
   });
 
+  it('opens Assistant with structured run history context', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-runtime-error',
+          effective_scope_resource_ids: ['vm-100'],
+          scope_resource_types: ['vm'],
+          resources_checked: 1,
+          guests_checked: 1,
+          error_count: 1,
+          status: 'error',
+          tool_call_count: 1,
+          error_summary: 'Selected model does not support Patrol tools',
+          error_detail:
+            "agentic patrol failed: API error (404): No endpoints found that support the provided 'tool_choice' value.",
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /discuss/i }));
+
+    expect(openWithPromptMock).toHaveBeenCalledTimes(1);
+    const [prompt, context] = openWithPromptMock.mock.calls[0];
+    expect(prompt).toContain('Discuss this Pulse Patrol run');
+    expect(prompt).toContain('Start by explaining the Patrol runtime failure');
+    expect(context).toMatchObject({
+      targetType: 'patrol-run',
+      targetId: 'run-runtime-error',
+      autonomousMode: false,
+      handoffResources: [{ id: 'vm-100', type: 'vm' }],
+      context: {
+        source: 'pulse-patrol-run',
+        runId: 'run-runtime-error',
+        errorCount: 1,
+        handoffResourceCount: 1,
+      },
+    });
+    expect(context.handoffContext).toContain('[Patrol Run Context]');
+    expect(context.handoffContext).toContain('Runtime Failure: Selected model');
+    expect(context.handoffContext).toContain('tool_choice');
+    expect(context.briefing).toMatchObject({
+      title: 'Patrol run attached',
+      actionLabel: 'Review Patrol runtime failure',
+    });
+  });
+
   it('keeps zero-coverage scoped runs on the shared coverage narrative', () => {
     render(() => (
       <RunHistoryEntry
@@ -241,12 +300,13 @@ describe('RunHistoryEntry', () => {
     expect(screen.getByText('• Checked 0 of 2 scoped resources')).toBeInTheDocument();
     expect(screen.queryByText('Scoped to 2 resources')).not.toBeInTheDocument();
     expect(
-      screen.getByText((_, element) =>
-        element?.tagName === 'P' &&
-        (element.textContent?.includes('Checked 0 of 2 scoped resources') ?? false) &&
-        (element.textContent?.includes('453ms') ?? false) &&
-        (element.textContent?.includes('Patrol completed with issues requiring review.') ??
-          false),
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          (element.textContent?.includes('Checked 0 of 2 scoped resources') ?? false) &&
+          (element.textContent?.includes('453ms') ?? false) &&
+          (element.textContent?.includes('Patrol completed with issues requiring review.') ??
+            false),
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/^Patrol completed in 453ms/)).not.toBeInTheDocument();
@@ -270,9 +330,10 @@ describe('RunHistoryEntry', () => {
     ));
 
     expect(
-      screen.getByText((_, element) =>
-        element?.tagName === 'P' &&
-        (element.textContent?.includes('No new issues, but 2 existing issues remain.') ?? false),
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          (element.textContent?.includes('No new issues, but 2 existing issues remain.') ?? false),
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('All clear — no new issues.')).not.toBeInTheDocument();

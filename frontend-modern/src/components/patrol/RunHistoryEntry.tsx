@@ -3,6 +3,8 @@ import type { Accessor } from 'solid-js';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
+import { buildPatrolRunAssistantHandoff } from '@/features/patrol/patrolInvestigationContextModel';
+import { aiChatStore } from '@/stores/aiChat';
 import { RunToolCallTrace } from './RunToolCallTrace';
 import {
   formatDurationMs,
@@ -38,6 +40,7 @@ import FilterXIcon from 'lucide-solid/icons/filter-x';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import MailIcon from 'lucide-solid/icons/mail';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import MessageSquareIcon from 'lucide-solid/icons/message-square';
 
 interface PatrolStreamState {
   phase: Accessor<string>;
@@ -152,10 +155,19 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const runIsHealthy = isPatrolRunHealthy(run.status, run.error_count);
   const coverageSummary = getPatrolRunCoverageSummary(run);
   const hasFindingsSnapshot = run.finding_ids !== undefined;
-  const runStatus = getPatrolRunStatusPresentation(run.status, run.error_count, hasFindingsSnapshot);
+  const runStatus = getPatrolRunStatusPresentation(
+    run.status,
+    run.error_count,
+    hasFindingsSnapshot,
+  );
   const runErrorSummary = String(run.error_summary || '').trim();
   const runErrorDetail = String(run.error_detail || '').trim();
   const hasRunErrorDetail = run.error_count > 0 && (runErrorSummary || runErrorDetail);
+  const handleDiscussRun = (event: Event) => {
+    event.stopPropagation();
+    const handoff = buildPatrolRunAssistantHandoff(run);
+    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+  };
 
   return (
     <div
@@ -191,7 +203,9 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <Show when={run.rejected_findings}>
             <span class="text-muted">• {run.rejected_findings} rejected</span>
           </Show>
-          <Show when={!hasFindingsSnapshot && run.new_findings === 0 && run.existing_findings === 0}>
+          <Show
+            when={!hasFindingsSnapshot && run.new_findings === 0 && run.existing_findings === 0}
+          >
             <span class="text-blue-600 dark:text-blue-400">• Findings snapshot unavailable</span>
           </Show>
         </div>
@@ -201,74 +215,86 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
       <Show when={props.selected}>
         <div class="px-3 pb-3 border-t border-blue-200 dark:border-blue-800 mt-0">
           {/* Section 1: Narrative Summary */}
-          <div class="mt-3 flex items-start gap-2 text-sm text-base-content">
-            <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-            <p>
-              {coverageSummary ? (
-                <>
-                  {coverageSummary}{' '}
-                  {formatDurationMs(run.duration_ms) ? (
-                    <>
-                      in <strong>{formatDurationMs(run.duration_ms)}</strong>
-                    </>
-                  ) : (
-                    ''
-                  )}{' '}
-                  {run.tool_call_count > 0 ? (
-                    <>
-                      using <strong>{run.tool_call_count}</strong> tool call
-                      {run.tool_call_count !== 1 ? 's' : ''}
-                    </>
-                  ) : (
-                    ''
-                  )}
-                  .{' '}
-                </>
-              ) : (
-                <>
-                  Patrol completed
-                  {formatDurationMs(run.duration_ms) ? (
-                    <>
-                      {' '}
-                      in <strong>{formatDurationMs(run.duration_ms)}</strong>
-                    </>
-                  ) : (
-                    ''
-                  )}
-                  .{' '}
-                </>
-              )}
-              {run.new_findings > 0 ? (
-                <>
-                  Found <strong>{run.new_findings}</strong> new issue
-                  {run.new_findings !== 1 ? 's' : ''}
-                  {run.auto_fix_count > 0 ? (
-                    <>
-                      , remediated <strong>{run.auto_fix_count}</strong>
-                    </>
-                  ) : (
-                    ''
-                  )}
-                  .
-                </>
-              ) : run.existing_findings > 0 ? (
-                <>
-                  No new issues, but <strong>{run.existing_findings}</strong> existing issue
-                  {run.existing_findings !== 1 ? 's' : ''} remain.
-                </>
-              ) : !hasFindingsSnapshot ? (
-                <span class="text-blue-600 dark:text-blue-400">
-                  This run predates findings snapshots, so run-specific findings cannot be fully
-                  verified.
-                </span>
-              ) : runIsHealthy ? (
-                <span class="text-green-600 dark:text-green-400">All clear — no new issues.</span>
-              ) : (
-                <span class="text-amber-600 dark:text-amber-400">
-                  Patrol completed with issues requiring review.
-                </span>
-              )}
-            </p>
+          <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
+            <div class="flex min-w-0 flex-1 items-start gap-2 text-sm text-base-content">
+              <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <p>
+                {coverageSummary ? (
+                  <>
+                    {coverageSummary}{' '}
+                    {formatDurationMs(run.duration_ms) ? (
+                      <>
+                        in <strong>{formatDurationMs(run.duration_ms)}</strong>
+                      </>
+                    ) : (
+                      ''
+                    )}{' '}
+                    {run.tool_call_count > 0 ? (
+                      <>
+                        using <strong>{run.tool_call_count}</strong> tool call
+                        {run.tool_call_count !== 1 ? 's' : ''}
+                      </>
+                    ) : (
+                      ''
+                    )}
+                    .{' '}
+                  </>
+                ) : (
+                  <>
+                    Patrol completed
+                    {formatDurationMs(run.duration_ms) ? (
+                      <>
+                        {' '}
+                        in <strong>{formatDurationMs(run.duration_ms)}</strong>
+                      </>
+                    ) : (
+                      ''
+                    )}
+                    .{' '}
+                  </>
+                )}
+                {run.new_findings > 0 ? (
+                  <>
+                    Found <strong>{run.new_findings}</strong> new issue
+                    {run.new_findings !== 1 ? 's' : ''}
+                    {run.auto_fix_count > 0 ? (
+                      <>
+                        , remediated <strong>{run.auto_fix_count}</strong>
+                      </>
+                    ) : (
+                      ''
+                    )}
+                    .
+                  </>
+                ) : run.existing_findings > 0 ? (
+                  <>
+                    No new issues, but <strong>{run.existing_findings}</strong> existing issue
+                    {run.existing_findings !== 1 ? 's' : ''} remain.
+                  </>
+                ) : !hasFindingsSnapshot ? (
+                  <span class="text-blue-600 dark:text-blue-400">
+                    This run predates findings snapshots, so run-specific findings cannot be fully
+                    verified.
+                  </span>
+                ) : runIsHealthy ? (
+                  <span class="text-green-600 dark:text-green-400">All clear — no new issues.</span>
+                ) : (
+                  <span class="text-amber-600 dark:text-amber-400">
+                    Patrol completed with issues requiring review.
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              data-testid="patrol-run-assistant-button"
+              onClick={handleDiscussRun}
+              class="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              title="Discuss this Patrol run with Assistant"
+            >
+              <MessageSquareIcon class="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Discuss</span>
+            </button>
           </div>
 
           <Show when={hasRunErrorDetail}>
