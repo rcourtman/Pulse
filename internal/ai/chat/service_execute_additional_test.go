@@ -205,7 +205,7 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 }
 
-func TestService_ExecuteStream_RequestAutonomousOverrideUpdatesToolExecutor(t *testing.T) {
+func TestService_ExecuteStream_RequestAutonomousOverrideClampsToolExecutor(t *testing.T) {
 	installTestApprovalStore(t, nil)
 
 	tmpDir := t.TempDir()
@@ -230,17 +230,17 @@ func TestService_ExecuteStream_RequestAutonomousOverrideUpdatesToolExecutor(t *t
 			if providerCallCount == 1 {
 				callback(providers.StreamEvent{
 					Type: "tool_start",
-					Data: providers.ToolStartEvent{ID: "call-restart", Name: "pulse_control"},
+					Data: providers.ToolStartEvent{ID: "call-df", Name: "pulse_control"},
 				})
 				callback(providers.StreamEvent{
 					Type: "done",
 					Data: providers.DoneEvent{
 						ToolCalls: []providers.ToolCall{{
-							ID:   "call-restart",
+							ID:   "call-df",
 							Name: "pulse_control",
 							Input: map[string]interface{}{
 								"type":    "command",
-								"command": "systemctl restart nginx",
+								"command": "df -h",
 							},
 						}},
 					},
@@ -278,7 +278,7 @@ func TestService_ExecuteStream_RequestAutonomousOverrideUpdatesToolExecutor(t *t
 	approvalSeen := false
 	err = svc.ExecuteStream(ctx, ExecuteRequest{
 		SessionID:      "sess-request-override",
-		Prompt:         "restart nginx",
+		Prompt:         "check disk space",
 		AutonomousMode: &approvalRequiredMode,
 		MaxTurns:       2,
 	}, func(event StreamEvent) {

@@ -179,6 +179,16 @@ func resolveEffectiveControlLevel(
 	return tools.ControlLevel(cfg.GetControlLevel())
 }
 
+func controlLevelForRequestAutonomousMode(level tools.ControlLevel, requested *bool) tools.ControlLevel {
+	if requested == nil || *requested {
+		return level
+	}
+	if level == tools.ControlLevelAutonomous {
+		return tools.ControlLevelControlled
+	}
+	return level
+}
+
 func (s *Service) effectiveControlLevelLocked() tools.ControlLevel {
 	return resolveEffectiveControlLevel(s.controlLevelResolver, s.cfg)
 }
@@ -568,7 +578,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if req.AutonomousMode != nil {
 		autonomousMode = *req.AutonomousMode
 	}
+	effectiveControlLevel = controlLevelForRequestAutonomousMode(effectiveControlLevel, req.AutonomousMode)
 	if executor != nil {
+		executor.SetControlLevel(effectiveControlLevel)
 		executor.SetAutonomousMode(autonomousMode)
 	}
 	selectedModel = configuredModel

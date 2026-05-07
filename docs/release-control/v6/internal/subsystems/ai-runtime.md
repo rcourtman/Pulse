@@ -274,7 +274,11 @@ runtime cost control, and shared AI transport surfaces.
     The chat runtime must apply any request-local autonomous-mode override to
     both the per-request `AgenticLoop` and the cloned `PulseToolExecutor`;
     persistent autonomous settings must not leak into scoped approval-required
-    handoffs through executor state.
+    handoffs through executor state. When such an override forces approval mode
+    and the saved control level is autonomous, the executor clone must clamp its
+    effective control level to controlled for that request only, so even
+    policy-allowed diagnostic commands require operator approval in scoped
+    handoffs without mutating the user's saved setting.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not
     mutate chat control settings, execute tools, or reveal raw command payloads.

@@ -54,6 +54,21 @@ func TestServiceEffectiveControlLevelUsesResolver(t *testing.T) {
 	}
 }
 
+func TestControlLevelForRequestAutonomousModeClampsAutonomousToControlled(t *testing.T) {
+	requestApprovalMode := false
+	if got := controlLevelForRequestAutonomousMode(tools.ControlLevelAutonomous, &requestApprovalMode); got != tools.ControlLevelControlled {
+		t.Fatalf("expected request approval mode to clamp autonomous control level to %q, got %q", tools.ControlLevelControlled, got)
+	}
+	if got := controlLevelForRequestAutonomousMode(tools.ControlLevelReadOnly, &requestApprovalMode); got != tools.ControlLevelReadOnly {
+		t.Fatalf("expected request approval mode not to upgrade read-only level, got %q", got)
+	}
+
+	requestAutonomousMode := true
+	if got := controlLevelForRequestAutonomousMode(tools.ControlLevelControlled, &requestAutonomousMode); got != tools.ControlLevelControlled {
+		t.Fatalf("expected request autonomous mode not to upgrade controlled entitlement, got %q", got)
+	}
+}
+
 func TestServiceUpdateControlSettingsRefreshesEffectiveConfig(t *testing.T) {
 	service := NewService(Config{
 		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly},
