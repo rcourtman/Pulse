@@ -1078,9 +1078,11 @@ contract from chat or alert investigation ingress.
 Assistant operator-decision and action-posture briefing text assembled from
 recovered Patrol handoff action references is also AI/runtime review context
 only. Storage and recovery may consume that explanation as incident context,
-but they must not reinterpret a recovered approval or clearer proposed-fix
-posture as backup freshness, restore authority, recovery proof, or
-storage-local remediation execution state.
+including safe approval status, request/expiry timestamps, action plan identity,
+approval policy, plan expiry, and dry-run posture, but they must not reinterpret
+a recovered approval or clearer proposed-fix posture as backup freshness,
+restore authority, recovery proof, or storage-local remediation execution
+state.
 That same storage ownership also includes the shared storage-source presentation
 contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and

@@ -321,8 +321,9 @@ the canonical monitored-system blocked payload.
     references may use the current live Patrol investigation-fix approval for
     the finding when that approval is newer than the approval ID on the durable
     record, but the payload may carry only IDs, status/risk/target metadata,
-    safe generated approval summaries, command counts, and fix/action
-    references, never the approval command payload. Patrol
+    request/expiry timestamps, action plan identity and expiry, safe generated
+    approval summaries, command counts, and fix/action references, never the
+    approval command payload. Patrol
     remediation-plan handoffs must use the same boundary for frontend-authored
     prompts: plan status, risk, step labels, and command counts are allowed,
     while raw command and rollback command payloads remain in governed action
@@ -887,12 +888,14 @@ the canonical monitored-system blocked payload.
    context payloads. Chat execution may refresh approval status snapshots for
    those references from the canonical approval store, but that snapshot is
    read-only, org-scoped, and must not expose or infer the raw command. When the
-   API handoff builder recovers a live approval, the model-only operator
-   briefing must use that recovered action reference for operator-decision and
+   API handoff builder recovers a live approval, the first model-only operator
+   briefing and structured handoff action must use that recovered approval's
+   safe lifecycle metadata, request/expiry timestamps, action plan identity,
+   approval policy, plan expiry, and dry-run posture for operator-decision and
    action-posture text instead of falling back to stale investigation-record
    approval posture. When the reference resolves to a governed action plan or
-   action audit, chat execution must hydrate the canonical action ID, lifecycle state,
-   requester, capability, approval policy, plan expiry, preflight/dry-run
+   action audit, chat execution must hydrate the canonical action ID, lifecycle
+   state, requester, capability, approval policy, plan expiry, preflight/dry-run
    summary, and terminal success/failure state from the action-audit store so
    API consumers do not mistake the original approval snapshot for current
    action truth. That action-audit snapshot remains model-only review context

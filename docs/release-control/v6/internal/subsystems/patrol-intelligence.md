@@ -104,10 +104,11 @@ Patrol-specific presentation helpers.
    including the rule that proposed-fix commands are summarized by count only
    and never rendered as raw command text in the handoff surface. When Patrol
    hands a pending fix or approval into Assistant, the shared handoff may retain
-   only structured action references such as approval ID, fix ID, risk, target,
-   and resource identity; approval and execution authority stays with the
-   governed approval/remediation surfaces. Assistant may refresh the referenced
-   approval's current status for review, and the backend handoff builder may
+   only structured action references such as approval ID, status, request/expiry
+   timestamps, action plan identity, fix ID, risk, target, and resource
+   identity; approval and execution authority stays with the governed
+   approval/remediation surfaces. Assistant may refresh the referenced
+   approval's current status for review, and the backend handoff builder must
    recover a live pending Patrol investigation-fix approval by finding ID when
    the durable record lacks the current approval reference, but Patrol
    presentation must still keep command payloads inside governed

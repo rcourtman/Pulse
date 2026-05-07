@@ -103,6 +103,69 @@ func testHandoffActionPlan(now time.Time) unifiedresources.ActionPlan {
 	}
 }
 
+func TestHydrateHandoffActionFromApprovalCopiesSafeLifecycleMetadata(t *testing.T) {
+	requestedAt := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	expiresAt := requestedAt.Add(10 * time.Minute)
+	decidedAt := requestedAt.Add(2 * time.Minute)
+	planExpiresAt := requestedAt.Add(5 * time.Minute)
+
+	action := HandoffAction{FindingID: "finding-123"}
+	HydrateHandoffActionFromApproval(&action, &approval.ApprovalRequest{
+		ID:          "approval-123",
+		Command:     "systemctl restart workload.service",
+		TargetType:  "vm",
+		TargetID:    "vm-100",
+		TargetName:  "web-server",
+		RiskLevel:   approval.RiskHigh,
+		Status:      approval.StatusApproved,
+		RequestedAt: requestedAt,
+		ExpiresAt:   expiresAt,
+		DecidedAt:   &decidedAt,
+		Consumed:    true,
+		Plan: &unifiedresources.ActionPlan{
+			ActionID:         "action-123",
+			RequiresApproval: true,
+			ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+			Message:          "Restart after the backup window clears.",
+			ExpiresAt:        planExpiresAt,
+			Preflight: &unifiedresources.ActionPreflight{
+				IntendedChange: "Restart workload service",
+				DryRunSummary:  "No provider-supported dry run is available for this action.",
+			},
+		},
+	})
+
+	if action.ApprovalID != "approval-123" || action.ApprovalStatus != "approved" || !action.ApprovalConsumed {
+		t.Fatalf("approval lifecycle was not hydrated: %#v", action)
+	}
+	if action.ApprovalRequestedAt != requestedAt.Format(time.RFC3339) ||
+		action.ApprovalExpiresAt != expiresAt.Format(time.RFC3339) ||
+		action.ApprovalDecidedAt != decidedAt.Format(time.RFC3339) {
+		t.Fatalf("approval timestamps were not hydrated: %#v", action)
+	}
+	if action.ActionID != "action-123" ||
+		action.ActionApprovalPolicy != "admin" ||
+		!action.ActionRequiresApproval ||
+		action.ActionPlanExpiresAt != planExpiresAt.Format(time.RFC3339) {
+		t.Fatalf("action plan metadata was not hydrated: %#v", action)
+	}
+	if action.RiskLevel != "high" ||
+		action.TargetResourceID != "vm-100" ||
+		action.TargetResourceName != "web-server" ||
+		action.TargetResourceType != "vm" {
+		t.Fatalf("approval target metadata was not hydrated: %#v", action)
+	}
+	safeContext := strings.Join([]string{
+		action.ActionPlanMessage,
+		action.ActionPreflight,
+		action.ActionDryRunSummary,
+		action.Description,
+	}, " ")
+	if strings.Contains(safeContext, "systemctl restart workload.service") {
+		t.Fatalf("approval command leaked into handoff action: %#v", action)
+	}
+}
+
 func seedHandoffActionAudit(t *testing.T, store unifiedresources.ResourceStore, plan unifiedresources.ActionPlan, state unifiedresources.ActionState, result *unifiedresources.ExecutionResult) {
 	t.Helper()
 	if store == nil {

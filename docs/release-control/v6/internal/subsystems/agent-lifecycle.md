@@ -1010,7 +1010,11 @@ Assistant finding handoffs may include a model-only operator briefing from
 Patrol's unified finding and structured investigation record. Lifecycle-adjacent
 setup, install, and fleet surfaces may treat that briefing as adjacent
 AI/runtime guidance only; it must not become agent readiness, install status,
-or lifecycle execution authority.
+or lifecycle execution authority. When that briefing includes recovered
+approval lifecycle metadata, action plan identity, approval policy, or dry-run
+posture, those fields remain Assistant review context and must not be treated
+as an agent command grant, enrollment state, update readiness, or fleet-control
+decision.
 That same shared dependency now also assumes hosted cloud handoff authorizes
 tenant org access before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,

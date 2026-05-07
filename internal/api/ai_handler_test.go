@@ -877,7 +877,8 @@ func TestHandleChat_RecoversLivePatrolApprovalForFindingHandoffAction(t *testing
 		approval.SetStore(prevStore)
 	})
 
-	assert.NoError(t, approvalStore.CreateApproval(&approval.ApprovalRequest{
+	planExpiresAt := time.Date(2026, 5, 6, 12, 9, 0, 0, time.UTC)
+	liveApproval := &approval.ApprovalRequest{
 		ID:         "approval-live",
 		ToolID:     "investigation_fix",
 		Command:    "systemctl restart workload.service",
@@ -886,7 +887,22 @@ func TestHandleChat_RecoversLivePatrolApprovalForFindingHandoffAction(t *testing
 		TargetName: "web-server",
 		Context:    "Restart the workload service after backup saturation clears.",
 		RiskLevel:  approval.RiskHigh,
-	}))
+		Plan: &unifiedresources.ActionPlan{
+			ActionID:         "action-live",
+			RequiresApproval: true,
+			ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+			Message:          "Restart the workload service after backup saturation clears.",
+			ExpiresAt:        planExpiresAt,
+			Preflight: &unifiedresources.ActionPreflight{
+				IntendedChange: "Restart workload service",
+				DryRunSummary:  "No provider-supported dry run is available for this action.",
+			},
+		},
+	}
+	assert.NoError(t, approvalStore.CreateApproval(liveApproval))
+	approvalRequestedAt := liveApproval.RequestedAt.UTC().Format(time.RFC3339)
+	approvalExpiresAt := liveApproval.ExpiresAt.UTC().Format(time.RFC3339)
+	actionPlanExpiresAt := liveApproval.Plan.ExpiresAt.UTC().Format(time.RFC3339)
 
 	detectedAt := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
 	store := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
@@ -941,21 +957,31 @@ func TestHandleChat_RecoversLivePatrolApprovalForFindingHandoffAction(t *testing
 		Run(func(args mock.Arguments) {
 			reqArg := args.Get(1).(chat.ExecuteRequest)
 			assert.Equal(t, []chat.HandoffAction{{
-				FindingID:          "finding-123",
-				RecordID:           "investigation-123",
-				ApprovalID:         "approval-live",
-				FixID:              "fix-123",
-				Description:        "Restart the workload service",
-				RiskLevel:          "high",
-				Destructive:        true,
-				TargetHost:         "pve-1",
-				TargetResourceID:   "vm-100",
-				TargetResourceName: "web-server",
-				TargetResourceType: "vm",
-				TargetNode:         "pve-1",
+				FindingID:              "finding-123",
+				RecordID:               "investigation-123",
+				ApprovalID:             "approval-live",
+				ApprovalStatus:         "pending",
+				ApprovalRequestedAt:    approvalRequestedAt,
+				ApprovalExpiresAt:      approvalExpiresAt,
+				ActionID:               "action-live",
+				ActionApprovalPolicy:   "admin",
+				ActionRequiresApproval: true,
+				ActionPlanExpiresAt:    actionPlanExpiresAt,
+				ActionPlanMessage:      "Restart the workload service after backup saturation clears.",
+				ActionPreflight:        "Restart workload service",
+				ActionDryRunSummary:    "No provider-supported dry run is available for this action.",
+				FixID:                  "fix-123",
+				Description:            "Restart the workload service",
+				RiskLevel:              "high",
+				Destructive:            true,
+				TargetHost:             "pve-1",
+				TargetResourceID:       "vm-100",
+				TargetResourceName:     "web-server",
+				TargetResourceType:     "vm",
+				TargetNode:             "pve-1",
 			}}, reqArg.HandoffActions)
-			assert.Contains(t, reqArg.HandoffContext, "Operator Decision: review governed approval approval-live before execution; proposed fix fix-123; risk high; destructive true")
-			assert.Contains(t, reqArg.HandoffContext, "Action Posture: approval approval-live; proposed fix fix-123; risk high; destructive true")
+			assert.Contains(t, reqArg.HandoffContext, "Operator Decision: review governed approval approval-live before execution; approval status pending; approval expires "+approvalExpiresAt+"; action action-live; approval policy admin; plan expires "+actionPlanExpiresAt+"; proposed fix fix-123; risk high; destructive true")
+			assert.Contains(t, reqArg.HandoffContext, "Action Posture: approval approval-live; approval status pending; approval requested "+approvalRequestedAt+"; approval expires "+approvalExpiresAt+"; action action-live; approval policy admin; action requires approval true; plan expires "+actionPlanExpiresAt+"; proposed fix fix-123; risk high; destructive true")
 			assert.NotContains(t, reqArg.HandoffContext, "Action Posture: proposed fix fix-123; risk medium")
 			assert.NotContains(t, reqArg.HandoffContext, "systemctl restart workload.service")
 			assert.NotContains(t, fmt.Sprintf("%#v", reqArg.HandoffActions), "systemctl restart workload.service")

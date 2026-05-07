@@ -1355,26 +1355,7 @@ func refreshHandoffActionStatus(handoffActions []HandoffAction, orgID string, ac
 		if approvalID != "" && store != nil {
 			req, ok := store.GetApproval(approvalID)
 			if ok && approval.BelongsToOrg(req, normalizedOrgID) {
-				actions[idx].ApprovalStatus = string(req.Status)
-				actions[idx].ApprovalRequestedAt = formatHandoffActionTime(req.RequestedAt)
-				actions[idx].ApprovalExpiresAt = formatHandoffActionTime(req.ExpiresAt)
-				if req.DecidedAt != nil {
-					actions[idx].ApprovalDecidedAt = formatHandoffActionTime(*req.DecidedAt)
-				}
-				actions[idx].ApprovalConsumed = req.Consumed
-				if strings.TrimSpace(actions[idx].RiskLevel) == "" {
-					actions[idx].RiskLevel = string(req.RiskLevel)
-				}
-				if strings.TrimSpace(actions[idx].TargetResourceID) == "" {
-					actions[idx].TargetResourceID = strings.TrimSpace(req.TargetID)
-				}
-				if strings.TrimSpace(actions[idx].TargetResourceName) == "" {
-					actions[idx].TargetResourceName = strings.TrimSpace(req.TargetName)
-				}
-				if strings.TrimSpace(actions[idx].TargetResourceType) == "" {
-					actions[idx].TargetResourceType = strings.TrimSpace(req.TargetType)
-				}
-				hydrateHandoffActionPlan(&actions[idx], req.Plan)
+				HydrateHandoffActionFromApproval(&actions[idx], req)
 			}
 		}
 		hydrateHandoffActionAudit(&actions[idx], actionStore)
@@ -1402,6 +1383,38 @@ func clearHandoffActionStatus(action *HandoffAction) {
 	action.ActionPreflight = ""
 	action.ActionDryRunSummary = ""
 	action.ActionResult = ""
+}
+
+// HydrateHandoffActionFromApproval copies non-command approval metadata into an
+// Assistant handoff action. It deliberately excludes ApprovalRequest.Command so
+// Assistant context can explain governed state without becoming command replay.
+func HydrateHandoffActionFromApproval(action *HandoffAction, req *approval.ApprovalRequest) {
+	if action == nil || req == nil {
+		return
+	}
+	if approvalID := strings.TrimSpace(req.ID); approvalID != "" {
+		action.ApprovalID = approvalID
+	}
+	action.ApprovalStatus = strings.TrimSpace(string(req.Status))
+	action.ApprovalRequestedAt = formatHandoffActionTime(req.RequestedAt)
+	action.ApprovalExpiresAt = formatHandoffActionTime(req.ExpiresAt)
+	if req.DecidedAt != nil {
+		action.ApprovalDecidedAt = formatHandoffActionTime(*req.DecidedAt)
+	}
+	action.ApprovalConsumed = req.Consumed
+	if strings.TrimSpace(action.RiskLevel) == "" {
+		action.RiskLevel = strings.TrimSpace(string(req.RiskLevel))
+	}
+	if strings.TrimSpace(action.TargetResourceID) == "" {
+		action.TargetResourceID = strings.TrimSpace(req.TargetID)
+	}
+	if strings.TrimSpace(action.TargetResourceName) == "" {
+		action.TargetResourceName = strings.TrimSpace(req.TargetName)
+	}
+	if strings.TrimSpace(action.TargetResourceType) == "" {
+		action.TargetResourceType = strings.TrimSpace(req.TargetType)
+	}
+	hydrateHandoffActionPlan(action, req.Plan)
 }
 
 func hydrateHandoffActionPlan(action *HandoffAction, plan *unifiedresources.ActionPlan) {

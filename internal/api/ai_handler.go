@@ -1566,8 +1566,23 @@ func unifiedFindingHandoffActionOperatorDecision(action chat.HandoffAction) stri
 	if status := strings.TrimSpace(action.ApprovalStatus); status != "" {
 		parts = append(parts, "approval status "+status)
 	}
+	if expiresAt := strings.TrimSpace(action.ApprovalExpiresAt); expiresAt != "" {
+		parts = append(parts, "approval expires "+expiresAt)
+	}
+	if action.ApprovalConsumed {
+		parts = append(parts, "approval consumed true")
+	}
+	if actionID := strings.TrimSpace(action.ActionID); actionID != "" && strings.TrimSpace(action.ApprovalID) != "" {
+		parts = append(parts, "action "+actionID)
+	}
 	if state := strings.TrimSpace(action.ActionState); state != "" {
 		parts = append(parts, "action state "+state)
+	}
+	if policy := strings.TrimSpace(action.ActionApprovalPolicy); policy != "" {
+		parts = append(parts, "approval policy "+policy)
+	}
+	if planExpiresAt := strings.TrimSpace(action.ActionPlanExpiresAt); planExpiresAt != "" {
+		parts = append(parts, "plan expires "+planExpiresAt)
 	}
 	if fixID := strings.TrimSpace(action.FixID); fixID != "" {
 		parts = append(parts, "proposed fix "+fixID)
@@ -1591,6 +1606,15 @@ func unifiedFindingHandoffActionPosture(action chat.HandoffAction) string {
 	if status := strings.TrimSpace(action.ApprovalStatus); status != "" {
 		parts = append(parts, "approval status "+status)
 	}
+	if requestedAt := strings.TrimSpace(action.ApprovalRequestedAt); requestedAt != "" {
+		parts = append(parts, "approval requested "+requestedAt)
+	}
+	if expiresAt := strings.TrimSpace(action.ApprovalExpiresAt); expiresAt != "" {
+		parts = append(parts, "approval expires "+expiresAt)
+	}
+	if decidedAt := strings.TrimSpace(action.ApprovalDecidedAt); decidedAt != "" {
+		parts = append(parts, "approval decided "+decidedAt)
+	}
 	if action.ApprovalConsumed {
 		parts = append(parts, "approval consumed true")
 	}
@@ -1599,6 +1623,15 @@ func unifiedFindingHandoffActionPosture(action chat.HandoffAction) string {
 	}
 	if state := strings.TrimSpace(action.ActionState); state != "" {
 		parts = append(parts, "action state "+state)
+	}
+	if policy := strings.TrimSpace(action.ActionApprovalPolicy); policy != "" {
+		parts = append(parts, "approval policy "+policy)
+	}
+	if action.ActionRequiresApproval {
+		parts = append(parts, "action requires approval true")
+	}
+	if planExpiresAt := strings.TrimSpace(action.ActionPlanExpiresAt); planExpiresAt != "" {
+		parts = append(parts, "plan expires "+planExpiresAt)
 	}
 	if fixID := strings.TrimSpace(action.FixID); fixID != "" {
 		parts = append(parts, "proposed fix "+fixID)
@@ -1843,15 +1876,16 @@ func buildUnifiedFindingHandoffActions(f *unified.UnifiedFinding, orgID string) 
 		action.TargetNode = firstNonEmptyString(rec.Subject.Node, action.TargetNode)
 	}
 	if liveApproval != nil {
-		action.ApprovalID = strings.TrimSpace(liveApproval.ID)
-		if risk := strings.TrimSpace(string(liveApproval.RiskLevel)); risk != "" {
-			action.RiskLevel = risk
-		}
-		if action.TargetResourceName == "" {
-			action.TargetResourceName = strings.TrimSpace(liveApproval.TargetName)
-		}
-		if action.TargetResourceType == "" && !strings.EqualFold(strings.TrimSpace(liveApproval.TargetID), strings.TrimSpace(f.ID)) {
-			action.TargetResourceType = strings.TrimSpace(liveApproval.TargetType)
+		targetResourceIDBeforeApproval := strings.TrimSpace(action.TargetResourceID)
+		targetResourceTypeBeforeApproval := strings.TrimSpace(action.TargetResourceType)
+		chat.HydrateHandoffActionFromApproval(&action, liveApproval)
+		if liveTargetID := strings.TrimSpace(liveApproval.TargetID); liveTargetID != "" && strings.EqualFold(liveTargetID, strings.TrimSpace(f.ID)) {
+			if targetResourceIDBeforeApproval == "" && strings.EqualFold(strings.TrimSpace(action.TargetResourceID), liveTargetID) {
+				action.TargetResourceID = ""
+			}
+			if targetResourceTypeBeforeApproval == "" && strings.EqualFold(strings.TrimSpace(action.TargetResourceType), strings.TrimSpace(liveApproval.TargetType)) {
+				action.TargetResourceType = ""
+			}
 		}
 	}
 	if rec != nil && rec.ProposedFix != nil {
