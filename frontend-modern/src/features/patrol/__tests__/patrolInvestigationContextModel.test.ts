@@ -272,6 +272,57 @@ describe('patrolInvestigationContextModel', () => {
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
+  it('carries live governed approval posture into assessment finding handoffs', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Issues detected',
+      },
+      activeFindings: [
+        {
+          id: 'finding-1',
+          title: 'High CPU usage',
+          severity: 'critical',
+          status: 'active',
+          resourceId: 'vm-100',
+          resourceName: 'web-server',
+          resourceType: 'vm',
+          pendingApproval: {
+            id: 'approval-1',
+            status: 'pending',
+            riskLevel: 'high',
+            requestedAt: '2026-05-06T12:00:00Z',
+            expiresAt: '2026-05-06T12:10:00Z',
+            targetName: 'web-server',
+          },
+          proposedFix: {
+            description: 'Restart the workload service',
+            riskLevel: 'high',
+            targetHost: 'web-server',
+            commandCount: 1,
+            destructive: true,
+          },
+        },
+      ],
+    });
+
+    expect(handoff.context.autonomousMode).toBe(false);
+    expect(handoff.context.handoffContext).toContain('Finding 1: High CPU usage');
+    expect(handoff.context.handoffContext).toContain('approval approval-1');
+    expect(handoff.context.handoffContext).toContain('live approval pending');
+    expect(handoff.context.handoffContext).toContain('high risk');
+    expect(handoff.context.handoffContext).toContain('approval target web-server');
+    expect(handoff.context.handoffContext).toContain('expires 2026-05-06T12:10:00Z');
+    expect(handoff.context.handoffContext).toContain('1 command recorded for approval context');
+    expect(handoff.context.handoffContext).toContain('destructive proposed fix');
+    expect(handoff.context.context).toMatchObject({
+      pendingApprovalCount: 1,
+    });
+    expect(handoff.context.briefing?.suggestedPrompts).toContain(
+      'Summarize governed remediation risks',
+    );
+    expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
+  });
+
   it('builds operator-facing Patrol record presentation without exposing raw commands', () => {
     const presentation = buildPatrolInvestigationRecordPresentation({
       id: 'record-1',

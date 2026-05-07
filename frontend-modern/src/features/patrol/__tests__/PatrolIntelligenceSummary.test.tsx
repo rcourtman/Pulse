@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { aiChatStore } from '@/stores/aiChat';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { PatrolIntelligenceSummary } from '../PatrolIntelligenceSummary';
 import type { PatrolIntelligenceState } from '../usePatrolIntelligenceState';
 
@@ -11,14 +12,33 @@ describe('PatrolIntelligenceSummary', () => {
     vi.restoreAllMocks();
   });
 
-  it('opens Assistant with model-only context for the current Patrol assessment', () => {
+  it('opens Assistant with model-only context for the current Patrol assessment', async () => {
     const openWithPrompt = vi.spyOn(aiChatStore, 'openWithPrompt').mockImplementation(() => {});
+    const loadPendingApprovals = vi
+      .spyOn(aiIntelligenceStore, 'loadPendingApprovals')
+      .mockResolvedValue(undefined);
+    vi.spyOn(aiIntelligenceStore, 'patrolPendingApprovals', 'get').mockReturnValue([
+      {
+        id: 'approval-1',
+        toolId: 'investigation_fix',
+        command: 'systemctl restart workload.service',
+        targetType: 'finding',
+        targetId: 'finding-1',
+        targetName: 'web-server',
+        context: 'Restart the workload service after backup pressure clears.',
+        riskLevel: 'high',
+        status: 'pending',
+        requestedAt: '2026-05-06T12:00:00Z',
+        expiresAt: '2026-05-06T12:10:00Z',
+      },
+    ]);
 
     render(() => <PatrolIntelligenceSummary state={createPatrolState()} />);
 
     fireEvent.click(screen.getByTestId('patrol-assessment-assistant-button'));
 
-    expect(openWithPrompt).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(openWithPrompt).toHaveBeenCalledTimes(1));
+    expect(loadPendingApprovals).toHaveBeenCalledTimes(1);
     const [prompt, context] = openWithPrompt.mock.calls[0] as [string, Record<string, unknown>];
     expect(prompt).toContain('Discuss the current Pulse Patrol assessment');
     expect(context.autonomousMode).toBe(false);
@@ -28,6 +48,14 @@ describe('PatrolIntelligenceSummary', () => {
     expect(context.handoffContext).toContain('Recent Change 1: Metric anomaly');
     expect(context.handoffContext).toContain('Correlation 1: Nightly backup job');
     expect(context.handoffContext).toContain('Finding 1: High CPU usage');
+    expect(context.handoffContext).toContain('approval approval-1');
+    expect(context.handoffContext).toContain('live approval pending');
+    expect(context.handoffContext).toContain('high risk');
+    expect(context.handoffContext).toContain('approval target web-server');
+    expect(context.handoffContext).toContain('expires 2026-05-06T12:10:00Z');
+    expect(context.context).toMatchObject({
+      pendingApprovalCount: 1,
+    });
     expect(context.handoffResources).toEqual([
       { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
       { id: 'backup-job', name: 'Nightly backup job', type: 'job', node: undefined },

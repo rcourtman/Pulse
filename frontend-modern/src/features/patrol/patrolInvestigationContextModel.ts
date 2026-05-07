@@ -135,6 +135,8 @@ export interface PatrolAssessmentAssistantFindingInput {
   timesRaised?: number | null;
   regressionCount?: number | null;
   lastRegressionAt?: string | null;
+  pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
+  proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
 }
 
@@ -354,6 +356,7 @@ export function buildPatrolAssessmentAssistantHandoff(
         recentChangeDetailCount: recentChanges.length,
         correlationDetailCount: correlations.length,
         governedResourceCount: input.investigationContext?.governedResourceCount ?? 0,
+        pendingApprovalCount: normalizeAssessmentPendingApprovalCount(input.activeFindings),
       },
     },
   };
@@ -440,9 +443,14 @@ function assessmentFindingHasGovernedAction(
   if (
     patrolAssistantFindingHandoffRequiresApprovalMode({
       investigationOutcome: finding.investigationOutcome,
+      pendingApproval: finding.pendingApproval,
       investigationRecord: finding.investigationRecord,
     })
   ) {
+    return true;
+  }
+
+  if (normalizeProposedFixBriefing(finding.proposedFix)) {
     return true;
   }
 
@@ -597,6 +605,15 @@ function normalizeAssessmentFindings(
     .slice(0, MAX_ASSESSMENT_FINDINGS);
 }
 
+function normalizeAssessmentPendingApprovalCount(
+  findings?: PatrolAssessmentAssistantFindingInput[] | null,
+): number {
+  return (findings ?? []).filter((finding) => {
+    const approval = normalizeApprovalBriefing(finding.pendingApproval);
+    return approval.id && approval.status === 'pending';
+  }).length;
+}
+
 function normalizeAssessmentRecentChanges(changes?: ResourceChange[] | null): ResourceChange[] {
   return sortResourceChangesByObservedAt(
     (changes ?? []).filter((change) =>
@@ -733,14 +750,27 @@ function formatAssessmentFindingEvidence(
 ): string | undefined {
   const title = normalizeText(finding.title) || 'Patrol finding';
   const resource = getAssessmentFindingResource(finding);
+  const pendingApproval = normalizeApprovalBriefing(finding.pendingApproval);
   const severityStatus = [
     formatIdentifierLabel(finding.severity),
     formatIdentifierLabel(finding.status),
   ]
     .filter(isNonEmptyString)
     .join(' ');
+  const approvalPosture = [
+    pendingApproval.id
+      ? pendingApproval.status === 'pending'
+        ? 'live approval pending'
+        : formatIdentifierLabel(pendingApproval.status)
+      : undefined,
+    formatAssessmentApprovalRiskLabel(pendingApproval.riskLevel),
+  ]
+    .filter(isNonEmptyString)
+    .join(' ');
   const resourceLabel = formatAssessmentResourceLabel(resource);
-  return [title, resourceLabel, severityStatus].filter(isNonEmptyString).join(' · ');
+  return [title, resourceLabel, severityStatus, approvalPosture]
+    .filter(isNonEmptyString)
+    .join(' · ');
 }
 
 function formatAssessmentRecentChangeEvidence(change: ResourceChange): string | undefined {
@@ -877,6 +907,9 @@ function formatAssessmentFindingContextLine(
   const title = truncateContextText(normalizeText(finding.title) || 'Patrol finding', 120);
   const resource = getAssessmentFindingResource(finding);
   const record = buildPatrolInvestigationRecordPresentation(finding.investigationRecord);
+  const proposedFix = record.proposedFix || normalizeProposedFixBriefing(finding.proposedFix);
+  const pendingApproval = normalizeApprovalBriefing(finding.pendingApproval);
+  const recordApprovalId = normalizeText(finding.investigationRecord?.approval_id);
   const statusParts = [
     formatIdentifierLabel(finding.severity),
     formatIdentifierLabel(finding.status),
@@ -905,11 +938,15 @@ function formatAssessmentFindingContextLine(
     record.recommendedAction
       ? `recommended ${truncateContextText(record.recommendedAction, 180)}`
       : undefined,
-    record.proposedFix?.description
-      ? `proposed fix ${truncateContextText(record.proposedFix.description, 160)}`
+    recordApprovalId && recordApprovalId !== pendingApproval.id
+      ? `approval ${recordApprovalId}`
       : undefined,
-    record.proposedFix?.commandSummary,
-    record.proposedFix?.destructive ? 'destructive proposed fix' : undefined,
+    ...formatAssessmentPendingApprovalContextParts(pendingApproval),
+    proposedFix?.description
+      ? `proposed fix ${truncateContextText(proposedFix.description, 160)}`
+      : undefined,
+    proposedFix?.commandSummary,
+    proposedFix?.destructive ? 'destructive proposed fix' : undefined,
     record.error ? `investigation error ${truncateContextText(record.error, 160)}` : undefined,
   ];
 
@@ -929,6 +966,42 @@ function formatAssessmentFindingContextLine(
   ].filter(isNonEmptyString);
 
   return `Finding ${index}: ${parts.join('; ')}`;
+}
+
+function formatAssessmentPendingApprovalContextParts(
+  approval: Required<PatrolAssistantApprovalBriefingInput>,
+): string[] {
+  const parts: string[] = [];
+  if (!approval.id) return parts;
+
+  parts.push(`approval ${approval.id}`);
+  if (approval.status === 'pending') {
+    parts.push('live approval pending');
+  } else {
+    const statusLabel = formatIdentifierLabel(approval.status)?.toLowerCase();
+    if (statusLabel) {
+      parts.push(`${statusLabel} approval`);
+    }
+  }
+  const riskLabel = formatIdentifierLabel(approval.riskLevel)?.toLowerCase();
+  if (riskLabel) {
+    parts.push(`${riskLabel} risk`);
+  }
+  if (approval.targetName) {
+    parts.push(`approval target ${truncateContextText(approval.targetName, 120)}`);
+  }
+  if (approval.expiresAt) {
+    parts.push(`expires ${approval.expiresAt}`);
+  }
+  if (approval.requestedAt) {
+    parts.push(`requested ${approval.requestedAt}`);
+  }
+  return parts;
+}
+
+function formatAssessmentApprovalRiskLabel(riskLevel?: string | null): string | undefined {
+  const riskLabel = formatIdentifierLabel(riskLevel);
+  return riskLabel ? `${riskLabel} risk` : undefined;
 }
 
 function getAssessmentFindingResource(

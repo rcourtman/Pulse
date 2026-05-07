@@ -22,7 +22,13 @@ import {
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { aiChatStore } from '@/stores/aiChat';
-import { buildPatrolAssessmentAssistantHandoff } from './patrolInvestigationContextModel';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import type { ApprovalRequest } from '@/api/ai';
+import {
+  buildPatrolAssessmentAssistantHandoff,
+  buildPatrolAssistantProposedFixBriefingInput,
+  type PatrolAssessmentAssistantFindingInput,
+} from './patrolInvestigationContextModel';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 function PatrolAssessmentLoadingShell() {
@@ -215,6 +221,27 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
     return metrics;
   });
+  const activeFindingsWithApprovalContext = createMemo<PatrolAssessmentAssistantFindingInput[]>(
+    () => {
+      const approvalsByFindingId = new Map(
+        aiIntelligenceStore.patrolPendingApprovals.map((approval) => [approval.targetId, approval]),
+      );
+      return state.activePatrolFindings().map((finding) => {
+        const approval = approvalsByFindingId.get(finding.id);
+        if (!approval) {
+          return finding;
+        }
+
+        return {
+          ...finding,
+          pendingApproval: buildPatrolAssessmentApprovalBriefing(approval),
+          proposedFix: finding.investigationRecord?.proposed_fix
+            ? undefined
+            : buildPatrolAssessmentApprovalProposedFixBriefing(approval),
+        };
+      });
+    },
+  );
   const assessmentAssistantHandoff = createMemo(() =>
     buildPatrolAssessmentAssistantHandoff({
       assessment: assessment(),
@@ -235,11 +262,12 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         recentChanges: state.intelligenceSummary()?.recent_changes,
         correlations: state.correlations(),
       },
-      activeFindings: state.activePatrolFindings(),
+      activeFindings: activeFindingsWithApprovalContext(),
     }),
   );
 
-  const handleDiscussAssessment = () => {
+  const handleDiscussAssessment = async () => {
+    await aiIntelligenceStore.loadPendingApprovals();
     const handoff = assessmentAssistantHandoff();
     aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
   };
@@ -487,4 +515,24 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       </Show>
     </>
   );
+}
+
+function buildPatrolAssessmentApprovalBriefing(approval: ApprovalRequest) {
+  return {
+    id: approval.id,
+    status: approval.status,
+    riskLevel: approval.riskLevel,
+    requestedAt: approval.requestedAt,
+    expiresAt: approval.expiresAt,
+    targetName: approval.targetName,
+  };
+}
+
+function buildPatrolAssessmentApprovalProposedFixBriefing(approval: ApprovalRequest) {
+  return buildPatrolAssistantProposedFixBriefingInput({
+    description: approval.context,
+    riskLevel: approval.riskLevel,
+    targetHost: approval.targetName,
+    commandCount: approval.command ? 1 : 0,
+  });
 }

@@ -217,10 +217,13 @@ Patrol-specific presentation helpers.
    verification recency, latest run, secondary investigation context, bounded
    recent-change and learned-correlation evidence, active-finding summaries,
    structured resource references, and safe source-owned suggested prompts as
-   model-only context. It must force request-local approval-required mode, keep
-   raw command and approval payloads out of prompt and drawer copy, and frame
-   Assistant as explanation, prioritization, and safe next-step review rather
-   than a generic reactive chat box.
+   model-only context. Active-finding summaries may include live pending
+   approval posture only as safe metadata: approval ID, pending status, risk,
+   target, requested/expiry timestamps, and command count. They must force
+   request-local approval-required mode, keep raw command and approval payloads
+   out of prompt and drawer copy, and frame Assistant as explanation,
+   prioritization, and safe next-step review rather than a generic reactive chat
+   box.
 
 ## Current State
 
