@@ -3108,6 +3108,7 @@ index 1111111..2222222 100644
                         "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
                         "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
                         "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
+                        "frontend-modern/src/utils/__tests__/approvalState.test.ts",
                         "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
                         "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                         "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts",

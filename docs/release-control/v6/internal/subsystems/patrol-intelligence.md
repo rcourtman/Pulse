@@ -37,17 +37,18 @@ Patrol-specific presentation helpers.
 14. `frontend-modern/src/components/patrol/`
 15. `frontend-modern/src/utils/aiFindingPresentation.ts`
 16. `frontend-modern/src/utils/approvalRiskPresentation.ts`
-17. `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`
-18. `frontend-modern/src/utils/findingAlertIdentity.ts`
-19. `frontend-modern/src/utils/remediationPresentation.ts`
-20. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
-21. `frontend-modern/src/utils/patrolFormat.ts`
-22. `frontend-modern/src/utils/patrolRunPresentation.ts`
-23. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
-24. `frontend-modern/src/utils/patrolRuntimePresentation.ts`
-25. `frontend-modern/src/utils/patrolRuntimeActions.ts`
-26. `frontend-modern/src/utils/textPresentation.ts`
-27. `tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts`
+17. `frontend-modern/src/utils/approvalState.ts`
+18. `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`
+19. `frontend-modern/src/utils/findingAlertIdentity.ts`
+20. `frontend-modern/src/utils/remediationPresentation.ts`
+21. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
+22. `frontend-modern/src/utils/patrolFormat.ts`
+23. `frontend-modern/src/utils/patrolRunPresentation.ts`
+24. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
+25. `frontend-modern/src/utils/patrolRuntimePresentation.ts`
+26. `frontend-modern/src/utils/patrolRuntimeActions.ts`
+27. `frontend-modern/src/utils/textPresentation.ts`
+28. `tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts`
 
 ## Shared Boundaries
 
@@ -781,11 +782,13 @@ approval consumers must treat the approval queue as `soonest expiry first`,
 then higher risk, then older request time, rather than inheriting raw API
 order. Approval-linked findings must follow that same ordering so multi-approval
 `Review` actions jump to the most urgent finding instead of an arbitrary one.
-Malformed or missing approval timestamps must sort after valid timestamps and
-must not produce non-deterministic comparator results in the shared urgency
-utility. Patrol approval banners must apply the same fail-closed timestamp
-posture to visible countdown copy instead of rendering invalid math such as
-`NaN`.
+Malformed or missing approval expiry timestamps must fail closed in the shared
+approval-state utility: they are not live/actionable pending approvals and the
+owning finding must return to the needs-attention path. If malformed approval
+records still reach presentation helpers, they must sort after valid timestamps
+and must not produce non-deterministic comparator results. Patrol approval
+banners must apply the same fail-closed timestamp posture to visible countdown
+copy instead of rendering invalid math such as `NaN`.
 Patrol fix approvals also inherit the unified action-governance preflight
 contract: queued fixes must keep their plan-level dry-run availability, safety
 checks, verification steps, approval policy, and action id in the shared

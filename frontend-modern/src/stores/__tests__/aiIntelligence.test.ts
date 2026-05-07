@@ -495,6 +495,53 @@ describe('aiIntelligenceStore', () => {
     vi.useRealTimers();
   });
 
+  it('fails malformed approval expiries closed and restores needs-attention state', async () => {
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
+      findings: [
+        {
+          id: 'finding-malformed-approval',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'performance',
+          resource_id: 'instance:node:202',
+          resource_name: 'node-202',
+          resource_type: 'host',
+          title: 'Queued remediation with malformed approval',
+          description: 'Patrol queued a remediation with malformed approval expiry.',
+          detected_at: '2026-03-01T00:00:00Z',
+          status: 'active',
+          investigation_outcome: 'fix_queued',
+        },
+      ],
+      count: 1,
+    });
+
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([
+      {
+        id: 'approval-malformed-expiry',
+        toolId: 'investigation_fix',
+        command: 'systemctl restart pulse-agent',
+        targetType: 'host',
+        targetId: 'finding-malformed-approval',
+        targetName: 'node-202',
+        context: 'Restart the agent',
+        riskLevel: 'medium',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:01:00Z',
+        expiresAt: 'not-a-date',
+      },
+    ]);
+
+    await aiIntelligenceStore.loadFindings();
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    expect(aiIntelligenceStore.pendingApprovalCount).toBe(0);
+    expect(aiIntelligenceStore.findingsWithPendingApprovals).toEqual([]);
+    expect(aiIntelligenceStore.findingsNeedingAttention.map((finding) => finding.id)).toEqual([
+      'finding-malformed-approval',
+    ]);
+  });
+
   it('sorts Patrol runtime findings to the top of the shared needs-attention queue', async () => {
     vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
       findings: [
