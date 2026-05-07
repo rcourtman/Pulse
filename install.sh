@@ -2544,8 +2544,8 @@ infer_release_from_archive_name() {
     local archive_name
     archive_name=$(basename "$1")
 
-    if [[ "$archive_name" =~ ^pulse-(v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)*)-linux-(amd64|arm64|armv7)\.tar\.gz$ ]]; then
-        printf '%s\n' "${BASH_REMATCH[1]}"
+    if [[ "$archive_name" =~ ^pulse(-pro)?-(v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)*)-linux-(amd64|arm64|armv7|armv6|386)\.tar\.gz$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[2]}"
         return 0
     fi
 

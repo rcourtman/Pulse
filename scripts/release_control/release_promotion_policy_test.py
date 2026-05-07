@@ -88,6 +88,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("release notes may keep placeholder", content)
         self.assertIn("Exact v6 GA and v5 end-of-support dates locked before GA publish", content)
         self.assertIn("governed prerelease and stable release branches", content)
+        self.assertIn("Customer-facing private Pulse Pro archives", content)
+        self.assertIn("public RC tag", content)
+        self.assertIn("license.pulserelay.pro/pulse-pro:6.0.0", content)
+        self.assertIn("moving branch", content)
 
     def test_pre_release_checklist_tracks_rc_to_ga_gate_inputs(self) -> None:
         content = read("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md")
@@ -355,7 +359,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             "the public Pulse release workflow builds OSS `pulse-v...` artifacts only",
             normalize_ws(contract),
         )
-        self.assertIn("`pulse-pro-v...` archives identify `Pulse Pro`", contract)
+        self.assertIn("`pulse-pro-v...` archives identify `Pulse Pro`", normalize_ws(contract))
         self.assertIn("https://pulserelay.pro/download.html", contract)
         self.assertIn("PULSE_IMAGE`-aware compose image line", normalize_ws(contract))
         self.assertIn("hardcoded `image: rcourtman/pulse:...`", normalize_ws(contract))

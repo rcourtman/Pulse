@@ -88,6 +88,32 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 	}
 }
 
+func TestRootInstallScriptInfersPrivateProArchiveVersion(t *testing.T) {
+	script := `
+		set -euo pipefail
+` + extractRootInstallShellFunction(t, "infer_release_from_archive_name") + `
+		infer_release_from_archive_name /tmp/pulse-v6.0.0-rc.5-linux-amd64.tar.gz
+		infer_release_from_archive_name /tmp/pulse-pro-v6.0.0-rc.5-linux-amd64.tar.gz
+		infer_release_from_archive_name /tmp/pulse-pro-v6.0.0-linux-arm64.tar.gz
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := strings.Fields(string(out))
+	want := []string{"v6.0.0-rc.5", "v6.0.0-rc.5", "v6.0.0"}
+	if len(got) != len(want) {
+		t.Fatalf("versions = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("versions = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func TestRootInstallScriptUpdateDiskHeadroomRejectsSharedLowSpaceFilesystem(t *testing.T) {
 	script := `
 		set -euo pipefail

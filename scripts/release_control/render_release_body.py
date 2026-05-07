@@ -81,7 +81,7 @@ def build_installation_section(version: str) -> str:
             "",
             "See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for complete setup instructions.",
             "",
-            "Paid Pulse Pro, Relay, and eligible legacy customers: public GitHub release assets and the public `rcourtman/pulse` Docker image are community builds. They do not include the private Pulse Pro runtime hooks. Use https://pulserelay.pro/download.html with your activation key to get the private Pulse Pro Docker image or Linux archive.",
+            "Paid Pulse Pro, Relay, and eligible legacy customers: public GitHub release assets and the public `rcourtman/pulse` Docker image are community builds. They do not include the private Pulse Pro runtime hooks. Use https://pulserelay.pro/download.html with your activation key to get the private Pulse Pro Docker image or Linux/LXC archive.",
         ]
     )
 

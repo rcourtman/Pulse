@@ -218,19 +218,26 @@ server-side update execution surfaces.
    declared feature-complete.
    Paid-user GA is part of that same release boundary: the public Pulse release
    workflow builds OSS `pulse-v...` artifacts only, so release docs and runbooks
-   must require a same-ref/same-version `pulse-enterprise` Pro package, verify
-   `pulse-pro-v...` archives identify `Pulse Pro`, and keep the paid
-   install/upgrade path pointed at Pro artifacts or a verified paid image before
-   any paid-user Pro runtime claim is made. Public GitHub release assets and the
+   must require a same-tag/same-version `pulse-enterprise` Pro package for
+   customer-facing publication, verify `pulse-pro-v...` archives identify
+   `Pulse Pro`, and keep the paid install/upgrade path pointed at Pro artifacts
+   or a verified paid image before any paid-user Pro runtime claim is made.
+   During the v6 RC phase, private Pulse Pro archive prefixes and Docker tags
+   must retain the RC suffix from the exact public Pulse RC tag; GA-shaped
+   `6.0.0` Pro archive names, R2 prefixes, and Docker tags are reserved for the
+   intentional v6 GA publish. Public GitHub release assets and the
    public `rcourtman/pulse` Docker image must be described as community builds
    where paid customers are likely to install or upgrade, and generated public
    release bodies must send Relay, Pulse Pro, and eligible legacy customers to
    `https://pulserelay.pro/download.html` for the private Pulse Pro Docker image
-   or Linux archive. Public Docker and install docs must also preserve a
+   or Linux/LXC archive. Public Docker and install docs must also preserve a
    `PULSE_IMAGE`-aware compose image line and warn that any hardcoded
    `image: rcourtman/pulse:...` line must be replaced before the private
    Pulse Pro compose commands can move an existing Docker install off the
-   community image.
+   community image. The root installer must accept private `pulse-pro-v...`
+   archive filenames through `--archive` so direct Linux and Proxmox LXC users
+   can keep the normal service setup while installing the private Pulse Pro
+   runtime.
    The repo-root VERSION file is part of the same governed boundary and must
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or

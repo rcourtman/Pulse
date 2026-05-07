@@ -56,6 +56,21 @@ Cloud, and self-hosted production users.
 3. Failed prereleases are fixed forward and replaced with a new prerelease. They are never
    promoted as-is to `stable`.
 
+## Paid Pro Artifact Lineage
+
+1. Customer-facing private Pulse Pro archives and private Pulse Pro Docker images
+   must track the same immutable release checkpoint as the public Pulse release
+   they support.
+2. During the v6 RC phase, private Pro artifacts must be built from the exact
+   public RC tag, use the same RC version, and publish under RC-shaped artifact
+   names, R2 prefixes, and Docker tags such as `6.0.0-rc.5`.
+3. Do not build or advertise `license.pulserelay.pro/pulse-pro:6.0.0`, a
+   `pulse-pro-v6.0.0-...` private archive, or a GA-shaped private R2 prefix
+   until the intentional v6 GA publish.
+4. A private Pro build from a moving branch is valid only as an internal proof
+   artifact. It is not valid customer guidance and must not update the live
+   paid-download manifest or private Docker customer tag.
+
 ## v5 Maintenance Policy
 
 1. When Pulse v6 reaches `stable`, Pulse v5 immediately enters
