@@ -1673,6 +1673,33 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.ClearOllamaPassword != nil
 }
 
+func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
+	return req.Enabled != nil ||
+		req.Model != nil ||
+		req.ChatModel != nil ||
+		req.PatrolModel != nil ||
+		req.PatrolEnabled != nil ||
+		req.PatrolIntervalMinutes != nil ||
+		req.AuthMethod != nil ||
+		req.AnthropicAPIKey != nil ||
+		req.OpenAIAPIKey != nil ||
+		req.OpenRouterAPIKey != nil ||
+		req.DeepSeekAPIKey != nil ||
+		req.GeminiAPIKey != nil ||
+		req.OllamaBaseURL != nil ||
+		req.OllamaUsername != nil ||
+		req.OllamaPassword != nil ||
+		req.OpenAIBaseURL != nil ||
+		req.ClearAnthropicKey != nil ||
+		req.ClearOpenAIKey != nil ||
+		req.ClearOpenRouterKey != nil ||
+		req.ClearDeepSeekKey != nil ||
+		req.ClearGeminiKey != nil ||
+		req.ClearOllamaURL != nil ||
+		req.ClearOllamaUsername != nil ||
+		req.ClearOllamaPassword != nil
+}
+
 // SetOnControlSettingsChange sets a callback to be invoked when control settings change
 // Used by Router to update MCP tool visibility without restarting AI chat
 func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
@@ -2695,6 +2722,13 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.Model = resolvedModel
 	}
 	settings.NormalizeQuickstartModelAliases()
+	if settings.IsPatrolEnabled() && aiSettingsUpdateTouchesPatrolReadiness(req) {
+		readiness := ai.EvaluatePatrolConfigReadiness(settings)
+		if !readiness.Ready {
+			writePatrolReadinessNotReadyResponse(w, http.StatusBadRequest, readiness)
+			return
+		}
+	}
 
 	// Save settings
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
@@ -4825,9 +4859,9 @@ type PatrolReadinessCheck struct {
 }
 
 const (
-	patrolReadinessReady    = "ready"
-	patrolReadinessWarning  = "warning"
-	patrolReadinessNotReady = "not_ready"
+	patrolReadinessReady    = ai.PatrolReadinessReady
+	patrolReadinessWarning  = ai.PatrolReadinessWarning
+	patrolReadinessNotReady = ai.PatrolReadinessNotReady
 )
 
 func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService *ai.Service, patrolAvailable bool) PatrolReadinessResponse {
@@ -4886,7 +4920,7 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 	}
 	addCheck("model", patrolReadinessReady, "Patrol model", "Patrol has a model selected from a configured provider.", "")
 
-	toolStatus, toolMessage := patrolToolReadinessForModel(provider, model)
+	toolStatus, toolMessage := ai.PatrolToolReadinessForModel(provider, model)
 	toolAction := ""
 	if toolStatus != patrolReadinessReady {
 		toolAction = "open_provider_settings"
@@ -4925,26 +4959,6 @@ func ptrToPatrolReadiness(readiness PatrolReadinessResponse) *PatrolReadinessRes
 	return &readiness
 }
 
-func patrolToolReadinessForModel(provider, model string) (string, string) {
-	normalizedModel := strings.ToLower(strings.TrimSpace(model))
-	switch {
-	case strings.Contains(normalizedModel, "deepseek-r1") ||
-		strings.Contains(normalizedModel, "/r1") ||
-		strings.Contains(normalizedModel, ":r1") ||
-		strings.Contains(normalizedModel, "reasoner") ||
-		strings.Contains(normalizedModel, "qwq"):
-		return patrolReadinessNotReady, "The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls. Patrol needs tool calling to inspect resources and create governed findings."
-	case provider == config.AIProviderOpenRouter:
-		return patrolReadinessWarning, "OpenRouter routes vary by model and endpoint. Patrol will fail closed if the routed model rejects tools or tool_choice."
-	case provider == config.AIProviderOllama:
-		return patrolReadinessWarning, "Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification."
-	case provider == config.AIProviderDeepSeek:
-		return patrolReadinessWarning, "DeepSeek model capability varies by model. Patrol requires a model that supports tool calling."
-	default:
-		return patrolReadinessReady, "The selected provider path supports Patrol's tool-backed analysis contract."
-	}
-}
-
 func (h *AISettingsHandler) getPatrolService(ctx context.Context) *ai.PatrolService {
 	aiService := h.GetAIService(ctx)
 	if aiService == nil {
@@ -4955,6 +4969,17 @@ func (h *AISettingsHandler) getPatrolService(ctx context.Context) *ai.PatrolServ
 
 func writePatrolServiceUnavailableResponse(w http.ResponseWriter) {
 	writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Pulse Patrol service not available", nil)
+}
+
+func writePatrolReadinessNotReadyResponse(w http.ResponseWriter, statusCode int, readiness ai.PatrolConfigReadiness) {
+	details := map[string]string{"status": readiness.Status}
+	if readiness.Provider != "" {
+		details["provider"] = readiness.Provider
+	}
+	if readiness.Model != "" {
+		details["model"] = readiness.Model
+	}
+	writeErrorResponse(w, statusCode, "patrol_readiness_not_ready", readiness.Summary, details)
 }
 
 func retireQuickstartPatrolStatus(status ai.PatrolStatus) ai.PatrolStatus {
@@ -5317,6 +5342,10 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		writePatrolServiceUnavailableResponse(w)
+		return
+	}
+	if readiness := aiService.PatrolRuntimeReadiness(); !readiness.Ready {
+		writePatrolReadinessNotReadyResponse(w, http.StatusConflict, readiness)
 		return
 	}
 

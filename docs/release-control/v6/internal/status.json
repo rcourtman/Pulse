@@ -2424,7 +2424,7 @@
     },
     {
       "id": "RA27",
-      "summary": "Patrol status owns server-authored runtime readiness: provider, model, settings-persistence, and tool-calling prerequisites must travel as structured `/api/ai/patrol/status` checks, and known not-ready states must block manual Patrol runs before they become generic interrupted-analysis failures.",
+      "summary": "Patrol readiness owns server-authored runtime and configuration safety: provider, model, settings-persistence, and tool-calling prerequisites must travel as structured `/api/ai/patrol/status`, settings-save, and Patrol action errors, and known not-ready states must block readiness-sensitive settings saves plus manual, scheduled, and scoped Patrol runs before they become generic interrupted-analysis failures.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -2439,6 +2439,21 @@
       "release_gate_ids": [],
       "proof_commands": [
         {
+          "id": "patrol-readiness-browser-contract-tests",
+          "run": [
+            "/usr/bin/env",
+            "PULSE_E2E_USE_HOT_DEV=1",
+            "PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1",
+            "npm",
+            "--prefix",
+            "tests/integration",
+            "test",
+            "--",
+            "tests/18-patrol-runtime-state.spec.ts",
+            "--project=chromium"
+          ]
+        },
+        {
           "id": "patrol-readiness-frontend-tests",
           "run": [
             "npm",
@@ -2449,6 +2464,28 @@
             "--run",
             "src/api/__tests__/patrol.test.ts",
             "src/pages/__tests__/AIIntelligence.test.tsx"
+          ]
+        },
+        {
+          "id": "patrol-readiness-runtime-gate-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai",
+            "-run",
+            "RunPatrol_BlocksNotReadyRuntimeBeforeLLM|RunScopedPatrol_BlocksNotReadyRuntimeBeforeLLM",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "patrol-readiness-settings-save-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "UpdateSettingsRejectsNotReadyPatrolModel|UpdateSettingsDoesNotLockUnrelatedSavesBehindExistingPatrolReadiness|HandleForcePatrol_BlocksNotReadyPatrolModel",
+            "-count=1"
           ]
         },
         {
@@ -2511,7 +2548,37 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/patrol_coverage_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_init.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_readiness.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_run.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/ai_handlers.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_handlers_patrol_actions_additional_test.go",
           "kind": "file"
         },
         {
@@ -2527,6 +2594,11 @@
         {
           "repo": "pulse",
           "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/18-patrol-runtime-state.spec.ts",
           "kind": "file"
         }
       ]

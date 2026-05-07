@@ -6,6 +6,8 @@ const PATROL_BLOCK_REASON =
   "Connect a provider to power Pulse Assistant and Patrol.";
 const PATROL_AUTONOMY_PRO_REQUIRED =
   "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.";
+const PATROL_REASONING_ONLY_REJECTION =
+  "The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls. Patrol needs tool calling to inspect resources and create governed findings.";
 
 function todayAt(hours: number, minutes: number): string {
   const value = new Date();
@@ -636,6 +638,49 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(
       page.getByText("Failed to save advanced settings"),
     ).toHaveCount(0);
+  });
+
+  test("shows the server reason when a stale manual Patrol run is rejected", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only Patrol runtime coverage",
+    );
+
+    let manualRunRequests = 0;
+
+    await ensureAuthenticated(page);
+    await mockScopedTriggerPatrolRuntimeState(page);
+    await page.route("**/api/ai/patrol/run", async (route) => {
+      manualRunRequests += 1;
+      expect(route.request().method()).toBe("POST");
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: PATROL_REASONING_ONLY_REJECTION,
+          code: "patrol_readiness_not_ready",
+          status_code: 409,
+          timestamp: Math.floor(Date.now() / 1000),
+          details: {
+            status: "not_ready",
+            provider: "ollama",
+            model: "ollama:deepseek-r1:7b-llama-distill-q4_K_M",
+          },
+        }),
+      });
+    });
+
+    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
+
+    const runButton = page.getByRole("button", { name: "Run Patrol" });
+    await expect(runButton).toBeEnabled();
+    await runButton.click();
+
+    await expect.poll(() => manualRunRequests).toBe(1);
+    await expect(page.getByText(PATROL_REASONING_ONLY_REJECTION)).toBeVisible();
+    await expect(page.getByText("Failed to start patrol run")).toHaveCount(0);
   });
 
   test("surfaces scoped trigger context inside the summary and split trigger controls on the Patrol page", async ({

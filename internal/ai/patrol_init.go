@@ -141,6 +141,9 @@ type PatrolConfig struct {
 	AnalyzeKubernetes bool `json:"analyze_kubernetes"`
 	// AnalyzePMG controls whether to analyze Proxmox Mail Gateway instances
 	AnalyzePMG bool `json:"analyze_pmg"`
+	// RuntimeBlockedReason explains why the configured Patrol runtime must not
+	// execute model-backed runs even though the schedule may be enabled.
+	RuntimeBlockedReason string `json:"runtime_blocked_reason,omitempty"`
 }
 
 // GetInterval returns the effective patrol interval, handling migration from old config
@@ -292,9 +295,19 @@ func (p *PatrolService) SetUnifiedFindingResolver(cb func(findingID string)) {
 func (p *PatrolService) SetConfig(cfg PatrolConfig) {
 	p.mu.Lock()
 	oldInterval := p.config.GetInterval()
+	oldBlockedReason := strings.TrimSpace(p.config.RuntimeBlockedReason)
 	p.config = cfg
 	newInterval := cfg.GetInterval()
 	configCh := p.configChanged
+	newBlockedReason := strings.TrimSpace(cfg.RuntimeBlockedReason)
+	switch {
+	case newBlockedReason != "":
+		p.lastBlockedReason = newBlockedReason
+		p.lastBlockedAt = time.Now()
+	case oldBlockedReason != "" && p.lastBlockedReason == oldBlockedReason:
+		p.lastBlockedReason = ""
+		p.lastBlockedAt = time.Time{}
+	}
 	p.mu.Unlock()
 
 	// Signal config change if patrol is running and interval changed

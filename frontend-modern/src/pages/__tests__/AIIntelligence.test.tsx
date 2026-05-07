@@ -491,6 +491,28 @@ describe('AIIntelligence entitlement gating', () => {
     });
   });
 
+  it('surfaces backend readiness rejection when a stale manual run request reaches the server', async () => {
+    triggerPatrolRunMock.mockRejectedValue(
+      new Error(
+        'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+      ),
+    );
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Run Patrol/i })[0]);
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+      );
+    });
+  });
+
   it('keeps legacy Patrol status payloads without readiness compatible', async () => {
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ readiness: undefined }));
 

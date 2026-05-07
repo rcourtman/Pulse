@@ -955,6 +955,28 @@ func (s *Service) getEffectivePatrolInterval(cfg *config.AIConfig) time.Duration
 	return interval
 }
 
+func (s *Service) patrolConfigFromAIConfig(cfg *config.AIConfig) PatrolConfig {
+	patrolCfg := DefaultPatrolConfig()
+	if cfg == nil {
+		patrolCfg.Enabled = false
+		patrolCfg.RuntimeBlockedReason = "Pulse Assistant settings could not be loaded from persistence."
+		return patrolCfg
+	}
+
+	patrolCfg.Enabled = cfg.IsPatrolEnabled()
+	patrolCfg.Interval = s.getEffectivePatrolInterval(cfg)
+	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
+	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
+	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
+	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
+	if patrolCfg.Enabled {
+		if readiness := EvaluatePatrolConfigReadiness(cfg); !readiness.Ready {
+			patrolCfg.RuntimeBlockedReason = readiness.Summary
+		}
+	}
+	return patrolCfg
+}
+
 // GetLicenseState returns the current license state and whether features are available
 func (s *Service) GetLicenseState() (string, bool) {
 	s.mu.RLock()
@@ -1000,14 +1022,8 @@ func (s *Service) StartPatrol(ctx context.Context) {
 		log.Info().Msg("Patrol safe remediation requires Pulse Pro license - fixes will require manual approval")
 	}
 
-	// Configure patrol from AI config (preserve defaults for resource types not in AI config)
-	patrolCfg := DefaultPatrolConfig()
-	patrolCfg.Enabled = true
-	patrolCfg.Interval = s.getEffectivePatrolInterval(cfg)
-	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
-	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
-	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
-	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
+	// Configure patrol from AI config (preserve defaults for resource types not in AI config).
+	patrolCfg := s.patrolConfigFromAIConfig(cfg)
 	patrol.SetConfig(patrolCfg)
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
 	patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
@@ -1104,14 +1120,8 @@ func (s *Service) ReconfigurePatrol() {
 		return
 	}
 
-	// Update patrol configuration (preserve defaults for resource types not in AI config)
-	patrolCfg := DefaultPatrolConfig()
-	patrolCfg.Enabled = cfg.IsPatrolEnabled()
-	patrolCfg.Interval = s.getEffectivePatrolInterval(cfg)
-	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
-	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
-	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
-	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
+	// Update patrol configuration (preserve defaults for resource types not in AI config).
+	patrolCfg := s.patrolConfigFromAIConfig(cfg)
 	patrol.SetConfig(patrolCfg)
 
 	// Update proactive threshold mode

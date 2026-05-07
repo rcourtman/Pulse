@@ -3624,12 +3624,12 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             api_match["matched_contract_references"],
             [
-                {
-                    "heading": "## Shared Boundaries",
-                    "path": "internal/api/access_control_handlers.go",
-                    "line": 186,
-                    "heading_line": 106,
-                }
+	                {
+	                    "heading": "## Shared Boundaries",
+	                    "path": "internal/api/access_control_handlers.go",
+	                    "line": 190,
+	                    "heading_line": 106,
+	                }
             ],
         )
 

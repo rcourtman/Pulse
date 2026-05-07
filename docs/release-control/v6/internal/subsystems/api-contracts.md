@@ -114,6 +114,10 @@ product API routes free of maintainer commercial analytics.
    The Patrol status payload owns Patrol readiness as structured API state:
    provider/model/settings/tool prerequisites must travel as bounded readiness
    checks instead of frontend-only heuristics or generic analysis-failed text.
+   `/api/settings/ai/update` and `/api/ai/patrol/run` must use that same
+   `patrol_readiness_not_ready` error taxonomy when they reject a known-bad
+   Patrol runtime configuration, with bounded `status`, `provider`, and
+   `model` details where available.
 7. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.

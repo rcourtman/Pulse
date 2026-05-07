@@ -250,6 +250,11 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	if !cfg.Enabled {
 		return
 	}
+	if reason := strings.TrimSpace(cfg.RuntimeBlockedReason); reason != "" {
+		p.setBlockedReason(reason)
+		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping run - runtime readiness blocked")
+		return
+	}
 
 	if !p.tryStartRun("full") {
 		return
@@ -613,6 +618,11 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	p.mu.RUnlock()
 
 	if !cfg.Enabled {
+		return
+	}
+	if reason := strings.TrimSpace(cfg.RuntimeBlockedReason); reason != "" {
+		p.setBlockedReason(reason)
+		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping scoped run - runtime readiness blocked")
 		return
 	}
 

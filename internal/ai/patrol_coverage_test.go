@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -219,5 +220,93 @@ func TestPatrol_RunPatrol_AIUnavailableUsesProviderSettingsGuidance(t *testing.T
 	status := ps.GetStatus()
 	if status.BlockedReason != patrolProviderNotConfiguredReason {
 		t.Fatalf("blocked reason = %q, want %q", status.BlockedReason, patrolProviderNotConfiguredReason)
+	}
+}
+
+func TestPatrol_RunPatrol_BlocksNotReadyRuntimeBeforeLLM(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{ID: "node1", Name: "node1", Status: "online"},
+			},
+		},
+	}
+
+	svc := NewService(nil, nil)
+	model := "ollama:deepseek-r1:7b-llama-distill-q4_K_M"
+	svc.cfg = &config.AIConfig{
+		Enabled:       true,
+		Model:         model,
+		PatrolModel:   model,
+		PatrolEnabled: true,
+		OllamaBaseURL: "http://127.0.0.1:11434",
+	}
+	svc.provider = &mockProvider{}
+	svc.SetChatService(&mockChatService{
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			t.Fatalf("ExecutePatrolStream should not be called when Patrol readiness blocks the run")
+			return nil, nil
+		},
+	})
+
+	ps := NewPatrolService(svc, stateProvider)
+	svc.patrolService = ps
+	svc.ReconfigurePatrol()
+
+	ps.runPatrol(context.Background())
+
+	status := ps.GetStatus()
+	if status.BlockedReason == "" {
+		t.Fatal("expected blocked reason")
+	}
+	if !strings.Contains(status.BlockedReason, "reasoning-only model family") {
+		t.Fatalf("blocked reason = %q", status.BlockedReason)
+	}
+	if status.ErrorCount != 0 {
+		t.Fatalf("expected readiness block not to record runtime errors, got %d", status.ErrorCount)
+	}
+}
+
+func TestPatrol_RunScopedPatrol_BlocksNotReadyRuntimeBeforeLLM(t *testing.T) {
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{
+				{ID: "node1", Name: "node1", Status: "online"},
+			},
+		},
+	}
+
+	svc := NewService(nil, nil)
+	model := "ollama:deepseek-r1:7b-llama-distill-q4_K_M"
+	svc.cfg = &config.AIConfig{
+		Enabled:       true,
+		Model:         model,
+		PatrolModel:   model,
+		PatrolEnabled: true,
+		OllamaBaseURL: "http://127.0.0.1:11434",
+	}
+	svc.provider = &mockProvider{}
+	svc.SetChatService(&mockChatService{
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			t.Fatalf("ExecutePatrolStream should not be called when scoped Patrol readiness blocks the run")
+			return nil, nil
+		},
+	})
+
+	ps := NewPatrolService(svc, stateProvider)
+	svc.patrolService = ps
+	svc.ReconfigurePatrol()
+
+	ps.runScopedPatrol(context.Background(), PatrolScope{
+		Reason:      TriggerReasonAlertFired,
+		ResourceIDs: []string{"node1"},
+	})
+
+	status := ps.GetStatus()
+	if !strings.Contains(status.BlockedReason, "reasoning-only model family") {
+		t.Fatalf("blocked reason = %q", status.BlockedReason)
+	}
+	if status.ErrorCount != 0 {
+		t.Fatalf("expected readiness block not to record runtime errors, got %d", status.ErrorCount)
 	}
 }

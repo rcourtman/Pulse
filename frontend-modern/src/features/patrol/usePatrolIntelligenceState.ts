@@ -31,6 +31,9 @@ import { buildPatrolInvestigationContextSummary } from './patrolInvestigationCon
 
 type PatrolTab = 'findings' | 'history';
 
+const patrolErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message.trim() ? error.message : fallback;
+
 export function usePatrolIntelligenceState() {
   const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
@@ -190,7 +193,7 @@ export function usePatrolIntelligenceState() {
     } catch (err) {
       console.error('Failed to toggle patrol:', err);
       setPatrolEnabledLocal(previousValue);
-      notificationStore.error('Failed to toggle patrol');
+      notificationStore.error(patrolErrorMessage(err, 'Failed to toggle patrol'));
     } finally {
       setIsTogglingPatrol(false);
     }
@@ -223,7 +226,7 @@ export function usePatrolIntelligenceState() {
     } catch (err) {
       console.error('Failed to trigger patrol run:', err);
       setManualRunRequested(false);
-      notificationStore.error('Failed to start patrol run');
+      notificationStore.error(patrolErrorMessage(err, 'Failed to start patrol run'));
       clearSafetyTimer();
     } finally {
       setIsTriggeringPatrol(false);
@@ -239,7 +242,7 @@ export function usePatrolIntelligenceState() {
       setPatrolModel(updated.patrol_model || modelId);
     } catch (err) {
       console.error('Failed to update patrol model:', err);
-      notificationStore.error('Failed to update patrol model');
+      notificationStore.error(patrolErrorMessage(err, 'Failed to update patrol model'));
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -256,7 +259,7 @@ export function usePatrolIntelligenceState() {
       refetchPatrolStatus();
     } catch (err) {
       console.error('Failed to update patrol interval:', err);
-      notificationStore.error('Failed to update patrol schedule');
+      notificationStore.error(patrolErrorMessage(err, 'Failed to update patrol schedule'));
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -273,7 +276,7 @@ export function usePatrolIntelligenceState() {
     } catch (err) {
       console.error('Failed to update alert-triggered analysis:', err);
       setAlertTriggeredAnalysis(previous);
-      notificationStore.error('Failed to update alert analysis setting');
+      notificationStore.error(patrolErrorMessage(err, 'Failed to update alert analysis setting'));
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -290,7 +293,9 @@ export function usePatrolIntelligenceState() {
     } catch (err) {
       console.error('Failed to update alert-triggered patrols:', err);
       setPatrolAlertTriggers(previous);
-      notificationStore.error('Failed to update alert-triggered Patrol setting');
+      notificationStore.error(
+        patrolErrorMessage(err, 'Failed to update alert-triggered Patrol setting'),
+      );
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -307,7 +312,9 @@ export function usePatrolIntelligenceState() {
     } catch (err) {
       console.error('Failed to update anomaly-triggered patrols:', err);
       setPatrolAnomalyTriggers(previous);
-      notificationStore.error('Failed to update anomaly-triggered Patrol setting');
+      notificationStore.error(
+        patrolErrorMessage(err, 'Failed to update anomaly-triggered Patrol setting'),
+      );
     } finally {
       setIsUpdatingSettings(false);
     }

@@ -642,8 +642,24 @@ func TestHandleGetFindingsHistory_StartTimeFilter(t *testing.T) {
 	}
 }
 
+func seedReadyAnthropicPatrolRuntime(t *testing.T, handler *AISettingsHandler) {
+	t.Helper()
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "anthropic:claude-3-5-sonnet-latest"
+	aiCfg.AnthropicAPIKey = "test-key"
+	if err := handler.defaultPersistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+	if err := handler.defaultAIService.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+}
+
 func TestHandleForcePatrol_ConfigDisabled(t *testing.T) {
 	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	seedReadyAnthropicPatrolRuntime(t, handler)
 
 	cfg := ai.DefaultPatrolConfig()
 	cfg.Enabled = false
@@ -662,8 +678,48 @@ func TestHandleForcePatrol_ConfigDisabled(t *testing.T) {
 	}
 }
 
+func TestHandleForcePatrol_BlocksNotReadyPatrolModel(t *testing.T) {
+	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+
+	model := "ollama:deepseek-r1:7b-llama-distill-q4_K_M"
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = model
+	aiCfg.PatrolModel = model
+	aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+	if err := handler.defaultPersistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+	if err := handler.defaultAIService.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/run", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleForcePatrol(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+	var payload APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Code != "patrol_readiness_not_ready" {
+		t.Fatalf("code = %q, want patrol_readiness_not_ready", payload.Code)
+	}
+	if !strings.Contains(payload.ErrorMessage, "reasoning-only model family") {
+		t.Fatalf("error = %q", payload.ErrorMessage)
+	}
+	if payload.Details["model"] != model {
+		t.Fatalf("model detail = %q, want %q", payload.Details["model"], model)
+	}
+}
+
 func TestHandleForcePatrol_CommunityTierIgnoresRecentScopedActivityForFullPatrolRateLimit(t *testing.T) {
 	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	seedReadyAnthropicPatrolRuntime(t, handler)
 	handler.defaultAIService.SetLicenseChecker(communityLicenseChecker{})
 
 	setUnexportedField(t, patrol, "lastActivity", time.Now().Add(-10*time.Minute))

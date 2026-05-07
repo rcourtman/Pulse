@@ -133,6 +133,68 @@ func TestAISettingsHandler_PatrolReadinessFlagsReasoningOnlyModel(t *testing.T) 
 	require.Equal(t, patrolReadinessNotReady, toolCheck.Status)
 }
 
+func TestAISettingsHandler_UpdateSettingsRejectsNotReadyPatrolModel(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	model := "ollama:deepseek-r1:7b-llama-distill-q4_K_M"
+	body, err := json.Marshal(AISettingsUpdateRequest{
+		Enabled:       ptr(true),
+		Model:         ptr(model),
+		PatrolModel:   ptr(model),
+		OllamaBaseURL: ptr("http://127.0.0.1:11434"),
+	})
+	require.NoError(t, err)
+
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	var payload APIError
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+	require.Equal(t, "patrol_readiness_not_ready", payload.Code)
+	require.Contains(t, payload.ErrorMessage, "reasoning-only model family")
+	require.Equal(t, patrolReadinessNotReady, payload.Details["status"])
+	require.Equal(t, "ollama", payload.Details["provider"])
+	require.Equal(t, model, payload.Details["model"])
+
+	persisted, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.False(t, persisted.Enabled)
+}
+
+func TestAISettingsHandler_UpdateSettingsDoesNotLockUnrelatedSavesBehindExistingPatrolReadiness(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	model := "ollama:deepseek-r1:7b-llama-distill-q4_K_M"
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = model
+	aiCfg.PatrolModel = model
+	aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body, err := json.Marshal(AISettingsUpdateRequest{
+		RequestTimeoutSeconds: ptr(120),
+	})
+	require.NoError(t, err)
+
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	persisted, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, 120, persisted.RequestTimeoutSeconds)
+	require.Equal(t, model, persisted.PatrolModel)
+}
+
 func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
 	t.Parallel()
 
