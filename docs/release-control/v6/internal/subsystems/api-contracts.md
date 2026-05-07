@@ -1976,13 +1976,13 @@ last-known approval/action status, risk level, and summary timestamp; it must
 not serialize the model-only `handoff_context`, runtime failure detail, action
 preflight/result bodies, remediation descriptions, raw commands, or approval
 command payloads.
-Patrol finding handoffs are stricter than ordinary chat requests: when
-`finding_id` resolves to model-only Patrol briefing, resource, or action
-context, `internal/api/ai_handler.go` must clamp the request-local autonomous
-mode to false even if the caller supplied `autonomous_mode:true`. That
-server-side clamp is part of the public API contract because the frontend
-handoff setting is only advisory unless the backend preserves the
-approval-required boundary.
+Patrol finding handoffs are stricter than ordinary chat requests: when a request
+carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
+resource, or action context, `internal/api/ai_handler.go` must clamp the
+request-local autonomous mode to false even if the caller supplied
+`autonomous_mode:true`. That server-side clamp is part of the public API
+contract because the frontend handoff setting is only advisory unless the
+backend preserves the approval-required boundary.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

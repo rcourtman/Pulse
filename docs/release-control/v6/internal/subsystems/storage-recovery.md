@@ -1109,6 +1109,12 @@ AI/runtime review identity only. Storage and recovery may display or link from
 the safe run ID, run type/status, runtime-failure flag, or scoped resource label
 as incident context, but they must not reinterpret it as backup freshness,
 restore proof, storage health authority, or recovery-local remediation state.
+Patrol finding handoffs that force approval-required Assistant mode from a
+non-empty `finding_id` follow the same adjacent API boundary: storage and
+recovery may treat the resulting Assistant session as incident context, but
+must not reinterpret the finding ID or approval-required chat mode as backup
+freshness, restore authorization, storage remediation permission, or recovery
+transport state.
 That same storage ownership also includes the shared storage-source presentation
 contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and

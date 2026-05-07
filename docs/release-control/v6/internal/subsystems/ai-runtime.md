@@ -372,10 +372,11 @@ runtime cost control, and shared AI transport surfaces.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.
-    `/api/ai/chat` must also clamp Patrol finding handoffs that resolve to
-    model-only briefing, resource, or action context to approval-required mode
-    by forcing the request-local autonomous-mode override to false, even when a
-    caller supplied `autonomous_mode:true`. That clamp belongs to the
+    `/api/ai/chat` must also clamp Patrol finding handoffs to
+    approval-required mode when a request carries a non-empty `finding_id` or
+    resolves to model-only briefing, resource, or action context, by forcing the
+    request-local autonomous-mode override to false, even when a caller supplied
+    `autonomous_mode:true`. That clamp belongs to the
     backend/API execution boundary, does not mutate the user's persistent AI
     control setting, and prevents product-originated Patrol action context from
     becoming silent command authority.

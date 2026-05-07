@@ -825,11 +825,18 @@ func chatAutonomousModeForScopedHandoff(requested *bool, handoffContext string, 
 	if strings.TrimSpace(handoffContext) == "" && len(handoffResources) == 0 && len(handoffActions) == 0 && chat.NormalizeHandoffMetadata(handoffMetadata) == (chat.HandoffMetadata{}) {
 		return requested
 	}
+	return chatApprovalRequiredAutonomousMode()
+}
+
+func chatApprovalRequiredAutonomousMode() *bool {
 	approvalRequired := false
 	return &approvalRequired
 }
 
 func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction, handoffMetadata chat.HandoffMetadata) *bool {
+	if strings.TrimSpace(findingID) != "" {
+		return chatApprovalRequiredAutonomousMode()
+	}
 	return chatAutonomousModeForScopedHandoff(requested, handoffContext, handoffResources, handoffActions, handoffMetadata)
 }
 

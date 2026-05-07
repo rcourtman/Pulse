@@ -280,7 +280,9 @@ profile and assignment columns, but embedded table framing must route through
    boundary: lifecycle-adjacent consumers may rely on Assistant approval
    semantics, but scoped `autonomous_mode:false` chat requests must not be
    reinterpreted as agent registration, assignment, installer, or connection
-   lifecycle state.
+   lifecycle state. Patrol finding handoffs that force approval-required mode
+   from a non-empty `finding_id` are likewise AI/runtime governance, not an
+   agent command grant or lifecycle authorization primitive.
    Lifecycle flows must not reintroduce anonymous bootstrap identity,
    tenant-local commercial-owner surrogates, or fake activation records when
    they traverse those shared handlers. They also must not infer tenant

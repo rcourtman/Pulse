@@ -583,6 +583,77 @@ func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestChatAutonomousModeForFindingHandoffRequiresApprovalForProductHandoffs(t *testing.T) {
+	requestedAutonomous := true
+	requestedManual := false
+	if got := chatAutonomousModeForFindingHandoff(&requestedAutonomous, "", "", nil, nil, chat.HandoffMetadata{}); got != &requestedAutonomous {
+		t.Fatalf("plain chat should pass requested autonomous mode through, got %#v", got)
+	}
+	if got := chatAutonomousModeForFindingHandoff(&requestedManual, "", "", nil, nil, chat.HandoffMetadata{}); got != &requestedManual {
+		t.Fatalf("plain chat should pass requested manual mode through, got %#v", got)
+	}
+	if got := chatAutonomousModeForFindingHandoff(nil, "", "", nil, nil, chat.HandoffMetadata{}); got != nil {
+		t.Fatalf("plain chat with no override should preserve nil autonomous mode, got %#v", got)
+	}
+
+	cases := []struct {
+		name             string
+		findingID        string
+		handoffContext   string
+		handoffResources []chat.HandoffResource
+		handoffActions   []chat.HandoffAction
+		handoffMetadata  chat.HandoffMetadata
+	}{
+		{
+			name:      "finding id only",
+			findingID: "finding-123",
+		},
+		{
+			name:           "scoped handoff context",
+			handoffContext: "[Patrol Finding Context]\nFinding ID: finding-123",
+		},
+		{
+			name:             "handoff resource",
+			handoffResources: []chat.HandoffResource{{ID: "vm-100", Type: "vm"}},
+		},
+		{
+			name:           "handoff action",
+			handoffActions: []chat.HandoffAction{{ActionID: "action-123", FindingID: "finding-123"}},
+		},
+		{
+			name:            "patrol run metadata",
+			handoffMetadata: chat.HandoffMetadata{Kind: "patrol_run", RunID: "run-1"},
+		},
+		{
+			name:            "patrol assessment metadata",
+			handoffMetadata: chat.HandoffMetadata{Kind: "patrol_assessment"},
+		},
+		{
+			name:            "patrol configuration failure metadata",
+			handoffMetadata: chat.HandoffMetadata{Kind: "patrol_configuration_failure", RuntimeFailure: true},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := chatAutonomousModeForFindingHandoff(
+				&requestedAutonomous,
+				tc.findingID,
+				tc.handoffContext,
+				tc.handoffResources,
+				tc.handoffActions,
+				tc.handoffMetadata,
+			)
+			if got == nil {
+				t.Fatalf("expected approval-required autonomous mode, got nil")
+			}
+			if *got {
+				t.Fatalf("expected approval-required autonomous mode false, got true")
+			}
+		})
+	}
+}
+
 func TestHandleChat_PassesScopedHandoffContext(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
