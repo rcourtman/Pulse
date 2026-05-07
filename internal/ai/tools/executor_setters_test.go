@@ -210,6 +210,30 @@ func TestToolRegistry_ListTools(t *testing.T) {
 	assert.Equal(t, "hidden in read-only mode; approval required in controlled mode", governance[1].ApprovalPolicy)
 }
 
+func TestToolRegistry_ExecuteControlToolReadOnlyUsesAssistantAndPatrolGuidance(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(RegisteredTool{
+		Definition:     Tool{Name: "control"},
+		RequireControl: true,
+		Handler: func(ctx context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			t.Fatal("control handler should not run in read-only mode")
+			return NewTextResult("unexpected"), nil
+		},
+	})
+
+	exec := NewPulseToolExecutor(ExecutorConfig{})
+	exec.SetControlLevel(ControlLevelReadOnly)
+
+	result, err := registry.Execute(context.Background(), exec, "control", nil)
+	require.NoError(t, err)
+	require.Len(t, result.Content, 1)
+	text := result.Content[0].Text
+	assert.Equal(t, assistantControlToolsDisabledMessage, text)
+	assert.Contains(t, text, "Assistant & Patrol settings")
+	assert.Contains(t, text, "Pulse Assistant Permissions > Control mode")
+	assert.NotContains(t, text, "Settings > Pulse Assistant")
+}
+
 func containsTool(tools []Tool, name string) bool {
 	for _, tool := range tools {
 		if tool.Name == name {

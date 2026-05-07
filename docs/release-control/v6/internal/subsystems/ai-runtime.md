@@ -135,6 +135,10 @@ runtime cost control, and shared AI transport surfaces.
    `ActionPlan.Preflight` dry-run boundary through
    `internal/ai/tools/action_audit.go` rather than leaving dry-run availability
    as chat-only text.
+   When the shared registry blocks a control tool in read-only mode, its
+   operator guidance must point to Assistant & Patrol settings and the Pulse
+   Assistant Permissions Control mode, not legacy Pulse Assistant settings
+   paths.
 9. Keep self-hosted Patrol messaging aligned with the v6 GA product contract:
    ordinary self-hosted installs use BYOK or local providers, and the runtime
    must not surface retired managed-model credits, trial prompts, account-backed

@@ -15,6 +15,8 @@ const (
 	ToolActionWrite ToolActionMode = "write"
 )
 
+const assistantControlToolsDisabledMessage = "Control tools are disabled. Open Assistant & Patrol settings, then set Pulse Assistant Permissions > Control mode to Controlled before using action tools."
+
 // ToolGovernance records the operator-facing governance contract for a tool.
 type ToolGovernance struct {
 	ActionMode     ToolActionMode
@@ -149,7 +151,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	// Centralized control level check
 	if tool.RequireControl {
 		if e.controlLevel == ControlLevelReadOnly || e.controlLevel == "" {
-			return NewTextResult("Control tools are disabled. Enable them in Settings > Pulse Assistant > Control Level."), nil
+			return NewTextResult(assistantControlToolsDisabledMessage), nil
 		}
 	}
 
