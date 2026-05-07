@@ -783,6 +783,17 @@ type ChatRequest struct {
 	AutonomousMode *bool         `json:"autonomous_mode,omitempty"`
 }
 
+func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool {
+	if strings.TrimSpace(findingID) == "" {
+		return requested
+	}
+	if strings.TrimSpace(handoffContext) == "" && len(handoffResources) == 0 && len(handoffActions) == 0 {
+		return requested
+	}
+	approvalRequired := false
+	return &approvalRequired
+}
+
 const findingChatContextListLimit = 5
 
 type unifiedFindingLookup interface {
@@ -2152,7 +2163,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		HandoffContext:   handoffContext,
 		HandoffResources: handoffResources,
 		HandoffActions:   handoffActions,
-		AutonomousMode:   req.AutonomousMode,
+		AutonomousMode:   chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions),
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
 			serviceSentDone = true

@@ -146,6 +146,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"handoffContext = buildUnifiedFindingChatContext(f, store, handoffActions)",
 		"handoffResources = buildUnifiedFindingHandoffResources(f, store)",
 		"livePatrolApprovalForFinding(f.ID, orgID)",
+		"func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool",
+		"AutonomousMode:   chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions)",
 		`appendChatContextLine(&b, "Finding Status", unifiedFindingChatStatus(f, time.Now()))`,
 		`appendChatContextLine(&b, "Finding Detected At", f.DetectedAt.Format(time.RFC3339))`,
 		`appendChatContextLine(&b, "Finding Last Seen At", f.LastSeenAt.Format(time.RFC3339))`,

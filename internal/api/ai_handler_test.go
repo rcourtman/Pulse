@@ -727,6 +727,9 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			reqArg := args.Get(1).(chat.ExecuteRequest)
 			assert.Equal(t, "finding-123", reqArg.FindingID)
 			assert.Equal(t, "What happened?", reqArg.Prompt)
+			if assert.NotNil(t, reqArg.AutonomousMode) {
+				assert.False(t, *reqArg.AutonomousMode)
+			}
 			assert.Contains(t, reqArg.HandoffContext, "[Operator Briefing]")
 			assert.Contains(t, reqArg.HandoffContext, "Briefing Source: Pulse Patrol structured finding")
 			assert.Contains(t, reqArg.HandoffContext, "Finding: High CPU usage (critical, performance, active)")
@@ -809,7 +812,7 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 			assert.NotContains(t, fmt.Sprintf("%#v", reqArg.HandoffActions), "systemctl restart workload.service")
 		})
 
-	body := `{"prompt":"What happened?","finding_id":"finding-123"}`
+	body := `{"prompt":"What happened?","finding_id":"finding-123","autonomous_mode":true}`
 	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
 	w := httptest.NewRecorder()
 

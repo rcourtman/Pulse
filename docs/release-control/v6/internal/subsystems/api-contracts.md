@@ -1831,6 +1831,13 @@ overrides. Dashboard Pulse Brief and other scoped handoffs may include
 execution for that exchange, but the transport must treat the field as a
 request override only and must not mutate the user's persistent AI control
 setting.
+Patrol finding handoffs are stricter than ordinary chat requests: when
+`finding_id` resolves to model-only Patrol briefing, resource, or action
+context, `internal/api/ai_handler.go` must clamp the request-local autonomous
+mode to false even if the caller supplied `autonomous_mode:true`. That
+server-side clamp is part of the public API contract because the frontend
+handoff setting is only advisory unless the backend preserves the
+approval-required boundary.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

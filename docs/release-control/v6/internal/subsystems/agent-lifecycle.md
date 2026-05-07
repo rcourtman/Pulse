@@ -1099,6 +1099,11 @@ execution mode is AI/API-owned. Request-scoped `AutonomousMode:false` and
 `RequireCommandApproval:true` on `/api/ai/investigate-alert` are Assistant
 action-governance facts, not agent install readiness, command reachability, or
 fleet-control capability signals.
+Patrol finding chat handoffs follow the same ownership split: when
+`/api/ai/chat` resolves a `finding_id` into model-only Patrol briefing,
+resource, or action context, the backend-enforced `autonomous_mode:false`
+clamp is Assistant action-governance, not agent readiness, fleet command
+reachability, or enrollment health.
 That same shared `internal/api/` dependency also now assumes SSO test and
 metadata-preview routes fail closed on validated outbound URL handling.
 Lifecycle-adjacent setup and hosted bootstrap surfaces may depend on those

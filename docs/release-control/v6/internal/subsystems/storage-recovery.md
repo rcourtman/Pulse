@@ -398,6 +398,11 @@ bypass the API fail-closed execution gate.
     `RequireCommandApproval:true` are AI action-governance constraints, not
     storage/recovery restore approval, recovery freshness, or storage diagnostic
     payload semantics.
+    Patrol finding chat handoff execution controls in `internal/api/ai_handler.go`
+    follow the same boundary: backend-forced `autonomous_mode:false` for
+    `finding_id` handoffs with model-only Patrol briefing, resource, or action
+    context is Assistant action-governance, not a storage/recovery approval,
+    recovery freshness, or restore-command signal.
     That same adjacent boundary also keeps the retired Patrol quickstart
     contract out of storage/recovery ownership: shared AI handlers no longer
     expose active quickstart credit, token, or hosted-model provider state, and
