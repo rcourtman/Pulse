@@ -300,7 +300,7 @@ func GenerateAlertInvestigationPrompt(req AlertInvestigationRequest) string {
 	prompt.WriteString("1. Identify the root cause of this alert\n")
 	prompt.WriteString("2. Check related metrics and system state\n")
 	prompt.WriteString("3. Suggest specific remediation steps\n")
-	prompt.WriteString("4. If safe, execute diagnostic commands to gather more info\n")
+	prompt.WriteString("4. Ask for operator approval before running any diagnostic command or change\n")
 
 	return prompt.String()
 }

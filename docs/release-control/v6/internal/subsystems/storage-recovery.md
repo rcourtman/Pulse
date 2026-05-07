@@ -393,6 +393,11 @@ bypass the API fail-closed execution gate.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
     The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, and provider-test model selection remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree.
+    Direct alert-investigation execution controls in `internal/api/ai_handlers.go`
+    follow that same split: request-scoped `AutonomousMode:false` and
+    `RequireCommandApproval:true` are AI action-governance constraints, not
+    storage/recovery restore approval, recovery freshness, or storage diagnostic
+    payload semantics.
     That same adjacent boundary also keeps the retired Patrol quickstart
     contract out of storage/recovery ownership: shared AI handlers no longer
     expose active quickstart credit, token, or hosted-model provider state, and

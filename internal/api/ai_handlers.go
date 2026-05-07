@@ -4300,10 +4300,13 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		}
 	}()
 
+	autonomousMode := false
 	resp, err := h.GetAIService(r.Context()).ExecuteStream(ctx, ai.ExecuteRequest{
-		Prompt:     investigationPrompt,
-		TargetType: targetType,
-		TargetID:   targetID,
+		Prompt:                 investigationPrompt,
+		TargetType:             targetType,
+		TargetID:               targetID,
+		AutonomousMode:         &autonomousMode,
+		RequireCommandApproval: true,
 		Context: map[string]interface{}{
 			"alertIdentifier": alertIdentifier,
 			"alertType":       req.AlertType,

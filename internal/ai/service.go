@@ -1838,6 +1838,13 @@ func (s *Service) IsAutonomous() bool {
 	return true
 }
 
+func (s *Service) isAutonomousForRequest(req ExecuteRequest) bool {
+	if req.AutonomousMode != nil && !*req.AutonomousMode {
+		return false
+	}
+	return s.IsAutonomous()
+}
+
 // ConversationMessage represents a message in conversation history
 type ConversationMessage struct {
 	Role    string `json:"role"` // "user" or "assistant"
@@ -1846,15 +1853,17 @@ type ConversationMessage struct {
 
 // ExecuteRequest represents a request to execute an AI prompt
 type ExecuteRequest struct {
-	Prompt       string                 `json:"prompt"`
-	TargetType   string                 `json:"target_type,omitempty"` // "agent", "system-container", "vm"
-	TargetID     string                 `json:"target_id,omitempty"`
-	Context      map[string]interface{} `json:"context,omitempty"`       // Current metrics, state, etc.
-	SystemPrompt string                 `json:"system_prompt,omitempty"` // Override system prompt
-	History      []ConversationMessage  `json:"history,omitempty"`       // Previous conversation messages
-	FindingID    string                 `json:"finding_id,omitempty"`    // If fixing a patrol finding, the ID to resolve
-	Model        string                 `json:"model,omitempty"`         // Override model for this request (for user selection in chat)
-	UseCase      string                 `json:"use_case,omitempty"`      // "chat" or "patrol" - determines which default model to use
+	Prompt                 string                 `json:"prompt"`
+	TargetType             string                 `json:"target_type,omitempty"` // "agent", "system-container", "vm"
+	TargetID               string                 `json:"target_id,omitempty"`
+	Context                map[string]interface{} `json:"context,omitempty"`                  // Current metrics, state, etc.
+	SystemPrompt           string                 `json:"system_prompt,omitempty"`            // Override system prompt
+	History                []ConversationMessage  `json:"history,omitempty"`                  // Previous conversation messages
+	FindingID              string                 `json:"finding_id,omitempty"`               // If fixing a patrol finding, the ID to resolve
+	Model                  string                 `json:"model,omitempty"`                    // Override model for this request (for user selection in chat)
+	UseCase                string                 `json:"use_case,omitempty"`                 // "chat" or "patrol" - determines which default model to use
+	AutonomousMode         *bool                  `json:"autonomous_mode,omitempty"`          // Per-request execution override; false keeps scoped handoffs approval-required
+	RequireCommandApproval bool                   `json:"require_command_approval,omitempty"` // Force every run_command tool call through operator approval
 }
 
 // ExecuteResponse represents the AI's response
@@ -2386,6 +2395,7 @@ Always execute the commands rather than telling the user how to do it.`
 			// Check if this command needs approval
 			needsApproval := false
 			approvalID := ""
+			approvalReason := "Command requires user approval"
 			if tc.Name == "run_command" {
 				cmd, _ := tc.Input["command"].(string)
 				runOnHost, _ := tc.Input["run_on_host"].(bool)
@@ -2406,7 +2416,7 @@ Always execute the commands rather than telling the user how to do it.`
 					}
 				}
 
-				isAuto := s.IsAutonomous()
+				isAuto := s.isAutonomousForRequest(req)
 				policyDecision := s.policy.Evaluate(cmd)
 				log.Debug().
 					Bool("autonomous", isAuto).
@@ -2446,10 +2456,13 @@ Always execute the commands rather than telling the user how to do it.`
 					continue
 				}
 
-				// If policy requires approval and we're not in autonomous mode, request approval.
-				if !isAuto && policyDecision == agentexec.PolicyRequireApproval {
+				if req.RequireCommandApproval || (!isAuto && policyDecision == agentexec.PolicyRequireApproval) {
 					needsApproval = true
 					anyNeedsApproval = true
+					approvalReason = "Security policy requires approval"
+					if req.RequireCommandApproval {
+						approvalReason = "This handoff requires operator approval before command execution"
+					}
 					approvalID = createRunCommandApprovalRecord(
 						approvalOrgID,
 						cmd,
@@ -2457,7 +2470,7 @@ Always execute the commands rather than telling the user how to do it.`
 						req,
 						runOnHost,
 						targetHost,
-						"Security policy requires approval",
+						approvalReason,
 					)
 					callback(StreamEvent{
 						Type: "approval_needed",
@@ -2482,7 +2495,7 @@ Always execute the commands rather than telling the user how to do it.`
 				// Note: We don't add to toolExecutions here because the approval_needed event
 				// already tells the frontend to show the approval UI
 				cmd, _ := tc.Input["command"].(string)
-				result = formatApprovalNeededToolResult(cmd, tc.ID, "Command requires user approval", approvalID)
+				result = formatApprovalNeededToolResult(cmd, tc.ID, approvalReason, approvalID)
 				execution = ToolExecution{
 					Name:    tc.Name,
 					Input:   toolInput,
@@ -3106,10 +3119,14 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			execution.Output = formatPolicyBlockedToolResult(command, "This command is blocked by security policy")
 			return execution.Output, execution
 		}
-		if decision == agentexec.PolicyRequireApproval && !s.IsAutonomous() {
+		if req.RequireCommandApproval || (decision == agentexec.PolicyRequireApproval && !s.isAutonomousForRequest(req)) {
 			s.mu.RLock()
 			approvalOrgID := s.orgID
 			s.mu.RUnlock()
+			approvalReason := "Security policy requires approval"
+			if req.RequireCommandApproval {
+				approvalReason = "This handoff requires operator approval before command execution"
+			}
 			approvalID := createRunCommandApprovalRecord(
 				approvalOrgID,
 				command,
@@ -3117,9 +3134,9 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 				req,
 				runOnHost,
 				targetHost,
-				"Security policy requires approval",
+				approvalReason,
 			)
-			execution.Output = formatApprovalNeededToolResult(command, tc.ID, "Security policy requires approval", approvalID)
+			execution.Output = formatApprovalNeededToolResult(command, tc.ID, approvalReason, approvalID)
 			execution.Success = true // Not an error, just needs approval
 			return execution.Output, execution
 		}
@@ -3992,14 +4009,23 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 
 // buildSystemPrompt creates the system prompt based on the request context
 func (s *Service) buildSystemPrompt(req ExecuteRequest, destinationModel string) string {
-	prompt := `You are Pulse's diagnostic assistant for Proxmox, Docker, and Kubernetes homelabs.
-
-## Command Approval
-Pulse has a built-in approval system:
+	commandApproval := `Pulse has a built-in approval system:
 - Safe commands (read-only: ls, df, cat, ps) execute immediately
 - Destructive commands (rm, service restart, apt install) require user approval
 - Blocked commands are never executed
-Execute commands normally - Pulse handles the approval flow automatically.
+Execute commands normally - Pulse handles the approval flow automatically.`
+	if req.RequireCommandApproval {
+		commandApproval = `This handoff is approval-bound:
+- Do not run commands just because they look safe.
+- Any run_command tool call will pause for explicit operator approval before execution.
+- Prefer existing metrics, alert context, and known system state before requesting command approval.
+- Blocked commands are never executed.`
+	}
+
+	prompt := fmt.Sprintf(`You are Pulse's diagnostic assistant for Proxmox, Docker, and Kubernetes homelabs.
+
+## Command Approval
+%s
 
 ## Command Execution
 - run_on_host=true: Run on PVE/Docker host (pct, qm, vzdump, docker commands)
@@ -4030,7 +4056,7 @@ Example: "homelab:pve-node:201" for VMID 201 on node pve-node in instance homela
 ## Installing/Updating Pulse
 curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 After: systemctl enable pulse && systemctl start pulse
-Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
+Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`, commandApproval)
 
 	// Add custom context from AI settings (user's infrastructure description)
 	s.mu.RLock()

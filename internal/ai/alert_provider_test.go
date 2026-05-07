@@ -229,6 +229,12 @@ func TestGenerateAlertInvestigationPrompt(t *testing.T) {
 		!strings.Contains(out, "**Node:** pve1") {
 		t.Fatalf("unexpected prompt: %s", out)
 	}
+	if !strings.Contains(out, "Ask for operator approval before running any diagnostic command") {
+		t.Fatalf("expected approval-bound diagnostic guidance, got: %s", out)
+	}
+	if strings.Contains(out, "execute diagnostic commands") {
+		t.Fatalf("prompt must not instruct autonomous diagnostic command execution: %s", out)
+	}
 }
 
 func TestAlertInvestigationRequestJSONCanonicalOutput(t *testing.T) {

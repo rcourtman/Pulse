@@ -735,6 +735,32 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 	if !strings.Contains(result, "APPROVAL_REQUIRED") {
 		t.Errorf("Expected APPROVAL_REQUIRED message, got %s", result)
 	}
+
+	// 4. Request-scoped approval mode must clamp an autonomous default.
+	autonomousMode := false
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}
+	req.AutonomousMode = &autonomousMode
+	result, exec = svc.executeTool(ctx, req, tc)
+	if !exec.Success {
+		t.Errorf("Expected success (not an error to need approval), got: %s", result)
+	}
+	if !strings.Contains(result, "APPROVAL_REQUIRED") {
+		t.Errorf("Expected request-scoped approval mode to require approval, got %s", result)
+	}
+
+	// 5. Approval-bound handoffs require approval even for policy-allowed commands.
+	mockPolicy.decision = agentexec.PolicyAllow
+	req.RequireCommandApproval = true
+	result, exec = svc.executeTool(ctx, req, tc)
+	if !exec.Success {
+		t.Errorf("Expected success (not an error to need approval), got: %s", result)
+	}
+	if !strings.Contains(result, "APPROVAL_REQUIRED") {
+		t.Errorf("Expected approval-bound handoff to require approval, got %s", result)
+	}
+	if !strings.Contains(result, "handoff requires operator approval") {
+		t.Errorf("Expected handoff approval reason, got %s", result)
+	}
 }
 
 func TestService_ExecuteTool_SetResourceURL(t *testing.T) {
@@ -2926,6 +2952,21 @@ func TestService_FindingContextInSystemPrompt(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "target_host") || !strings.Contains(prompt, "minipc") {
 		t.Error("System prompt should include ROUTING instructions mentioning target_host=minipc")
+	}
+}
+
+func TestService_BuildSystemPrompt_ApprovalBoundCommandHandoff(t *testing.T) {
+	svc := NewService(nil, nil)
+	prompt := svc.buildSystemPrompt(ExecuteRequest{RequireCommandApproval: true}, "")
+
+	if !strings.Contains(prompt, "This handoff is approval-bound") {
+		t.Fatalf("expected approval-bound command guidance, got: %s", prompt)
+	}
+	if !strings.Contains(prompt, "Any run_command tool call will pause for explicit operator approval") {
+		t.Fatalf("expected all command tool calls to require approval, got: %s", prompt)
+	}
+	if strings.Contains(prompt, "Safe commands (read-only: ls, df, cat, ps) execute immediately") {
+		t.Fatalf("approval-bound prompt must not say safe commands execute immediately: %s", prompt)
 	}
 }
 

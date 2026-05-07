@@ -2048,6 +2048,18 @@ func TestHandleInvestigateAlert_AcceptsCanonicalAlertIdentifier(t *testing.T) {
 	require.NotContains(t, rec.Header().Get("Content-Type"), "text/event-stream")
 }
 
+func TestHandleInvestigateAlert_ForcesApprovalBoundExecuteRequest(t *testing.T) {
+	t.Parallel()
+
+	source, err := os.ReadFile("ai_handlers.go")
+	require.NoError(t, err)
+	text := string(source)
+
+	require.Contains(t, text, "autonomousMode := false")
+	require.Contains(t, text, "AutonomousMode:         &autonomousMode")
+	require.Contains(t, text, "RequireCommandApproval: true")
+}
+
 // ========================================
 // AISettingsHandler setter method tests
 // ========================================

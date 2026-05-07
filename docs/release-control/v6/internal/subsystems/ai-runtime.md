@@ -1055,6 +1055,13 @@ only governed prompt/context data, but the submitted chat request must set
 `autonomous_mode:false`, preserve the operator's persistent Assistant
 control-level setting, and disclose the temporary approval-required mode in
 the drawer instead of showing the generic Autonomous warning.
+Direct alert-investigation runtime handoffs follow the same rule even when
+they bypass the chat drawer. `/api/ai/investigate-alert` must set
+`ai.ExecuteRequest.AutonomousMode` to false plus
+`ai.ExecuteRequest.RequireCommandApproval` to true, and
+`internal/ai/alert_provider.go` must frame diagnostics as approval-bound
+operator actions rather than instructing the model to execute commands because
+they appear safe.
 Those backend AI and Patrol change summaries should derive their canonical
 labels and provenance fragments from
 `internal/unifiedresources/change_presentation.go`, so the resource-model

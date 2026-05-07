@@ -295,6 +295,20 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	}
 }
 
+func TestContract_InvestigateAlertIsApprovalBound(t *testing.T) {
+	source, err := os.ReadFile(filepath.Clean("ai_handlers.go"))
+	if err != nil {
+		t.Fatalf("read ai_handlers.go: %v", err)
+	}
+	text := string(source)
+
+	if !strings.Contains(text, "autonomousMode := false") ||
+		!strings.Contains(text, "AutonomousMode:         &autonomousMode") ||
+		!strings.Contains(text, "RequireCommandApproval: true") {
+		t.Fatal("investigate-alert API handoff must force request-scoped approval and command approval")
+	}
+}
+
 func TestContract_ProxmoxSetupScriptUsesPrivilegeSeparatedTokenACLs(t *testing.T) {
 	storagePerms := `
 pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin

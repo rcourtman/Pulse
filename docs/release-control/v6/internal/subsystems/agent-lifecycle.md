@@ -1094,6 +1094,11 @@ AI handlers add split scoped-trigger fields, recency labels, or trigger-state
 transport for Patrol, lifecycle-adjacent setup and fleet surfaces must treat
 those payloads as Patrol-only runtime context and must not reinterpret them as
 agent install readiness, enrollment health, or fleet-control state.
+That same shared AI handler dependency also assumes direct alert-investigation
+execution mode is AI/API-owned. Request-scoped `AutonomousMode:false` and
+`RequireCommandApproval:true` on `/api/ai/investigate-alert` are Assistant
+action-governance facts, not agent install readiness, command reachability, or
+fleet-control capability signals.
 That same shared `internal/api/` dependency also now assumes SSO test and
 metadata-preview routes fail closed on validated outbound URL handling.
 Lifecycle-adjacent setup and hosted bootstrap surfaces may depend on those

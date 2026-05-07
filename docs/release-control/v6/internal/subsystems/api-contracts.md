@@ -327,7 +327,12 @@ the canonical monitored-system blocked payload.
     surfaces. Frontend finding-discussion handoffs that carry any live approval,
     proposed-fix, fix outcome, or remediation-plan reference must force a
     request-local approval-required Assistant mode instead of inheriting the
-    user's persistent autonomous control setting. The operator
+    user's persistent autonomous control setting. Direct alert-investigation API
+    handoffs through `internal/api/ai_handlers.go` must enforce that same
+    request-scoped boundary by setting `ai.ExecuteRequest.AutonomousMode` to
+    false and `ai.ExecuteRequest.RequireCommandApproval` to true; API proof must
+    keep this guarded in both `internal/api/ai_handlers_test.go` and
+    `internal/api/contract_test.go`. The operator
     decision and action-posture lines in the briefing must derive from those
     same structured action references after recovery so the briefing cannot
     contradict the handoff action payload. Related finding
