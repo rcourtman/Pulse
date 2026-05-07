@@ -286,6 +286,12 @@ runtime cost control, and shared AI transport surfaces.
     `autonomous_mode:false` even when the summary is context-only and has no
     queued action, while the visible badge/action copy must still reflect the
     actual last-known action state instead of inventing a pending approval.
+    Before `/api/ai/sessions` returns summaries with stored handoff action
+    references, the chat runtime must refresh their safe approval/action status
+    from the canonical approval store and action-audit store. Session listing is
+    an operator decision surface, so it must not leave stale pending/approval
+    labels in the drawer after the governed action moved on, and it must still
+    omit raw commands, preflight bodies, and execution output.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.

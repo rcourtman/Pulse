@@ -2073,13 +2073,60 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 func (s *Service) ListSessions(ctx context.Context) ([]Session, error) {
 	s.mu.RLock()
 	sessions := s.sessions
+	actionAuditStore := s.actionAuditStore
+	orgID := s.orgID
 	s.mu.RUnlock()
 
 	if sessions == nil {
 		return nil, fmt.Errorf("service not started")
 	}
 
+	refreshSessionHandoffActionSummaries(sessions, orgID, actionAuditStore)
 	return sessions.List()
+}
+
+func refreshSessionHandoffActionSummaries(sessions *SessionStore, orgID string, actionStore unifiedresources.ResourceStore) {
+	if sessions == nil {
+		return
+	}
+
+	list, err := sessions.List()
+	if err != nil {
+		log.Debug().Err(err).Msg("[ChatService] Failed to list sessions for handoff action refresh")
+		return
+	}
+
+	for _, session := range list {
+		if session.HandoffSummary == nil || session.HandoffSummary.ActionCount == 0 {
+			continue
+		}
+		actions, err := sessions.GetModelHandoffActions(session.ID)
+		if err != nil {
+			log.Debug().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load session handoff actions for summary refresh")
+			continue
+		}
+		refreshed := refreshHandoffActionStatus(actions, orgID, actionStore)
+		if handoffActionsEqual(actions, refreshed) {
+			continue
+		}
+		if err := sessions.SetModelHandoffActions(session.ID, refreshed); err != nil {
+			log.Debug().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist refreshed session handoff action summary")
+		}
+	}
+}
+
+func handoffActionsEqual(a, b []HandoffAction) bool {
+	a = normalizeHandoffActions(a)
+	b = normalizeHandoffActions(b)
+	if len(a) != len(b) {
+		return false
+	}
+	for idx := range a {
+		if a[idx] != b[idx] {
+			return false
+		}
+	}
+	return true
 }
 
 // CreateSession creates a new session

@@ -192,6 +192,103 @@ func seedHandoffActionAudit(t *testing.T, store unifiedresources.ResourceStore, 
 	}
 }
 
+func TestService_ListSessionsRefreshesHandoffActionSummary(t *testing.T) {
+	now := time.Now().UTC().Add(-2 * time.Minute)
+	decidedAt := now.Add(2 * time.Minute)
+	actionPlan := testHandoffActionPlan(now)
+	installTestApprovalStore(t, &approval.ApprovalRequest{
+		ID:          "approval-123",
+		OrgID:       approval.DefaultOrgID,
+		Command:     "systemctl restart workload.service",
+		TargetType:  "vm",
+		TargetID:    "vm-100",
+		TargetName:  "web-server",
+		RiskLevel:   approval.RiskMedium,
+		Status:      approval.StatusApproved,
+		RequestedAt: now,
+		DecidedAt:   &decidedAt,
+		ExpiresAt:   now.Add(10 * time.Minute),
+		Plan:        &actionPlan,
+	})
+	if _, err := approval.GetStore().Approve("approval-123", "operator@example.com"); err != nil {
+		t.Fatalf("Approve failed: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	if err := store.SetModelHandoffFindingID(session.ID, "finding-123"); err != nil {
+		t.Fatalf("SetModelHandoffFindingID failed: %v", err)
+	}
+	if err := store.SetModelHandoffActions(session.ID, []HandoffAction{{
+		FindingID:              "finding-123",
+		ApprovalID:             "approval-123",
+		ApprovalStatus:         "pending",
+		ActionID:               actionPlan.ActionID,
+		ActionState:            "awaiting_approval",
+		ActionRequiresApproval: true,
+		ActionPreflight:        "systemctl restart workload.service",
+		ActionResult:           "raw command output",
+		RiskLevel:              "medium",
+		TargetResourceID:       "vm-100",
+		TargetResourceName:     "web-server",
+		TargetResourceType:     "vm",
+	}}); err != nil {
+		t.Fatalf("SetModelHandoffActions failed: %v", err)
+	}
+
+	actionStore := unifiedresources.NewMemoryStore()
+	seedHandoffActionAudit(t, actionStore, actionPlan, unifiedresources.ActionStateCompleted, &unifiedresources.ExecutionResult{
+		Success: true,
+		Output:  "raw command output",
+	})
+	svc := &Service{
+		sessions:         store,
+		actionAuditStore: actionStore,
+		started:          true,
+	}
+
+	sessions, err := svc.ListSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListSessions failed: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].HandoffSummary == nil {
+		t.Fatalf("sessions = %#v, want one handoff summary", sessions)
+	}
+	summary := sessions[0].HandoffSummary
+	if summary.LastKnownApprovalStatus != "approved" {
+		t.Fatalf("approval status = %q, want approved", summary.LastKnownApprovalStatus)
+	}
+	if summary.LastKnownActionState != string(unifiedresources.ActionStateCompleted) {
+		t.Fatalf("action state = %q, want completed", summary.LastKnownActionState)
+	}
+	if !summary.RequiresApproval || summary.ActionCount != 1 {
+		t.Fatalf("action summary = %#v, want approval-required action context", summary)
+	}
+
+	actions, err := store.GetModelHandoffActions(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffActions failed: %v", err)
+	}
+	if len(actions) != 1 {
+		t.Fatalf("actions = %#v, want one refreshed action", actions)
+	}
+	safeContext := strings.Join([]string{
+		actions[0].ActionPreflight,
+		actions[0].ActionDryRunSummary,
+		actions[0].ActionResult,
+	}, " ")
+	if strings.Contains(safeContext, "systemctl restart workload.service") || strings.Contains(safeContext, "raw command output") {
+		t.Fatalf("refreshed handoff action leaked command details: %#v", actions[0])
+	}
+}
+
 func (s *stubServiceProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 	return &providers.ChatResponse{Content: "ok", Model: req.Model}, nil
 }
