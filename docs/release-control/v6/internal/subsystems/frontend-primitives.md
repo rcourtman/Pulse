@@ -684,7 +684,8 @@ frontend primitive boundary.
     `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`,
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`,
     `frontend-modern/src/features/patrol/patrolSupportingContextPresentation.ts`,
-    and `frontend-modern/src/components/patrol/PatrolStatusBar.tsx` must keep
+    `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, and
+    `frontend-modern/src/utils/patrolRuntimeActions.ts` must keep
     Patrol assessment, verification, and findings primary; surface recent
     changes, learned correlations, and policy coverage only as explicitly
     secondary supporting context when degraded or incomplete verification,
@@ -2305,11 +2306,13 @@ controls, and `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`
 should render compact activity breakdown and scoped-trigger-state copy from the
 shared transport rather than leaving busy Patrol periods as unexplained noise.
 That same Patrol-facing primitive vocabulary must stay product-first. Patrol
-summary actions, runtime banners, circuit-breaker copy, and Patrol
-configuration controls may point at the shared provider settings route or model
-catalog, but they should describe those controls as Patrol/provider surfaces
-rather than falling back to generic `AI Settings`, `AI Model`, or `AI circuit
-breaker` copy inside the Patrol shell itself.
+summary actions, runtime banners, run-history runtime-failure actions,
+runtime-finding actions, circuit-breaker copy, and Patrol configuration controls
+may point at the shared provider settings route or model catalog, but they
+should describe those controls as Patrol/provider surfaces through
+`frontend-modern/src/utils/patrolRuntimeActions.ts` rather than falling back to
+generic `AI Settings`, `AI Model`, or `AI circuit breaker` copy inside the
+Patrol shell itself.
 That same product-first naming rule also applies to the shared `system-ai`
 settings shell: `frontend-modern/src/components/Settings/AISettings.tsx`,
 `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,

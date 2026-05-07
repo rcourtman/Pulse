@@ -17,6 +17,7 @@ import { formatRelativeTime } from '@/utils/format';
 import {
   getPatrolRunCoverageSummary,
   getPatrolRunResourcesHeading,
+  getPatrolRunPrimaryActionPresentation,
   getPatrolRunStatusPresentation,
   isPatrolRunHealthy,
 } from '@/utils/patrolRunPresentation';
@@ -41,6 +42,7 @@ import SparklesIcon from 'lucide-solid/icons/sparkles';
 import MailIcon from 'lucide-solid/icons/mail';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
+import SettingsIcon from 'lucide-solid/icons/settings';
 
 interface PatrolStreamState {
   phase: Accessor<string>;
@@ -163,6 +165,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const runErrorSummary = String(run.error_summary || '').trim();
   const runErrorDetail = String(run.error_detail || '').trim();
   const hasRunErrorDetail = run.error_count > 0 && (runErrorSummary || runErrorDetail);
+  const primaryAction = getPatrolRunPrimaryActionPresentation(run);
   const handleDiscussRun = (event: Event) => {
     event.stopPropagation();
     const handoff = buildPatrolRunAssistantHandoff(run);
@@ -306,6 +309,17 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                   <p class="break-words text-xs leading-relaxed text-red-700 dark:text-red-300">
                     {runErrorDetail}
                   </p>
+                </Show>
+                <Show when={primaryAction}>
+                  {(action) => (
+                    <a
+                      href={action().href}
+                      class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-800 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-100 dark:hover:bg-red-900"
+                    >
+                      <SettingsIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>{action().label}</span>
+                    </a>
+                  )}
                 </Show>
               </div>
             </div>

@@ -2,6 +2,7 @@ import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { ApprovalRequest } from '@/api/ai';
 import type { InvestigationOutcome, InvestigationStatus } from '@/api/patrol';
 import { isLivePendingApproval } from '@/utils/approvalState';
+import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
@@ -443,10 +444,7 @@ export const getFindingPrimaryActionPresentation = (
   finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
 ): FindingPrimaryActionPresentation | undefined => {
   if (isPatrolRuntimeFinding(finding)) {
-    return {
-      label: 'Open Patrol provider settings',
-      href: '/settings/system-ai',
-    };
+    return getPatrolProviderSettingsAction();
   }
 
   return undefined;

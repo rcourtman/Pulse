@@ -225,6 +225,29 @@ describe('RunHistoryEntry', () => {
     expect(screen.getByText('Selected model does not support Patrol tools')).toBeInTheDocument();
     expect(screen.getByText(/tool_choice/)).toBeInTheDocument();
     expect(screen.getByText('error')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Patrol provider settings' })).toHaveAttribute(
+      'href',
+      '/settings/system-ai',
+    );
+  });
+
+  it('does not show provider settings for healthy runs', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-healthy',
+          error_count: 0,
+          status: 'healthy',
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.queryByRole('link', { name: 'Open Patrol provider settings' })).toBeNull();
   });
 
   it('opens Assistant with structured run history context', () => {

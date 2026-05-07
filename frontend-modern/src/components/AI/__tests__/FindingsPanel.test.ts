@@ -35,6 +35,7 @@ import {
   getInvestigationStatusBadgeClasses,
   doesFindingNeedAttention,
 } from '@/utils/aiFindingPresentation';
+import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
 
 const findingsPanelSource = readFileSync(resolve(__dirname, '..', 'FindingsPanel.tsx'), 'utf-8');
 const patrolWorkspaceSource = readFileSync(
@@ -342,10 +343,7 @@ describe('aiFindingPresentation', () => {
           resourceName: 'Pulse Patrol Service',
           title: 'Pulse Patrol: Provider billing or quota issue',
         }),
-      ).toEqual({
-        label: 'Open Patrol provider settings',
-        href: '/settings/system-ai',
-      });
+      ).toEqual(PATROL_PROVIDER_SETTINGS_ACTION);
     });
 
     it('does not expose Patrol provider settings as the primary action for infrastructure findings', () => {
@@ -365,10 +363,7 @@ describe('aiFindingPresentation', () => {
           resourceName: 'Pulse Patrol Service',
           title: 'Provider billing or quota issue',
         }),
-      ).toEqual({
-        label: 'Open Patrol provider settings',
-        href: '/settings/system-ai',
-      });
+      ).toEqual(PATROL_PROVIDER_SETTINGS_ACTION);
     });
   });
 

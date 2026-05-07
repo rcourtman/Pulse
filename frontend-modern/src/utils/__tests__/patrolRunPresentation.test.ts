@@ -6,6 +6,7 @@ import {
   getPatrolLatestRunPresentation,
   getPatrolRunKindLabel,
   getPatrolRunCoverageSummary,
+  getPatrolRunPrimaryActionPresentation,
   getPatrolRunResourcesHeading,
   getPatrolRunStatusPresentation,
   getPatrolTriggerStatusSummary,
@@ -70,6 +71,33 @@ describe('patrolRunPresentation', () => {
     expect(isPatrolRunHealthy('critical', 0)).toBe(false);
     expect(isPatrolRunHealthy('issues_found', 0)).toBe(false);
     expect(isPatrolRunHealthy('healthy', 1)).toBe(false);
+  });
+
+  it('offers Patrol provider settings for runtime-failed runs only', () => {
+    expect(
+      getPatrolRunPrimaryActionPresentation({
+        error_count: 1,
+        error_summary: 'Selected model does not support Patrol tools',
+        error_detail: 'Provider rejected tool_choice',
+      }),
+    ).toEqual({
+      label: 'Open Patrol provider settings',
+      href: '/settings/system-ai',
+    });
+    expect(
+      getPatrolRunPrimaryActionPresentation({
+        error_count: 0,
+        error_summary: '',
+        error_detail: '',
+      }),
+    ).toBeUndefined();
+    expect(
+      getPatrolRunPrimaryActionPresentation({
+        error_count: 1,
+        error_summary: '',
+        error_detail: '',
+      }),
+    ).toBeUndefined();
   });
 
   it('normalizes unknown status labels safely', () => {

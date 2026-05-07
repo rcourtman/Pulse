@@ -9,6 +9,7 @@ import {
   formatPatrolActivityBreakdown,
   getPatrolActivityBreakdown,
 } from '@/utils/patrolRunPresentation';
+import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
 import type { SemanticTone } from '@/utils/semanticTonePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 
@@ -255,10 +256,7 @@ export function getPatrolAssessmentAction(args: {
 }): PatrolAssessmentAction | undefined {
   const classified = classifyActiveFindings(args.activeFindings);
   if (classified.infrastructureTotal === 0 && classified.runtimeTotal > 0) {
-    return {
-      label: 'Open Patrol provider settings',
-      href: '/settings/system-ai',
-    };
+    return getPatrolProviderSettingsAction();
   }
 
   return undefined;

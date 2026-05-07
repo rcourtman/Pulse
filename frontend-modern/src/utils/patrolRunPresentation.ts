@@ -1,6 +1,10 @@
 import type { PatrolRunRecord, PatrolRunStatus, PatrolTriggerStatus } from '@/api/patrol';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
+import {
+  getPatrolProviderSettingsAction,
+  type PatrolRuntimeActionPresentation,
+} from '@/utils/patrolRuntimeActions';
 
 export interface PatrolRunStatusPresentation {
   badgeClass: string;
@@ -25,6 +29,8 @@ export interface PatrolActivityBreakdown {
   otherScopedRuns: number;
   newFindings: number;
 }
+
+export type PatrolRunPrimaryActionPresentation = PatrolRuntimeActionPresentation;
 
 function formatResourceCount(count: number, qualifier?: string): string {
   const normalized = Math.max(0, count || 0);
@@ -73,6 +79,22 @@ export function isPatrolRunHealthy(
   errorCount: number = 0,
 ): boolean {
   return getEffectivePatrolRunStatus(status, errorCount) === 'healthy';
+}
+
+export function getPatrolRunPrimaryActionPresentation(
+  run: Pick<PatrolRunRecord, 'error_count' | 'error_summary' | 'error_detail'>,
+): PatrolRunPrimaryActionPresentation | undefined {
+  const hasRuntimeFailureDetail = Boolean(
+    String(run.error_summary || '').trim() || String(run.error_detail || '').trim(),
+  );
+  if (Math.max(0, run.error_count || 0) <= 0) {
+    return undefined;
+  }
+  if (!hasRuntimeFailureDetail) {
+    return undefined;
+  }
+
+  return getPatrolProviderSettingsAction();
 }
 
 export function getPatrolRunStatusPresentation(

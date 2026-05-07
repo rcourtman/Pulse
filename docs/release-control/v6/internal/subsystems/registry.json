@@ -4077,6 +4077,7 @@
         "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
         "frontend-modern/src/utils/patrolFormat.ts",
         "frontend-modern/src/utils/patrolRunPresentation.ts",
+        "frontend-modern/src/utils/patrolRuntimeActions.ts",
         "frontend-modern/src/utils/patrolRuntimePresentation.ts",
         "frontend-modern/src/utils/patrolSummaryPresentation.ts",
         "frontend-modern/src/utils/remediationPresentation.ts"
@@ -4165,6 +4166,24 @@
               "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "patrol-runtime-action-presentation",
+            "label": "patrol runtime action presentation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/patrolRuntimeActions.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+              "frontend-modern/src/components/patrol/__tests__/RunHistoryEntry.test.tsx",
+              "frontend-modern/src/utils/__tests__/patrolRunPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolRuntimeActions.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolSummaryPresentation.test.ts",
+              "tests/integration/tests/18-patrol-runtime-state.spec.ts"
             ]
           },
           {

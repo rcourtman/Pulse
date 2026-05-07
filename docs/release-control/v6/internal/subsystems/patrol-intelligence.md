@@ -45,8 +45,9 @@ Patrol-specific presentation helpers.
 22. `frontend-modern/src/utils/patrolRunPresentation.ts`
 23. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
 24. `frontend-modern/src/utils/patrolRuntimePresentation.ts`
-25. `frontend-modern/src/utils/textPresentation.ts`
-26. `tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts`
+25. `frontend-modern/src/utils/patrolRuntimeActions.ts`
+26. `frontend-modern/src/utils/textPresentation.ts`
+27. `tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts`
 
 ## Shared Boundaries
 
@@ -57,7 +58,7 @@ Patrol-specific presentation helpers.
 1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` as the canonical investigation-context derivation owner, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature shell, keep the Patrol-owned section files under `frontend-modern/src/features/patrol/` as the heavy render owners, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, keep `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` as the canonical AI summary normalization owner, and update `frontend-modern/src/stores/aiIntelligence.ts` together
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
-4. Add or change Patrol header, summary, or status runtime-state presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`
+4. Add or change Patrol header, summary, status runtime-state presentation, or runtime provider action presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, `frontend-modern/src/utils/patrolRuntimePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimeActions.ts`
 5. Add or change Patrol header schedule and runtime presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`.
    Patrol must not surface retired hosted-model credit badges or trial-like activation prompts in the normal self-hosted GA app, even when legacy transport fields are still present.
 6. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
@@ -455,10 +456,10 @@ infrastructure severity chip like `warning` with a second Patrol-runtime
 label.
 Patrol run history must follow the same operator-facing runtime failure
 contract. Expanded erroring runs should show the backend-provided
-`error_summary` and bounded `error_detail` near the run narrative, so a
-provider/model/tool failure remains actionable even when the operator starts
-from the Runs tab rather than the synthetic runtime finding.
-classification badge.
+`error_summary`, bounded `error_detail`, and the shared direct `Open Patrol
+provider settings` action near the run narrative, so a provider/model/tool
+failure remains actionable even when the operator starts from the Runs tab
+rather than the synthetic runtime finding.
 That same shared finding-presentation helper should also own Patrol finding
 subject labels, so Patrol-owned synthetic service findings render as
 `Patrol runtime` rather than leaking backend resource internals like

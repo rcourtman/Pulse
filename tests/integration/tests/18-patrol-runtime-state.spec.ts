@@ -682,6 +682,9 @@ test.describe("Patrol runtime-state browser contract", () => {
       page.getByText("Selected model does not support Patrol tools"),
     ).toBeVisible();
     await expect(page.getByText(/tool_choice/)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Open Patrol provider settings" }),
+    ).toHaveAttribute("href", "/settings/system-ai");
 
     await page.getByTestId("patrol-run-assistant-button").click();
     const assistantContext = page.getByLabel("Assistant context");
