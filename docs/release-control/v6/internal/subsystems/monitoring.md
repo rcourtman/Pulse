@@ -842,7 +842,11 @@ canonical host `AgentData` and shared `ResourceMetrics` contract, and
 `internal/monitoring/monitor.go` must sync them into the existing `agent`
 metrics-history/store path. Pulse must not add a TrueNAS-only top-level
 system charts path or leave TrueNAS host telemetry outside the canonical host
-history contract.
+history contract. Host profile fields on `AgentData`, such as `hostProfile`
+for Unraid-compatible Pulse Agent hosts, are presentation identity only; typed
+read access through `internal/unifiedresources/views.go` must keep
+`Platform()` as the normalized runtime platform and expose the profile through
+a separate host-profile accessor.
 That same monitoring boundary now also owns API-backed TrueNAS CPU
 temperature. `internal/truenas/client.go` must use the modern
 `reporting.get_data` RPC surface to derive current `cputemp` readings in the

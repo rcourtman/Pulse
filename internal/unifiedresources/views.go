@@ -927,6 +927,13 @@ func (v HostView) Platform() string {
 	return ""
 }
 
+func (v HostView) HostProfile() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.HostProfile
+}
+
 func (v HostView) OSName() string {
 	if v.r == nil || v.r.Agent == nil {
 		return ""

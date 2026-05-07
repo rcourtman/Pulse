@@ -175,6 +175,38 @@ func TestRefreshCanonicalIdentityPrefersProxmoxNodePrimaryIDForAgentResources(t 
 	}
 }
 
+func TestRefreshCanonicalIdentityKeepsAgentHostProfileOutOfCanonicalIDs(t *testing.T) {
+	resource := Resource{
+		ID:   "agent:tower",
+		Type: ResourceTypeAgent,
+		Name: "tower",
+		Agent: &AgentData{
+			AgentID:     "host-1",
+			Hostname:    "tower",
+			Platform:    "linux",
+			HostProfile: "unraid",
+			OSName:      "Unraid",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.PlatformID; got != "tower" {
+		t.Fatalf("platformId = %q, want tower", got)
+	}
+	if got := resource.Canonical.PrimaryID; got != "agent:host-1" {
+		t.Fatalf("primaryId = %q, want agent:host-1", got)
+	}
+	for _, alias := range resource.Canonical.Aliases {
+		if alias == "unraid" {
+			t.Fatalf("agent host profile leaked into canonical aliases: %+v", resource.Canonical.Aliases)
+		}
+	}
+}
+
 func TestRefreshCanonicalIdentityCanonicalizesTargetResourceTypeAliases(t *testing.T) {
 	resource := Resource{
 		ID:   "agent-1",

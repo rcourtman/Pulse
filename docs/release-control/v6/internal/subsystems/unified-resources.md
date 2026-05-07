@@ -619,7 +619,10 @@ canonical top-level platform identity.
 Host-profile runtime fallback values are generated beside those labels so
 agent-backed appliance reports can normalize to canonical runtime platforms
 such as `linux` without making the appliance profile a unified-resource
-platform.
+platform. Unified-resource `AgentData` must carry that distinction explicitly:
+`agent.platform` is the normalized runtime platform, while
+`agent.hostProfile` carries a governed profile id such as `unraid` for
+presentation and host/appliance support-floor copy.
 That same shared source boundary also applies when unified seeds and
 supplemental providers coexist. If a canonical unified-resource seed omits an
 owned supplemental source such as TrueNAS or VMware, the shared resource API
