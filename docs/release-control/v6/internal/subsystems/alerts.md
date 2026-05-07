@@ -79,6 +79,7 @@ operator-facing alert routing behavior for live runtime alerts.
 57. `internal/alerts/tracking_cleanup.go`
 58. `internal/alerts/active_lifecycle.go`
 59. `internal/alerts/active_cleanup.go`
+60. `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`
 
 ## Shared Boundaries
 
@@ -102,6 +103,11 @@ operator-facing alert routing behavior for live runtime alerts.
    `frontend-modern/src/stores/alertsActivation.ts` so browser display colors
    consume the same configured alert thresholds and override identity chain as
    the alert runtime instead of hard-coded per-surface thresholds.
+7. Add or change unlocked Pulse Assistant alert investigation handoffs through
+   `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`; these
+   handoffs must preserve alert context, force request-scoped approval mode,
+   and must not instruct the Assistant to execute diagnostics or remediation
+   without operator approval.
 
 ## Forbidden Paths
 
@@ -353,6 +359,11 @@ suppression policy: when `presentationPolicy.hideUpgrade` is true, a locked
 alert-investigation action may remain visibly unavailable, but it must not
 show Pro-required tooltip copy, track upgrade clicks, or open the commercial
 handoff route.
+Unlocked alert-investigation Assistant handoffs are contextual explanation and
+triage entries, not autonomous execution grants. `InvestigateAlertButton.tsx`
+must pass `autonomousMode: false` when it opens Pulse Assistant, and the seeded
+prompt may ask for root-cause analysis, metrics checks, and remediation advice
+only if command or change execution remains explicitly approval-bound.
 Alert-adjacent shared helpers also inherit the runtime-versus-commercial split
 now carried by the shared licensing stores. Alert pages may consume runtime
 feature truth from `frontend-modern/src/stores/license.ts`, but any

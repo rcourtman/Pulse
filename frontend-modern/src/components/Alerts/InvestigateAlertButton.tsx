@@ -74,7 +74,7 @@ Please:
 1. Identify the root cause
 2. Check related metrics
 3. Suggest specific remediation steps
-4. Execute diagnostic commands if safe`;
+4. Ask for operator approval before running any diagnostic command or change`;
 
     const targetType = resolveAlertTargetType({
       alertType: props.alert.type,
@@ -90,6 +90,7 @@ Please:
     aiChatStore.openWithPrompt(prompt, {
       targetType,
       targetId: props.alert.resourceId,
+      autonomousMode: false,
       context: {
         alertIdentifier: getCanonicalAlertId(props.alert),
         alertType: props.alert.type,

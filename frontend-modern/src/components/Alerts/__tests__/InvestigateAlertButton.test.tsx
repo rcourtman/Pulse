@@ -293,6 +293,7 @@ describe('InvestigateAlertButton', () => {
       expect(context).toMatchObject({
         targetType: 'vm',
         targetId: 'vm-101',
+        autonomousMode: false,
         context: {
           alertIdentifier: 'alert-1',
           alertType: 'cpu',
@@ -302,6 +303,21 @@ describe('InvestigateAlertButton', () => {
           node: 'pve1',
         },
       });
+    });
+
+    it('keeps alert investigation handoffs approval-required and command-free', async () => {
+      const alert = makeAlert();
+      render(() => <InvestigateAlertButton alert={alert} />);
+      await fireEvent.click(screen.getByRole('button'));
+
+      const [prompt, context] = openWithPromptMock.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+
+      expect(context.autonomousMode).toBe(false);
+      expect(prompt).toContain('Ask for operator approval before running any diagnostic command');
+      expect(prompt).not.toContain('Execute diagnostic commands if safe');
     });
 
     it('does not open the upgrade destination when unlocked', async () => {
