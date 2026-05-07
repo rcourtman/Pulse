@@ -282,14 +282,15 @@ runtime cost control, and shared AI transport surfaces.
     `handoff_summary` for this private model-context metadata so reloaded
     Assistant sessions can still be identified as scoped Patrol/product
     handoffs. That summary may include the handoff kind, finding ID, resource
-    and action counts, a primary resource label, last-known approval/action
-    status, risk level, and timestamp, but it must not expose model-only
-    handoff text, action preflight/result bodies, remediation descriptions, raw
-    commands, or approval command payloads. Its `requires_approval` field is a
-    current operator-decision flag only: pending approval states may set it, but
-    approved, denied, rejected, executing, completed, failed, expired, or
-    otherwise historical action references must remain action context without
-    being relabeled as requiring approval.
+    and Patrol run ID, safe run type/status/runtime-failure flags, resource and
+    action counts, a primary resource label, last-known approval/action status,
+    risk level, and timestamp, but it must not expose model-only handoff text,
+    runtime failure detail, action preflight/result bodies, remediation
+    descriptions, raw commands, or approval command payloads. Its
+    `requires_approval` field is a current operator-decision flag only: pending
+    approval states may set it, but approved, denied, rejected, executing,
+    completed, failed, expired, or otherwise historical action references must
+    remain action context without being relabeled as requiring approval.
     When the Assistant drawer restores any session from that `handoff_summary`,
     it must restore the scoped request-local approval boundary as well as the
     safe visible briefing: the next chat turn must carry
@@ -310,9 +311,10 @@ runtime cost control, and shared AI transport surfaces.
     opening the session picker instead of presenting mount-time cached
     summaries as the operator's decision surface.
     Browser-originated `handoff_context`, `handoff_resources`, and
-    `handoff_actions` are one-shot request seeds for the first successful chat
-    turn. After that send succeeds, the drawer must clear those request payloads
-    while preserving the safe visible briefing and request-local
+    `handoff_actions` plus safe `handoff_metadata` are one-shot request seeds
+    for the first successful chat turn. After that send succeeds, the drawer
+    must clear those request payloads while preserving the safe visible
+    briefing and request-local
     approval-required posture; later turns must rely on backend-owned session
     model-context hydration and current canonical stores instead of resending
     stale browser handoff payloads. Patrol approval-row Assistant entries are

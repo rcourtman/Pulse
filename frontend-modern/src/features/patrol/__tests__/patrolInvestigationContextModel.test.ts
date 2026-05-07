@@ -424,6 +424,13 @@ describe('patrolInvestigationContextModel', () => {
       },
     });
     expect(handoff.context.handoffResources).toEqual([{ id: 'vm-100', type: 'vm' }]);
+    expect(handoff.context.handoffMetadata).toEqual({
+      kind: 'patrol_run',
+      runId: 'run-runtime-error',
+      runType: 'Scoped run',
+      runStatus: 'error',
+      runtimeFailure: true,
+    });
     expect(handoff.context.handoffContext).toContain('[Patrol Run Context]');
     expect(handoff.context.handoffContext).toContain('Source: Pulse Patrol run history');
     expect(handoff.context.handoffContext).toContain('Run Type: Scoped run');

@@ -188,7 +188,9 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		`svc.GetModelHandoffFindingID(ctx, req.SessionID)`,
 		`svc.ClearModelHandoffContext(ctx, sessionID)`,
 		`HandoffActions   []chat.HandoffAction   ` + "`json:\"handoff_actions,omitempty\"`",
+		`HandoffMetadata  chat.HandoffMetadata   ` + "`json:\"handoff_metadata,omitempty\"`",
 		"handoffActions := normalizeChatRequestHandoffActions(req.HandoffActions)",
+		"handoffMetadata := chat.NormalizeHandoffMetadata(req.HandoffMetadata)",
 		"chatRequestHandoffActionLimit",
 		"requestHandoffContext := handoffContext",
 		"requestHandoffResources := handoffResources",
@@ -202,8 +204,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"chat.HydrateHandoffActionFromApproval(&action, liveApproval)",
 		"ApprovalRequestedAt",
 		"ApprovalExpiresAt",
-		"func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool",
-		"AutonomousMode:   chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions)",
+		"func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction, handoffMetadata chat.HandoffMetadata) *bool",
+		"AutonomousMode:   chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata)",
 		`appendChatContextLine(&b, "Finding Status", unifiedFindingChatStatus(f, time.Now()))`,
 		`appendChatContextLine(&b, "Finding Detected At", f.DetectedAt.Format(time.RFC3339))`,
 		`appendChatContextLine(&b, "Finding Last Seen At", f.LastSeenAt.Format(time.RFC3339))`,
@@ -250,6 +252,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"HandoffContext:",
 		"HandoffResources: handoffResources",
 		"HandoffActions:   handoffActions",
+		"HandoffMetadata:  handoffMetadata",
 	} {
 		if !strings.Contains(handlerText, required) {
 			t.Fatalf("ai_handler.go must preserve model-only finding handoff contract: missing %q", required)
@@ -263,13 +266,13 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	for _, required := range []string{
 		"handoffContext := strings.TrimSpace(req.HandoffContext)",
 		"handoffFindingID := strings.TrimSpace(req.FindingID)",
-		"sessions.SetModelHandoffFindingID(session.ID, handoffFindingID)",
+		"handoffMetadata := NormalizeHandoffMetadata(req.HandoffMetadata)",
+		"hasRequestHandoffEnvelope",
+		"sessions.SetModelHandoffEnvelope(session.ID, handoffFindingID, handoffContext, handoffResources, handoffActions, handoffMetadata)",
 		"ClearModelHandoffContext",
 		"handoffResources := normalizeHandoffResources(req.HandoffResources)",
-		"sessions.SetModelHandoffContext(session.ID, handoffContext)",
 		"GetModelHandoffFindingID",
 		"sessions.GetModelHandoffContext(session.ID)",
-		"sessions.SetModelHandoffResources(session.ID, handoffResources)",
 		"sessions.GetModelHandoffResources(session.ID)",
 		"sessions.SetModelHandoffActions(session.ID, handoffActions)",
 		"sessions.GetModelHandoffActions(session.ID)",
@@ -311,6 +314,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	for _, required := range []string{
 		"ModelContext *sessionModelContext",
 		"SetModelHandoffFindingID",
+		"SetModelHandoffEnvelope",
 		"GetModelHandoffFindingID",
 		"ClearModelHandoffContext",
 		"HandoffFindingID string",
@@ -322,6 +326,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"SetModelHandoffActions",
 		"GetModelHandoffActions",
 		"HandoffActions   []HandoffAction",
+		"SetModelHandoffMetadata",
+		"HandoffMetadata  HandoffMetadata",
 	} {
 		if !strings.Contains(chatSessionText, required) {
 			t.Fatalf("chat session store must persist model-only handoff metadata outside messages: missing %q", required)
@@ -334,6 +340,8 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"HandoffResources []HandoffResource",
 		"type HandoffAction struct",
 		"HandoffActions   []HandoffAction",
+		"type HandoffMetadata struct",
+		"HandoffMetadata  HandoffMetadata",
 		"ApprovalStatus",
 		"ActionID",
 		"ActionState",

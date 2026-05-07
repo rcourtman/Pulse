@@ -2,6 +2,7 @@ import { createSignal, onCleanup } from 'solid-js';
 import {
   AIChatAPI,
   type ChatHandoffAction,
+  type ChatHandoffMetadata,
   type ChatHandoffResource,
   type ChatMention,
   type StreamEvent,
@@ -31,6 +32,7 @@ export interface SendMessageOptions {
   handoffContext?: string;
   handoffResources?: ChatHandoffResource[];
   handoffActions?: ChatHandoffAction[];
+  handoffMetadata?: ChatHandoffMetadata;
 }
 
 export function useChat(options: UseChatOptions = {}) {
@@ -572,6 +574,7 @@ export function useChat(options: UseChatOptions = {}) {
         sendOptions?.handoffContext,
         sendOptions?.handoffResources,
         sendOptions?.handoffActions,
+        sendOptions?.handoffMetadata,
       );
       await notifyConversationChanged();
       return true;

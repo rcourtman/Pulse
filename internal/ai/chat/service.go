@@ -462,46 +462,29 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	handoffContext := strings.TrimSpace(req.HandoffContext)
 	handoffResources := normalizeHandoffResources(req.HandoffResources)
 	handoffActions := normalizeHandoffActions(req.HandoffActions)
+	handoffMetadata := NormalizeHandoffMetadata(req.HandoffMetadata)
 	handoffFindingID := strings.TrimSpace(req.FindingID)
-	if handoffFindingID != "" {
-		if err := sessions.SetModelHandoffFindingID(session.ID, handoffFindingID); err != nil {
-			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff finding reference")
-		}
-	}
-	if handoffContext != "" {
-		if err := sessions.SetModelHandoffContext(session.ID, handoffContext); err != nil {
-			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff context")
-		}
-		if err := sessions.SetModelHandoffResources(session.ID, handoffResources); err != nil {
-			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff resources")
-		}
-		if err := sessions.SetModelHandoffActions(session.ID, handoffActions); err != nil {
-			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff actions")
+	hasRequestHandoffEnvelope := handoffFindingID != "" ||
+		handoffContext != "" ||
+		len(handoffResources) > 0 ||
+		len(handoffActions) > 0 ||
+		!handoffMetadataEmpty(handoffMetadata)
+	if hasRequestHandoffEnvelope {
+		if err := sessions.SetModelHandoffEnvelope(session.ID, handoffFindingID, handoffContext, handoffResources, handoffActions, handoffMetadata); err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff envelope")
 		}
 	} else {
-		if len(handoffResources) > 0 {
-			if err := sessions.SetModelHandoffResources(session.ID, handoffResources); err != nil {
-				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff resources")
-			}
+		storedHandoffResources, err := sessions.GetModelHandoffResources(session.ID)
+		if err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff resources")
 		} else {
-			storedHandoffResources, err := sessions.GetModelHandoffResources(session.ID)
-			if err != nil {
-				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff resources")
-			} else {
-				handoffResources = storedHandoffResources
-			}
+			handoffResources = storedHandoffResources
 		}
-		if len(handoffActions) > 0 {
-			if err := sessions.SetModelHandoffActions(session.ID, handoffActions); err != nil {
-				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff actions")
-			}
+		storedHandoffActions, err := sessions.GetModelHandoffActions(session.ID)
+		if err != nil {
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff actions")
 		} else {
-			storedHandoffActions, err := sessions.GetModelHandoffActions(session.ID)
-			if err != nil {
-				log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff actions")
-			} else {
-				handoffActions = storedHandoffActions
-			}
+			handoffActions = storedHandoffActions
 		}
 		storedHandoffContext, err := sessions.GetModelHandoffContext(session.ID)
 		if err != nil {

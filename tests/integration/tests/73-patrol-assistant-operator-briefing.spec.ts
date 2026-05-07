@@ -97,6 +97,29 @@ test.describe("Patrol Assistant operator briefing", () => {
         updated_at: "2026-05-06T12:09:00Z",
       },
     };
+    const patrolRunHandoffSession = {
+      id: "session-patrol-run",
+      title: "Runtime failure follow-up",
+      created_at: "2026-05-06T12:04:00Z",
+      updated_at: "2026-05-06T12:10:00Z",
+      message_count: 1,
+      handoff_summary: {
+        kind: "patrol_run",
+        run_id: "run-runtime-error",
+        run_type: "Scoped run",
+        run_status: "error",
+        runtime_failure: true,
+        has_model_context: true,
+        resource_count: 1,
+        primary_resource: {
+          id: "vm-100",
+          type: "vm",
+        },
+        action_count: 0,
+        requires_approval: false,
+        updated_at: "2026-05-06T12:10:00Z",
+      },
+    };
 
     await page.route("**/api/security/status", async (route) => {
       await route.fulfill({
@@ -193,7 +216,11 @@ test.describe("Patrol Assistant operator briefing", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([handoffSession, contextOnlyHandoffSession]),
+        body: JSON.stringify([
+          handoffSession,
+          contextOnlyHandoffSession,
+          patrolRunHandoffSession,
+        ]),
       });
     });
 
@@ -607,7 +634,31 @@ test.describe("Patrol Assistant operator briefing", () => {
       "Finding finding-context-only",
     );
     await expect(
-      contextOnlyAssistantContext.getByText("systemctl restart workload.service"),
+      contextOnlyAssistantContext.getByText(
+        "systemctl restart workload.service",
+      ),
+    ).toHaveCount(0);
+
+    await page.getByTitle("Pulse Assistant sessions").click();
+    await expect(page.getByText("Runtime failure follow-up")).toBeVisible();
+    await expect(page.getByText("Runtime issue").last()).toBeVisible();
+    await expect(page.getByText(/run error/).last()).toBeVisible();
+    await page.getByText("Runtime failure follow-up").click();
+
+    const runAssistantContext = page.getByLabel("Assistant context");
+    await expect(runAssistantContext).toBeVisible();
+    await expect(runAssistantContext).toContainText(
+      "Patrol run run-runtime-error",
+    );
+    await expect(runAssistantContext).toContainText("Run run-runtime-error");
+    await expect(runAssistantContext).toContainText("Run type: Scoped run");
+    await expect(runAssistantContext).toContainText("Run state: run error");
+    await expect(runAssistantContext).toContainText(
+      "Review Patrol runtime issue",
+    );
+    await expect(runAssistantContext.getByText("tool_choice")).toHaveCount(0);
+    await expect(
+      runAssistantContext.getByText("No endpoints found"),
     ).toHaveCount(0);
 
     includePendingApproval = false;

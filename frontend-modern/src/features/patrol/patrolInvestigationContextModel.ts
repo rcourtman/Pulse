@@ -584,6 +584,13 @@ export function buildPatrolRunAssistantHandoff(run: PatrolRunRecord): PatrolRunA
       autonomousMode: false,
       handoffContext: buildPatrolRunAssistantModelContext(run, kindLabel, statusLabel),
       handoffResources: handoffResources.length > 0 ? handoffResources : undefined,
+      handoffMetadata: {
+        kind: 'patrol_run',
+        runId: runId || undefined,
+        runType: kindLabel,
+        runStatus: statusLabel,
+        runtimeFailure: Boolean(runtimeFailure),
+      },
       briefing: buildPatrolRunAssistantBriefing(run, kindLabel, statusLabel, runtimeFailure),
       context: {
         source: 'pulse-patrol-run',

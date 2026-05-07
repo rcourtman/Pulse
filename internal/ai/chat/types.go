@@ -27,6 +27,10 @@ type Session struct {
 type SessionHandoffSummary struct {
 	Kind                    string           `json:"kind,omitempty"`
 	FindingID               string           `json:"finding_id,omitempty"`
+	RunID                   string           `json:"run_id,omitempty"`
+	RunType                 string           `json:"run_type,omitempty"`
+	RunStatus               string           `json:"run_status,omitempty"`
+	RuntimeFailure          bool             `json:"runtime_failure,omitempty"`
 	HasModelContext         bool             `json:"has_model_context"`
 	ResourceCount           int              `json:"resource_count,omitempty"`
 	PrimaryResource         *HandoffResource `json:"primary_resource,omitempty"`
@@ -153,6 +157,17 @@ type HandoffAction struct {
 	TargetNode             string `json:"target_node,omitempty"`
 }
 
+// HandoffMetadata carries browser-safe identity for a product-originated
+// model-only handoff. It must not include model context text, command payloads,
+// remediation details, or provider/runtime error detail.
+type HandoffMetadata struct {
+	Kind           string `json:"kind,omitempty"`
+	RunID          string `json:"run_id,omitempty"`
+	RunType        string `json:"run_type,omitempty"`
+	RunStatus      string `json:"run_status,omitempty"`
+	RuntimeFailure bool   `json:"runtime_failure,omitempty"`
+}
+
 // ExecuteRequest represents a chat execution request
 type ExecuteRequest struct {
 	Prompt           string              `json:"prompt"`
@@ -163,6 +178,7 @@ type ExecuteRequest struct {
 	HandoffContext   string              `json:"handoff_context,omitempty"`   // Model-only context for scoped handoffs; not persisted as user-authored text.
 	HandoffResources []HandoffResource   `json:"handoff_resources,omitempty"` // Product-originated resources to seed governed session validation.
 	HandoffActions   []HandoffAction     `json:"handoff_actions,omitempty"`   // Product-originated approval/action references for model-only review context.
+	HandoffMetadata  HandoffMetadata     `json:"handoff_metadata,omitempty"`  // Browser-safe identity for restoring saved product handoffs.
 	MaxTurns         int                 `json:"max_turns,omitempty"`         // Override max agentic turns (0 = use default)
 	AutonomousMode   *bool               `json:"autonomous_mode,omitempty"`   // Per-request autonomous override (nil = use service default)
 }

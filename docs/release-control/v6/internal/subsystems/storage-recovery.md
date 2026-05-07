@@ -1092,6 +1092,11 @@ approval policy, plan expiry, and dry-run posture, but they must not reinterpret
 a recovered approval or clearer proposed-fix posture as backup freshness,
 restore authority, recovery proof, or storage-local remediation execution
 state.
+Patrol run `handoff_metadata` retained for saved Assistant sessions is also
+AI/runtime review identity only. Storage and recovery may display or link from
+the safe run ID, run type/status, runtime-failure flag, or scoped resource label
+as incident context, but they must not reinterpret it as backup freshness,
+restore proof, storage health authority, or recovery-local remediation state.
 That same storage ownership also includes the shared storage-source presentation
 contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and

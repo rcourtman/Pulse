@@ -78,8 +78,14 @@ const compactText = (items: Array<string | undefined>): string[] =>
 const pluralizeCount = (count: number, singular: string, plural: string) =>
   `${count} ${count === 1 ? singular : plural}`;
 
-const isPatrolSessionHandoff = (summary: ChatSessionHandoffSummary) =>
+const isPatrolFindingSessionHandoff = (summary: ChatSessionHandoffSummary) =>
   summary.kind === 'patrol_finding' || Boolean(summary.finding_id);
+
+const isPatrolRunSessionHandoff = (summary: ChatSessionHandoffSummary) =>
+  summary.kind === 'patrol_run' || Boolean(summary.run_id);
+
+const isPatrolSessionHandoff = (summary: ChatSessionHandoffSummary) =>
+  isPatrolFindingSessionHandoff(summary) || isPatrolRunSessionHandoff(summary);
 
 const getSessionHandoffSourceLabel = (summary: ChatSessionHandoffSummary) =>
   isPatrolSessionHandoff(summary) ? 'Pulse Patrol' : 'Pulse Assistant';
@@ -98,8 +104,14 @@ const formatSessionHandoffResourceDetail = (summary: ChatSessionHandoffSummary) 
   return label;
 };
 
-const formatSessionHandoffStatus = (summary: ChatSessionHandoffSummary) =>
-  compactText([
+const formatSessionHandoffStatus = (summary: ChatSessionHandoffSummary) => {
+  if (isPatrolRunSessionHandoff(summary)) {
+    return compactText([
+      summary.run_status ? `run ${formatIdentifierLabel(summary.run_status)}` : undefined,
+      summary.runtime_failure ? 'runtime issue' : undefined,
+    ]).join(' · ');
+  }
+  return compactText([
     summary.last_known_approval_status
       ? `approval ${formatIdentifierLabel(summary.last_known_approval_status)}`
       : undefined,
@@ -110,10 +122,14 @@ const formatSessionHandoffStatus = (summary: ChatSessionHandoffSummary) =>
       ? `${formatIdentifierLabel(summary.last_known_action_risk)} risk`
       : undefined,
   ]).join(' · ');
+};
 
 const getSessionHandoffBadgeLabel = (summary: ChatSessionHandoffSummary) => {
   if (summary.requires_approval) return 'Approval required';
   if ((summary.action_count ?? 0) > 0) return 'Action context';
+  if (isPatrolRunSessionHandoff(summary)) {
+    return summary.runtime_failure ? 'Runtime issue' : 'Run context';
+  }
   return summary.has_model_context ? 'Context attached' : 'Scoped handoff';
 };
 
@@ -128,24 +144,36 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
   const actionCount = summary.action_count ?? 0;
   const resourceCount = summary.resource_count ?? 0;
   const findingId = summary.finding_id?.trim() || undefined;
-  const isPatrol = isPatrolSessionHandoff(summary);
-  const title = isPatrol
-    ? resourceLabel
-      ? `Patrol finding on ${resourceLabel}`
-      : findingId
-        ? `Patrol finding ${findingId}`
-        : 'Patrol finding handoff'
-    : resourceLabel
-      ? `Assistant handoff for ${resourceLabel}`
-      : 'Assistant handoff';
+  const runId = summary.run_id?.trim() || undefined;
+  const runType = summary.run_type?.trim() || undefined;
+  const runStatus = summary.run_status?.trim() || undefined;
+  const isPatrolFinding = isPatrolFindingSessionHandoff(summary);
+  const isPatrolRun = isPatrolRunSessionHandoff(summary);
+  const title = isPatrolRun
+    ? runId
+      ? `Patrol run ${runId}`
+      : 'Patrol run handoff'
+    : isPatrolFinding
+      ? resourceLabel
+        ? `Patrol finding on ${resourceLabel}`
+        : findingId
+          ? `Patrol finding ${findingId}`
+          : 'Patrol finding handoff'
+      : resourceLabel
+        ? `Assistant handoff for ${resourceLabel}`
+        : 'Assistant handoff';
 
   return {
-    targetType: summary.primary_resource?.type,
-    targetId: summary.primary_resource?.id,
+    targetType: isPatrolRun ? 'patrol-run' : summary.primary_resource?.type,
+    targetId: isPatrolRun ? runId : summary.primary_resource?.id,
     context: {
       source: 'session_handoff_summary',
       kind: summary.kind,
       findingId,
+      runId,
+      runType,
+      runStatus,
+      runtimeFailure: summary.runtime_failure ?? false,
       hasModelContext: summary.has_model_context,
       resourceCount,
       actionCount,
@@ -160,9 +188,14 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
     briefing: {
       sourceLabel,
       title,
-      subject: findingId ? `Finding ${findingId}` : undefined,
-      statusLabel: statusLabel || (summary.requires_approval ? 'approval required' : undefined),
+      subject:
+        isPatrolRun && runId ? `Run ${runId}` : findingId ? `Finding ${findingId}` : undefined,
+      statusLabel:
+        statusLabel ||
+        (summary.requires_approval ? 'approval required' : undefined) ||
+        (isPatrolRun && summary.runtime_failure ? 'runtime issue' : undefined),
       detailLines: compactText([
+        isPatrolRun && runType ? `Run type: ${runType}` : undefined,
         resourceDetail ? `Resource: ${resourceDetail}` : undefined,
         resourceCount > 1
           ? pluralizeCount(resourceCount, 'linked resource', 'linked resources')
@@ -174,21 +207,42 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       ]),
       actionLabel: summary.requires_approval
         ? 'Approval required'
+        : isPatrolRun && summary.runtime_failure
+          ? 'Review Patrol runtime issue'
+          : isPatrolRun
+            ? 'Review Patrol run'
+            : actionCount > 0
+              ? 'Governed action context'
+              : undefined,
+      commandSummary: statusLabel
+        ? isPatrolRun
+          ? `Run state: ${statusLabel}`
+          : `Last known state: ${statusLabel}`
+        : undefined,
+      safetyNote: isPatrolRun
+        ? 'Patrol run context is review-only; actions still require governed approval.'
         : actionCount > 0
-          ? 'Governed action context'
-          : undefined,
-      commandSummary: statusLabel ? `Last known state: ${statusLabel}` : undefined,
-      safetyNote:
-        actionCount > 0
           ? 'Detailed command payloads stay in governed approval context.'
           : undefined,
-      suggestedPrompts: isPatrol
-        ? [
-            'What changed since this finding was opened?',
-            'What evidence supports this finding?',
-            'What should I verify next?',
-          ]
-        : ['Summarize this handoff', 'What needs attention?', 'What should I verify next?'],
+      suggestedPrompts: isPatrolRun
+        ? summary.runtime_failure
+          ? [
+              'Explain this Patrol runtime issue',
+              'What should I check before retrying?',
+              'What should I verify next?',
+            ]
+          : [
+              'Explain this Patrol run',
+              'What changed during this run?',
+              'What should I verify next?',
+            ]
+        : isPatrolFinding
+          ? [
+              'What changed since this finding was opened?',
+              'What evidence supports this finding?',
+              'What should I verify next?',
+            ]
+          : ['Summarize this handoff', 'What needs attention?', 'What should I verify next?'],
     },
   };
 };
@@ -809,18 +863,23 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (ctx.handoffActions && ctx.handoffActions.length > 0) {
       sendOptions.handoffActions = ctx.handoffActions;
     }
+    if (ctx.handoffMetadata) {
+      sendOptions.handoffMetadata = ctx.handoffMetadata;
+    }
     const hasSendOptions =
       typeof sendOptions.autonomousMode === 'boolean' ||
       Boolean(sendOptions.handoffContext) ||
       Boolean(sendOptions.handoffResources?.length) ||
-      Boolean(sendOptions.handoffActions?.length);
+      Boolean(sendOptions.handoffActions?.length) ||
+      Boolean(sendOptions.handoffMetadata);
     const sendPromise = hasSendOptions
       ? chat.sendMessage(prompt, mentionsForAPI, findingId, sendOptions)
       : chat.sendMessage(prompt, mentionsForAPI, findingId);
     const hasRequestHandoffPayload =
       Boolean(ctx.handoffContext?.trim()) ||
       Boolean(ctx.handoffResources?.length) ||
-      Boolean(ctx.handoffActions?.length);
+      Boolean(ctx.handoffActions?.length) ||
+      Boolean(ctx.handoffMetadata);
     sendPromise.then((ok) => {
       if (!ok) return;
       if (findingId) {

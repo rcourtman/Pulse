@@ -144,6 +144,58 @@ describe('AIChatAPI', () => {
     );
   });
 
+  it('includes browser-safe Patrol run handoff metadata when supplied', async () => {
+    const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIChatAPI.chat(
+      'discuss run',
+      'session-run',
+      undefined,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      {
+        kind: 'patrol_run',
+        runId: 'run-runtime-error',
+        runType: 'Scoped run',
+        runStatus: 'error',
+        runtimeFailure: true,
+      },
+    );
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/ai/chat',
+      expect.objectContaining({
+        body: JSON.stringify({
+          prompt: 'discuss run',
+          session_id: 'session-run',
+          model: undefined,
+          autonomous_mode: false,
+          handoff_metadata: {
+            kind: 'patrol_run',
+            run_id: 'run-runtime-error',
+            run_type: 'Scoped run',
+            run_status: 'error',
+            runtime_failure: true,
+          },
+        }),
+      }),
+    );
+  });
+
   it('includes a Patrol finding id when supplied for Assistant context', async () => {
     const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
     const releaseLock = vi.fn();

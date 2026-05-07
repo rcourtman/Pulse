@@ -183,15 +183,19 @@ work extends shared components instead of creating new local variants.
    briefing state so Patrol and alert context does not visually leak between
    conversations. Browser-originated model handoff payloads are one-shot
    request seeds: after the first successful chat send, this store must clear
-   `handoffContext`, `handoffResources`, and `handoffActions` while preserving
-   the safe visible briefing and scoped approval-required posture, so later
-   turns rely on backend session hydration instead of resending stale browser
-   context. The drawer must treat `handoff_summary.requires_approval` as a
-   current pending-decision flag, not a historical action marker, so completed
-   or rejected handoff actions render as action context rather than pending
-   approval. Session-load and new-conversation transitions must be
-   success-bound: if the underlying session operation fails, the shared drawer
-   store must not clear or replace the current scoped handoff context.
+   `handoffContext`, `handoffResources`, `handoffActions`, and safe
+   `handoffMetadata` while preserving the safe visible briefing and scoped
+   approval-required posture, so later turns rely on backend session hydration
+   instead of resending stale browser context. The drawer must treat
+   `handoff_summary.requires_approval` as a current pending-decision flag, not a
+   historical action marker, so completed or rejected handoff actions render as
+   action context rather than pending approval. A restored Patrol run summary
+   must remain visibly sourced to Pulse Patrol, restore a `patrol-run` target
+   plus run ID/type/status/runtime-failure presentation only, and must not
+   rehydrate model-only runtime failure detail into browser context.
+   Session-load and new-conversation transitions must be success-bound: if the
+   underlying session operation fails, the shared drawer store must not clear or
+   replace the current scoped handoff context.
 9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless

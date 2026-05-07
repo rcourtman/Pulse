@@ -1902,23 +1902,27 @@ The same chat payload boundary now carries scoped product handoff context:
 `handoff_context` is bounded model-only text, `handoff_resources` are structured
 resource references used to seed canonical resource-policy, state, relationship,
 and timeline hydration, and `handoff_actions` are structured approval/action
-references used to seed canonical approval and action-audit refresh. Frontend
-handoff builders may send these fields for owned alert, incident, or Patrol
-assessment context, but the backend must not persist them as user-authored
-message text and must treat them as explanation/review context only. When a
-Patrol `finding_id` resolves, backend-refreshed durable finding context remains
-canonical; the handler may merge only recognized same-finding Patrol product
-handoff text and same-finding resource/action references as secondary
-model-only review context, while dropping mismatched references and raw command
-payload lines so the model cannot continue from stale or spoofed Patrol
-authority.
+references used to seed canonical approval and action-audit refresh.
+`handoff_metadata` is the browser-safe identity envelope for restoring saved
+product handoffs, currently including Patrol run kind, run ID, safe run
+type/status, and a runtime-failure boolean rather than runtime failure detail.
+Frontend handoff builders may send these fields for owned alert, incident,
+Patrol assessment, or Patrol run-history context, but the backend must not
+persist them as user-authored message text and must treat them as
+explanation/review context only. When a Patrol `finding_id` resolves,
+backend-refreshed durable finding context remains canonical; the handler may
+merge only recognized same-finding Patrol product handoff text and same-finding
+resource/action references as secondary model-only review context, while
+dropping mismatched references and raw command payload lines so the model cannot
+continue from stale or spoofed Patrol authority.
 The `/api/ai/sessions` response may expose `handoff_summary` for sessions that
 carry private Assistant model-context metadata, but that payload is a safe
-reload marker only. It may carry the handoff kind, finding ID, counts,
-primary-resource label, last-known approval/action status, risk level, and
-summary timestamp; it must not serialize the model-only `handoff_context`,
-action preflight/result bodies, remediation descriptions, raw commands, or
-approval command payloads.
+reload marker only. It may carry the handoff kind, finding ID, Patrol run ID,
+safe run type/status/runtime-failure flags, counts, primary-resource label,
+last-known approval/action status, risk level, and summary timestamp; it must
+not serialize the model-only `handoff_context`, runtime failure detail, action
+preflight/result bodies, remediation descriptions, raw commands, or approval
+command payloads.
 Patrol finding handoffs are stricter than ordinary chat requests: when
 `finding_id` resolves to model-only Patrol briefing, resource, or action
 context, `internal/api/ai_handler.go` must clamp the request-local autonomous

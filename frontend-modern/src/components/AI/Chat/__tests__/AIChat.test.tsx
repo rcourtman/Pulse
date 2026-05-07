@@ -610,7 +610,13 @@ describe('AIChat', () => {
       mockAIChatAPI.listSessions
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
-          { id: 's-fresh', title: 'Fresh session', created_at: '', updated_at: '', message_count: 1 },
+          {
+            id: 's-fresh',
+            title: 'Fresh session',
+            created_at: '',
+            updated_at: '',
+            message_count: 1,
+          },
         ]);
 
       renderChat();
@@ -719,6 +725,84 @@ describe('AIChat', () => {
       const restoredContext = mockAiChatStore.setContext.mock.calls[0]?.[0];
       expect(restoredContext.handoffContext).toBeUndefined();
       expect(restoredContext.handoffActions).toBeUndefined();
+    });
+
+    it('restores safe Patrol run handoff state from a loaded session summary', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 's-patrol-run',
+          title: 'Runtime failure follow-up',
+          created_at: '',
+          updated_at: '',
+          message_count: 2,
+          handoff_summary: {
+            kind: 'patrol_run',
+            run_id: 'run-runtime-error',
+            run_type: 'Scoped run',
+            run_status: 'error',
+            runtime_failure: true,
+            has_model_context: true,
+            resource_count: 1,
+            primary_resource: {
+              id: 'vm-100',
+              type: 'vm',
+            },
+            action_count: 0,
+            requires_approval: false,
+          },
+        },
+      ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+        expect(screen.getByText('Runtime issue')).toBeInTheDocument();
+        expect(screen.getByText(/run error/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('Runtime failure follow-up'));
+
+      await waitFor(() => {
+        expect(mockChat.loadSession).toHaveBeenCalledWith('s-patrol-run');
+        expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
+          expect.objectContaining({
+            targetType: 'patrol-run',
+            targetId: 'run-runtime-error',
+            findingId: undefined,
+            autonomousMode: false,
+            context: expect.objectContaining({
+              kind: 'patrol_run',
+              runId: 'run-runtime-error',
+              runType: 'Scoped run',
+              runStatus: 'error',
+              runtimeFailure: true,
+            }),
+            briefing: expect.objectContaining({
+              sourceLabel: 'Pulse Patrol',
+              title: 'Patrol run run-runtime-error',
+              subject: 'Run run-runtime-error',
+              actionLabel: 'Review Patrol runtime issue',
+              commandSummary: expect.stringContaining('runtime issue'),
+            }),
+          }),
+        );
+      });
+      const restoredContext = mockAiChatStore.setContext.mock.calls[0]?.[0];
+      expect(restoredContext.handoffContext).toBeUndefined();
+      expect(restoredContext.handoffMetadata).toBeUndefined();
+
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      fireEvent.input(textarea, { target: { value: 'what failed?' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith('what failed?', undefined, undefined, {
+        autonomousMode: false,
+      });
     });
 
     it('does not restore handoff context when loading a session fails', async () => {

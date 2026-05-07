@@ -627,6 +627,41 @@ func TestHandleChat_PassesScopedHandoffContext(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestHandleChat_PassesPatrolRunHandoffMetadata(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "discuss run", reqArg.Prompt)
+			assert.Equal(t, "", reqArg.FindingID)
+			assert.Equal(t, chat.HandoffMetadata{
+				Kind:           "patrol_run",
+				RunID:          "run-runtime-error",
+				RunType:        "Scoped run",
+				RunStatus:      "error",
+				RuntimeFailure: true,
+			}, reqArg.HandoffMetadata)
+			if assert.NotNil(t, reqArg.AutonomousMode) {
+				assert.False(t, *reqArg.AutonomousMode)
+			}
+		})
+
+	body := `{"prompt":"discuss run","autonomous_mode":true,"handoff_metadata":{"kind":"patrol_run","run_id":" run-runtime-error ","run_type":" Scoped run ","run_status":" error ","runtime_failure":true}}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)

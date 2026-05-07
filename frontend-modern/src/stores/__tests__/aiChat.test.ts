@@ -182,6 +182,13 @@ describe('aiChatStore', () => {
         '[Alert Incident Context]\nTimeline Event 1: 2026-05-07T00:02:00Z | Command | Command event recorded',
       handoffResources: [{ id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' }],
       handoffActions: [{ findingId: 'finding-1', approvalId: 'approval-1' }],
+      handoffMetadata: {
+        kind: 'patrol_run',
+        runId: 'run-runtime-error',
+        runType: 'Scoped run',
+        runStatus: 'error',
+        runtimeFailure: true,
+      },
     });
 
     aiChatStore.clearRequestHandoffPayload();
@@ -189,6 +196,7 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.handoffContext).toBeUndefined();
     expect(aiChatStore.context.handoffResources).toBeUndefined();
     expect(aiChatStore.context.handoffActions).toBeUndefined();
+    expect(aiChatStore.context.handoffMetadata).toBeUndefined();
     expect(aiChatStore.context.targetId).toBe('storage-1');
     expect(aiChatStore.context.findingId).toBe('finding-1');
     expect(aiChatStore.context.autonomousMode).toBe(false);

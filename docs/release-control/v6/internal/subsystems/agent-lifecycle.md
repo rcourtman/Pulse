@@ -391,6 +391,11 @@ profile and assignment columns, but embedded table framing must route through
    proof, or auto-approval policy. Any approval or action-audit status snapshot
    refreshed for Assistant review remains read-only AI/runtime context and must
    not become command-websocket authority or lifecycle execution state.
+   Patrol run `handoff_metadata` retained for saved Assistant sessions follows
+   the same isolation rule: a run ID, run type/status, runtime-failure flag, or
+   scoped resource label may restore Assistant presentation, but it must not
+   become agent enrollment evidence, installer state, command-websocket
+   identity, or fleet-control authority.
    Assistant operator-decision and action-posture briefing text derived from
    those same recovered handoff action references stays under that review-only
    boundary; lifecycle surfaces must not reinterpret a clearer approval posture

@@ -55,6 +55,7 @@ type sessionModelContext struct {
 	HandoffContext   string            `json:"handoff_context,omitempty"`
 	HandoffResources []HandoffResource `json:"handoff_resources,omitempty"`
 	HandoffActions   []HandoffAction   `json:"handoff_actions,omitempty"`
+	HandoffMetadata  HandoffMetadata   `json:"handoff_metadata,omitempty"`
 	UpdatedAt        time.Time         `json:"updated_at,omitempty"`
 }
 
@@ -136,6 +137,90 @@ func normalizeHandoffActions(actions []HandoffAction) []HandoffAction {
 	return normalized
 }
 
+func trimHandoffMetadataField(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	if len([]rune(value)) <= maxRunes {
+		return value
+	}
+	runes := []rune(value)
+	return strings.TrimSpace(string(runes[:maxRunes]))
+}
+
+// NormalizeHandoffMetadata returns the browser-safe subset of product-originated
+// handoff identity that can be persisted and exposed in session summaries.
+func NormalizeHandoffMetadata(metadata HandoffMetadata) HandoffMetadata {
+	kind := strings.ToLower(trimHandoffMetadataField(metadata.Kind, 64))
+	switch kind {
+	case sessionHandoffKindPatrolRun:
+	default:
+		return HandoffMetadata{}
+	}
+
+	normalized := HandoffMetadata{
+		Kind:           kind,
+		RunID:          trimHandoffMetadataField(metadata.RunID, 256),
+		RunType:        trimHandoffMetadataField(metadata.RunType, 128),
+		RunStatus:      trimHandoffMetadataField(metadata.RunStatus, 128),
+		RuntimeFailure: metadata.RuntimeFailure,
+	}
+	if normalized.Kind == sessionHandoffKindPatrolRun && normalized.RunID == "" {
+		return HandoffMetadata{}
+	}
+	return normalized
+}
+
+func handoffMetadataEmpty(metadata HandoffMetadata) bool {
+	return NormalizeHandoffMetadata(metadata) == (HandoffMetadata{})
+}
+
+func inferPatrolRunHandoffMetadata(handoffContext string) HandoffMetadata {
+	lines := strings.Split(strings.TrimSpace(handoffContext), "\n")
+	if len(lines) == 0 {
+		return HandoffMetadata{}
+	}
+
+	var metadata HandoffMetadata
+	sawRunContext := false
+	sawRunHistorySource := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "[Patrol Run Context]" {
+			sawRunContext = true
+			continue
+		}
+		if !sawRunContext {
+			continue
+		}
+
+		label, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		label = strings.ToLower(strings.TrimSpace(label))
+		value = strings.TrimSpace(value)
+		switch label {
+		case "source":
+			if strings.EqualFold(value, "Pulse Patrol run history") {
+				sawRunHistorySource = true
+			}
+		case "run id":
+			metadata.RunID = value
+		case "run type":
+			metadata.RunType = value
+		case "status":
+			metadata.RunStatus = value
+		case "runtime failure":
+			metadata.RuntimeFailure = value != ""
+		}
+	}
+
+	if !sawRunContext || !sawRunHistorySource || strings.TrimSpace(metadata.RunID) == "" {
+		return HandoffMetadata{}
+	}
+	metadata.Kind = sessionHandoffKindPatrolRun
+	return NormalizeHandoffMetadata(metadata)
+}
+
 func modelContextEmpty(modelContext *sessionModelContext) bool {
 	if modelContext == nil {
 		return true
@@ -143,11 +228,13 @@ func modelContextEmpty(modelContext *sessionModelContext) bool {
 	return strings.TrimSpace(modelContext.HandoffFindingID) == "" &&
 		strings.TrimSpace(modelContext.HandoffContext) == "" &&
 		len(normalizeHandoffResources(modelContext.HandoffResources)) == 0 &&
-		len(normalizeHandoffActions(modelContext.HandoffActions)) == 0
+		len(normalizeHandoffActions(modelContext.HandoffActions)) == 0 &&
+		handoffMetadataEmpty(modelContext.HandoffMetadata)
 }
 
 const (
 	sessionHandoffKindPatrolFinding = "patrol_finding"
+	sessionHandoffKindPatrolRun     = "patrol_run"
 	sessionHandoffKindScopedContext = "scoped_context"
 )
 
@@ -177,6 +264,10 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 
 	resources := normalizeHandoffResources(modelContext.HandoffResources)
 	actions := normalizeHandoffActions(modelContext.HandoffActions)
+	metadata := NormalizeHandoffMetadata(modelContext.HandoffMetadata)
+	if handoffMetadataEmpty(metadata) {
+		metadata = inferPatrolRunHandoffMetadata(modelContext.HandoffContext)
+	}
 	findingID := strings.TrimSpace(modelContext.HandoffFindingID)
 	if findingID == "" {
 		for _, action := range actions {
@@ -190,14 +281,26 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 	kind := sessionHandoffKindScopedContext
 	if findingID != "" {
 		kind = sessionHandoffKindPatrolFinding
+	} else if metadata.Kind == sessionHandoffKindPatrolRun {
+		kind = sessionHandoffKindPatrolRun
 	}
 
 	summary := &SessionHandoffSummary{
 		Kind:            kind,
 		FindingID:       findingID,
+		RunID:           metadata.RunID,
+		RunType:         metadata.RunType,
+		RunStatus:       metadata.RunStatus,
+		RuntimeFailure:  metadata.RuntimeFailure,
 		HasModelContext: strings.TrimSpace(modelContext.HandoffContext) != "",
 		ResourceCount:   len(resources),
 		ActionCount:     len(actions),
+	}
+	if kind != sessionHandoffKindPatrolRun {
+		summary.RunID = ""
+		summary.RunType = ""
+		summary.RunStatus = ""
+		summary.RuntimeFailure = false
 	}
 	if !modelContext.UpdatedAt.IsZero() {
 		updatedAt := modelContext.UpdatedAt
@@ -503,6 +606,43 @@ func (s *SessionStore) SetModelHandoffFindingID(id, findingID string) error {
 	return s.writeSession(*data)
 }
 
+// SetModelHandoffEnvelope replaces the session's product-originated handoff
+// as one coherent scope. This avoids stale finding, run, resource, or action
+// identity leaking between separate handoffs within the same chat session.
+func (s *SessionStore) SetModelHandoffEnvelope(id string, findingID string, handoffContext string, handoffResources []HandoffResource, handoffActions []HandoffAction, handoffMetadata HandoffMetadata) error {
+	findingID = strings.TrimSpace(findingID)
+	handoffContext = strings.TrimSpace(handoffContext)
+	resources := normalizeHandoffResources(handoffResources)
+	actions := normalizeHandoffActions(handoffActions)
+	metadata := NormalizeHandoffMetadata(handoffMetadata)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	modelContext := &sessionModelContext{
+		HandoffFindingID: findingID,
+		HandoffContext:   handoffContext,
+		HandoffResources: resources,
+		HandoffActions:   actions,
+		HandoffMetadata:  metadata,
+		UpdatedAt:        now,
+	}
+	if modelContextEmpty(modelContext) {
+		data.ModelContext = nil
+	} else {
+		data.ModelContext = modelContext
+	}
+	data.UpdatedAt = now
+
+	return s.writeSession(*data)
+}
+
 // SetModelHandoffContext stores model-only handoff context for future turns.
 // It is intentionally session metadata, not a user-authored chat message.
 func (s *SessionStore) SetModelHandoffContext(id, handoffContext string) error {
@@ -581,6 +721,33 @@ func (s *SessionStore) SetModelHandoffActions(id string, handoffActions []Handof
 	if modelContextEmpty(data.ModelContext) {
 		data.ModelContext = nil
 	}
+	data.UpdatedAt = now
+
+	return s.writeSession(*data)
+}
+
+// SetModelHandoffMetadata stores browser-safe handoff identity for future
+// session summaries without exposing private model context details.
+func (s *SessionStore) SetModelHandoffMetadata(id string, handoffMetadata HandoffMetadata) error {
+	metadata := NormalizeHandoffMetadata(handoffMetadata)
+	if handoffMetadataEmpty(metadata) {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if data.ModelContext == nil {
+		data.ModelContext = &sessionModelContext{}
+	}
+	data.ModelContext.HandoffMetadata = metadata
+	data.ModelContext.UpdatedAt = now
 	data.UpdatedAt = now
 
 	return s.writeSession(*data)

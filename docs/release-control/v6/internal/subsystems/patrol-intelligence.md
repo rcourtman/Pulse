@@ -249,7 +249,10 @@ Patrol-specific presentation helpers.
    history facts such as run ID/type/status, trigger, timing, coverage, scope,
    findings snapshot availability, outcome counts, tool/triage effort,
    `error_summary`, `error_detail`, sanitized Patrol analysis, and scoped
-   resource references as model-only context. It must force request-local
+   resource references as model-only context. It must also send safe
+   `handoff_metadata` for the saved-session identity envelope: kind
+   `patrol_run`, run ID, safe run type/status, and a runtime-failure boolean,
+   never runtime failure detail or analysis text. It must force request-local
    approval-required mode, present a source-named visible drawer briefing, and
    frame Assistant as explanation and next-step review rather than execution or
    automatic retry authority.

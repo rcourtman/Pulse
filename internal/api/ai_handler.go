@@ -783,6 +783,7 @@ type ChatRequest struct {
 	HandoffContext   string                 `json:"handoff_context,omitempty"`
 	HandoffResources []chat.HandoffResource `json:"handoff_resources,omitempty"`
 	HandoffActions   []chat.HandoffAction   `json:"handoff_actions,omitempty"`
+	HandoffMetadata  chat.HandoffMetadata   `json:"handoff_metadata,omitempty"`
 	AutonomousMode   *bool                  `json:"autonomous_mode,omitempty"`
 }
 
@@ -792,16 +793,16 @@ const (
 	chatRequestHandoffActionLimit     = 4
 )
 
-func chatAutonomousModeForScopedHandoff(requested *bool, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool {
-	if strings.TrimSpace(handoffContext) == "" && len(handoffResources) == 0 && len(handoffActions) == 0 {
+func chatAutonomousModeForScopedHandoff(requested *bool, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction, handoffMetadata chat.HandoffMetadata) *bool {
+	if strings.TrimSpace(handoffContext) == "" && len(handoffResources) == 0 && len(handoffActions) == 0 && chat.NormalizeHandoffMetadata(handoffMetadata) == (chat.HandoffMetadata{}) {
 		return requested
 	}
 	approvalRequired := false
 	return &approvalRequired
 }
 
-func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool {
-	return chatAutonomousModeForScopedHandoff(requested, handoffContext, handoffResources, handoffActions)
+func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction, handoffMetadata chat.HandoffMetadata) *bool {
+	return chatAutonomousModeForScopedHandoff(requested, handoffContext, handoffResources, handoffActions, handoffMetadata)
 }
 
 func normalizeChatRequestHandoffContext(raw string) string {
@@ -2508,6 +2509,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	handoffContext := normalizeChatRequestHandoffContext(req.HandoffContext)
 	handoffResources := normalizeChatRequestHandoffResources(req.HandoffResources)
 	handoffActions := normalizeChatRequestHandoffActions(req.HandoffActions)
+	handoffMetadata := chat.NormalizeHandoffMetadata(req.HandoffMetadata)
 	requestHandoffContext := handoffContext
 	requestHandoffResources := handoffResources
 	requestHandoffActions := handoffActions
@@ -2529,6 +2531,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 				handoffActions = mergeUnifiedFindingRequestHandoffActions(f, buildUnifiedFindingHandoffActions(f, orgID), requestHandoffActions)
 				handoffContext = mergeUnifiedFindingRequestHandoffContext(buildUnifiedFindingChatContext(f, store, handoffActions), requestHandoffContext, f.ID)
 				handoffResources = mergeUnifiedFindingRequestHandoffResources(f, buildUnifiedFindingHandoffResources(f, store), requestHandoffResources)
+				handoffMetadata = chat.HandoffMetadata{}
 			}
 		}
 		if !findingResolved {
@@ -2541,6 +2544,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 			handoffContext = ""
 			handoffResources = nil
 			handoffActions = nil
+			handoffMetadata = chat.HandoffMetadata{}
 		}
 	}
 
@@ -2555,7 +2559,8 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		HandoffContext:   handoffContext,
 		HandoffResources: handoffResources,
 		HandoffActions:   handoffActions,
-		AutonomousMode:   chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions),
+		HandoffMetadata:  handoffMetadata,
+		AutonomousMode:   chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata),
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
 			serviceSentDone = true

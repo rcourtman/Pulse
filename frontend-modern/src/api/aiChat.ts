@@ -41,6 +41,10 @@ export interface ChatSessionHandoffResource {
 export interface ChatSessionHandoffSummary {
   kind?: string;
   finding_id?: string;
+  run_id?: string;
+  run_type?: string;
+  run_status?: string;
+  runtime_failure?: boolean;
   has_model_context: boolean;
   resource_count?: number;
   primary_resource?: ChatSessionHandoffResource;
@@ -50,6 +54,14 @@ export interface ChatSessionHandoffSummary {
   last_known_action_state?: string;
   last_known_action_risk?: string;
   updated_at?: string;
+}
+
+export interface ChatHandoffMetadata {
+  kind?: string;
+  runId?: string;
+  runType?: string;
+  runStatus?: string;
+  runtimeFailure?: boolean;
 }
 
 export interface ChatHandoffAction {
@@ -264,6 +276,7 @@ export class AIChatAPI {
     handoffContext?: string,
     handoffResources?: ChatHandoffResource[],
     handoffActions?: ChatHandoffAction[],
+    handoffMetadata?: ChatHandoffMetadata,
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
@@ -289,6 +302,15 @@ export class AIChatAPI {
     }
     if (handoffActions && handoffActions.length > 0) {
       body.handoff_actions = handoffActions.map(serializeChatHandoffAction);
+    }
+    if (handoffMetadata) {
+      body.handoff_metadata = {
+        kind: handoffMetadata.kind,
+        run_id: handoffMetadata.runId,
+        run_type: handoffMetadata.runType,
+        run_status: handoffMetadata.runStatus,
+        runtime_failure: handoffMetadata.runtimeFailure,
+      };
     }
 
     const response = await apiFetch(`${this.baseUrl}/chat`, {

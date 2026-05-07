@@ -56,6 +56,14 @@ export interface AIChatHandoffAction {
   targetNode?: string;
 }
 
+export interface AIChatHandoffMetadata {
+  kind?: string;
+  runId?: string;
+  runType?: string;
+  runStatus?: string;
+  runtimeFailure?: boolean;
+}
+
 export interface AIChatContext {
   targetType?: string;
   targetId?: string;
@@ -66,6 +74,7 @@ export interface AIChatContext {
   handoffContext?: string;
   handoffResources?: AIChatHandoffResource[];
   handoffActions?: AIChatHandoffAction[];
+  handoffMetadata?: AIChatHandoffMetadata;
   // Per-request execution mode override; false keeps scoped handoffs approval-required.
   autonomousMode?: boolean;
 }
@@ -482,13 +491,19 @@ export const aiChatStore = {
   // them as model-only session context.
   clearRequestHandoffPayload() {
     setAIChatContext((prev) => {
-      if (!prev.handoffContext && !prev.handoffResources?.length && !prev.handoffActions?.length) {
+      if (
+        !prev.handoffContext &&
+        !prev.handoffResources?.length &&
+        !prev.handoffActions?.length &&
+        !prev.handoffMetadata
+      ) {
         return prev;
       }
       const {
         handoffContext: _handoffContext,
         handoffResources: _handoffResources,
         handoffActions: _handoffActions,
+        handoffMetadata: _handoffMetadata,
         ...rest
       } = prev;
       return rest;

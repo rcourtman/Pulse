@@ -419,6 +419,109 @@ func TestSessionStore_ListIncludesSafeHandoffSummary(t *testing.T) {
 	}
 }
 
+func TestSessionStore_ListIncludesSafePatrolRunHandoffSummary(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	handoffContext := strings.Join([]string{
+		"[Patrol Run Context]",
+		"Source: Pulse Patrol run history",
+		"Run ID: run-runtime-error",
+		"Run Type: Scoped run",
+		"Status: error",
+		"Runtime Failure: Selected model does not support Patrol tools: No endpoints found that support the provided 'tool_choice' value.",
+		"Patrol Analysis: Runtime failure prevented analysis.",
+	}, "\n")
+	if err := store.SetModelHandoffEnvelope(session.ID, "", handoffContext, []HandoffResource{{
+		ID:   " vm-100 ",
+		Type: " vm ",
+	}}, nil, HandoffMetadata{
+		Kind:           " patrol_run ",
+		RunID:          " run-runtime-error ",
+		RunType:        " Scoped run ",
+		RunStatus:      " error ",
+		RuntimeFailure: true,
+	}); err != nil {
+		t.Fatalf("SetModelHandoffEnvelope failed: %v", err)
+	}
+
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("sessions = %#v, want one session", sessions)
+	}
+
+	summary := sessions[0].HandoffSummary
+	if summary == nil {
+		t.Fatalf("expected handoff summary")
+	}
+	if summary.Kind != sessionHandoffKindPatrolRun {
+		t.Fatalf("handoff kind = %q, want %q", summary.Kind, sessionHandoffKindPatrolRun)
+	}
+	if summary.FindingID != "" {
+		t.Fatalf("finding ID = %q, want empty Patrol run summary", summary.FindingID)
+	}
+	if summary.RunID != "run-runtime-error" || summary.RunType != "Scoped run" || summary.RunStatus != "error" || !summary.RuntimeFailure {
+		t.Fatalf("run summary = %#v, want safe Patrol run identity", summary)
+	}
+	if !summary.HasModelContext {
+		t.Fatalf("expected summary to report model context")
+	}
+	if summary.ResourceCount != 1 || summary.PrimaryResource == nil || summary.PrimaryResource.ID != "vm-100" {
+		t.Fatalf("resource summary = %#v, want normalized primary resource", summary)
+	}
+	if summary.ActionCount != 0 || summary.RequiresApproval {
+		t.Fatalf("action summary = %#v, want review-only run context without action authority", summary)
+	}
+
+	payload, err := json.Marshal(sessions)
+	if err != nil {
+		t.Fatalf("Marshal sessions failed: %v", err)
+	}
+	publicJSON := string(payload)
+	for _, forbidden := range []string{
+		"Selected model",
+		"No endpoints found",
+		"tool_choice",
+		"Runtime failure prevented analysis",
+	} {
+		if strings.Contains(publicJSON, forbidden) {
+			t.Fatalf("public session JSON leaked %q: %s", forbidden, publicJSON)
+		}
+	}
+}
+
+func TestModelContextHandoffSummaryInfersPatrolRunMetadataForExistingSessions(t *testing.T) {
+	summary := modelContextHandoffSummary(&sessionModelContext{
+		HandoffContext: strings.Join([]string{
+			"[Patrol Run Context]",
+			"Source: Pulse Patrol run history",
+			"Run ID: run-existing",
+			"Run Type: Scheduled run",
+			"Status: completed",
+			"Runtime Failure: Selected model failed during Patrol execution.",
+		}, "\n"),
+	})
+	if summary == nil {
+		t.Fatalf("summary is nil")
+	}
+	if summary.Kind != sessionHandoffKindPatrolRun {
+		t.Fatalf("handoff kind = %q, want %q", summary.Kind, sessionHandoffKindPatrolRun)
+	}
+	if summary.RunID != "run-existing" || summary.RunType != "Scheduled run" || summary.RunStatus != "completed" || !summary.RuntimeFailure {
+		t.Fatalf("run summary = %#v, want inferred Patrol run identity", summary)
+	}
+}
+
 func TestModelContextHandoffSummaryRequiresApprovalOnlyForCurrentPendingApproval(t *testing.T) {
 	tests := []struct {
 		name             string
