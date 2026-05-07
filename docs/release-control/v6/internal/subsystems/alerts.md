@@ -80,6 +80,7 @@ operator-facing alert routing behavior for live runtime alerts.
 58. `internal/alerts/active_lifecycle.go`
 59. `internal/alerts/active_cleanup.go`
 60. `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`
+61. `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`
 
 ## Shared Boundaries
 
@@ -104,10 +105,12 @@ operator-facing alert routing behavior for live runtime alerts.
    consume the same configured alert thresholds and override identity chain as
    the alert runtime instead of hard-coded per-surface thresholds.
 7. Add or change unlocked Pulse Assistant alert investigation handoffs through
-   `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`; these
-   handoffs must preserve alert context, force request-scoped approval mode,
-   and must not instruct the Assistant to execute diagnostics or remediation
-   without operator approval.
+   `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` and
+   `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`;
+   these handoffs must preserve alert context, force request-scoped approval
+   mode, attach a visible alert-owned Assistant drawer briefing, and must not
+   instruct the Assistant to execute diagnostics or remediation without operator
+   approval.
 
 ## Forbidden Paths
 
@@ -363,7 +366,11 @@ Unlocked alert-investigation Assistant handoffs are contextual explanation and
 triage entries, not autonomous execution grants. `InvestigateAlertButton.tsx`
 must pass `autonomousMode: false` when it opens Pulse Assistant, and the seeded
 prompt may ask for root-cause analysis, metrics checks, and remediation advice
-only if command or change execution remains explicitly approval-bound.
+only if command or change execution remains explicitly approval-bound. The
+visible drawer briefing for that same handoff is Alerts-owned presentation
+context: alert identifier, severity, metric, resource, threshold, duration,
+node label, and message may be shown, while raw diagnostic or remediation
+commands remain outside the handoff.
 Alert-adjacent shared helpers also inherit the runtime-versus-commercial split
 now carried by the shared licensing stores. Alert pages may consume runtime
 feature truth from `frontend-modern/src/stores/license.ts`, but any

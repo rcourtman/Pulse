@@ -15,30 +15,29 @@ const {
   getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
   presentationPolicyHidesUpgradePromptsMock,
-} =
-  vi.hoisted(() => {
-    const openWithPromptMock = vi.fn();
-    const openUpgradeDestinationMock = vi.fn();
-    const formatAlertValueMock = vi.fn((value?: number, _type?: string) =>
-      value !== undefined ? `${value.toFixed(1)}%` : 'N/A',
-    );
-    const getUpgradeActionDestinationMock = vi.fn();
-    const getUpgradeActionUrlOrFallbackMock = vi.fn();
-    const presentationPolicyHidesUpgradePromptsMock = vi.fn();
-    const mockAiChatStore = {
-      enabled: true as boolean | null,
-      openWithPrompt: (...args: unknown[]) => openWithPromptMock(...args),
-    };
-    return {
-      openWithPromptMock,
-      openUpgradeDestinationMock,
-      formatAlertValueMock,
-      mockAiChatStore,
-      getUpgradeActionDestinationMock,
-      getUpgradeActionUrlOrFallbackMock,
-      presentationPolicyHidesUpgradePromptsMock,
-    };
-  });
+} = vi.hoisted(() => {
+  const openWithPromptMock = vi.fn();
+  const openUpgradeDestinationMock = vi.fn();
+  const formatAlertValueMock = vi.fn((value?: number, _type?: string) =>
+    value !== undefined ? `${value.toFixed(1)}%` : 'N/A',
+  );
+  const getUpgradeActionDestinationMock = vi.fn();
+  const getUpgradeActionUrlOrFallbackMock = vi.fn();
+  const presentationPolicyHidesUpgradePromptsMock = vi.fn();
+  const mockAiChatStore = {
+    enabled: true as boolean | null,
+    openWithPrompt: (...args: unknown[]) => openWithPromptMock(...args),
+  };
+  return {
+    openWithPromptMock,
+    openUpgradeDestinationMock,
+    formatAlertValueMock,
+    mockAiChatStore,
+    getUpgradeActionDestinationMock,
+    getUpgradeActionUrlOrFallbackMock,
+    presentationPolicyHidesUpgradePromptsMock,
+  };
+});
 
 vi.mock('@/stores/aiChat', () => ({
   aiChatStore: mockAiChatStore,
@@ -294,6 +293,19 @@ describe('InvestigateAlertButton', () => {
         targetType: 'vm',
         targetId: 'vm-101',
         autonomousMode: false,
+        briefing: expect.objectContaining({
+          sourceLabel: 'Pulse Alerts',
+          title: 'Alert investigation attached',
+          subject: 'Warning cpu on test-vm',
+          statusLabel: expect.stringContaining('Warning alert'),
+          detailLines: expect.arrayContaining([
+            'Current value 82.5%; threshold 80.0%',
+            'Node: PVE Node 1',
+            'Message: CPU usage is high',
+          ]),
+          actionLabel: 'Investigate alert alert-1',
+          safetyNote: 'Diagnostics and remediation require operator approval.',
+        }),
         context: {
           alertIdentifier: 'alert-1',
           alertType: 'cpu',
@@ -316,8 +328,13 @@ describe('InvestigateAlertButton', () => {
       ];
 
       expect(context.autonomousMode).toBe(false);
+      expect(context.briefing).toMatchObject({
+        sourceLabel: 'Pulse Alerts',
+        title: 'Alert investigation attached',
+      });
       expect(prompt).toContain('Ask for operator approval before running any diagnostic command');
       expect(prompt).not.toContain('Execute diagnostic commands if safe');
+      expect(JSON.stringify(context.briefing)).not.toContain('systemctl');
     });
 
     it('does not open the upgrade destination when unlocked', async () => {

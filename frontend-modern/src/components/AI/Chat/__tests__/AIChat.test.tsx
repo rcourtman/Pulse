@@ -75,22 +75,27 @@ const {
   const mockAiChatStore = {
     isOpenSignal: vi.fn(() => true),
     context: {
-      initialPrompt: undefined as string | undefined,
-      findingId: undefined as string | undefined,
-      autonomousMode: undefined as boolean | undefined,
-      briefing: undefined as
-        | {
-            sourceLabel: string;
-            title: string;
-            subject?: string;
-            statusLabel?: string;
-            detailLines?: string[];
-            evidence?: string[];
-            actionLabel?: string;
-            commandSummary?: string;
-            safetyNote?: string;
-          }
-        | undefined,
+      initialPrompt: undefined,
+      findingId: undefined,
+      autonomousMode: undefined,
+      context: undefined,
+      briefing: undefined,
+    } as {
+      initialPrompt?: string;
+      findingId?: string;
+      autonomousMode?: boolean;
+      context?: Record<string, unknown>;
+      briefing?: {
+        sourceLabel: string;
+        title: string;
+        subject?: string;
+        statusLabel?: string;
+        detailLines?: string[];
+        evidence?: string[];
+        actionLabel?: string;
+        commandSummary?: string;
+        safetyNote?: string;
+      };
     },
     clearInitialPrompt: vi.fn(),
     clearFindingId: vi.fn(),
@@ -1047,6 +1052,38 @@ describe('AIChat', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Approval required for this Patrol handoff/)).toBeInTheDocument();
+      });
+      expect(
+        screen.queryByText(/Approval required for this dashboard brief/),
+      ).not.toBeInTheDocument();
+    });
+
+    it('names scoped alert handoffs in the approval banner', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'gpt-4',
+        chat_model: '',
+        control_level: 'autonomous',
+        autonomous_mode: true,
+        discovery_enabled: true,
+      });
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Alerts',
+          title: 'Alert investigation attached',
+        },
+        context: {
+          alertIdentifier: 'alert-1',
+        },
+      };
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Approval required for this alert investigation/),
+        ).toBeInTheDocument();
       });
       expect(
         screen.queryByText(/Approval required for this dashboard brief/),

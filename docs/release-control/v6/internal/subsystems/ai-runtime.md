@@ -285,7 +285,8 @@ runtime cost control, and shared AI transport surfaces.
     When the drawer renders a request-local approval-required banner for a
     scoped handoff, the banner must derive its subject from the attached
     briefing or structured finding context, so Patrol approval/finding handoffs
-    are named as Patrol handoffs rather than generic dashboard briefs.
+    and alert-investigation handoffs are named by their source rather than as
+    generic dashboard briefs.
 
 ## Current State
 

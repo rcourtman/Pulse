@@ -2,11 +2,9 @@ import { Show, createSignal } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
 import type { Alert } from '@/types/api';
 import { useUpgradeNavigation } from '@/components/shared/useUpgradeNavigation';
-import { getCanonicalAlertId } from '@/features/alerts/identity';
-import { formatAlertValue } from '@/utils/alertFormatters';
-import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import { buildAlertAssistantHandoff } from './alertAssistantHandoffModel';
 
 interface InvestigateAlertButtonProps {
   alert: Alert;
@@ -50,57 +48,14 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       return;
     }
 
-    // Calculate how long the alert has been active
-    const startTime = new Date(props.alert.startTime);
-    const now = new Date();
-    const durationMs = now.getTime() - startTime.getTime();
-    const durationMins = Math.floor(durationMs / 60000);
-    const durationStr =
-      durationMins < 60
-        ? `${durationMins} min${durationMins !== 1 ? 's' : ''}`
-        : `${Math.floor(durationMins / 60)}h ${durationMins % 60}m`;
-
-    // Format a focused prompt for investigation
-    const prompt = `Investigate this ${props.alert.level.toUpperCase()} alert:
-
-**Resource:** ${props.alert.resourceName}
-**Alert Type:** ${props.alert.type}
-**Current Value:** ${formatAlertValue(props.alert.value, props.alert.type)}
-**Threshold:** ${formatAlertValue(props.alert.threshold, props.alert.type)}
-**Duration:** ${durationStr}
-${props.alert.node ? `**Node:** ${props.alert.nodeDisplayName || props.alert.node}` : ''}
-
-Please:
-1. Identify the root cause
-2. Check related metrics
-3. Suggest specific remediation steps
-4. Ask for operator approval before running any diagnostic command or change`;
-
-    const targetType = resolveAlertTargetType({
-      alertType: props.alert.type,
+    const handoff = buildAlertAssistantHandoff({
+      alert: props.alert,
       resourceType: props.resourceType,
-      metadataResourceType:
-        typeof props.alert.metadata?.resourceType === 'string'
-          ? (props.alert.metadata.resourceType as string)
-          : undefined,
-      resourceId: props.alert.resourceId,
+      vmid: props.vmid,
     });
 
     // Open AI chat with this context and prompt
-    aiChatStore.openWithPrompt(prompt, {
-      targetType,
-      targetId: props.alert.resourceId,
-      autonomousMode: false,
-      context: {
-        alertIdentifier: getCanonicalAlertId(props.alert),
-        alertType: props.alert.type,
-        alertLevel: props.alert.level,
-        alertMessage: props.alert.message,
-        guestName: props.alert.resourceName,
-        node: props.alert.node,
-        vmid: props.vmid,
-      },
-    });
+    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
   };
 
   const sizeClasses = {

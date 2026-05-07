@@ -317,6 +317,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const scopedApprovalHandoffLabel = createMemo(() => {
     const source = contextBriefing()?.sourceLabel?.toLowerCase() || '';
     if (source.includes('patrol')) return 'this Patrol handoff';
+    if (source.includes('alert') || aiChatStore.context.context?.alertIdentifier) {
+      return 'this alert investigation';
+    }
     if (aiChatStore.context.findingId) return 'this Patrol finding';
     return 'this dashboard brief';
   });
