@@ -1,5 +1,6 @@
 import type { ConnectionType } from '@/api/connections';
 import {
+  SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES,
   getSourcePlatformManifestEntry,
   type PlatformGovernanceState,
   type PlatformPrimaryMode,
@@ -72,6 +73,45 @@ export interface InfrastructureCoverageCompleteActionPresentation {
   detail: string;
 }
 
+const INFRASTRUCTURE_AGENT_RUNTIME_PLATFORM_LABELS = [
+  'Linux',
+  'macOS',
+  'Windows',
+  'FreeBSD',
+] as const;
+
+const formatJoinedLabelList = (labels: readonly string[]): string => {
+  if (labels.length === 0) return '';
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+};
+
+const getInfrastructureAgentHostProfileLabels = (): readonly string[] => {
+  const labels = [
+    ...INFRASTRUCTURE_AGENT_RUNTIME_PLATFORM_LABELS,
+    ...SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES.filter(
+      (profile) => profile.governanceState === 'supported',
+    ).map((profile) => profile.family),
+  ];
+  return Array.from(new Set(labels));
+};
+
+export const getInfrastructureAgentHostProfileSupportText = (): string =>
+  `${formatJoinedLabelList(getInfrastructureAgentHostProfileLabels())} host/appliance profiles`;
+
+export const getInfrastructureGovernanceBadgeLabel = (
+  governanceState: PlatformGovernanceState,
+  readinessStage: PlatformReadinessStage,
+): string | null => {
+  if (governanceState === 'supported') return null;
+  if (governanceState === 'admitted') {
+    return readinessStage === 'first-lab-ready' ? 'First lab ready' : 'Admitted';
+  }
+  if (governanceState === 'presentation-only') return 'Presentation only';
+  return null;
+};
+
 const SOURCE_STRATEGY_PRESENTATION: Record<
   InfrastructureSourceStrategy,
   InfrastructureSourceStrategyPresentation
@@ -84,7 +124,7 @@ const SOURCE_STRATEGY_PRESENTATION: Record<
   agent: {
     label: 'Agent telemetry',
     summary: 'Pulse Agent',
-    detail: 'Installs Pulse Agent for host telemetry, local services, Docker, and Kubernetes.',
+    detail: `Installs Pulse Agent for ${getInfrastructureAgentHostProfileSupportText()}, local services, Docker, and Kubernetes.`,
   },
   'api-agent': {
     label: 'API first',
@@ -105,8 +145,7 @@ const PRODUCT_PRESENTATION: Record<
 > = {
   agent: {
     label: 'Pulse Agent',
-    bestFor:
-      'Linux, macOS, Windows, FreeBSD, and compatible hosts such as Unraid. Recommended on each machine where you want full node-local telemetry.',
+    bestFor: `${getInfrastructureAgentHostProfileSupportText()} where you want low-overhead node-local telemetry.`,
     coverage: 'Low-overhead host telemetry, SMART, services, Docker, and Kubernetes',
     catalogDescription: 'Low-overhead host telemetry, services, Docker, Kubernetes',
     sourceStrategy: 'agent',
@@ -232,7 +271,7 @@ export const INFRASTRUCTURE_ONBOARDING_PATHS: Record<
   InfrastructureOnboardingPathPresentation
 > = {
   api: {
-    title: 'Connect a supported platform',
+    title: 'Connect platform API',
     description:
       'Use a management API when the platform exposes one. Pulse validates the endpoint, requests credentials, and then starts collecting platform inventory and health.',
     bestFor: 'TrueNAS, Proxmox, and the current VMware vCenter integration path',
@@ -240,10 +279,8 @@ export const INFRASTRUCTURE_ONBOARDING_PATHS: Record<
   },
   agent: {
     title: 'Install Pulse Agent',
-    description:
-      'Use the agent when you want low-overhead machine telemetry, or when the system does not expose a management API Pulse can connect to directly.',
-    bestFor:
-      'Linux, macOS, Windows, FreeBSD, and compatible hosts such as Unraid. Recommended on each machine where you want full node-local telemetry.',
+    description: `Use the agent when you want low-overhead machine telemetry for ${getInfrastructureAgentHostProfileSupportText()}, or when the system does not expose a management API Pulse can connect to directly.`,
+    bestFor: `${getInfrastructureAgentHostProfileSupportText()} where you want full node-local telemetry.`,
     coverage:
       'Low-overhead CPU temperature, disk SMART, services, network metrics, Docker, and Kubernetes telemetry',
   },
@@ -255,13 +292,7 @@ export const INFRASTRUCTURE_AGENT_DISCOVERY_LABELS = [
   'Kubernetes',
 ] as const;
 
-export const INFRASTRUCTURE_AGENT_HOST_LABELS = [
-  'Linux',
-  'macOS',
-  'Windows',
-  'FreeBSD',
-  'Unraid',
-] as const;
+export const INFRASTRUCTURE_AGENT_HOST_LABELS = getInfrastructureAgentHostProfileLabels();
 
 const SOURCE_PICKER_GROUPS: InfrastructureSourcePickerGroupPresentation[] = [
   {

@@ -9,6 +9,28 @@
     "docker",
     "kubernetes"
   ],
+  "agent_host_profiles": [
+    {
+      "id": "unraid",
+      "family": "Unraid",
+      "governance_state": "supported",
+      "readiness_stage": "supported",
+      "host_identity_tokens": [
+        "unraid"
+      ],
+      "support_floor": {
+        "setup": "supported",
+        "visibility": "supported",
+        "workloads": "n/a",
+        "storage": "supported",
+        "recovery": "n/a",
+        "alerts": "supported",
+        "assistant_read": "supported",
+        "assistant_control": "read-only"
+      },
+      "storage_family": "onprem"
+    }
+  ],
   "platforms": [
     {
       "id": "agent",

@@ -65,6 +65,7 @@ export interface ConnectionFleetGovernance {
 export interface ConnectionAgentIdentity {
   hostname?: string;
   platform?: string;
+  hostProfile?: string;
   osName?: string;
   osVersion?: string;
   kernelVersion?: string;

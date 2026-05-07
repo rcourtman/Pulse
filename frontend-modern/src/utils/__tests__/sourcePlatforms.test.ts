@@ -9,6 +9,10 @@ import {
   resolveSourceTypeFromSources,
 } from '@/utils/sourcePlatforms';
 import {
+  AGENT_HOST_PROFILE_IDS,
+  PLATFORM_TYPE_KEYS,
+  PRESENTATION_ONLY_PLATFORM_IDS,
+  getAgentHostProfileFamily,
   getSourcePlatformCanonicalProjections,
   getSourcePlatformReadinessStage,
   getSourcePlatformSupportFloor,
@@ -138,6 +142,13 @@ describe('sourcePlatforms', () => {
         assistantRead: 'supported',
         assistantControl: 'read-only',
       });
+    });
+
+    it('keeps Unraid as an agent host profile instead of a platform type', () => {
+      expect(AGENT_HOST_PROFILE_IDS).toEqual(['unraid']);
+      expect(getAgentHostProfileFamily('unraid')).toBe('Unraid');
+      expect(PLATFORM_TYPE_KEYS).not.toContain('unraid');
+      expect(PRESENTATION_ONLY_PLATFORM_IDS).toContain('unraid');
     });
   });
 

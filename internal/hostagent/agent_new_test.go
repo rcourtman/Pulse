@@ -478,6 +478,41 @@ Platform = QNAP
 			t.Fatalf("osVersion = %q, want %q", agent.osVersion, "5.2.0")
 		}
 	})
+
+	t.Run("unraid from version file", func(t *testing.T) {
+		mc := &mockCollector{
+			goos: "linux",
+			hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+				return &gohost.InfoStat{
+					Hostname:        "unraid",
+					HostID:          "hid",
+					Platform:        "linux",
+					PlatformFamily:  "linux",
+					PlatformVersion: "",
+					KernelArch:      runtime.GOARCH,
+				}, nil
+			},
+			readFileFn: func(name string) ([]byte, error) {
+				switch name {
+				case "/etc/unraid-version":
+					return []byte("Unraid OS 7.1.0\n"), nil
+				default:
+					return nil, os.ErrNotExist
+				}
+			},
+		}
+
+		agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel, Collector: mc})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if agent.osName != "Unraid" {
+			t.Fatalf("osName = %q, want %q", agent.osName, "Unraid")
+		}
+		if agent.osVersion != "7.1.0" {
+			t.Fatalf("osVersion = %q, want %q", agent.osVersion, "7.1.0")
+		}
+	})
 }
 
 func TestNew_UsesCustomCABundleForHTTPTransport(t *testing.T) {

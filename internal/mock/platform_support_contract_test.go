@@ -14,15 +14,27 @@ import (
 )
 
 var (
-	numberedPlatformListRE   = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
-	currentSupportMatrixRE   = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
-	currentSupportSetupRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+([^|]+?)\\s+\\|")
+	numberedPlatformListRE     = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
+	currentSupportMatrixRE     = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
+	currentSupportSetupRowRE   = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+([^|]+?)\\s+\\|")
+	agentHostProfileTableRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|\\s+`([^`]+)`\\s+\\|")
 )
 
 type platformSupportManifest struct {
-	SchemaVersion                    int                            `json:"schema_version"`
-	DefaultInfrastructureSourceOrder []string                       `json:"default_infrastructure_source_order"`
-	Platforms                        []platformSupportManifestEntry `json:"platforms"`
+	SchemaVersion                    int                             `json:"schema_version"`
+	DefaultInfrastructureSourceOrder []string                        `json:"default_infrastructure_source_order"`
+	AgentHostProfiles                []agentHostProfileManifestEntry `json:"agent_host_profiles"`
+	Platforms                        []platformSupportManifestEntry  `json:"platforms"`
+}
+
+type agentHostProfileManifestEntry struct {
+	ID                 string            `json:"id"`
+	Family             string            `json:"family"`
+	GovernanceState    string            `json:"governance_state"`
+	ReadinessStage     string            `json:"readiness_stage"`
+	HostIdentityTokens []string          `json:"host_identity_tokens"`
+	SupportFloor       map[string]string `json:"support_floor"`
+	StorageFamily      string            `json:"storage_family"`
 }
 
 type platformSupportManifestEntry struct {
@@ -47,6 +59,7 @@ func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
 	classified := parsePlatformListSection(t, model, "### First-class platforms")
 	admitted := parsePlatformListSection(t, model, "### Admitted platforms (not yet supported)")
 	presentationOnly := parsePlatformListSection(t, model, "### Presentation-only platform vocabulary")
+	agentHostProfiles := parseAgentHostProfileSection(t, model, "### Agent Host Profiles")
 	matrix := parseCurrentSupportMatrixPlatforms(t, model)
 
 	if diff := diffPlatformSets(classified, matrix); diff != "" {
@@ -70,6 +83,52 @@ func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
 		manifestPlatformOnboardingPathsByState(t, manifest, "supported"),
 	); diff != "" {
 		t.Fatalf("supported onboarding-path manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformSets(
+		sortedAgentHostProfileIDs(agentHostProfiles),
+		manifestAgentHostProfileIDsByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("agent host profile manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		agentHostProfileFieldMap(agentHostProfiles, func(profile agentHostProfileSectionEntry) []string {
+			return []string{profile.Family}
+		}),
+		manifestAgentHostProfileFamiliesByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("agent host profile family drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		agentHostProfileFieldMap(agentHostProfiles, func(profile agentHostProfileSectionEntry) []string {
+			return []string{profile.GovernanceState}
+		}),
+		manifestAgentHostProfileGovernanceStatesByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("agent host profile governance drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		agentHostProfileFieldMap(agentHostProfiles, func(profile agentHostProfileSectionEntry) []string {
+			return []string{profile.ReadinessStage}
+		}),
+		manifestAgentHostProfileReadinessStagesByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("agent host profile readiness drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		agentHostProfileFieldMap(agentHostProfiles, func(profile agentHostProfileSectionEntry) []string {
+			return append([]string(nil), profile.HostIdentityTokens...)
+		}),
+		manifestAgentHostProfileHostIdentityTokensByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("agent host profile host-identity tokens drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		agentHostProfileFieldMap(agentHostProfiles, func(profile agentHostProfileSectionEntry) []string {
+			return []string{profile.StorageFamily}
+		}),
+		manifestAgentHostProfileStorageFamiliesByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("agent host profile storage-family drifted from the canonical support model:\n%s", diff)
 	}
 	if diff := diffPlatformSets(classified, manifest.DefaultInfrastructureSourceOrder); diff != "" {
 		t.Fatalf("default infrastructure source ordering drifted from the canonical supported platform set:\n%s", diff)
@@ -164,6 +223,57 @@ func TestVMwareFixturesRemainAdmittedButNotSupported(t *testing.T) {
 	}
 	if fixture.Hosts == 0 || fixture.VMs == 0 || fixture.Datastores == 0 {
 		t.Fatalf("expected VMware mock connection fixture to describe canonical inventory, got %+v", fixture)
+	}
+}
+
+func TestUnraidRemainsInPresentationOnlyVocabularyAndAgentHostProfiles(t *testing.T) {
+	model := loadPlatformSupportModel(t)
+	manifest := loadPlatformSupportManifest(t)
+	supported := manifestPlatformsByState(t, manifest, "supported")
+	admitted := manifestPlatformsByState(t, manifest, "admitted")
+	presentationOnly := manifestPlatformsByState(t, manifest, "presentation-only")
+	profiles := parseAgentHostProfileSection(t, model, "### Agent Host Profiles")
+
+	if containsPlatform(supported, "unraid") {
+		t.Fatal("unraid must not appear in the current supported platform set")
+	}
+	if containsPlatform(admitted, "unraid") {
+		t.Fatal("unraid must not appear in the admitted platform set")
+	}
+	if !containsPlatform(presentationOnly, "unraid") {
+		t.Fatal("expected unraid to remain presentation-only platform vocabulary")
+	}
+	if !containsPlatform(sortedAgentHostProfileIDs(profiles), "unraid") {
+		t.Fatal("expected unraid to remain a supported agent host profile")
+	}
+
+	profile := requireAgentHostProfileManifestEntry(t, manifest, "unraid")
+	if profile.GovernanceState != "supported" {
+		t.Fatalf("unraid governance state = %q, want supported", profile.GovernanceState)
+	}
+	if profile.ReadinessStage != "supported" {
+		t.Fatalf("unraid readiness stage = %q, want supported", profile.ReadinessStage)
+	}
+	if diff := diffPlatformSets([]string{"unraid"}, profile.HostIdentityTokens); diff != "" {
+		t.Fatalf("unraid host identity tokens drifted from the host-profile model:\n%s", diff)
+	}
+	if profile.StorageFamily != "onprem" {
+		t.Fatalf("unraid storage family = %q, want onprem", profile.StorageFamily)
+	}
+	if got := profile.SupportFloor["assistant_control"]; got != "read-only" {
+		t.Fatalf("unraid assistant control support floor = %q, want read-only", got)
+	}
+	if got := profile.SupportFloor["storage"]; got != "supported" {
+		t.Fatalf("unraid storage support floor = %q, want supported", got)
+	}
+	if !strings.Contains(model, "### Agent Host Profiles") {
+		t.Fatal("expected platform support model to keep an agent host profiles section")
+	}
+	if !strings.Contains(
+		model,
+		"| `unraid` | `Unraid` | `supported` | `supported` | `unraid` | `onprem` |",
+	) {
+		t.Fatal("expected platform support model to keep the unraid host-profile row")
 	}
 }
 
@@ -493,6 +603,236 @@ func manifestPlatformOnboardingPaths(manifest platformSupportManifest) map[strin
 		rows[platform.ID] = append([]string(nil), platform.OnboardingPaths...)
 	}
 	return rows
+}
+
+type agentHostProfileSectionEntry struct {
+	Family             string
+	GovernanceState    string
+	ReadinessStage     string
+	HostIdentityTokens []string
+	StorageFamily      string
+}
+
+func parseAgentHostProfileSection(
+	t *testing.T,
+	model string,
+	heading string,
+) map[string]agentHostProfileSectionEntry {
+	t.Helper()
+
+	entries := make(map[string]agentHostProfileSectionEntry)
+	inSection := false
+
+	for _, raw := range strings.Split(model, "\n") {
+		line := strings.TrimSpace(raw)
+		switch {
+		case line == heading:
+			inSection = true
+			continue
+		case !inSection:
+			continue
+		case strings.HasPrefix(line, "### ") || strings.HasPrefix(line, "## "):
+			return requireNonEmptyAgentHostProfileMap(t, entries, heading)
+		case line == "" || strings.HasPrefix(line, "| ---"):
+			continue
+		}
+
+		matches := agentHostProfileTableRowRE.FindStringSubmatch(line)
+		if len(matches) != 7 {
+			continue
+		}
+
+		entries[matches[1]] = agentHostProfileSectionEntry{
+			Family:             matches[2],
+			GovernanceState:    matches[3],
+			ReadinessStage:     matches[4],
+			HostIdentityTokens: parseInlineTokenList(matches[5]),
+			StorageFamily:      matches[6],
+		}
+	}
+
+	return requireNonEmptyAgentHostProfileMap(t, entries, heading)
+}
+
+func parseInlineTokenList(value string) []string {
+	tokens := make([]string, 0, 1)
+	for _, token := range strings.Split(value, ",") {
+		token = strings.TrimSpace(token)
+		token = strings.Trim(token, "`")
+		if token == "" {
+			continue
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens
+}
+
+func sortedAgentHostProfileIDs(profiles map[string]agentHostProfileSectionEntry) []string {
+	ids := make([]string, 0, len(profiles))
+	for id := range profiles {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func agentHostProfileFieldMap(
+	profiles map[string]agentHostProfileSectionEntry,
+	selector func(agentHostProfileSectionEntry) []string,
+) map[string][]string {
+	rows := make(map[string][]string, len(profiles))
+	for id, profile := range profiles {
+		rows[id] = append([]string(nil), selector(profile)...)
+	}
+	return rows
+}
+
+func requireNonEmptyAgentHostProfileMap(
+	t *testing.T,
+	entries map[string]agentHostProfileSectionEntry,
+	heading string,
+) map[string]agentHostProfileSectionEntry {
+	t.Helper()
+
+	if len(entries) == 0 {
+		t.Fatalf("expected %s to declare at least one agent host profile", heading)
+	}
+	return entries
+}
+
+func manifestAgentHostProfileIDsByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) []string {
+	t.Helper()
+
+	ids := make([]string, 0)
+	for _, profile := range manifest.AgentHostProfiles {
+		if strings.TrimSpace(profile.ID) == "" {
+			t.Fatal("expected agent host profile ids to be non-empty")
+		}
+		if strings.TrimSpace(profile.GovernanceState) == "" {
+			t.Fatalf("expected agent host profile manifest to classify %s", profile.ID)
+		}
+		if profile.GovernanceState == governanceState {
+			ids = append(ids, profile.ID)
+		}
+	}
+
+	return requireNonEmptyPlatformList(
+		t,
+		ids,
+		fmt.Sprintf("manifest agent host profiles with state %s", governanceState),
+	)
+}
+
+func manifestAgentHostProfileFieldMap(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+	selector func(agentHostProfileManifestEntry) []string,
+	label string,
+) map[string][]string {
+	t.Helper()
+
+	rows := make(map[string][]string)
+	for _, profile := range manifest.AgentHostProfiles {
+		if profile.GovernanceState != governanceState {
+			continue
+		}
+		rows[profile.ID] = append([]string(nil), selector(profile)...)
+	}
+
+	return requireNonEmptyPlatformFieldMap(t, rows, label)
+}
+
+func manifestAgentHostProfileFamiliesByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) map[string][]string {
+	return manifestAgentHostProfileFieldMap(
+		t,
+		manifest,
+		governanceState,
+		func(profile agentHostProfileManifestEntry) []string { return []string{profile.Family} },
+		fmt.Sprintf("manifest agent host profile families with state %s", governanceState),
+	)
+}
+
+func manifestAgentHostProfileGovernanceStatesByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) map[string][]string {
+	return manifestAgentHostProfileFieldMap(
+		t,
+		manifest,
+		governanceState,
+		func(profile agentHostProfileManifestEntry) []string { return []string{profile.GovernanceState} },
+		fmt.Sprintf("manifest agent host profile governance with state %s", governanceState),
+	)
+}
+
+func manifestAgentHostProfileReadinessStagesByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) map[string][]string {
+	return manifestAgentHostProfileFieldMap(
+		t,
+		manifest,
+		governanceState,
+		func(profile agentHostProfileManifestEntry) []string { return []string{profile.ReadinessStage} },
+		fmt.Sprintf("manifest agent host profile readiness with state %s", governanceState),
+	)
+}
+
+func manifestAgentHostProfileHostIdentityTokensByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) map[string][]string {
+	return manifestAgentHostProfileFieldMap(
+		t,
+		manifest,
+		governanceState,
+		func(profile agentHostProfileManifestEntry) []string {
+			return append([]string(nil), profile.HostIdentityTokens...)
+		},
+		fmt.Sprintf("manifest agent host profile identity tokens with state %s", governanceState),
+	)
+}
+
+func manifestAgentHostProfileStorageFamiliesByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) map[string][]string {
+	return manifestAgentHostProfileFieldMap(
+		t,
+		manifest,
+		governanceState,
+		func(profile agentHostProfileManifestEntry) []string { return []string{profile.StorageFamily} },
+		fmt.Sprintf("manifest agent host profile storage families with state %s", governanceState),
+	)
+}
+
+func requireAgentHostProfileManifestEntry(
+	t *testing.T,
+	manifest platformSupportManifest,
+	profileID string,
+) agentHostProfileManifestEntry {
+	t.Helper()
+
+	for _, profile := range manifest.AgentHostProfiles {
+		if profile.ID == profileID {
+			return profile
+		}
+	}
+	t.Fatalf("expected agent host profile manifest entry for %s", profileID)
+	return agentHostProfileManifestEntry{}
 }
 
 func requireManifestPlatform(t *testing.T, manifest platformSupportManifest, platformID string) platformSupportManifestEntry {

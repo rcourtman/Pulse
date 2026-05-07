@@ -611,7 +611,11 @@ must stay generated from
 `frontend-modern/src/types/resource.ts` must derive `PlatformType` from that
 generated supported-plus-admitted projection rather than hand-maintaining a
 second platform union that can drift from the governed manifest or re-admit
-presentation-only labels by mistake.
+presentation-only labels by mistake. Agent host profiles are generated beside
+that platform projection for shared identity/presentation use only; a profile
+such as Unraid may label a Pulse Agent host, but it must not enter
+`PlatformType`, `PLATFORM_TYPE_KEYS`, unified-resource source filters, or
+canonical top-level platform identity.
 That same shared source boundary also applies when unified seeds and
 supplemental providers coexist. If a canonical unified-resource seed omits an
 owned supplemental source such as TrueNAS or VMware, the shared resource API

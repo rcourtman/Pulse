@@ -462,9 +462,11 @@ func connectionFleetRemoteControl(conn Connection) string {
 }
 
 func connectionAgentIdentityForHost(host models.Host) *ConnectionAgentIdentity {
+	hostProfile := connectionAgentHostProfileForHost(host)
 	identity := &ConnectionAgentIdentity{
 		Hostname:        strings.TrimSpace(host.Hostname),
-		Platform:        strings.TrimSpace(host.Platform),
+		Platform:        connectionAgentPlatformForHost(host, hostProfile),
+		HostProfile:     hostProfile,
 		OSName:          strings.TrimSpace(host.OSName),
 		OSVersion:       strings.TrimSpace(host.OSVersion),
 		KernelVersion:   strings.TrimSpace(host.KernelVersion),
@@ -474,6 +476,7 @@ func connectionAgentIdentityForHost(host models.Host) *ConnectionAgentIdentity {
 	}
 	if identity.Hostname == "" &&
 		identity.Platform == "" &&
+		identity.HostProfile == "" &&
 		identity.OSName == "" &&
 		identity.OSVersion == "" &&
 		identity.KernelVersion == "" &&
@@ -483,6 +486,27 @@ func connectionAgentIdentityForHost(host models.Host) *ConnectionAgentIdentity {
 		return nil
 	}
 	return identity
+}
+
+func connectionAgentPlatformForHost(host models.Host, hostProfile string) string {
+	platform := strings.TrimSpace(host.Platform)
+	if hostProfile == "unraid" && (platform == "" || strings.EqualFold(platform, "unraid")) {
+		return "linux"
+	}
+	return platform
+}
+
+func connectionAgentHostProfileForHost(host models.Host) string {
+	if host.Unraid != nil {
+		return "unraid"
+	}
+	if strings.EqualFold(strings.TrimSpace(host.OSName), "unraid") {
+		return "unraid"
+	}
+	if strings.EqualFold(strings.TrimSpace(host.Platform), "unraid") {
+		return "unraid"
+	}
+	return ""
 }
 
 func connectionHostAliasesForAgent(host models.Host, name, address string) []string {

@@ -257,7 +257,8 @@ func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testin
 		got[0].AgentIdentity,
 		&ConnectionAgentIdentity{
 			Hostname:        "pi",
-			Platform:        "unraid",
+			Platform:        "linux",
+			HostProfile:     "unraid",
 			OSName:          "Unraid",
 			OSVersion:       "7.1.0",
 			KernelVersion:   "6.12.0",
@@ -267,6 +268,42 @@ func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testin
 		},
 	) {
 		t.Fatalf("agent identity = %+v", got[0].AgentIdentity)
+	}
+}
+
+func TestBuildConnections_AgentHostProfileFromUnraidStorageFacts(t *testing.T) {
+	now := time.Now()
+	in := aggregatorInputs{
+		hosts: []models.Host{
+			{
+				ID:              "tower",
+				Hostname:        "tower",
+				Platform:        "linux",
+				Unraid:          &models.HostUnraidStorage{ArrayStarted: true},
+				LastSeen:        now,
+				AgentVersion:    "6.12.10",
+				CommandsEnabled: false,
+			},
+		},
+		now: now,
+	}
+
+	got := buildConnections(in)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 connection, got %d", len(got))
+	}
+	identity := got[0].AgentIdentity
+	if identity == nil {
+		t.Fatal("expected agent identity metadata")
+	}
+	if identity.HostProfile != "unraid" {
+		t.Fatalf("host profile = %q, want %q", identity.HostProfile, "unraid")
+	}
+	if identity.Platform != "linux" {
+		t.Fatalf("platform = %q, want %q", identity.Platform, "linux")
+	}
+	if identity.OSName != "" {
+		t.Fatalf("os name = %q, want empty when source identity is absent", identity.OSName)
 	}
 }
 

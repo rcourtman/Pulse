@@ -1,6 +1,11 @@
 package hostagent
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+var unraidVersionPattern = regexp.MustCompile(`\b\d+(?:\.\d+)+(?:[-+._][A-Za-z0-9]+)*\b|\b\d+\b`)
 
 func resolveHostOSIdentity(collector SystemCollector, osName, osVersion string) (string, string) {
 	currentName := strings.TrimSpace(osName)
@@ -18,6 +23,13 @@ func resolveHostOSIdentity(collector SystemCollector, osName, osVersion string) 
 	}
 
 	if name, version, ok := detectQNAPOSIdentity(collector); ok {
+		if version == "" {
+			version = currentVersion
+		}
+		return name, strings.TrimSpace(version)
+	}
+
+	if name, version, ok := detectUnraidOSIdentity(collector); ok {
 		if version == "" {
 			version = currentVersion
 		}
@@ -136,6 +148,38 @@ func detectQNAPOSIdentity(collector SystemCollector) (string, string, bool) {
 	}
 
 	return "", "", false
+}
+
+func detectUnraidOSIdentity(collector SystemCollector) (string, string, bool) {
+	data, err := collector.ReadFile(hostAgentUnraidVersionPath)
+	if err != nil {
+		if _, statErr := collector.Stat(hostAgentUnraidVersionPath); statErr != nil {
+			return "", "", false
+		}
+		return "Unraid", "", true
+	}
+
+	version := cleanUnraidVersion(string(data))
+	return "Unraid", version, true
+}
+
+func cleanUnraidVersion(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if match := unraidVersionPattern.FindString(line); match != "" {
+			return match
+		}
+	}
+
+	return ""
 }
 
 func parseAssignmentConfig(content string) map[string]string {

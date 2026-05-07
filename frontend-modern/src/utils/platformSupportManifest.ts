@@ -1,11 +1,19 @@
 import {
   ADMITTED_PLATFORM_IDS,
+  AGENT_HOST_PROFILE_IDS,
   DEFAULT_INFRASTRUCTURE_SOURCE_ORDER,
   KNOWN_SOURCE_PLATFORM_KEYS,
   PLATFORM_TYPE_KEYS,
   PLATFORM_SUPPORT_MANIFEST_SOURCE,
   PRESENTATION_ONLY_PLATFORM_IDS,
   PLATFORM_SUPPORT_MANIFEST,
+  SOURCE_AGENT_HOST_PROFILE_FAMILY,
+  SOURCE_AGENT_HOST_PROFILE_GOVERNANCE_STATE,
+  SOURCE_AGENT_HOST_PROFILE_HOST_IDENTITY_TOKENS,
+  SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES,
+  SOURCE_AGENT_HOST_PROFILE_READINESS_STAGE,
+  SOURCE_AGENT_HOST_PROFILE_STORAGE_FAMILY,
+  SOURCE_AGENT_HOST_PROFILE_SUPPORT_FLOOR,
   SOURCE_PLATFORM_CANONICAL_PROJECTIONS,
   SOURCE_PLATFORM_ONBOARDING_PATH_KEYS,
   SOURCE_PLATFORM_ONBOARDING_PATHS,
@@ -20,6 +28,12 @@ import {
   SOURCE_PLATFORM_STORAGE_FAMILY,
   SOURCE_PLATFORM_SUPPORT_FLOOR,
   SUPPORTED_PLATFORM_IDS,
+  type AgentHostProfileGovernanceState,
+  type AgentHostProfileReadinessStage,
+  type AgentHostProfileSupportFloor,
+  type AgentHostProfileSupportFloorValue,
+  type GeneratedAgentHostProfileId,
+  type GeneratedAgentHostProfileManifestEntry,
   type GeneratedKnownSourcePlatform,
   type GeneratedSourcePlatformOnboardingPath,
   type GeneratedSourcePlatformManifestEntry,
@@ -33,7 +47,13 @@ import {
 } from '@/utils/platformSupportManifest.generated';
 
 export type SourcePlatformManifestEntry = GeneratedSourcePlatformManifestEntry;
+export type SourceAgentHostProfileManifestEntry = GeneratedAgentHostProfileManifestEntry;
 export type {
+  AgentHostProfileGovernanceState,
+  AgentHostProfileReadinessStage,
+  AgentHostProfileSupportFloor,
+  AgentHostProfileSupportFloorValue,
+  GeneratedAgentHostProfileId as AgentHostProfileId,
   GeneratedKnownSourcePlatform,
   GeneratedSourcePlatformOnboardingPath as SourcePlatformOnboardingPath,
   PlatformPrimaryMode,
@@ -48,16 +68,32 @@ export type {
 const entriesById = new Map<string, SourcePlatformManifestEntry>(
   SOURCE_PLATFORM_MANIFEST_ENTRIES.map((platform) => [platform.id, platform] as const),
 );
+const agentHostProfileEntriesById = new Map<string, SourceAgentHostProfileManifestEntry>(
+  SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES.map((profile) => [profile.id, profile] as const),
+);
+const agentHostProfileEntriesByToken = new Map<string, SourceAgentHostProfileManifestEntry>(
+  SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES.flatMap((profile) =>
+    profile.hostIdentityTokens.map((token) => [token, profile] as const),
+  ),
+);
 const EMPTY_ONBOARDING_PATHS: readonly GeneratedSourcePlatformOnboardingPath[] = [];
 
 export {
   ADMITTED_PLATFORM_IDS,
+  AGENT_HOST_PROFILE_IDS,
   DEFAULT_INFRASTRUCTURE_SOURCE_ORDER,
   KNOWN_SOURCE_PLATFORM_KEYS,
   PLATFORM_SUPPORT_MANIFEST_SOURCE,
   PLATFORM_TYPE_KEYS,
   PRESENTATION_ONLY_PLATFORM_IDS,
   PLATFORM_SUPPORT_MANIFEST,
+  SOURCE_AGENT_HOST_PROFILE_FAMILY,
+  SOURCE_AGENT_HOST_PROFILE_GOVERNANCE_STATE,
+  SOURCE_AGENT_HOST_PROFILE_HOST_IDENTITY_TOKENS,
+  SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES,
+  SOURCE_AGENT_HOST_PROFILE_READINESS_STAGE,
+  SOURCE_AGENT_HOST_PROFILE_STORAGE_FAMILY,
+  SOURCE_AGENT_HOST_PROFILE_SUPPORT_FLOOR,
   SOURCE_PLATFORM_CANONICAL_PROJECTIONS,
   SOURCE_PLATFORM_ONBOARDING_PATH_KEYS,
   SOURCE_PLATFORM_ONBOARDING_PATHS,
@@ -82,6 +118,24 @@ export const getSourcePlatformManifestEntry = (
   const aliasMap = SOURCE_PLATFORM_ALIAS_MAP as Record<string, string>;
   const platformId = aliasMap[normalized] || normalized;
   return entriesById.get(platformId) || null;
+};
+
+export const getAgentHostProfileManifestEntry = (
+  value: string | null | undefined,
+): SourceAgentHostProfileManifestEntry | null => {
+  const normalized = (value || '').trim().toLowerCase();
+  if (!normalized) return null;
+
+  return (
+    agentHostProfileEntriesById.get(normalized) ||
+    agentHostProfileEntriesByToken.get(normalized) ||
+    null
+  );
+};
+
+export const getAgentHostProfileFamily = (value: string | null | undefined): string | null => {
+  const manifestProfile = getAgentHostProfileManifestEntry(value);
+  return manifestProfile?.family ?? null;
 };
 
 export const getSourcePlatformStorageFamily = (

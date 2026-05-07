@@ -536,7 +536,7 @@ describe('settings architecture guardrails', () => {
     expect(addressProbeStepSource).toContain('Probe address');
     expect(addressProbeStepSource).toContain('install Pulse Agent instead');
     expect(addressProbeStepSource).toContain('Choose a source type instead');
-    expect(addressProbeStepSource).toContain('Linux, macOS, Windows, FreeBSD, or Unraid host');
+    expect(addressProbeStepSource).toContain('getInfrastructureAgentHostProfileSupportText');
     expect(addressProbeStepSource).toContain('supported API-backed platform');
 
     expect(connectionEditorStateSource).toContain('ConnectionsAPI.probe(value)');

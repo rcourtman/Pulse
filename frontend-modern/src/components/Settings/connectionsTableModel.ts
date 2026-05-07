@@ -1,4 +1,4 @@
-import type { Connection } from '@/api/connections';
+import type { Connection, ConnectionAgentIdentity } from '@/api/connections';
 import type { ConnectionType } from '@/api/connections';
 import type {
   ConnectionFleetAdapterHealth,
@@ -11,6 +11,7 @@ import type {
   ConnectionFleetUpdateStatus,
   ConnectionFleetVersionDrift,
 } from '@/api/connections';
+import { getAgentHostProfileFamily } from '@/utils/platformSupportManifest';
 
 export const lastActivityTextFromLastSeen = (lastSeen?: string | null): string => {
   if (!lastSeen) return 'No activity yet';
@@ -30,6 +31,10 @@ export const lastActivityTextFromLastSeen = (lastSeen?: string | null): string =
 export const connectionLastActivityText = (connection: Connection): string =>
   lastActivityTextFromLastSeen(connection.lastSeen);
 
+type ConnectionAgentIdentityPresentation = ConnectionAgentIdentity & {
+  hostProfile?: string | null;
+};
+
 const prettifyPlatform = (platform?: string | null): string | null => {
   const normalized = platform?.trim().toLowerCase();
   if (!normalized) return null;
@@ -48,6 +53,16 @@ const prettifyPlatform = (platform?: string | null): string | null => {
     default:
       return platform?.trim() ?? null;
   }
+};
+
+const connectionAgentHostProfileLabel = (
+  identity?: ConnectionAgentIdentityPresentation | null,
+): string | null => {
+  const hostProfile = identity?.hostProfile?.trim();
+  if (hostProfile) {
+    return getAgentHostProfileFamily(hostProfile) ?? prettifyPlatform(hostProfile);
+  }
+  return prettifyPlatform(identity?.platform ?? identity?.osName);
 };
 
 const isIPv4Literal = (value: string): boolean => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value);
@@ -74,11 +89,13 @@ const firstDistinctAgentIPv4Alias = (connection: Connection): string | null => {
 };
 
 export const connectionAgentIdentitySummary = (connection: Connection): string | null => {
+  const hostProfile = connectionAgentHostProfileLabel(connection.agentIdentity);
   const osName = connection.agentIdentity?.osName?.trim();
   const osVersion = connection.agentIdentity?.osVersion?.trim();
+  if (hostProfile && osVersion) return `${hostProfile} ${osVersion}`;
   if (osName && osVersion) return `${osName} ${osVersion}`;
   if (osName) return osName;
-  return prettifyPlatform(connection.agentIdentity?.platform);
+  return hostProfile;
 };
 
 export const connectionAgentEndpointDisplay = (connection: Connection): string | null => {

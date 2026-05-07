@@ -792,6 +792,12 @@ the canonical monitored-system blocked payload.
     kernel, architecture, and command capability, so settings surfaces can
     render recognizable standalone-host identity without a second inventory
     fetch or frontend-local host reconciliation rules.
+    Appliance-specific Pulse Agent compatibility is an additive host-profile
+    fact on that same identity payload. For Unraid and similar host profiles,
+    `agentIdentity.platform` remains the canonical runtime platform such as
+    `linux`, while `agentIdentity.hostProfile` carries the governed profile id
+    such as `unraid`; frontend clients must not re-promote those profile ids
+    into first-class platform types.
     `pulse fleet connections` may read that same `GET /api/connections`
     payload as a deterministic CLI adapter for agent-ready operations, but it
     must remain a read-only view over the canonical connections ledger rather

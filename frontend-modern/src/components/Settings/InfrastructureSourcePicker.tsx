@@ -2,6 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import { Activity, Archive, Cpu, Database, Mail, Search, Server, ServerCog } from 'lucide-solid';
 import type { InfrastructureOnboardingConnectionType } from '@/utils/infrastructureOnboardingPresentation';
 import {
+  getInfrastructureGovernanceBadgeLabel,
   getInfrastructureSourcePickerGroups,
   getInfrastructureOnboardingProductPresentation,
   getInfrastructureSourceStrategyPresentation,
@@ -66,6 +67,10 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
                   const strategy = getInfrastructureSourceStrategyPresentation(
                     details.sourceStrategy,
                   );
+                  const governanceBadge = getInfrastructureGovernanceBadgeLabel(
+                    details.governanceState,
+                    details.readinessStage,
+                  );
                   return (
                     <button
                       type="button"
@@ -87,9 +92,9 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
                             <span class="inline-flex items-center rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-base-content">
                               {strategy.label}
                             </span>
-                            <Show when={details.governanceState === 'admitted'}>
+                            <Show when={governanceBadge}>
                               <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-                                Available now
+                                {governanceBadge}
                               </span>
                             </Show>
                           </div>

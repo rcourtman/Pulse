@@ -51,6 +51,11 @@ func TestNormalisePlatform(t *testing.T) {
 			expected: "freebsd",
 		},
 		{
+			name:     "unraid reports linux platform",
+			platform: "unraid",
+			expected: "linux",
+		},
+		{
 			name:     "empty string",
 			platform: "",
 			expected: "",

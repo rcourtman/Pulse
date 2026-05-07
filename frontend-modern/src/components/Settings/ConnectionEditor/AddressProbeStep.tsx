@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import type { ProbeCandidate } from '@/api/connections';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
+import { getInfrastructureAgentHostProfileSupportText } from '@/utils/infrastructureOnboardingPresentation';
 import type { CompletedProbePhase, ConnectionEditorState } from './useConnectionEditor';
 import { CONNECTION_TYPE_LABELS } from './useConnectionEditor';
 
@@ -70,7 +71,9 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           <div class="mt-1 text-xs">
             <Show
               when={props.onChooseSourceTypeInstead}
-              fallback={<span>Pick a supported product from the catalog below, or if this is </span>}
+              fallback={
+                <span>Pick a supported product from the catalog below, or if this is </span>
+              }
             >
               <button
                 type="button"
@@ -81,7 +84,7 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
               </button>
               <span>, or if this is </span>
             </Show>
-            a Linux, macOS, Windows, FreeBSD, or Unraid host,{' '}
+            this is one of the supported {getInfrastructureAgentHostProfileSupportText()},{' '}
             <Show
               when={props.onInstallAgent}
               fallback={<span class="font-medium">install Pulse Agent instead</span>}

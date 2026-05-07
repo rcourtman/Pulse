@@ -508,9 +508,11 @@ bypass the API fail-closed execution gate.
    systems, duplicate recovery inventory rows, or a storage-local ownership
    model. The same shared `/api/connections` contract also owns compact
    `agentIdentity` facts for agent-backed rows; storage and recovery may read
-   that metadata when they need to label a represented host, but they must not
-   rebuild OS/endpoint identity from recovery inventory or alias heuristics.
-   taxonomy. When that grouped platform row is a Proxmox cluster, storage and
+   that metadata, including host-profile ids such as `unraid`, when they need
+   to label a represented host, but they must not rebuild OS/endpoint identity
+   from recovery inventory or alias heuristics, or reinterpret an agent
+   host-profile id as a storage provider platform.
+   When that grouped platform row is a Proxmox cluster, storage and
    recovery must also treat the backend-authored cluster moniker as the
    canonical row identity instead of re-expanding cluster-member agents into
    sibling host rows or per-node storage owners. If the grouped row carries

@@ -81,6 +81,7 @@ type ConnectionError struct {
 type ConnectionAgentIdentity struct {
 	Hostname        string `json:"hostname,omitempty"`
 	Platform        string `json:"platform,omitempty"`
+	HostProfile     string `json:"hostProfile,omitempty"`
 	OSName          string `json:"osName,omitempty"`
 	OSVersion       string `json:"osVersion,omitempty"`
 	KernelVersion   string `json:"kernelVersion,omitempty"`

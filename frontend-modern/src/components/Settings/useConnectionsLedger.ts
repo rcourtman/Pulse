@@ -31,7 +31,7 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   vmware: 'VMware vCenter',
   truenas: 'TrueNAS SCALE',
   availability: 'Network Endpoint',
-  agent: 'Pulse Unified Agent',
+  agent: 'Pulse Agent',
   docker: 'Docker',
   kubernetes: 'Kubernetes',
 };

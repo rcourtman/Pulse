@@ -165,7 +165,8 @@ describe('ConnectionsAPI', () => {
         source: 'agent',
         agentIdentity: {
           hostname: 'tower',
-          platform: 'unraid',
+          platform: 'linux',
+          hostProfile: 'unraid',
           osName: 'Unraid',
           osVersion: '7.1.0',
           kernelVersion: '6.12.0',
@@ -183,7 +184,8 @@ describe('ConnectionsAPI', () => {
     expect(result.connections[0]).toMatchObject({
       agentIdentity: {
         hostname: 'tower',
-        platform: 'unraid',
+        platform: 'linux',
+        hostProfile: 'unraid',
         osName: 'Unraid',
         osVersion: '7.1.0',
         kernelVersion: '6.12.0',

@@ -33,6 +33,11 @@ through platform-by-platform improvisation.
    intentionally merges API-backed and agent-backed truth.
 7. Platform work must project into canonical shared resources first.
    Do not add provider-local top-level resource types by default.
+8. Agent host and appliance profiles are governed separately from first-class
+   platforms.
+   A profile may describe supported Pulse Agent deployment on a specific host
+   or appliance family, but it does not promote that family into
+   `PLATFORM_TYPE_KEYS` or first-class platform status.
 
 ## Platform Categories
 
@@ -83,6 +88,25 @@ Examples:
    control for `proxmox-pve`
 2. a unified agent on a TrueNAS appliance enriching a `truenas` system that is
    already supported through the API-backed poller
+
+### Agent Host Profile
+
+An agent host profile is a governed compatibility profile for running Pulse
+Agent on a specific host or appliance family.
+
+It may reuse source/platform vocabulary for identity matching, but it is not a
+platform id, does not carry `PLATFORM_TYPE_KEYS` membership, and does not
+replace first-class platform support.
+
+Agent host profiles must define:
+
+1. canonical profile id
+2. profile family or label
+3. governance state
+4. readiness stage
+5. host identity tokens
+6. support-floor row
+7. optional storage family
 
 ## Canonical Ingestion Modes
 
@@ -221,6 +245,20 @@ Rules:
 5. `azure`
 6. `gcp`
 
+Unraid remains presentation-only platform vocabulary so source/platform labels
+stay available for compatibility, but its governed Pulse Agent support is
+tracked below as an agent host profile instead of as a first-class platform.
+
+### Agent Host Profiles
+
+Support floor fields are recorded in this order: `setup`, `visibility`,
+`workloads`, `storage`, `recovery`, `alerts`, `assistant_read`,
+`assistant_control`.
+
+| Profile | Family | Governance | Readiness | Host identity tokens | Storage family | Support floor |
+| --- | --- | --- | --- | --- | --- | --- |
+| `unraid` | `Unraid` | `supported` | `supported` | `unraid` | `onprem` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+
 ### Current support rows
 
 Support floor fields are recorded in this order: `setup`, `visibility`,
@@ -248,13 +286,14 @@ paths, no canonical projections, and `n/a` for every support-floor field.
 supported, admitted, and presentation-only platform vocabulary declared here,
 plus the canonical platform-family, readiness-stage, primary-mode,
 onboarding-path, projection, and support-floor classification for supported
-and admitted platforms. Tests and shared frontend vocabulary may consume that
-manifest, and the tracked frontend projection in
-`frontend-modern/src/utils/platformSupportManifest.generated.ts` must be
-generated from it, but neither projection may introduce platform ids or
-governance states, platform families, readiness stages, primary modes,
-onboarding paths, projections, or support-floor claims that are not declared in
-this document.
+and admitted platforms, and the separate machine-readable agent host profile
+classification for supported host/appliance profiles. Tests and shared
+frontend vocabulary may consume that manifest, and the tracked frontend
+projection in `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+must be generated from it, but neither projection may introduce platform ids,
+host profile ids, governance states, families, readiness stages, primary
+modes, onboarding paths, projections, support-floor claims, or host identity
+tokens that are not declared in this document.
 
 ### Runtime variants
 

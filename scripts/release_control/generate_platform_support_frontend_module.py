@@ -35,6 +35,8 @@ SUPPORT_FLOOR_FIELDS = (
     "assistant_control",
 )
 VALID_SUPPORT_FLOOR_VALUES = {"supported", "augmentation-only", "read-only", "n/a"}
+VALID_AGENT_HOST_PROFILE_GOVERNANCE_STATES = {"supported", "presentation-only"}
+VALID_AGENT_HOST_PROFILE_READINESS_STAGES = {"supported", "presentation-only"}
 
 
 def require_dict(value: Any, label: str) -> dict[str, Any]:
@@ -73,14 +75,124 @@ def unique_preserve_order(values: list[str]) -> list[str]:
     return ordered
 
 
+def normalize_support_floor(support_floor_record: Any, label: str) -> dict[str, str]:
+    record = require_dict(support_floor_record, label)
+    support_floor: dict[str, str] = {}
+    for field in SUPPORT_FLOOR_FIELDS:
+        value = require_string(record.get(field), f"{label}.{field}")
+        if value not in VALID_SUPPORT_FLOOR_VALUES:
+            raise ValueError(
+                f"expected {label}.{field} to be one of {sorted(VALID_SUPPORT_FLOOR_VALUES)}"
+            )
+        camel_field = field.split("_")[0] + "".join(part.title() for part in field.split("_")[1:])
+        support_floor[camel_field] = value
+    return support_floor
+
+
 def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     schema_version = raw_manifest.get("schema_version")
     if not isinstance(schema_version, int) or schema_version < 1:
         raise ValueError("expected schema_version to be a positive integer")
 
+    raw_agent_host_profiles = raw_manifest.get("agent_host_profiles")
+    if not isinstance(raw_agent_host_profiles, list) or not raw_agent_host_profiles:
+        raise ValueError("expected agent_host_profiles to be a non-empty array")
+
     raw_platforms = raw_manifest.get("platforms")
     if not isinstance(raw_platforms, list) or not raw_platforms:
         raise ValueError("expected platforms to be a non-empty array")
+
+    agent_host_profiles: list[dict[str, Any]] = []
+    agent_host_profile_ids: list[str] = []
+    for index, raw_profile in enumerate(raw_agent_host_profiles):
+        record = require_dict(raw_profile, f"agent_host_profiles[{index}]")
+        profile_id = require_lowercase_identifier(record.get("id"), f"agent_host_profiles[{index}].id")
+        if profile_id in agent_host_profile_ids:
+            raise ValueError(f"duplicate agent host profile id {profile_id}")
+
+        governance_state = require_string(
+            record.get("governance_state"), f"agent_host_profiles[{index}].governance_state"
+        )
+        if governance_state not in VALID_AGENT_HOST_PROFILE_GOVERNANCE_STATES:
+            raise ValueError(
+                "expected agent_host_profiles["
+                f"{index}].governance_state to be one of "
+                f"{sorted(VALID_AGENT_HOST_PROFILE_GOVERNANCE_STATES)}"
+            )
+
+        readiness_stage = require_string(
+            record.get("readiness_stage"), f"agent_host_profiles[{index}].readiness_stage"
+        )
+        if readiness_stage not in VALID_AGENT_HOST_PROFILE_READINESS_STAGES:
+            raise ValueError(
+                "expected agent_host_profiles["
+                f"{index}].readiness_stage to be one of "
+                f"{sorted(VALID_AGENT_HOST_PROFILE_READINESS_STAGES)}"
+            )
+        if governance_state == "supported" and readiness_stage != "supported":
+            raise ValueError(
+                f"supported agent host profile {profile_id} must use readiness_stage supported"
+            )
+        if governance_state == "presentation-only" and readiness_stage != "presentation-only":
+            raise ValueError(
+                "presentation-only agent host profile "
+                f"{profile_id} must use readiness_stage presentation-only"
+            )
+
+        host_identity_tokens = unique_preserve_order(
+            [
+                require_lowercase_identifier(
+                    token,
+                    f"agent_host_profiles[{index}].host_identity_tokens",
+                )
+                for token in require_string_list(
+                    record.get("host_identity_tokens"),
+                    f"agent_host_profiles[{index}].host_identity_tokens",
+                )
+            ]
+        )
+        if governance_state == "supported" and not host_identity_tokens:
+            raise ValueError(
+                f"supported agent host profile {profile_id} must declare host identity tokens"
+            )
+        if governance_state == "presentation-only" and host_identity_tokens:
+            raise ValueError(
+                f"presentation-only agent host profile {profile_id} must not declare host identity tokens"
+            )
+
+        support_floor = normalize_support_floor(
+            record.get("support_floor"),
+            f"agent_host_profiles[{index}].support_floor",
+        )
+        if governance_state == "presentation-only" and any(
+            value != "n/a" for value in support_floor.values()
+        ):
+            raise ValueError(
+                f"presentation-only agent host profile {profile_id} support floor must be n/a"
+            )
+
+        storage_family = require_string(
+            record.get("storage_family"), f"agent_host_profiles[{index}].storage_family"
+        )
+        if storage_family not in VALID_STORAGE_FAMILIES:
+            raise ValueError(
+                "expected agent_host_profiles["
+                f"{index}].storage_family to be one of "
+                f"{sorted(VALID_STORAGE_FAMILIES)}"
+            )
+
+        agent_host_profiles.append(
+            {
+                "id": profile_id,
+                "family": require_string(record.get("family"), f"agent_host_profiles[{index}].family"),
+                "governanceState": governance_state,
+                "readinessStage": readiness_stage,
+                "hostIdentityTokens": host_identity_tokens,
+                "supportFloor": support_floor,
+                "storageFamily": storage_family,
+            }
+        )
+        agent_host_profile_ids.append(profile_id)
 
     platforms: list[dict[str, Any]] = []
     known_ids: set[str] = set()
@@ -175,20 +287,10 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         if governance_state == "presentation-only" and canonical_projections:
             raise ValueError(f"presentation-only platform {platform_id} must not declare projections")
 
-        support_floor_record = require_dict(record.get("support_floor"), f"platforms[{index}].support_floor")
-        support_floor: dict[str, str] = {}
-        for field in SUPPORT_FLOOR_FIELDS:
-            value = require_string(
-                support_floor_record.get(field),
-                f"platforms[{index}].support_floor.{field}",
-            )
-            if value not in VALID_SUPPORT_FLOOR_VALUES:
-                raise ValueError(
-                    f"expected platforms[{index}].support_floor.{field} to be one of "
-                    f"{sorted(VALID_SUPPORT_FLOOR_VALUES)}"
-                )
-            camel_field = field.split("_")[0] + "".join(part.title() for part in field.split("_")[1:])
-            support_floor[camel_field] = value
+        support_floor = normalize_support_floor(
+            record.get("support_floor"),
+            f"platforms[{index}].support_floor",
+        )
         if governance_state == "presentation-only" and any(value != "n/a" for value in support_floor.values()):
             raise ValueError(f"presentation-only platform {platform_id} support floor must be n/a")
 
@@ -274,6 +376,24 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     readiness_stage_by_id = {
         platform["id"]: platform["readinessStage"] for platform in platforms
     }
+    agent_host_profile_family_by_id = {
+        profile["id"]: profile["family"] for profile in agent_host_profiles
+    }
+    agent_host_profile_governance_state_by_id = {
+        profile["id"]: profile["governanceState"] for profile in agent_host_profiles
+    }
+    agent_host_profile_readiness_stage_by_id = {
+        profile["id"]: profile["readinessStage"] for profile in agent_host_profiles
+    }
+    agent_host_profile_host_identity_tokens_by_id = {
+        profile["id"]: profile["hostIdentityTokens"] for profile in agent_host_profiles
+    }
+    agent_host_profile_support_floor_by_id = {
+        profile["id"]: profile["supportFloor"] for profile in agent_host_profiles
+    }
+    agent_host_profile_storage_family_by_id = {
+        profile["id"]: profile["storageFamily"] for profile in agent_host_profiles
+    }
     primary_mode_by_id = {
         platform["id"]: platform["primaryMode"] for platform in platforms
     }
@@ -297,6 +417,14 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         for platform in platforms
         if platform["governanceState"] == "presentation-only"
     ]
+    first_class_profile_ids = sorted(
+        set(agent_host_profile_ids).intersection([*supported_ids, *admitted_ids])
+    )
+    if first_class_profile_ids:
+        raise ValueError(
+            "agent host profile ids must not also be supported or admitted platform ids: "
+            + ", ".join(first_class_profile_ids)
+        )
     platform_type_keys = [*supported_ids, *admitted_ids]
     known_source_platform_keys = [*platform_type_keys, *presentation_only_ids, "generic"]
     onboarding_path_keys = unique_preserve_order(
@@ -310,6 +438,8 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     return {
         "schemaVersion": schema_version,
         "defaultInfrastructureSourceOrder": default_order,
+        "agentHostProfiles": agent_host_profiles,
+        "agentHostProfileIds": agent_host_profile_ids,
         "platforms": platforms,
         "supportedPlatformIds": supported_ids,
         "admittedPlatformIds": admitted_ids,
@@ -320,6 +450,12 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         "auditTokens": audit_tokens,
         "displayTokens": display_tokens,
         "onboardingPathKeys": onboarding_path_keys,
+        "agentHostProfileFamilyById": agent_host_profile_family_by_id,
+        "agentHostProfileGovernanceStateById": agent_host_profile_governance_state_by_id,
+        "agentHostProfileReadinessStageById": agent_host_profile_readiness_stage_by_id,
+        "agentHostProfileHostIdentityTokensById": agent_host_profile_host_identity_tokens_by_id,
+        "agentHostProfileSupportFloorById": agent_host_profile_support_floor_by_id,
+        "agentHostProfileStorageFamilyById": agent_host_profile_storage_family_by_id,
         "familyById": family_by_id,
         "readinessStageById": readiness_stage_by_id,
         "primaryModeById": primary_mode_by_id,
@@ -354,10 +490,14 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
             {
                 "schemaVersion": normalized["schemaVersion"],
                 "defaultInfrastructureSourceOrder": normalized["defaultInfrastructureSourceOrder"],
+                "agentHostProfiles": normalized["agentHostProfiles"],
                 "platforms": normalized["platforms"],
             },
         ),
         "export const SOURCE_PLATFORM_MANIFEST_ENTRIES = PLATFORM_SUPPORT_MANIFEST.platforms;\n",
+        "export const SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES =\n"
+        "  PLATFORM_SUPPORT_MANIFEST.agentHostProfiles;\n",
+        render_const("AGENT_HOST_PROFILE_IDS", normalized["agentHostProfileIds"]),
         render_const("SUPPORTED_PLATFORM_IDS", normalized["supportedPlatformIds"]),
         render_const("ADMITTED_PLATFORM_IDS", normalized["admittedPlatformIds"]),
         render_const("PRESENTATION_ONLY_PLATFORM_IDS", normalized["presentationOnlyPlatformIds"]),
@@ -371,6 +511,30 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         render_const("SOURCE_PLATFORM_AUDIT_TOKENS", normalized["auditTokens"]),
         render_const("SOURCE_PLATFORM_DISPLAY_TOKENS", normalized["displayTokens"]),
         render_const("SOURCE_PLATFORM_ONBOARDING_PATH_KEYS", normalized["onboardingPathKeys"]),
+        render_const(
+            "SOURCE_AGENT_HOST_PROFILE_FAMILY",
+            normalized["agentHostProfileFamilyById"],
+        ),
+        render_const(
+            "SOURCE_AGENT_HOST_PROFILE_GOVERNANCE_STATE",
+            normalized["agentHostProfileGovernanceStateById"],
+        ),
+        render_const(
+            "SOURCE_AGENT_HOST_PROFILE_READINESS_STAGE",
+            normalized["agentHostProfileReadinessStageById"],
+        ),
+        render_const(
+            "SOURCE_AGENT_HOST_PROFILE_HOST_IDENTITY_TOKENS",
+            normalized["agentHostProfileHostIdentityTokensById"],
+        ),
+        render_const(
+            "SOURCE_AGENT_HOST_PROFILE_SUPPORT_FLOOR",
+            normalized["agentHostProfileSupportFloorById"],
+        ),
+        render_const(
+            "SOURCE_AGENT_HOST_PROFILE_STORAGE_FAMILY",
+            normalized["agentHostProfileStorageFamilyById"],
+        ),
         render_const("SOURCE_PLATFORM_FAMILY", normalized["familyById"]),
         render_const("SOURCE_PLATFORM_READINESS_STAGE", normalized["readinessStageById"]),
         render_const("SOURCE_PLATFORM_PRIMARY_MODE", normalized["primaryModeById"]),
@@ -390,6 +554,17 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         "export type PlatformSupportFloorValue = PlatformSupportFloor[keyof PlatformSupportFloor];\n",
         "export type GeneratedSourcePlatformOnboardingPath =\n"
         "  (typeof SOURCE_PLATFORM_ONBOARDING_PATH_KEYS)[number];\n",
+        "export type GeneratedAgentHostProfileId = (typeof AGENT_HOST_PROFILE_IDS)[number];\n",
+        "export type GeneratedAgentHostProfileManifestEntry =\n"
+        "  (typeof SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES)[number];\n",
+        "export type AgentHostProfileGovernanceState =\n"
+        "  (typeof SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES)[number]['governanceState'];\n",
+        "export type AgentHostProfileReadinessStage =\n"
+        "  (typeof SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES)[number]['readinessStage'];\n",
+        "export type AgentHostProfileSupportFloor =\n"
+        "  (typeof SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES)[number]['supportFloor'];\n",
+        "export type AgentHostProfileSupportFloorValue =\n"
+        "  AgentHostProfileSupportFloor[keyof AgentHostProfileSupportFloor];\n",
         "export type SourcePlatformStorageFamily =\n"
         "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['storageFamily'];\n",
         "export type GeneratedPlatformType = (typeof PLATFORM_TYPE_KEYS)[number];\n",

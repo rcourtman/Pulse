@@ -175,6 +175,11 @@ those facts into source-strategy copy, but it must not turn an admitted
 `first-lab-ready` platform such as VMware into a product-level supported
 claim, invent platform-local projections, or classify assistant control beyond
 the manifest's support-floor row.
+That same lifecycle-owned helper must keep first-class platform APIs separate
+from governed Pulse Agent host profiles. Host/appliance compatibility such as
+Unraid is presented as an agent install/profile path sourced from the manifest
+`agent_host_profiles` section, not as `PLATFORM_TYPE_KEYS` membership or a
+peer API-backed platform.
 The lifecycle-owned infrastructure source manager also owns platform/system
 grouping as source-management content, but not its table band presentation:
 `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` must

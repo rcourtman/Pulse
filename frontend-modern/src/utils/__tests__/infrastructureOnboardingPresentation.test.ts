@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getInfrastructureAgentHostProfileSupportText,
   getInfrastructureCoverageCompleteActionPresentation,
   getInfrastructureApiProductsByGovernanceState,
   getInfrastructureAutoDetectLabels,
   getInfrastructureEmptyStateDetail,
+  getInfrastructureGovernanceBadgeLabel,
   getInfrastructureEmptyStateSummary,
+  INFRASTRUCTURE_ONBOARDING_PATHS,
   getInfrastructureOnboardingProductPresentation,
   getInfrastructureSourceManagerProducts,
   getInfrastructureSourcePickerGroups,
@@ -37,7 +40,11 @@ describe('infrastructureOnboardingPresentation', () => {
     const agent = getInfrastructureOnboardingProductPresentation('agent');
     const pve = getInfrastructureOnboardingProductPresentation('pve');
 
-    expect(agent.bestFor).toContain('full node-local telemetry');
+    expect(getInfrastructureAgentHostProfileSupportText()).toBe(
+      'Linux, macOS, Windows, FreeBSD, and Unraid host/appliance profiles',
+    );
+    expect(agent.bestFor).toContain('host/appliance profiles');
+    expect(agent.bestFor).toContain('low-overhead node-local telemetry');
     expect(agent.coverage).toContain('Low-overhead host telemetry');
     expect(agent.catalogDescription).toContain('Low-overhead host telemetry');
     expect(agent.sourceStrategy).toBe('agent');
@@ -55,6 +62,8 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(getInfrastructureSourceStrategyPresentation('agent')).toMatchObject({
       label: 'Agent telemetry',
       summary: 'Pulse Agent',
+      detail:
+        'Installs Pulse Agent for Linux, macOS, Windows, FreeBSD, and Unraid host/appliance profiles, local services, Docker, and Kubernetes.',
     });
     expect(getInfrastructureSourceStrategyPresentation('api-agent')).toMatchObject({
       label: 'API first',
@@ -73,6 +82,8 @@ describe('infrastructureOnboardingPresentation', () => {
       primaryMode: 'api-backed',
       canonicalProjections: ['network-endpoint'],
     });
+    expect(INFRASTRUCTURE_ONBOARDING_PATHS.api.title).toBe('Connect platform API');
+    expect(INFRASTRUCTURE_ONBOARDING_PATHS.agent.title).toBe('Install Pulse Agent');
   });
 
   it('keeps supported API products separate from the admitted VMware path', () => {
@@ -89,6 +100,13 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(
       getInfrastructureApiProductsByGovernanceState('admitted').map((product) => product.label),
     ).toEqual(['VMware vCenter']);
+    expect(
+      getInfrastructureGovernanceBadgeLabel(
+        getInfrastructureOnboardingProductPresentation('vmware').governanceState,
+        getInfrastructureOnboardingProductPresentation('vmware').readinessStage,
+      ),
+    ).toBe('First lab ready');
+    expect(getInfrastructureGovernanceBadgeLabel('supported', 'supported')).toBeNull();
   });
 
   it('derives picker groups, auto-detect copy, and landing summaries from the shared helper', () => {

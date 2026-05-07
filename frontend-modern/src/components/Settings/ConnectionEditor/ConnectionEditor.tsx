@@ -6,7 +6,10 @@ import {
   createConnectionEditorState,
   type ConnectionEditorState,
 } from './useConnectionEditor';
-import { getInfrastructureAutoDetectLabels } from '@/utils/infrastructureOnboardingPresentation';
+import {
+  getInfrastructureAgentHostProfileSupportText,
+  getInfrastructureAutoDetectLabels,
+} from '@/utils/infrastructureOnboardingPresentation';
 
 export type ConnectionEditorMode = 'add' | 'edit';
 
@@ -128,7 +131,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                 >
                   Install Pulse Agent
                 </button>{' '}
-                for Linux, macOS, Windows, FreeBSD, or Unraid hosts.
+                for {getInfrastructureAgentHostProfileSupportText()}.
               </p>
 
               <AddressProbeStep

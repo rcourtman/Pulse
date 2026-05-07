@@ -997,6 +997,8 @@ func normalisePlatform(platform string) string {
 	switch platform {
 	case "darwin":
 		return "macos"
+	case "unraid":
+		return "linux"
 	default:
 		return platform
 	}
