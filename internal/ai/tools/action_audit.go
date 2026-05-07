@@ -16,7 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const approvalAuditActor = "pulse_assistant"
+const approvalAuditActor = approval.RequesterPulseAssistant
 
 func (e *PulseToolExecutor) executeCommandWithAudit(
 	ctx context.Context,
@@ -578,22 +578,26 @@ func RecordPendingApprovalAction(store unifiedresources.ResourceStore, req *appr
 	if store == nil || req == nil || req.Plan == nil {
 		return
 	}
-	record := actionAuditRecordFromApproval(req, unifiedresources.ActionStatePending, approvalAuditActor)
+	actor := approval.RequesterForRequest(req)
+	record := actionAuditRecordFromApproval(req, unifiedresources.ActionStatePending, actor)
 	if err := store.RecordActionAudit(record); err != nil {
 		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to persist pending approval action")
 		return
 	}
-	recordApprovalLifecycle(store, req.Plan.ActionID, unifiedresources.ActionStatePlanned, strings.TrimSpace(req.Context))
-	recordApprovalLifecycle(store, req.Plan.ActionID, unifiedresources.ActionStatePending, "waiting for approval")
+	recordApprovalLifecycle(store, req.Plan.ActionID, unifiedresources.ActionStatePlanned, actor, strings.TrimSpace(req.Context))
+	recordApprovalLifecycle(store, req.Plan.ActionID, unifiedresources.ActionStatePending, actor, "waiting for approval")
 }
 
-func recordApprovalLifecycle(store unifiedresources.ResourceStore, actionID string, state unifiedresources.ActionState, message string) {
+func recordApprovalLifecycle(store unifiedresources.ResourceStore, actionID string, state unifiedresources.ActionState, actor, message string) {
 	event := unifiedresources.ActionLifecycleEvent{
 		ActionID:  strings.TrimSpace(actionID),
 		State:     state,
 		Timestamp: time.Now().UTC(),
-		Actor:     approvalAuditActor,
+		Actor:     strings.TrimSpace(actor),
 		Message:   strings.TrimSpace(message),
+	}
+	if event.Actor == "" {
+		event.Actor = approvalAuditActor
 	}
 	if err := store.RecordActionLifecycleEvent(event); err != nil {
 		log.Warn().Err(err).Str("action_id", actionID).Str("state", string(state)).Msg("failed to persist pending approval lifecycle event")

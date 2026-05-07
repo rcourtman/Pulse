@@ -2780,7 +2780,7 @@ func TestOrchestratorApprovalAdapterRecordsPendingActionAudit(t *testing.T) {
 	require.Equal(t, unifiedresources.ActionStatePending, audit.State)
 	require.Equal(t, req.ID, audit.Request.RequestID)
 	require.Equal(t, "investigation:finding-123", audit.Request.ResourceID)
-	require.Equal(t, "pulse_assistant", audit.Request.RequestedBy)
+	require.Equal(t, "pulse_patrol", audit.Request.RequestedBy)
 	require.NotNil(t, audit.Plan.Preflight)
 
 	events, err := actionStore.GetActionLifecycleEvents(req.Plan.ActionID, time.Time{}, 10)
@@ -2788,6 +2788,7 @@ func TestOrchestratorApprovalAdapterRecordsPendingActionAudit(t *testing.T) {
 	states := map[unifiedresources.ActionState]bool{}
 	for _, event := range events {
 		states[event.State] = true
+		require.Equal(t, "pulse_patrol", event.Actor)
 	}
 	require.True(t, states[unifiedresources.ActionStatePlanned], "missing planned lifecycle event: %#v", events)
 	require.True(t, states[unifiedresources.ActionStatePending], "missing pending lifecycle event: %#v", events)

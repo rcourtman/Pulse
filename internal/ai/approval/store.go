@@ -29,7 +29,16 @@ const (
 	StatusExpired  ApprovalStatus = "expired"
 )
 
-const DefaultOrgID = "default"
+const (
+	DefaultOrgID = "default"
+
+	// RequesterPulseAssistant identifies approvals proposed from the interactive
+	// Assistant control surface.
+	RequesterPulseAssistant = "pulse_assistant"
+	// RequesterPulsePatrol identifies approvals produced by Patrol's structured
+	// investigation loop.
+	RequesterPulsePatrol = "pulse_patrol"
+)
 
 // RiskLevel indicates the potential impact of a command.
 type RiskLevel string
@@ -115,6 +124,18 @@ func BelongsToOrg(req *ApprovalRequest, orgID string) bool {
 		return normalizedOrg == DefaultOrgID
 	}
 	return requestOrg == normalizedOrg
+}
+
+// RequesterForRequest returns the canonical producer identity for an approval.
+func RequesterForRequest(req *ApprovalRequest) string {
+	if req == nil {
+		return RequesterPulseAssistant
+	}
+	if strings.TrimSpace(req.ToolID) == "investigation_fix" ||
+		strings.TrimSpace(req.TargetType) == "investigation" {
+		return RequesterPulsePatrol
+	}
+	return RequesterPulseAssistant
 }
 
 // ExecutionState stores the AI conversation state for resumption after approval.
@@ -264,7 +285,7 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 			ResourceID:     approvalResourceID(req.TargetType, req.TargetID, req.TargetName),
 			CapabilityName: approvalCapabilityName(req.TargetType),
 			Reason:         req.Context,
-			RequestedBy:    "pulse_assistant",
+			RequestedBy:    RequesterForRequest(req),
 		}, *req.Plan)
 		req.Preflight = req.Plan.Preflight
 	}

@@ -141,7 +141,7 @@ func TestAttachApprovalActionPlanRecordsPendingActionAudit(t *testing.T) {
 	if audit.Request.ResourceID != "investigation:finding-123" {
 		t.Fatalf("audit resource id = %q", audit.Request.ResourceID)
 	}
-	if audit.Request.RequestedBy != approvalAuditActor {
+	if audit.Request.RequestedBy != approval.RequesterPulsePatrol {
 		t.Fatalf("audit requested by = %q", audit.Request.RequestedBy)
 	}
 
@@ -152,6 +152,9 @@ func TestAttachApprovalActionPlanRecordsPendingActionAudit(t *testing.T) {
 	states := map[unifiedresources.ActionState]bool{}
 	for _, event := range events {
 		states[event.State] = true
+		if event.Actor != approval.RequesterPulsePatrol {
+			t.Fatalf("lifecycle actor = %q, want %q", event.Actor, approval.RequesterPulsePatrol)
+		}
 	}
 	if !states[unifiedresources.ActionStatePlanned] || !states[unifiedresources.ActionStatePending] {
 		t.Fatalf("expected planned and pending lifecycle states, got %#v", events)

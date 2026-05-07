@@ -252,6 +252,52 @@ func TestCreateApproval_PopulatesActionPlanPreflightWhenMissing(t *testing.T) {
 	}
 }
 
+func TestCreateApproval_UsesPatrolRequesterForInvestigationFixPreflight(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	req := &ApprovalRequest{
+		ID:         "approval-patrol",
+		ToolID:     "investigation_fix",
+		Command:    "systemctl restart nginx",
+		TargetType: "investigation",
+		TargetID:   "finding-123",
+		Context:    "Restart nginx after Patrol investigation",
+		Plan: &unifiedresources.ActionPlan{
+			ActionID:         "action-patrol",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+			PlannedAt:        time.Now().UTC(),
+		},
+	}
+
+	if err := store.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval() error = %v", err)
+	}
+	if got := RequesterForRequest(req); got != RequesterPulsePatrol {
+		t.Fatalf("RequesterForRequest = %q, want %q", got, RequesterPulsePatrol)
+	}
+	if req.Plan.Preflight == nil {
+		t.Fatal("expected normalized action preflight")
+	}
+	if req.Plan.Preflight.Target != "investigation:finding-123" {
+		t.Fatalf("preflight target = %q, want investigation:finding-123", req.Plan.Preflight.Target)
+	}
+	if len(req.Plan.Preflight.VerificationSteps) == 0 {
+		t.Fatalf("expected request-context normalized preflight: %#v", req.Plan.Preflight)
+	}
+}
+
 func TestCreateApproval_RejectsUnsupportedHostTargetType(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {

@@ -657,8 +657,10 @@ planning contract.
 Patrol investigation-fix approvals must use that same action-audit boundary:
 when the orchestrator queues a fix approval, `internal/api/ai_handlers.go` must
 attach a governed action plan, seed the shared action-audit store as planned
-and pending, and leave later execution or approval decisions to the governed
-action/approval paths instead of creating Patrol-only execution context.
+and pending with `pulse_patrol` as the requester/actor, and leave later
+execution or approval decisions to the governed action/approval paths instead
+of creating Patrol-only execution context or collapsing Patrol proposals into
+generic Assistant-origin actions.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`
