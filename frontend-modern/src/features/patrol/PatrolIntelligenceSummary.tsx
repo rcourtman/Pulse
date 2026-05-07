@@ -4,6 +4,7 @@ import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
+import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import {
   getPatrolAssessmentAction,
   getPatrolAssessmentShellPresentation,
@@ -20,6 +21,8 @@ import {
 } from '@/utils/patrolRunPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { formatRelativeTime } from '@/utils/format';
+import { aiChatStore } from '@/stores/aiChat';
+import { buildPatrolAssessmentAssistantHandoff } from './patrolInvestigationContextModel';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 function PatrolAssessmentLoadingShell() {
@@ -212,6 +215,30 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
     return metrics;
   });
+  const assessmentAssistantHandoff = createMemo(() =>
+    buildPatrolAssessmentAssistantHandoff({
+      assessment: assessment(),
+      overallHealth: state.intelligenceSummary()?.overall_health,
+      scoreChipLabel: scoreChipLabel(),
+      metricState: metricState(),
+      verification: verification(),
+      recency: recency(),
+      latestRun: latestRun(),
+      investigationContext: {
+        recentChangeCount: state.recentChangeCount(),
+        correlationCount: state.correlationTotal(),
+        governedResourceCount: state.policyPosture()?.total_resources ?? 0,
+        hasContext: state.hasInvestigationContext(),
+        summaryText: state.investigationContextSummary(),
+      },
+      activeFindings: state.activePatrolFindings(),
+    }),
+  );
+
+  const handleDiscussAssessment = () => {
+    const handoff = assessmentAssistantHandoff();
+    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+  };
 
   const renderAssessmentIcon = () => {
     const iconClass = `w-5 h-5 ${assessmentShellPresentation().iconClass}`;
@@ -307,18 +334,28 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                     <p class="mt-1.5 max-w-3xl text-sm leading-6 text-muted">
                       {assessment().description}
                     </p>
-                    <Show when={assessmentAction()}>
-                      {(action) => (
-                        <div class="mt-4">
+                    <div class="mt-4 flex flex-wrap items-center gap-2">
+                      <Show when={assessmentAction()}>
+                        {(action) => (
                           <a
                             href={action().href}
                             class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover"
                           >
                             {action().label}
                           </a>
-                        </div>
-                      )}
-                    </Show>
+                        )}
+                      </Show>
+                      <button
+                        type="button"
+                        data-testid="patrol-assessment-assistant-button"
+                        class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        title="Discuss current Patrol assessment"
+                        onClick={handleDiscussAssessment}
+                      >
+                        <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
+                        <span>Discuss with Assistant</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -364,7 +401,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                         {(latest) => (
                           <>
                             <div class="mt-1 flex flex-wrap items-center gap-2 text-sm">
-                              <span class="font-medium text-base-content">{latest().kindLabel}</span>
+                              <span class="font-medium text-base-content">
+                                {latest().kindLabel}
+                              </span>
                               <span
                                 class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${latest().status.badgeClass}`}
                               >
@@ -414,7 +453,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         </Show>
       </Show>
 
-      <Show when={!showRuntimeSummary() && state.intelligenceSummary() && visibleMetrics().length > 0}>
+      <Show
+        when={!showRuntimeSummary() && state.intelligenceSummary() && visibleMetrics().length > 0}
+      >
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <For each={visibleMetrics()}>
             {(metric) => {

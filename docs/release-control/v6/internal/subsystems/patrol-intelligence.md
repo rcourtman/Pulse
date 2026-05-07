@@ -188,6 +188,16 @@ Patrol-specific presentation helpers.
    structured `investigationRecord` as investigation data, even when the legacy
    investigation-detail endpoint has no separate session payload, so it must not
    render empty-state copy above a durable Patrol record.
+   The primary Patrol assessment summary may open Assistant as a whole-surface
+   review handoff, but that handoff must also flow through
+   `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`.
+   The summary action may pass the current assessment title, health score,
+   verification recency, latest run, secondary investigation context, bounded
+   active-finding summaries, and structured resource references as model-only
+   context. It must force request-local approval-required mode, keep raw command
+   and approval payloads out of prompt and drawer copy, and frame Assistant as
+   explanation, prioritization, and safe next-step review rather than a generic
+   reactive chat box.
 
 ## Current State
 
@@ -235,6 +245,14 @@ render contract: the header chip, primary summary card, and status bar must
 all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`
 helper plus the backend `runtime_state` payload instead of inferring operator
 state from the last healthy summary snapshot or run history alone.
+The primary summary card now also has a Patrol-owned Assistant assessment
+handoff. `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
+opens Assistant through
+`frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`, which
+packages the current Patrol assessment, verification posture, latest run,
+secondary investigation context, bounded active-finding summaries, and deduped
+resource references as model-only context while forcing `autonomousMode:false`
+and summarizing proposed-fix command-bearing records by count only.
 That active-runtime label must stay operational rather than verdict-like: the
 header chip should communicate that Patrol is enabled or available, not imply
 that infrastructure health is currently good merely because the runtime is on.

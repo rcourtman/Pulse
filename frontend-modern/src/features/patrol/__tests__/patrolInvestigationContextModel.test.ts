@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RemediationPlan } from '@/api/ai';
 
 import {
+  buildPatrolAssessmentAssistantHandoff,
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingPrompt,
   buildPatrolInvestigationContextSummary,
@@ -87,6 +88,128 @@ describe('patrolInvestigationContextModel', () => {
       hasContext: false,
       summaryText: '',
     });
+  });
+
+  it('builds a model-only Assistant handoff for the current Patrol assessment', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Issues detected',
+        description:
+          'Patrol surfaced one active critical finding and recent coverage is incomplete.',
+        eyebrow: 'Current assessment',
+      },
+      overallHealth: { grade: 'B', score: 84 },
+      scoreChipLabel: 'Health',
+      metricState: {
+        primaryLabel: 'Infrastructure findings',
+        primaryValue: 1,
+        secondaryLabel: 'Runtime issues',
+        secondaryValue: 1,
+        fixedLabel: 'Fixed',
+        fixedValue: 2,
+      },
+      verification: {
+        title: 'Full patrol verified recently',
+        description: 'Latest full run completed with findings.',
+        lastFullRunAt: '2026-05-06T12:00:00Z',
+        activityMixLabel: '1 full patrol · 2 scoped runs',
+      },
+      recency: {
+        label: 'Last patrol',
+        timestamp: '2026-05-06T12:10:00Z',
+      },
+      latestRun: {
+        kindLabel: 'Full patrol',
+        status: { label: 'issues found' },
+        timestamp: '2026-05-06T12:10:00Z',
+        coverageSummary: '12 resources checked',
+        findingsSnapshotAvailable: true,
+      },
+      investigationContext: {
+        recentChangeCount: 1,
+        correlationCount: 2,
+        governedResourceCount: 4,
+        hasContext: true,
+        summaryText: '1 recent change · 2 correlations · 4 policy-covered resources',
+      },
+      activeFindings: [
+        {
+          id: 'finding-1',
+          title: 'High CPU usage',
+          description: 'CPU stayed above 95% during backup.',
+          severity: 'critical',
+          status: 'active',
+          resourceId: 'vm-100',
+          resourceName: 'web-server',
+          resourceType: 'vm',
+          detectedAt: '2026-05-06T12:00:00Z',
+          lastSeenAt: '2026-05-06T12:10:00Z',
+          investigationStatus: 'completed',
+          investigationOutcome: 'fix_queued',
+          loopState: 'awaiting_approval',
+          timesRaised: 3,
+          regressionCount: 1,
+          lastRegressionAt: '2026-05-06T12:06:00Z',
+          investigationRecord: {
+            id: 'record-1',
+            finding_id: 'finding-1',
+            subject: {
+              resource_id: 'vm-100',
+              resource_name: 'web-server',
+              resource_type: 'vm',
+              node: 'pve-1',
+            },
+            trigger: { detected_at: '2026-05-06T12:00:00Z' },
+            status: 'completed',
+            outcome: 'fix_queued',
+            confidence: 'high',
+            conclusion: 'Backup job saturated CPU.',
+            recommended_action: 'Approve a controlled restart after the backup completes.',
+            evidence: [{ kind: 'metrics', summary: 'CPU stayed above 95% for 10 minutes' }],
+            proposed_fix: {
+              id: 'fix-1',
+              description: 'Restart the workload service',
+              commands: ['systemctl restart workload.service'],
+              risk_level: 'medium',
+              destructive: false,
+            },
+            verification: ['CPU returned below 50%'],
+            tools_used: ['ssh.exec'],
+            started_at: '2026-05-06T12:00:00Z',
+          },
+        },
+        {
+          id: 'finding-2',
+          title: 'Patrol provider warning',
+          severity: 'warning',
+          status: 'active',
+          resourceId: 'vm-100',
+          resourceName: 'web-server',
+          resourceType: 'vm',
+        },
+      ],
+    });
+
+    expect(handoff.prompt).toContain('Discuss the current Pulse Patrol assessment');
+    expect(handoff.context.autonomousMode).toBe(false);
+    expect(handoff.context.handoffContext).toContain('[Patrol Assessment Context]');
+    expect(handoff.context.handoffContext).toContain('Source: Pulse Patrol current assessment');
+    expect(handoff.context.handoffContext).toContain('Health: Health B 84/100');
+    expect(handoff.context.handoffContext).toContain(
+      'Supporting Context: 1 recent change · 2 correlations · 4 policy-covered resources',
+    );
+    expect(handoff.context.handoffContext).toContain('Finding 1: High CPU usage');
+    expect(handoff.context.handoffContext).toContain('1 command recorded for approval context');
+    expect(handoff.context.handoffResources).toEqual([
+      { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
+    ]);
+    expect(handoff.context.briefing).toMatchObject({
+      sourceLabel: 'Pulse Patrol',
+      title: 'Patrol assessment attached',
+      subject: 'Issues detected',
+      safetyNote: 'Diagnostics and remediation require governed approval.',
+    });
+    expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
   it('builds operator-facing Patrol record presentation without exposing raw commands', () => {
