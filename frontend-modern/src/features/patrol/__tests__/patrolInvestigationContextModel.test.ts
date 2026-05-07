@@ -614,4 +614,44 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
   });
+
+  it('builds queued-fix recovery briefing from safe proposed-fix metadata', () => {
+    expect(
+      buildPatrolAssistantFindingBriefing({
+        title: 'CPU saturation',
+        subject: 'node-1',
+        findingStatus: 'active',
+        investigationOutcome: 'fix_queued',
+        loopState: 'fix_queued',
+        proposedFix: {
+          description: 'Restart workload service',
+          riskLevel: 'high',
+          targetHost: 'node-1',
+          rationale: 'service is wedged',
+          commandCount: 1,
+          destructive: true,
+        },
+      }),
+    ).toEqual({
+      sourceLabel: 'Pulse Patrol',
+      title: 'Operator briefing attached',
+      subject: 'CPU saturation on node-1',
+      statusLabel: 'Fix Queued',
+      detailLines: [
+        'Attention: active finding; loop fix queued; fix queued for governed review',
+        'Proposed fix: Restart workload service; target node-1; high risk; 1 command recorded for approval context; destructive proposed fix; rationale service is wedged',
+        'Decision: Recover or regenerate the governed approval before execution; do not execute from chat context.',
+      ],
+      evidence: [],
+      actionLabel: 'Restart workload service',
+      commandSummary: '1 command recorded for approval context',
+      safetyNote:
+        'Command details stay in approval context; destructive actions require governed approval.',
+      suggestedPrompts: [
+        'Review approval risk and next step',
+        'Explain current finding status',
+        'Summarize remediation without command text',
+      ],
+    });
+  });
 });

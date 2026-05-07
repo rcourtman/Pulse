@@ -181,6 +181,12 @@ Patrol-specific presentation helpers.
    with the same Patrol-owned visible briefing and approval-required posture
    from current finding facts; it must not fall back to generic investigation
    chat or invite execution from missing command details.
+   If the live approval is gone but the structured proposed-fix payload is still
+   available, the recovery Assistant briefing must carry only safe proposed-fix
+   metadata such as description, target, risk, rationale, destructive posture,
+   and command count. Raw command text remains in the governed remediation or
+   approval panel, while Assistant gets enough context to explain approval
+   recovery and risk without becoming an execution surface.
    If the referenced finding is no longer current, Assistant must drop the
    stored handoff instead of continuing from stale Patrol context. Assistant
    handoff context must also carry the unified

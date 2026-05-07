@@ -48,6 +48,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     const approvalRequestedAt = new Date(Date.now() - 60_000).toISOString();
     const approvalExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
     let includePendingApproval = true;
+    let includeInvestigationProposedFix = false;
 
     await page.route("**/api/security/status", async (route) => {
       await route.fulfill({
@@ -392,7 +393,29 @@ test.describe("Patrol Assistant operator briefing", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(null),
+        body: JSON.stringify(
+          includeInvestigationProposedFix
+            ? {
+                id: "session-operator-briefing",
+                finding_id: "finding-operator-briefing",
+                session_id: "session-operator-briefing",
+                status: "completed",
+                started_at: "2026-05-06T12:00:00Z",
+                turn_count: 1,
+                outcome: "fix_queued",
+                proposed_fix: {
+                  id: "fix-expired-1",
+                  description: "Restart the workload service",
+                  commands: ["systemctl restart workload.service"],
+                  risk_level: "high",
+                  destructive: true,
+                  target_host: "web-server",
+                  rationale:
+                    "Workload service stayed wedged after backup pressure.",
+                },
+              }
+            : null,
+        ),
       });
     });
 
@@ -485,6 +508,39 @@ test.describe("Patrol Assistant operator briefing", () => {
     ).toBeVisible();
     await expect(
       queuedAssistantContext.getByText("systemctl restart workload.service"),
+    ).toHaveCount(0);
+
+    includeInvestigationProposedFix = true;
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("button", { name: "Findings" })).toBeVisible();
+
+    await page.getByText("High CPU usage").click();
+    const expiredFinding = page.locator("#finding-finding-operator-briefing");
+    await expect(expiredFinding.getByText("approval expired")).toBeVisible();
+    await expiredFinding
+      .getByRole("button", { name: "Fix with Assistant" })
+      .last()
+      .click();
+
+    const expiredAssistantContext = page.getByLabel("Assistant context");
+    await expect(expiredAssistantContext).toBeVisible();
+    await expect(expiredAssistantContext).toContainText(
+      "Operator briefing attached",
+    );
+    await expect(expiredAssistantContext).toContainText("Fix Queued");
+    await expect(expiredAssistantContext).toContainText(
+      "Proposed fix: Restart the workload service; target web-server; high risk; 1 command recorded for approval context; destructive proposed fix; rationale Workload service stayed wedged after backup pressure.",
+    );
+    await expect(expiredAssistantContext).toContainText(
+      "Command details stay in approval context; destructive actions require governed approval.",
+    );
+    await expect(
+      expiredAssistantContext.getByRole("button", {
+        name: "Summarize remediation without command text",
+      }),
+    ).toBeVisible();
+    await expect(
+      expiredAssistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
   });
 });

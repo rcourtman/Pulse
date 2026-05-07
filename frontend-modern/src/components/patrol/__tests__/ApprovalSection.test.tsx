@@ -207,6 +207,76 @@ describe('ApprovalSection', () => {
     expect(JSON.stringify(context.briefing)).not.toContain('systemctl restart nginx');
   });
 
+  it('opens Assistant from an expired approval with safe proposed-fix briefing metadata', async () => {
+    getInvestigationMock.mockResolvedValue({
+      id: 'session-1',
+      finding_id: 'finding-1',
+      session_id: 'session-1',
+      status: 'completed',
+      started_at: '2026-05-06T12:00:00Z',
+      turn_count: 1,
+      outcome: 'fix_queued',
+      proposed_fix: {
+        id: 'fix-1',
+        description: 'Restart the workload service',
+        commands: ['systemctl restart nginx'],
+        risk_level: 'high',
+        destructive: true,
+        target_host: 'node-1',
+        rationale: 'Service is wedged after IO pressure.',
+      },
+    });
+
+    render(() => (
+      <ApprovalSection
+        findingId="finding-1"
+        investigationOutcome="fix_queued"
+        findingTitle="CPU saturation"
+        resourceName="node-1"
+        resourceType="agent"
+        resourceId="agent-1"
+      />
+    ));
+
+    expect(await screen.findByText('approval expired')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /fix with assistant/i }));
+
+    expect(openWithPromptMock).toHaveBeenCalledTimes(1);
+    const [prompt, context] = openWithPromptMock.mock.calls[0];
+    expect(prompt).toContain('queued a governed fix for review');
+    expect(prompt).toContain('**Proposed fix:** Restart the workload service');
+    expect(prompt).toContain('**Target:** node-1');
+    expect(prompt).toContain('**Risk level:** high');
+    expect(prompt).not.toContain('systemctl restart nginx');
+    expect(context).toEqual({
+      targetType: 'agent',
+      targetId: 'agent-1',
+      findingId: 'finding-1',
+      briefing: expect.objectContaining({
+        sourceLabel: 'Pulse Patrol',
+        title: 'Operator briefing attached',
+        subject: 'CPU saturation on node-1',
+        statusLabel: 'Fix Queued',
+        detailLines: expect.arrayContaining([
+          expect.stringContaining('fix queued for governed review'),
+          expect.stringContaining('Proposed fix: Restart the workload service'),
+          expect.stringContaining('Recover or regenerate the governed approval before execution'),
+        ]),
+        actionLabel: 'Restart the workload service',
+        commandSummary: '1 command recorded for approval context',
+        safetyNote:
+          'Command details stay in approval context; destructive actions require governed approval.',
+        suggestedPrompts: [
+          'Review approval risk and next step',
+          'Explain current finding status',
+          'Summarize remediation without command text',
+        ],
+      }),
+      autonomousMode: false,
+    });
+    expect(JSON.stringify(context.briefing)).not.toContain('systemctl restart nginx');
+  });
+
   it('recreates and executes a queued fix when autofix is available', async () => {
     state.hasAutoFix = true;
     getInvestigationMock.mockResolvedValue(null);

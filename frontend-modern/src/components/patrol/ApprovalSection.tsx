@@ -24,6 +24,15 @@ interface ApprovalSectionProps {
   resourceId?: string;
 }
 
+interface AssistantBriefingFixSource {
+  description?: string | null;
+  commands?: string[] | null;
+  target_host?: string | null;
+  risk_level?: string | null;
+  rationale?: string | null;
+  destructive?: boolean | null;
+}
+
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [executionResult, setExecutionResult] = createSignal<ApprovalExecutionResult | null>(null);
@@ -39,7 +48,10 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
 
-  const approvalBriefing = (approval: ApprovalRequest | null) =>
+  const approvalBriefing = (
+    approval: ApprovalRequest | null,
+    fix?: AssistantBriefingFixSource | null,
+  ) =>
     buildPatrolAssistantFindingBriefing({
       title: props.findingTitle || 'Patrol finding',
       subject: props.resourceName || 'affected resource',
@@ -56,17 +68,21 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             targetName: approval.targetName,
           }
         : null,
+      proposedFix: fix
+        ? {
+            description: fix.description,
+            riskLevel: fix.risk_level,
+            targetHost: fix.target_host,
+            rationale: fix.rationale,
+            commandCount: fix.commands?.length ?? 0,
+            destructive: fix.destructive,
+          }
+        : null,
     });
 
   const handleFixWithAssistant = (
     approval: ApprovalRequest | null,
-    fix: {
-      description?: string;
-      commands?: string[];
-      target_host?: string;
-      risk_level?: string;
-      rationale?: string;
-    } | null,
+    fix: AssistantBriefingFixSource | null,
     e: Event,
   ) => {
     e.stopPropagation();
@@ -88,7 +104,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       targetType: props.resourceType,
       targetId: props.resourceId,
       findingId: props.findingId,
-      briefing: approvalBriefing(approval),
+      briefing: approvalBriefing(approval, fix),
       autonomousMode: false,
     });
   };

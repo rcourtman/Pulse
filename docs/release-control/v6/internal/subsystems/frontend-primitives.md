@@ -827,7 +827,10 @@ frontend primitive boundary.
     raw approval, command, or rollback command payload text. Missing-detail
     queued-fix recovery actions must still provide the feature-owned Patrol
     briefing and request-local approval-required posture rather than opening the
-    shared drawer as context-free generic Assistant chat.
+    shared drawer as context-free generic Assistant chat. If a feature-owned
+    expired-approval recovery action still has structured proposed-fix metadata,
+    the shared drawer may receive only safe summary fields and command counts;
+    raw command text remains outside shared Assistant primitives.
     When those feature-owned helpers attach backend model-only context, the
     drawer store may carry only bounded handoff text and structured resource
     references for the shared chat transport; approval, lifecycle, and command

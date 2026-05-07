@@ -337,7 +337,11 @@ the canonical monitored-system blocked payload.
     carry that Patrol-owned operator briefing, current `fix_queued` posture,
     request-local approval-required mode, and safe suggested prompts; they must
     not degrade into generic Assistant investigation chat or imply that
-    execution can proceed from missing command payloads. Direct
+    execution can proceed from missing command payloads. Expired-approval
+    recovery handoffs may use a still-available structured proposed-fix payload
+    only as safe metadata: description, target, risk, rationale, destructive
+    posture, and command count may enter the briefing, while raw command text
+    remains owned by governed remediation or approval surfaces. Direct
     alert-investigation API handoffs through `internal/api/ai_handlers.go` must
     enforce that same request-scoped boundary by setting
     `ai.ExecuteRequest.AutonomousMode` to

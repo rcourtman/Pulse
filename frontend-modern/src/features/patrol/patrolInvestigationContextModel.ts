@@ -68,6 +68,15 @@ export interface PatrolAssistantApprovalBriefingInput {
   targetName?: string | null;
 }
 
+export interface PatrolAssistantProposedFixBriefingInput {
+  description?: string | null;
+  riskLevel?: string | null;
+  targetHost?: string | null;
+  rationale?: string | null;
+  commandCount?: number | null;
+  destructive?: boolean | null;
+}
+
 export interface PatrolAssistantFindingBriefingInput {
   title: string;
   subject: string;
@@ -80,6 +89,7 @@ export interface PatrolAssistantFindingBriefingInput {
   lastRegressionAt?: string | null;
   remediationId?: string | null;
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
+  proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
 }
 
@@ -1021,6 +1031,7 @@ export function buildPatrolAssistantFindingBriefing(
   const title = normalizeText(input.title) || 'Patrol finding';
   const subject = normalizeText(input.subject) || 'affected resource';
   const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
+  const proposedFix = record.proposedFix || normalizeProposedFixBriefing(input.proposedFix);
   const approvalStatusParts = !record.hasRecord
     ? [
         pendingApproval.status ? `${formatIdentifierLabel(pendingApproval.status)} approval` : '',
@@ -1039,11 +1050,15 @@ export function buildPatrolAssistantFindingBriefing(
   if (!record.hasRecord && !attentionReason && !operatorDecision) {
     return undefined;
   }
+  const proposedFixDetail = record.proposedFix
+    ? undefined
+    : formatPatrolAssistantProposedFixDetail(proposedFix);
 
   const detailLines = [
     attentionReason ? `Attention: ${attentionReason}` : undefined,
     record.conclusion,
     record.recommendedAction,
+    proposedFixDetail,
     operatorDecision ? `Decision: ${operatorDecision}` : undefined,
   ]
     .filter(isNonEmptyString)
@@ -1058,11 +1073,16 @@ export function buildPatrolAssistantFindingBriefing(
     detailLines,
     evidence: [...record.evidenceSummaries, ...verificationLines].slice(0, 4),
     actionLabel:
-      record.proposedFix?.description ||
+      proposedFix?.description ||
       (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined),
-    commandSummary: record.proposedFix?.commandSummary,
-    safetyNote: buildPatrolAssistantSafetyNote(record, pendingApproval),
-    suggestedPrompts: buildPatrolFindingSuggestedPrompts(input, record, pendingApproval),
+    commandSummary: proposedFix?.commandSummary,
+    safetyNote: buildPatrolAssistantSafetyNote(proposedFix, pendingApproval),
+    suggestedPrompts: buildPatrolFindingSuggestedPrompts(
+      input,
+      record,
+      pendingApproval,
+      proposedFix,
+    ),
   };
 }
 
@@ -1096,6 +1116,7 @@ function buildPatrolFindingSuggestedPrompts(
   input: PatrolAssistantFindingBriefingInput,
   record: PatrolInvestigationRecordPresentation,
   pendingApproval: Required<PatrolAssistantApprovalBriefingInput>,
+  proposedFix?: PatrolInvestigationRecordPresentation['proposedFix'],
 ): string[] {
   const prompts: string[] = [];
   const requiresApproval = patrolAssistantFindingHandoffRequiresApprovalMode({
@@ -1127,7 +1148,7 @@ function buildPatrolFindingSuggestedPrompts(
     prompts.push('List evidence to gather before action');
   }
 
-  if (record.proposedFix?.commandSummary) {
+  if (proposedFix?.commandSummary) {
     prompts.push('Summarize remediation without command text');
   } else if (requiresApproval) {
     prompts.push('List approval prerequisites before action');
@@ -1360,11 +1381,11 @@ function buildPatrolAssistantOperatorDecision(
 }
 
 function buildPatrolAssistantSafetyNote(
-  record: PatrolInvestigationRecordPresentation,
+  proposedFix?: PatrolInvestigationRecordPresentation['proposedFix'],
   pendingApproval?: Required<PatrolAssistantApprovalBriefingInput>,
 ): string | undefined {
-  const hasCommands = Boolean(record.proposedFix?.commandSummary);
-  const isDestructive = Boolean(record.proposedFix?.destructive);
+  const hasCommands = Boolean(proposedFix?.commandSummary);
+  const isDestructive = Boolean(proposedFix?.destructive);
   if (hasCommands && isDestructive) {
     return 'Command details stay in approval context; destructive actions require governed approval.';
   }
@@ -1378,6 +1399,52 @@ function buildPatrolAssistantSafetyNote(
     return 'Execution requires the governed approval flow.';
   }
   return undefined;
+}
+
+function normalizeProposedFixBriefing(
+  proposedFix?: PatrolAssistantProposedFixBriefingInput | null,
+): PatrolInvestigationRecordPresentation['proposedFix'] | undefined {
+  const commandSummary = formatCommandSummary(normalizeNonNegativeCount(proposedFix?.commandCount));
+  const normalized = {
+    description: normalizeText(proposedFix?.description),
+    riskLabel: formatIdentifierLabel(proposedFix?.riskLevel),
+    targetHost: normalizeText(proposedFix?.targetHost),
+    rationale: normalizeText(proposedFix?.rationale),
+    commandSummary,
+    destructive: Boolean(proposedFix?.destructive),
+  };
+
+  if (
+    !normalized.description &&
+    !normalized.riskLabel &&
+    !normalized.targetHost &&
+    !normalized.rationale &&
+    !normalized.commandSummary &&
+    !normalized.destructive
+  ) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function formatPatrolAssistantProposedFixDetail(
+  proposedFix?: PatrolInvestigationRecordPresentation['proposedFix'],
+): string | undefined {
+  if (!proposedFix) return undefined;
+  const detail = formatBriefingStringList(
+    [
+      proposedFix.description,
+      proposedFix.targetHost ? `target ${proposedFix.targetHost}` : undefined,
+      proposedFix.riskLabel ? `${proposedFix.riskLabel.toLowerCase()} risk` : undefined,
+      proposedFix.commandSummary,
+      proposedFix.destructive ? 'destructive proposed fix' : undefined,
+      proposedFix.rationale ? `rationale ${proposedFix.rationale}` : undefined,
+    ],
+    6,
+    'proposed-fix facts',
+  );
+  return detail ? `Proposed fix: ${detail}` : undefined;
 }
 
 function normalizeApprovalBriefing(
