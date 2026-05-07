@@ -584,4 +584,34 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
   });
+
+  it('builds a queued-fix recovery briefing when live approval details are unavailable', () => {
+    expect(
+      buildPatrolAssistantFindingBriefing({
+        title: 'CPU saturation',
+        subject: 'node-1',
+        findingStatus: 'active',
+        investigationOutcome: 'fix_queued',
+        loopState: 'fix_queued',
+      }),
+    ).toEqual({
+      sourceLabel: 'Pulse Patrol',
+      title: 'Operator briefing attached',
+      subject: 'CPU saturation on node-1',
+      statusLabel: 'Fix Queued',
+      detailLines: [
+        'Attention: active finding; loop fix queued; fix queued for governed review',
+        'Decision: Recover or regenerate the governed approval before execution; do not execute from chat context.',
+      ],
+      evidence: [],
+      actionLabel: undefined,
+      commandSummary: undefined,
+      safetyNote: undefined,
+      suggestedPrompts: [
+        'Review approval risk and next step',
+        'Explain current finding status',
+        'List approval prerequisites before action',
+      ],
+    });
+  });
 });

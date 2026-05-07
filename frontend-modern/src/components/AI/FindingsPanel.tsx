@@ -449,6 +449,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       subject,
       severity: finding.severity,
       findingStatus: finding.status,
+      investigationOutcome: finding.investigationOutcome,
       loopState: finding.loopState,
       timesRaised: finding.timesRaised,
       regressionCount: finding.regressionCount,

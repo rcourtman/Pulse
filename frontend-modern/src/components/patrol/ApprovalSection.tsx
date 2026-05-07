@@ -44,6 +44,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       title: props.findingTitle || 'Patrol finding',
       subject: props.resourceName || 'affected resource',
       findingStatus: 'active',
+      investigationOutcome: props.investigationOutcome,
       loopState: props.investigationOutcome || 'awaiting_approval',
       pendingApproval: approval
         ? {
@@ -94,12 +95,19 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   const handleDiscussQueuedFix = (e: Event) => {
     e.stopPropagation();
+    const title = props.findingTitle || 'Patrol finding';
+    const subject = props.resourceName || 'affected resource';
     aiChatStore.openWithPrompt(
-      `Patrol queued a fix for a finding, but the original approval details are no longer available.\n\n**Finding:** ${props.findingTitle || 'Unknown finding'} on ${props.resourceName || 'unknown resource'}\n\nPlease help me investigate the issue again and propose a safe remediation approach.`,
+      [
+        `Patrol queued a governed fix for ${title} on ${subject}, but the live approval payload is no longer available.`,
+        'Use the attached Patrol briefing to explain the current action state, approval recovery path, and safest next step.',
+        'Do not infer, repeat, or execute raw command text from this chat handoff.',
+      ].join('\n\n'),
       {
         targetType: props.resourceType,
         targetId: props.resourceId,
         findingId: props.findingId,
+        briefing: approvalBriefing(null),
         autonomousMode: false,
       },
     );

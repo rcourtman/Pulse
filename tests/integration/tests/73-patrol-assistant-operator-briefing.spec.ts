@@ -47,6 +47,7 @@ test.describe("Patrol Assistant operator briefing", () => {
   }) => {
     const approvalRequestedAt = new Date(Date.now() - 60_000).toISOString();
     const approvalExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+    let includePendingApproval = true;
 
     await page.route("**/api/security/status", async (route) => {
       await route.fulfill({
@@ -366,22 +367,32 @@ test.describe("Patrol Assistant operator briefing", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          approvals: [
-            {
-              id: "approval-1",
-              toolId: "investigation_fix",
-              command: "systemctl restart workload.service",
-              targetType: "host",
-              targetId: "finding-operator-briefing",
-              targetName: "web-server",
-              context: "Restart the workload service",
-              riskLevel: "high",
-              status: "pending",
-              requestedAt: approvalRequestedAt,
-              expiresAt: approvalExpiresAt,
-            },
-          ],
+          approvals: includePendingApproval
+            ? [
+                {
+                  id: "approval-1",
+                  toolId: "investigation_fix",
+                  command: "systemctl restart workload.service",
+                  targetType: "host",
+                  targetId: "finding-operator-briefing",
+                  targetName: "web-server",
+                  context: "Restart the workload service",
+                  riskLevel: "high",
+                  status: "pending",
+                  requestedAt: approvalRequestedAt,
+                  expiresAt: approvalExpiresAt,
+                },
+              ]
+            : [],
         }),
+      });
+    });
+
+    await page.route("**/api/ai/findings/*/investigation", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(null),
       });
     });
 
@@ -442,5 +453,38 @@ test.describe("Patrol Assistant operator briefing", () => {
     ).toHaveValue("Review approval risk and next step");
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+
+    includePendingApproval = false;
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("button", { name: "Findings" })).toBeVisible();
+
+    await page.getByText("High CPU usage").click();
+    const queuedFinding = page.locator("#finding-finding-operator-briefing");
+    await expect(queuedFinding.getByText("details unavailable")).toBeVisible();
+    await queuedFinding
+      .getByRole("button", { name: "Discuss with Assistant" })
+      .last()
+      .click();
+
+    const queuedAssistantContext = page.getByLabel("Assistant context");
+    await expect(queuedAssistantContext).toBeVisible();
+    await expect(queuedAssistantContext).toContainText(
+      "Operator briefing attached",
+    );
+    await expect(queuedAssistantContext).toContainText("Fix Queued");
+    await expect(queuedAssistantContext).toContainText(
+      "Attention: active finding; loop fix queued; fix queued for governed review",
+    );
+    await expect(queuedAssistantContext).toContainText(
+      "Decision: Recover or regenerate the governed approval before execution; do not execute from chat context.",
+    );
+    await expect(
+      queuedAssistantContext.getByRole("button", {
+        name: "List approval prerequisites before action",
+      }),
+    ).toBeVisible();
+    await expect(
+      queuedAssistantContext.getByText("systemctl restart workload.service"),
+    ).toHaveCount(0);
   });
 });

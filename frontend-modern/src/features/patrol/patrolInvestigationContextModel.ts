@@ -73,6 +73,7 @@ export interface PatrolAssistantFindingBriefingInput {
   subject: string;
   severity?: string | null;
   findingStatus?: string | null;
+  investigationOutcome?: string | null;
   loopState?: string | null;
   timesRaised?: number | null;
   regressionCount?: number | null;
@@ -1024,6 +1025,7 @@ export function buildPatrolAssistantFindingBriefing(
     ? [
         pendingApproval.status ? `${formatIdentifierLabel(pendingApproval.status)} approval` : '',
         pendingApproval.riskLevel ? `${formatIdentifierLabel(pendingApproval.riskLevel)} risk` : '',
+        !pendingApproval.id ? formatIdentifierLabel(input.investigationOutcome) || '' : '',
       ]
     : [];
   const statusParts = [
@@ -1097,7 +1099,7 @@ function buildPatrolFindingSuggestedPrompts(
 ): string[] {
   const prompts: string[] = [];
   const requiresApproval = patrolAssistantFindingHandoffRequiresApprovalMode({
-    investigationOutcome: input.investigationRecord?.outcome,
+    investigationOutcome: input.investigationOutcome || input.investigationRecord?.outcome,
     remediationId: input.remediationId,
     pendingApproval,
     investigationRecord: input.investigationRecord,
@@ -1198,7 +1200,7 @@ function buildPatrolAssistantAttentionReason(
     parts.push('destructive proposed fix');
   }
 
-  switch (normalizeText(rawRecord?.outcome)) {
+  switch (normalizeText(rawRecord?.outcome || input.investigationOutcome)) {
     case 'fix_queued':
       parts.push('fix queued for governed review');
       break;
@@ -1325,6 +1327,23 @@ function buildPatrolAssistantOperatorDecision(
   const remediationId = normalizeText(input.remediationId);
   if (remediationId) {
     return `Review governed remediation ${remediationId} before execution.`;
+  }
+
+  switch (normalizeText(input.investigationOutcome).toLowerCase()) {
+    case 'fix_queued':
+      return 'Recover or regenerate the governed approval before execution; do not execute from chat context.';
+    case 'fix_executed':
+      return 'Verify the execution result before closing or resolving the finding.';
+    case 'fix_failed':
+    case 'fix_verification_failed':
+      return 'Review failed remediation evidence before retrying or escalating.';
+    case 'fix_verification_unknown':
+      return 'Gather verification evidence before closing or retrying remediation.';
+    case 'needs_attention':
+    case 'cannot_fix':
+      return 'Operator intervention is required; use the evidence to choose the next manual step.';
+    case 'timed_out':
+      return 'Patrol timed out; rerun investigation or gather more evidence before remediation.';
   }
 
   const loopState = normalizeText(input.loopState).toLowerCase();

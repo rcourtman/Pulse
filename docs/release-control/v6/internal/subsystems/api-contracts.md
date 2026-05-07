@@ -332,9 +332,15 @@ the canonical monitored-system blocked payload.
     briefing payloads may include short suggested prompts, but those prompts
     must be derived from the same safe action posture, evidence, recurrence, and
     remediation-plan metadata as the briefing and must never carry raw approval,
-    command, or rollback command text. Direct alert-investigation API
-    handoffs through `internal/api/ai_handlers.go` must enforce that same
-    request-scoped boundary by setting `ai.ExecuteRequest.AutonomousMode` to
+    command, or rollback command text. Frontend queued-fix recovery handoffs
+    where the live approval or proposed-fix payload is unavailable must still
+    carry that Patrol-owned operator briefing, current `fix_queued` posture,
+    request-local approval-required mode, and safe suggested prompts; they must
+    not degrade into generic Assistant investigation chat or imply that
+    execution can proceed from missing command payloads. Direct
+    alert-investigation API handoffs through `internal/api/ai_handlers.go` must
+    enforce that same request-scoped boundary by setting
+    `ai.ExecuteRequest.AutonomousMode` to
     false and `ai.ExecuteRequest.RequireCommandApproval` to true; API proof must
     keep this guarded in both `internal/api/ai_handlers_test.go` and
     `internal/api/contract_test.go`. The operator

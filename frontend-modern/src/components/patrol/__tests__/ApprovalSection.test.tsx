@@ -123,11 +123,26 @@ describe('ApprovalSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
 
     expect(openWithPromptMock).toHaveBeenCalledWith(
-      expect.stringContaining('Patrol queued a fix for a finding'),
+      expect.stringContaining('Patrol queued a governed fix for CPU saturation on node-1'),
       {
         targetType: 'host',
         targetId: 'host-1',
         findingId: 'finding-1',
+        briefing: expect.objectContaining({
+          sourceLabel: 'Pulse Patrol',
+          title: 'Operator briefing attached',
+          subject: 'CPU saturation on node-1',
+          statusLabel: 'Fix Queued',
+          detailLines: expect.arrayContaining([
+            expect.stringContaining('fix queued for governed review'),
+            expect.stringContaining('Recover or regenerate the governed approval before execution'),
+          ]),
+          suggestedPrompts: [
+            'Review approval risk and next step',
+            'Explain current finding status',
+            'List approval prerequisites before action',
+          ],
+        }),
         autonomousMode: false,
       },
     );

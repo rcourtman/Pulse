@@ -824,7 +824,10 @@ frontend primitive boundary.
     suggested prompts must be derived from safe briefing metadata such as
     evidence, confidence, approval risk, prerequisites, recurrence, rollback,
     and verification posture; they must not become another primitive path for
-    raw approval, command, or rollback command payload text.
+    raw approval, command, or rollback command payload text. Missing-detail
+    queued-fix recovery actions must still provide the feature-owned Patrol
+    briefing and request-local approval-required posture rather than opening the
+    shared drawer as context-free generic Assistant chat.
     When those feature-owned helpers attach backend model-only context, the
     drawer store may carry only bounded handoff text and structured resource
     references for the shared chat transport; approval, lifecycle, and command

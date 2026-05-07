@@ -176,6 +176,11 @@ Patrol-specific presentation helpers.
    injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
    addresses outside the canonical policy boundary.
+   If a `fix_queued` finding no longer has a live approval payload or detailed
+   proposed-fix payload available, the recovery action must still open Assistant
+   with the same Patrol-owned visible briefing and approval-required posture
+   from current finding facts; it must not fall back to generic investigation
+   chat or invite execution from missing command details.
    If the referenced finding is no longer current, Assistant must drop the
    stored handoff instead of continuing from stale Patrol context. Assistant
    handoff context must also carry the unified
