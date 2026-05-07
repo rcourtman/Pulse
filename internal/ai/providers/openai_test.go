@@ -400,6 +400,146 @@ func TestOpenAIClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
 	assert.True(t, doneCalled)
 }
 
+func TestOpenAIClient_Chat_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		assert.Equal(t, "deepseek-v4-flash", got["model"])
+		assert.Equal(t, "auto", got["tool_choice"])
+		require.Len(t, got["tools"], 1)
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-deepseek-tools",
+			Model: "deepseek-v4-flash",
+			Choices: []openaiChoice{
+				{
+					Message:      openaiRespMsg{Role: "assistant", Content: "ok"},
+					FinishReason: "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "deepseek-v4-flash", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/v1/chat/completions#deepseek.com"
+
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Use the tool"}},
+		Tools: []Tool{
+			{Name: "ping", Description: "Ping", InputSchema: map[string]interface{}{"type": "object"}},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceTool, Name: "ping"},
+	})
+	require.NoError(t, err)
+}
+
+func TestOpenAIClient_ChatStream_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		assert.Equal(t, "deepseek-v4-flash", got["model"])
+		assert.Equal(t, "auto", got["tool_choice"])
+		require.Len(t, got["tools"], 1)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "data: %s\n\n", `{"id":"chatcmpl-1","choices":[{"delta":{"content":"ok"}}],"object":"chat.completion.chunk"}`)
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+		w.(http.Flusher).Flush()
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "deepseek-v4-flash", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/v1/chat/completions#deepseek.com"
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Use the tool"}},
+		Tools: []Tool{
+			{Name: "ping", Description: "Ping", InputSchema: map[string]interface{}{"type": "object"}},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceAny},
+	}, func(event StreamEvent) {})
+	require.NoError(t, err)
+}
+
+func TestOpenAIClient_Chat_DeepSeekPreservesReasoningContentForToolTurns(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got openaiRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		require.Len(t, got.Messages, 3)
+		assert.Equal(t, "assistant", got.Messages[1].Role)
+		assert.Equal(t, "I need current state first.", got.Messages[1].ReasoningContent)
+		require.Len(t, got.Messages[1].ToolCalls, 1)
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-deepseek-reasoning",
+			Model: "deepseek-v4-flash",
+			Choices: []openaiChoice{
+				{
+					Message:      openaiRespMsg{Role: "assistant", Content: "ok"},
+					FinishReason: "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "deepseek-v4-flash", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/v1/chat/completions#deepseek.com"
+
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{
+			{Role: "user", Content: "Check status"},
+			{
+				Role:             "assistant",
+				ReasoningContent: "I need current state first.",
+				ToolCalls: []ToolCall{
+					{ID: "call-1", Name: "pulse_read", Input: map[string]interface{}{"action": "status"}},
+				},
+			},
+			{Role: "tool", ToolResult: &ToolResult{ToolUseID: "call-1", Content: "healthy"}},
+		},
+	})
+	require.NoError(t, err)
+}
+
+func TestOpenAIClient_ChatStream_DeepSeekPreservesReasoningContentForToolTurns(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got openaiStreamRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		require.Len(t, got.Messages, 3)
+		assert.Equal(t, "assistant", got.Messages[1].Role)
+		assert.Equal(t, "I need current state first.", got.Messages[1].ReasoningContent)
+		require.Len(t, got.Messages[1].ToolCalls, 1)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "data: %s\n\n", `{"id":"chatcmpl-1","choices":[{"delta":{"content":"ok"}}],"object":"chat.completion.chunk"}`)
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+		w.(http.Flusher).Flush()
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "deepseek-v4-flash", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/v1/chat/completions#deepseek.com"
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{
+			{Role: "user", Content: "Check status"},
+			{
+				Role:             "assistant",
+				ReasoningContent: "I need current state first.",
+				ToolCalls: []ToolCall{
+					{ID: "call-1", Name: "pulse_read", Input: map[string]interface{}{"action": "status"}},
+				},
+			},
+			{Role: "tool", ToolResult: &ToolResult{ToolUseID: "call-1", Content: "healthy"}},
+		},
+	}, func(event StreamEvent) {})
+	require.NoError(t, err)
+}
+
 func TestOpenAIClient_ChatStream_Errors(t *testing.T) {
 	t.Run("401 Unauthorized", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

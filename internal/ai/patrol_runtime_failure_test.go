@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -29,8 +30,11 @@ func TestPatrolRuntimeFailureFromError_ClassifiesToolCallingUnsupported(t *testi
 	if !strings.Contains(failure.Recommendation, "supports tool calling") {
 		t.Fatalf("expected recommendation to mention tool calling, got %q", failure.Recommendation)
 	}
-	if !strings.Contains(failure.Evidence, "tool_choice") {
-		t.Fatalf("expected evidence to keep provider detail, got %q", failure.Evidence)
+	if strings.Contains(failure.Evidence, "tool_choice") || strings.Contains(failure.Evidence, "No endpoints found") {
+		t.Fatalf("evidence leaked raw provider detail: %q", failure.Evidence)
+	}
+	if !strings.Contains(failure.Evidence, "Provider rejected Patrol tool calls") {
+		t.Fatalf("expected evidence to keep safe classified detail, got %q", failure.Evidence)
 	}
 }
 
@@ -80,6 +84,17 @@ func TestPatrolRuntimeFailureFromErrorRedactsSecretLikeDetail(t *testing.T) {
 	}
 	if !strings.Contains(failure.Evidence, "[redacted]") {
 		t.Fatalf("expected evidence to retain redacted context, got %q", failure.Evidence)
+	}
+}
+
+func TestPatrolRuntimeFailureFromErrorSummarizesReasoningContentProtocolDetail(t *testing.T) {
+	failure := patrolRuntimeFailureFromError(errors.New("API error (400): The `reasoning_content` in the thinking mode must be passed back to the API."))
+
+	if strings.Contains(failure.Evidence, "reasoning_content") {
+		t.Fatalf("evidence leaked raw provider protocol detail: %q", failure.Evidence)
+	}
+	if !strings.Contains(failure.Evidence, "Provider rejected Patrol reasoning state") {
+		t.Fatalf("expected safe reasoning-state summary, got %q", failure.Evidence)
 	}
 }
 
@@ -149,8 +164,11 @@ func TestRunPatrolRecordsStructuredRuntimeFailure(t *testing.T) {
 	if runs[0].ErrorSummary != "Selected model does not support Patrol tools" {
 		t.Fatalf("expected structured run error summary, got %q", runs[0].ErrorSummary)
 	}
-	if !strings.Contains(runs[0].ErrorDetail, "tool_choice") {
-		t.Fatalf("expected run error detail to preserve provider message, got %q", runs[0].ErrorDetail)
+	if strings.Contains(runs[0].ErrorDetail, "tool_choice") || strings.Contains(runs[0].ErrorDetail, "No endpoints found") {
+		t.Fatalf("run error detail leaked raw provider message: %q", runs[0].ErrorDetail)
+	}
+	if !strings.Contains(runs[0].ErrorDetail, "Provider rejected Patrol tool calls") {
+		t.Fatalf("expected run error detail to preserve safe classified detail, got %q", runs[0].ErrorDetail)
 	}
 
 	finding := ps.findings.Get(generateFindingID(patrolRuntimeResourceID, "reliability", patrolRuntimeFindingKey))
@@ -162,6 +180,29 @@ func TestRunPatrolRecordsStructuredRuntimeFailure(t *testing.T) {
 	}
 	if finding.FailureCause != string(PatrolFailureCauseModelUnsupportedTools) {
 		t.Fatalf("unexpected runtime finding cause %q", finding.FailureCause)
+	}
+}
+
+func TestPatrolRunRecordJSONNormalizesRuntimeFailureDetail(t *testing.T) {
+	run := PatrolRunRecord{
+		ID:           "run-1",
+		Status:       "error",
+		ErrorSummary: "Selected model does not support Patrol tools",
+		ErrorDetail:  `agentic patrol failed: provider error: API error (400): deepseek-reasoner does not support this tool_choice at https://openrouter.ai/settings/keys for user_test`,
+	}
+
+	body, err := json.Marshal(run)
+	if err != nil {
+		t.Fatalf("marshal run: %v", err)
+	}
+	text := string(body)
+	for _, raw := range []string{"tool_choice", "openrouter.ai/settings/keys", "user_test", "deepseek-reasoner"} {
+		if strings.Contains(text, raw) {
+			t.Fatalf("marshaled run leaked raw provider detail %q: %s", raw, text)
+		}
+	}
+	if !strings.Contains(text, "Provider rejected Patrol tool calls") {
+		t.Fatalf("expected safe classified detail in marshaled run, got %s", text)
 	}
 }
 

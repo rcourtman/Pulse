@@ -496,6 +496,13 @@ contract. Expanded erroring runs should show the backend-provided
 provider settings` action near the run narrative, so a provider/model/tool
 failure remains actionable even when the operator starts from the Runs tab
 rather than the synthetic runtime finding.
+Those run-history failure fields are customer/API-safe classified detail, not
+raw provider payload storage. The backend must normalize both newly written
+and already persisted Patrol run records before browser/API serialization, so
+provider protocol fragments such as `tool_choice`, `reasoning_content`, raw
+endpoint URLs, credential hints, or model-internal error strings do not leak
+through run history while the operator still receives an actionable recovery
+summary.
 That same shared finding-presentation helper should also own Patrol finding
 subject labels, so Patrol-owned synthetic service findings render as
 `Patrol runtime` rather than leaking backend resource internals like

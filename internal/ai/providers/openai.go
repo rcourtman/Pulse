@@ -176,6 +176,21 @@ func (c *OpenAIClient) isDeepSeekReasoner() bool {
 	return c.isDeepSeek() && strings.Contains(c.model, "reasoner")
 }
 
+func (c *OpenAIClient) shouldSendReasoningContent() bool {
+	return c.isDeepSeek()
+}
+
+func (c *OpenAIClient) supportsForcedToolChoice(model string) bool {
+	return !c.isDeepSeek()
+}
+
+func (c *OpenAIClient) toolChoiceForModel(model string, choice *ToolChoice) interface{} {
+	if !c.supportsForcedToolChoice(model) {
+		return "auto"
+	}
+	return convertToolChoiceToOpenAI(choice)
+}
+
 func (c *OpenAIClient) applyProviderHeaders(req *http.Request) {
 	if !c.isOpenRouter() {
 		return
@@ -242,8 +257,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			if m.Content != "" {
 				msg.Content = m.Content
 			}
-			// For DeepSeek reasoner, include reasoning_content if present
-			if c.isDeepSeekReasoner() && m.ReasoningContent != "" {
+			// DeepSeek reasoning-backed models require the reasoning_content
+			// returned with a tool call to be passed back on the next turn.
+			if c.shouldSendReasoningContent() && m.ReasoningContent != "" {
 				msg.ReasoningContent = m.ReasoningContent
 			}
 			for _, tc := range m.ToolCalls {
@@ -268,7 +284,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		} else {
 			msg.Content = m.Content
 			// For assistant messages with reasoning content (DeepSeek)
-			if c.isDeepSeekReasoner() && m.ReasoningContent != "" {
+			if c.shouldSendReasoningContent() && m.ReasoningContent != "" {
 				msg.ReasoningContent = m.ReasoningContent
 			}
 		}
@@ -334,11 +350,13 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 				},
 			})
 		}
-		if len(openaiReq.Tools) > 0 && !c.isDeepSeekReasoner() {
+		if len(openaiReq.Tools) > 0 {
 			// Map ToolChoice to OpenAI format
 			// OpenAI uses "required" instead of Anthropic's "any"
-			// DeepSeek Reasoner does not support tool_choice — it decides tool use via reasoning
-			openaiReq.ToolChoice = convertToolChoiceToOpenAI(req.ToolChoice)
+			// DeepSeek's direct API accepts tools with auto choice, but rejects
+			// forced specific/required tool_choice values for reasoning-backed
+			// models such as V4 Flash/Pro.
+			openaiReq.ToolChoice = c.toolChoiceForModel(model, req.ToolChoice)
 		}
 	}
 
@@ -528,8 +546,8 @@ func (c *OpenAIClient) modelsEndpoint() string {
 
 // SupportsThinking returns true if the model supports extended thinking
 func (c *OpenAIClient) SupportsThinking(model string) bool {
-	// DeepSeek reasoner models support extended thinking
-	if c.isDeepSeek() && strings.Contains(model, "reasoner") {
+	// DeepSeek reasoning-backed models expose reasoning_content.
+	if c.isDeepSeek() && (strings.Contains(model, "reasoner") || strings.HasPrefix(model, "deepseek-v4-")) {
 		return true
 	}
 	// OpenAI o1/o3/o4 models have reasoning but not in the same streaming format
@@ -657,7 +675,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 			if m.Content != "" {
 				msg.Content = m.Content
 			}
-			if c.isDeepSeekReasoner() && m.ReasoningContent != "" {
+			if c.shouldSendReasoningContent() && m.ReasoningContent != "" {
 				msg.ReasoningContent = m.ReasoningContent
 			}
 			for _, tc := range m.ToolCalls {
@@ -680,7 +698,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 			msg.ToolCallID = m.ToolResult.ToolUseID
 		} else {
 			msg.Content = m.Content
-			if c.isDeepSeekReasoner() && m.ReasoningContent != "" {
+			if c.shouldSendReasoningContent() && m.ReasoningContent != "" {
 				msg.ReasoningContent = m.ReasoningContent
 			}
 		}
@@ -739,10 +757,12 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 				},
 			})
 		}
-		if len(openaiReq.Tools) > 0 && !c.isDeepSeekReasoner() {
+		if len(openaiReq.Tools) > 0 {
 			// Map ToolChoice to OpenAI format (same as non-streaming)
-			// DeepSeek Reasoner does not support tool_choice — it decides tool use via reasoning
-			openaiReq.ToolChoice = convertToolChoiceToOpenAI(req.ToolChoice)
+			// DeepSeek's direct API accepts tools with auto choice, but rejects
+			// forced specific/required tool_choice values for reasoning-backed
+			// models such as V4 Flash/Pro.
+			openaiReq.ToolChoice = c.toolChoiceForModel(model, req.ToolChoice)
 		}
 	}
 

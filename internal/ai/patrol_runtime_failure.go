@@ -82,7 +82,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	if err != nil {
 		raw = strings.TrimSpace(err.Error())
 	}
-	detail := truncateString(redactPatrolRuntimeFailureDetail(raw), patrolRuntimeFailureDetailLimit)
+	detail := truncateString(summarizePatrolRuntimeFailureDetail(raw), patrolRuntimeFailureDetailLimit)
 	lower := strings.ToLower(raw)
 
 	failure := patrolRuntimeFailure{
@@ -199,6 +199,8 @@ func summarizePatrolRuntimeFailureDetail(raw string) string {
 		strings.Contains(lower, "tools are not supported") ||
 		strings.Contains(lower, "no endpoints found") && strings.Contains(lower, "tool"):
 		return "Provider rejected Patrol tool calls. Choose a Patrol model and endpoint with tool-call support."
+	case strings.Contains(lower, "reasoning_content"):
+		return "Provider rejected Patrol reasoning state. Retry with a provider route that supports the selected model's reasoning and tool protocol."
 	case strings.Contains(lower, "insufficient balance") ||
 		strings.Contains(lower, "402") ||
 		strings.Contains(lower, "payment required") ||

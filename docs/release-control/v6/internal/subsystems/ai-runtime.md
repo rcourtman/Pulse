@@ -1295,6 +1295,15 @@ OpenAI-compatible chat streams. Provider reads that return payload bytes with
 process the buffered frame set and route tool-call assembly plus final done
 event emission through the same canonical finalizer used for `[DONE]` instead
 of dropping the last chunk or leaving tool calls unfinalized on clean close.
+That same provider-transport boundary owns OpenAI-compatible tool protocol
+adaptation. When a direct provider such as DeepSeek accepts tools but rejects
+forced specific or required `tool_choice` values, the shared OpenAI-compatible
+client must degrade offered-tool requests to provider-supported auto tool
+selection instead of surfacing a raw provider protocol error to Assistant or
+Patrol. Reasoning-backed provider turns that return tool calls with
+`reasoning_content` must preserve that reasoning state on the following
+tool-result turn when the provider requires it, so Assistant and Patrol can
+complete multi-turn tool use against live BYOK providers.
 That same browser-owned chat read model must keep target normalization helper-
 driven. Assistant shells may still derive legacy VM identifiers or display
 labels for read-only targeting, but they must do so through shared helpers and

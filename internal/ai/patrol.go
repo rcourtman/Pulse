@@ -229,6 +229,10 @@ func canonicalPatrolFindingIDs(ids []string) []string {
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
 	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier)
 	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
+	record.ErrorSummary = strings.TrimSpace(redactPatrolRuntimeFailureDetail(record.ErrorSummary))
+	if strings.TrimSpace(record.ErrorDetail) != "" {
+		record.ErrorDetail = truncateString(summarizePatrolRuntimeFailureDetail(record.ErrorDetail), patrolRuntimeFailureDetailLimit)
+	}
 	return record
 }
 

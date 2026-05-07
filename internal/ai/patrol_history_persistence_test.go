@@ -661,8 +661,11 @@ func TestPatrolHistoryPersistenceAdapter_PreservesEmptySnapshotsAndParityFields(
 	if loaded[0].ErrorSummary != "Selected model does not support Patrol tools" {
 		t.Fatalf("expected ErrorSummary to survive persistence, got %q", loaded[0].ErrorSummary)
 	}
-	if loaded[0].ErrorDetail != "provider rejected tool_choice" {
-		t.Fatalf("expected ErrorDetail to survive persistence, got %q", loaded[0].ErrorDetail)
+	if strings.Contains(loaded[0].ErrorDetail, "tool_choice") {
+		t.Fatalf("expected ErrorDetail to serialize safe classified detail, got %q", loaded[0].ErrorDetail)
+	}
+	if !strings.Contains(loaded[0].ErrorDetail, "Provider rejected Patrol tool calls") {
+		t.Fatalf("expected ErrorDetail to preserve actionable provider classification, got %q", loaded[0].ErrorDetail)
 	}
 }
 
