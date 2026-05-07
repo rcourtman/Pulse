@@ -607,7 +607,7 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   // Load session messages
-  const loadSession = async (id: string) => {
+  const loadSession = async (id: string): Promise<boolean> => {
     try {
       const msgs = await AIChatAPI.getMessages(id);
       setMessages(
@@ -620,9 +620,11 @@ export function useChat(options: UseChatOptions = {}) {
         })),
       );
       setSessionId(id);
+      return true;
     } catch (error) {
       logger.error('[useChat] Failed to load session:', error);
       notificationStore.error('Failed to load session');
+      return false;
     }
   };
 

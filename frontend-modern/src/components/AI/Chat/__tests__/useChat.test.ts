@@ -1010,8 +1010,9 @@ describe('useChat', () => {
       ]);
 
       const { value: chat, dispose } = withRoot(() => useChat());
-      await chat.loadSession('sess-42');
+      const loaded = await chat.loadSession('sess-42');
 
+      expect(loaded).toBe(true);
       expect(chat.sessionId()).toBe('sess-42');
       const msgs = chat.messages();
       expect(msgs).toHaveLength(2);
@@ -1026,8 +1027,9 @@ describe('useChat', () => {
       mockGetMessages.mockRejectedValue(new Error('not found'));
 
       const { value: chat, dispose } = withRoot(() => useChat());
-      await chat.loadSession('bad-id');
+      const loaded = await chat.loadSession('bad-id');
 
+      expect(loaded).toBe(false);
       expect(mockNotifyError).toHaveBeenCalledWith('Failed to load session');
       expect(chat.messages()).toEqual([]);
       dispose();

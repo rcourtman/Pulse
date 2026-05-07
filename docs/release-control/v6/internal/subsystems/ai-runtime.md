@@ -289,7 +289,11 @@ runtime cost control, and shared AI transport surfaces.
     safe visible briefing: the next chat turn must carry
     `autonomous_mode:false` even when the summary is context-only and has no
     queued action, while the visible badge/action copy must still reflect the
-    actual last-known action state instead of inventing a pending approval.
+    actual last-known action state instead of inventing a pending approval. That
+    restoration is success-bound: if the underlying session message load fails,
+    the drawer must leave the current context untouched instead of applying
+    summary-derived Patrol or approval state for a session the operator is not
+    actually viewing.
     Before `/api/ai/sessions` returns summaries with stored handoff action
     references, the chat runtime must refresh their safe approval/action status
     from the canonical approval store and action-audit store. Session listing is

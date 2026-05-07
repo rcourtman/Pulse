@@ -913,7 +913,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // New conversation
   const handleNewConversation = async () => {
-    await chat.newSession();
+    const session = await chat.newSession();
+    if (!session) return;
     aiChatStore.clearContext?.();
     setShowSessions(false);
   };
@@ -947,7 +948,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Load session
   const handleLoadSession = async (sessionId: string) => {
     const session = sessions().find((candidate) => candidate.id === sessionId);
-    await chat.loadSession(sessionId);
+    const loaded = await chat.loadSession(sessionId);
+    if (!loaded) return;
     const restoredContext = buildSessionHandoffContext(session);
     if (restoredContext) {
       aiChatStore.setContext(restoredContext);
