@@ -747,6 +747,12 @@ func (e *PulseToolExecutor) SetContext(targetType, targetID string, autonomous b
 	e.isAutonomous = autonomous
 }
 
+// SetAutonomousMode updates only the execution mode, preserving any
+// session-scoped target context already attached to this executor clone.
+func (e *PulseToolExecutor) SetAutonomousMode(enabled bool) {
+	e.isAutonomous = enabled
+}
+
 // SetOrgID sets the org scope used when creating approval records.
 func (e *PulseToolExecutor) SetOrgID(orgID string) {
 	e.orgID = normalizeExecutorOrgID(orgID)

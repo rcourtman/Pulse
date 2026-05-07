@@ -271,6 +271,10 @@ runtime cost control, and shared AI transport surfaces.
     backend/API execution boundary, does not mutate the user's persistent AI
     control setting, and prevents product-originated Patrol action context from
     becoming silent command authority.
+    The chat runtime must apply any request-local autonomous-mode override to
+    both the per-request `AgenticLoop` and the cloned `PulseToolExecutor`;
+    persistent autonomous settings must not leak into scoped approval-required
+    handoffs through executor state.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not
     mutate chat control settings, execute tools, or reveal raw command payloads.

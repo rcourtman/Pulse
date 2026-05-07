@@ -38,6 +38,11 @@ func TestPulseToolExecutor_Setters(t *testing.T) {
 	assert.Equal(t, "101", exec.targetID)
 	assert.True(t, exec.isAutonomous)
 
+	exec.SetAutonomousMode(false)
+	assert.Equal(t, "vm", exec.targetType)
+	assert.Equal(t, "101", exec.targetID)
+	assert.False(t, exec.isAutonomous)
+
 	exec.SetControlLevel(ControlLevelControlled)
 	assert.Equal(t, ControlLevelControlled, exec.controlLevel)
 

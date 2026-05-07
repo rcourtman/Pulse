@@ -568,6 +568,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if req.AutonomousMode != nil {
 		autonomousMode = *req.AutonomousMode
 	}
+	if executor != nil {
+		executor.SetAutonomousMode(autonomousMode)
+	}
 	selectedModel = configuredModel
 	if overrideModel != "" {
 		selectedModel = overrideModel

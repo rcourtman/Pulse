@@ -3,9 +3,11 @@ package chat
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -17,6 +19,27 @@ import (
 
 type stubServiceProvider struct {
 	streamFn func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
+}
+
+type recordingAgentServer struct {
+	calls atomic.Int32
+}
+
+func (s *recordingAgentServer) GetConnectedAgents() []agentexec.ConnectedAgent {
+	return []agentexec.ConnectedAgent{{
+		AgentID:  "agent-1",
+		Hostname: "node-1",
+	}}
+}
+
+func (s *recordingAgentServer) ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+	s.calls.Add(1)
+	return &agentexec.CommandResultPayload{
+		RequestID: cmd.RequestID,
+		Success:   true,
+		Stdout:    "executed",
+		ExitCode:  0,
+	}, nil
 }
 
 type handoffUnifiedProvider struct {
@@ -179,6 +202,100 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 	if len(messages) < 2 {
 		t.Fatalf("expected at least 2 messages, got %d", len(messages))
+	}
+}
+
+func TestService_ExecuteStream_RequestAutonomousOverrideUpdatesToolExecutor(t *testing.T) {
+	installTestApprovalStore(t, nil)
+
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	store.GetSessionFSM("sess-request-override").State = StateReading
+
+	agentServer := &recordingAgentServer{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		Policy:       agentexec.DefaultPolicy(),
+		AgentServer:  agentServer,
+		ControlLevel: tools.ControlLevelAutonomous,
+	})
+	executor.SetContext("agent", "agent-1", true)
+
+	providerCallCount := 0
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			providerCallCount++
+			if providerCallCount == 1 {
+				callback(providers.StreamEvent{
+					Type: "tool_start",
+					Data: providers.ToolStartEvent{ID: "call-restart", Name: "pulse_control"},
+				})
+				callback(providers.StreamEvent{
+					Type: "done",
+					Data: providers.DoneEvent{
+						ToolCalls: []providers.ToolCall{{
+							ID:   "call-restart",
+							Name: "pulse_control",
+							Input: map[string]interface{}{
+								"type":    "command",
+								"command": "systemctl restart nginx",
+							},
+						}},
+					},
+				})
+				return nil
+			}
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "done"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+
+	svc := &Service{
+		cfg: &config.AIConfig{
+			ChatModel:    "openai:test",
+			ControlLevel: config.ControlLevelAutonomous,
+		},
+		sessions:       store,
+		executor:       executor,
+		provider:       provider,
+		started:        true,
+		autonomousMode: true,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	approvalRequiredMode := false
+	approvalSeen := false
+	err = svc.ExecuteStream(ctx, ExecuteRequest{
+		SessionID:      "sess-request-override",
+		Prompt:         "restart nginx",
+		AutonomousMode: &approvalRequiredMode,
+		MaxTurns:       2,
+	}, func(event StreamEvent) {
+		if event.Type == "approval_needed" {
+			approvalSeen = true
+			cancel()
+		}
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("expected request to stop while waiting for approval, got %v", err)
+	}
+	if !approvalSeen {
+		t.Fatal("expected approval_needed event from request-local approval mode")
+	}
+	if got := agentServer.calls.Load(); got != 0 {
+		t.Fatalf("expected command not to execute before approval, got %d executions", got)
 	}
 }
 
