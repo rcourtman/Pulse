@@ -45,6 +45,18 @@ type PatrolAPIError = Error & {
 const patrolErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() ? error.message : fallback;
 
+export function resolvePatrolAutonomyLevelForSave(
+  level: PatrolAutonomyLevel,
+  fullModeUnlocked: boolean,
+  autoFixLocked: boolean,
+): PatrolAutonomyLevel {
+  if (autoFixLocked) return 'monitor';
+  if (level === 'assisted' || level === 'full') {
+    return fullModeUnlocked ? 'full' : 'assisted';
+  }
+  return level;
+}
+
 export function usePatrolIntelligenceState() {
   const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
@@ -496,10 +508,14 @@ export function usePatrolIntelligenceState() {
 
   async function handleAutonomyChange(level: PatrolAutonomyLevel) {
     if (isUpdatingAutonomy()) return;
-    if (autoFixLocked() && (level === 'approval' || level === 'assisted')) return;
+    if (autoFixLocked() && level !== 'monitor') return;
 
     const previousLevel = autonomyLevel();
-    const effectiveLevel = level === 'assisted' && fullModeUnlocked() ? 'full' : level;
+    const effectiveLevel = resolvePatrolAutonomyLevelForSave(
+      level,
+      fullModeUnlocked(),
+      autoFixLocked(),
+    );
     setAutonomyLevel(effectiveLevel);
     setIsUpdatingAutonomy(true);
 
@@ -523,6 +539,11 @@ export function usePatrolIntelligenceState() {
     const apiError = err as PatrolAPIError;
     const message = patrolErrorMessage(err, 'Failed to save Patrol configuration');
     const readiness = patrolReadiness();
+    const apiDetails = apiError.details ?? {};
+    const hasReadinessDetails =
+      Boolean(apiDetails.status || apiDetails.provider || apiDetails.model) ||
+      apiError.code === 'patrol_readiness_not_ready';
+    const readinessSummary = apiDetails.readiness_summary ?? apiDetails.summary;
     return {
       message,
       code: apiError.code,
@@ -540,7 +561,17 @@ export function usePatrolIntelligenceState() {
             provider: readiness.provider,
             model: readiness.model,
           }
-        : null,
+        : hasReadinessDetails
+          ? {
+              status: apiDetails.status,
+              cause: apiDetails.cause,
+              summary:
+                readinessSummary ||
+                (apiError.code === 'patrol_readiness_not_ready' ? message : undefined),
+              provider: apiDetails.provider,
+              model: apiDetails.model,
+            }
+          : null,
       runtimeState: runtimeState(),
       blockedReason: blockedReason(),
       blockedCause: patrolStatus()?.blocked_cause,
@@ -551,11 +582,11 @@ export function usePatrolIntelligenceState() {
     setIsSavingAdvanced(true);
     setAdvancedSettingsError(null);
     try {
-      let effectiveLevel = autonomyLevel();
-      const inAutoFix = effectiveLevel === 'assisted' || effectiveLevel === 'full';
-      if (inAutoFix) {
-        effectiveLevel = fullModeUnlocked() ? 'full' : 'assisted';
-      }
+      const effectiveLevel = resolvePatrolAutonomyLevelForSave(
+        autonomyLevel(),
+        fullModeUnlocked(),
+        autoFixLocked(),
+      );
 
       const result = await updatePatrolAutonomySettings({
         autonomy_level: effectiveLevel,

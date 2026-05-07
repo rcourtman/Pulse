@@ -369,7 +369,15 @@ after a page render: recoverable Patrol provider/model settings saves must
 persist and echo structured readiness cause metadata, manual run requests must
 return the structured readiness reason if a stale UI still submits, and
 scheduled or scoped alert/anomaly runs must skip before calling the model while
-preserving the blocked reason and cause in Patrol status.
+preserving the blocked reason and cause in Patrol status. The Patrol
+configuration state owner must also clamp stale investigation/remediation
+autonomy back to findings-only `monitor` before submitting Apply Configuration
+when the safe-remediation entitlement is not effective, so an expired or
+downgraded plan cannot turn a recoverable configuration review into a Pro-only
+save failure. The same inline error surface must render any Patrol readiness
+provider, model, and summary carried by the failure object, and keep the
+provider-settings action immediately available before the operator chooses to
+open the Assistant handoff.
 That same Patrol-owned presentation rule also applies to the findings empty
 state: `frontend-modern/src/components/AI/FindingsPanel.tsx` must not treat
 `0 active findings` as equivalent to "your infrastructure looks healthy" when

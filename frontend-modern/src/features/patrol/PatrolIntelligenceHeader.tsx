@@ -17,7 +17,28 @@ import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
+import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
+import type { PatrolConfigurationFailureInput } from './patrolInvestigationContextModel';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
+
+const isNonEmptyConfigurationDetail = (value?: string | null): value is string =>
+  Boolean(value?.trim());
+
+export function getPatrolConfigurationFailureInlineDetails(
+  failure: PatrolConfigurationFailureInput,
+): string[] {
+  const readiness = failure.readiness ?? null;
+  const codeAndCause = [failure.code, readiness?.cause || failure.blockedCause]
+    .filter(isNonEmptyConfigurationDetail)
+    .join(' · ');
+
+  return [
+    codeAndCause || undefined,
+    readiness?.summary ? `Readiness: ${readiness.summary}` : undefined,
+    readiness?.provider ? `Provider: ${readiness.provider}` : undefined,
+    readiness?.model ? `Model: ${readiness.model}` : undefined,
+  ].filter(isNonEmptyConfigurationDetail);
+}
 
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
@@ -414,22 +435,36 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                           >
                             <p class="text-xs font-semibold">Patrol configuration was not saved</p>
                             <p class="mt-1 text-xs leading-relaxed">{failure().message}</p>
-                            <Show when={failure().code || failure().readiness?.cause}>
-                              <p class="mt-1 text-[11px] leading-relaxed opacity-80">
-                                {[failure().code, failure().readiness?.cause]
-                                  .filter(Boolean)
-                                  .join(' · ')}
-                              </p>
-                            </Show>
-                            <button
-                              type="button"
-                              data-testid="patrol-configuration-error-assistant-button"
-                              onClick={state.openAdvancedSettingsErrorInAssistant}
-                              class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-950 transition-colors hover:bg-white dark:border-red-700 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-900/50"
+                            <Show
+                              when={
+                                getPatrolConfigurationFailureInlineDetails(failure()).length > 0
+                              }
                             >
-                              <MessageSquareIcon class="h-3.5 w-3.5" />
-                              Discuss with Assistant
-                            </button>
+                              <ul class="mt-1 space-y-0.5 text-[11px] leading-relaxed opacity-80">
+                                <For each={getPatrolConfigurationFailureInlineDetails(failure())}>
+                                  {(detail) => <li>{detail}</li>}
+                                </For>
+                              </ul>
+                            </Show>
+                            <div class="mt-2 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                data-testid="patrol-configuration-error-assistant-button"
+                                onClick={state.openAdvancedSettingsErrorInAssistant}
+                                class="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-950 transition-colors hover:bg-white dark:border-red-700 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-900/50"
+                              >
+                                <MessageSquareIcon class="h-3.5 w-3.5" />
+                                Discuss with Assistant
+                              </button>
+                              <a
+                                href={PATROL_PROVIDER_SETTINGS_ACTION.href}
+                                data-testid="patrol-configuration-error-settings-link"
+                                class="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-950 transition-colors hover:bg-white dark:border-red-700 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-900/50"
+                              >
+                                <SettingsIcon class="h-3.5 w-3.5" />
+                                {PATROL_PROVIDER_SETTINGS_ACTION.label}
+                              </a>
+                            </div>
                           </div>
                         )}
                       </Show>

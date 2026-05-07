@@ -230,13 +230,16 @@ const scopedTriggerPatrolStatus = {
 
 async function mockBlockedPatrolRuntimeState(
   page: Page,
-  options: { autonomyRoute?: (route: Route) => Promise<void> } = {},
+  options: {
+    autonomyRoute?: (route: Route) => Promise<void>;
+    status?: Record<string, unknown>;
+  } = {},
 ): Promise<void> {
   await page.route("**/api/ai/patrol/status", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(blockedPatrolStatus),
+      body: JSON.stringify(options.status ?? blockedPatrolStatus),
     });
   });
 
@@ -562,6 +565,18 @@ test.describe("Patrol runtime-state browser contract", () => {
     ]);
     await ensureAuthenticated(page);
     await mockBlockedPatrolRuntimeState(page, {
+      status: {
+        ...blockedPatrolStatus,
+        readiness: {
+          status: "not_ready",
+          ready: false,
+          cause: "model_unsupported_tools",
+          summary: PATROL_REASONING_ONLY_REJECTION,
+          provider: "openrouter",
+          model: "openrouter:deepseek/deepseek-r1",
+          checks: [],
+        },
+      },
       autonomyRoute: async (route) => {
         if (route.request().method() !== "PUT") {
           await route.fulfill({
@@ -645,6 +660,14 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(inlineError).toBeVisible();
     await expect(inlineError).toContainText(PATROL_AUTONOMY_PRO_REQUIRED);
     await expect(inlineError).toContainText("patrol_autonomy_pro_required");
+    await expect(inlineError).toContainText(PATROL_REASONING_ONLY_REJECTION);
+    await expect(inlineError).toContainText("Provider: openrouter");
+    await expect(inlineError).toContainText(
+      "Model: openrouter:deepseek/deepseek-r1",
+    );
+    await expect(
+      inlineError.getByRole("link", { name: "Open Patrol provider settings" }),
+    ).toHaveAttribute("href", "/settings/system-ai");
     await inlineError
       .getByTestId("patrol-configuration-error-assistant-button")
       .click();

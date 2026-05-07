@@ -845,7 +845,10 @@ the canonical monitored-system blocked payload.
    and the Patrol autonomy save contract, so Community/free runtime payloads
    may persist only `monitor` autonomy settings through
    `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and `full` return
-   the canonical license-required response instead of a generic save failure
+   the canonical license-required response instead of a generic save failure,
+   and Patrol frontend state owners must clamp stale paid autonomy to `monitor`
+   before submitting that endpoint when the safe-remediation entitlement is not
+   effective
    and the Patrol settings-save readiness contract, so
    `/api/settings/ai/update` may save a selected Patrol provider/model even
    when that model is not ready for tool-backed Patrol execution, but it must
@@ -3777,4 +3780,8 @@ configuration from paid remediation autonomy. `GET /api/ai/patrol/autonomy`
 continues to clamp effective Community autonomy to `monitor`, and
 `PUT /api/ai/patrol/autonomy` in the open-source/free adapter must accept and
 persist only `monitor` settings while returning the canonical license-required
-payload for investigation or remediation autonomy levels.
+payload for investigation or remediation autonomy levels. Frontend Patrol state
+owners must not rely on that 402 as normal control flow for stale local state:
+when the current entitlement locks safe remediation, they submit `monitor` even
+if older persisted settings or a previous entitlement left `approval`,
+`assisted`, or `full` in memory.
