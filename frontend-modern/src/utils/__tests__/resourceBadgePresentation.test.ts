@@ -70,7 +70,8 @@ describe('resourceBadgePresentation', () => {
           platformData: {
             sources: ['agent', 'docker'],
             agent: {
-              platform: 'unraid',
+              platform: 'linux',
+              hostProfile: 'unraid',
               osName: 'Unraid',
               osVersion: '7.1.0',
             },
@@ -89,6 +90,45 @@ describe('resourceBadgePresentation', () => {
         }),
       ).map((badge) => badge.label),
     ).toEqual(['Docker / Podman']);
+  });
+
+  it('uses governed host identity tokens for legacy agent profile reports', () => {
+    expect(
+      getInfrastructureSystemIdentityBadges(
+        makeResource({
+          type: 'docker-host',
+          platformType: 'docker',
+          sourceType: 'hybrid',
+          platformData: {
+            sources: ['agent', 'docker'],
+            agent: {
+              platform: 'linux',
+              osName: 'Unraid OS 7.1.0',
+              osVersion: '7.1.0',
+            },
+          },
+        }),
+      ).map((badge) => badge.label),
+    ).toEqual(['Unraid']);
+  });
+
+  it('matches governed platform display tokens inside reported host identity text', () => {
+    expect(
+      getInfrastructureSystemIdentityBadges(
+        makeResource({
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'agent',
+          platformData: {
+            sources: ['agent'],
+            agent: {
+              platform: 'linux',
+              osName: 'TrueNAS SCALE',
+            },
+          },
+        }),
+      ).map((badge) => badge.label),
+    ).toEqual(['TrueNAS']);
   });
 
   it('keeps API-backed platform identity ahead of reported host OS', () => {

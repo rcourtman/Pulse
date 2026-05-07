@@ -1,6 +1,14 @@
 import type { PlatformType, SourceType, Resource, ResourceType } from '@/types/resource';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { getPlatformAgentRecord, getPlatformDataRecord } from '@/utils/agentResources';
+import {
+  AGENT_HOST_PROFILE_IDS,
+  SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES,
+  SOURCE_PLATFORM_MANIFEST_ENTRIES,
+  getAgentHostProfileFamily,
+  getAgentHostProfileManifestEntry,
+  getSourcePlatformManifestEntry,
+} from '@/utils/platformSupportManifest';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getSourceTypePresentation } from '@/utils/sourceTypePresentation';
 import {
@@ -26,20 +34,12 @@ const PRIMARY_SYSTEM_SOURCE_PRIORITY: KnownSourcePlatform[] = [
   'proxmox-pmg',
   'truenas',
   'vmware-vsphere',
-  'unraid',
+  ...(AGENT_HOST_PROFILE_IDS.filter((profileId) =>
+    getSourcePlatformManifestEntry(profileId),
+  ) as KnownSourcePlatform[]),
   'synology-dsm',
   'microsoft-hyperv',
   'kubernetes',
-];
-
-const knownHostIdentityPlatformPatterns: Array<{
-  pattern: RegExp;
-  source: KnownSourcePlatform;
-}> = [
-  { pattern: /\btrue\s*nas\b|\btruenas\b/i, source: 'truenas' },
-  { pattern: /\bunraid\b/i, source: 'unraid' },
-  { pattern: /\bsynology\b|\bdiskstation\b|\bdsm\b/i, source: 'synology-dsm' },
-  { pattern: /\bhyper-?v\b/i, source: 'microsoft-hyperv' },
 ];
 
 const hostOsLabelPatterns: Array<{ pattern: RegExp; label: string }> = [
@@ -157,9 +157,52 @@ const firstSystemSource = (
   return PRIMARY_SYSTEM_SOURCE_PRIORITY.find((source) => sourceSet.has(source)) ?? null;
 };
 
+const textContainsToken = (value: string, token: string): boolean => {
+  const normalizedToken = token.trim().toLowerCase();
+  return Boolean(normalizedToken) && value.includes(normalizedToken);
+};
+
+const getHostIdentityAgentProfile = (value: string) => {
+  const exactProfile = getAgentHostProfileManifestEntry(value);
+  if (exactProfile) return exactProfile;
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+
+  return (
+    SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES.find((profile) =>
+      [profile.id, profile.family, ...profile.hostIdentityTokens].some((token) =>
+        textContainsToken(normalized, token),
+      ),
+    ) ?? null
+  );
+};
+
+const getHostIdentityPlatform = (value: string) => {
+  const exactPlatform = getSourcePlatformManifestEntry(value);
+  if (exactPlatform) return exactPlatform;
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+
+  return (
+    SOURCE_PLATFORM_MANIFEST_ENTRIES.filter(
+      (platform) => platform.id !== 'agent' && platform.id !== 'docker',
+    ).find((platform) =>
+      [platform.id, platform.family, ...platform.aliases, ...platform.displayTokens].some((token) =>
+        textContainsToken(normalized, token),
+      ),
+    ) ?? null
+  );
+};
+
 const getKnownHostIdentitySource = (...values: string[]): KnownSourcePlatform | null => {
   for (const value of values) {
     if (!value) continue;
+    const profile = getHostIdentityAgentProfile(value);
+    if (profile && getSourcePlatformManifestEntry(profile.id)) {
+      return profile.id as KnownSourcePlatform;
+    }
     const normalized = normalizeSourcePlatformKey(value);
     if (
       normalized &&
@@ -169,8 +212,10 @@ const getKnownHostIdentitySource = (...values: string[]): KnownSourcePlatform | 
     ) {
       return normalized;
     }
-    const match = knownHostIdentityPlatformPatterns.find(({ pattern }) => pattern.test(value));
-    if (match) return match.source;
+    const manifestPlatform = getHostIdentityPlatform(value);
+    if (manifestPlatform && manifestPlatform.id !== 'agent' && manifestPlatform.id !== 'docker') {
+      return manifestPlatform.id as KnownSourcePlatform;
+    }
   }
   return null;
 };
@@ -188,9 +233,23 @@ const getAgentSystemIdentityBadge = (resource: Resource): ResourceBadge | null =
   const agent = getPlatformAgentRecord(resource);
   if (!agent) return null;
 
+  const hostProfile = trimString(agent.hostProfile);
   const platform = trimString(agent.platform);
   const osName = trimString(agent.osName);
   const osVersion = trimString(agent.osVersion);
+  if (hostProfile) {
+    const badge = getSourcePlatformBadge(hostProfile);
+    const profileFamily = getAgentHostProfileFamily(hostProfile);
+    const label = badge?.label ?? profileFamily;
+    if (label) {
+      return {
+        label,
+        classes: badge?.classes ?? `${baseBadge} ${typeClasses}`,
+        title: titleFromParts(osName || badge?.title || profileFamily || label, osVersion) ?? label,
+      };
+    }
+  }
+
   const knownSource = getKnownHostIdentitySource(platform, osName);
   if (knownSource) {
     const badge = getSourcePlatformBadge(knownSource);

@@ -198,7 +198,8 @@ describe('UnifiedResourceTable performance contract', () => {
           platformData: {
             sources: ['agent', 'docker'],
             agent: {
-              platform: 'unraid',
+              platform: 'linux',
+              hostProfile: 'unraid',
               osName: 'Unraid',
               osVersion: '7.1.0',
             },

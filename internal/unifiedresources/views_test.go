@@ -700,9 +700,9 @@ func TestView_HostViewAccessors(t *testing.T) {
 	if v.ID() != "host-1" || v.Name() != "agent-host-1" {
 		t.Fatalf("expected ID/Name to match, got id=%q name=%q", v.ID(), v.Name())
 	}
-	if v.Hostname() != "agent-host-1" || v.Platform() != "linux" || v.OSName() != "Ubuntu" || v.OSVersion() != "24.04" || v.KernelVersion() != "6.8.0" || v.Architecture() != "amd64" {
-		t.Fatalf("expected agent OS accessors to match, got hostname=%q platform=%q os=%q %q kernel=%q arch=%q",
-			v.Hostname(), v.Platform(), v.OSName(), v.OSVersion(), v.KernelVersion(), v.Architecture())
+	if v.Hostname() != "agent-host-1" || v.Platform() != "linux" || v.HostProfile() != "" || v.OSName() != "Ubuntu" || v.OSVersion() != "24.04" || v.KernelVersion() != "6.8.0" || v.Architecture() != "amd64" {
+		t.Fatalf("expected agent OS accessors to match, got hostname=%q platform=%q profile=%q os=%q %q kernel=%q arch=%q",
+			v.Hostname(), v.Platform(), v.HostProfile(), v.OSName(), v.OSVersion(), v.KernelVersion(), v.Architecture())
 	}
 	if v.MachineID() != "machine-1" || v.CPUCount() != 16 {
 		t.Fatalf("expected machine id/cpu count to match, got machine=%q cpus=%d", v.MachineID(), v.CPUCount())

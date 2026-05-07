@@ -404,6 +404,7 @@ export interface ResourceAgentMeta {
   agentVersion?: string;
   hostname?: string;
   platform?: string;
+  hostProfile?: string;
   osName?: string;
   osVersion?: string;
   kernelVersion?: string;

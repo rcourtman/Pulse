@@ -38,6 +38,11 @@ describe('sourcePlatforms', () => {
       expect(getSourcePlatformPresentation('agent')?.tone).toContain('emerald');
     });
 
+    it('matches governed display tokens from the platform manifest', () => {
+      expect(getSourcePlatformPresentation('Unraid')).toMatchObject({ label: 'Unraid' });
+      expect(getSourcePlatformPresentation('Proxmox VE')).toMatchObject({ label: 'PVE' });
+    });
+
     it('returns null for unknown platforms', () => {
       expect(getSourcePlatformPresentation('custom-platform')).toBeNull();
       expect(getSourcePlatformPresentation('')).toBeNull();

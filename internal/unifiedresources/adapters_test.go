@@ -142,6 +142,32 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostProjectsAgentHostProfile(t *testing.T) {
+	host := models.Host{
+		ID:        "tower-host",
+		Hostname:  "tower",
+		Platform:  "unraid",
+		OSName:    "Unraid",
+		OSVersion: "7.1.0",
+		Status:    "online",
+		Unraid:    &models.HostUnraidStorage{ArrayStarted: true},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Technology != "linux" {
+		t.Fatalf("Technology = %q, want linux runtime platform", resource.Technology)
+	}
+	if resource.Agent == nil {
+		t.Fatal("expected agent payload")
+	}
+	if resource.Agent.Platform != "linux" {
+		t.Fatalf("agent platform = %q, want linux runtime platform", resource.Agent.Platform)
+	}
+	if resource.Agent.HostProfile != "unraid" {
+		t.Fatalf("agent host profile = %q, want unraid", resource.Agent.HostProfile)
+	}
+}
+
 func TestResourceFromVMPreservesProxmoxPool(t *testing.T) {
 	vm := models.VM{
 		ID:       "cluster-a:pve-a:101",

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
@@ -112,6 +113,8 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	}
 
 	identity := identityFromHost(host)
+	hostProfile := agentHostProfileForHost(host)
+	platform := agentRuntimePlatformForHost(host, hostProfile)
 
 	agent := &AgentData{
 		AgentID:           host.ID,
@@ -122,7 +125,8 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		TokenName:         host.TokenName,
 		TokenHint:         host.TokenHint,
 		TokenLastUsedAt:   host.TokenLastUsedAt,
-		Platform:          host.Platform,
+		Platform:          platform,
+		HostProfile:       hostProfile,
 		OSName:            host.OSName,
 		OSVersion:         host.OSVersion,
 		KernelVersion:     host.KernelVersion,
@@ -398,7 +402,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 
 	resource := Resource{
 		Type:       ResourceTypeAgent,
-		Technology: strings.TrimSpace(host.Platform),
+		Technology: strings.TrimSpace(platform),
 		Name:       name,
 		Status:     storageStatus(statusFromString(host.Status), agent.StorageRisk),
 		LastSeen:   host.LastSeen,
@@ -409,6 +413,25 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	}
 
 	return resource, identity
+}
+
+func agentRuntimePlatformForHost(host models.Host, hostProfile string) string {
+	return platformsupport.NormalizeRuntimePlatformForAgentHostProfile(hostProfile, host.Platform)
+}
+
+func agentHostProfileForHost(host models.Host) string {
+	if host.Unraid != nil {
+		return agentHostProfileIDFromIdentity("unraid")
+	}
+	return agentHostProfileIDFromIdentity(host.OSName, host.Platform)
+}
+
+func agentHostProfileIDFromIdentity(values ...string) string {
+	profile, ok := platformsupport.AgentHostProfileForIdentity(values...)
+	if !ok {
+		return ""
+	}
+	return profile.ID
 }
 
 func resourceFromHostUnraidStorage(host models.Host) (Resource, ResourceIdentity) {

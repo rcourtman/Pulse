@@ -71,6 +71,11 @@ export type {
 const entriesById = new Map<string, SourcePlatformManifestEntry>(
   SOURCE_PLATFORM_MANIFEST_ENTRIES.map((platform) => [platform.id, platform] as const),
 );
+const entriesByDisplayToken = new Map<string, SourcePlatformManifestEntry>(
+  SOURCE_PLATFORM_MANIFEST_ENTRIES.flatMap((platform) =>
+    platform.displayTokens.map((token) => [token.trim().toLowerCase(), platform] as const),
+  ),
+);
 const agentHostProfileEntriesById = new Map<string, SourceAgentHostProfileManifestEntry>(
   SOURCE_AGENT_HOST_PROFILE_MANIFEST_ENTRIES.map((profile) => [profile.id, profile] as const),
 );
@@ -121,7 +126,7 @@ export const getSourcePlatformManifestEntry = (
 
   const aliasMap = SOURCE_PLATFORM_ALIAS_MAP as Record<string, string>;
   const platformId = aliasMap[normalized] || normalized;
-  return entriesById.get(platformId) || null;
+  return entriesById.get(platformId) || entriesByDisplayToken.get(normalized) || null;
 };
 
 export const getAgentHostProfileManifestEntry = (

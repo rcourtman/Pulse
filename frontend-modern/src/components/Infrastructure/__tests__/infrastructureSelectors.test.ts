@@ -251,7 +251,8 @@ describe('infrastructureSelectors', () => {
           platformData: {
             sources: ['agent', 'docker'],
             agent: {
-              platform: 'unraid',
+              platform: 'linux',
+              hostProfile: 'unraid',
               osName: 'Unraid',
             },
           },

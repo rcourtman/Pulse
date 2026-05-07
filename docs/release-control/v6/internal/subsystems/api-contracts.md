@@ -814,6 +814,9 @@ the canonical monitored-system blocked payload.
     `linux`, while `agentIdentity.hostProfile` carries the governed profile id
     such as `unraid`; frontend clients must not re-promote those profile ids
     into first-class platform types.
+    Unified-resource agent payloads use the same split: `agent.platform` is
+    the normalized runtime platform and `agent.hostProfile` is the optional
+    governed profile id for host/appliance presentation.
     The API aggregator must resolve host-profile identity tokens and runtime
     platform fallback values through the generated platform-support backend
     projection in `internal/platformsupport/manifest_generated.go`, so payload
