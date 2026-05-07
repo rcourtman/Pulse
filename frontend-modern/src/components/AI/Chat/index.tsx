@@ -128,7 +128,6 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
   const actionCount = summary.action_count ?? 0;
   const resourceCount = summary.resource_count ?? 0;
   const findingId = summary.finding_id?.trim() || undefined;
-  const requiresApproval = Boolean(summary.requires_approval || actionCount > 0);
   const isPatrol = isPatrolSessionHandoff(summary);
   const title = isPatrol
     ? resourceLabel
@@ -157,7 +156,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       updatedAt: summary.updated_at,
     },
     findingId,
-    ...(requiresApproval ? { autonomousMode: false } : {}),
+    autonomousMode: false,
     briefing: {
       sourceLabel,
       title,

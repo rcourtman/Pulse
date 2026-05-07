@@ -75,6 +75,28 @@ test.describe("Patrol Assistant operator briefing", () => {
         updated_at: "2026-05-06T12:08:00Z",
       },
     };
+    const contextOnlyHandoffSession = {
+      id: "session-context-only",
+      title: "Context-only Patrol follow-up",
+      created_at: "2026-05-06T12:02:00Z",
+      updated_at: "2026-05-06T12:09:00Z",
+      message_count: 1,
+      handoff_summary: {
+        kind: "patrol_finding",
+        finding_id: "finding-context-only",
+        has_model_context: true,
+        resource_count: 1,
+        primary_resource: {
+          id: "host:web-server",
+          name: "web-server",
+          type: "host",
+          node: "pve-1",
+        },
+        action_count: 0,
+        requires_approval: false,
+        updated_at: "2026-05-06T12:09:00Z",
+      },
+    };
 
     await page.route("**/api/security/status", async (route) => {
       await route.fulfill({
@@ -171,7 +193,7 @@ test.describe("Patrol Assistant operator briefing", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([handoffSession]),
+        body: JSON.stringify([handoffSession, contextOnlyHandoffSession]),
       });
     });
 
@@ -569,6 +591,23 @@ test.describe("Patrol Assistant operator briefing", () => {
     );
     await expect(
       reloadedAssistantContext.getByText("systemctl restart workload.service"),
+    ).toHaveCount(0);
+
+    await page.getByTitle("Pulse Assistant sessions").click();
+    await expect(page.getByText("Context-only Patrol follow-up")).toBeVisible();
+    await expect(page.getByText("Context attached").last()).toBeVisible();
+    await page.getByText("Context-only Patrol follow-up").click();
+
+    const contextOnlyAssistantContext = page.getByLabel("Assistant context");
+    await expect(contextOnlyAssistantContext).toBeVisible();
+    await expect(contextOnlyAssistantContext).toContainText(
+      "Patrol finding on web-server",
+    );
+    await expect(contextOnlyAssistantContext).toContainText(
+      "Finding finding-context-only",
+    );
+    await expect(
+      contextOnlyAssistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
 
     includePendingApproval = false;

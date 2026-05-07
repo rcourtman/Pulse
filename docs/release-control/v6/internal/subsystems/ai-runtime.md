@@ -280,6 +280,12 @@ runtime cost control, and shared AI transport surfaces.
     status, risk level, and timestamp, but it must not expose model-only
     handoff text, action preflight/result bodies, remediation descriptions, raw
     commands, or approval command payloads.
+    When the Assistant drawer restores any session from that `handoff_summary`,
+    it must restore the scoped request-local approval boundary as well as the
+    safe visible briefing: the next chat turn must carry
+    `autonomous_mode:false` even when the summary is context-only and has no
+    queued action, while the visible badge/action copy must still reflect the
+    actual last-known action state instead of inventing a pending approval.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.

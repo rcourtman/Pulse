@@ -658,6 +658,80 @@ describe('AIChat', () => {
       expect(restoredContext.handoffActions).toBeUndefined();
     });
 
+    it('keeps restored Patrol handoffs approval-bound without queued actions', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'gpt-4',
+        chat_model: '',
+        control_level: 'autonomous',
+        autonomous_mode: true,
+        discovery_enabled: true,
+      });
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 's-patrol-context',
+          title: 'Context-only Patrol follow-up',
+          created_at: '',
+          updated_at: '',
+          message_count: 2,
+          handoff_summary: {
+            kind: 'patrol_finding',
+            finding_id: 'finding-context-only',
+            has_model_context: true,
+            resource_count: 1,
+            primary_resource: {
+              id: 'host:web-server',
+              name: 'web-server',
+              type: 'host',
+              node: 'pve-1',
+            },
+            action_count: 0,
+            requires_approval: false,
+          },
+        },
+      ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+
+      expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+      expect(screen.getByText('Context attached')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Context-only Patrol follow-up'));
+
+      await waitFor(() => {
+        expect(mockChat.loadSession).toHaveBeenCalledWith('s-patrol-context');
+        expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
+          expect.objectContaining({
+            findingId: 'finding-context-only',
+            autonomousMode: false,
+            context: expect.objectContaining({
+              actionCount: 0,
+              requiresApproval: false,
+            }),
+            briefing: expect.objectContaining({
+              sourceLabel: 'Pulse Patrol',
+              title: 'Patrol finding on web-server',
+              actionLabel: undefined,
+            }),
+          }),
+        );
+      });
+
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      fireEvent.input(textarea, { target: { value: 'what changed?' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'what changed?',
+        undefined,
+        'finding-context-only',
+        { autonomousMode: false },
+      );
+    });
+
     it('clears stale handoff context when loading a plain session', async () => {
       mockAiChatStore.context = {
         findingId: 'finding-old',
