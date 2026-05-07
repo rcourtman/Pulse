@@ -827,6 +827,10 @@ the canonical monitored-system blocked payload.
    generic hosted AI quota, anonymous Community entitlement, trial CTA,
    account-backed activation support, or full-chat entitlement in normal
    self-hosted v6 GA UI
+   and the Patrol autonomy save contract, so Community/free runtime payloads
+   may persist only `monitor` autonomy settings through
+   `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and `full` return
+   the canonical license-required response instead of a generic save failure
    and the structured investigation-record contract, so unified findings may
    expose `investigation_record` only through the shared
    `aicontracts.InvestigationRecord` payload shape, with frontend API types
@@ -3727,3 +3731,9 @@ re-introduce a per-tab gate on this boundary. The discovery subnet settings
 write path through `SettingsAPI.updateSystemSettings` remains governed by the
 shared `internal/api/` settings boundary and is unaffected by the polling
 scope change.
+The shared Patrol autonomy API contract now separates findings-only monitor
+configuration from paid remediation autonomy. `GET /api/ai/patrol/autonomy`
+continues to clamp effective Community autonomy to `monitor`, and
+`PUT /api/ai/patrol/autonomy` in the open-source/free adapter must accept and
+persist only `monitor` settings while returning the canonical license-required
+payload for investigation or remediation autonomy levels.

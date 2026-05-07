@@ -6723,8 +6723,92 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	json.NewEncoder(w).Encode(settings)
 }
 
-// HandleUpdatePatrolAutonomy has been moved to enterprise.
-// The route now delegates to aiAutoFixEndpoints.HandleUpdatePatrolAutonomy.
+// HandleUpdatePatrolAutonomyMonitorOnly persists findings-only Patrol autonomy
+// settings for builds without the safe remediation extension.
+func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Pulse Patrol service not available", nil)
+		return
+	}
+	cfg := aiService.GetConfig()
+	if cfg == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_configured", "Pulse Patrol not configured", nil)
+		return
+	}
+
+	var req PatrolAutonomySettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
+		return
+	}
+	if !config.IsValidPatrolAutonomyLevel(req.AutonomyLevel) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_autonomy_level",
+			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor', 'approval', 'assisted', or 'full'", req.AutonomyLevel), nil)
+		return
+	}
+	if req.AutonomyLevel != config.PatrolAutonomyMonitor {
+		WriteLicenseRequired(w, featureAIAutoFixKey, "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
+		return
+	}
+
+	if req.InvestigationBudget < 5 {
+		req.InvestigationBudget = 5
+	}
+	if req.InvestigationBudget > 30 {
+		req.InvestigationBudget = 30
+	}
+	if req.InvestigationTimeoutSec < 60 {
+		req.InvestigationTimeoutSec = 60
+	}
+	if req.InvestigationTimeoutSec > 1800 {
+		req.InvestigationTimeoutSec = 1800
+	}
+
+	effectiveUnlocked := cfg.PatrolFullModeUnlocked
+	if req.FullModeUnlocked != nil {
+		effectiveUnlocked = *req.FullModeUnlocked
+	}
+
+	cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+	cfg.PatrolFullModeUnlocked = effectiveUnlocked
+	cfg.PatrolInvestigationBudget = req.InvestigationBudget
+	cfg.PatrolInvestigationTimeoutSec = req.InvestigationTimeoutSec
+
+	persistence := h.getPersistence(r.Context())
+	if persistence == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_configured", "Pulse Patrol not configured", nil)
+		return
+	}
+	if err := persistence.SaveAIConfig(*cfg); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Assistant config", nil)
+		return
+	}
+	if err := aiService.LoadConfig(); err != nil {
+		log.Warn().Err(err).Msg("Patrol autonomy settings saved but config reload failed")
+	}
+
+	settings := PatrolAutonomyResponse{
+		AutonomyLevel:           config.PatrolAutonomyMonitor,
+		FullModeUnlocked:        effectiveUnlocked,
+		InvestigationBudget:     req.InvestigationBudget,
+		InvestigationTimeoutSec: req.InvestigationTimeoutSec,
+	}
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"success":  true,
+		"settings": settings,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write patrol autonomy update response")
+	}
+}
+
+// Premium Patrol autonomy updates have been moved to enterprise.
+// The route delegates to aiAutoFixEndpoints.HandleUpdatePatrolAutonomy.
 
 // maxFindingIDLength is the maximum allowed length for finding IDs in URL paths.
 // Real finding IDs are 16 hex chars (SHA256[:8]), but we accept up to 256 for

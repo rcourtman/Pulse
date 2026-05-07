@@ -214,6 +214,10 @@ profile and assignment columns, but embedded table framing must route through
    handlers and connection ledgers, but they must remain settings/API
    availability resources and must not create install commands, agent tokens, or
    host uninstall/stop-monitoring lifecycle actions.
+   Patrol autonomy API changes are likewise adjacent when they touch shared
+   `internal/api/` route wiring: monitor-mode configuration and remediation
+   entitlement payloads remain AI runtime/API-contract owned and must not create
+   agent lifecycle authority, install-token scope, or fleet command semantics.
    Hosted handoff subjects consumed through the shared API auth boundary must
    already be stable, non-email principals; lifecycle-adjacent routes must not
    recover authority from a blank handoff subject by falling back to contact

@@ -701,7 +701,10 @@ frontend primitive boundary.
     commercial-facing Patrol capability language: Pro-locked helper copy,
     autonomy segmented controls, and run-history/result labels must use
     `Remediate`, `remediated`, or safe remediation wording while legacy API
-    names remain hidden from operators.
+    names remain hidden from operators. The Patrol configuration popover is part
+    of that shared feature-presentation boundary: it must stay viewport-bounded,
+    expose an accessible dialog label, and pass backend save rejection reasons
+    through to the toast surface instead of replacing them with generic copy.
 19. Keep the shared `system-ai` settings shell product-first.
     `frontend-modern/src/components/Settings/AISettings.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,

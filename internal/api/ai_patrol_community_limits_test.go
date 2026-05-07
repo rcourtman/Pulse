@@ -77,13 +77,54 @@ func TestPatrolCommunityAutonomyLockedToMonitor(t *testing.T) {
 		t.Fatalf("expected autonomy %q for Community, got %q", config.PatrolAutonomyMonitor, getResp.AutonomyLevel)
 	}
 
-	// PUT via free adapter should return 402 for Community.
-	freeAdapter := aiAutoFixFreeAdapter{}
-	body := `{"autonomy_level":"approval","investigation_budget":10,"investigation_timeout_sec":120}`
+	// PUT via free adapter should allow findings-only monitor settings and
+	// persist the same clamped runtime limits used by the enterprise handler.
+	freeAdapter := aiAutoFixFreeAdapter{handler: handler}
+	body := `{"autonomy_level":"monitor","investigation_budget":2,"investigation_timeout_sec":30}`
 	putReq := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
 	putRec := httptest.NewRecorder()
 	freeAdapter.HandleUpdatePatrolAutonomy(putRec, putReq)
-	if putRec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402 for Community autonomy update, got %d: %s", putRec.Code, putRec.Body.String())
+	if putRec.Code != http.StatusOK {
+		t.Fatalf("expected monitor update to be allowed for Community, got %d: %s", putRec.Code, putRec.Body.String())
+	}
+	var putResp struct {
+		Success  bool                   `json:"success"`
+		Settings PatrolAutonomyResponse `json:"settings"`
+	}
+	if err := json.Unmarshal(putRec.Body.Bytes(), &putResp); err != nil {
+		t.Fatalf("failed to decode update response: %v", err)
+	}
+	if !putResp.Success {
+		t.Fatalf("expected successful update response, got %+v", putResp)
+	}
+	if putResp.Settings.AutonomyLevel != config.PatrolAutonomyMonitor {
+		t.Fatalf("expected saved autonomy %q, got %q", config.PatrolAutonomyMonitor, putResp.Settings.AutonomyLevel)
+	}
+	if putResp.Settings.InvestigationBudget != 5 || putResp.Settings.InvestigationTimeoutSec != 60 {
+		t.Fatalf("expected clamped budget/timeout 5/60, got %d/%d",
+			putResp.Settings.InvestigationBudget, putResp.Settings.InvestigationTimeoutSec)
+	}
+	saved, err := persistence.LoadAIConfig()
+	if err != nil {
+		t.Fatalf("LoadAIConfig: %v", err)
+	}
+	if saved.PatrolAutonomyLevel != config.PatrolAutonomyMonitor {
+		t.Fatalf("expected persisted autonomy %q, got %q", config.PatrolAutonomyMonitor, saved.PatrolAutonomyLevel)
+	}
+	if saved.PatrolInvestigationBudget != 5 || saved.PatrolInvestigationTimeoutSec != 60 {
+		t.Fatalf("expected persisted budget/timeout 5/60, got %d/%d",
+			saved.PatrolInvestigationBudget, saved.PatrolInvestigationTimeoutSec)
+	}
+
+	// Investigation/remediation autonomy remains Pro-gated.
+	approvalBody := `{"autonomy_level":"approval","investigation_budget":10,"investigation_timeout_sec":120}`
+	approvalReq := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(approvalBody))
+	approvalRec := httptest.NewRecorder()
+	freeAdapter.HandleUpdatePatrolAutonomy(approvalRec, approvalReq)
+	if approvalRec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 for Community premium autonomy update, got %d: %s", approvalRec.Code, approvalRec.Body.String())
+	}
+	if !strings.Contains(approvalRec.Body.String(), "limited to Monitor") {
+		t.Fatalf("expected Pro gate response to explain monitor limit, got %s", approvalRec.Body.String())
 	}
 }

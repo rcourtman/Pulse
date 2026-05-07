@@ -116,6 +116,51 @@ func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T)
 	}
 }
 
+func TestContract_PatrolAutonomyCommunityMonitorUpdatePayload(t *testing.T) {
+	rawToken := "patrol-autonomy-contract-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	body := `{"autonomy_level":"monitor","investigation_budget":2,"investigation_timeout_sec":30}`
+	req := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected monitor autonomy update to be allowed, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Success  bool                   `json:"success"`
+		Settings PatrolAutonomyResponse `json:"settings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode monitor update response: %v", err)
+	}
+	if !resp.Success {
+		t.Fatalf("expected success response, got %+v", resp)
+	}
+	if resp.Settings.AutonomyLevel != config.PatrolAutonomyMonitor ||
+		resp.Settings.InvestigationBudget != 5 ||
+		resp.Settings.InvestigationTimeoutSec != 60 {
+		t.Fatalf("unexpected monitor update settings: %+v", resp.Settings)
+	}
+
+	premiumBody := `{"autonomy_level":"approval","investigation_budget":10,"investigation_timeout_sec":120}`
+	premiumReq := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(premiumBody))
+	premiumReq.Header.Set("X-API-Token", rawToken)
+	premiumRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(premiumRec, premiumReq)
+
+	if premiumRec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected premium autonomy to require license, got %d: %s", premiumRec.Code, premiumRec.Body.String())
+	}
+	if !strings.Contains(premiumRec.Body.String(), "limited to Monitor") {
+		t.Fatalf("expected premium autonomy payload to explain Community monitor limit, got %s", premiumRec.Body.String())
+	}
+}
+
 func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	handlerSource, err := os.ReadFile(filepath.Clean("ai_handler.go"))
 	if err != nil {

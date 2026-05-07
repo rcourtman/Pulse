@@ -1,9 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
 import { ensureAuthenticated, trackBrowserRequests } from "./helpers";
 
 const PATROL_BLOCK_REASON =
   "Connect a provider to power Pulse Assistant and Patrol.";
+const PATROL_AUTONOMY_PRO_REQUIRED =
+  "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.";
 
 function todayAt(hours: number, minutes: number): string {
   const value = new Date();
@@ -221,7 +223,10 @@ const scopedTriggerPatrolStatus = {
   },
 };
 
-async function mockBlockedPatrolRuntimeState(page: Page): Promise<void> {
+async function mockBlockedPatrolRuntimeState(
+  page: Page,
+  options: { autonomyRoute?: (route: Route) => Promise<void> } = {},
+): Promise<void> {
   await page.route("**/api/ai/patrol/status", async (route) => {
     await route.fulfill({
       status: 200,
@@ -239,6 +244,10 @@ async function mockBlockedPatrolRuntimeState(page: Page): Promise<void> {
   });
 
   await page.route("**/api/ai/patrol/autonomy", async (route) => {
+    if (options.autonomyRoute) {
+      await options.autonomyRoute(route);
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -321,6 +330,29 @@ async function mockBlockedPatrolRuntimeState(page: Page): Promise<void> {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ approvals: [] }),
+    });
+  });
+}
+
+async function mockRuntimeCapabilities(
+  page: Page,
+  capabilities: string[],
+): Promise<void> {
+  await page.route("**/api/license/runtime-capabilities", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        capabilities,
+        limits: [],
+        hosted_mode: false,
+        max_history_days: 7,
+        runtime: {
+          build: "community",
+          label: "Pulse Community runtime",
+        },
+        blocked_capabilities: [],
+      }),
     });
   });
 }
@@ -492,7 +524,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await mockBlockedPatrolRuntimeState(page);
 
     await page.getByRole("tab", { name: "Patrol" }).click();
-    await expect(page).toHaveURL(/\/ai/);
+    await expect(page).toHaveURL(/\/patrol/);
 
     await expect(page.getByText("Patrol Paused").first()).toBeVisible();
     await expect(page.getByText("Patrol paused").first()).toBeVisible();
@@ -506,6 +538,101 @@ test.describe("Patrol runtime-state browser contract", () => {
     expect(entitlementsRequests.count()).toBe(0);
     commercialPostureRequests.stop();
     entitlementsRequests.stop();
+  });
+
+  test("shows the server reason when Patrol configuration save is rejected", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only Patrol configuration coverage",
+    );
+
+    let autonomyUpdateCount = 0;
+
+    await mockRuntimeCapabilities(page, [
+      "ai_patrol",
+      "ai_autofix",
+      "ai_alerts",
+    ]);
+    await ensureAuthenticated(page);
+    await mockBlockedPatrolRuntimeState(page, {
+      autonomyRoute: async (route) => {
+        if (route.request().method() !== "PUT") {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              autonomy_level: "monitor",
+              full_mode_unlocked: false,
+              investigation_budget: 15,
+              investigation_timeout_sec: 300,
+            }),
+          });
+          return;
+        }
+
+        autonomyUpdateCount += 1;
+        if (autonomyUpdateCount === 1) {
+          const payload = route.request().postDataJSON() as Record<
+            string,
+            unknown
+          >;
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              success: true,
+              settings: {
+                autonomy_level: payload.autonomy_level ?? "assisted",
+                full_mode_unlocked: payload.full_mode_unlocked ?? false,
+                investigation_budget: payload.investigation_budget ?? 15,
+                investigation_timeout_sec:
+                  payload.investigation_timeout_sec ?? 300,
+              },
+            }),
+          });
+          return;
+        }
+
+        await route.fulfill({
+          status: 402,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "license_required",
+            message: PATROL_AUTONOMY_PRO_REQUIRED,
+            feature: "ai_autofix",
+            upgrade_url: "https://www.pulseproxmox.com/pricing",
+          }),
+        });
+      },
+    });
+
+    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Configure Patrol" }).click();
+    const configPanel = page.getByRole("dialog", {
+      name: "Patrol Configuration",
+    });
+
+    const remediateButton = configPanel.getByRole("button", {
+      name: "Remediate",
+    });
+    await expect(remediateButton).toBeEnabled();
+    await remediateButton.click();
+    await expect.poll(() => autonomyUpdateCount).toBe(1);
+
+    await configPanel.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    const applyButton = configPanel.getByRole("button", {
+      name: "Apply Configuration",
+    });
+    await applyButton.click();
+
+    await expect(page.getByText(PATROL_AUTONOMY_PRO_REQUIRED)).toBeVisible();
+    await expect(page.getByText("Failed to save advanced settings")).toHaveCount(
+      0,
+    );
   });
 
   test("surfaces scoped trigger context inside the summary and split trigger controls on the Patrol page", async ({

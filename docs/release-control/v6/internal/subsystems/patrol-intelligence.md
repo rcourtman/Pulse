@@ -317,6 +317,11 @@ suppress stale healthy summary headlines such as `Health A · 100/100` even if
 the last summary payload still looks healthy. Legacy `/ai` entry points must
 redirect into that same Patrol-owned shell rather than preserving a second
 canonical route.
+That same browser proof now covers the Patrol configuration save contract.
+The advanced Patrol panel must stay within the desktop viewport, scroll its
+own contents to the Apply control, and surface the backend's concrete
+license/validation reason when a save is rejected instead of replacing it with
+a generic `Failed to save advanced settings` toast.
 That same Patrol-owned presentation rule also applies to the findings empty
 state: `frontend-modern/src/components/AI/FindingsPanel.tsx` must not treat
 `0 active findings` as equivalent to "your infrastructure looks healthy" when

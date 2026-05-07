@@ -1246,3 +1246,8 @@ runtime services may reuse one canonical executor configuration, but each chat
 or Patrol run must clone that executor before attaching resolved-context,
 approval-routing, or patrol-finding state so concurrent sessions cannot
 overwrite one another's mutable runtime context.
+That same Patrol runtime boundary owns Community monitor-mode autonomy saves.
+The open-source/free `PUT /api/ai/patrol/autonomy` adapter may persist
+findings-only `monitor` configuration and the governed investigation budget /
+timeout clamps, but it must continue to reject `approval`, `assisted`, and
+`full` autonomy with the canonical safe-remediation license response.

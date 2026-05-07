@@ -64,6 +64,43 @@ func TestAIHandlersUseSafeRemediationCommercialCopy(t *testing.T) {
 	}
 }
 
+func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body := `{"autonomy_level":"monitor","investigation_budget":2,"investigation_timeout_sec":30}`
+	req := newLoopbackRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdatePatrolAutonomyMonitorOnly(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp struct {
+		Success  bool                   `json:"success"`
+		Settings PatrolAutonomyResponse `json:"settings"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.True(t, resp.Success)
+	require.Equal(t, config.PatrolAutonomyMonitor, resp.Settings.AutonomyLevel)
+	require.Equal(t, 5, resp.Settings.InvestigationBudget)
+	require.Equal(t, 60, resp.Settings.InvestigationTimeoutSec)
+
+	saved, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, config.PatrolAutonomyMonitor, saved.PatrolAutonomyLevel)
+	require.Equal(t, 5, saved.PatrolInvestigationBudget)
+	require.Equal(t, 60, saved.PatrolInvestigationTimeoutSec)
+
+	premiumBody := `{"autonomy_level":"approval","investigation_budget":10,"investigation_timeout_sec":120}`
+	premiumReq := newLoopbackRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(premiumBody))
+	premiumRec := httptest.NewRecorder()
+	handler.HandleUpdatePatrolAutonomyMonitorOnly(premiumRec, premiumReq)
+
+	require.Equal(t, http.StatusPaymentRequired, premiumRec.Code, premiumRec.Body.String())
+	require.Contains(t, premiumRec.Body.String(), "limited to Monitor")
+}
+
 func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	t.Parallel()
 

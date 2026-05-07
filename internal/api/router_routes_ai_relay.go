@@ -137,7 +137,8 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetDismissedFindings)))
 
-	// Patrol Autonomy - GET stays in core (always returns current level); PUT is gated via extension
+	// Patrol Autonomy - GET stays in core; PUT is extension-gated for premium
+	// modes while the free adapter persists findings-only monitor settings.
 	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -232,8 +233,12 @@ func (aiAutoFixFreeAdapter) HandleReapproveInvestigationFix(w http.ResponseWrite
 	WriteLicenseRequired(w, featureAIAutoFixKey, "Fix execution requires Pulse Pro")
 }
 
-func (aiAutoFixFreeAdapter) HandleUpdatePatrolAutonomy(w http.ResponseWriter, _ *http.Request) {
-	WriteLicenseRequired(w, featureAIAutoFixKey, "Patrol autonomy settings require Pulse Pro")
+func (a aiAutoFixFreeAdapter) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r *http.Request) {
+	if a.handler != nil {
+		a.handler.HandleUpdatePatrolAutonomyMonitorOnly(w, r)
+		return
+	}
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
 }
 
 func (aiAutoFixFreeAdapter) HandleGetRemediationPlans(w http.ResponseWriter, _ *http.Request) {

@@ -509,7 +509,7 @@ export function usePatrolIntelligenceState() {
       setShowAdvancedSettings(false);
     } catch (err) {
       console.error('Failed to save advanced settings:', err);
-      notificationStore.error('Failed to save advanced settings');
+      notificationStore.error((err as Error).message || 'Failed to save advanced settings');
     } finally {
       setIsSavingAdvanced(false);
     }
