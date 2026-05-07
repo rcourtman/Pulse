@@ -181,7 +181,12 @@ work extends shared components instead of creating new local variants.
    `handoff_summary` presentation state from the session list. Loading a plain
    session or starting a new conversation must clear stale scoped handoff
    briefing state so Patrol and alert context does not visually leak between
-   conversations.
+   conversations. Browser-originated model handoff payloads are one-shot
+   request seeds: after the first successful chat send, this store must clear
+   `handoffContext`, `handoffResources`, and `handoffActions` while preserving
+   the safe visible briefing and scoped approval-required posture, so later
+   turns rely on backend session hydration instead of resending stale browser
+   context.
 9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless

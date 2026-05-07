@@ -168,6 +168,33 @@ describe('aiChatStore', () => {
     ]);
   });
 
+  it('clears request handoff payloads while preserving safe visible context', () => {
+    aiChatStore.openWithPrompt('discuss this incident', {
+      targetType: 'storage',
+      targetId: 'storage-1',
+      autonomousMode: false,
+      findingId: 'finding-1',
+      briefing: {
+        sourceLabel: 'Pulse Patrol',
+        title: 'Patrol finding on tank',
+      },
+      handoffContext:
+        '[Alert Incident Context]\nTimeline Event 1: 2026-05-07T00:02:00Z | Command | Command event recorded',
+      handoffResources: [{ id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' }],
+      handoffActions: [{ findingId: 'finding-1', approvalId: 'approval-1' }],
+    });
+
+    aiChatStore.clearRequestHandoffPayload();
+
+    expect(aiChatStore.context.handoffContext).toBeUndefined();
+    expect(aiChatStore.context.handoffResources).toBeUndefined();
+    expect(aiChatStore.context.handoffActions).toBeUndefined();
+    expect(aiChatStore.context.targetId).toBe('storage-1');
+    expect(aiChatStore.context.findingId).toBe('finding-1');
+    expect(aiChatStore.context.autonomousMode).toBe(false);
+    expect(aiChatStore.context.briefing?.title).toBe('Patrol finding on tank');
+  });
+
   it('focusInput returns false when closed and true when open with a registered element', () => {
     const textarea = document.createElement('textarea');
     document.body.appendChild(textarea);

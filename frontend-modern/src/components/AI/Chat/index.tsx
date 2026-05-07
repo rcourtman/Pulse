@@ -817,9 +817,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const sendPromise = hasSendOptions
       ? chat.sendMessage(prompt, mentionsForAPI, findingId, sendOptions)
       : chat.sendMessage(prompt, mentionsForAPI, findingId);
+    const hasRequestHandoffPayload =
+      Boolean(ctx.handoffContext?.trim()) ||
+      Boolean(ctx.handoffResources?.length) ||
+      Boolean(ctx.handoffActions?.length);
     sendPromise.then((ok) => {
-      if (ok && findingId) {
+      if (!ok) return;
+      if (findingId) {
         aiChatStore.clearFindingId?.();
+      }
+      if (hasRequestHandoffPayload) {
+        aiChatStore.clearRequestHandoffPayload?.();
       }
     });
     setInput('');

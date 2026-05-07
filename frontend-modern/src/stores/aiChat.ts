@@ -478,6 +478,23 @@ export const aiChatStore = {
     });
   },
 
+  // Clear one-shot request handoff payloads after the backend has persisted
+  // them as model-only session context.
+  clearRequestHandoffPayload() {
+    setAIChatContext((prev) => {
+      if (!prev.handoffContext && !prev.handoffResources?.length && !prev.handoffActions?.length) {
+        return prev;
+      }
+      const {
+        handoffContext: _handoffContext,
+        handoffResources: _handoffResources,
+        handoffActions: _handoffActions,
+        ...rest
+      } = prev;
+      return rest;
+    });
+  },
+
   // Register the AI input element (called by AIChat component)
   registerInput(ref: HTMLTextAreaElement | null) {
     aiInputRef = ref;

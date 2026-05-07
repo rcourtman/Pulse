@@ -122,7 +122,19 @@ const {
       mockAiChatStore.context = emptyChatContext();
     }),
     clearInitialPrompt: vi.fn(),
-    clearFindingId: vi.fn(),
+    clearFindingId: vi.fn(() => {
+      const { findingId: _findingId, ...rest } = mockAiChatStore.context;
+      mockAiChatStore.context = rest;
+    }),
+    clearRequestHandoffPayload: vi.fn(() => {
+      const {
+        handoffContext: _handoffContext,
+        handoffResources: _handoffResources,
+        handoffActions: _handoffActions,
+        ...rest
+      } = mockAiChatStore.context;
+      mockAiChatStore.context = rest;
+    }),
   };
 
   const mockByType = vi.fn((_type: string): Array<{ name: string }> => []);
@@ -1398,6 +1410,71 @@ describe('AIChat', () => {
             },
           ],
         },
+      );
+    });
+
+    it('clears request handoff payloads after the first successful turn', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'gpt-4',
+        chat_model: '',
+        control_level: 'autonomous',
+        autonomous_mode: true,
+        discovery_enabled: true,
+      });
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        findingId: 'finding-1',
+        autonomousMode: false,
+        handoffContext: '[Patrol Finding Context]\nFinding ID: finding-1',
+        handoffResources: [
+          {
+            id: 'host:web-server',
+            name: 'web-server',
+            type: 'host',
+            node: 'pve-1',
+          },
+        ],
+        handoffActions: [
+          {
+            findingId: 'finding-1',
+            approvalId: 'approval-1',
+            approvalStatus: 'pending',
+          },
+        ],
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Patrol finding on web-server',
+        },
+      };
+
+      renderChat();
+
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      fireEvent.input(textarea, { target: { value: 'what happened here?' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockAiChatStore.clearFindingId).toHaveBeenCalledTimes(1);
+        expect(mockAiChatStore.clearRequestHandoffPayload).toHaveBeenCalledTimes(1);
+      });
+      expect(mockAiChatStore.context.findingId).toBeUndefined();
+      expect(mockAiChatStore.context.handoffContext).toBeUndefined();
+      expect(mockAiChatStore.context.handoffResources).toBeUndefined();
+      expect(mockAiChatStore.context.handoffActions).toBeUndefined();
+      expect(mockAiChatStore.context.autonomousMode).toBe(false);
+      expect(mockAiChatStore.context.briefing?.title).toBe('Patrol finding on web-server');
+
+      fireEvent.input(textarea, { target: { value: 'what changed next?' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockChat.sendMessage).toHaveBeenCalledTimes(2);
+      });
+      expect(mockChat.sendMessage).toHaveBeenLastCalledWith(
+        'what changed next?',
+        undefined,
+        undefined,
+        { autonomousMode: false },
       );
     });
   });

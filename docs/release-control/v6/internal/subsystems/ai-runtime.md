@@ -295,6 +295,13 @@ runtime cost control, and shared AI transport surfaces.
     The Assistant drawer must also fetch that current session list before
     opening the session picker instead of presenting mount-time cached
     summaries as the operator's decision surface.
+    Browser-originated `handoff_context`, `handoff_resources`, and
+    `handoff_actions` are one-shot request seeds for the first successful chat
+    turn. After that send succeeds, the drawer must clear those request payloads
+    while preserving the safe visible briefing and request-local
+    approval-required posture; later turns must rely on backend-owned session
+    model-context hydration and current canonical stores instead of resending
+    stale browser handoff payloads.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.
