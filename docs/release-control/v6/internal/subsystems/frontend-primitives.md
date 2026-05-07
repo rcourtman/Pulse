@@ -820,7 +820,11 @@ frontend primitive boundary.
     evidence summaries, operator-decision copy, action copy, safety note, and
     any bounded suggested prompts. Suggested prompts may fill the drawer input
     for the operator, but they must not submit automatically or change the
-    request-local approval-required mode.
+    request-local approval-required mode. Patrol finding and remediation-plan
+    suggested prompts must be derived from safe briefing metadata such as
+    evidence, confidence, approval risk, prerequisites, recurrence, rollback,
+    and verification posture; they must not become another primitive path for
+    raw approval, command, or rollback command payload text.
     When those feature-owned helpers attach backend model-only context, the
     drawer store may carry only bounded handoff text and structured resource
     references for the shared chat transport; approval, lifecycle, and command

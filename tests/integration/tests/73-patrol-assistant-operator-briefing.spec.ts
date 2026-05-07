@@ -416,8 +416,30 @@ test.describe("Patrol Assistant operator briefing", () => {
       "Command details stay in approval context; destructive actions require governed approval.",
     );
     await expect(
+      assistantContext.getByRole("button", {
+        name: "Review approval risk and next step",
+      }),
+    ).toBeVisible();
+    await expect(
+      assistantContext.getByRole("button", {
+        name: "Explain Patrol evidence and confidence",
+      }),
+    ).toBeVisible();
+    await expect(
+      assistantContext.getByRole("button", {
+        name: "Summarize remediation without command text",
+      }),
+    ).toBeVisible();
+    await expect(
       assistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
+
+    await assistantContext
+      .getByRole("button", { name: "Review approval risk and next step" })
+      .click();
+    await expect(
+      page.getByPlaceholder("Ask about your infrastructure..."),
+    ).toHaveValue("Review approval risk and next step");
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

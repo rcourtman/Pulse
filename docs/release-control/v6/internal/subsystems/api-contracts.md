@@ -328,7 +328,11 @@ the canonical monitored-system blocked payload.
     surfaces. Frontend finding-discussion handoffs that carry any live approval,
     proposed-fix, fix outcome, or remediation-plan reference must force a
     request-local approval-required Assistant mode instead of inheriting the
-    user's persistent autonomous control setting. Direct alert-investigation API
+    user's persistent autonomous control setting. Frontend-visible Patrol
+    briefing payloads may include short suggested prompts, but those prompts
+    must be derived from the same safe action posture, evidence, recurrence, and
+    remediation-plan metadata as the briefing and must never carry raw approval,
+    command, or rollback command text. Direct alert-investigation API
     handoffs through `internal/api/ai_handlers.go` must enforce that same
     request-scoped boundary by setting `ai.ExecuteRequest.AutonomousMode` to
     false and `ai.ExecuteRequest.RequireCommandApproval` to true; API proof must
@@ -3018,6 +3022,10 @@ paste raw approval or proposed-fix command text into the authored chat prompt.
 Patrol remediation-plan Assistant prompts must also pass only safe plan metadata,
 step labels, risk/status, and command counts; raw plan command and rollback
 command payloads remain owned by the governed remediation/action APIs and panels.
+Frontend Assistant briefing suggested prompts for those finding and plan
+handoffs must stay bounded to safe operator questions about evidence,
+confidence, approval risk, prerequisites, recurrence, rollback, and verification
+rather than becoming another place to serialize executable action details.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

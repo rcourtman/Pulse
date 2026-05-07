@@ -170,7 +170,7 @@ const MAX_ASSESSMENT_FINDINGS = 5;
 const MAX_ASSESSMENT_RECENT_CHANGES = 3;
 const MAX_ASSESSMENT_CORRELATIONS = 3;
 const MAX_ASSESSMENT_RESOURCES = 8;
-const MAX_ASSESSMENT_SUGGESTED_PROMPTS = 3;
+const MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS = 3;
 
 export function buildPatrolInvestigationContextSummary(
   input: PatrolInvestigationContextSummaryInput,
@@ -382,10 +382,7 @@ function buildPatrolAssessmentSuggestedPrompts(
     prompts.push('Identify early warning signals');
   }
 
-  return Array.from(new Set(prompts.map(normalizeText).filter(isNonEmptyString))).slice(
-    0,
-    MAX_ASSESSMENT_SUGGESTED_PROMPTS,
-  );
+  return formatPatrolSuggestedPrompts(prompts);
 }
 
 function assessmentFindingHasGovernedAction(
@@ -1012,6 +1009,7 @@ export function buildPatrolRemediationPlanAssistantBriefing(
     safetyNote: commandSummary
       ? 'Command details stay in governed remediation context; execution requires the approval flow.'
       : 'Review the governed remediation context before execution.',
+    suggestedPrompts: buildPatrolRemediationPlanSuggestedPrompts(plan, steps, commandSummary),
   };
 }
 
@@ -1062,7 +1060,84 @@ export function buildPatrolAssistantFindingBriefing(
       (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined),
     commandSummary: record.proposedFix?.commandSummary,
     safetyNote: buildPatrolAssistantSafetyNote(record, pendingApproval),
+    suggestedPrompts: buildPatrolFindingSuggestedPrompts(input, record, pendingApproval),
   };
+}
+
+function buildPatrolRemediationPlanSuggestedPrompts(
+  plan: RemediationPlan,
+  steps: RemediationPlan['steps'],
+  commandSummary?: string,
+): string[] {
+  const prompts = ['Review plan risk and prerequisites'];
+  const hasSteps = Array.isArray(steps) && steps.length > 0;
+  const riskLevel = normalizeText(plan.risk_level).toLowerCase();
+
+  if (commandSummary) {
+    prompts.push('Explain commands without command text');
+  }
+
+  if (hasSteps) {
+    prompts.push('Check rollback and verification steps');
+  } else {
+    prompts.push('Identify missing plan details');
+  }
+
+  if (!commandSummary && (riskLevel === 'high' || riskLevel === 'critical')) {
+    prompts.push('Check rollback and failure handling');
+  }
+
+  return formatPatrolSuggestedPrompts(prompts);
+}
+
+function buildPatrolFindingSuggestedPrompts(
+  input: PatrolAssistantFindingBriefingInput,
+  record: PatrolInvestigationRecordPresentation,
+  pendingApproval: Required<PatrolAssistantApprovalBriefingInput>,
+): string[] {
+  const prompts: string[] = [];
+  const requiresApproval = patrolAssistantFindingHandoffRequiresApprovalMode({
+    investigationOutcome: input.investigationRecord?.outcome,
+    remediationId: input.remediationId,
+    pendingApproval,
+    investigationRecord: input.investigationRecord,
+  });
+  const hasLoopState = Boolean(normalizeText(input.loopState));
+  const hasRecurrence =
+    normalizeNonNegativeCount(input.regressionCount) > 0 ||
+    normalizeNonNegativeCount(input.timesRaised) > 1;
+
+  if (requiresApproval) {
+    prompts.push('Review approval risk and next step');
+  } else if (record.hasRecord) {
+    prompts.push('Prioritize finding and safest next step');
+  } else {
+    prompts.push('Explain current finding status');
+  }
+
+  if (record.hasRecord) {
+    prompts.push('Explain Patrol evidence and confidence');
+  } else if (requiresApproval) {
+    prompts.push('Explain current finding status');
+  } else if (hasLoopState) {
+    prompts.push('Explain current Patrol loop state');
+  } else {
+    prompts.push('List evidence to gather before action');
+  }
+
+  if (record.proposedFix?.commandSummary) {
+    prompts.push('Summarize remediation without command text');
+  } else if (requiresApproval) {
+    prompts.push('List approval prerequisites before action');
+  } else if (hasRecurrence) {
+    prompts.push('Explain recurrence and what changed');
+  } else if (hasLoopState) {
+    prompts.push('Explain current Patrol loop state');
+  } else {
+    prompts.push('List evidence to gather before action');
+  }
+
+  return formatPatrolSuggestedPrompts(prompts);
 }
 
 function buildPatrolAssistantAttentionReason(
@@ -1345,6 +1420,13 @@ function formatPlanCommandSummary(plan: RemediationPlan): string | undefined {
     );
   }
   return parts.join('; ');
+}
+
+function formatPatrolSuggestedPrompts(values: string[]): string[] {
+  return Array.from(new Set(values.map(normalizeText).filter(isNonEmptyString))).slice(
+    0,
+    MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS,
+  );
 }
 
 function formatBriefingStringList(

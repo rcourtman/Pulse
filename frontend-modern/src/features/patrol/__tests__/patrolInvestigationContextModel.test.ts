@@ -406,6 +406,11 @@ describe('patrolInvestigationContextModel', () => {
       commandSummary: '1 command recorded for approval context',
       safetyNote:
         'Command details stay in approval context; destructive actions require governed approval.',
+      suggestedPrompts: [
+        'Review approval risk and next step',
+        'Explain Patrol evidence and confidence',
+        'Summarize remediation without command text',
+      ],
     });
     expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
   });
@@ -460,6 +465,11 @@ describe('patrolInvestigationContextModel', () => {
     expect(briefing.safetyNote).toBe(
       'Command details stay in governed remediation context; execution requires the approval flow.',
     );
+    expect(briefing.suggestedPrompts).toEqual([
+      'Review plan risk and prerequisites',
+      'Explain commands without command text',
+      'Check rollback and verification steps',
+    ]);
     expect(JSON.stringify(briefing)).not.toContain('systemctl');
   });
 
@@ -530,6 +540,11 @@ describe('patrolInvestigationContextModel', () => {
       actionLabel: undefined,
       commandSummary: undefined,
       safetyNote: undefined,
+      suggestedPrompts: [
+        'Explain current finding status',
+        'Explain current Patrol loop state',
+        'Explain recurrence and what changed',
+      ],
     });
   });
 
@@ -562,6 +577,11 @@ describe('patrolInvestigationContextModel', () => {
       actionLabel: 'Approval approval-1',
       commandSummary: undefined,
       safetyNote: 'Execution requires the governed approval flow.',
+      suggestedPrompts: [
+        'Review approval risk and next step',
+        'Explain current finding status',
+        'List approval prerequisites before action',
+      ],
     });
   });
 });

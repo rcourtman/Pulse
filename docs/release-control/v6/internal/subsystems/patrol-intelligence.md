@@ -146,8 +146,10 @@ Patrol-specific presentation helpers.
    Patrol-owned operator frame, including current severity/status, recurrence or
    regression, loop state, approval/proposed-fix posture, and the explicit
    operator decision being requested. That visible briefing remains a summary
-   surface only: proposed-fix commands stay summarized by count and destructive
-   action copy must point back to governed approval/remediation context. When a
+   surface only: proposed-fix commands stay summarized by count, safe suggested
+   prompts must steer the operator toward evidence, approval risk, recurrence,
+   and next-step review without carrying command text, and destructive action
+   copy must point back to governed approval/remediation context. When a
    structured investigation record is not available yet, the same Patrol-owned
    helper must still brief the operator from current finding facts such as
    active status, severity, recurrence, and loop state instead of opening a
@@ -163,14 +165,15 @@ Patrol-specific presentation helpers.
    briefing for the pending approval, and never paste the approval command or
    proposed-fix command text into the chat prompt. Remediation-plan Assistant
    handoffs follow the same boundary: step labels, plan status, risk, and command
-   counts are allowed, while command and rollback command text stays in the
-   governed remediation or approval surface. Generic finding discussion
-   handoffs must also force request-local approval-required mode when the finding
-   already references a live approval, proposed fix, fix outcome, or remediation
-   plan, so default autonomous Assistant settings cannot bypass the Patrol
-   action-governance boundary. The assembled handoff must still pass through the
-   Assistant runtime's
-   resource-policy sanitizer before prompt injection, so Patrol-owned prose
+   counts are allowed, safe suggested prompts may ask about plan risk,
+   prerequisites, rollback, and verification, while command and rollback command
+   text stays in the governed remediation or approval surface. Generic finding
+   discussion handoffs must also force request-local approval-required mode when
+   the finding already references a live approval, proposed fix, fix outcome, or
+   remediation plan, so default autonomous Assistant settings cannot bypass the
+   Patrol action-governance boundary. The assembled handoff must still pass
+   through the Assistant runtime's resource-policy sanitizer before prompt
+   injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
    addresses outside the canonical policy boundary.
    If the referenced finding is no longer current, Assistant must drop the
