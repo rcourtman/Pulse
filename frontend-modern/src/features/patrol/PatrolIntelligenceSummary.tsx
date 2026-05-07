@@ -279,8 +279,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       });
     },
   );
-  const assessmentAssistantHandoff = createMemo(() =>
-    buildPatrolAssessmentAssistantHandoff({
+  const assessmentAssistantHandoff = createMemo(() => {
+    const recommendation = recommendedNextStep();
+    return buildPatrolAssessmentAssistantHandoff({
       assessment: assessment(),
       overallHealth: state.intelligenceSummary()?.overall_health,
       scoreChipLabel: scoreChipLabel(),
@@ -299,9 +300,15 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         recentChanges: state.intelligenceSummary()?.recent_changes,
         correlations: state.correlations(),
       },
+      recommendedNextStep: {
+        title: recommendation.title,
+        description: recommendation.description,
+        actionLabel: recommendation.action?.label,
+        actionKind: recommendation.action?.kind,
+      },
       activeFindings: activeFindingsWithApprovalContext(),
-    }),
-  );
+    });
+  });
 
   const handleDiscussAssessment = async () => {
     await aiIntelligenceStore.loadPendingApprovals();

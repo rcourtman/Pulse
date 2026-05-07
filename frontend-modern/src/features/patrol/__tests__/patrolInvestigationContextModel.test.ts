@@ -328,13 +328,24 @@ describe('patrolInvestigationContextModel', () => {
         hasContext: true,
         summaryText: '100 recent changes · 29 correlations · 116 policy-covered resources',
       },
+      recommendedNextStep: {
+        title: 'Verify full coverage',
+        description:
+          'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
+        actionLabel: 'Run Patrol',
+        actionKind: 'run_patrol',
+      },
       activeFindings: [],
     });
 
     expect(handoff.prompt).toContain('why Patrol coverage is incomplete');
     expect(handoff.prompt).toContain('what the latest scoped activity did and did not prove');
+    expect(handoff.prompt).toContain(
+      'Patrol\'s visible recommended next step is "Verify full coverage"',
+    );
+    expect(handoff.prompt).toContain('available Patrol-owned action: Run Patrol');
     expect(handoff.context.briefing).toMatchObject({
-      actionLabel: 'Review coverage gap',
+      actionLabel: 'Recommended: Run Patrol',
       safetyNote:
         'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled.',
       suggestedPrompts: [
@@ -344,9 +355,48 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
     expect(handoff.context.handoffContext).toContain('Assessment: Coverage incomplete');
+    expect(handoff.context.handoffContext).toContain('Recommended Next Step: Verify full coverage');
+    expect(handoff.context.handoffContext).toContain(
+      'Recommended Next Step Action: Run Patrol (run_patrol)',
+    );
     expect(handoff.context.handoffContext).toContain(
       'Supporting Context: 100 recent changes · 29 correlations · 116 policy-covered resources',
     );
+    expect(handoff.context.context).toMatchObject({
+      recommendedNextStepTitle: 'Verify full coverage',
+      recommendedNextStepActionKind: 'run_patrol',
+    });
+  });
+
+  it('withholds unsafe recommendation text from assessment handoffs', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Coverage incomplete',
+        description: 'Patrol coverage is incomplete.',
+      },
+      overallHealth: {
+        grade: 'C',
+        score: 65,
+        factors: [{ category: 'coverage' }],
+      },
+      recommendedNextStep: {
+        title: 'Run sudo systemctl restart workload.service',
+        description: 'Use token abc123 before running curl against the host.',
+        actionLabel: 'sudo restart',
+        actionKind: 'run_patrol',
+      },
+    });
+
+    expect(handoff.context.handoffContext).toContain('Recommended Next Step: Run Patrol');
+    expect(handoff.context.handoffContext).toContain(
+      'Recommended Next Step Detail: sensitive or command detail withheld',
+    );
+    expect(handoff.context.handoffContext).toContain(
+      'Recommended Next Step Action: Run Patrol (run_patrol)',
+    );
+    expect(JSON.stringify(handoff)).not.toContain('systemctl');
+    expect(JSON.stringify(handoff)).not.toContain('abc123');
+    expect(JSON.stringify(handoff)).not.toContain('curl');
   });
 
   it('carries live governed approval posture into assessment finding handoffs', () => {

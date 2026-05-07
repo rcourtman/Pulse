@@ -194,6 +194,20 @@ export interface PatrolAssessmentAssistantFindingInput {
   investigationRecord?: InvestigationRecord | null;
 }
 
+export type PatrolAssessmentRecommendedNextStepActionKind =
+  | 'discuss_assessment'
+  | 'open_provider_settings'
+  | 'review_approvals'
+  | 'review_findings'
+  | 'run_patrol';
+
+export interface PatrolAssessmentRecommendedNextStepInput {
+  title?: string | null;
+  description?: string | null;
+  actionLabel?: string | null;
+  actionKind?: PatrolAssessmentRecommendedNextStepActionKind | string | null;
+}
+
 export interface PatrolAssessmentAssistantHandoffInput {
   assessment?: {
     title?: string | null;
@@ -239,6 +253,7 @@ export interface PatrolAssessmentAssistantHandoffInput {
     recentChanges?: ResourceChange[] | null;
     correlations?: ResourceCorrelation[] | null;
   } | null;
+  recommendedNextStep?: PatrolAssessmentRecommendedNextStepInput | null;
   activeFindings?: PatrolAssessmentAssistantFindingInput[] | null;
 }
 
@@ -290,6 +305,26 @@ const MAX_ASSESSMENT_RESOURCES = 8;
 const MAX_ASSESSMENT_HANDOFF_ACTIONS = 4;
 const MAX_PATROL_RUN_HANDOFF_RESOURCES = 8;
 const MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS = 3;
+
+interface NormalizedPatrolAssessmentRecommendedNextStep {
+  title: string;
+  description?: string;
+  actionLabel?: string;
+  actionKind?: PatrolAssessmentRecommendedNextStepActionKind;
+  actionSummary?: string;
+}
+
+const PATROL_ASSESSMENT_RECOMMENDED_NEXT_STEP_ACTION_LABELS: Record<
+  PatrolAssessmentRecommendedNextStepActionKind,
+  string
+> = {
+  discuss_assessment: 'Discuss with Assistant',
+  open_provider_settings: 'Open provider settings',
+  review_approvals: 'Review approvals',
+  review_findings: 'Review findings',
+  run_patrol: 'Run Patrol',
+};
+const WITHHELD_RECOMMENDATION_TEXT = 'sensitive or command detail withheld';
 
 export function buildPatrolInvestigationContextSummary(
   input: PatrolInvestigationContextSummaryInput,
@@ -504,6 +539,7 @@ export function buildPatrolAssessmentAssistantHandoff(
 ): PatrolAssessmentAssistantHandoff {
   const title = normalizeText(input.assessment?.title) || 'Pulse Patrol assessment';
   const description = normalizeText(input.assessment?.description);
+  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
   const handoffContext = buildPatrolAssessmentAssistantModelContext(input);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
@@ -531,6 +567,12 @@ export function buildPatrolAssessmentAssistantHandoff(
         correlationDetailCount: correlations.length,
         governedResourceCount: input.investigationContext?.governedResourceCount ?? 0,
         pendingApprovalCount: normalizeAssessmentPendingApprovalCount(input.activeFindings),
+        ...(recommendedNextStep
+          ? {
+              recommendedNextStepTitle: recommendedNextStep.title,
+              recommendedNextStepActionKind: recommendedNextStep.actionKind,
+            }
+          : {}),
       },
     },
   };
@@ -717,6 +759,7 @@ function buildPatrolAssessmentAssistantPrompt(
   const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
   const actionCount = handoffActions.length;
   const hasCoverageGap = assessmentHasCoverageGap(input);
+  const recommendationInstruction = buildPatrolAssessmentRecommendationPromptInstruction(input);
   const reviewInstruction =
     pendingApprovalCount > 0
       ? `Start by reviewing ${formatAssessmentMetricCount(
@@ -736,6 +779,7 @@ function buildPatrolAssessmentAssistantPrompt(
     `Discuss the current Pulse Patrol assessment: ${title}.`,
     description,
     reviewInstruction,
+    recommendationInstruction,
     'Do not infer, repeat, or execute raw command text from this handoff.',
   ]
     .filter(isNonEmptyString)
@@ -752,6 +796,9 @@ function buildPatrolAssessmentAssistantBriefing(
   const verification = formatAssessmentVerification(input);
   const latestRun = formatAssessmentLatestRun(input);
   const contextSummary = normalizeText(input.investigationContext?.summaryText);
+  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
+  const recommendedNextStepLine =
+    formatAssessmentRecommendedNextStepDetailLine(recommendedNextStep);
   const findings = normalizeAssessmentFindings(input.activeFindings);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
@@ -770,9 +817,9 @@ function buildPatrolAssessmentAssistantBriefing(
     title: 'Patrol assessment attached',
     subject: title,
     statusLabel: [health, attentionSummary].filter(isNonEmptyString).join(' · ') || undefined,
-    detailLines: [description, verification, latestRun, contextSummary]
+    detailLines: [description, recommendedNextStepLine, verification, latestRun, contextSummary]
       .filter(isNonEmptyString)
-      .slice(0, 4),
+      .slice(0, 5),
     evidence: [...findingEvidence.slice(0, 3), ...supportingEvidence].slice(0, 5),
     actionLabel: actionPosture.actionLabel,
     safetyNote: actionPosture.safetyNote,
@@ -784,6 +831,41 @@ function buildPatrolAssessmentAssistantBriefing(
   };
 }
 
+function buildPatrolAssessmentRecommendationPromptInstruction(
+  input: PatrolAssessmentAssistantHandoffInput,
+): string | undefined {
+  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
+  if (!recommendedNextStep) return undefined;
+
+  const parts = [
+    `Patrol's visible recommended next step is "${recommendedNextStep.title}"`,
+    recommendedNextStep.description
+      ? `detail: ${truncateContextText(recommendedNextStep.description, 180)}`
+      : undefined,
+    recommendedNextStep.actionLabel
+      ? `available Patrol-owned action: ${recommendedNextStep.actionLabel}`
+      : undefined,
+  ].filter(isNonEmptyString);
+
+  return `${parts.join('; ')}. Explain that recommendation before alternatives, but keep Patrol runs, settings changes, diagnostics, remediation, and approvals in governed controls.`;
+}
+
+function formatAssessmentRecommendedNextStepDetailLine(
+  recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
+): string | undefined {
+  if (!recommendedNextStep) return undefined;
+
+  return formatBriefingStringList(
+    [
+      `Recommended next step: ${recommendedNextStep.title}`,
+      recommendedNextStep.description,
+      recommendedNextStep.actionLabel ? `action ${recommendedNextStep.actionLabel}` : undefined,
+    ],
+    3,
+    'recommendation facts',
+  );
+}
+
 function buildPatrolAssessmentActionPosture(
   input: PatrolAssessmentAssistantHandoffInput,
   handoffActions: AIChatHandoffAction[],
@@ -791,6 +873,7 @@ function buildPatrolAssessmentActionPosture(
   const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
   const actionCount = handoffActions.length;
   const hasCoverageGap = assessmentHasCoverageGap(input);
+  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
   const hasDryRunPosture = handoffActions.some((action) =>
     Boolean(normalizeText(action.actionDryRunSummary) || normalizeText(action.actionPreflight)),
   );
@@ -831,9 +914,19 @@ function buildPatrolAssessmentActionPosture(
 
   if (hasCoverageGap) {
     return {
-      actionLabel: 'Review coverage gap',
+      actionLabel: recommendedNextStep?.actionLabel
+        ? `Recommended: ${recommendedNextStep.actionLabel}`
+        : 'Review coverage gap',
       safetyNote:
         'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled.',
+    };
+  }
+
+  if (recommendedNextStep?.actionLabel || recommendedNextStep?.title) {
+    return {
+      actionLabel: `Recommended: ${recommendedNextStep.actionLabel || recommendedNextStep.title}`,
+      safetyNote:
+        'Assistant can explain the Patrol recommendation; Patrol runs, settings changes, diagnostics, and remediation remain operator-controlled.',
     };
   }
 
@@ -964,6 +1057,7 @@ function assessmentFindingHasGovernedAction(
 function buildPatrolAssessmentAssistantModelContext(
   input: PatrolAssessmentAssistantHandoffInput,
 ): string {
+  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
   const findings = normalizeAssessmentFindings(input.activeFindings);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
@@ -991,6 +1085,9 @@ function buildPatrolAssessmentAssistantModelContext(
     formatContextLine('Assessment Scope', input.assessment?.eyebrow),
     formatContextLine('Health', formatAssessmentHealth(input)),
     formatContextLine('Attention', formatAssessmentAttentionSummary(input)),
+    formatContextLine('Recommended Next Step', recommendedNextStep?.title),
+    formatContextLine('Recommended Next Step Detail', recommendedNextStep?.description),
+    formatContextLine('Recommended Next Step Action', recommendedNextStep?.actionSummary),
     formatContextLine('Verification', formatAssessmentVerification(input)),
     formatContextLine('Last Patrol', formatAssessmentRecency(input)),
     formatContextLine('Latest Run', formatAssessmentLatestRun(input)),
@@ -2628,6 +2725,82 @@ function formatPatrolSuggestedPrompts(values: string[]): string[] {
   return Array.from(new Set(values.map(normalizeText).filter(isNonEmptyString))).slice(
     0,
     MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS,
+  );
+}
+
+function normalizeAssessmentRecommendedNextStep(
+  input?: PatrolAssessmentRecommendedNextStepInput | null,
+): NormalizedPatrolAssessmentRecommendedNextStep | undefined {
+  if (!input) return undefined;
+
+  const actionKind = normalizeAssessmentRecommendedNextStepActionKind(input.actionKind);
+  const title = formatSafeAssessmentRecommendationText(input.title, 140);
+  const description = formatSafeAssessmentRecommendationText(input.description, 260);
+  const fallbackActionLabel = actionKind
+    ? PATROL_ASSESSMENT_RECOMMENDED_NEXT_STEP_ACTION_LABELS[actionKind]
+    : undefined;
+  const safeActionLabel = formatSafeAssessmentRecommendationText(input.actionLabel, 80);
+  const actionLabel =
+    safeActionLabel === WITHHELD_RECOMMENDATION_TEXT && fallbackActionLabel
+      ? fallbackActionLabel
+      : safeActionLabel || fallbackActionLabel;
+  const effectiveTitle =
+    title === WITHHELD_RECOMMENDATION_TEXT && actionLabel ? actionLabel : title || actionLabel;
+  const actionSummary = formatAssessmentRecommendedNextStepActionSummary(actionLabel, actionKind);
+
+  if (!effectiveTitle && !description && !actionSummary) {
+    return undefined;
+  }
+
+  return {
+    title: effectiveTitle || 'Review Patrol recommendation',
+    description,
+    actionLabel,
+    actionKind,
+    actionSummary,
+  };
+}
+
+function normalizeAssessmentRecommendedNextStepActionKind(
+  value?: string | null,
+): PatrolAssessmentRecommendedNextStepActionKind | undefined {
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) return undefined;
+  return Object.prototype.hasOwnProperty.call(
+    PATROL_ASSESSMENT_RECOMMENDED_NEXT_STEP_ACTION_LABELS,
+    normalized,
+  )
+    ? (normalized as PatrolAssessmentRecommendedNextStepActionKind)
+    : undefined;
+}
+
+function formatAssessmentRecommendedNextStepActionSummary(
+  actionLabel?: string,
+  actionKind?: PatrolAssessmentRecommendedNextStepActionKind,
+): string | undefined {
+  if (actionLabel && actionKind) return `${actionLabel} (${actionKind})`;
+  if (actionLabel) return actionLabel;
+  if (actionKind) return PATROL_ASSESSMENT_RECOMMENDED_NEXT_STEP_ACTION_LABELS[actionKind];
+  return undefined;
+}
+
+function formatSafeAssessmentRecommendationText(
+  value?: string | null,
+  limit: number = 240,
+): string | undefined {
+  const normalized = truncateContextText(value, limit);
+  if (!normalized) return undefined;
+  if (assessmentRecommendationTextShouldBeWithheld(normalized)) {
+    return WITHHELD_RECOMMENDATION_TEXT;
+  }
+  return normalized;
+}
+
+function assessmentRecommendationTextShouldBeWithheld(value: string): boolean {
+  return (
+    /(password|secret|token|api[_-]?key|credential|private[_-]?key)/i.test(value) ||
+    /\b(systemctl|sudo|bash|sh\s+-c|curl|wget|kubectl)\b/i.test(value) ||
+    /\b(docker|ssh)\s+\S+/i.test(value)
   );
 }
 

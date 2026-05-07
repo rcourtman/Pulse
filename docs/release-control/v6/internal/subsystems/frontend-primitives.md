@@ -231,7 +231,10 @@ the Patrol helper owns the decision text, while the section component only
 renders a compact inline accent and one bounded action inside the existing
 assessment shell. Feature-owned recommendation actions may use the shared
 button/link shape, but they must not create a second full-width action band or
-nest another card inside the primary Pulse surface.
+nest another card inside the primary Pulse surface. If the same assessment
+opens Assistant, the Patrol-to-Assistant handoff must carry that exact
+recommendation as safe bounded metadata so the drawer briefing and first-turn
+prompt explain the same operator-facing priority.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
    Framed product table surfaces must consume the shared `TableCard` frame and
@@ -538,8 +541,9 @@ nest another card inside the primary Pulse surface.
    `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`,
    but the editor now serves as governed dialog content under the source
    manager rather than replacing the page inline. The `?add=pick` route owns
-   the grouped source-type picker, `?add=detect` owns the detect-from-address
-   utility, and typed add routes jump straight into the matching credential
+   the search-first infrastructure source finder, `?add=detect` owns the
+   detect-from-address utility, and typed add routes jump straight into the
+   matching credential
    slot through `initialType`.
    The picker and typed add dialog must use the shared source-strategy
    vocabulary so users choose between API inventory, Agent telemetry, and API
@@ -975,10 +979,10 @@ nest another card inside the primary Pulse surface.
     `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`. Both the
     infrastructure empty state and the Workloads no-resources state must route
     first-time operators into the canonical
-    `/settings/infrastructure?add=pick` source picker, describe platform API
-    inventory and Pulse Agent telemetry as equal source strategies, and avoid
-    falling back to either passive “nothing here yet” wording or the retired
-    install-first / `Platform connections` split. Workloads routes that already
+    `/settings/infrastructure?add=pick` source picker, let operators choose by
+    recognizable system/service names instead of collection-method taxonomy,
+    and avoid falling back to either passive “nothing here yet” wording or the
+    retired install-first / `Platform connections` split. Workloads routes that already
     have canonical unified-resource infrastructure sources but no workload
     inventory must use a distinct no-inventory presentation that points
     operators at credentials, permissions, and collection status in the

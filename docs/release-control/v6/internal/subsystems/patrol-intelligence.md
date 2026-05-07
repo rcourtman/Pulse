@@ -241,7 +241,11 @@ Patrol-specific presentation helpers.
    verification recency, latest run, secondary investigation context, bounded
    recent-change and learned-correlation evidence, active-finding summaries,
    structured resource references, structured approval/action references, and
-   safe source-owned suggested prompts as model-only context. Active-finding
+   safe source-owned suggested prompts as model-only context. The same handoff
+   must also carry the Patrol-owned recommended next step as safe bounded
+   metadata, including its title, detail copy, action label, and known action
+   kind when present, so Assistant explains the same operator-facing priority
+   shown in the summary card instead of inventing a separate next step. Active-finding
    summaries may include live pending approval posture only as safe metadata:
    approval ID, pending status, risk, target, requested/expiry timestamps,
    action plan identity, approval policy, plan expiry, dry-run posture, and
@@ -332,15 +336,20 @@ opens Assistant through
 packages the current Patrol assessment, verification posture, latest run,
 secondary investigation context, bounded recent-change and learned-correlation
 evidence, bounded active-finding summaries, source-owned suggested prompts, and
-deduped resource references plus safe structured approval/action references as
+the Patrol-owned recommended next step, plus deduped resource references and
+safe structured approval/action references as
 model-only context while forcing `autonomousMode:false` and summarizing
 proposed-fix command-bearing records and command-bearing change events without
 raw command text. Its visible Assistant briefing must also use those safe
 references to distinguish pending governed approvals or attached action
 references from a generic assessment discussion, including approval-policy and
-dry-run posture when available, and its initial prompt must prioritize those
-approvals or action references before broader assessment discussion while
-command payloads stay out of the drawer.
+dry-run posture when available. When no approval or governed action outranks
+the summary recommendation, the briefing action label and initial prompt may
+lead with that recommendation, but Assistant remains explanatory and may not
+start Patrol runs, settings changes, diagnostics, remediation, or approvals
+from the handoff. Its initial prompt must prioritize approvals or action
+references before broader assessment discussion while command payloads stay
+out of the drawer.
 Run-history rows now follow that same Assistant handoff model. A selected
 `frontend-modern/src/components/patrol/RunHistoryEntry.tsx` row may open
 Assistant through

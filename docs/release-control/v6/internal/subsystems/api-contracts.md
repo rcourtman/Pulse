@@ -508,7 +508,8 @@ the canonical monitored-system blocked payload.
    and that same Patrol investigation-context owner, so the current Patrol
    assessment summary may open Assistant with bounded model-only assessment,
    verification, latest-run, supporting-context evidence, active-finding, and
-   resource reference context plus safe source-owned suggested prompts; active
+   resource reference context plus safe source-owned suggested prompts and the
+   Patrol-owned recommended next step as safe metadata; active
    finding entries may carry live pending Patrol approval posture only as safe
    structured handoff actions with approval ID/status/risk/target/request/expiry
    metadata, action plan identity/policy/expiry, dry-run posture, and command
@@ -516,13 +517,15 @@ the canonical monitored-system blocked payload.
    and may derive visible action labels, safety notes, and approval-aware
    suggested prompts plus first-turn prompt emphasis from that same safe metadata
    so the drawer does not fall back to generic assessment copy when governed
-   actions are present
+   actions are present or when the summary already exposes a concrete
+   recommended next step
    and that same Patrol investigation-context owner, so coverage-incomplete
    assessments with no active infrastructure findings are serialized as a
    verification-gap handoff: prompt and visible briefing copy must explain what
    scoped activity did and did not prove, keep latest-run and supporting-context
-   facts model-only, and avoid introducing backend fields beyond the existing
-   Patrol status plus run-history contracts
+   facts model-only, carry the existing summary recommendation as safe
+   handoff-only metadata, and avoid introducing backend fields beyond the
+   existing Patrol status plus run-history contracts
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,

@@ -74,6 +74,12 @@ describe('PatrolIntelligenceSummary', () => {
     expect(context.handoffContext).toContain('[Patrol Assessment Context]');
     expect(context.handoffContext).toContain('Source: Pulse Patrol current assessment');
     expect(context.handoffContext).toContain('Supporting Context: 2 recent changes');
+    expect(context.handoffContext).toContain(
+      'Recommended Next Step: Review the pending Patrol approval',
+    );
+    expect(context.handoffContext).toContain(
+      'Recommended Next Step Action: Review approvals (review_approvals)',
+    );
     expect(context.handoffContext).toContain('Recent Change 1: Metric anomaly');
     expect(context.handoffContext).toContain('Correlation 1: Nightly backup job');
     expect(context.handoffContext).toContain('Finding 1: High CPU usage');
@@ -84,6 +90,8 @@ describe('PatrolIntelligenceSummary', () => {
     expect(context.handoffContext).toContain('expires 2026-05-06T12:10:00Z');
     expect(context.context).toMatchObject({
       pendingApprovalCount: 1,
+      recommendedNextStepTitle: 'Review the pending Patrol approval',
+      recommendedNextStepActionKind: 'review_approvals',
     });
     expect(context.handoffResources).toEqual([
       { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
@@ -114,6 +122,11 @@ describe('PatrolIntelligenceSummary', () => {
         'Review pending approvals and safest next step',
       ],
     });
+    expect((context.briefing as { detailLines?: string[] }).detailLines).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Recommended next step: Review the pending Patrol approval'),
+      ]),
+    );
     expect(JSON.stringify(context)).not.toContain('systemctl restart workload.service');
   });
 });
