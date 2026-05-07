@@ -597,6 +597,11 @@ was disabled at process boot. The approval cleanup loop must follow owned AI
 runtime lifetime rather than an HTTP request context, and approval persistence
 may fail closed only when AI is actually disabled instead of because runtime
 enablement happened after startup.
+Pending approval reads from that store must be deterministic across web, mobile
+relay, and API consumers: live pending approvals are ordered by soonest expiry,
+then highest operational risk, then oldest request time, with approval ID as
+the final tie-break so map iteration cannot decide which governed action looks
+most urgent.
 That same approval boundary also owns approved command execution. When
 `internal/api/ai_handlers.go`, `internal/ai/service.go`, or
 `internal/ai/tools/action_audit.go` consume a governed approval record, the

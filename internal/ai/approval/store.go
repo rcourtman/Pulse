@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -326,6 +327,7 @@ func (s *Store) GetPendingApprovals() []*ApprovalRequest {
 			pending = append(pending, req)
 		}
 	}
+	sortPendingApprovals(pending)
 
 	return pending
 }
@@ -346,8 +348,46 @@ func (s *Store) GetPendingApprovalsForOrg(orgID string) []*ApprovalRequest {
 			pending = append(pending, req)
 		}
 	}
+	sortPendingApprovals(pending)
 
 	return pending
+}
+
+func sortPendingApprovals(approvals []*ApprovalRequest) {
+	sort.SliceStable(approvals, func(i, j int) bool {
+		return pendingApprovalLess(approvals[i], approvals[j])
+	})
+}
+
+func pendingApprovalLess(a, b *ApprovalRequest) bool {
+	if a == nil || b == nil {
+		return b != nil
+	}
+	if !a.ExpiresAt.Equal(b.ExpiresAt) {
+		return a.ExpiresAt.Before(b.ExpiresAt)
+	}
+	if aRisk, bRisk := approvalRiskRank(a.RiskLevel), approvalRiskRank(b.RiskLevel); aRisk != bRisk {
+		return aRisk < bRisk
+	}
+	if !a.RequestedAt.Equal(b.RequestedAt) {
+		return a.RequestedAt.Before(b.RequestedAt)
+	}
+	return strings.TrimSpace(a.ID) < strings.TrimSpace(b.ID)
+}
+
+func approvalRiskRank(risk RiskLevel) int {
+	switch strings.ToLower(strings.TrimSpace(string(risk))) {
+	case "critical":
+		return 0
+	case string(RiskHigh):
+		return 1
+	case string(RiskMedium):
+		return 2
+	case string(RiskLow):
+		return 3
+	default:
+		return 4
+	}
 }
 
 // GetApprovalsByExecution returns all approvals for an execution ID.

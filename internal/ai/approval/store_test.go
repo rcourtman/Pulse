@@ -331,6 +331,52 @@ func TestGetPendingApprovals(t *testing.T) {
 	}
 }
 
+func TestGetPendingApprovalsReturnsOperationalPriorityOrder(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	base := time.Now().UTC().Add(30 * time.Minute).Truncate(time.Second)
+	create := func(id string, expiresAt time.Time, risk RiskLevel, requestedAt time.Time) {
+		req := &ApprovalRequest{
+			ID:        id,
+			Command:   "test command " + id,
+			RiskLevel: risk,
+			ExpiresAt: expiresAt,
+		}
+		if err := store.CreateApproval(req); err != nil {
+			t.Fatalf("CreateApproval(%s) error = %v", id, err)
+		}
+		req.ExpiresAt = expiresAt
+		req.RiskLevel = risk
+		req.RequestedAt = requestedAt
+	}
+
+	create("later-critical", base.Add(3*time.Minute), RiskLevel("critical"), base)
+	create("same-expiry-medium", base.Add(2*time.Minute), RiskMedium, base.Add(-2*time.Minute))
+	create("same-expiry-high-b", base.Add(2*time.Minute), RiskHigh, base)
+	create("same-expiry-high-a", base.Add(2*time.Minute), RiskHigh, base)
+	create("same-expiry-high-newer", base.Add(2*time.Minute), RiskHigh, base.Add(time.Minute))
+	create("soon-low", base.Add(time.Minute), RiskLow, base)
+
+	assertApprovalOrder(t, store.GetPendingApprovals(), []string{
+		"soon-low",
+		"same-expiry-high-a",
+		"same-expiry-high-b",
+		"same-expiry-high-newer",
+		"same-expiry-medium",
+		"later-critical",
+	})
+}
+
 func TestNormalizeOrgID(t *testing.T) {
 	if got := NormalizeOrgID(""); got != DefaultOrgID {
 		t.Fatalf("NormalizeOrgID(\"\") = %q, want %q", got, DefaultOrgID)
@@ -392,6 +438,47 @@ func TestGetPendingApprovalsForOrg(t *testing.T) {
 	if pendingOrgA[0].OrgID != "org-a" {
 		t.Fatalf("expected org-a approval, got %q", pendingOrgA[0].OrgID)
 	}
+}
+
+func TestGetPendingApprovalsForOrgReturnsOperationalPriorityOrder(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	base := time.Now().UTC().Add(30 * time.Minute).Truncate(time.Second)
+	create := func(id, orgID string, expiresAt time.Time, risk RiskLevel) {
+		req := &ApprovalRequest{
+			ID:        id,
+			OrgID:     orgID,
+			Command:   "test command " + id,
+			RiskLevel: risk,
+			ExpiresAt: expiresAt,
+		}
+		if err := store.CreateApproval(req); err != nil {
+			t.Fatalf("CreateApproval(%s) error = %v", id, err)
+		}
+		req.ExpiresAt = expiresAt
+		req.RiskLevel = risk
+	}
+
+	create("org-b-sooner", "org-b", base.Add(time.Minute), RiskHigh)
+	create("org-a-later-critical", "org-a", base.Add(3*time.Minute), RiskLevel("critical"))
+	create("org-a-sooner-low", "org-a", base.Add(time.Minute), RiskLow)
+	create("org-a-same-expiry-high", "org-a", base.Add(2*time.Minute), RiskHigh)
+
+	assertApprovalOrder(t, store.GetPendingApprovalsForOrg("org-a"), []string{
+		"org-a-sooner-low",
+		"org-a-same-expiry-high",
+		"org-a-later-critical",
+	})
 }
 
 func TestGetApprovalsByExecution(t *testing.T) {
@@ -1071,4 +1158,19 @@ func TestGlobalStore(t *testing.T) {
 
 	// Reset global store
 	SetStore(nil)
+}
+
+func assertApprovalOrder(t *testing.T, approvals []*ApprovalRequest, want []string) {
+	t.Helper()
+	if len(approvals) != len(want) {
+		t.Fatalf("approval count = %d, want %d", len(approvals), len(want))
+	}
+	for i, req := range approvals {
+		if req == nil {
+			t.Fatalf("approval[%d] = nil, want %q", i, want[i])
+		}
+		if req.ID != want[i] {
+			t.Fatalf("approval[%d].ID = %q, want %q", i, req.ID, want[i])
+		}
+	}
 }
