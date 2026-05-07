@@ -926,6 +926,11 @@ the canonical monitored-system blocked payload.
    rather than inventing a second finding-context transport shape.
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
+   and the Patrol runtime-failure run-history contract, so backend payloads,
+   persistence adapters, and `frontend-modern/src/api/patrol.ts` preserve
+   `error_summary` and `error_detail` whenever an erroring run has structured
+   provider, model, tool, context-window, quota, auth, rate-limit, or
+   connectivity failure context
    and the main Patrol page composition boundary, so once that governed
    secondary area exists inside the summary shell the same payloads must not
    also drive a second page-level status strip elsewhere on the route
@@ -3103,6 +3108,12 @@ That same frontend run-history path must also preserve and expose
 `triage_flags` and `triage_skipped_llm` from canonical patrol run records so
 deterministic triage-only runs do not collapse into generic "no analysis"
 history entries.
+Patrol run-history payloads must also preserve structured runtime failure
+context. When a Patrol run records `error_count > 0`, the backend may include
+`error_summary` and `error_detail`; persistence, API responses, and
+`frontend-modern/src/api/patrol.ts` must preserve those fields so the Patrol UI
+can explain provider/model/tool runtime failures without scraping finding
+copy or inferring meaning from a generic error status.
 Patrol status payloads no longer carry quickstart credit state as an ordinary
 v6 GA API contract. `quickstart_credits_remaining`,
 `quickstart_credits_total`, and `using_quickstart` are retired public fields;

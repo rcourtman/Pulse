@@ -195,6 +195,30 @@ describe('RunHistoryEntry', () => {
     ).toBeInTheDocument();
   });
 
+  it('surfaces structured Patrol runtime error details on expanded runs', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-runtime-error',
+          error_count: 1,
+          status: 'error',
+          error_summary: 'Selected model does not support Patrol tools',
+          error_detail:
+            "agentic patrol failed: API error (404): No endpoints found that support the provided 'tool_choice' value.",
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('Selected model does not support Patrol tools')).toBeInTheDocument();
+    expect(screen.getByText(/tool_choice/)).toBeInTheDocument();
+    expect(screen.getByText('error')).toBeInTheDocument();
+  });
+
   it('keeps zero-coverage scoped runs on the shared coverage narrative', () => {
     render(() => (
       <RunHistoryEntry

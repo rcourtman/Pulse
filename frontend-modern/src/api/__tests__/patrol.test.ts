@@ -129,6 +129,8 @@ describe('patrol api', () => {
         finding_ids: [],
         error_count: 0,
         status: 'healthy',
+        error_summary: 'Selected model does not support Patrol tools',
+        error_detail: 'provider rejected tool_choice',
         triage_flags: 2,
         triage_skipped_llm: true,
         tool_call_count: 0,
@@ -143,6 +145,8 @@ describe('patrol api', () => {
       alertIdentifier: 'canonical-alert-1',
       effective_scope_resource_ids: ['resource-1', 'resource-2'],
       truenas_checked: 1,
+      error_summary: 'Selected model does not support Patrol tools',
+      error_detail: 'provider rejected tool_choice',
       triage_flags: 2,
       triage_skipped_llm: true,
     });

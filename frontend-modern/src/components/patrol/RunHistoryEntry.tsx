@@ -153,6 +153,9 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const coverageSummary = getPatrolRunCoverageSummary(run);
   const hasFindingsSnapshot = run.finding_ids !== undefined;
   const runStatus = getPatrolRunStatusPresentation(run.status, run.error_count, hasFindingsSnapshot);
+  const runErrorSummary = String(run.error_summary || '').trim();
+  const runErrorDetail = String(run.error_detail || '').trim();
+  const hasRunErrorDetail = run.error_count > 0 && (runErrorSummary || runErrorDetail);
 
   return (
     <div
@@ -267,6 +270,20 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               )}
             </p>
           </div>
+
+          <Show when={hasRunErrorDetail}>
+            <div class="mt-3 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+              <AlertTriangleIcon class="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <div class="min-w-0 space-y-1">
+                <p class="font-medium">{runErrorSummary || 'Patrol analysis did not complete'}</p>
+                <Show when={runErrorDetail && runErrorDetail !== runErrorSummary}>
+                  <p class="break-words text-xs leading-relaxed text-red-700 dark:text-red-300">
+                    {runErrorDetail}
+                  </p>
+                </Show>
+              </div>
+            </div>
+          </Show>
 
           {/* Section 2: Resources Scanned */}
           <Show when={run.resources_checked > 0}>

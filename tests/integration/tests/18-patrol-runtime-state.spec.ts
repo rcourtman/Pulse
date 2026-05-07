@@ -126,6 +126,9 @@ function buildScopedTriggerRunHistory() {
       finding_ids: ["finding-triggered"],
       error_count: 1,
       status: "healthy",
+      error_summary: "Selected model does not support Patrol tools",
+      error_detail:
+        "agentic patrol failed: API error (404): No endpoints found that support the provided 'tool_choice' value.",
       triage_flags: 0,
       tool_call_count: 0,
     },
@@ -672,5 +675,12 @@ test.describe("Patrol runtime-state browser contract", () => {
       ),
     ).toBeVisible();
     await expect(page.getByText("Last full patrol")).toBeVisible();
+
+    await page.getByRole("button", { name: "Runs" }).click();
+    await page.getByRole("button", { name: /Alert fired/i }).click();
+    await expect(
+      page.getByText("Selected model does not support Patrol tools"),
+    ).toBeVisible();
+    await expect(page.getByText(/tool_choice/)).toBeVisible();
   });
 });

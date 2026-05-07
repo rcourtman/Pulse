@@ -289,7 +289,9 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		triageSkippedLLM  bool
 		findingIDs        []string
 		errors            int
-		lastAIError       error             // Preserve original error for circuit breaker categorization
+		lastAIError       error // Preserve original error for circuit breaker categorization
+		errorSummary      string
+		errorDetail       string
 		aiAnalysis        *AIAnalysisResult // Stores the AI's analysis for the run record
 	}
 	var newFindings []*Finding
@@ -383,43 +385,12 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 			log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
 			runStats.errors++
 			runStats.lastAIError = aiErr
+			failure := patrolRuntimeFailureFromError(aiErr)
+			runStats.errorSummary = failure.Summary
+			runStats.errorDetail = failure.Detail
 
 			// Create a finding to surface this error to the user
-			errMsg := aiErr.Error()
-			var title, description, recommendation string
-			if strings.Contains(errMsg, "Insufficient Balance") || strings.Contains(errMsg, "402") {
-				title = "Pulse Patrol: Provider billing or quota issue"
-				description = "Pulse Patrol cannot analyze your infrastructure because the configured AI provider rejected the request for billing or quota reasons."
-				recommendation = "Resolve the billing or quota issue with your AI provider, or switch to a different provider or local model in Pulse Assistant settings."
-			} else if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "Unauthorized") {
-				title = "Pulse Patrol: Invalid API key"
-				description = "Pulse Patrol cannot analyze your infrastructure because the API key is invalid or expired."
-				recommendation = "Check your API key in Pulse Assistant settings and verify it is correct."
-			} else if strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "429") {
-				title = "Pulse Patrol: Rate limited"
-				description = "Pulse Patrol is being rate limited by your provider. Analysis will be retried on the next patrol run."
-				recommendation = "Wait for the rate limit to reset, or consider upgrading your API plan for higher limits."
-			} else {
-				title = "Pulse Patrol: Analysis failed"
-				description = fmt.Sprintf("Pulse Patrol encountered an error while analyzing your infrastructure: %s", errMsg)
-				recommendation = "Check your Pulse Assistant settings and API key. If the problem persists, check the logs for more details."
-			}
-
-			errorFinding := &Finding{
-				ID:             generateFindingID("ai-service", "reliability", "ai-patrol-error"),
-				Key:            "ai-patrol-error",
-				Severity:       "warning",
-				Category:       "reliability",
-				ResourceID:     "ai-service",
-				ResourceName:   "Pulse Patrol Service",
-				ResourceType:   "service",
-				Title:          title,
-				Description:    description,
-				Recommendation: recommendation,
-				Evidence:       fmt.Sprintf("Error: %s", errMsg),
-				DetectedAt:     time.Now(),
-				LastSeenAt:     time.Now(),
-			}
+			errorFinding := newPatrolRuntimeFailureFinding(failure, time.Now())
 			trackFinding(errorFinding)
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
@@ -559,6 +530,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		FindingIDs:        runStats.findingIDs,
 		ErrorCount:        runStats.errors,
 		Status:            status,
+		ErrorSummary:      runStats.errorSummary,
+		ErrorDetail:       runStats.errorDetail,
 	}
 
 	if scope != nil {
@@ -699,6 +672,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		triageSkippedLLM  bool
 		findingIDs        []string
 		errors            int
+		errorSummary      string
+		errorDetail       string
 		aiAnalysis        *AIAnalysisResult
 	}
 
@@ -814,6 +789,16 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
 			runStats.errors++
+			failure := patrolRuntimeFailureFromError(aiErr)
+			runStats.errorSummary = failure.Summary
+			runStats.errorDetail = failure.Detail
+			errorFinding := newPatrolRuntimeFailureFinding(failure, time.Now())
+			if p.recordFinding(errorFinding) {
+				runStats.newFindings++
+			} else {
+				runStats.existingFindings++
+			}
+			runStats.findingIDs = append(runStats.findingIDs, errorFinding.ID)
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
 			runStats.rejectedFindings = aiResult.RejectedFindings
@@ -899,6 +884,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		FindingIDs:                runStats.findingIDs,
 		ErrorCount:                runStats.errors,
 		Status:                    status,
+		ErrorSummary:              runStats.errorSummary,
+		ErrorDetail:               runStats.errorDetail,
 	}
 
 	if runStats.aiAnalysis != nil {

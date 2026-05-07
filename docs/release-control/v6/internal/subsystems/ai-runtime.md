@@ -98,6 +98,12 @@ runtime cost control, and shared AI transport surfaces.
 1. Update this contract when canonical AI runtime or transport entry points move
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes
+   Patrol runtime failures are part of that runtime contract: provider, model,
+   tool-calling, auth, quota, rate-limit, context-window, and connectivity
+   failures must be classified in `internal/ai/` before they reach operators,
+   surfaced as the synthetic Patrol runtime finding, and preserved on patrol
+   run records as structured error summary/detail instead of collapsing to
+   generic analysis-failed copy.
 4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
    External provider-bound unified-resource context must enforce the same

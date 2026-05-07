@@ -137,6 +137,8 @@ func TestConfigPersistence_AIChatSessionsMigratesPlaintextFile(t *testing.T) {
 func TestPatrolRunRecordJSONCanonicalOutput(t *testing.T) {
 	record := config.PatrolRunRecord{
 		ID:              "run-1",
+		ErrorSummary:    "Selected model does not support Patrol tools",
+		ErrorDetail:     "provider rejected tool_choice",
 		AlertIdentifier: "instance:node:100::metric/cpu",
 	}
 
@@ -158,16 +160,30 @@ func TestPatrolRunRecordJSONCanonicalOutput(t *testing.T) {
 	if _, ok := payload["alert_id"]; ok {
 		t.Fatalf("did not expect alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
+	if payload["error_summary"] != "Selected model does not support Patrol tools" {
+		t.Fatalf("expected error_summary to persist, got %#v", payload["error_summary"])
+	}
+	if payload["error_detail"] != "provider rejected tool_choice" {
+		t.Fatalf("expected error_detail to persist, got %#v", payload["error_detail"])
+	}
 
 	var decoded config.PatrolRunRecord
 	if err := json.Unmarshal([]byte(`{
 		"id":"run-1",
+		"error_summary":"Selected model does not support Patrol tools",
+		"error_detail":"provider rejected tool_choice",
 		"alert_identifier":"instance:node:100::metric/cpu"
 	}`), &decoded); err != nil {
 		t.Fatalf("unmarshal canonical patrol run: %v", err)
 	}
 	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier to load, got %q", decoded.AlertIdentifier)
+	}
+	if decoded.ErrorSummary != "Selected model does not support Patrol tools" {
+		t.Fatalf("expected error_summary to load, got %q", decoded.ErrorSummary)
+	}
+	if decoded.ErrorDetail != "provider rejected tool_choice" {
+		t.Fatalf("expected error_detail to load, got %q", decoded.ErrorDetail)
 	}
 }
 

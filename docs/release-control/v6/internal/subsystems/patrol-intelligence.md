@@ -430,6 +430,12 @@ the summary card and the findings list. The active finding row should surface
 the same Patrol runtime classification with a runtime-qualified severity badge
 such as `Runtime issue` or `Runtime critical`, rather than pairing a generic
 infrastructure severity chip like `warning` with a second Patrol-runtime
+label.
+Patrol run history must follow the same operator-facing runtime failure
+contract. Expanded erroring runs should show the backend-provided
+`error_summary` and bounded `error_detail` near the run narrative, so a
+provider/model/tool failure remains actionable even when the operator starts
+from the Runs tab rather than the synthetic runtime finding.
 classification badge.
 That same shared finding-presentation helper should also own Patrol finding
 subject labels, so Patrol-owned synthetic service findings render as

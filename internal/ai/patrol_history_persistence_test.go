@@ -613,6 +613,8 @@ func TestPatrolHistoryPersistenceAdapter_PreservesEmptySnapshotsAndParityFields(
 			FindingIDs:                []string{},
 			ErrorCount:                0,
 			Status:                    "healthy",
+			ErrorSummary:              "Selected model does not support Patrol tools",
+			ErrorDetail:               "provider rejected tool_choice",
 			TriageFlags:               3,
 			TriageSkippedLLM:          true,
 		},
@@ -655,6 +657,12 @@ func TestPatrolHistoryPersistenceAdapter_PreservesEmptySnapshotsAndParityFields(
 	}
 	if !loaded[0].TriageSkippedLLM {
 		t.Fatal("expected TriageSkippedLLM to survive persistence")
+	}
+	if loaded[0].ErrorSummary != "Selected model does not support Patrol tools" {
+		t.Fatalf("expected ErrorSummary to survive persistence, got %q", loaded[0].ErrorSummary)
+	}
+	if loaded[0].ErrorDetail != "provider rejected tool_choice" {
+		t.Fatalf("expected ErrorDetail to survive persistence, got %q", loaded[0].ErrorDetail)
 	}
 }
 

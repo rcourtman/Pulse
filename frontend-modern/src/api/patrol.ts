@@ -429,6 +429,8 @@ export interface PatrolRunRecord {
   finding_ids?: string[];
   error_count: number;
   status: PatrolRunStatus;
+  error_summary?: string;
+  error_detail?: string;
   triage_flags: number;
   triage_skipped_llm?: boolean;
   ai_analysis?: string;

@@ -2505,6 +2505,8 @@ type PatrolRunRecord struct {
 	FindingIDs       []string `json:"finding_ids"`
 	ErrorCount       int      `json:"error_count"`
 	Status           string   `json:"status"` // "healthy", "issues_found", "critical", "error"
+	ErrorSummary     string   `json:"error_summary,omitempty"`
+	ErrorDetail      string   `json:"error_detail,omitempty"`
 	// Triage stats
 	TriageFlags      int  `json:"triage_flags"`
 	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"`
@@ -2549,6 +2551,8 @@ type patrolRunRecordJSON struct {
 	FindingIDs                []string         `json:"finding_ids"`
 	ErrorCount                int              `json:"error_count"`
 	Status                    string           `json:"status"`
+	ErrorSummary              string           `json:"error_summary,omitempty"`
+	ErrorDetail               string           `json:"error_detail,omitempty"`
 	TriageFlags               int              `json:"triage_flags"`
 	TriageSkippedLLM          bool             `json:"triage_skipped_llm,omitempty"`
 	AIAnalysis                string           `json:"ai_analysis,omitempty"`
@@ -2626,6 +2630,8 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		FindingIDs:                normalized.FindingIDs,
 		ErrorCount:                normalized.ErrorCount,
 		Status:                    normalized.Status,
+		ErrorSummary:              normalized.ErrorSummary,
+		ErrorDetail:               normalized.ErrorDetail,
 		TriageFlags:               normalized.TriageFlags,
 		TriageSkippedLLM:          normalized.TriageSkippedLLM,
 		AIAnalysis:                normalized.AIAnalysis,
@@ -2675,6 +2681,8 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		FindingIDs:                payload.FindingIDs,
 		ErrorCount:                payload.ErrorCount,
 		Status:                    payload.Status,
+		ErrorSummary:              payload.ErrorSummary,
+		ErrorDetail:               payload.ErrorDetail,
 		TriageFlags:               payload.TriageFlags,
 		TriageSkippedLLM:          payload.TriageSkippedLLM,
 		AIAnalysis:                payload.AIAnalysis,
