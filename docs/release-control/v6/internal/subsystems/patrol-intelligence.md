@@ -159,7 +159,8 @@ Patrol-specific presentation helpers.
    recovered approval reference when framing the operator decision and action
    posture. Inline Patrol approval actions that open Assistant must follow the
    same rule: pass approval ID/status/risk/target as review context, force the
-   request-local approval-required mode, and never paste the approval command or
+   request-local approval-required mode, attach the Patrol-owned visible drawer
+   briefing for the pending approval, and never paste the approval command or
    proposed-fix command text into the chat prompt. Remediation-plan Assistant
    handoffs follow the same boundary: step labels, plan status, risk, and command
    counts are allowed, while command and rollback command text stays in the

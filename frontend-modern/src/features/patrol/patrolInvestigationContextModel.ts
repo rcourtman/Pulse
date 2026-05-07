@@ -293,9 +293,19 @@ export function buildPatrolAssistantFindingBriefing(
   const record = buildPatrolInvestigationRecordPresentation(input.investigationRecord);
   const title = normalizeText(input.title) || 'Patrol finding';
   const subject = normalizeText(input.subject) || 'affected resource';
-  const statusParts = [record.statusLabel, record.outcomeLabel, record.confidenceLabel].filter(
-    isNonEmptyString,
-  );
+  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
+  const approvalStatusParts = !record.hasRecord
+    ? [
+        pendingApproval.status ? `${formatIdentifierLabel(pendingApproval.status)} approval` : '',
+        pendingApproval.riskLevel ? `${formatIdentifierLabel(pendingApproval.riskLevel)} risk` : '',
+      ]
+    : [];
+  const statusParts = [
+    record.statusLabel,
+    record.outcomeLabel,
+    record.confidenceLabel,
+    ...approvalStatusParts,
+  ].filter(isNonEmptyString);
   const attentionReason = buildPatrolAssistantAttentionReason(input, record);
   const operatorDecision = buildPatrolAssistantOperatorDecision(input);
   if (!record.hasRecord && !attentionReason && !operatorDecision) {
@@ -319,9 +329,11 @@ export function buildPatrolAssistantFindingBriefing(
     statusLabel: statusParts.join(' · ') || undefined,
     detailLines,
     evidence: [...record.evidenceSummaries, ...verificationLines].slice(0, 4),
-    actionLabel: record.proposedFix?.description,
+    actionLabel:
+      record.proposedFix?.description ||
+      (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined),
     commandSummary: record.proposedFix?.commandSummary,
-    safetyNote: buildPatrolAssistantSafetyNote(record),
+    safetyNote: buildPatrolAssistantSafetyNote(record, pendingApproval),
   };
 }
 
@@ -495,8 +507,14 @@ function buildPatrolAssistantOperatorDecision(
     if (pendingApproval.targetName) {
       parts.push(`Target: ${pendingApproval.targetName}.`);
     }
+    if (pendingApproval.riskLevel) {
+      parts.push(`Risk: ${pendingApproval.riskLevel}.`);
+    }
     if (pendingApproval.expiresAt) {
       parts.push(`Expires: ${pendingApproval.expiresAt}.`);
+    }
+    if (pendingApproval.requestedAt) {
+      parts.push(`Requested: ${pendingApproval.requestedAt}.`);
     }
     return parts.join(' ');
   }
@@ -521,6 +539,7 @@ function buildPatrolAssistantOperatorDecision(
 
 function buildPatrolAssistantSafetyNote(
   record: PatrolInvestigationRecordPresentation,
+  pendingApproval?: Required<PatrolAssistantApprovalBriefingInput>,
 ): string | undefined {
   const hasCommands = Boolean(record.proposedFix?.commandSummary);
   const isDestructive = Boolean(record.proposedFix?.destructive);
@@ -532,6 +551,9 @@ function buildPatrolAssistantSafetyNote(
   }
   if (isDestructive) {
     return 'Destructive actions require governed approval.';
+  }
+  if (pendingApproval?.id) {
+    return 'Execution requires the governed approval flow.';
   }
   return undefined;
 }

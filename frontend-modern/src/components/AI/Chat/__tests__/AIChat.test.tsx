@@ -1024,6 +1024,34 @@ describe('AIChat', () => {
         { autonomousMode: false },
       );
     });
+
+    it('names scoped Patrol handoffs in the approval banner', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'gpt-4',
+        chat_model: '',
+        control_level: 'autonomous',
+        autonomous_mode: true,
+        discovery_enabled: true,
+      });
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        findingId: 'finding-1',
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Operator briefing attached',
+        },
+      };
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Approval required for this Patrol handoff/)).toBeInTheDocument();
+      });
+      expect(
+        screen.queryByText(/Approval required for this dashboard brief/),
+      ).not.toBeInTheDocument();
+    });
   });
 
   // ── Discovery hint ───────────────────────────────────────────────────

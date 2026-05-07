@@ -819,7 +819,10 @@ frontend primitive boundary.
     When the feature helper adds live approval state to the generic drawer
     briefing, it may pass only safe approval metadata into
     `AIChatContextBriefing`; raw approval commands remain owned by the governed
-    approval/remediation panels. Patrol approval-row Assistant prompts must
+    approval/remediation panels. The shared approval-required drawer banner must
+    derive its subject from that briefing or structured finding context, so
+    Patrol handoffs render as Patrol handoffs or Patrol findings rather than
+    generic dashboard briefs. Patrol approval-row Assistant prompts must
     follow that same drawer primitive contract: safe approval metadata may enter
     the prompt and context, but raw command text stays out and the scoped
     request must pass `autonomousMode:false` instead of changing the user's

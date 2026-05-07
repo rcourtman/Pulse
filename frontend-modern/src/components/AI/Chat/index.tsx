@@ -314,6 +314,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const contextBriefing = createMemo(() => aiChatStore.context.briefing);
   const contextBriefingEvidence = createMemo(() => contextBriefing()?.evidence ?? []);
   const contextBriefingDetails = createMemo(() => contextBriefing()?.detailLines ?? []);
+  const scopedApprovalHandoffLabel = createMemo(() => {
+    const source = contextBriefing()?.sourceLabel?.toLowerCase() || '';
+    if (source.includes('patrol')) return 'this Patrol handoff';
+    if (aiChatStore.context.findingId) return 'this Patrol finding';
+    return 'this dashboard brief';
+  });
 
   // Compute current status for display
   const currentStatus = createMemo(() => {
@@ -1103,8 +1109,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
           <Show when={hasScopedApprovalHandoff() && controlLevel() === 'autonomous'}>
             <div class="px-4 py-2 border-b border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 flex items-center gap-2 text-[11px] text-blue-700 dark:text-blue-200">
               <span>
-                Approval required for this dashboard brief. Commands will ask before running; your
-                default Assistant mode is unchanged.
+                Approval required for {scopedApprovalHandoffLabel()}. Commands will ask before
+                running; your default Assistant mode is unchanged.
               </span>
             </div>
           </Show>
@@ -1221,7 +1227,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <Show when={contextBriefing()!.actionLabel || contextBriefing()!.commandSummary}>
                 <div class="mt-2 rounded border border-border bg-surface-alt px-2.5 py-2 text-[11px] text-muted">
                   <Show when={contextBriefing()!.actionLabel}>
-                    <div class="font-medium text-base-content">{contextBriefing()!.actionLabel}</div>
+                    <div class="font-medium text-base-content">
+                      {contextBriefing()!.actionLabel}
+                    </div>
                   </Show>
                   <Show when={contextBriefing()!.commandSummary}>
                     <div>{contextBriefing()!.commandSummary}</div>

@@ -350,4 +350,36 @@ describe('patrolInvestigationContextModel', () => {
       safetyNote: undefined,
     });
   });
+
+  it('builds a pending approval briefing before full investigation record hydration', () => {
+    const briefing = buildPatrolAssistantFindingBriefing({
+      title: 'CPU saturation',
+      subject: 'node-1',
+      findingStatus: 'active',
+      loopState: 'fix_queued',
+      pendingApproval: {
+        id: 'approval-1',
+        status: 'pending',
+        riskLevel: 'high',
+        requestedAt: '2026-05-06T12:00:00Z',
+        expiresAt: '2026-05-06T12:10:00Z',
+        targetName: 'node-1',
+      },
+    });
+
+    expect(briefing).toEqual({
+      sourceLabel: 'Pulse Patrol',
+      title: 'Operator briefing attached',
+      subject: 'CPU saturation on node-1',
+      statusLabel: 'Pending approval · High risk',
+      detailLines: [
+        'Attention: active finding; loop fix queued; live approval pending',
+        'Decision: Review live governed approval approval-1 before execution. Status: pending. Target: node-1. Risk: high. Expires: 2026-05-06T12:10:00Z. Requested: 2026-05-06T12:00:00Z.',
+      ],
+      evidence: [],
+      actionLabel: 'Approval approval-1',
+      commandSummary: undefined,
+      safetyNote: 'Execution requires the governed approval flow.',
+    });
+  });
 });

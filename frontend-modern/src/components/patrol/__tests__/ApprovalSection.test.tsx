@@ -175,8 +175,21 @@ describe('ApprovalSection', () => {
       targetType: 'agent',
       targetId: 'agent-1',
       findingId: 'finding-1',
+      briefing: expect.objectContaining({
+        sourceLabel: 'Pulse Patrol',
+        title: 'Operator briefing attached',
+        subject: 'CPU saturation on node-1',
+        statusLabel: 'Pending approval · High risk',
+        detailLines: expect.arrayContaining([
+          expect.stringContaining('live approval pending'),
+          expect.stringContaining('Review live governed approval approval-1 before execution'),
+        ]),
+        actionLabel: 'Approval approval-1',
+        safetyNote: 'Execution requires the governed approval flow.',
+      }),
       autonomousMode: false,
     });
+    expect(JSON.stringify(context.briefing)).not.toContain('systemctl restart nginx');
   });
 
   it('recreates and executes a queued fix when autofix is available', async () => {

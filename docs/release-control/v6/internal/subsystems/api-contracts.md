@@ -853,7 +853,11 @@ the canonical monitored-system blocked payload.
    for the finding when the durable record has no current approval ID, but those
    references must omit raw proposed-fix commands, remain model-only review
    context, and leave approval/execution authority with the governed approval
-   and remediation APIs. Chat execution may refresh approval status snapshots for
+   and remediation APIs. Frontend-visible pending-approval drawer briefings must
+   be a presentation of that same safe handoff context: approval ID, status,
+   risk, target, requested/expiry timestamps, action label, and approval-flow
+   safety posture may be shown, while raw commands stay outside chat prompt and
+   context payloads. Chat execution may refresh approval status snapshots for
    those references from the canonical approval store, but that snapshot is
    read-only, org-scoped, and must not expose or infer the raw command. When the
    API handoff builder recovers a live approval, the model-only operator

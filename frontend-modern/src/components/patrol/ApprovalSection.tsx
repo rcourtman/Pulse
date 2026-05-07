@@ -12,6 +12,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
+import { buildPatrolAssistantFindingBriefing } from '@/features/patrol/patrolInvestigationContextModel';
 import { RemediationStatus } from './RemediationStatus';
 
 interface ApprovalSectionProps {
@@ -37,6 +38,24 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   });
 
   const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
+
+  const approvalBriefing = (approval: ApprovalRequest | null) =>
+    buildPatrolAssistantFindingBriefing({
+      title: props.findingTitle || 'Patrol finding',
+      subject: props.resourceName || 'affected resource',
+      findingStatus: 'active',
+      loopState: props.investigationOutcome || 'awaiting_approval',
+      pendingApproval: approval
+        ? {
+            id: approval.id,
+            status: approval.status,
+            riskLevel: approval.riskLevel,
+            requestedAt: approval.requestedAt,
+            expiresAt: approval.expiresAt,
+            targetName: approval.targetName,
+          }
+        : null,
+    });
 
   const handleFixWithAssistant = (
     approval: ApprovalRequest | null,
@@ -68,6 +87,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       targetType: props.resourceType,
       targetId: props.resourceId,
       findingId: props.findingId,
+      briefing: approvalBriefing(approval),
       autonomousMode: false,
     });
   };
