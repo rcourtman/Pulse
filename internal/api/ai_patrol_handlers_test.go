@@ -12,6 +12,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 const (
@@ -64,6 +65,15 @@ func TestHandleGetPatrolStatus_NoPatrolService(t *testing.T) {
 	if !resp.Healthy {
 		t.Error("expected Healthy to be true when patrol not initialized (no issues)")
 	}
+	if resp.Readiness == nil {
+		t.Fatal("expected readiness payload when patrol service is unavailable")
+	}
+	if resp.Readiness.Status != patrolReadinessNotReady {
+		t.Fatalf("readiness status = %q, want %q", resp.Readiness.Status, patrolReadinessNotReady)
+	}
+	if check := requirePatrolReadinessCheck(t, *resp.Readiness, "service"); check.Message != "Pulse Patrol service is not available." {
+		t.Fatalf("service readiness message = %q", check.Message)
+	}
 }
 
 func TestHandleGetPatrolStatus_NoAIService(t *testing.T) {
@@ -101,6 +111,59 @@ func TestHandleGetPatrolStatus_NoAIService(t *testing.T) {
 	if resp.LicenseStatus == "" {
 		t.Error("expected LicenseStatus to be set when AI service missing")
 	}
+	if resp.Readiness == nil {
+		t.Fatal("expected readiness payload when AI service is missing")
+	}
+	if resp.Readiness.Status != patrolReadinessNotReady {
+		t.Fatalf("readiness status = %q, want %q", resp.Readiness.Status, patrolReadinessNotReady)
+	}
+	if check := requirePatrolReadinessCheck(t, *resp.Readiness, "service"); check.Message != "Pulse AI runtime service is not available." {
+		t.Fatalf("service readiness message = %q", check.Message)
+	}
+}
+
+func TestHandleGetPatrolStatus_NormalIncludesReadiness(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("save AI config: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetReadState(unifiedresources.NewRegistry(nil))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Readiness == nil {
+		t.Fatal("expected readiness payload when patrol service is available")
+	}
+	if resp.Readiness.Status != patrolReadinessWarning {
+		t.Fatalf("readiness status = %q, want %q", resp.Readiness.Status, patrolReadinessWarning)
+	}
+	if !resp.Readiness.Ready {
+		t.Fatal("warning readiness should still allow Patrol to run")
+	}
+	if resp.Readiness.Provider != "ollama" || resp.Readiness.Model != "ollama:llama3" {
+		t.Fatalf("unexpected readiness provider/model: %+v", resp.Readiness)
+	}
+	requirePatrolReadinessCheck(t, *resp.Readiness, "tools")
 }
 
 func TestHandleGetPatrolFindings_MethodNotAllowed(t *testing.T) {

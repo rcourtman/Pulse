@@ -141,6 +141,24 @@ export interface FindingsSummary {
 
 export type LicenseStatus = 'none' | 'active' | 'expired' | 'grace_period';
 export type PatrolRuntimeState = 'unavailable' | 'disabled' | 'running' | 'blocked' | 'active';
+export type PatrolReadinessStatus = 'ready' | 'warning' | 'not_ready';
+
+export interface PatrolReadinessCheck {
+  id: string;
+  status: PatrolReadinessStatus;
+  label: string;
+  message: string;
+  action?: string;
+}
+
+export interface PatrolReadiness {
+  status: PatrolReadinessStatus;
+  ready: boolean;
+  summary: string;
+  provider?: string;
+  model?: string;
+  checks: PatrolReadinessCheck[];
+}
 
 export interface PatrolTriggerStatus {
   running: boolean;
@@ -172,6 +190,7 @@ export interface PatrolStatus {
   license_required?: boolean;
   license_status?: LicenseStatus;
   upgrade_url?: string;
+  readiness?: PatrolReadiness;
   summary: FindingsSummary;
 }
 

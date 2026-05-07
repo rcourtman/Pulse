@@ -2421,6 +2421,115 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA27",
+      "summary": "Patrol status owns server-authored runtime readiness: provider, model, settings-persistence, and tool-calling prerequisites must travel as structured `/api/ai/patrol/status` checks, and known not-ready states must block manual Patrol runs before they become generic interrupted-analysis failures.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "patrol-readiness-frontend-tests",
+          "run": [
+            "npm",
+            "--prefix",
+            "frontend-modern",
+            "test",
+            "--",
+            "--run",
+            "src/api/__tests__/patrol.test.ts",
+            "src/pages/__tests__/AIIntelligence.test.tsx"
+          ]
+        },
+        {
+          "id": "patrol-readiness-status-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "PatrolReadiness|PatrolStatus|Contract_PatrolStatusResponseJSONSnapshot",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/__tests__/patrol.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/patrol.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_handlers.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_patrol_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

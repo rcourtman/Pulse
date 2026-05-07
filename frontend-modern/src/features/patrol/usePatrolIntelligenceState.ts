@@ -336,13 +336,20 @@ export function usePatrolIntelligenceState() {
     normalizePatrolRuntimeBlockedReason(patrolStatus()?.blocked_reason),
   );
   const blockedAt = createMemo(() => patrolStatus()?.blocked_at);
+  const patrolReadiness = createMemo(() => patrolStatus()?.readiness ?? null);
+  const readinessBlocksPatrol = createMemo(() => patrolReadiness()?.status === 'not_ready');
   const showBlockedBanner = createMemo(() => runtimeState() === 'blocked');
-  const canTriggerPatrol = createMemo(() => runtimeState() === 'active');
+  const showReadinessBanner = createMemo(() => {
+    const readiness = patrolReadiness();
+    return runtimeState() === 'active' && readiness !== null && readiness.status !== 'ready';
+  });
+  const canTriggerPatrol = createMemo(() => runtimeState() === 'active' && !readinessBlocksPatrol());
   const triggerPatrolDisabledReason = createMemo(() => {
     if (runtimeState() === 'disabled') return 'Patrol is disabled';
     if (runtimeState() === 'blocked') return blockedReason() || 'Patrol is paused';
     if (runtimeState() === 'running') return 'Patrol is already running';
     if (runtimeState() === 'unavailable') return 'Patrol service is unavailable';
+    if (readinessBlocksPatrol()) return patrolReadiness()?.summary || 'Patrol is not ready';
     return '';
   });
 
@@ -683,6 +690,7 @@ export function usePatrolIntelligenceState() {
     patrolAnomalyTriggers,
     patrolInterval,
     patrolModel,
+    patrolReadiness,
     patrolRunHistory,
     runtimeState,
     patrolStatus,
@@ -710,6 +718,7 @@ export function usePatrolIntelligenceState() {
     },
     showAdvancedSettings,
     showBlockedBanner,
+    showReadinessBanner,
     showInvestigationContext,
     shouldSurfaceInvestigationContext,
     summaryStats,

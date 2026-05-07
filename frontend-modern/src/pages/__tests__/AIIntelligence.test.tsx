@@ -187,6 +187,9 @@ vi.mock('@/stores/aiIntelligence', () => {
     get circuitBreakerStatus() {
       return intelligenceState.circuitBreakerStatus;
     },
+    get patrolPendingApprovals() {
+      return [];
+    },
     get correlations() {
       return correlationsState();
     },
@@ -406,6 +409,101 @@ describe('AIIntelligence entitlement gating', () => {
 
     expect(screen.queryByRole('heading', { name: 'Pulse Patrol Patrol' })).not.toBeInTheDocument();
     expect(screen.getByTestId('pulse-patrol-logo')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('surfaces Patrol readiness issues before a manual run can start', async () => {
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        readiness: {
+          status: 'not_ready',
+          ready: false,
+          summary:
+            'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+          provider: 'ollama',
+          model: 'ollama:deepseek-r1:7b-llama-distill-q4_K_M',
+          checks: [
+            {
+              id: 'tools',
+              status: 'not_ready',
+              label: 'Patrol tools',
+              message:
+                'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+              action: 'open_provider_settings',
+            },
+          ],
+        },
+      }),
+    );
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Patrol readiness issue')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(
+        'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+      ),
+    ).toBeInTheDocument();
+    for (const button of screen.getAllByRole('button', { name: /Run Patrol/i })) {
+      expect(button).toBeDisabled();
+    }
+    expect(triggerPatrolRunMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces Patrol readiness warnings without blocking manual runs', async () => {
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        readiness: {
+          status: 'warning',
+          ready: true,
+          summary:
+            'Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification.',
+          provider: 'ollama',
+          model: 'ollama:llama3',
+          checks: [
+            {
+              id: 'tools',
+              status: 'warning',
+              label: 'Patrol tools',
+              message:
+                'Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification.',
+              action: 'open_provider_settings',
+            },
+          ],
+        },
+      }),
+    );
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Patrol readiness warning')).toBeInTheDocument();
+    });
+    const runButtons = screen.getAllByRole('button', { name: /Run Patrol/i });
+    for (const button of runButtons) {
+      expect(button).not.toBeDisabled();
+    }
+
+    fireEvent.click(runButtons[0]);
+    await waitFor(() => {
+      expect(triggerPatrolRunMock).toHaveBeenCalled();
+    });
+  });
+
+  it('keeps legacy Patrol status payloads without readiness compatible', async () => {
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ readiness: undefined }));
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Patrol readiness issue')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol readiness warning')).not.toBeInTheDocument();
+    for (const button of screen.getAllByRole('button', { name: /Run Patrol/i })) {
+      expect(button).not.toBeDisabled();
+    }
   });
 
   it('renders canonical learned correlations in the summary page through the correlation card', async () => {

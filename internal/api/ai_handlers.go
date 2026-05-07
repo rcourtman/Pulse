@@ -4804,6 +4804,145 @@ type PatrolStatusResponse struct {
 		Watch    int `json:"watch"`
 		Info     int `json:"info"`
 	} `json:"summary"`
+	Readiness *PatrolReadinessResponse `json:"readiness,omitempty"`
+}
+
+type PatrolReadinessResponse struct {
+	Status   string                 `json:"status"`
+	Ready    bool                   `json:"ready"`
+	Summary  string                 `json:"summary"`
+	Provider string                 `json:"provider,omitempty"`
+	Model    string                 `json:"model,omitempty"`
+	Checks   []PatrolReadinessCheck `json:"checks"`
+}
+
+type PatrolReadinessCheck struct {
+	ID      string `json:"id"`
+	Status  string `json:"status"`
+	Label   string `json:"label"`
+	Message string `json:"message"`
+	Action  string `json:"action,omitempty"`
+}
+
+const (
+	patrolReadinessReady    = "ready"
+	patrolReadinessWarning  = "warning"
+	patrolReadinessNotReady = "not_ready"
+)
+
+func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService *ai.Service, patrolAvailable bool) PatrolReadinessResponse {
+	checks := make([]PatrolReadinessCheck, 0, 4)
+	addCheck := func(id, status, label, message, action string) {
+		checks = append(checks, PatrolReadinessCheck{
+			ID:      id,
+			Status:  status,
+			Label:   label,
+			Message: message,
+			Action:  action,
+		})
+	}
+
+	if aiService == nil {
+		addCheck("service", patrolReadinessNotReady, "AI runtime service", "Pulse AI runtime service is not available.", "restart_service")
+		return summarizePatrolReadiness("", "", checks)
+	}
+	if !patrolAvailable {
+		addCheck("service", patrolReadinessNotReady, "Patrol service", "Pulse Patrol service is not available.", "restart_service")
+		return summarizePatrolReadiness("", "", checks)
+	}
+	addCheck("service", patrolReadinessReady, "Patrol service", "Pulse Patrol service is available.", "")
+
+	cfg, err := h.loadAIConfig(ctx)
+	if err != nil || cfg == nil {
+		addCheck("settings", patrolReadinessNotReady, "Settings persistence", "Pulse Assistant settings could not be loaded from persistence.", "open_provider_settings")
+		return summarizePatrolReadiness("", "", checks)
+	}
+	addCheck("settings", patrolReadinessReady, "Settings persistence", "Pulse Assistant and Patrol settings are readable.", "")
+
+	if !cfg.Enabled {
+		addCheck("enabled", patrolReadinessNotReady, "Assistant enabled", "Pulse Assistant is disabled, so Patrol cannot run model-backed verification.", "open_provider_settings")
+	} else {
+		addCheck("enabled", patrolReadinessReady, "Assistant enabled", "Pulse Assistant is enabled for Patrol verification.", "")
+	}
+
+	if !cfg.IsConfigured() {
+		addCheck("provider", patrolReadinessNotReady, "Provider configured", "No AI provider is configured for Patrol.", "open_provider_settings")
+		return summarizePatrolReadiness("", "", checks)
+	}
+	addCheck("provider", patrolReadinessReady, "Provider configured", "At least one AI provider is configured.", "")
+
+	model := strings.TrimSpace(cfg.GetPatrolModel())
+	if model == "" {
+		model = strings.TrimSpace(cfg.GetChatModel())
+	}
+	provider, _ := config.ParseModelString(model)
+	if model == "" || provider == "" || provider == config.AIProviderQuickstart {
+		addCheck("model", patrolReadinessNotReady, "Patrol model", "No concrete Patrol model is selected.", "open_provider_settings")
+		return summarizePatrolReadiness(provider, model, checks)
+	}
+	if !cfg.HasProvider(provider) {
+		addCheck("model", patrolReadinessNotReady, "Patrol model", fmt.Sprintf("The selected Patrol model uses %s, but that provider is not configured.", provider), "open_provider_settings")
+		return summarizePatrolReadiness(provider, model, checks)
+	}
+	addCheck("model", patrolReadinessReady, "Patrol model", "Patrol has a model selected from a configured provider.", "")
+
+	toolStatus, toolMessage := patrolToolReadinessForModel(provider, model)
+	toolAction := ""
+	if toolStatus != patrolReadinessReady {
+		toolAction = "open_provider_settings"
+	}
+	addCheck("tools", toolStatus, "Patrol tools", toolMessage, toolAction)
+
+	return summarizePatrolReadiness(provider, model, checks)
+}
+
+func summarizePatrolReadiness(provider, model string, checks []PatrolReadinessCheck) PatrolReadinessResponse {
+	status := patrolReadinessReady
+	summary := "Patrol is ready to run tool-backed verification."
+	for _, check := range checks {
+		if check.Status == patrolReadinessNotReady {
+			status = patrolReadinessNotReady
+			summary = check.Message
+			break
+		}
+		if check.Status == patrolReadinessWarning && status == patrolReadinessReady {
+			status = patrolReadinessWarning
+			summary = check.Message
+		}
+	}
+
+	return PatrolReadinessResponse{
+		Status:   status,
+		Ready:    status != patrolReadinessNotReady,
+		Summary:  summary,
+		Provider: provider,
+		Model:    model,
+		Checks:   checks,
+	}
+}
+
+func ptrToPatrolReadiness(readiness PatrolReadinessResponse) *PatrolReadinessResponse {
+	return &readiness
+}
+
+func patrolToolReadinessForModel(provider, model string) (string, string) {
+	normalizedModel := strings.ToLower(strings.TrimSpace(model))
+	switch {
+	case strings.Contains(normalizedModel, "deepseek-r1") ||
+		strings.Contains(normalizedModel, "/r1") ||
+		strings.Contains(normalizedModel, ":r1") ||
+		strings.Contains(normalizedModel, "reasoner") ||
+		strings.Contains(normalizedModel, "qwq"):
+		return patrolReadinessNotReady, "The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls. Patrol needs tool calling to inspect resources and create governed findings."
+	case provider == config.AIProviderOpenRouter:
+		return patrolReadinessWarning, "OpenRouter routes vary by model and endpoint. Patrol will fail closed if the routed model rejects tools or tool_choice."
+	case provider == config.AIProviderOllama:
+		return patrolReadinessWarning, "Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification."
+	case provider == config.AIProviderDeepSeek:
+		return patrolReadinessWarning, "DeepSeek model capability varies by model. Patrol requires a model that supports tool calling."
+	default:
+		return patrolReadinessReady, "The selected provider path supports Patrol's tool-backed analysis contract."
+	}
 }
 
 func (h *AISettingsHandler) getPatrolService(ctx context.Context) *ai.PatrolService {
@@ -4858,6 +4997,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 			LicenseRequired: true,
 			LicenseStatus:   "none",
 			UpgradeURL:      upgradeURLForFeatureFromLicensing(featureAIAutoFixValue),
+			Readiness:       ptrToPatrolReadiness(h.buildPatrolReadiness(r.Context(), nil, false)),
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write patrol status response (no AI service)")
@@ -4877,6 +5017,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 			Healthy:         true,
 			LicenseRequired: !hasAutoFixFeature,
 			LicenseStatus:   licenseStatus,
+			Readiness:       ptrToPatrolReadiness(h.buildPatrolReadiness(r.Context(), aiService, false)),
 		}
 		if !hasAutoFixFeature {
 			response.UpgradeURL = upgradeURLForFeatureFromLicensing(featureAIAutoFixValue)
@@ -4921,6 +5062,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		BlockedAt:        status.BlockedAt,
 		LicenseRequired:  !hasAutoFixFeature,
 		LicenseStatus:    licenseStatus,
+		Readiness:        ptrToPatrolReadiness(h.buildPatrolReadiness(r.Context(), aiService, true)),
 	}
 	if !hasAutoFixFeature {
 		response.UpgradeURL = upgradeURLForFeatureFromLicensing(featureAIAutoFixValue)

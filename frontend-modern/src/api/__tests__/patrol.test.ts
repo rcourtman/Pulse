@@ -64,12 +64,43 @@ describe('patrol api', () => {
       runtime_state: 'blocked',
       blocked_reason: 'Connect a provider to power Pulse Assistant and Patrol.',
       healthy: false,
+      readiness: {
+        status: 'not_ready',
+        ready: false,
+        summary:
+          'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+        provider: 'ollama',
+        model: 'ollama:deepseek-r1:7b-llama-distill-q4_K_M',
+        checks: [
+          {
+            id: 'tools',
+            status: 'not_ready',
+            label: 'Patrol tools',
+            message:
+              'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+            action: 'open_provider_settings',
+          },
+        ],
+      },
     } as any);
 
     await expect(getPatrolStatus()).resolves.toMatchObject({
       runtime_state: 'blocked',
       blocked_reason: 'Connect a provider to power Pulse Assistant and Patrol.',
       healthy: false,
+      readiness: {
+        status: 'not_ready',
+        ready: false,
+        provider: 'ollama',
+        model: 'ollama:deepseek-r1:7b-llama-distill-q4_K_M',
+        checks: [
+          {
+            id: 'tools',
+            status: 'not_ready',
+            action: 'open_provider_settings',
+          },
+        ],
+      },
     });
   });
 

@@ -111,6 +111,9 @@ product API routes free of maintainer commercial analytics.
 4. `frontend-modern/src/api/notifications.ts` shared with `notifications`: the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary.
 5. `frontend-modern/src/api/orgs.ts` shared with `organization-settings`: the organization frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 6. `frontend-modern/src/api/patrol.ts` shared with `ai-runtime`: the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
+   The Patrol status payload owns Patrol readiness as structured API state:
+   provider/model/settings/tool prerequisites must travel as bounded readiness
+   checks instead of frontend-only heuristics or generic analysis-failed text.
 7. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.

@@ -101,6 +101,195 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.Contains(t, premiumRec.Body.String(), "limited to Monitor")
 }
 
+func TestAISettingsHandler_PatrolReadinessFlagsReasoningOnlyModel(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.PatrolModel = "ollama:deepseek-r1:7b-llama-distill-q4_K_M"
+	aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	readiness := handler.buildPatrolReadiness(context.Background(), handler.GetAIService(context.Background()), true)
+
+	require.Equal(t, patrolReadinessNotReady, readiness.Status)
+	require.False(t, readiness.Ready)
+	require.Equal(t, "ollama", readiness.Provider)
+	require.Equal(t, "ollama:deepseek-r1:7b-llama-distill-q4_K_M", readiness.Model)
+	require.Contains(t, readiness.Summary, "reasoning-only model family")
+
+	var toolCheck *PatrolReadinessCheck
+	for i := range readiness.Checks {
+		if readiness.Checks[i].ID == "tools" {
+			toolCheck = &readiness.Checks[i]
+			break
+		}
+	}
+	require.NotNil(t, toolCheck)
+	require.Equal(t, patrolReadinessNotReady, toolCheck.Status)
+}
+
+func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		patrolAvailable bool
+		configure       func(*config.AIConfig)
+		wantStatus      string
+		wantReady       bool
+		wantCheckID     string
+		wantCheck       string
+		wantSummary     string
+	}{
+		{
+			name:            "disabled assistant blocks patrol",
+			patrolAvailable: true,
+			wantStatus:      patrolReadinessNotReady,
+			wantReady:       false,
+			wantCheckID:     "enabled",
+			wantCheck:       patrolReadinessNotReady,
+			wantSummary:     "disabled",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = false
+				aiCfg.Model = "ollama:llama3"
+				aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+			},
+		},
+		{
+			name:            "provider configured without model blocks patrol",
+			patrolAvailable: true,
+			wantStatus:      patrolReadinessNotReady,
+			wantReady:       false,
+			wantCheckID:     "model",
+			wantCheck:       patrolReadinessNotReady,
+			wantSummary:     "No concrete Patrol model",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = true
+				aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+			},
+		},
+		{
+			name:            "selected model provider must be configured",
+			patrolAvailable: true,
+			wantStatus:      patrolReadinessNotReady,
+			wantReady:       false,
+			wantCheckID:     "model",
+			wantCheck:       patrolReadinessNotReady,
+			wantSummary:     "provider is not configured",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = true
+				aiCfg.Model = "anthropic:claude-3-5-sonnet-latest"
+				aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+			},
+		},
+		{
+			name:            "ollama tool support is a warning",
+			patrolAvailable: true,
+			wantStatus:      patrolReadinessWarning,
+			wantReady:       true,
+			wantCheckID:     "tools",
+			wantCheck:       patrolReadinessWarning,
+			wantSummary:     "Ollama connectivity alone does not prove tool support",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = true
+				aiCfg.Model = "ollama:llama3"
+				aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+			},
+		},
+		{
+			name:            "anthropic model is ready",
+			patrolAvailable: true,
+			wantStatus:      patrolReadinessReady,
+			wantReady:       true,
+			wantCheckID:     "tools",
+			wantCheck:       patrolReadinessReady,
+			wantSummary:     "ready to run",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = true
+				aiCfg.Model = "anthropic:claude-3-5-sonnet-latest"
+				aiCfg.AnthropicAPIKey = "test-key"
+			},
+		},
+		{
+			name:            "deepseek aliases warn instead of silently ready",
+			patrolAvailable: true,
+			wantStatus:      patrolReadinessWarning,
+			wantReady:       true,
+			wantCheckID:     "tools",
+			wantCheck:       patrolReadinessWarning,
+			wantSummary:     "DeepSeek model capability varies",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = true
+				aiCfg.Model = "deepseek:deepseek-v4-flush7pro"
+				aiCfg.DeepSeekAPIKey = "test-key"
+			},
+		},
+		{
+			name:            "missing patrol service blocks before settings checks",
+			patrolAvailable: false,
+			wantStatus:      patrolReadinessNotReady,
+			wantReady:       false,
+			wantCheckID:     "service",
+			wantCheck:       patrolReadinessNotReady,
+			wantSummary:     "Pulse Patrol service is not available",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = true
+				aiCfg.Model = "anthropic:claude-3-5-sonnet-latest"
+				aiCfg.AnthropicAPIKey = "test-key"
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			cfg := &config.Config{DataPath: tmp}
+			persistence := config.NewConfigPersistence(tmp)
+			aiCfg := config.NewDefaultAIConfig()
+			if tt.configure != nil {
+				tt.configure(aiCfg)
+			}
+			require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+
+			handler := newTestAISettingsHandler(cfg, persistence, nil)
+			readiness := handler.buildPatrolReadiness(context.Background(), handler.GetAIService(context.Background()), tt.patrolAvailable)
+
+			require.Equal(t, tt.wantStatus, readiness.Status)
+			require.Equal(t, tt.wantReady, readiness.Ready)
+			require.Contains(t, readiness.Summary, tt.wantSummary)
+			check := requirePatrolReadinessCheck(t, readiness, tt.wantCheckID)
+			require.Equal(t, tt.wantCheck, check.Status)
+		})
+	}
+}
+
+func TestAISettingsHandler_PatrolReadinessNotReadyTakesPrecedenceOverWarnings(t *testing.T) {
+	readiness := summarizePatrolReadiness("ollama", "ollama:llama3", []PatrolReadinessCheck{
+		{ID: "tools", Status: patrolReadinessWarning, Message: "warning message"},
+		{ID: "model", Status: patrolReadinessNotReady, Message: "not ready message"},
+	})
+
+	require.Equal(t, patrolReadinessNotReady, readiness.Status)
+	require.False(t, readiness.Ready)
+	require.Equal(t, "not ready message", readiness.Summary)
+}
+
+func requirePatrolReadinessCheck(t *testing.T, readiness PatrolReadinessResponse, id string) PatrolReadinessCheck {
+	t.Helper()
+	for _, check := range readiness.Checks {
+		if check.ID == id {
+			return check
+		}
+	}
+	t.Fatalf("readiness check %q not found in %+v", id, readiness.Checks)
+	return PatrolReadinessCheck{}
+}
+
 func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	t.Parallel()
 

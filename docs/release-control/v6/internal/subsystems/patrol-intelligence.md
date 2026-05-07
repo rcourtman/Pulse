@@ -82,6 +82,10 @@ Patrol-specific presentation helpers.
    header badges, runtime banners, empty states, and settings handoffs must
    present provider setup as BYOK/local/self-managed rather than promising
    managed credits or account-backed AI access.
+   Server-authored Patrol readiness from the status payload is part of the
+   Patrol product surface: warnings must be visible before a run starts, and
+   known not-ready states must disable manual Patrol runs instead of letting
+   operators discover provider/model/tool incompatibility through a failed run.
 5. Keep customer-facing Patrol naming product-first: page titles, route chrome,
    summary copy, actions, and empty states should lead with `Patrol` or
    `Pulse Patrol` rather than generic `AI` branding. Reserve `AI` terminology

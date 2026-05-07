@@ -52,6 +52,69 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
         </div>
       </Show>
 
+      <Show when={state.showReadinessBanner() && !state.showBlockedBanner()}>
+        <div
+          class={`flex-shrink-0 border-b px-4 py-3 ${
+            state.patrolReadiness()?.status === 'not_ready'
+              ? 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-900'
+              : 'bg-amber-50 dark:bg-amber-900 border-amber-200 dark:border-amber-800'
+          }`}
+        >
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-start gap-3">
+              <div
+                class={`flex-shrink-0 p-1.5 rounded-md ${
+                  state.patrolReadiness()?.status === 'not_ready'
+                    ? 'bg-red-100 dark:bg-red-900'
+                    : 'bg-amber-100 dark:bg-amber-900'
+                }`}
+              >
+                <ShieldAlertIcon
+                  class={`w-4 h-4 ${
+                    state.patrolReadiness()?.status === 'not_ready'
+                      ? 'text-red-600 dark:text-red-300'
+                      : 'text-amber-600 dark:text-amber-400'
+                  }`}
+                />
+              </div>
+              <div>
+                <p
+                  class={`text-sm font-semibold ${
+                    state.patrolReadiness()?.status === 'not_ready'
+                      ? 'text-red-900 dark:text-red-100'
+                      : 'text-amber-900 dark:text-amber-100'
+                  }`}
+                >
+                  {state.patrolReadiness()?.status === 'not_ready'
+                    ? 'Patrol readiness issue'
+                    : 'Patrol readiness warning'}
+                </p>
+                <p
+                  class={`text-xs ${
+                    state.patrolReadiness()?.status === 'not_ready'
+                      ? 'text-red-700 dark:text-red-200'
+                      : 'text-amber-700 dark:text-amber-300'
+                  }`}
+                >
+                  {state.patrolReadiness()?.summary}
+                </p>
+              </div>
+            </div>
+            <a
+              href={PATROL_PROVIDER_SETTINGS_ACTION.href}
+              class={`inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors ${
+                state.patrolReadiness()?.status === 'not_ready'
+                  ? 'text-red-900 dark:text-red-100 bg-red-100 dark:bg-red-900 border-red-200 dark:border-red-700 hover:bg-red-200 dark:hover:bg-red-900'
+                  : 'text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900 border-amber-200 dark:border-amber-700 hover:bg-amber-200 dark:hover:bg-amber-900'
+              }`}
+            >
+              <SettingsIcon class="w-3.5 h-3.5" />
+              {PATROL_PROVIDER_SETTINGS_ACTION.label}
+            </a>
+          </div>
+        </div>
+      </Show>
+
       <Show when={state.showBlockedBanner()}>
         <div class="flex-shrink-0 bg-amber-50 dark:bg-amber-900 border-b border-amber-200 dark:border-amber-800 px-4 py-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
