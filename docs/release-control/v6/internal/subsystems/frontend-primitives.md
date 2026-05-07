@@ -726,7 +726,10 @@ frontend primitive boundary.
     provider-settings action instead of hiding that diagnosis behind Assistant
     alone. If that inline state opens Assistant, the Patrol feature must hand off
     a source-named, model-only briefing and close the popover so the shared
-    Assistant drawer is not visually hidden behind feature chrome.
+    Assistant drawer is not visually hidden behind feature chrome. When a Patrol
+    assessment handoff is attached, the shared Assistant drawer empty state must
+    stay aligned with that source-named briefing and must not render generic
+    cluster/system starter prompts below the Patrol-owned context.
 19. Keep the shared `system-ai` settings shell product-first.
     `frontend-modern/src/components/Settings/AISettings.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
@@ -2915,6 +2918,10 @@ persistence belong there, while backend settings/model reads stay on
 `tests/integration/tests/11-first-session.spec.ts` must continue to assert
 that plain settings routes render without assistant bootstrap traffic or
 console noise.
+When an owned Patrol or alert surface attaches a source-named Assistant
+handoff, that same drawer shell must keep the empty conversation state aligned
+with the attached briefing instead of rendering generic cluster/system starter
+prompts below the source-owned context.
 Shared table, disclosure, and form primitives must also stay explicitly typed
 at the browser edge. Summary rows may memoize repeated pending-update reads,
 shared buttons must preserve discriminated disclosure props, toggle and a11y

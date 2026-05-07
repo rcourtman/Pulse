@@ -86,7 +86,10 @@ runtime cost control, and shared AI transport surfaces.
    instead of generic dashboard briefs. Source-owned handoff helpers may attach
    bounded suggested prompts to that briefing, but those prompts are only input
    starters; they must not auto-submit, bypass approval mode, or carry raw
-   command payloads. Reloaded Assistant sessions may consume the backend-owned
+   command payloads. While such a handoff is attached, the Assistant empty
+   message state must also remain source-named and must not fall back to generic
+   cluster/system starter prompts that compete with the attached briefing.
+   Reloaded Assistant sessions may consume the backend-owned
    `handoff_summary` only as safe presentation state and a Patrol finding
    pointer; hidden model context, command payloads, preflight data, and action
    results stay backend-owned and must not be reconstructed in the browser.

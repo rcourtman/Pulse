@@ -370,6 +370,32 @@ describe('AIChat', () => {
       expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
     });
 
+    it('uses Patrol briefing context instead of generic empty-state suggestions', () => {
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Patrol assessment attached',
+          subject: 'Coverage incomplete',
+          suggestedPrompts: [
+            'Explain why coverage is incomplete',
+            'Explain scoped activity and full-run gap',
+          ],
+        },
+      };
+
+      renderChat();
+
+      expect(screen.getByText('Review Pulse Patrol context')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Explain why coverage is incomplete' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Summarize cluster health' }),
+      ).not.toBeInTheDocument();
+    });
+
     it('renders New button', () => {
       renderChat();
       expect(screen.getByText('New')).toBeInTheDocument();

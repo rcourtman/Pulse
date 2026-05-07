@@ -22,6 +22,19 @@ export const AI_CHAT_QUESTION_CARD_PLACEHOLDER = 'Type your answer...';
 export const AI_CHAT_ASSISTANT_MESSAGE_LABEL = 'Pulse Assistant';
 export const AI_CHAT_CONTEXT_USED_LABEL = 'Context used';
 
+export interface AIChatEmptyStateBriefingInput {
+  sourceLabel?: string;
+  subject?: string;
+  suggestedPrompts?: string[];
+  title?: string;
+}
+
+export interface AIChatEmptyStatePresentation {
+  suggestions: string[];
+  subtitle?: string;
+  title: string;
+}
+
 const AI_CHAT_CLUSTER_EMPTY_STATE_SUGGESTIONS = [
   'Summarize cluster health',
   'Find failed services',
@@ -46,4 +59,30 @@ export function getAIChatEmptyStateSuggestions(isCluster: boolean) {
   return isCluster
     ? AI_CHAT_CLUSTER_EMPTY_STATE_SUGGESTIONS
     : AI_CHAT_SINGLE_SYSTEM_EMPTY_STATE_SUGGESTIONS;
+}
+
+export function getAIChatEmptyStatePresentation(args: {
+  briefing?: AIChatEmptyStateBriefingInput;
+  isCluster: boolean;
+}): AIChatEmptyStatePresentation {
+  const sourceLabel = args.briefing?.sourceLabel?.trim();
+  const title = args.briefing?.title?.trim();
+  const subject = args.briefing?.subject?.trim();
+  const hasSuggestedPrompts = (args.briefing?.suggestedPrompts ?? []).some(
+    (prompt) => prompt.trim().length > 0,
+  );
+
+  if (args.briefing && (sourceLabel || title || subject || hasSuggestedPrompts)) {
+    return {
+      title: sourceLabel ? `Review ${sourceLabel} context` : 'Review attached context',
+      subtitle: [title, subject].filter(Boolean).join(' · ') || undefined,
+      suggestions: [],
+    };
+  }
+
+  return {
+    title: AI_CHAT_EMPTY_STATE_TITLE,
+    subtitle: AI_CHAT_EMPTY_STATE_SUBTITLE,
+    suggestions: getAIChatEmptyStateSuggestions(args.isCluster),
+  };
 }

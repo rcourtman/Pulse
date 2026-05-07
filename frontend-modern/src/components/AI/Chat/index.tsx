@@ -28,15 +28,13 @@ import {
   AI_CHAT_DISCOVERY_HINT_BODY,
   AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_TITLE,
-  AI_CHAT_EMPTY_STATE_SUBTITLE,
-  AI_CHAT_EMPTY_STATE_TITLE,
   AI_CHAT_INPUT_PLACEHOLDER,
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
   AI_CHAT_NEW_SESSION_MENU_LABEL,
   AI_CHAT_NEW_SESSION_SHORT_LABEL,
   AI_CHAT_SESSION_MENU_TITLE,
   AI_CHAT_SESSION_EMPTY_STATE,
-  getAIChatEmptyStateSuggestions,
+  getAIChatEmptyStatePresentation,
 } from '@/utils/aiChatPresentation';
 import {
   getAIChatControlLevelPresentation,
@@ -547,6 +545,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const contextBriefingDetails = createMemo(() => contextBriefing()?.detailLines ?? []);
   const contextBriefingSuggestedPrompts = createMemo(
     () => contextBriefing()?.suggestedPrompts ?? [],
+  );
+  const emptyStatePresentation = createMemo(() =>
+    getAIChatEmptyStatePresentation({
+      briefing: contextBriefing(),
+      isCluster: isCluster(),
+    }),
   );
   const scopedApprovalHandoffLabel = createMemo(() => {
     const source = contextBriefing()?.sourceLabel?.toLowerCase() || '';
@@ -1589,9 +1593,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
               .slice(0, 3)}
             onLoadSession={handleLoadSession}
             emptyState={{
-              title: AI_CHAT_EMPTY_STATE_TITLE,
-              subtitle: AI_CHAT_EMPTY_STATE_SUBTITLE,
-              suggestions: getAIChatEmptyStateSuggestions(isCluster()),
+              title: emptyStatePresentation().title,
+              subtitle: emptyStatePresentation().subtitle,
+              suggestions: emptyStatePresentation().suggestions,
               onSuggestionClick: (s) => setInput(s),
             }}
           />

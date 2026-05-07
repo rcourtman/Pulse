@@ -18,6 +18,7 @@ import {
   AI_CHAT_SUGGESTIONS_LABEL,
   getAIChatLauncherTitle,
   getAIChatEmptyStateSuggestions,
+  getAIChatEmptyStatePresentation,
 } from '@/utils/aiChatPresentation';
 
 describe('aiChatPresentation', () => {
@@ -63,5 +64,26 @@ describe('aiChatPresentation', () => {
       'Check storage pressure',
       'Explain recent Patrol findings',
     ]);
+  });
+
+  it('uses attached briefing context for scoped assistant handoff empty states', () => {
+    expect(
+      getAIChatEmptyStatePresentation({
+        isCluster: true,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Patrol assessment attached',
+          subject: 'Coverage incomplete',
+          suggestedPrompts: [
+            'Explain why coverage is incomplete',
+            'Explain scoped activity and full-run gap',
+          ],
+        },
+      }),
+    ).toEqual({
+      title: 'Review Pulse Patrol context',
+      subtitle: 'Patrol assessment attached · Coverage incomplete',
+      suggestions: [],
+    });
   });
 });

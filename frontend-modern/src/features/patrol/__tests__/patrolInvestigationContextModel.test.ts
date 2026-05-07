@@ -284,6 +284,70 @@ describe('patrolInvestigationContextModel', () => {
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
+  it('frames coverage-incomplete assessment handoffs as a verification gap', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Coverage incomplete',
+        description:
+          'Patrol coverage is incomplete: recent activity was limited to scoped runs, so overall infrastructure health is not fully verified.',
+        eyebrow: 'Patrol assessment',
+      },
+      overallHealth: {
+        grade: 'C',
+        score: 65,
+        prediction: 'Patrol coverage is incomplete.',
+        factors: [{ category: 'coverage' }],
+      },
+      scoreChipLabel: 'Assessment',
+      metricState: {
+        primaryLabel: 'Active findings',
+        primaryValue: 0,
+        secondaryLabel: 'Warnings',
+        secondaryValue: 0,
+        fixedLabel: 'Fixed',
+        fixedValue: 0,
+      },
+      verification: {
+        title: 'Recently verified',
+        description: 'The most recent full patrol completed successfully.',
+        lastFullRunAt: '2026-05-04T21:38:51Z',
+        activityMixLabel: '8 full, 3 alert-triggered',
+      },
+      latestRun: {
+        kindLabel: 'Scoped run',
+        status: { label: 'issues found' },
+        timestamp: '2026-05-07T21:39:18Z',
+        coverageSummary: 'Checked 1 of 2 scoped resources',
+        findingsSnapshotAvailable: true,
+      },
+      investigationContext: {
+        recentChangeCount: 100,
+        correlationCount: 29,
+        governedResourceCount: 116,
+        hasContext: true,
+        summaryText: '100 recent changes · 29 correlations · 116 policy-covered resources',
+      },
+      activeFindings: [],
+    });
+
+    expect(handoff.prompt).toContain('why Patrol coverage is incomplete');
+    expect(handoff.prompt).toContain('what the latest scoped activity did and did not prove');
+    expect(handoff.context.briefing).toMatchObject({
+      actionLabel: 'Review coverage gap',
+      safetyNote:
+        'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled.',
+      suggestedPrompts: [
+        'Explain why coverage is incomplete',
+        'Explain scoped activity and full-run gap',
+        'Identify early warning signals before full verification',
+      ],
+    });
+    expect(handoff.context.handoffContext).toContain('Assessment: Coverage incomplete');
+    expect(handoff.context.handoffContext).toContain(
+      'Supporting Context: 100 recent changes · 29 correlations · 116 policy-covered resources',
+    );
+  });
+
   it('carries live governed approval posture into assessment finding handoffs', () => {
     const handoff = buildPatrolAssessmentAssistantHandoff({
       assessment: {

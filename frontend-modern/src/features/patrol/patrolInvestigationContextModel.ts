@@ -200,7 +200,9 @@ export interface PatrolAssessmentAssistantHandoffInput {
     eyebrow?: string | null;
   } | null;
   overallHealth?: {
+    factors?: Array<{ category?: string | null }> | null;
     grade?: string | null;
+    prediction?: string | null;
     score?: number | null;
   } | null;
   scoreChipLabel?: string | null;
@@ -712,6 +714,7 @@ function buildPatrolAssessmentAssistantPrompt(
 ): string {
   const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
   const actionCount = handoffActions.length;
+  const hasCoverageGap = assessmentHasCoverageGap(input);
   const reviewInstruction =
     pendingApprovalCount > 0
       ? `Start by reviewing ${formatAssessmentMetricCount(
@@ -723,7 +726,9 @@ function buildPatrolAssessmentAssistantPrompt(
             'governed action references',
             actionCount,
           )}, risk, and the safest next step from the attached context.`
-        : 'Use the attached model-only Patrol assessment context before suggesting next actions. Help me understand priority, risk, and safe next steps.';
+        : hasCoverageGap
+          ? 'Start by explaining why Patrol coverage is incomplete, what the latest scoped activity did and did not prove, and whether a full Patrol verification should run before action.'
+          : 'Use the attached model-only Patrol assessment context before suggesting next actions. Help me understand priority, risk, and safe next steps.';
 
   return [
     `Discuss the current Pulse Patrol assessment: ${title}.`,
@@ -783,6 +788,7 @@ function buildPatrolAssessmentActionPosture(
 ): { actionLabel: string; safetyNote: string } {
   const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
   const actionCount = handoffActions.length;
+  const hasCoverageGap = assessmentHasCoverageGap(input);
   const hasDryRunPosture = handoffActions.some((action) =>
     Boolean(normalizeText(action.actionDryRunSummary) || normalizeText(action.actionPreflight)),
   );
@@ -818,6 +824,14 @@ function buildPatrolAssessmentActionPosture(
         hasDestructiveAction,
         hasApprovalPolicy,
       }),
+    };
+  }
+
+  if (hasCoverageGap) {
+    return {
+      actionLabel: 'Review coverage gap',
+      safetyNote:
+        'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled.',
     };
   }
 
@@ -857,17 +871,29 @@ function buildPatrolAssessmentSuggestedPrompts(
 ): string[] {
   const prompts: string[] = [];
   const activeFindingCount = normalizeNonNegativeCount(input.activeFindings?.length);
+  const hasCoverageGap = assessmentHasCoverageGap(input);
+  const hasCoverageOnlyGap = hasCoverageGap && activeFindingCount === 0;
   const hasSupportingEvidence =
-    normalized.recentChanges.length > 0 || normalized.correlations.length > 0;
+    normalized.recentChanges.length > 0 ||
+    normalized.correlations.length > 0 ||
+    input.investigationContext?.hasContext === true;
   const hasGovernedAction = normalized.findings.some(assessmentFindingHasGovernedAction);
 
   if (activeFindingCount > 0) {
     prompts.push('Prioritize findings and safest next step');
+  } else if (hasCoverageOnlyGap) {
+    prompts.push('Explain why coverage is incomplete');
   } else {
     prompts.push('Explain current health and what to watch');
   }
 
-  if (hasSupportingEvidence) {
+  if (hasCoverageOnlyGap) {
+    prompts.push(
+      input.verification?.activityMixLabel || input.latestRun?.kindLabel
+        ? 'Explain scoped activity and full-run gap'
+        : 'What should a full Patrol verify next?',
+    );
+  } else if (hasSupportingEvidence) {
     prompts.push('Explain recent changes and correlations');
   }
 
@@ -879,11 +905,37 @@ function buildPatrolAssessmentSuggestedPrompts(
     );
   } else if (activeFindingCount > 0) {
     prompts.push('List evidence to verify before action');
+  } else if (hasCoverageOnlyGap) {
+    prompts.push(
+      hasSupportingEvidence
+        ? 'Identify early warning signals before full verification'
+        : 'What should a full Patrol verify next?',
+    );
   } else if (hasSupportingEvidence) {
     prompts.push('Identify early warning signals');
   }
 
   return formatPatrolSuggestedPrompts(prompts);
+}
+
+function assessmentHasCoverageGap(input: PatrolAssessmentAssistantHandoffInput): boolean {
+  const title = normalizeText(input.assessment?.title).toLowerCase();
+  const description = normalizeText(input.assessment?.description).toLowerCase();
+  const prediction = normalizeText(input.overallHealth?.prediction).toLowerCase();
+  const hasCoverageFactor = Boolean(
+    input.overallHealth?.factors?.some(
+      (factor) => normalizeText(factor.category).toLowerCase() === 'coverage',
+    ),
+  );
+
+  return (
+    hasCoverageFactor ||
+    title.includes('coverage incomplete') ||
+    description.includes('coverage incomplete') ||
+    description.includes('coverage is incomplete') ||
+    prediction.includes('coverage incomplete') ||
+    prediction.includes('coverage is incomplete')
+  );
 }
 
 function assessmentFindingHasGovernedAction(

@@ -501,6 +501,12 @@ the canonical monitored-system blocked payload.
    suggested prompts plus first-turn prompt emphasis from that same safe metadata
    so the drawer does not fall back to generic assessment copy when governed
    actions are present
+   and that same Patrol investigation-context owner, so coverage-incomplete
+   assessments with no active infrastructure findings are serialized as a
+   verification-gap handoff: prompt and visible briefing copy must explain what
+   scoped activity did and did not prove, keep latest-run and supporting-context
+   facts model-only, and avoid introducing backend fields beyond the existing
+   Patrol status plus run-history contracts
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,

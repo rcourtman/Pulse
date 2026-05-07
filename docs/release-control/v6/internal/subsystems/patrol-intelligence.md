@@ -255,6 +255,12 @@ Patrol-specific presentation helpers.
    as current-assessment context instead of becoming generic scoped context or
    an accidental single-finding session because one bounded action reference
    names a finding.
+   When the current Patrol assessment is coverage-incomplete with no active
+   infrastructure finding, the same handoff model must frame the briefing as a
+   verification gap: the prompt leads with what scoped activity did and did not
+   prove, visible drawer copy names the coverage gap, suggested prompts focus
+   on full-run verification and early warning signals, and execution or retry
+   remains operator-controlled.
    Patrol run-history entries may also open Assistant for a selected run, but
    that handoff must flow through the same Patrol-owned investigation-context
    model rather than a row-local prompt. The browser-visible prompt and drawer
