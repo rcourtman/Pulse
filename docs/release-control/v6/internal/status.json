@@ -4996,6 +4996,30 @@
       ]
     },
     {
+      "id": "paid-runtime-build-attribution-alerting",
+      "summary": "Confirm active paid licenses cannot silently run on the public community runtime: Pulse must detect non-Pro or unknown runtime identity for paid installs, surface a clear private-runtime warning in-product, preserve runtime-build telemetry for support, and expose Pro/community/unknown runtime status in admin support views.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "managed-runtime-exercise",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L9",
+        "L12",
+        "L17"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/paid-runtime-build-attribution-alerting-2026-05-07.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
+      ]
+    },
+    {
       "id": "rc-to-ga-promotion-readiness",
       "summary": "Confirm stable or GA promotion is coming from an exercised RC with live release-pipeline proof, rollback instructions, and a written v5 maintenance-only policy.",
       "owner": "project-owner",

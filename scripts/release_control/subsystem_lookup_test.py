@@ -4536,6 +4536,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "hosted-signup-billing-replay",
                 "msp-provider-tenant-management",
                 "paid-feature-entitlement-gating",
+                "paid-runtime-build-attribution-alerting",
                 "upgrade-state-and-entitlement-preservation",
             },
         )
