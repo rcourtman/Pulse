@@ -208,7 +208,14 @@ product API routes free of maintainer commercial analytics.
     `handoff_summary` projection needed by the browser to mark and restore a
     scoped handoff. The payload must not expose provider-bound model context,
     raw commands, preflight output, action results, or remediation command
-    descriptions.
+    descriptions. That safe projection owns Patrol handoff identity as data,
+    not browser inference: `kind` may identify `patrol_assessment`,
+    `patrol_configuration_failure`, `patrol_run`, `patrol_finding`, or generic
+    `scoped_context`; assessment and configuration-failure sessions must not be
+    collapsed into one finding because a safe action reference contains a
+    finding ID. `patrol_configuration_failure` may carry only the
+    runtime-failure boolean needed for drawer/session presentation, and
+    run-specific fields remain reserved for `patrol_run`.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 35. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 36. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.

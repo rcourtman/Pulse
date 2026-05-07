@@ -192,7 +192,13 @@ work extends shared components instead of creating new local variants.
    action context rather than pending approval. A restored Patrol run summary
    must remain visibly sourced to Pulse Patrol, restore a `patrol-run` target
    plus run ID/type/status/runtime-failure presentation only, and must not
-   rehydrate model-only runtime failure detail into browser context.
+   rehydrate model-only runtime failure detail into browser context. Restored
+   Patrol assessment and Patrol configuration-failure sessions follow the same
+   safe-summary rule: the drawer may restore source label, title, target type,
+   status badge, action label, and suggested prompts from `handoff_summary`, but
+   it must not infer a finding target from bounded action references or
+   reconstruct hidden model context, provider details, retry payloads, commands,
+   preflight output, or action results in the browser.
    Session-load and new-conversation transitions must be success-bound: if the
    underlying session operation fails, the shared drawer store must not clear or
    replace the current scoped handoff context.

@@ -500,6 +500,89 @@ func TestSessionStore_ListIncludesSafePatrolRunHandoffSummary(t *testing.T) {
 	}
 }
 
+func TestSessionStore_ListKeepsPatrolAssessmentHandoffIdentity(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := store.SetModelHandoffEnvelope(session.ID, "", "[Patrol Assessment Context]\nSource: Pulse Patrol current assessment", nil, []HandoffAction{{
+		FindingID:        "finding-123",
+		ApprovalID:       "approval-123",
+		ApprovalStatus:   "pending",
+		FixID:            "fix-123",
+		Description:      "Restart the workload service",
+		RiskLevel:        "high",
+		TargetResourceID: "vm-100",
+	}}, HandoffMetadata{
+		Kind: "patrol_assessment",
+	}); err != nil {
+		t.Fatalf("SetModelHandoffEnvelope failed: %v", err)
+	}
+
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].HandoffSummary == nil {
+		t.Fatalf("sessions = %#v, want one session with handoff summary", sessions)
+	}
+
+	summary := sessions[0].HandoffSummary
+	if summary.Kind != sessionHandoffKindPatrolAssessment {
+		t.Fatalf("handoff kind = %q, want %q", summary.Kind, sessionHandoffKindPatrolAssessment)
+	}
+	if summary.FindingID != "" {
+		t.Fatalf("finding ID = %q, want assessment summary not pinned to one action finding", summary.FindingID)
+	}
+	if summary.ActionCount != 1 || !summary.RequiresApproval {
+		t.Fatalf("action summary = %#v, want assessment action posture preserved", summary)
+	}
+	if summary.LastKnownApprovalStatus != "pending" || summary.LastKnownActionRisk != "high" {
+		t.Fatalf("approval posture = %#v, want safe action summary", summary)
+	}
+}
+
+func TestSessionStore_ListKeepsPatrolConfigurationFailureHandoffIdentity(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := store.SetModelHandoffEnvelope(session.ID, "", "[Patrol Configuration Failure Context]\nSource: Pulse Patrol configuration surface", nil, nil, HandoffMetadata{
+		Kind:           "patrol_configuration_failure",
+		RuntimeFailure: true,
+	}); err != nil {
+		t.Fatalf("SetModelHandoffEnvelope failed: %v", err)
+	}
+
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].HandoffSummary == nil {
+		t.Fatalf("sessions = %#v, want one session with handoff summary", sessions)
+	}
+
+	summary := sessions[0].HandoffSummary
+	if summary.Kind != sessionHandoffKindPatrolConfigurationFailure || !summary.RuntimeFailure {
+		t.Fatalf("handoff summary = %#v, want configuration failure runtime identity", summary)
+	}
+	if summary.RunID != "" || summary.RunStatus != "" {
+		t.Fatalf("run fields = %#v, want no Patrol run identity for configuration failure", summary)
+	}
+}
+
 func TestModelContextHandoffSummaryInfersPatrolRunMetadataForExistingSessions(t *testing.T) {
 	summary := modelContextHandoffSummary(&sessionModelContext{
 		HandoffContext: strings.Join([]string{

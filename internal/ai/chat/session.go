@@ -151,7 +151,9 @@ func trimHandoffMetadataField(value string, maxRunes int) string {
 func NormalizeHandoffMetadata(metadata HandoffMetadata) HandoffMetadata {
 	kind := strings.ToLower(trimHandoffMetadataField(metadata.Kind, 64))
 	switch kind {
-	case sessionHandoffKindPatrolRun:
+	case sessionHandoffKindPatrolAssessment,
+		sessionHandoffKindPatrolConfigurationFailure,
+		sessionHandoffKindPatrolRun:
 	default:
 		return HandoffMetadata{}
 	}
@@ -233,9 +235,11 @@ func modelContextEmpty(modelContext *sessionModelContext) bool {
 }
 
 const (
-	sessionHandoffKindPatrolFinding = "patrol_finding"
-	sessionHandoffKindPatrolRun     = "patrol_run"
-	sessionHandoffKindScopedContext = "scoped_context"
+	sessionHandoffKindPatrolAssessment           = "patrol_assessment"
+	sessionHandoffKindPatrolConfigurationFailure = "patrol_configuration_failure"
+	sessionHandoffKindPatrolFinding              = "patrol_finding"
+	sessionHandoffKindPatrolRun                  = "patrol_run"
+	sessionHandoffKindScopedContext              = "scoped_context"
 )
 
 func handoffActionCurrentlyRequiresApproval(action HandoffAction) bool {
@@ -269,7 +273,7 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 		metadata = inferPatrolRunHandoffMetadata(modelContext.HandoffContext)
 	}
 	findingID := strings.TrimSpace(modelContext.HandoffFindingID)
-	if findingID == "" {
+	if findingID == "" && metadata.Kind == "" {
 		for _, action := range actions {
 			if strings.TrimSpace(action.FindingID) != "" {
 				findingID = strings.TrimSpace(action.FindingID)
@@ -279,10 +283,10 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 	}
 
 	kind := sessionHandoffKindScopedContext
-	if findingID != "" {
+	if metadata.Kind != "" {
+		kind = metadata.Kind
+	} else if findingID != "" {
 		kind = sessionHandoffKindPatrolFinding
-	} else if metadata.Kind == sessionHandoffKindPatrolRun {
-		kind = sessionHandoffKindPatrolRun
 	}
 
 	summary := &SessionHandoffSummary{
@@ -300,6 +304,8 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 		summary.RunID = ""
 		summary.RunType = ""
 		summary.RunStatus = ""
+	}
+	if kind != sessionHandoffKindPatrolRun && kind != sessionHandoffKindPatrolConfigurationFailure {
 		summary.RuntimeFailure = false
 	}
 	if !modelContext.UpdatedAt.IsZero() {

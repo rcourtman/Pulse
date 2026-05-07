@@ -120,6 +120,37 @@ test.describe("Patrol Assistant operator briefing", () => {
         updated_at: "2026-05-06T12:10:00Z",
       },
     };
+    const patrolAssessmentHandoffSession = {
+      id: "session-patrol-assessment",
+      title: "Assessment follow-up",
+      created_at: "2026-05-06T12:05:00Z",
+      updated_at: "2026-05-06T12:11:00Z",
+      message_count: 1,
+      handoff_summary: {
+        kind: "patrol_assessment",
+        has_model_context: true,
+        resource_count: 2,
+        action_count: 0,
+        requires_approval: false,
+        updated_at: "2026-05-06T12:11:00Z",
+      },
+    };
+    const patrolConfigurationFailureHandoffSession = {
+      id: "session-patrol-configuration",
+      title: "Configuration follow-up",
+      created_at: "2026-05-06T12:06:00Z",
+      updated_at: "2026-05-06T12:12:00Z",
+      message_count: 1,
+      handoff_summary: {
+        kind: "patrol_configuration_failure",
+        runtime_failure: true,
+        has_model_context: true,
+        resource_count: 0,
+        action_count: 0,
+        requires_approval: false,
+        updated_at: "2026-05-06T12:12:00Z",
+      },
+    };
 
     await page.route("**/api/security/status", async (route) => {
       await route.fulfill({
@@ -220,6 +251,8 @@ test.describe("Patrol Assistant operator briefing", () => {
           handoffSession,
           contextOnlyHandoffSession,
           patrolRunHandoffSession,
+          patrolAssessmentHandoffSession,
+          patrolConfigurationFailureHandoffSession,
         ]),
       });
     });
@@ -660,6 +693,41 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(
       runAssistantContext.getByText("No endpoints found"),
     ).toHaveCount(0);
+
+    await page.getByTitle("Pulse Assistant sessions").click();
+    await expect(page.getByText("Assessment follow-up")).toBeVisible();
+    await expect(page.getByText("Assessment context").last()).toBeVisible();
+    await page.getByText("Assessment follow-up").click();
+
+    const restoredAssessmentAssistantContext =
+      page.getByLabel("Assistant context");
+    await expect(restoredAssessmentAssistantContext).toBeVisible();
+    await expect(restoredAssessmentAssistantContext).toContainText(
+      "Patrol assessment handoff",
+    );
+    await expect(restoredAssessmentAssistantContext).toContainText(
+      "Current Patrol assessment",
+    );
+    await expect(restoredAssessmentAssistantContext).toContainText(
+      "Review Patrol assessment",
+    );
+
+    await page.getByTitle("Pulse Assistant sessions").click();
+    await expect(page.getByText("Configuration follow-up")).toBeVisible();
+    await expect(page.getByText("Runtime issue").last()).toBeVisible();
+    await page.getByText("Configuration follow-up").click();
+
+    const configurationAssistantContext = page.getByLabel("Assistant context");
+    await expect(configurationAssistantContext).toBeVisible();
+    await expect(configurationAssistantContext).toContainText(
+      "Patrol configuration failure",
+    );
+    await expect(configurationAssistantContext).toContainText(
+      "Patrol configuration",
+    );
+    await expect(configurationAssistantContext).toContainText(
+      "Review Patrol configuration issue",
+    );
 
     includePendingApproval = false;
     await page.reload({ waitUntil: "domcontentloaded" });

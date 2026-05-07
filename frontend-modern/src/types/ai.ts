@@ -365,6 +365,10 @@ export interface AIChatSessionHandoffResource {
 export interface AIChatSessionHandoffSummary {
   kind?: string;
   finding_id?: string;
+  run_id?: string;
+  run_type?: string;
+  run_status?: string;
+  runtime_failure?: boolean;
   has_model_context: boolean;
   resource_count?: number;
   primary_resource?: AIChatSessionHandoffResource;

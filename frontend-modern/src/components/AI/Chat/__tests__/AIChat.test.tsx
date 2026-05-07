@@ -607,17 +607,15 @@ describe('AIChat', () => {
     });
 
     it('refreshes sessions before opening the picker', async () => {
-      mockAIChatAPI.listSessions
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          {
-            id: 's-fresh',
-            title: 'Fresh session',
-            created_at: '',
-            updated_at: '',
-            message_count: 1,
-          },
-        ]);
+      mockAIChatAPI.listSessions.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          id: 's-fresh',
+          title: 'Fresh session',
+          created_at: '',
+          updated_at: '',
+          message_count: 1,
+        },
+      ]);
 
       renderChat();
       await waitFor(() => {
@@ -847,6 +845,113 @@ describe('AIChat', () => {
       });
       expect(mockAiChatStore.setContext).not.toHaveBeenCalled();
       expect(mockAiChatStore.clearContext).not.toHaveBeenCalled();
+    });
+
+    it('restores Patrol assessment handoff state without pinning to one finding', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 's-patrol-assessment',
+          title: 'Assessment follow-up',
+          created_at: '',
+          updated_at: '',
+          message_count: 3,
+          handoff_summary: {
+            kind: 'patrol_assessment',
+            has_model_context: true,
+            resource_count: 2,
+            action_count: 0,
+            requires_approval: false,
+          },
+        },
+      ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+        expect(screen.getByText('Assessment context')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('Assessment follow-up'));
+
+      await waitFor(() => {
+        expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
+          expect.objectContaining({
+            targetType: 'patrol-assessment',
+            targetId: 'pulse-patrol-assessment',
+            findingId: undefined,
+            autonomousMode: false,
+            context: expect.objectContaining({
+              kind: 'patrol_assessment',
+              findingId: undefined,
+            }),
+            briefing: expect.objectContaining({
+              sourceLabel: 'Pulse Patrol',
+              title: 'Patrol assessment handoff',
+              subject: 'Current Patrol assessment',
+              actionLabel: 'Review Patrol assessment',
+            }),
+          }),
+        );
+      });
+    });
+
+    it('restores Patrol configuration failure handoff state as a runtime issue', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 's-patrol-config',
+          title: 'Configuration follow-up',
+          created_at: '',
+          updated_at: '',
+          message_count: 2,
+          handoff_summary: {
+            kind: 'patrol_configuration_failure',
+            runtime_failure: true,
+            has_model_context: true,
+            resource_count: 0,
+            action_count: 0,
+            requires_approval: false,
+          },
+        },
+      ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+        expect(screen.getAllByText('Runtime issue').length).toBeGreaterThan(0);
+      });
+
+      fireEvent.click(screen.getByText('Configuration follow-up'));
+
+      await waitFor(() => {
+        expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
+          expect.objectContaining({
+            targetType: 'patrol-configuration',
+            targetId: 'pulse-patrol-configuration',
+            autonomousMode: false,
+            context: expect.objectContaining({
+              kind: 'patrol_configuration_failure',
+              runtimeFailure: true,
+            }),
+            briefing: expect.objectContaining({
+              sourceLabel: 'Pulse Patrol',
+              title: 'Patrol configuration failure',
+              subject: 'Patrol configuration',
+              actionLabel: 'Review Patrol configuration issue',
+              statusLabel: 'runtime issue',
+            }),
+          }),
+        );
+      });
     });
 
     it('shows completed Patrol actions as action context instead of pending approval', async () => {

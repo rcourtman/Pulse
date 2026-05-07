@@ -513,6 +513,9 @@ export function buildPatrolAssessmentAssistantHandoff(
       handoffContext,
       handoffResources: buildPatrolAssessmentHandoffResources(input),
       handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
+      handoffMetadata: {
+        kind: 'patrol_assessment',
+      },
       briefing: buildPatrolAssessmentAssistantBriefing(input),
       context: {
         source: 'pulse-patrol-assessment',

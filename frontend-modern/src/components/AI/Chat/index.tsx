@@ -84,8 +84,17 @@ const isPatrolFindingSessionHandoff = (summary: ChatSessionHandoffSummary) =>
 const isPatrolRunSessionHandoff = (summary: ChatSessionHandoffSummary) =>
   summary.kind === 'patrol_run' || Boolean(summary.run_id);
 
+const isPatrolAssessmentSessionHandoff = (summary: ChatSessionHandoffSummary) =>
+  summary.kind === 'patrol_assessment';
+
+const isPatrolConfigurationFailureSessionHandoff = (summary: ChatSessionHandoffSummary) =>
+  summary.kind === 'patrol_configuration_failure';
+
 const isPatrolSessionHandoff = (summary: ChatSessionHandoffSummary) =>
-  isPatrolFindingSessionHandoff(summary) || isPatrolRunSessionHandoff(summary);
+  isPatrolFindingSessionHandoff(summary) ||
+  isPatrolRunSessionHandoff(summary) ||
+  isPatrolAssessmentSessionHandoff(summary) ||
+  isPatrolConfigurationFailureSessionHandoff(summary);
 
 const getSessionHandoffSourceLabel = (summary: ChatSessionHandoffSummary) =>
   isPatrolSessionHandoff(summary) ? 'Pulse Patrol' : 'Pulse Assistant';
@@ -111,6 +120,9 @@ const formatSessionHandoffStatus = (summary: ChatSessionHandoffSummary) => {
       summary.runtime_failure ? 'runtime issue' : undefined,
     ]).join(' · ');
   }
+  if (isPatrolConfigurationFailureSessionHandoff(summary)) {
+    return summary.runtime_failure ? 'runtime issue' : '';
+  }
   return compactText([
     summary.last_known_approval_status
       ? `approval ${formatIdentifierLabel(summary.last_known_approval_status)}`
@@ -130,6 +142,8 @@ const getSessionHandoffBadgeLabel = (summary: ChatSessionHandoffSummary) => {
   if (isPatrolRunSessionHandoff(summary)) {
     return summary.runtime_failure ? 'Runtime issue' : 'Run context';
   }
+  if (isPatrolConfigurationFailureSessionHandoff(summary)) return 'Runtime issue';
+  if (isPatrolAssessmentSessionHandoff(summary)) return 'Assessment context';
   return summary.has_model_context ? 'Context attached' : 'Scoped handoff';
 };
 
@@ -149,23 +163,41 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
   const runStatus = summary.run_status?.trim() || undefined;
   const isPatrolFinding = isPatrolFindingSessionHandoff(summary);
   const isPatrolRun = isPatrolRunSessionHandoff(summary);
+  const isPatrolAssessment = isPatrolAssessmentSessionHandoff(summary);
+  const isPatrolConfigurationFailure = isPatrolConfigurationFailureSessionHandoff(summary);
   const title = isPatrolRun
     ? runId
       ? `Patrol run ${runId}`
       : 'Patrol run handoff'
-    : isPatrolFinding
-      ? resourceLabel
-        ? `Patrol finding on ${resourceLabel}`
-        : findingId
-          ? `Patrol finding ${findingId}`
-          : 'Patrol finding handoff'
-      : resourceLabel
-        ? `Assistant handoff for ${resourceLabel}`
-        : 'Assistant handoff';
+    : isPatrolAssessment
+      ? 'Patrol assessment handoff'
+      : isPatrolConfigurationFailure
+        ? 'Patrol configuration failure'
+        : isPatrolFinding
+          ? resourceLabel
+            ? `Patrol finding on ${resourceLabel}`
+            : findingId
+              ? `Patrol finding ${findingId}`
+              : 'Patrol finding handoff'
+          : resourceLabel
+            ? `Assistant handoff for ${resourceLabel}`
+            : 'Assistant handoff';
 
   return {
-    targetType: isPatrolRun ? 'patrol-run' : summary.primary_resource?.type,
-    targetId: isPatrolRun ? runId : summary.primary_resource?.id,
+    targetType: isPatrolRun
+      ? 'patrol-run'
+      : isPatrolAssessment
+        ? 'patrol-assessment'
+        : isPatrolConfigurationFailure
+          ? 'patrol-configuration'
+          : summary.primary_resource?.type,
+    targetId: isPatrolRun
+      ? runId
+      : isPatrolAssessment
+        ? 'pulse-patrol-assessment'
+        : isPatrolConfigurationFailure
+          ? 'pulse-patrol-configuration'
+          : summary.primary_resource?.id,
     context: {
       source: 'session_handoff_summary',
       kind: summary.kind,
@@ -189,7 +221,15 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       sourceLabel,
       title,
       subject:
-        isPatrolRun && runId ? `Run ${runId}` : findingId ? `Finding ${findingId}` : undefined,
+        isPatrolRun && runId
+          ? `Run ${runId}`
+          : isPatrolAssessment
+            ? 'Current Patrol assessment'
+            : isPatrolConfigurationFailure
+              ? 'Patrol configuration'
+              : findingId
+                ? `Finding ${findingId}`
+                : undefined,
       statusLabel:
         statusLabel ||
         (summary.requires_approval ? 'approval required' : undefined) ||
@@ -207,13 +247,17 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       ]),
       actionLabel: summary.requires_approval
         ? 'Approval required'
-        : isPatrolRun && summary.runtime_failure
-          ? 'Review Patrol runtime issue'
-          : isPatrolRun
-            ? 'Review Patrol run'
-            : actionCount > 0
-              ? 'Governed action context'
-              : undefined,
+        : isPatrolConfigurationFailure
+          ? 'Review Patrol configuration issue'
+          : isPatrolAssessment
+            ? 'Review Patrol assessment'
+            : isPatrolRun && summary.runtime_failure
+              ? 'Review Patrol runtime issue'
+              : isPatrolRun
+                ? 'Review Patrol run'
+                : actionCount > 0
+                  ? 'Governed action context'
+                  : undefined,
       commandSummary: statusLabel
         ? isPatrolRun
           ? `Run state: ${statusLabel}`
@@ -236,13 +280,25 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
               'What changed during this run?',
               'What should I verify next?',
             ]
-        : isPatrolFinding
+        : isPatrolConfigurationFailure
           ? [
-              'What changed since this finding was opened?',
-              'What evidence supports this finding?',
-              'What should I verify next?',
+              'Explain this Patrol configuration issue',
+              'What should I check before retrying?',
+              'What should I change before the next run?',
             ]
-          : ['Summarize this handoff', 'What needs attention?', 'What should I verify next?'],
+          : isPatrolAssessment
+            ? [
+                'Prioritize findings and safest next step',
+                'Explain recent changes and correlations',
+                'What should I verify next?',
+              ]
+            : isPatrolFinding
+              ? [
+                  'What changed since this finding was opened?',
+                  'What evidence supports this finding?',
+                  'What should I verify next?',
+                ]
+              : ['Summarize this handoff', 'What needs attention?', 'What should I verify next?'],
     },
   };
 };

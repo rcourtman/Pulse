@@ -250,7 +250,11 @@ Patrol-specific presentation helpers.
    lead with approval/action review when governed references are attached, and
    frame Assistant as explanation, prioritization, and safe next-step review
    rather than a generic reactive chat
-   box.
+   box. That whole-surface assessment handoff must send safe
+   `handoff_metadata.kind=patrol_assessment` so saved Assistant sessions restore
+   as current-assessment context instead of becoming generic scoped context or
+   an accidental single-finding session because one bounded action reference
+   names a finding.
    Patrol run-history entries may also open Assistant for a selected run, but
    that handoff must flow through the same Patrol-owned investigation-context
    model rather than a row-local prompt. The handoff may pass bounded run
@@ -355,7 +359,11 @@ a generic `Failed to save advanced settings` toast. That inline failure may
 handoff to Assistant only as model-only explanation context: raw command,
 script, credential, and provider-detail payloads stay redacted, Assistant opens
 with `autonomousMode:false`, and the configuration panel closes so the operator
-is not left behind an overlapping popover.
+is not left behind an overlapping popover. Configuration-failure handoffs
+must send safe `handoff_metadata.kind=patrol_configuration_failure` plus only
+the runtime-failure boolean needed for drawer/session presentation, so the
+saved session restores as a Patrol configuration issue without carrying raw
+provider, credential, command, or retry payloads into the browser.
 The readiness contract now applies before Patrol work is admitted, not only
 after a page render: recoverable Patrol provider/model settings saves must
 persist and echo structured readiness cause metadata, manual run requests must

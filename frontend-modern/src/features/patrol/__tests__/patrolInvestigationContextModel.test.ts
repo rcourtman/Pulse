@@ -265,6 +265,9 @@ describe('patrolInvestigationContextModel', () => {
       { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
       { id: 'backup-job', name: 'Nightly backup job', type: 'job', node: undefined },
     ]);
+    expect(handoff.context.handoffMetadata).toEqual({
+      kind: 'patrol_assessment',
+    });
     expect(handoff.context.briefing).toMatchObject({
       sourceLabel: 'Pulse Patrol',
       title: 'Patrol assessment attached',

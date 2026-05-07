@@ -238,7 +238,18 @@ runtime cost control, and shared AI transport surfaces.
     resolved, snoozed, dismissed or suppressed state, detection/last-seen/
     resolved timestamps, recurrence, regression, and recent lifecycle events so
     Assistant explains the current Patrol record rather than only the original
-    investigation narrative. The operator briefing must surface the primary
+    investigation narrative. The saved-session handoff envelope must also
+    preserve first-class Patrol source identity when product callers provide
+    safe metadata. Patrol assessment handoffs remain `patrol_assessment`
+    whole-surface review sessions even when their bounded action references
+    name individual findings; the session list must not infer a
+    `patrol_finding` identity from those action references once metadata is
+    present. Patrol configuration failure handoffs remain
+    `patrol_configuration_failure` sessions and may expose only the safe
+    runtime-failure boolean needed for browser presentation. Run-specific
+    fields stay reserved for `patrol_run` handoffs, while hidden model context,
+    command payloads, preflight output, and action results remain
+    backend-owned. The operator briefing must surface the primary
     finding's current attention reason, recency facts, bounded evidence
     snapshot, verification summary, and explicit operator decision framing
     before investigation guidance, may surface the latest lifecycle event as
