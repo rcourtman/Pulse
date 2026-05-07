@@ -53,6 +53,9 @@ describe('PatrolIntelligenceSummary', () => {
     expect(loadPendingApprovals).toHaveBeenCalledTimes(1);
     const [prompt, context] = openWithPrompt.mock.calls[0] as [string, Record<string, unknown>];
     expect(prompt).toContain('Discuss the current Pulse Patrol assessment');
+    expect(prompt).toContain('Start by reviewing 1 pending governed approval');
+    expect(prompt).toContain('approval policy, dry-run posture');
+    expect(prompt).toContain('Do not infer, repeat, or execute raw command text');
     expect(context.autonomousMode).toBe(false);
     expect(context.handoffContext).toContain('[Patrol Assessment Context]');
     expect(context.handoffContext).toContain('Source: Pulse Patrol current assessment');

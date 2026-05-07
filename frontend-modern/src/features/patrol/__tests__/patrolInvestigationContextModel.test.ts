@@ -238,6 +238,8 @@ describe('patrolInvestigationContextModel', () => {
     });
 
     expect(handoff.prompt).toContain('Discuss the current Pulse Patrol assessment');
+    expect(handoff.prompt).toContain('Start by reviewing 1 governed action reference');
+    expect(handoff.prompt).toContain('Do not infer, repeat, or execute raw command text');
     expect(handoff.context.autonomousMode).toBe(false);
     expect(handoff.context.handoffContext).toContain('[Patrol Assessment Context]');
     expect(handoff.context.handoffContext).toContain('Source: Pulse Patrol current assessment');
@@ -314,6 +316,8 @@ describe('patrolInvestigationContextModel', () => {
     });
 
     expect(handoff.context.autonomousMode).toBe(false);
+    expect(handoff.prompt).toContain('Start by reviewing 1 pending governed approval');
+    expect(handoff.prompt).toContain('approval policy, dry-run posture');
     expect(handoff.context.handoffContext).toContain('Finding 1: High CPU usage');
     expect(handoff.context.handoffContext).toContain('approval approval-1');
     expect(handoff.context.handoffContext).toContain('live approval pending');

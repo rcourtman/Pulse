@@ -460,8 +460,9 @@ the canonical monitored-system blocked payload.
    metadata, action plan identity/policy/expiry, dry-run posture, and command
    counts instead of pasting page-local UI text or raw command payloads into chat,
    and may derive visible action labels, safety notes, and approval-aware
-   suggested prompts from that same safe metadata so the drawer does not fall
-   back to generic assessment copy when governed actions are present
+   suggested prompts plus first-turn prompt emphasis from that same safe metadata
+   so the drawer does not fall back to generic assessment copy when governed
+   actions are present
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,

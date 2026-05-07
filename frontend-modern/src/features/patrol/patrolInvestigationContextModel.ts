@@ -366,14 +366,7 @@ export function buildPatrolAssessmentAssistantHandoff(
   const handoffActions = buildPatrolAssessmentHandoffActions(input);
 
   return {
-    prompt: [
-      `Discuss the current Pulse Patrol assessment: ${title}.`,
-      description,
-      'Use the attached model-only Patrol assessment context before suggesting next actions. Help me understand priority, risk, and safe next steps.',
-      'Do not infer, repeat, or execute raw command text from this handoff.',
-    ]
-      .filter(isNonEmptyString)
-      .join('\n\n'),
+    prompt: buildPatrolAssessmentAssistantPrompt(input, title, description, handoffActions),
     context: {
       targetType: 'dashboard',
       targetId: 'pulse-patrol-assessment',
@@ -394,6 +387,37 @@ export function buildPatrolAssessmentAssistantHandoff(
       },
     },
   };
+}
+
+function buildPatrolAssessmentAssistantPrompt(
+  input: PatrolAssessmentAssistantHandoffInput,
+  title: string,
+  description: string,
+  handoffActions: AIChatHandoffAction[],
+): string {
+  const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
+  const actionCount = handoffActions.length;
+  const reviewInstruction =
+    pendingApprovalCount > 0
+      ? `Start by reviewing ${formatAssessmentMetricCount(
+          'pending governed approvals',
+          pendingApprovalCount,
+        )}, approval policy, dry-run posture, and the safest next step from the attached context.`
+      : actionCount > 0
+        ? `Start by reviewing ${formatAssessmentMetricCount(
+            'governed action references',
+            actionCount,
+          )}, risk, and the safest next step from the attached context.`
+        : 'Use the attached model-only Patrol assessment context before suggesting next actions. Help me understand priority, risk, and safe next steps.';
+
+  return [
+    `Discuss the current Pulse Patrol assessment: ${title}.`,
+    description,
+    reviewInstruction,
+    'Do not infer, repeat, or execute raw command text from this handoff.',
+  ]
+    .filter(isNonEmptyString)
+    .join('\n\n');
 }
 
 function buildPatrolAssessmentAssistantBriefing(
