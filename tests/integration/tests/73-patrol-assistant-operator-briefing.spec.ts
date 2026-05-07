@@ -50,6 +50,31 @@ test.describe("Patrol Assistant operator briefing", () => {
     let includePendingApproval = true;
     let includeUnifiedInvestigationRecord = true;
     let includeInvestigationProposedFix = false;
+    const handoffSession = {
+      id: "session-operator-briefing",
+      title: "High CPU follow-up",
+      created_at: "2026-05-06T12:00:00Z",
+      updated_at: "2026-05-06T12:08:00Z",
+      message_count: 2,
+      handoff_summary: {
+        kind: "patrol_finding",
+        finding_id: "finding-operator-briefing",
+        has_model_context: true,
+        resource_count: 1,
+        primary_resource: {
+          id: "host:web-server",
+          name: "web-server",
+          type: "host",
+          node: "pve-1",
+        },
+        action_count: 1,
+        requires_approval: true,
+        last_known_approval_status: "pending",
+        last_known_action_state: "awaiting_approval",
+        last_known_action_risk: "high",
+        updated_at: "2026-05-06T12:08:00Z",
+      },
+    };
 
     await page.route("**/api/security/status", async (route) => {
       await route.fulfill({
@@ -122,6 +147,21 @@ test.describe("Patrol Assistant operator briefing", () => {
       });
     });
 
+    await page.route("**/api/ai/sessions/*/messages", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "msg-operator-briefing",
+            role: "assistant",
+            content: "Previous governed finding context.",
+            timestamp: "2026-05-06T12:08:00Z",
+          },
+        ]),
+      });
+    });
+
     await page.route("**/api/ai/sessions", async (route) => {
       if (route.request().method() !== "GET") {
         await route.continue();
@@ -131,7 +171,7 @@ test.describe("Patrol Assistant operator briefing", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify([handoffSession]),
       });
     });
 
@@ -447,7 +487,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(assessmentAssistantContext).toContainText("High risk");
     await expect(
       assessmentAssistantContext.getByRole("button", {
-        name: "Summarize governed remediation risks",
+        name: "Review pending approvals and safest next step",
       }),
     ).toBeVisible();
     await expect(
@@ -508,6 +548,28 @@ test.describe("Patrol Assistant operator briefing", () => {
     ).toHaveValue("Review approval risk and next step");
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+
+    await page.getByTitle("Pulse Assistant sessions").click();
+    await expect(page.getByText("High CPU follow-up")).toBeVisible();
+    await expect(page.getByText("Pulse Patrol").last()).toBeVisible();
+    await expect(page.getByText("Approval required").last()).toBeVisible();
+    await expect(page.getByText(/approval pending/).last()).toBeVisible();
+    await page.getByText("High CPU follow-up").click();
+
+    const reloadedAssistantContext = page.getByLabel("Assistant context");
+    await expect(reloadedAssistantContext).toBeVisible();
+    await expect(reloadedAssistantContext).toContainText(
+      "Patrol finding on web-server",
+    );
+    await expect(reloadedAssistantContext).toContainText(
+      "Finding finding-operator-briefing",
+    );
+    await expect(reloadedAssistantContext).toContainText(
+      "Last known state: approval pending",
+    );
+    await expect(
+      reloadedAssistantContext.getByText("systemctl restart workload.service"),
+    ).toHaveCount(0);
 
     includePendingApproval = false;
     await page.reload({ waitUntil: "domcontentloaded" });

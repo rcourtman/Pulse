@@ -12,6 +12,7 @@ export interface ChatSession {
   created_at: string;
   updated_at: string;
   message_count: number;
+  handoff_summary?: ChatSessionHandoffSummary;
 }
 
 export type ChatMentionType = 'vm' | 'system-container' | 'app-container' | 'agent' | 'storage';
@@ -28,6 +29,27 @@ export interface ChatHandoffResource {
   name?: string;
   type?: string;
   node?: string;
+}
+
+export interface ChatSessionHandoffResource {
+  id?: string;
+  name?: string;
+  type?: string;
+  node?: string;
+}
+
+export interface ChatSessionHandoffSummary {
+  kind?: string;
+  finding_id?: string;
+  has_model_context: boolean;
+  resource_count?: number;
+  primary_resource?: ChatSessionHandoffResource;
+  action_count?: number;
+  requires_approval?: boolean;
+  last_known_approval_status?: string;
+  last_known_action_state?: string;
+  last_known_action_risk?: string;
+  updated_at?: string;
 }
 
 export interface ChatHandoffAction {

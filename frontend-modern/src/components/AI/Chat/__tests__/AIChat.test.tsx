@@ -72,18 +72,20 @@ const {
     error: vi.fn(),
   };
 
+  const emptyChatContext = () => ({
+    initialPrompt: undefined,
+    findingId: undefined,
+    autonomousMode: undefined,
+    context: undefined,
+    briefing: undefined,
+    handoffContext: undefined,
+    handoffResources: undefined,
+    handoffActions: undefined,
+  });
+
   const mockAiChatStore = {
     isOpenSignal: vi.fn(() => true),
-    context: {
-      initialPrompt: undefined,
-      findingId: undefined,
-      autonomousMode: undefined,
-      context: undefined,
-      briefing: undefined,
-      handoffContext: undefined,
-      handoffResources: undefined,
-      handoffActions: undefined,
-    } as {
+    context: emptyChatContext() as {
       initialPrompt?: string;
       findingId?: string;
       autonomousMode?: boolean;
@@ -113,6 +115,12 @@ const {
         suggestedPrompts?: string[];
       };
     },
+    setContext: vi.fn((context: any) => {
+      mockAiChatStore.context = context;
+    }),
+    clearContext: vi.fn(() => {
+      mockAiChatStore.context = emptyChatContext();
+    }),
     clearInitialPrompt: vi.fn(),
     clearFindingId: vi.fn(),
   };
@@ -531,6 +539,24 @@ describe('AIChat', () => {
       });
     });
 
+    it('clears scoped handoff context when starting a new session', async () => {
+      mockAiChatStore.context = {
+        findingId: 'finding-old',
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Old finding handoff',
+        },
+      };
+
+      renderChat();
+      fireEvent.click(screen.getByText('New'));
+
+      await waitFor(() => {
+        expect(mockAiChatStore.clearContext).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('opens session picker on click', () => {
       renderChat();
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
@@ -570,6 +596,92 @@ describe('AIChat', () => {
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
       fireEvent.click(screen.getByText('Session One'));
       expect(mockChat.loadSession).toHaveBeenCalledWith('s1');
+    });
+
+    it('restores safe Patrol handoff state from a loaded session summary', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 's-patrol',
+          title: 'High CPU follow-up',
+          created_at: '',
+          updated_at: '',
+          message_count: 4,
+          handoff_summary: {
+            kind: 'patrol_finding',
+            finding_id: 'finding-operator-briefing',
+            has_model_context: true,
+            resource_count: 1,
+            primary_resource: {
+              id: 'host:web-server',
+              name: 'web-server',
+              type: 'host',
+              node: 'pve-1',
+            },
+            action_count: 1,
+            requires_approval: true,
+            last_known_approval_status: 'pending',
+            last_known_action_state: 'awaiting_approval',
+            last_known_action_risk: 'medium',
+          },
+        },
+      ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+
+      expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+      expect(screen.getByText('Approval required')).toBeInTheDocument();
+      expect(screen.getByText(/approval pending/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('High CPU follow-up'));
+
+      await waitFor(() => {
+        expect(mockChat.loadSession).toHaveBeenCalledWith('s-patrol');
+        expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
+          expect.objectContaining({
+            findingId: 'finding-operator-briefing',
+            autonomousMode: false,
+            briefing: expect.objectContaining({
+              sourceLabel: 'Pulse Patrol',
+              title: 'Patrol finding on web-server',
+              subject: 'Finding finding-operator-briefing',
+              actionLabel: 'Approval required',
+            }),
+          }),
+        );
+      });
+      const restoredContext = mockAiChatStore.setContext.mock.calls[0]?.[0];
+      expect(restoredContext.handoffContext).toBeUndefined();
+      expect(restoredContext.handoffActions).toBeUndefined();
+    });
+
+    it('clears stale handoff context when loading a plain session', async () => {
+      mockAiChatStore.context = {
+        findingId: 'finding-old',
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Old finding handoff',
+        },
+      };
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+      ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      fireEvent.click(screen.getByText('Session One'));
+
+      await waitFor(() => {
+        expect(mockChat.loadSession).toHaveBeenCalledWith('s1');
+        expect(mockAiChatStore.clearContext).toHaveBeenCalledTimes(1);
+      });
     });
   });
 

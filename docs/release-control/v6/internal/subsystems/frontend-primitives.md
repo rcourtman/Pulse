@@ -177,6 +177,11 @@ work extends shared components instead of creating new local variants.
 6. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 7. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
 8. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+   Assistant session pickers and reloads must restore only safe
+   `handoff_summary` presentation state from the session list. Loading a plain
+   session or starting a new conversation must clear stale scoped handoff
+   briefing state so Patrol and alert context does not visually leak between
+   conversations.
 9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless

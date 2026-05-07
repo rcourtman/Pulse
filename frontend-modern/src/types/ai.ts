@@ -332,10 +332,32 @@ export interface AIChatSession {
 }
 
 // Summary returned by list endpoint (no messages)
+export interface AIChatSessionHandoffResource {
+  id?: string;
+  name?: string;
+  type?: string;
+  node?: string;
+}
+
+export interface AIChatSessionHandoffSummary {
+  kind?: string;
+  finding_id?: string;
+  has_model_context: boolean;
+  resource_count?: number;
+  primary_resource?: AIChatSessionHandoffResource;
+  action_count?: number;
+  requires_approval?: boolean;
+  last_known_approval_status?: string;
+  last_known_action_state?: string;
+  last_known_action_risk?: string;
+  updated_at?: string;
+}
+
 export interface AIChatSessionSummary {
   id: string;
   title: string;
   message_count: number;
   created_at: string;
   updated_at: string;
+  handoff_summary?: AIChatSessionHandoffSummary;
 }

@@ -15,14 +15,48 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 import { AIChatAPI } from '@/api/aiChat';
-import { apiFetch } from '@/utils/apiClient';
+import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
 describe('AIChatAPI', () => {
   const apiFetchMock = vi.mocked(apiFetch);
+  const apiFetchJSONMock = vi.mocked(apiFetchJSON);
 
   beforeEach(() => {
     apiFetchMock.mockReset();
+    apiFetchJSONMock.mockReset();
+  });
+
+  it('preserves safe handoff summaries on listed chat sessions', async () => {
+    const session = {
+      id: 'session-operator-briefing',
+      title: 'High CPU follow-up',
+      created_at: '2026-05-06T12:00:00Z',
+      updated_at: '2026-05-06T12:08:00Z',
+      message_count: 2,
+      handoff_summary: {
+        kind: 'patrol_finding',
+        finding_id: 'finding-operator-briefing',
+        has_model_context: true,
+        resource_count: 1,
+        primary_resource: {
+          id: 'host:web-server',
+          name: 'web-server',
+          type: 'host',
+          node: 'pve-1',
+        },
+        action_count: 1,
+        requires_approval: true,
+        last_known_approval_status: 'pending',
+        last_known_action_state: 'awaiting_approval',
+        last_known_action_risk: 'high',
+        updated_at: '2026-05-06T12:08:00Z',
+      },
+    };
+    apiFetchJSONMock.mockResolvedValueOnce([session]);
+
+    await expect(AIChatAPI.listSessions()).resolves.toEqual([session]);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions');
   });
 
   it('clears read timeout timers when chat stream reads complete', async () => {

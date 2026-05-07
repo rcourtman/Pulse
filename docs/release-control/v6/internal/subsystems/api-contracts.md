@@ -196,6 +196,11 @@ product API routes free of maintainer commercial analytics.
     page-local payload ownership.
 32. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
 33. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+    Assistant session list payloads may expose only the safe
+    `handoff_summary` projection needed by the browser to mark and restore a
+    scoped handoff. The payload must not expose provider-bound model context,
+    raw commands, preflight output, action results, or remediation command
+    descriptions.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 35. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 36. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.

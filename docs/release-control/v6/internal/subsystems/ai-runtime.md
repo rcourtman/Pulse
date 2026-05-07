@@ -79,7 +79,10 @@ runtime cost control, and shared AI transport surfaces.
    instead of generic dashboard briefs. Source-owned handoff helpers may attach
    bounded suggested prompts to that briefing, but those prompts are only input
    starters; they must not auto-submit, bypass approval mode, or carry raw
-   command payloads.
+   command payloads. Reloaded Assistant sessions may consume the backend-owned
+   `handoff_summary` only as safe presentation state and a Patrol finding
+   pointer; hidden model context, command payloads, preflight data, and action
+   results stay backend-owned and must not be reconstructed in the browser.
 9. Add or change public AI overview wording through `docs/AI.md`; it may
    describe Assistant and Patrol capabilities, but it must not revive legacy
    commercial shorthand such as `incident memory` as a current product promise.

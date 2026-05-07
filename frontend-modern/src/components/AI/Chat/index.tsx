@@ -10,9 +10,9 @@ import {
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
-import { AIChatAPI, type ChatSession } from '@/api/aiChat';
+import { AIChatAPI, type ChatSession, type ChatSessionHandoffSummary } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiChatStore, type AIChatContext } from '@/stores/aiChat';
 import {
   aiRuntimeModels,
   aiRuntimeModelsError,
@@ -71,6 +71,128 @@ const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
 interface AIChatProps {
   onClose: () => void;
 }
+
+const compactText = (items: Array<string | undefined>): string[] =>
+  items.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+
+const pluralizeCount = (count: number, singular: string, plural: string) =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+const isPatrolSessionHandoff = (summary: ChatSessionHandoffSummary) =>
+  summary.kind === 'patrol_finding' || Boolean(summary.finding_id);
+
+const getSessionHandoffSourceLabel = (summary: ChatSessionHandoffSummary) =>
+  isPatrolSessionHandoff(summary) ? 'Pulse Patrol' : 'Pulse Assistant';
+
+const formatSessionHandoffResourceLabel = (summary: ChatSessionHandoffSummary) => {
+  const resource = summary.primary_resource;
+  const label = resource?.name?.trim() || resource?.id?.trim() || '';
+  if (label) return label;
+  return formatIdentifierLabel(resource?.type, { fallback: '' });
+};
+
+const formatSessionHandoffResourceDetail = (summary: ChatSessionHandoffSummary) => {
+  const label = formatSessionHandoffResourceLabel(summary);
+  const node = summary.primary_resource?.node?.trim();
+  if (label && node) return `${label} on ${node}`;
+  return label;
+};
+
+const formatSessionHandoffStatus = (summary: ChatSessionHandoffSummary) =>
+  compactText([
+    summary.last_known_approval_status
+      ? `approval ${formatIdentifierLabel(summary.last_known_approval_status)}`
+      : undefined,
+    summary.last_known_action_state
+      ? `action ${formatIdentifierLabel(summary.last_known_action_state)}`
+      : undefined,
+    summary.last_known_action_risk
+      ? `${formatIdentifierLabel(summary.last_known_action_risk)} risk`
+      : undefined,
+  ]).join(' · ');
+
+const getSessionHandoffBadgeLabel = (summary: ChatSessionHandoffSummary) => {
+  if (summary.requires_approval) return 'Approval required';
+  if ((summary.action_count ?? 0) > 0) return 'Action context';
+  return summary.has_model_context ? 'Context attached' : 'Scoped handoff';
+};
+
+const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | undefined => {
+  const summary = session?.handoff_summary;
+  if (!summary) return undefined;
+
+  const sourceLabel = getSessionHandoffSourceLabel(summary);
+  const resourceLabel = formatSessionHandoffResourceLabel(summary);
+  const resourceDetail = formatSessionHandoffResourceDetail(summary);
+  const statusLabel = formatSessionHandoffStatus(summary);
+  const actionCount = summary.action_count ?? 0;
+  const resourceCount = summary.resource_count ?? 0;
+  const findingId = summary.finding_id?.trim() || undefined;
+  const requiresApproval = Boolean(summary.requires_approval || actionCount > 0);
+  const isPatrol = isPatrolSessionHandoff(summary);
+  const title = isPatrol
+    ? resourceLabel
+      ? `Patrol finding on ${resourceLabel}`
+      : findingId
+        ? `Patrol finding ${findingId}`
+        : 'Patrol finding handoff'
+    : resourceLabel
+      ? `Assistant handoff for ${resourceLabel}`
+      : 'Assistant handoff';
+
+  return {
+    targetType: summary.primary_resource?.type,
+    targetId: summary.primary_resource?.id,
+    context: {
+      source: 'session_handoff_summary',
+      kind: summary.kind,
+      findingId,
+      hasModelContext: summary.has_model_context,
+      resourceCount,
+      actionCount,
+      requiresApproval: summary.requires_approval ?? false,
+      lastKnownApprovalStatus: summary.last_known_approval_status,
+      lastKnownActionState: summary.last_known_action_state,
+      lastKnownActionRisk: summary.last_known_action_risk,
+      updatedAt: summary.updated_at,
+    },
+    findingId,
+    ...(requiresApproval ? { autonomousMode: false } : {}),
+    briefing: {
+      sourceLabel,
+      title,
+      subject: findingId ? `Finding ${findingId}` : undefined,
+      statusLabel: statusLabel || (summary.requires_approval ? 'approval required' : undefined),
+      detailLines: compactText([
+        resourceDetail ? `Resource: ${resourceDetail}` : undefined,
+        resourceCount > 1
+          ? pluralizeCount(resourceCount, 'linked resource', 'linked resources')
+          : undefined,
+        actionCount > 0
+          ? pluralizeCount(actionCount, 'governed action', 'governed actions')
+          : undefined,
+        summary.requires_approval ? 'Approval required before action' : undefined,
+      ]),
+      actionLabel: summary.requires_approval
+        ? 'Approval required'
+        : actionCount > 0
+          ? 'Governed action context'
+          : undefined,
+      commandSummary: statusLabel ? `Last known state: ${statusLabel}` : undefined,
+      safetyNote:
+        actionCount > 0
+          ? 'Detailed command payloads stay in governed approval context.'
+          : undefined,
+      suggestedPrompts: isPatrol
+        ? [
+            'What changed since this finding was opened?',
+            'What evidence supports this finding?',
+            'What should I verify next?',
+          ]
+        : ['Summarize this handoff', 'What needs attention?', 'What should I verify next?'],
+    },
+  };
+};
 
 /**
  * AIChat - Main chat panel component.
@@ -785,12 +907,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // New conversation
   const handleNewConversation = async () => {
     await chat.newSession();
+    aiChatStore.clearContext?.();
     setShowSessions(false);
   };
 
   // Load session
   const handleLoadSession = async (sessionId: string) => {
+    const session = sessions().find((candidate) => candidate.id === sessionId);
     await chat.loadSession(sessionId);
+    const restoredContext = buildSessionHandoffContext(session);
+    if (restoredContext) {
+      aiChatStore.setContext(restoredContext);
+    } else {
+      aiChatStore.clearContext?.();
+    }
     setShowSessions(false);
   };
 
@@ -1085,6 +1215,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                 <div class="text-xs text-muted">
                                   {session.message_count} messages
                                 </div>
+                                <Show when={session.handoff_summary}>
+                                  {(summary) => (
+                                    <div class="mt-1 flex max-w-full flex-wrap gap-1.5">
+                                      <span class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                                        {getSessionHandoffSourceLabel(summary())}
+                                      </span>
+                                      <span class="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                                        {getSessionHandoffBadgeLabel(summary())}
+                                      </span>
+                                      <Show when={formatSessionHandoffStatus(summary())}>
+                                        {(status) => (
+                                          <span class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                                            {status()}
+                                          </span>
+                                        )}
+                                      </Show>
+                                    </div>
+                                  )}
+                                </Show>
                               </div>
                               <button
                                 type="button"
