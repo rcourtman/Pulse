@@ -28,6 +28,12 @@ import {
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
+const PRO_RUNTIME_IDENTITY = {
+  build: 'pro',
+  label: 'Pulse Pro runtime',
+  download_url: 'https://pulserelay.pro/download.html',
+};
+
 const loadRuntimeLicenseStatusMock = vi.fn();
 const loadCommercialPostureMock = vi.fn();
 const loadLicenseEntitlementsMock = vi.fn();
@@ -326,6 +332,7 @@ describe('ProLicensePanel', () => {
       licensed_email: 'owner@example.com',
       is_lifetime: false,
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
 
     renderPanel();
@@ -360,6 +367,7 @@ describe('ProLicensePanel', () => {
       licensed_email: 'owner@example.com',
       is_lifetime: true,
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
 
     renderPanel();
@@ -412,6 +420,7 @@ describe('ProLicensePanel', () => {
         licensed_email: 'owner@example.com',
         is_lifetime: false,
         trial_eligible: false,
+        runtime: PRO_RUNTIME_IDENTITY,
       };
 
       renderPanel();
@@ -475,6 +484,7 @@ describe('ProLicensePanel', () => {
       licensed_email: 'owner@example.com',
       max_history_days: 90,
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
 
     renderPanel();
@@ -569,6 +579,7 @@ describe('ProLicensePanel', () => {
       plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
 
     renderPanel();
@@ -611,6 +622,7 @@ describe('ProLicensePanel', () => {
       plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
 
     renderPanel();
@@ -654,6 +666,7 @@ describe('ProLicensePanel', () => {
       plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
 
     renderPanel();
@@ -710,6 +723,7 @@ describe('ProLicensePanel', () => {
       subscription_state: 'active',
       upgrade_reasons: [],
       tier: 'enterprise',
+      runtime: PRO_RUNTIME_IDENTITY,
     };
 
     renderPanel();
@@ -810,6 +824,7 @@ describe('ProLicensePanel', () => {
           tier: 'pro',
           licensed_email: 'owner@example.com',
           trial_eligible: false,
+          runtime: PRO_RUNTIME_IDENTITY,
         };
       }
       useLocationMock.mockReturnValue({
@@ -853,6 +868,7 @@ describe('ProLicensePanel', () => {
       tier: 'pro',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
     useLocationMock.mockReturnValue({
       search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,
@@ -895,6 +911,7 @@ describe('ProLicensePanel', () => {
       plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
     useLocationMock.mockReturnValue({
       search: '?details=counting-rules',
@@ -986,6 +1003,7 @@ describe('ProLicensePanel', () => {
       plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
     };
     useLocationMock.mockReturnValue({
       search: '',

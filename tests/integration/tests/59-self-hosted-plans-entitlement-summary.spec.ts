@@ -2,6 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { ensureAuthenticated } from './helpers';
 
+const PRO_RUNTIME_IDENTITY = {
+  build: 'pro',
+  label: 'Pulse Pro runtime',
+  download_url: 'https://pulserelay.pro/download.html',
+};
+
 const PRO_PLAN_ENTITLEMENTS = {
   capabilities: [
     'update_alerts',
@@ -46,6 +52,7 @@ const PRO_PLAN_ENTITLEMENTS = {
   in_grace_period: false,
   grace_period_end: null,
   max_history_days: 90,
+  runtime: PRO_RUNTIME_IDENTITY,
 };
 
 const PRO_PLAN_COMMERCIAL_POSTURE = {
@@ -64,14 +71,26 @@ const PRO_PLAN_RUNTIME_CAPABILITIES = {
   monitored_system_capacity: PRO_PLAN_ENTITLEMENTS.monitored_system_capacity,
   hosted_mode: false,
   max_history_days: 90,
+  runtime: PRO_RUNTIME_IDENTITY,
 };
 
-async function stubSelfHostedPlanEndpoints(page: Page) {
+async function stubSelfHostedPlanEndpoints(
+  page: Page,
+  payloads: {
+    entitlements?: Record<string, unknown>;
+    commercialPosture?: Record<string, unknown>;
+    runtimeCapabilities?: Record<string, unknown>;
+  } = {},
+) {
+  const runtimeCapabilities = payloads.runtimeCapabilities ?? PRO_PLAN_RUNTIME_CAPABILITIES;
+  const entitlements = payloads.entitlements ?? PRO_PLAN_ENTITLEMENTS;
+  const commercialPosture = payloads.commercialPosture ?? PRO_PLAN_COMMERCIAL_POSTURE;
+
   await page.route('**/api/license/runtime-capabilities', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(PRO_PLAN_RUNTIME_CAPABILITIES),
+      body: JSON.stringify(runtimeCapabilities),
     });
   });
 
@@ -79,7 +98,7 @@ async function stubSelfHostedPlanEndpoints(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(PRO_PLAN_ENTITLEMENTS),
+      body: JSON.stringify(entitlements),
     });
   });
 
@@ -87,7 +106,7 @@ async function stubSelfHostedPlanEndpoints(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(PRO_PLAN_COMMERCIAL_POSTURE),
+      body: JSON.stringify(commercialPosture),
     });
   });
 }
@@ -151,6 +170,39 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(
       currentPlanCard.getByText('Centralized Agent Profiles', { exact: true }),
     ).toBeVisible();
+  });
+
+  test('warns when an active Pro plan does not report the private runtime', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only plans coverage');
+
+    const unknownRuntimeEntitlements: Record<string, unknown> = { ...PRO_PLAN_ENTITLEMENTS };
+    delete unknownRuntimeEntitlements.runtime;
+    const unknownRuntimeCapabilities: Record<string, unknown> = {
+      ...PRO_PLAN_RUNTIME_CAPABILITIES,
+    };
+    delete unknownRuntimeCapabilities.runtime;
+
+    await stubSelfHostedPlanEndpoints(page, {
+      entitlements: unknownRuntimeEntitlements,
+      runtimeCapabilities: unknownRuntimeCapabilities,
+    });
+    await ensureAuthenticated(page);
+    await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
+
+    const currentPlanCard = page
+      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
+      .filter({ has: page.getByText('Current plan: Pulse Pro') })
+      .first();
+
+    await expect(currentPlanCard.getByText('Pro runtime missing')).toBeVisible();
+    await expect(
+      currentPlanCard.getByText(/not reporting the private Pulse Pro runtime/i),
+    ).toBeVisible();
+    await expect(
+      currentPlanCard.getByRole('link', { name: 'Open Pulse Pro downloads' }),
+    ).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
   });
 
   test('surfaces advertised Pro settings sections when Pro capabilities are active', async ({

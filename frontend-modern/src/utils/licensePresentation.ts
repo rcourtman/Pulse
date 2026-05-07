@@ -192,15 +192,32 @@ export const hasPulseProRuntime = (
   entitlements?: Pick<LicenseCommercialEntitlements, 'runtime'> | null,
 ): boolean => (entitlements?.runtime?.build || '').trim().toLowerCase() === 'pro';
 
+const getPulseProRuntimeBuild = (
+  entitlements?: Pick<LicenseCommercialEntitlements, 'runtime'> | null,
+): string => (entitlements?.runtime?.build || '').trim().toLowerCase();
+
 export const hasPulseProRuntimeMismatch = (
   entitlements?: Pick<
     LicenseCommercialEntitlements,
     'hosted_mode' | 'runtime' | 'subscription_state' | 'tier'
   > | null,
 ): boolean => {
-  const runtimeBuild = (entitlements?.runtime?.build || '').trim().toLowerCase();
-  return requiresPulseProRuntime(entitlements) && runtimeBuild !== '' && runtimeBuild !== 'pro';
+  return requiresPulseProRuntime(entitlements) && getPulseProRuntimeBuild(entitlements) !== 'pro';
 };
+
+const getPulseProRuntimeMismatchSummary = (
+  entitlements?: Pick<LicenseCommercialEntitlements, 'runtime'> | null,
+): string =>
+  getPulseProRuntimeBuild(entitlements) === 'community'
+    ? 'running the community runtime'
+    : 'not reporting the private Pulse Pro runtime';
+
+const getPulseProRuntimeMismatchDetail = (
+  entitlements?: Pick<LicenseCommercialEntitlements, 'runtime'> | null,
+): string =>
+  getPulseProRuntimeBuild(entitlements) === 'community'
+    ? `This install reports the community runtime. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key and install the private Pulse Pro runtime; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`
+    : `This install is not reporting a Pulse Pro runtime identity. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key and install the private Pulse Pro runtime; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`;
 
 export const getLicenseTierLabel = (tier?: string | null): string => {
   const normalized = (tier || '').trim().toLowerCase();
@@ -453,7 +470,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
     return {
       title: `Current plan: ${planLabel} Trial`,
       body: runtimeMismatch
-        ? `${planLabel} trial entitlement is active, but this install is running the community runtime. Open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime to use Pro-only features.`
+        ? `${planLabel} trial entitlement is active, but this install is ${getPulseProRuntimeMismatchSummary(current)}. Open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime to use Pro-only features.`
         : unlockedFeatures.length > 0
           ? `${planLabel} trial capabilities are active on this instance right now.`
           : `${planLabel} trial entitlement is being confirmed for this instance.`,
@@ -496,7 +513,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
       );
       return {
         title: `Current plan: ${planLabel}`,
-        body: `${planLabel} is active, but this install is running the community runtime. Open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime to use Pro-only features such as Audit Log, Audit Webhooks, RBAC, and governed remediation.`,
+        body: `${planLabel} is active, but this install is ${getPulseProRuntimeMismatchSummary(current)}. Open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime to use Pro-only features such as Audit Log, Audit Webhooks, RBAC, and governed remediation.`,
         unlockedFeaturesLabel,
         unlockedFeatures,
         includedExtrasLabel: includedExtras.length > 0 ? 'Included extras' : undefined,
@@ -603,7 +620,7 @@ export const getSelfHostedActivationProofPresentation = (
     (entitlements.capabilities || []).map((capability) => capability.trim().toLowerCase()),
   );
   const items: SelfHostedActivationProofItem[] = [];
-  if (requiresPulseProRuntime(entitlements) && entitlements.runtime?.build) {
+  if (requiresPulseProRuntime(entitlements)) {
     const hasProRuntime = hasPulseProRuntime(entitlements);
     items.push({
       label: 'Pulse Pro runtime',
@@ -611,7 +628,7 @@ export const getSelfHostedActivationProofPresentation = (
       statusLabel: hasProRuntime ? 'Active' : 'Needs attention',
       detail: hasProRuntime
         ? 'This install reports the private Pulse Pro runtime.'
-        : `This install reports the community runtime. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key and install the private Pulse Pro runtime; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`,
+        : getPulseProRuntimeMismatchDetail(entitlements),
     });
   }
   items.push(
@@ -721,10 +738,10 @@ export const getSelfHostedActivationSuccessPresentation = ({
     body:
       source === 'purchase'
         ? runtimeMismatch
-          ? `Checkout completed and the license is active. This install is still running the community runtime, so open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime before using Pro-only features.`
+          ? `Checkout completed and the license is active. This install is ${getPulseProRuntimeMismatchSummary(current)}, so open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime before using Pro-only features.`
           : `Checkout completed and this instance is now running ${planLabel}.`
         : runtimeMismatch
-          ? `The activation key was accepted. This install is still running the community runtime, so open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime before using Pro-only features.`
+          ? `The activation key was accepted. This install is ${getPulseProRuntimeMismatchSummary(current)}, so open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime before using Pro-only features.`
           : `The activation key was accepted and this instance is now running ${planLabel}.`,
     highlightsLabel: runtimeMismatch ? 'Licensed capabilities' : 'Available now on this instance',
     highlights,

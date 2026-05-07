@@ -125,6 +125,14 @@ cloud-specific enforcement rules.
    values on activate, legacy exchange, and grant refresh instead of inferring
    install version or paid-runtime status from browser state, dev build
    metadata, public image tags, or anonymous telemetry.
+   Active self-hosted paid entitlements must also treat runtime identity as a
+   first-class product state. A paid Pro, Pro Annual, Pro+, lifetime, or
+   enterprise entitlement on a non-Pro or missing runtime identity must render
+   the private Pulse Pro runtime handoff in the local Plans surface rather than
+   presenting as fully healthy. License-server support/admin payloads must
+   preserve the raw runtime build and expose a normalized `pro`, `community`,
+   or `unknown` status so paid-runtime support triage does not depend on
+   interpreting Docker tags, public release names, or customer screenshots.
 5. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 6. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
    That shared monitored-system presentation boundary also owns disabled

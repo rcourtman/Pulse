@@ -629,6 +629,9 @@ func TestHandleRuntimeCapabilities_CommunityRuntimeBlocksPrivateProCapabilities(
 	if err := json.Unmarshal(entitlementRec.Body.Bytes(), &entitlementPayload); err != nil {
 		t.Fatalf("unmarshal entitlement payload failed: %v", err)
 	}
+	if entitlementPayload.Runtime == nil || entitlementPayload.Runtime.Build != pkglicensing.RuntimeBuildCommunity {
+		t.Fatalf("entitlement runtime identity=%+v, want community", entitlementPayload.Runtime)
+	}
 	for _, feature := range []string{license.FeatureAuditLogging, license.FeatureRBAC, license.FeatureAIAutoFix} {
 		if !containsCapability(entitlementPayload.Capabilities, feature) {
 			t.Fatalf("entitlements lost licensed feature %q: %v", feature, entitlementPayload.Capabilities)

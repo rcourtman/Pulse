@@ -249,6 +249,7 @@ describe('licensePresentation', () => {
           capabilities: ['relay', 'ai_autofix'],
           limits: [{ key: 'max_monitored_systems', limit: 10, current: 23, state: 'enforced' }],
           upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
       }),
@@ -267,6 +268,7 @@ describe('licensePresentation', () => {
           capabilities: ['relay', 'mobile_app', 'ai_autofix'],
           limits: [],
           upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
@@ -302,6 +304,7 @@ describe('licensePresentation', () => {
           capabilities: ['relay', 'ai_autofix'],
           limits: [],
           upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
       }),
@@ -325,6 +328,7 @@ describe('licensePresentation', () => {
           capabilities: ['relay'],
           limits: [],
           upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: ['Pulse Relay (Remote Access)'],
       }),
@@ -401,6 +405,53 @@ describe('licensePresentation', () => {
     });
   });
 
+  it('surfaces active Pro licenses when runtime identity is missing', () => {
+    const entitlements = {
+      tier: 'pro',
+      subscription_state: 'active',
+      capabilities: ['relay', 'audit_logging', 'rbac', 'ai_autofix'],
+      limits: [],
+      upgrade_reasons: [],
+      max_history_days: 90,
+    };
+
+    expect(hasPulseProRuntimeMismatch(entitlements)).toBe(true);
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements,
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+      }),
+    ).toMatchObject({
+      title: 'Current plan: Pulse Pro',
+      body: expect.stringContaining('not reporting the private Pulse Pro runtime'),
+      supplementalBadges: ['Pro runtime missing'],
+      privateRuntimeAction: {
+        actionLabel: 'Open Pulse Pro downloads',
+        actionUrl: 'https://pulserelay.pro/download.html',
+      },
+    });
+    expect(getSelfHostedActivationProofPresentation(entitlements)?.items[0]).toMatchObject({
+      label: 'Pulse Pro runtime',
+      statusLabel: 'Needs attention',
+      state: 'missing',
+      detail: expect.stringContaining('not reporting a Pulse Pro runtime identity'),
+    });
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements,
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+        source: 'manual',
+      }),
+    ).toMatchObject({
+      title: 'Pulse Pro license is active',
+      tone: expect.stringContaining('amber'),
+      body: expect.stringContaining('not reporting the private Pulse Pro runtime'),
+      highlightsLabel: 'Licensed capabilities',
+      actionLabel: 'Open Pulse Pro downloads',
+      actionUrl: 'https://pulserelay.pro/download.html',
+    });
+  });
+
   it('sources active self-hosted current-plan summaries from the shared plan contract', () => {
     expect(
       getSelfHostedCurrentPlanPresentation({
@@ -427,6 +478,7 @@ describe('licensePresentation', () => {
           capabilities: ['relay', 'ai_autofix'],
           limits: [],
           upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
       }).body,
@@ -563,10 +615,12 @@ describe('licensePresentation', () => {
         limits: [],
         upgrade_reasons: [],
         max_history_days: 90,
+        runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       }),
     ).toMatchObject({
       title: 'Pulse Pro value proof',
       items: [
+        { label: 'Pulse Pro runtime', statusLabel: 'Active' },
         { label: 'Remote access, pairing, and push', statusLabel: 'Active' },
         { label: '90-day metric history', statusLabel: 'Active' },
         { label: 'Root-cause analysis and remediation', statusLabel: 'Active' },
@@ -582,8 +636,10 @@ describe('licensePresentation', () => {
         limits: [],
         upgrade_reasons: [],
         max_history_days: 14,
+        runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       })?.items.map((item) => [item.label, item.statusLabel]),
     ).toEqual([
+      ['Pulse Pro runtime', 'Active'],
       ['Remote access, pairing, and push', 'Partial'],
       ['90-day metric history', 'Partial'],
       ['Root-cause analysis and remediation', 'Partial'],
@@ -610,6 +666,7 @@ describe('licensePresentation', () => {
           capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_autofix'],
           limits: [],
           upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',

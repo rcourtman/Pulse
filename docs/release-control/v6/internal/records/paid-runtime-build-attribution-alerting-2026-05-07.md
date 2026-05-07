@@ -48,6 +48,50 @@ continue running the community build with a valid paid key.
   runtime and the public community runtime negative case.
 - Alerting is rate-limited or delayed enough to avoid noisy false positives.
 
+## Implementation Slice - 2026-05-07
+
+The first product and support guardrail slice now exists:
+
+- active paid self-hosted plans treat any non-Pro or missing runtime identity as
+  a private-runtime mismatch;
+- the Plans surface renders `Pro runtime missing` plus the private Pulse Pro
+  download handoff when a paid install reports community runtime or no runtime;
+- activation-success and value-proof copy use the same runtime identity check,
+  so a freshly accepted paid key cannot present as fully healthy without the
+  private runtime;
+- license-server installation responses preserve raw `runtime_build` and add
+  normalized `runtime_status` values: `pro`, `community`, or `unknown`;
+- admin/customer support JSON and the admin UI expose runtime status per
+  installation, plus a per-license runtime-status rollup for support triage.
+
+Local proof added:
+
+- `go test ./internal/api -run 'TestHandleRuntimeCapabilities_CommunityRuntimeBlocksPrivateProCapabilities|TestHandleRuntimeCapabilities_ProRuntimePreservesPrivateProCapabilities'`
+- `go test ./...` from `repos/pulse-pro/license-server`
+- `npm test -- --run src/utils/__tests__/licensePresentation.test.ts src/components/Settings/__tests__/ProLicensePanel.test.tsx`
+- `npm run type-check` from `repos/pulse/frontend-modern`
+- `PULSE_BASE_URL=http://127.0.0.1:5173 npx playwright test tests/59-self-hosted-plans-entitlement-summary.spec.ts --project=chromium` from `repos/pulse/tests/integration`
+
+The Playwright proof exercises the real hot-dev browser surface with a paid Pro
+payload that reports the Pro runtime and a negative paid Pro payload with the
+runtime identity omitted.
+
+## Remaining Proof Before Passing
+
+The release gate remains pending until the negative path is exercised against a
+managed runtime rather than only a browser-stubbed paid payload. The remaining
+proof should run a valid paid activation against the public community runtime
+and confirm:
+
+- Pulse reports `runtime.build=community` in local entitlement/runtime payloads;
+- Pro-only runtime capabilities are blocked with `paid_runtime_required`;
+- Plans displays the private-runtime warning and download handoff;
+- license-server support/admin telemetry records `runtime_status=community`;
+- the private Pulse Pro runtime path still reports `runtime_status=pro`.
+
+Direct Linux/LXC coverage should use the same contract with the private archive
+and public community archive before this gate is marked `passed`.
+
 ## Result
 
 This record creates a new release-ready gate. It should remain pending until the
