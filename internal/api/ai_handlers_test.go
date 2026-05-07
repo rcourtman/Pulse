@@ -281,6 +281,20 @@ func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
 			},
 		},
 		{
+			name:            "deepseek v4 flash is ready",
+			patrolAvailable: true,
+			wantStatus:      patrolReadinessReady,
+			wantReady:       true,
+			wantCheckID:     "tools",
+			wantCheck:       patrolReadinessReady,
+			wantSummary:     "ready to run",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = true
+				aiCfg.Model = "deepseek:deepseek-v4-flash"
+				aiCfg.DeepSeekAPIKey = "test-key"
+			},
+		},
+		{
 			name:            "deepseek aliases warn instead of silently ready",
 			patrolAvailable: true,
 			wantStatus:      patrolReadinessWarning,

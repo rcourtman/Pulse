@@ -261,3 +261,59 @@ func TestRunScopedPatrolRecordsStructuredRuntimeFailure(t *testing.T) {
 		t.Fatalf("unexpected runtime finding title %q", finding.Title)
 	}
 }
+
+func TestRunScopedPatrolResolvesPreviousRuntimeFailureOnSuccess(t *testing.T) {
+	svc := NewService(config.NewConfigPersistence(t.TempDir()), nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "deepseek:deepseek-v4-flash", DeepSeekAPIKey: "sk-test"}
+	svc.provider = &mockProvider{}
+	var patrolStreamCalled bool
+	svc.SetChatService(&mockChatService{
+		executor: tools.NewPulseToolExecutor(tools.ExecutorConfig{}),
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			patrolStreamCalled = true
+			return &PatrolStreamResponse{Content: "scoped patrol completed without provider errors"}, nil
+		},
+	})
+
+	ps := NewPatrolService(svc, &mockStateProvider{
+		state: models.StateSnapshot{
+			Nodes: []models.Node{{ID: "node-1", Name: "pve-1", Status: "online", CPU: 0.95}},
+		},
+	})
+	ps.SetConfig(PatrolConfig{
+		Enabled:      true,
+		Interval:     time.Hour,
+		AnalyzeNodes: true,
+	})
+	runtimeFinding := newPatrolRuntimeFailureFinding(patrolRuntimeFailureFromError(errors.New("provider connection failed")), time.Now().Add(-time.Hour))
+	ps.recordFinding(runtimeFinding)
+
+	ps.runScopedPatrol(context.Background(), PatrolScope{
+		ResourceIDs: []string{"node-1"},
+		Reason:      TriggerReasonManual,
+		NoStream:    true,
+	})
+
+	if !patrolStreamCalled {
+		t.Fatal("expected scoped patrol success to exercise the provider-backed patrol stream")
+	}
+
+	finding := ps.findings.Get(runtimeFinding.ID)
+	if finding == nil {
+		t.Fatal("expected runtime finding to remain available as resolved history")
+	}
+	if !finding.IsResolved() {
+		t.Fatalf("expected successful scoped patrol to auto-resolve runtime finding, got resolved_at=%v", finding.ResolvedAt)
+	}
+
+	runs := ps.runHistoryStore.GetRecent(1)
+	if len(runs) != 1 {
+		t.Fatalf("expected one scoped patrol run, got %d", len(runs))
+	}
+	if runs[0].ErrorCount != 0 {
+		t.Fatalf("expected successful scoped run without runtime errors, got %d", runs[0].ErrorCount)
+	}
+	if runs[0].ResolvedFindings != 1 {
+		t.Fatalf("expected scoped run to record resolved runtime finding, got %d", runs[0].ResolvedFindings)
+	}
+}

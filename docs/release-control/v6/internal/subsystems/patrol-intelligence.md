@@ -503,6 +503,12 @@ provider protocol fragments such as `tool_choice`, `reasoning_content`, raw
 endpoint URLs, credential hints, or model-internal error strings do not leak
 through run history while the operator still receives an actionable recovery
 summary.
+The Patrol surface must not keep presenting runtime-warning or runtime-issue
+copy after a successful provider-backed Patrol run proves the selected
+provider/model can run tool-backed analysis. Scoped success may still leave
+estate coverage incomplete, but it must clear stale Patrol runtime impairment
+state and suppress provider-only readiness warnings for live-proven
+tool-capable models.
 That same shared finding-presentation helper should also own Patrol finding
 subject labels, so Patrol-owned synthetic service findings render as
 `Patrol runtime` rather than leaking backend resource internals like

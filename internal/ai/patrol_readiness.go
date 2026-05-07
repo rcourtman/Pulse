@@ -77,6 +77,8 @@ func EvaluatePatrolConfigReadiness(cfg *config.AIConfig) PatrolConfigReadiness {
 func PatrolToolReadinessForModel(provider, model string) (string, PatrolFailureCause, string) {
 	normalizedModel := strings.ToLower(strings.TrimSpace(model))
 	switch {
+	case provider == config.AIProviderDeepSeek && patrolDeepSeekModelSupportsTools(normalizedModel):
+		return PatrolReadinessReady, PatrolFailureCauseNone, "The selected DeepSeek model supports Patrol's tool-backed analysis contract."
 	case strings.Contains(normalizedModel, "deepseek-r1") ||
 		strings.Contains(normalizedModel, "/r1") ||
 		strings.Contains(normalizedModel, ":r1") ||
@@ -92,6 +94,11 @@ func PatrolToolReadinessForModel(provider, model string) (string, PatrolFailureC
 	default:
 		return PatrolReadinessReady, PatrolFailureCauseNone, "The selected provider path supports Patrol's tool-backed analysis contract."
 	}
+}
+
+func patrolDeepSeekModelSupportsTools(normalizedModel string) bool {
+	model := strings.TrimPrefix(normalizedModel, string(config.AIProviderDeepSeek)+":")
+	return model == "deepseek-v4-flash" || model == "deepseek-v4-pro"
 }
 
 func patrolConfigReadiness(provider, model, status string, cause PatrolFailureCause, summary string) PatrolConfigReadiness {

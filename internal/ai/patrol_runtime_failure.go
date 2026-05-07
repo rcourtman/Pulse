@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const patrolRuntimeFailureDetailLimit = 2000
@@ -248,4 +250,21 @@ func newPatrolRuntimeFailureFinding(failure patrolRuntimeFailure, now time.Time)
 		DetectedAt:     now,
 		LastSeenAt:     now,
 	}
+}
+
+func (p *PatrolService) resolvePatrolRuntimeFailureFinding(reason string) bool {
+	if p == nil || p.findings == nil {
+		return false
+	}
+	errorFindingID := generateFindingID(patrolRuntimeResourceID, "reliability", patrolRuntimeFindingKey)
+	if existing := p.findings.Get(errorFindingID); existing == nil || existing.IsResolved() {
+		return false
+	}
+
+	p.findings.Resolve(errorFindingID, true)
+	if resolver := p.unifiedFindingResolver; resolver != nil {
+		resolver(errorFindingID)
+	}
+	log.Info().Str("reason", reason).Msg("AI Patrol: Auto-resolved previous patrol runtime finding after successful provider-backed run")
+	return true
 }

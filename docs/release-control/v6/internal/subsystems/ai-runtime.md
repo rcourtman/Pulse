@@ -1268,6 +1268,11 @@ so the full-run seed/reconcile path must not auto-resolve them as
 `Resource no longer exists in infrastructure` just because `ai-service` is not
 present in the infrastructure snapshot. Those findings stay active until
 Patrol actually succeeds or resolves them for a Patrol-owned reason.
+That success boundary includes provider-backed scoped Patrol runs. A successful
+scoped run proves that Patrol can currently reach the selected provider/model
+and complete tool-backed analysis, so it must clear the synthetic
+`ai-service` runtime failure just as a successful full Patrol run does, without
+loosening ordinary scoped finding reconciliation for infrastructure issues.
 Because those findings represent Patrol blindness rather than operator-triaged
 infrastructure noise, the Patrol runtime must also reject manual acknowledge,
 snooze, dismiss, resolve, and suppress actions against synthetic `ai-service`
@@ -1304,6 +1309,11 @@ Patrol. Reasoning-backed provider turns that return tool calls with
 `reasoning_content` must preserve that reasoning state on the following
 tool-result turn when the provider requires it, so Assistant and Patrol can
 complete multi-turn tool use against live BYOK providers.
+Readiness classification for the same provider path must be model-aware, not
+provider-only. Known live-proven DeepSeek V4 tool-capable models may report
+Patrol readiness as ready; unknown DeepSeek aliases may still warn until
+proved, and known reasoning-only families must continue to fail closed before
+Patrol work is admitted.
 That same browser-owned chat read model must keep target normalization helper-
 driven. Assistant shells may still derive legacy VM identifiers or display
 labels for read-only targeting, but they must do so through shared helpers and

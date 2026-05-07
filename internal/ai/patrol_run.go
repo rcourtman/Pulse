@@ -298,6 +298,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		errorSummary      string
 		errorDetail       string
 		aiAnalysis        *AIAnalysisResult // Stores the AI's analysis for the run record
+		runtimeResolved   bool
 	}
 	var newFindings []*Finding
 
@@ -405,14 +406,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 			runStats.triageFlags = aiResult.TriageFlags
 			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
 
-			// Auto-resolve previous patrol error finding if this run succeeded
-			errorFindingID := generateFindingID("ai-service", "reliability", "ai-patrol-error")
-			if existing := p.findings.Get(errorFindingID); existing != nil && !existing.IsResolved() {
-				p.findings.Resolve(errorFindingID, true) // auto-resolved
-				if resolver := p.unifiedFindingResolver; resolver != nil {
-					resolver(errorFindingID)
-				}
-				log.Info().Msg("AI Patrol: Auto-resolved previous patrol error finding after successful run")
+			if !aiResult.TriageSkippedLLM {
+				runStats.runtimeResolved = p.resolvePatrolRuntimeFailureFinding("full_patrol_success")
 			}
 
 			// Findings are already recorded via patrol_report_finding tool calls.
@@ -437,6 +432,9 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	var resolvedCount int
 	if runStats.aiAnalysis != nil {
 		resolvedCount = len(runStats.aiAnalysis.ResolvedIDs)
+		if runStats.runtimeResolved {
+			resolvedCount++
+		}
 
 		// Auto-resolve stale findings: active findings that were presented to the LLM
 		// in seed context but were neither re-reported nor explicitly resolved.
@@ -687,6 +685,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		errorSummary      string
 		errorDetail       string
 		aiAnalysis        *AIAnalysisResult
+		runtimeResolved   bool
 	}
 
 	// Get current state
@@ -818,6 +817,9 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			runStats.rejectedFindings = aiResult.RejectedFindings
 			runStats.triageFlags = aiResult.TriageFlags
 			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
+			if !aiResult.TriageSkippedLLM {
+				runStats.runtimeResolved = p.resolvePatrolRuntimeFailureFinding("scoped_patrol_success")
+			}
 
 			// Findings are already recorded via patrol_report_finding tool calls.
 			for _, f := range aiResult.Findings {
@@ -866,6 +868,13 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
 		}
 	}
+	resolvedFindings := 0
+	if runStats.aiAnalysis != nil {
+		resolvedFindings = len(runStats.aiAnalysis.ResolvedIDs)
+		if runStats.runtimeResolved {
+			resolvedFindings++
+		}
+	}
 
 	runRecord := PatrolRunRecord{
 		ID:                        runID,
@@ -894,6 +903,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		NewFindings:               runStats.newFindings,
 		ExistingFindings:          runStats.existingFindings,
 		RejectedFindings:          runStats.rejectedFindings,
+		ResolvedFindings:          resolvedFindings,
 		FindingsSummary:           findingsSummaryStr,
 		FindingIDs:                runStats.findingIDs,
 		ErrorCount:                runStats.errors,
