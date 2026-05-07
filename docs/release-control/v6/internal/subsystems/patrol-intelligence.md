@@ -163,8 +163,12 @@ Patrol-specific presentation helpers.
    proposed-fix command text into the chat prompt. Remediation-plan Assistant
    handoffs follow the same boundary: step labels, plan status, risk, and command
    counts are allowed, while command and rollback command text stays in the
-   governed remediation or approval surface. The assembled handoff must still
-   pass through the Assistant runtime's
+   governed remediation or approval surface. Generic finding discussion
+   handoffs must also force request-local approval-required mode when the finding
+   already references a live approval, proposed fix, fix outcome, or remediation
+   plan, so default autonomous Assistant settings cannot bypass the Patrol
+   action-governance boundary. The assembled handoff must still pass through the
+   Assistant runtime's
    resource-policy sanitizer before prompt injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
    addresses outside the canonical policy boundary.

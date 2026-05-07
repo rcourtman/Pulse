@@ -324,7 +324,10 @@ the canonical monitored-system blocked payload.
     remediation-plan handoffs must use the same boundary for frontend-authored
     prompts: plan status, risk, step labels, and command counts are allowed,
     while raw command and rollback command payloads remain in governed action
-    surfaces. The operator
+    surfaces. Frontend finding-discussion handoffs that carry any live approval,
+    proposed-fix, fix outcome, or remediation-plan reference must force a
+    request-local approval-required Assistant mode instead of inheriting the
+    user's persistent autonomous control setting. The operator
     decision and action-posture lines in the briefing must derive from those
     same structured action references after recovery so the briefing cannot
     contradict the handoff action payload. Related finding

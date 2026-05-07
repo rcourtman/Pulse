@@ -22,6 +22,7 @@ import {
   buildPatrolAssistantFindingPrompt,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantPrompt,
+  patrolAssistantFindingHandoffRequiresApprovalMode,
 } from '@/features/patrol/patrolInvestigationContextModel';
 import { useResources } from '@/hooks/useResources';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
@@ -427,6 +428,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const pendingApproval = aiIntelligenceStore.patrolPendingApprovals.find(
       (approval) => approval.toolId === 'investigation_fix' && approval.targetId === finding.id,
     );
+    const pendingApprovalBriefing = pendingApproval
+      ? {
+          id: pendingApproval.id,
+          status: pendingApproval.status,
+          riskLevel: pendingApproval.riskLevel,
+          requestedAt: pendingApproval.requestedAt,
+          expiresAt: pendingApproval.expiresAt,
+          targetName: pendingApproval.targetName,
+        }
+      : undefined;
     const prompt = buildPatrolAssistantFindingPrompt({
       title,
       subject,
@@ -443,16 +454,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       regressionCount: finding.regressionCount,
       lastRegressionAt: finding.lastRegressionAt,
       remediationId: finding.remediationPlanId,
-      pendingApproval: pendingApproval
-        ? {
-            id: pendingApproval.id,
-            status: pendingApproval.status,
-            riskLevel: pendingApproval.riskLevel,
-            requestedAt: pendingApproval.requestedAt,
-            expiresAt: pendingApproval.expiresAt,
-            targetName: pendingApproval.targetName,
-          }
-        : undefined,
+      pendingApproval: pendingApprovalBriefing,
+      investigationRecord: finding.investigationRecord,
+    });
+    const requiresApprovalMode = patrolAssistantFindingHandoffRequiresApprovalMode({
+      investigationOutcome: finding.investigationOutcome,
+      remediationId: finding.remediationPlanId,
+      pendingApproval: pendingApprovalBriefing,
       investigationRecord: finding.investigationRecord,
     });
     aiChatStore.openWithPrompt(prompt, {
@@ -460,6 +468,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       targetId: finding.resourceId,
       findingId: finding.id,
       briefing,
+      autonomousMode: requiresApprovalMode ? false : undefined,
     });
   };
 

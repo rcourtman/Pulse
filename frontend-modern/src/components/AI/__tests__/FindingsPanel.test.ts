@@ -49,6 +49,10 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('investigationRecord: finding.investigationRecord');
     expect(findingsPanelSource).toContain('pendingApproval: pendingApproval');
     expect(findingsPanelSource).toContain('await aiIntelligenceStore.loadPendingApprovals()');
+    expect(findingsPanelSource).toContain('patrolAssistantFindingHandoffRequiresApprovalMode');
+    expect(findingsPanelSource).toContain(
+      'autonomousMode: requiresApprovalMode ? false : undefined',
+    );
   });
 
   it('routes remediation plan handoffs through the command-free Patrol handoff model', () => {

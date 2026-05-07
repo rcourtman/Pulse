@@ -8,6 +8,7 @@ import {
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantPrompt,
+  patrolAssistantFindingHandoffRequiresApprovalMode,
 } from '../patrolInvestigationContextModel';
 
 describe('patrolInvestigationContextModel', () => {
@@ -278,6 +279,50 @@ describe('patrolInvestigationContextModel', () => {
       'Command details stay in governed remediation context; execution requires the approval flow.',
     );
     expect(JSON.stringify(briefing)).not.toContain('systemctl');
+  });
+
+  it('forces approval-required Assistant mode for governed finding handoffs', () => {
+    expect(
+      patrolAssistantFindingHandoffRequiresApprovalMode({
+        pendingApproval: { id: 'approval-1', status: 'pending' },
+      }),
+    ).toBe(true);
+    expect(
+      patrolAssistantFindingHandoffRequiresApprovalMode({
+        remediationId: 'plan-1',
+      }),
+    ).toBe(true);
+    expect(
+      patrolAssistantFindingHandoffRequiresApprovalMode({
+        investigationOutcome: 'fix_queued',
+      }),
+    ).toBe(true);
+    expect(
+      patrolAssistantFindingHandoffRequiresApprovalMode({
+        investigationRecord: {
+          id: 'record-1',
+          finding_id: 'finding-1',
+          subject: { resource_id: 'agent-1' },
+          trigger: { detected_at: '2026-05-06T12:00:00Z' },
+          status: 'completed',
+          evidence: [],
+          proposed_fix: {
+            id: 'fix-1',
+            description: 'Restart service',
+            commands: ['systemctl restart nginx'],
+            destructive: false,
+          },
+          verification: [],
+          tools_used: [],
+          started_at: '2026-05-06T12:00:00Z',
+        },
+      }),
+    ).toBe(true);
+    expect(
+      patrolAssistantFindingHandoffRequiresApprovalMode({
+        investigationOutcome: 'needs_attention',
+      }),
+    ).toBe(false);
   });
 
   it('builds an operator briefing from current finding facts before a Patrol record exists', () => {

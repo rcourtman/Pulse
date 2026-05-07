@@ -70,6 +70,13 @@ export interface PatrolAssistantFindingBriefingInput {
   investigationRecord?: InvestigationRecord | null;
 }
 
+export interface PatrolAssistantFindingModeInput {
+  investigationOutcome?: string | null;
+  remediationId?: string | null;
+  pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
+  investigationRecord?: InvestigationRecord | null;
+}
+
 export interface PatrolRemediationPlanAssistantInput {
   title: string;
   subject: string;
@@ -174,6 +181,21 @@ export function buildPatrolAssistantFindingPrompt(
     prompt += `\n\n${description}`;
   }
   return prompt;
+}
+
+export function patrolAssistantFindingHandoffRequiresApprovalMode(
+  input: PatrolAssistantFindingModeInput,
+): boolean {
+  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
+  if (pendingApproval.id) return true;
+  if (normalizeText(input.remediationId)) return true;
+
+  const record = input.investigationRecord;
+  if (normalizeText(record?.approval_id)) return true;
+  if (record?.proposed_fix) return true;
+
+  const outcome = normalizeText(input.investigationOutcome || record?.outcome).toLowerCase();
+  return GOVERNED_ACTION_OUTCOMES.has(outcome);
 }
 
 export function buildPatrolRemediationPlanAssistantPrompt(
@@ -629,3 +651,12 @@ const PATROL_TOOL_LABELS: Record<string, string> = {
   'metrics.history': 'Metrics history',
   'ssh.exec': 'SSH exec',
 };
+
+const GOVERNED_ACTION_OUTCOMES = new Set([
+  'fix_queued',
+  'fix_executed',
+  'fix_failed',
+  'fix_verified',
+  'fix_verification_failed',
+  'fix_verification_unknown',
+]);
