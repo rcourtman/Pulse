@@ -458,7 +458,10 @@ the canonical monitored-system blocked payload.
    finding entries may carry live pending Patrol approval posture only as safe
    structured handoff actions with approval ID/status/risk/target/request/expiry
    metadata, action plan identity/policy/expiry, dry-run posture, and command
-   counts instead of pasting page-local UI text or raw command payloads into chat
+   counts instead of pasting page-local UI text or raw command payloads into chat,
+   and may derive visible action labels, safety notes, and approval-aware
+   suggested prompts from that same safe metadata so the drawer does not fall
+   back to generic assessment copy when governed actions are present
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,
@@ -3037,10 +3040,12 @@ visible handoffs from findings, while the downstream chat
 service hydrates live resource state, timeline, and action audit context around
 that same handoff. Frontend Patrol handoff helpers may consume current pending
 approval list payloads only as safe metadata for that visible briefing and any
-structured `handoff_actions`: approval ID, status, risk, request/expiry
-timestamps, target label, action ID, approval policy, plan expiry, and dry-run
-summary are allowed, while approval command text remains inside the governed
-approval/remediation surface.
+   structured `handoff_actions`: approval ID, status, risk, request/expiry
+   timestamps, target label, action ID, approval policy, plan expiry, and dry-run
+   summary are allowed. Assessment-level visible briefings may reuse that same
+   safe metadata for action labels, safety notes, and approval-aware suggested
+   prompts, while approval command text remains inside the governed
+   approval/remediation surface.
 Patrol approval-row Assistant prompts must use the same safe metadata boundary
 and set `autonomousMode:false` for the request-local chat handoff; they must not
 paste raw approval or proposed-fix command text into the authored chat prompt.

@@ -262,7 +262,9 @@ describe('patrolInvestigationContextModel', () => {
       sourceLabel: 'Pulse Patrol',
       title: 'Patrol assessment attached',
       subject: 'Issues detected',
-      safetyNote: 'Diagnostics and remediation require governed approval.',
+      actionLabel: '1 governed action reference attached',
+      safetyNote:
+        'Review action posture in the governed flow; raw command payloads stay out of Assistant.',
       suggestedPrompts: [
         'Prioritize findings and safest next step',
         'Explain recent changes and correlations',
@@ -345,8 +347,13 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.context).toMatchObject({
       pendingApprovalCount: 1,
     });
+    expect(handoff.context.briefing).toMatchObject({
+      actionLabel: '1 pending governed approval attached',
+      safetyNote:
+        'Review approvals in the governed flow; approval policy is attached; dry-run posture is attached; destructive actions remain approval-bound; raw command payloads stay out of Assistant.',
+    });
     expect(handoff.context.briefing?.suggestedPrompts).toContain(
-      'Summarize governed remediation risks',
+      'Review pending approvals and safest next step',
     );
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });

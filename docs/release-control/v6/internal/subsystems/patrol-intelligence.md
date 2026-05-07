@@ -223,9 +223,10 @@ Patrol-specific presentation helpers.
    approval ID, pending status, risk, target, requested/expiry timestamps,
    action plan identity, approval policy, plan expiry, dry-run posture, and
    command count. They must force request-local approval-required mode, keep raw
-   command and approval payloads out of prompt and drawer copy, and frame
-   Assistant as explanation, prioritization, and safe next-step review rather
-   than a generic reactive chat
+   command and approval payloads out of prompt and drawer copy, surface visible
+   drawer action posture from the same safe references, and frame Assistant as
+   explanation, prioritization, and safe next-step review rather than a generic
+   reactive chat
    box.
 
 ## Current State
@@ -284,7 +285,10 @@ evidence, bounded active-finding summaries, source-owned suggested prompts, and
 deduped resource references plus safe structured approval/action references as
 model-only context while forcing `autonomousMode:false` and summarizing
 proposed-fix command-bearing records and command-bearing change events without
-raw command text.
+raw command text. Its visible Assistant briefing must also use those safe
+references to distinguish pending governed approvals or attached action
+references from a generic assessment discussion, including approval-policy and
+dry-run posture when available, while command payloads stay out of the drawer.
 That active-runtime label must stay operational rather than verdict-like: the
 header chip should communicate that Patrol is enabled or available, not imply
 that infrastructure health is currently good merely because the runtime is on.

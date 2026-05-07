@@ -88,10 +88,13 @@ describe('PatrolIntelligenceSummary', () => {
       actionDryRunSummary: 'No provider-supported dry run is available for this action.',
     });
     expect(context.briefing).toMatchObject({
+      actionLabel: '1 pending governed approval attached',
+      safetyNote:
+        'Review approvals in the governed flow; approval policy is attached; dry-run posture is attached; raw command payloads stay out of Assistant.',
       suggestedPrompts: [
         'Prioritize findings and safest next step',
         'Explain recent changes and correlations',
-        'Summarize governed remediation risks',
+        'Review pending approvals and safest next step',
       ],
     });
     expect(JSON.stringify(context)).not.toContain('systemctl restart workload.service');

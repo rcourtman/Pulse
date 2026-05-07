@@ -410,6 +410,8 @@ function buildPatrolAssessmentAssistantBriefing(
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
   const findingEvidence = findings.map(formatAssessmentFindingEvidence).filter(isNonEmptyString);
+  const handoffActions = buildPatrolAssessmentHandoffActions(input);
+  const actionPosture = buildPatrolAssessmentActionPosture(input, handoffActions);
   const supportingEvidence = [
     ...recentChanges.map(formatAssessmentRecentChangeEvidence),
     ...correlations.map(formatAssessmentCorrelationEvidence),
@@ -426,14 +428,84 @@ function buildPatrolAssessmentAssistantBriefing(
       .filter(isNonEmptyString)
       .slice(0, 4),
     evidence: [...findingEvidence.slice(0, 3), ...supportingEvidence].slice(0, 5),
-    actionLabel: 'Discuss Patrol assessment',
-    safetyNote: 'Diagnostics and remediation require governed approval.',
+    actionLabel: actionPosture.actionLabel,
+    safetyNote: actionPosture.safetyNote,
     suggestedPrompts: buildPatrolAssessmentSuggestedPrompts(input, {
       findings,
       recentChanges,
       correlations,
     }),
   };
+}
+
+function buildPatrolAssessmentActionPosture(
+  input: PatrolAssessmentAssistantHandoffInput,
+  handoffActions: AIChatHandoffAction[],
+): { actionLabel: string; safetyNote: string } {
+  const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
+  const actionCount = handoffActions.length;
+  const hasDryRunPosture = handoffActions.some((action) =>
+    Boolean(normalizeText(action.actionDryRunSummary) || normalizeText(action.actionPreflight)),
+  );
+  const hasDestructiveAction = handoffActions.some((action) => Boolean(action.destructive));
+  const hasApprovalPolicy = handoffActions.some((action) =>
+    Boolean(normalizeText(action.actionApprovalPolicy)),
+  );
+
+  if (pendingApprovalCount > 0) {
+    return {
+      actionLabel: `${formatAssessmentMetricCount(
+        'Pending governed approvals',
+        pendingApprovalCount,
+      )} attached`,
+      safetyNote: formatAssessmentActionSafetyNote({
+        primary: 'Review approvals in the governed flow',
+        hasDryRunPosture,
+        hasDestructiveAction,
+        hasApprovalPolicy,
+      }),
+    };
+  }
+
+  if (actionCount > 0) {
+    return {
+      actionLabel: `${formatAssessmentMetricCount(
+        'Governed action references',
+        actionCount,
+      )} attached`,
+      safetyNote: formatAssessmentActionSafetyNote({
+        primary: 'Review action posture in the governed flow',
+        hasDryRunPosture,
+        hasDestructiveAction,
+        hasApprovalPolicy,
+      }),
+    };
+  }
+
+  return {
+    actionLabel: 'Discuss Patrol assessment',
+    safetyNote: 'Diagnostics and remediation require governed approval.',
+  };
+}
+
+function formatAssessmentActionSafetyNote(input: {
+  primary: string;
+  hasDryRunPosture: boolean;
+  hasDestructiveAction: boolean;
+  hasApprovalPolicy: boolean;
+}): string {
+  const parts = [input.primary];
+  if (input.hasApprovalPolicy) {
+    parts.push('approval policy is attached');
+  }
+  if (input.hasDryRunPosture) {
+    parts.push('dry-run posture is attached');
+  }
+  if (input.hasDestructiveAction) {
+    parts.push('destructive actions remain approval-bound');
+  }
+  parts.push('raw command payloads stay out of Assistant');
+  return `${parts.join('; ')}.`;
 }
 
 function buildPatrolAssessmentSuggestedPrompts(
@@ -461,7 +533,11 @@ function buildPatrolAssessmentSuggestedPrompts(
   }
 
   if (hasGovernedAction) {
-    prompts.push('Summarize governed remediation risks');
+    prompts.push(
+      normalizeAssessmentPendingApprovalCount(input.activeFindings) > 0
+        ? 'Review pending approvals and safest next step'
+        : 'Summarize governed remediation risks',
+    );
   } else if (activeFindingCount > 0) {
     prompts.push('List evidence to verify before action');
   } else if (hasSupportingEvidence) {
