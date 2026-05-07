@@ -81,12 +81,18 @@ func TestRouteTestConnection_ConnectionFailure(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Cause          string `json:"cause"`
+		Recommendation string `json:"recommendation"`
+		Action         string `json:"action"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
-	assert.Equal(t, "Connection test failed", resp.Message)
+	assert.Equal(t, "Provider connection issue", resp.Message)
+	assert.Equal(t, "provider_connection", resp.Cause)
+	assert.Contains(t, resp.Recommendation, "provider reachability")
+	assert.Equal(t, "open_provider_settings", resp.Action)
 }
 
 // TestRouteTestConnection_MethodNotAllowed verifies that non-POST methods
@@ -156,10 +162,14 @@ func TestRouteTestConnection_NoConfig(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Cause          string `json:"cause"`
+		Recommendation string `json:"recommendation"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
-	assert.Equal(t, "Connection test failed", resp.Message)
+	assert.Equal(t, "Provider not ready", resp.Message)
+	assert.Equal(t, "provider_not_configured", resp.Cause)
+	assert.Contains(t, resp.Recommendation, "provider settings")
 }

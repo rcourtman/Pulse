@@ -413,6 +413,9 @@ describe('patrolInvestigationContextModel', () => {
 
     expect(handoff.prompt).toContain('Discuss this Pulse Patrol run');
     expect(handoff.prompt).toContain('Start by explaining the Patrol runtime failure');
+    expect(handoff.prompt).toContain('Provider rejected Patrol tool calls');
+    expect(handoff.prompt).not.toContain('tool_choice');
+    expect(handoff.prompt).not.toContain('No endpoints found');
     expect(handoff.context.autonomousMode).toBe(false);
     expect(handoff.context).toMatchObject({
       targetType: 'patrol-run',
@@ -427,7 +430,7 @@ describe('patrolInvestigationContextModel', () => {
         handoffResourceCount: 1,
       },
     });
-    expect(handoff.context.handoffResources).toEqual([{ id: 'vm-100', type: 'vm' }]);
+    expect(handoff.context.handoffResources).toBeUndefined();
     expect(handoff.context.handoffMetadata).toEqual({
       kind: 'patrol_run',
       runId: 'run-runtime-error',
@@ -435,12 +438,7 @@ describe('patrolInvestigationContextModel', () => {
       runStatus: 'error',
       runtimeFailure: true,
     });
-    expect(handoff.context.handoffContext).toContain('[Patrol Run Context]');
-    expect(handoff.context.handoffContext).toContain('Source: Pulse Patrol run history');
-    expect(handoff.context.handoffContext).toContain('Run Type: Scoped run');
-    expect(handoff.context.handoffContext).toContain('Runtime Failure: Selected model');
-    expect(handoff.context.handoffContext).toContain('tool_choice');
-    expect(handoff.context.handoffContext).toContain('Patrol Analysis: Visible runtime summary.');
+    expect(handoff.context.handoffContext).toBeUndefined();
     expect(handoff.context.briefing).toMatchObject({
       sourceLabel: 'Pulse Patrol',
       title: 'Patrol run attached',
@@ -452,6 +450,8 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
     expect(JSON.stringify(handoff)).not.toContain('provider trace');
+    expect(JSON.stringify(handoff)).not.toContain('tool_choice');
+    expect(JSON.stringify(handoff)).not.toContain('No endpoints found');
   });
 
   it('builds a model-only Assistant handoff for a Patrol configuration failure', () => {

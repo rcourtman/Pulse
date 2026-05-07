@@ -2165,6 +2165,20 @@ func (s *Service) GetModelHandoffFindingID(ctx context.Context, sessionID string
 	return sessions.GetModelHandoffFindingID(sessionID)
 }
 
+// GetModelHandoffMetadata returns the session-scoped product handoff identity
+// used to refresh model-only Patrol context on follow-up turns.
+func (s *Service) GetModelHandoffMetadata(ctx context.Context, sessionID string) (HandoffMetadata, error) {
+	s.mu.RLock()
+	sessions := s.sessions
+	s.mu.RUnlock()
+
+	if sessions == nil {
+		return HandoffMetadata{}, fmt.Errorf("service not started")
+	}
+
+	return sessions.GetModelHandoffMetadata(sessionID)
+}
+
 // ClearModelHandoffContext invalidates product-originated model-only handoff
 // state after its source record can no longer be resolved. Unpinned resolved
 // resources are cleared with it so stale Patrol handoffs cannot remain action

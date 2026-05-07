@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatDurationMs,
+  formatPatrolRuntimeFailureDetail,
+  formatPatrolRuntimeFailureSummary,
   formatTriggerReason,
   formatScope,
   getCanonicalScopeResourceIds,
@@ -176,6 +178,48 @@ describe('patrolFormat', () => {
 
     it('handles text without DSML', () => {
       expect(sanitizeAnalysis('Normal text')).toBe('Normal text');
+    });
+  });
+
+  describe('formatPatrolRuntimeFailureSummary', () => {
+    it('classifies provider billing payloads without exposing raw account details', () => {
+      const summary = formatPatrolRuntimeFailureSummary({
+        errorSummary: 'Provider billing or quota issue',
+        errorDetail:
+          'API error (402): {"error":{"message":"This request requires more credits. Visit https://openrouter.ai/settings/keys"},"user_id":"user_2rLolwcxpOSbgPEKJZuIxdW76pi"}',
+        errorCount: 1,
+      });
+
+      expect(summary).toContain('Provider billing or quota issue');
+      expect(summary).toContain('insufficient credits or token budget');
+      expect(summary).not.toContain('openrouter.ai/settings/keys');
+      expect(summary).not.toContain('user_2rLolwcxpOSbgPEKJZuIxdW76pi');
+    });
+
+    it('classifies tool-call failures without leaking provider routing payloads', () => {
+      const summary = formatPatrolRuntimeFailureSummary({
+        errorSummary: 'Selected model does not support Patrol tools',
+        errorDetail: "No endpoints found that support the provided 'tool_choice' value.",
+        errorCount: 1,
+      });
+
+      expect(summary).toContain('Selected model does not support Patrol tools');
+      expect(summary).toContain('Provider rejected Patrol tool calls');
+      expect(summary).not.toContain('tool_choice');
+      expect(summary).not.toContain('No endpoints found');
+    });
+
+    it('redacts unknown provider details defensively', () => {
+      const detail = formatPatrolRuntimeFailureDetail(
+        'provider returned Authorization: Bearer sk-live-secret and url https://example.invalid/path?token=abc for user_abc123',
+      );
+
+      expect(detail).toContain('[redacted-url]');
+      expect(detail).toContain('Bearer [redacted-secret]');
+      expect(detail).toContain('[redacted-user]');
+      expect(detail).not.toContain('sk-live-secret');
+      expect(detail).not.toContain('token=abc');
+      expect(detail).not.toContain('user_abc123');
     });
   });
 

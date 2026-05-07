@@ -30,6 +30,22 @@ var patrolRuntimeFailureDetailRedactors = []struct {
 		pattern:     regexp.MustCompile(`(?i)(https?://)[^\s/@:]+:[^\s/@]+@`),
 		replacement: `${1}[redacted]@`,
 	},
+	{
+		pattern:     regexp.MustCompile(`(?i)https?://[^\s"')]+`),
+		replacement: `[redacted-url]`,
+	},
+	{
+		pattern:     regexp.MustCompile(`\buser_[A-Za-z0-9_-]+\b`),
+		replacement: `[redacted-user]`,
+	},
+	{
+		pattern:     regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{8,}\b`),
+		replacement: `[redacted-secret]`,
+	},
+	{
+		pattern:     regexp.MustCompile(`(?i)("(?:user[_-]?id)"\s*:\s*")[^"]+`),
+		replacement: `${1}[redacted]`,
+	},
 }
 
 type patrolRuntimeFailure struct {
@@ -169,6 +185,48 @@ func redactPatrolRuntimeFailureDetail(raw string) string {
 		redacted = redactor.pattern.ReplaceAllString(redacted, redactor.replacement)
 	}
 	return redacted
+}
+
+func summarizePatrolRuntimeFailureDetail(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	lower := strings.ToLower(raw)
+	switch {
+	case strings.Contains(lower, "tool_choice") ||
+		strings.Contains(lower, "tool calling") ||
+		strings.Contains(lower, "tools are not supported") ||
+		strings.Contains(lower, "no endpoints found") && strings.Contains(lower, "tool"):
+		return "Provider rejected Patrol tool calls. Choose a Patrol model and endpoint with tool-call support."
+	case strings.Contains(lower, "insufficient balance") ||
+		strings.Contains(lower, "402") ||
+		strings.Contains(lower, "payment required") ||
+		strings.Contains(lower, "quota") ||
+		strings.Contains(lower, "credit") ||
+		strings.Contains(lower, "max_tokens"):
+		return "Provider reported insufficient credits or token budget for the requested Patrol analysis."
+	case strings.Contains(lower, "rate limit") ||
+		strings.Contains(lower, "429") ||
+		strings.Contains(lower, "too many requests"):
+		return "Provider rate limit reached. Wait for capacity or adjust provider limits before retrying."
+	case strings.Contains(lower, "401") ||
+		strings.Contains(lower, "403") ||
+		strings.Contains(lower, "unauthorized") ||
+		strings.Contains(lower, "forbidden") ||
+		strings.Contains(lower, "api key"):
+		return "Provider authentication failed. Check the configured provider key and account access."
+	case strings.Contains(lower, "failed to connect") ||
+		strings.Contains(lower, "connection refused") ||
+		strings.Contains(lower, "no such host") ||
+		strings.Contains(lower, "i/o timeout") ||
+		strings.Contains(lower, "context deadline exceeded") ||
+		strings.Contains(lower, "timeout") ||
+		strings.Contains(lower, "returned status 5"):
+		return "Provider connection failed. Check provider reachability before retrying Patrol."
+	default:
+		return strings.TrimSpace(redactPatrolRuntimeFailureDetail(raw))
+	}
 }
 
 func newPatrolRuntimeFailureFinding(failure patrolRuntimeFailure, now time.Time) *Finding {

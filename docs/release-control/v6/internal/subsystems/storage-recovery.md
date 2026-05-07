@@ -416,6 +416,12 @@ bypass the API fail-closed execution gate.
     model-only context remains secondary to backend-refreshed finding context
     and must not become storage freshness, restore eligibility, recovery
     execution authority, or a storage-local approval shortcut.
+    Patrol run chat handoffs through that same shared handler follow the same
+    adjacent-boundary rule. A run ID may let AI runtime rebuild model-only run
+    context from Patrol history, but scoped storage resources or runtime failure
+    details attached to that briefing are review context only and must not
+    become backup freshness evidence, restore eligibility, storage health truth,
+    or recovery execution authority.
     Alert, incident, and Patrol assessment Assistant handoffs that send bounded
     model-only `handoff_context`, `handoff_resources`, or `handoff_actions`
     through `/api/ai/chat` without a `finding_id` stay on that same adjacent

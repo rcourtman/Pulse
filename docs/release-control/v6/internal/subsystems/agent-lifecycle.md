@@ -1028,6 +1028,12 @@ approval lifecycle metadata, action plan identity, approval policy, or dry-run
 posture, those fields remain Assistant review context and must not be treated
 as an agent command grant, enrollment state, update readiness, or fleet-control
 decision.
+Patrol run handoffs through that same shared handler and `internal/api/router.go`
+remain metadata-driven Assistant review context only. The router may expose a
+run-history lookup so AI runtime can rebuild model-only run context, but the
+resulting scoped resources, runtime failure summaries, and follow-up session
+metadata must not become agent command authorization, reachability proof,
+install state, profile assignment, or fleet lifecycle evidence.
 That same shared dependency now also assumes hosted cloud handoff authorizes
 tenant org access before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,

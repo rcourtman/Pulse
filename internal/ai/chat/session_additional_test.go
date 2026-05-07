@@ -452,6 +452,20 @@ func TestSessionStore_ListIncludesSafePatrolRunHandoffSummary(t *testing.T) {
 		t.Fatalf("SetModelHandoffEnvelope failed: %v", err)
 	}
 
+	metadata, err := store.GetModelHandoffMetadata(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffMetadata failed: %v", err)
+	}
+	if metadata != (HandoffMetadata{
+		Kind:           sessionHandoffKindPatrolRun,
+		RunID:          "run-runtime-error",
+		RunType:        "Scoped run",
+		RunStatus:      "error",
+		RuntimeFailure: true,
+	}) {
+		t.Fatalf("handoff metadata = %#v, want normalized Patrol run identity", metadata)
+	}
+
 	sessions, err := store.List()
 	if err != nil {
 		t.Fatalf("List failed: %v", err)

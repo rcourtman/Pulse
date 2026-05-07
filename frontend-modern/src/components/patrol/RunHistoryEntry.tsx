@@ -8,6 +8,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { RunToolCallTrace } from './RunToolCallTrace';
 import {
   formatDurationMs,
+  formatPatrolRuntimeFailureDetail,
   formatTriggerReason,
   formatScope,
   getCanonicalScopeResourceIds,
@@ -162,8 +163,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
     run.error_count,
     hasFindingsSnapshot,
   );
-  const runErrorSummary = String(run.error_summary || '').trim();
-  const runErrorDetail = String(run.error_detail || '').trim();
+  const runErrorSummary = formatPatrolRuntimeFailureDetail(run.error_summary);
+  const runErrorDetail = formatPatrolRuntimeFailureDetail(run.error_detail);
   const hasRunErrorDetail = run.error_count > 0 && (runErrorSummary || runErrorDetail);
   const primaryAction = getPatrolRunPrimaryActionPresentation(run);
   const handleDiscussRun = (event: Event) => {

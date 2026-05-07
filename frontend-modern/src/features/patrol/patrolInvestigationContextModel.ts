@@ -24,6 +24,7 @@ import {
 } from '@/utils/resourceCorrelationPresentation';
 import {
   formatDurationMs,
+  formatPatrolRuntimeFailureSummary,
   formatScope,
   formatTriggerReason,
   getCanonicalScopeResourceIds,
@@ -611,8 +612,6 @@ export function buildPatrolRunAssistantHandoff(run: PatrolRunRecord): PatrolRunA
       targetType: 'patrol-run',
       targetId: runId || undefined,
       autonomousMode: false,
-      handoffContext: buildPatrolRunAssistantModelContext(run, kindLabel, statusLabel),
-      handoffResources: handoffResources.length > 0 ? handoffResources : undefined,
       handoffMetadata: {
         kind: 'patrol_run',
         runId: runId || undefined,
@@ -993,41 +992,6 @@ function buildPatrolRunAssistantPrompt(
     .join('\n\n');
 }
 
-function buildPatrolRunAssistantModelContext(
-  run: PatrolRunRecord,
-  kindLabel: string,
-  statusLabel: string,
-): string {
-  const scope = formatScope(run);
-  const coverage = formatPatrolRunCoverage(run);
-  const runtimeFailure = formatPatrolRunRuntimeFailure(run);
-  const outcomes = formatPatrolRunOutcomes(run);
-  const timing = formatPatrolRunTiming(run);
-  const effort = formatPatrolRunEffort(run);
-  const analysis = truncateContextText(sanitizeAnalysis(run.ai_analysis), 500);
-
-  return [
-    '[Patrol Run Context]',
-    'Source: Pulse Patrol run history',
-    formatContextLine('Run ID', run.id),
-    formatContextLine('Run Type', kindLabel),
-    formatContextLine('Status', statusLabel),
-    formatContextLine('Trigger', formatTriggerReason(run.trigger_reason)),
-    formatContextLine('Timing', timing),
-    formatContextLine('Coverage', coverage),
-    formatContextLine('Scope', scope),
-    formatContextLine('Findings Snapshot', formatPatrolRunFindingsSnapshot(run)),
-    formatContextLine('Outcomes', outcomes),
-    formatContextLine('Runtime Failure', runtimeFailure),
-    formatContextLine('Effort', effort),
-    formatContextLine('Findings Summary', run.findings_summary),
-    formatContextLine('Patrol Analysis', analysis),
-    'Operator Boundary: This Patrol run handoff is model-only context for explanation and review. Configuration changes, diagnostics, remediation, and command execution require explicit governed operator action.',
-  ]
-    .filter(isNonEmptyString)
-    .join('\n');
-}
-
 function buildPatrolRunAssistantBriefing(
   run: PatrolRunRecord,
   kindLabel: string,
@@ -1184,19 +1148,11 @@ function buildPatrolRunHandoffResources(run: PatrolRunRecord): AIChatHandoffReso
 }
 
 function formatPatrolRunRuntimeFailure(run: PatrolRunRecord): string | undefined {
-  const summary = normalizeText(run.error_summary);
-  const detail = normalizeText(run.error_detail);
-  if (summary && detail && summary !== detail) {
-    return `${summary}: ${truncateContextText(detail, 260)}`;
-  }
-  if (summary || detail) {
-    return summary || detail;
-  }
-  const errorCount = normalizeNonNegativeCount(run.error_count);
-  if (errorCount > 0) {
-    return `${errorCount} Patrol runtime error${errorCount === 1 ? '' : 's'} recorded`;
-  }
-  return undefined;
+  return formatPatrolRuntimeFailureSummary({
+    errorSummary: run.error_summary,
+    errorDetail: run.error_detail,
+    errorCount: run.error_count,
+  });
 }
 
 function formatPatrolRunCoverage(run: PatrolRunRecord): string | undefined {
@@ -1233,14 +1189,6 @@ function formatPatrolRunCoverage(run: PatrolRunRecord): string | undefined {
     8,
     'coverage facts',
   );
-}
-
-function formatPatrolRunFindingsSnapshot(run: PatrolRunRecord): string {
-  if (run.finding_ids === undefined) {
-    return 'unavailable for this run';
-  }
-  const count = run.finding_ids.length;
-  return `${count} finding ID${count === 1 ? '' : 's'} captured`;
 }
 
 function formatPatrolRunOutcomes(run: PatrolRunRecord): string | undefined {

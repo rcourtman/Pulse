@@ -609,6 +609,25 @@ func (r *Router) setupRoutes() {
 	})
 	// Wire AI handler to profile handler for AI-assisted suggestions
 	r.configProfileHandler.SetAIHandler(r.aiHandler)
+	r.aiHandler.SetPatrolRunHandoffProvider(func(ctx context.Context, runID string) (ai.PatrolRunRecord, bool) {
+		if r.aiSettingsHandler == nil {
+			return ai.PatrolRunRecord{}, false
+		}
+		aiService := r.aiSettingsHandler.GetAIService(ctx)
+		if aiService == nil {
+			return ai.PatrolRunRecord{}, false
+		}
+		patrol := aiService.GetPatrolService()
+		if patrol == nil {
+			return ai.PatrolRunRecord{}, false
+		}
+		run, ok := patrol.GetRunByID(runID)
+		if !ok {
+			return ai.PatrolRunRecord{}, false
+		}
+		run.ToolCalls = nil
+		return run, true
+	})
 	// Wire chat handler to AI settings handler for investigation orchestration
 	r.aiSettingsHandler.SetChatHandler(r.aiHandler)
 	// Wire license checker for alert manager Pro features (Update Alerts)

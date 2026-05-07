@@ -215,7 +215,14 @@ product API routes free of maintainer commercial analytics.
     collapsed into one finding because a safe action reference contains a
     finding ID. `patrol_configuration_failure` may carry only the
     runtime-failure boolean needed for drawer/session presentation, and
-    run-specific fields remain reserved for `patrol_run`.
+    run-specific fields remain reserved for `patrol_run`. Chat requests that
+    carry `handoff_metadata.kind=patrol_run` are identity envelopes, not
+    browser-authored model context: the API handler must resolve the run ID
+    through the backend Patrol service, rebuild the model-only run context and
+    resources server-side, and ignore request-side run context, resources, or
+    actions when the run cannot be resolved. Stored session metadata must be
+    readable by the handler so follow-up turns can rehydrate the same backend
+    context without asking the browser to resend provider-bound payloads.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Provider test responses from `/api/ai/test` and provider-specific
     `/api/ai/test/{provider}` preflight responses must return one safe

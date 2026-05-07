@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	airuntime "github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
@@ -91,6 +92,19 @@ func (m *MockAIService) GetModelHandoffFindingID(ctx context.Context, sessionID 
 		}
 	}
 	return "", nil
+}
+
+func (m *MockAIService) GetModelHandoffMetadata(ctx context.Context, sessionID string) (chat.HandoffMetadata, error) {
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "GetModelHandoffMetadata" {
+			args := m.Called(ctx, sessionID)
+			if args.Get(0) == nil {
+				return chat.HandoffMetadata{}, args.Error(1)
+			}
+			return args.Get(0).(chat.HandoffMetadata), args.Error(1)
+		}
+	}
+	return chat.HandoffMetadata{}, nil
 }
 
 func (m *MockAIService) ClearModelHandoffContext(ctx context.Context, sessionID string) error {
@@ -654,6 +668,168 @@ func TestHandleChat_PassesPatrolRunHandoffMetadata(t *testing.T) {
 		})
 
 	body := `{"prompt":"discuss run","autonomous_mode":true,"handoff_metadata":{"kind":"patrol_run","run_id":" run-runtime-error ","run_type":" Scoped run ","run_status":" error ","runtime_failure":true}}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleChat_DropsBrowserPatrolRunHandoffContextWhenRunUnavailable(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "discuss run", reqArg.Prompt)
+			assert.Empty(t, reqArg.HandoffContext)
+			assert.Empty(t, reqArg.HandoffResources)
+			assert.Empty(t, reqArg.HandoffActions)
+			assert.Equal(t, chat.HandoffMetadata{
+				Kind:           "patrol_run",
+				RunID:          "run-missing",
+				RunType:        "Scoped run",
+				RunStatus:      "error",
+				RuntimeFailure: true,
+			}, reqArg.HandoffMetadata)
+		})
+
+	body := `{"prompt":"discuss run","handoff_context":"[Patrol Run Context]\nSource: browser-authored stale context\nRuntime Failure: leaked provider detail","handoff_resources":[{"id":"storage-999","type":"storage"}],"handoff_actions":[{"description":"stale action","target_resource_id":"vm-1"}],"handoff_metadata":{"kind":"patrol_run","run_id":"run-missing","run_type":"Scoped run","run_status":"error","runtime_failure":true}}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleChat_RehydratesPatrolRunHandoffContextFromBackend(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+	h.SetPatrolRunHandoffProvider(func(ctx context.Context, runID string) (airuntime.PatrolRunRecord, bool) {
+		assert.Equal(t, "run-runtime-error", runID)
+		return airuntime.PatrolRunRecord{
+			ID:                        "run-runtime-error",
+			StartedAt:                 time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC),
+			CompletedAt:               time.Date(2026, 5, 7, 12, 0, 3, 0, time.UTC),
+			DurationMs:                3000,
+			Type:                      "scoped",
+			TriggerReason:             "alert_fired",
+			EffectiveScopeResourceIDs: []string{"vm-100"},
+			ScopeResourceTypes:        []string{"vm"},
+			ResourcesChecked:          1,
+			GuestsChecked:             1,
+			FindingsSummary:           "Runtime failure prevented analysis.",
+			FindingIDs:                []string{},
+			ErrorCount:                1,
+			ErrorSummary:              "Selected model does not support Patrol tools",
+			ErrorDetail:               "No endpoints found that support tool_choice.",
+			Status:                    "error",
+			AIAnalysis:                "<｜DSML｜trace>provider trace</｜DSML｜trace>Visible runtime summary.",
+			ToolCallCount:             1,
+		}, true
+	})
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "discuss run", reqArg.Prompt)
+			assert.Equal(t, "", reqArg.FindingID)
+			assert.Contains(t, reqArg.HandoffContext, "[Patrol Run Context]")
+			assert.Contains(t, reqArg.HandoffContext, "Source: Pulse Patrol run history")
+			assert.Contains(t, reqArg.HandoffContext, "Run ID: run-runtime-error")
+			assert.Contains(t, reqArg.HandoffContext, "Runtime Failure: Selected model does not support Patrol tools")
+			assert.Contains(t, reqArg.HandoffContext, "Provider rejected Patrol tool calls")
+			assert.Contains(t, reqArg.HandoffContext, "Patrol Analysis: Visible runtime summary.")
+			assert.NotContains(t, reqArg.HandoffContext, "browser-authored stale context")
+			assert.NotContains(t, reqArg.HandoffContext, "provider trace")
+			assert.NotContains(t, reqArg.HandoffContext, "tool_choice")
+			assert.NotContains(t, reqArg.HandoffContext, "No endpoints found")
+			assert.Equal(t, []chat.HandoffResource{{ID: "vm-100", Type: "vm"}}, reqArg.HandoffResources)
+			assert.Equal(t, chat.HandoffMetadata{
+				Kind:           "patrol_run",
+				RunID:          "run-runtime-error",
+				RunType:        "Scoped run",
+				RunStatus:      "error",
+				RuntimeFailure: true,
+			}, reqArg.HandoffMetadata)
+			if assert.NotNil(t, reqArg.AutonomousMode) {
+				assert.False(t, *reqArg.AutonomousMode)
+			}
+		})
+
+	body := `{"prompt":"discuss run","autonomous_mode":true,"handoff_context":"[Patrol Run Context]\nSource: browser-authored stale context","handoff_resources":[{"id":"storage-999","type":"storage"}],"handoff_metadata":{"kind":"patrol_run","run_id":"run-runtime-error","run_type":"Wrong type","run_status":"healthy","runtime_failure":false}}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleChat_RehydratesStoredPatrolRunHandoffMetadataForFollowUp(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+	h.SetPatrolRunHandoffProvider(func(ctx context.Context, runID string) (airuntime.PatrolRunRecord, bool) {
+		assert.Equal(t, "run-stored", runID)
+		return airuntime.PatrolRunRecord{
+			ID:                        "run-stored",
+			StartedAt:                 time.Date(2026, 5, 7, 13, 0, 0, 0, time.UTC),
+			CompletedAt:               time.Date(2026, 5, 7, 13, 0, 5, 0, time.UTC),
+			DurationMs:                5000,
+			Type:                      "verification",
+			TriggerReason:             "user_action",
+			EffectiveScopeResourceIDs: []string{"storage-1"},
+			ScopeResourceTypes:        []string{"storage"},
+			ResourcesChecked:          1,
+			StorageChecked:            1,
+			FindingsSummary:           "Verification completed.",
+			Status:                    "healthy",
+		}, true
+	})
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("GetModelHandoffFindingID", mock.Anything, "session-run").
+		Return("", nil)
+	mockSvc.
+		On("GetModelHandoffMetadata", mock.Anything, "session-run").
+		Return(chat.HandoffMetadata{
+			Kind:  "patrol_run",
+			RunID: "run-stored",
+		}, nil)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "what changed?", reqArg.Prompt)
+			assert.Contains(t, reqArg.HandoffContext, "Run ID: run-stored")
+			assert.Contains(t, reqArg.HandoffContext, "Run Type: Verification check")
+			assert.Equal(t, []chat.HandoffResource{{ID: "storage-1", Type: "storage"}}, reqArg.HandoffResources)
+			assert.Equal(t, chat.HandoffMetadata{
+				Kind:      "patrol_run",
+				RunID:     "run-stored",
+				RunType:   "Verification check",
+				RunStatus: "healthy",
+			}, reqArg.HandoffMetadata)
+		})
+
+	body := `{"prompt":"what changed?","session_id":"session-run"}`
 	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
 	w := httptest.NewRecorder()
 

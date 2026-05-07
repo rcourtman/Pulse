@@ -178,6 +178,10 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read chat types: %v", err)
 	}
+	patrolHandoffSource, err := os.ReadFile(filepath.Clean("../ai/patrol_assistant_handoff.go"))
+	if err != nil {
+		t.Fatalf("read Patrol Assistant handoff model: %v", err)
+	}
 	toolsQuerySource, err := os.ReadFile(filepath.Clean("../ai/tools/tools_query.go"))
 	if err != nil {
 		t.Fatalf("read AI tools query runtime: %v", err)
@@ -186,11 +190,14 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	handlerText := string(handlerSource)
 	for _, required := range []string{
 		`svc.GetModelHandoffFindingID(ctx, req.SessionID)`,
+		`svc.GetModelHandoffMetadata(ctx, req.SessionID)`,
 		`svc.ClearModelHandoffContext(ctx, sessionID)`,
 		`HandoffActions   []chat.HandoffAction   ` + "`json:\"handoff_actions,omitempty\"`",
 		`HandoffMetadata  chat.HandoffMetadata   ` + "`json:\"handoff_metadata,omitempty\"`",
 		"handoffActions := normalizeChatRequestHandoffActions(req.HandoffActions)",
 		"handoffMetadata := chat.NormalizeHandoffMetadata(req.HandoffMetadata)",
+		"h.getPatrolRunForHandoff(ctx, handoffMetadata.RunID)",
+		"airuntime.BuildPatrolRunAssistantHandoff(run)",
 		"chatRequestHandoffActionLimit",
 		"requestHandoffContext := handoffContext",
 		"requestHandoffResources := handoffResources",
@@ -262,6 +269,20 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		t.Fatal("ai_handler.go must not prepend finding context into the persisted prompt")
 	}
 
+	patrolHandoffText := string(patrolHandoffSource)
+	for _, required := range []string{
+		"func BuildPatrolRunAssistantHandoff(run PatrolRunRecord) PatrolRunAssistantHandoff",
+		"[Patrol Run Context]",
+		"Source: Pulse Patrol run history",
+		"patrolRunAssistantHandoffResources",
+		"sanitizePatrolRunAnalysis",
+		"Operator Boundary",
+	} {
+		if !strings.Contains(patrolHandoffText, required) {
+			t.Fatalf("Patrol runtime must own safe Assistant run handoff context: missing %q", required)
+		}
+	}
+
 	chatServiceText := string(chatServiceSource)
 	for _, required := range []string{
 		"handoffContext := strings.TrimSpace(req.HandoffContext)",
@@ -272,6 +293,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"ClearModelHandoffContext",
 		"handoffResources := normalizeHandoffResources(req.HandoffResources)",
 		"GetModelHandoffFindingID",
+		"GetModelHandoffMetadata",
 		"sessions.GetModelHandoffContext(session.ID)",
 		"sessions.GetModelHandoffResources(session.ID)",
 		"sessions.SetModelHandoffActions(session.ID, handoffActions)",
@@ -316,6 +338,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"SetModelHandoffFindingID",
 		"SetModelHandoffEnvelope",
 		"GetModelHandoffFindingID",
+		"GetModelHandoffMetadata",
 		"ClearModelHandoffContext",
 		"HandoffFindingID string",
 		"SetModelHandoffContext",
@@ -1060,11 +1083,26 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		"ollama_configured":true,
 		"ollama_base_url":%q,
 		"ollama_password_set":false,
-			"configured_providers":["ollama"],
-			"control_level":"read_only",
-			"protected_guests":[],
-			"discovery_enabled":false
-		}`, ollama.URL)
+		"configured_providers":["ollama"],
+		"control_level":"read_only",
+		"protected_guests":[],
+		"discovery_enabled":false,
+		"patrol_readiness":{
+			"status":"warning",
+			"ready":true,
+			"cause":"model_tool_support_unverified",
+			"summary":"Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification.",
+			"provider":"ollama",
+			"model":"ollama:llama3:latest",
+			"checks":[{
+				"id":"configuration",
+				"status":"warning",
+				"cause":"model_tool_support_unverified",
+				"label":"Patrol configuration",
+				"message":"Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification."
+			}]
+		}
+	}`, ollama.URL)
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }

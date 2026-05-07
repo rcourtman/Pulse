@@ -217,7 +217,15 @@ runtime cost control, and shared AI transport surfaces.
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so
     same-session follow-up turns keep the Patrol finding context without
-    mutating saved user messages. When the handoff identifies a resource, the
+    mutating saved user messages. Patrol run-history handoffs follow the same
+    backend-owned context rule: the browser may seed only safe `patrol_run`
+    metadata such as run ID/type/status/runtime-failure posture, while
+    `/api/ai/chat` must rehydrate model-only run context, scoped resources, and
+    safe failure detail from the current Patrol run record before model
+    execution and again on same-session follow-up turns. If the Patrol run no
+    longer resolves, browser-authored run context, resources, and actions must
+    be dropped rather than used as fallback provider context. When the handoff
+    identifies a resource, the
     runtime may also seed the session's resolved-resource scope, but only through
     canonical unified-resource tool registration so allowed actions, executors,
     and explicit-access checks stay governed. Structured handoff resource

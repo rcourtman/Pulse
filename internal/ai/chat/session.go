@@ -775,6 +775,22 @@ func (s *SessionStore) GetModelHandoffFindingID(id string) (string, error) {
 	return strings.TrimSpace(data.ModelContext.HandoffFindingID), nil
 }
 
+// GetModelHandoffMetadata returns the browser-safe handoff identity stored for
+// a session.
+func (s *SessionStore) GetModelHandoffMetadata(id string) (HandoffMetadata, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return HandoffMetadata{}, err
+	}
+	if data.ModelContext == nil {
+		return HandoffMetadata{}, nil
+	}
+	return NormalizeHandoffMetadata(data.ModelContext.HandoffMetadata), nil
+}
+
 // GetModelHandoffContext returns model-only handoff context for a session.
 func (s *SessionStore) GetModelHandoffContext(id string) (string, error) {
 	s.mu.RLock()

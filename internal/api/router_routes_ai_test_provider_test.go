@@ -117,14 +117,20 @@ func TestRouteTestProvider_ConnectionFailure(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp struct {
-		Success  bool   `json:"success"`
-		Message  string `json:"message"`
-		Provider string `json:"provider"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Provider       string `json:"provider"`
+		Cause          string `json:"cause"`
+		Recommendation string `json:"recommendation"`
+		Action         string `json:"action"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
-	assert.Equal(t, "Connection test failed", resp.Message)
+	assert.Equal(t, "Provider connection issue", resp.Message)
 	assert.Equal(t, "ollama", resp.Provider)
+	assert.Equal(t, "provider_connection", resp.Cause)
+	assert.Contains(t, resp.Recommendation, "provider reachability")
+	assert.Equal(t, "open_provider_settings", resp.Action)
 }
 
 // TestRouteTestProvider_MethodNotAllowed verifies that GET (and other

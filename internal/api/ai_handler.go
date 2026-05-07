@@ -13,6 +13,7 @@ import (
 	"fmt"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	airuntime "github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -44,6 +45,7 @@ type AIService interface {
 	DeleteSession(ctx context.Context, sessionID string) error
 	GetMessages(ctx context.Context, sessionID string) ([]chat.Message, error)
 	GetModelHandoffFindingID(ctx context.Context, sessionID string) (string, error)
+	GetModelHandoffMetadata(ctx context.Context, sessionID string) (chat.HandoffMetadata, error)
 	ClearModelHandoffContext(ctx context.Context, sessionID string) error
 	AbortSession(ctx context.Context, sessionID string) error
 	SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
@@ -76,6 +78,8 @@ type AIService interface {
 	GetBaseURL() string
 }
 
+type patrolRunHandoffProvider func(context.Context, string) (airuntime.PatrolRunRecord, bool)
+
 // AIHandler handles all AI endpoints using direct AI integration
 type AIHandler struct {
 	stateMu              sync.RWMutex
@@ -101,6 +105,7 @@ type AIHandler struct {
 	approvalStoreDir     string
 	approvalStoreStop    context.CancelFunc
 	controlLevelResolver func(context.Context, *config.AIConfig) string
+	patrolRunProvider    patrolRunHandoffProvider
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -135,6 +140,29 @@ func NewAIHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenan
 		services:           make(map[string]AIService),
 		unifiedStores:      make(map[string]*unified.UnifiedStore),
 	}
+}
+
+// SetPatrolRunHandoffProvider wires the Patrol history owner into Assistant
+// chat handoffs without making the browser reconstruct model context.
+func (h *AIHandler) SetPatrolRunHandoffProvider(provider patrolRunHandoffProvider) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.patrolRunProvider = provider
+}
+
+func (h *AIHandler) getPatrolRunForHandoff(ctx context.Context, runID string) (airuntime.PatrolRunRecord, bool) {
+	runID = strings.TrimSpace(runID)
+	if runID == "" {
+		return airuntime.PatrolRunRecord{}, false
+	}
+
+	h.stateMu.RLock()
+	provider := h.patrolRunProvider
+	h.stateMu.RUnlock()
+	if provider == nil {
+		return airuntime.PatrolRunRecord{}, false
+	}
+	return provider(ctx, runID)
 }
 
 func (h *AIHandler) stateRefs() (
@@ -2519,6 +2547,24 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 			log.Debug().Err(err).Str("session_id", req.SessionID).Msg("Unable to load stored Assistant finding handoff reference")
 		} else {
 			findingID = strings.TrimSpace(storedFindingID)
+		}
+	}
+	if findingID == "" && handoffMetadata == (chat.HandoffMetadata{}) && strings.TrimSpace(req.SessionID) != "" {
+		if storedMetadata, err := svc.GetModelHandoffMetadata(ctx, req.SessionID); err != nil {
+			log.Debug().Err(err).Str("session_id", req.SessionID).Msg("Unable to load stored Assistant handoff metadata")
+		} else {
+			handoffMetadata = chat.NormalizeHandoffMetadata(storedMetadata)
+		}
+	}
+	if findingID == "" && handoffMetadata.Kind == "patrol_run" {
+		handoffContext = ""
+		handoffResources = nil
+		handoffActions = nil
+		if run, ok := h.getPatrolRunForHandoff(ctx, handoffMetadata.RunID); ok {
+			runHandoff := airuntime.BuildPatrolRunAssistantHandoff(run)
+			handoffContext = runHandoff.Context
+			handoffResources = runHandoff.Resources
+			handoffMetadata = chat.NormalizeHandoffMetadata(runHandoff.Metadata)
 		}
 	}
 	if findingID != "" {

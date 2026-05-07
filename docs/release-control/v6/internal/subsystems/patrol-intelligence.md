@@ -257,14 +257,17 @@ Patrol-specific presentation helpers.
    names a finding.
    Patrol run-history entries may also open Assistant for a selected run, but
    that handoff must flow through the same Patrol-owned investigation-context
-   model rather than a row-local prompt. The handoff may pass bounded run
-   history facts such as run ID/type/status, trigger, timing, coverage, scope,
-   findings snapshot availability, outcome counts, tool/triage effort,
-   `error_summary`, `error_detail`, sanitized Patrol analysis, and scoped
-   resource references as model-only context. It must also send safe
+   model rather than a row-local prompt. The browser-visible prompt and drawer
+   briefing may include only classified, redacted runtime-failure summaries and
+   safe run identity facts. The browser request must send safe
    `handoff_metadata` for the saved-session identity envelope: kind
    `patrol_run`, run ID, safe run type/status, and a runtime-failure boolean,
-   never runtime failure detail or analysis text. It must force request-local
+   never provider-bound runtime failure detail, analysis text, tool traces, raw
+   provider payloads, or scoped resource context. Backend Assistant runtime owns
+   the model-only run context: it resolves the run ID from Patrol history,
+   rebuilds bounded run facts, scoped resource references, sanitized analysis,
+   and classified failure detail server-side, and rehydrates the same context
+   from stored metadata on follow-up turns. It must force request-local
    approval-required mode, present a source-named visible drawer briefing, and
    frame Assistant as explanation and next-step review rather than execution or
    automatic retry authority.

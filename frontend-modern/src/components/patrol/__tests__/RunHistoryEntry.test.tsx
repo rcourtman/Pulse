@@ -223,7 +223,9 @@ describe('RunHistoryEntry', () => {
     ));
 
     expect(screen.getByText('Selected model does not support Patrol tools')).toBeInTheDocument();
-    expect(screen.getByText(/tool_choice/)).toBeInTheDocument();
+    expect(screen.getByText(/Provider rejected Patrol tool calls/)).toBeInTheDocument();
+    expect(screen.queryByText(/tool_choice/)).toBeNull();
+    expect(screen.queryByText(/No endpoints found/)).toBeNull();
     expect(screen.getByText('error')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Patrol provider settings' })).toHaveAttribute(
       'href',
@@ -280,11 +282,20 @@ describe('RunHistoryEntry', () => {
     const [prompt, context] = openWithPromptMock.mock.calls[0];
     expect(prompt).toContain('Discuss this Pulse Patrol run');
     expect(prompt).toContain('Start by explaining the Patrol runtime failure');
+    expect(prompt).toContain('Provider rejected Patrol tool calls');
+    expect(prompt).not.toContain('tool_choice');
+    expect(prompt).not.toContain('No endpoints found');
     expect(context).toMatchObject({
       targetType: 'patrol-run',
       targetId: 'run-runtime-error',
       autonomousMode: false,
-      handoffResources: [{ id: 'vm-100', type: 'vm' }],
+      handoffMetadata: {
+        kind: 'patrol_run',
+        runId: 'run-runtime-error',
+        runType: 'Scoped run',
+        runStatus: 'error',
+        runtimeFailure: true,
+      },
       context: {
         source: 'pulse-patrol-run',
         runId: 'run-runtime-error',
@@ -292,13 +303,14 @@ describe('RunHistoryEntry', () => {
         handoffResourceCount: 1,
       },
     });
-    expect(context.handoffContext).toContain('[Patrol Run Context]');
-    expect(context.handoffContext).toContain('Runtime Failure: Selected model');
-    expect(context.handoffContext).toContain('tool_choice');
+    expect(context.handoffContext).toBeUndefined();
+    expect(context.handoffResources).toBeUndefined();
     expect(context.briefing).toMatchObject({
       title: 'Patrol run attached',
       actionLabel: 'Review Patrol runtime failure',
     });
+    expect(JSON.stringify(context)).not.toContain('tool_choice');
+    expect(JSON.stringify(context)).not.toContain('No endpoints found');
   });
 
   it('keeps zero-coverage scoped runs on the shared coverage narrative', () => {
