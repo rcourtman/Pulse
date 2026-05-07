@@ -26,6 +26,7 @@ import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { ApprovalRequest } from '@/api/ai';
 import {
   buildPatrolAssessmentAssistantHandoff,
+  buildPatrolAssistantApprovalBriefingInput,
   buildPatrolAssistantProposedFixBriefingInput,
   type PatrolAssessmentAssistantFindingInput,
 } from './patrolInvestigationContextModel';
@@ -518,14 +519,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 }
 
 function buildPatrolAssessmentApprovalBriefing(approval: ApprovalRequest) {
-  return {
-    id: approval.id,
-    status: approval.status,
-    riskLevel: approval.riskLevel,
-    requestedAt: approval.requestedAt,
-    expiresAt: approval.expiresAt,
-    targetName: approval.targetName,
-  };
+  return buildPatrolAssistantApprovalBriefingInput(approval);
 }
 
 function buildPatrolAssessmentApprovalProposedFixBriefing(approval: ApprovalRequest) {

@@ -685,10 +685,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (ctx.handoffResources && ctx.handoffResources.length > 0) {
       sendOptions.handoffResources = ctx.handoffResources;
     }
+    if (ctx.handoffActions && ctx.handoffActions.length > 0) {
+      sendOptions.handoffActions = ctx.handoffActions;
+    }
     const hasSendOptions =
       typeof sendOptions.autonomousMode === 'boolean' ||
       Boolean(sendOptions.handoffContext) ||
-      Boolean(sendOptions.handoffResources?.length);
+      Boolean(sendOptions.handoffResources?.length) ||
+      Boolean(sendOptions.handoffActions?.length);
     const sendPromise = hasSendOptions
       ? chat.sendMessage(prompt, mentionsForAPI, findingId, sendOptions)
       : chat.sendMessage(prompt, mentionsForAPI, findingId);

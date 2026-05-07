@@ -443,6 +443,10 @@ Assistant handoff context may hydrate those normalized action-audit facts for
 review, but that read is still model-only context: it must remain org-scoped,
 must not expose raw command text or raw execution output, and must not grant
 approval or execution authority.
+Scoped Assistant `handoff_actions` from Patrol assessment handoffs may carry
+only safe approval/action metadata for model-only refresh, including approval
+IDs, action IDs, policy, expiry, dry-run posture, and proposed-fix labels; they
+must not expose raw command or execution payloads or become an approval bypass.
 Assistant operator briefings generated from Patrol findings follow the same
 boundary: they may summarize approval IDs, proposed-fix IDs, risk, destructive
 posture, and recommended next steps for review, but they must not expose raw

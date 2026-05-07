@@ -456,8 +456,9 @@ the canonical monitored-system blocked payload.
    verification, latest-run, supporting-context evidence, active-finding, and
    resource reference context plus safe source-owned suggested prompts; active
    finding entries may carry live pending Patrol approval posture only as safe
-   approval ID/status/risk/target/request/expiry metadata and command counts
-   instead of pasting page-local UI text or raw command payloads into chat
+   structured handoff actions with approval ID/status/risk/target/request/expiry
+   metadata, action plan identity/policy/expiry, dry-run posture, and command
+   counts instead of pasting page-local UI text or raw command payloads into chat
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,
@@ -1866,13 +1867,15 @@ execution for that exchange, but the transport must treat the field as a
 request override only and must not mutate the user's persistent AI control
 setting.
 The same chat payload boundary now carries scoped product handoff context:
-`handoff_context` is bounded model-only text and `handoff_resources` are
-structured resource references used to seed canonical resource-policy, state,
-relationship, and timeline hydration. Frontend handoff builders may send these
-fields for owned alert or incident context, but the backend must not persist
-them as user-authored message text and must treat them as explanation/review
-context only. When a Patrol `finding_id` resolves, backend-refreshed durable
-finding context replaces any browser-supplied handoff text so the model cannot
+`handoff_context` is bounded model-only text, `handoff_resources` are structured
+resource references used to seed canonical resource-policy, state, relationship,
+and timeline hydration, and `handoff_actions` are structured approval/action
+references used to seed canonical approval and action-audit refresh. Frontend
+handoff builders may send these fields for owned alert, incident, or Patrol
+assessment context, but the backend must not persist them as user-authored
+message text and must treat them as explanation/review context only. When a
+Patrol `finding_id` resolves, backend-refreshed durable finding context replaces
+any browser-supplied handoff text or action references so the model cannot
 continue from stale or spoofed Patrol context.
 Patrol finding handoffs are stricter than ordinary chat requests: when
 `finding_id` resolves to model-only Patrol briefing, resource, or action
@@ -3033,9 +3036,11 @@ frontend Assistant drawer briefing must use that same operator frame for
 visible handoffs from findings, while the downstream chat
 service hydrates live resource state, timeline, and action audit context around
 that same handoff. Frontend Patrol handoff helpers may consume current pending
-approval list payloads only as safe metadata for that visible briefing: approval
-ID, status, risk, request/expiry timestamps, and target label are allowed, while
-approval command text remains inside the governed approval/remediation surface.
+approval list payloads only as safe metadata for that visible briefing and any
+structured `handoff_actions`: approval ID, status, risk, request/expiry
+timestamps, target label, action ID, approval policy, plan expiry, and dry-run
+summary are allowed, while approval command text remains inside the governed
+approval/remediation surface.
 Patrol approval-row Assistant prompts must use the same safe metadata boundary
 and set `autonomousMode:false` for the request-local chat handoff; they must not
 paste raw approval or proposed-fix command text into the authored chat prompt.

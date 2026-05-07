@@ -293,6 +293,12 @@ describe('patrolInvestigationContextModel', () => {
             requestedAt: '2026-05-06T12:00:00Z',
             expiresAt: '2026-05-06T12:10:00Z',
             targetName: 'web-server',
+            actionId: 'action-1',
+            actionApprovalPolicy: 'admin',
+            actionPlanExpiresAt: '2026-05-06T12:10:00Z',
+            actionPlanMessage: 'Restart after the backup window clears.',
+            actionPreflight: 'Restart workload service',
+            actionDryRunSummary: 'No provider-supported dry run is available for this action.',
           },
           proposedFix: {
             description: 'Restart the workload service',
@@ -314,6 +320,28 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffContext).toContain('expires 2026-05-06T12:10:00Z');
     expect(handoff.context.handoffContext).toContain('1 command recorded for approval context');
     expect(handoff.context.handoffContext).toContain('destructive proposed fix');
+    expect(handoff.context.handoffActions).toHaveLength(1);
+    expect(handoff.context.handoffActions?.[0]).toMatchObject({
+      findingId: 'finding-1',
+      approvalId: 'approval-1',
+      approvalStatus: 'pending',
+      approvalRequestedAt: '2026-05-06T12:00:00Z',
+      approvalExpiresAt: '2026-05-06T12:10:00Z',
+      actionId: 'action-1',
+      actionApprovalPolicy: 'admin',
+      actionRequiresApproval: true,
+      actionPlanExpiresAt: '2026-05-06T12:10:00Z',
+      actionPlanMessage: 'Restart after the backup window clears.',
+      actionPreflight: 'Restart workload service',
+      actionDryRunSummary: 'No provider-supported dry run is available for this action.',
+      description: 'Restart the workload service',
+      riskLevel: 'high',
+      destructive: true,
+      targetHost: 'web-server',
+      targetResourceId: 'vm-100',
+      targetResourceName: 'web-server',
+      targetResourceType: 'vm',
+    });
     expect(handoff.context.context).toMatchObject({
       pendingApprovalCount: 1,
     });

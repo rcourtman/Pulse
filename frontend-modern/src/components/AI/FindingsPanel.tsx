@@ -20,6 +20,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import {
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingPrompt,
+  buildPatrolAssistantApprovalBriefingInput,
   buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantPrompt,
@@ -480,16 +481,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const pendingApproval = aiIntelligenceStore.patrolPendingApprovals.find(
       (approval) => approval.toolId === 'investigation_fix' && approval.targetId === finding.id,
     );
-    const pendingApprovalBriefing = pendingApproval
-      ? {
-          id: pendingApproval.id,
-          status: pendingApproval.status,
-          riskLevel: pendingApproval.riskLevel,
-          requestedAt: pendingApproval.requestedAt,
-          expiresAt: pendingApproval.expiresAt,
-          targetName: pendingApproval.targetName,
-        }
-      : undefined;
+    const pendingApprovalBriefing = buildPatrolAssistantApprovalBriefingInput(pendingApproval);
     const latestInvestigationProposedFix = await loadLatestInvestigationProposedFixBriefing(
       finding,
       pendingApprovalBriefing,

@@ -217,13 +217,15 @@ Patrol-specific presentation helpers.
    The summary action may pass the current assessment title, health score,
    verification recency, latest run, secondary investigation context, bounded
    recent-change and learned-correlation evidence, active-finding summaries,
-   structured resource references, and safe source-owned suggested prompts as
-   model-only context. Active-finding summaries may include live pending
-   approval posture only as safe metadata: approval ID, pending status, risk,
-   target, requested/expiry timestamps, and command count. They must force
-   request-local approval-required mode, keep raw command and approval payloads
-   out of prompt and drawer copy, and frame Assistant as explanation,
-   prioritization, and safe next-step review rather than a generic reactive chat
+   structured resource references, structured approval/action references, and
+   safe source-owned suggested prompts as model-only context. Active-finding
+   summaries may include live pending approval posture only as safe metadata:
+   approval ID, pending status, risk, target, requested/expiry timestamps,
+   action plan identity, approval policy, plan expiry, dry-run posture, and
+   command count. They must force request-local approval-required mode, keep raw
+   command and approval payloads out of prompt and drawer copy, and frame
+   Assistant as explanation, prioritization, and safe next-step review rather
+   than a generic reactive chat
    box.
 
 ## Current State
@@ -279,9 +281,10 @@ opens Assistant through
 packages the current Patrol assessment, verification posture, latest run,
 secondary investigation context, bounded recent-change and learned-correlation
 evidence, bounded active-finding summaries, source-owned suggested prompts, and
-deduped resource references as model-only context while forcing
-`autonomousMode:false` and summarizing proposed-fix command-bearing records and
-command-bearing change events without raw command text.
+deduped resource references plus safe structured approval/action references as
+model-only context while forcing `autonomousMode:false` and summarizing
+proposed-fix command-bearing records and command-bearing change events without
+raw command text.
 That active-runtime label must stay operational rather than verdict-like: the
 header chip should communicate that Patrol is enabled or available, not imply
 that infrastructure health is currently good merely because the runtime is on.

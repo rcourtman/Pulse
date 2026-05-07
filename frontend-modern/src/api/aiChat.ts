@@ -30,6 +30,38 @@ export interface ChatHandoffResource {
   node?: string;
 }
 
+export interface ChatHandoffAction {
+  findingId?: string;
+  recordId?: string;
+  approvalId?: string;
+  approvalStatus?: string;
+  approvalRequestedAt?: string;
+  approvalExpiresAt?: string;
+  approvalDecidedAt?: string;
+  approvalConsumed?: boolean;
+  actionId?: string;
+  actionState?: string;
+  actionUpdatedAt?: string;
+  actionRequestedBy?: string;
+  actionCapability?: string;
+  actionApprovalPolicy?: string;
+  actionRequiresApproval?: boolean;
+  actionPlanExpiresAt?: string;
+  actionPlanMessage?: string;
+  actionPreflight?: string;
+  actionDryRunSummary?: string;
+  actionResult?: string;
+  fixId?: string;
+  description?: string;
+  riskLevel?: string;
+  destructive?: boolean;
+  targetHost?: string;
+  targetResourceId?: string;
+  targetResourceName?: string;
+  targetResourceType?: string;
+  targetNode?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -209,6 +241,7 @@ export class AIChatAPI {
     autonomousMode?: boolean,
     handoffContext?: string,
     handoffResources?: ChatHandoffResource[],
+    handoffActions?: ChatHandoffAction[],
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
@@ -231,6 +264,9 @@ export class AIChatAPI {
     }
     if (handoffResources && handoffResources.length > 0) {
       body.handoff_resources = handoffResources;
+    }
+    if (handoffActions && handoffActions.length > 0) {
+      body.handoff_actions = handoffActions.map(serializeChatHandoffAction);
     }
 
     const response = await apiFetch(`${this.baseUrl}/chat`, {
@@ -265,4 +301,38 @@ export class AIChatAPI {
       },
     });
   }
+}
+
+function serializeChatHandoffAction(action: ChatHandoffAction): Record<string, unknown> {
+  return {
+    finding_id: action.findingId,
+    record_id: action.recordId,
+    approval_id: action.approvalId,
+    approval_status: action.approvalStatus,
+    approval_requested_at: action.approvalRequestedAt,
+    approval_expires_at: action.approvalExpiresAt,
+    approval_decided_at: action.approvalDecidedAt,
+    approval_consumed: action.approvalConsumed,
+    action_id: action.actionId,
+    action_state: action.actionState,
+    action_updated_at: action.actionUpdatedAt,
+    action_requested_by: action.actionRequestedBy,
+    action_capability: action.actionCapability,
+    action_approval_policy: action.actionApprovalPolicy,
+    action_requires_approval: action.actionRequiresApproval,
+    action_plan_expires_at: action.actionPlanExpiresAt,
+    action_plan_message: action.actionPlanMessage,
+    action_preflight: action.actionPreflight,
+    action_dry_run_summary: action.actionDryRunSummary,
+    action_result: action.actionResult,
+    fix_id: action.fixId,
+    description: action.description,
+    risk_level: action.riskLevel,
+    destructive: action.destructive,
+    target_host: action.targetHost,
+    target_resource_id: action.targetResourceId,
+    target_resource_name: action.targetResourceName,
+    target_resource_type: action.targetResourceType,
+    target_node: action.targetNode,
+  };
 }

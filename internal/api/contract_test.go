@@ -142,6 +142,9 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	for _, required := range []string{
 		`svc.GetModelHandoffFindingID(ctx, req.SessionID)`,
 		`svc.ClearModelHandoffContext(ctx, sessionID)`,
+		`HandoffActions   []chat.HandoffAction   ` + "`json:\"handoff_actions,omitempty\"`",
+		"handoffActions := normalizeChatRequestHandoffActions(req.HandoffActions)",
+		"chatRequestHandoffActionLimit",
 		"handoffActions = buildUnifiedFindingHandoffActions(f, orgID)",
 		"handoffContext = buildUnifiedFindingChatContext(f, store, handoffActions)",
 		"handoffResources = buildUnifiedFindingHandoffResources(f, store)",

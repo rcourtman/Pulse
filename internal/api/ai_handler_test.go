@@ -593,12 +593,32 @@ func TestHandleChat_PassesScopedHandoffContext(t *testing.T) {
 				Type: "storage",
 				Node: "nas-1",
 			}}, reqArg.HandoffResources)
+			assert.Equal(t, []chat.HandoffAction{{
+				FindingID:              "finding-123",
+				ApprovalID:             "approval-123",
+				ApprovalStatus:         "pending",
+				ApprovalRequestedAt:    "2026-05-06T12:00:00Z",
+				ApprovalExpiresAt:      "2026-05-06T12:10:00Z",
+				ActionID:               "action-123",
+				ActionApprovalPolicy:   "admin",
+				ActionRequiresApproval: true,
+				ActionPlanExpiresAt:    "2026-05-06T12:10:00Z",
+				ActionDryRunSummary:    "No provider-supported dry run is available for this action.",
+				FixID:                  "fix-123",
+				Description:            "Restart the workload service",
+				RiskLevel:              "high",
+				Destructive:            true,
+				TargetResourceID:       "vm-100",
+				TargetResourceName:     "web-server",
+				TargetResourceType:     "vm",
+			}}, reqArg.HandoffActions)
+			assert.NotContains(t, fmt.Sprintf("%#v", reqArg.HandoffActions), "systemctl restart")
 			if assert.NotNil(t, reqArg.AutonomousMode) {
 				assert.False(t, *reqArg.AutonomousMode)
 			}
 		})
 
-	body := `{"prompt":"discuss incident","autonomous_mode":true,"handoff_context":"[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command | Command event recorded","handoff_resources":[{"id":"storage-1","name":"tank","type":"storage","node":"nas-1"}]}`
+	body := `{"prompt":"discuss incident","autonomous_mode":true,"handoff_context":"[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command | Command event recorded","handoff_resources":[{"id":"storage-1","name":"tank","type":"storage","node":"nas-1"}],"handoff_actions":[{"finding_id":"finding-123","approval_id":"approval-123","approval_status":"pending","approval_requested_at":"2026-05-06T12:00:00Z","approval_expires_at":"2026-05-06T12:10:00Z","action_id":"action-123","action_approval_policy":"admin","action_requires_approval":true,"action_plan_expires_at":"2026-05-06T12:10:00Z","action_dry_run_summary":"No provider-supported dry run is available for this action.","fix_id":"fix-123","description":"Restart the workload service","risk_level":"high","destructive":true,"target_resource_id":"vm-100","target_resource_name":"web-server","target_resource_type":"vm"}]}`
 	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
 	w := httptest.NewRecorder()
 

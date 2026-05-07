@@ -144,12 +144,16 @@ describe('aiChatStore', () => {
       handoffContext:
         '[Alert Incident Context]\nTimeline Event 1: 2026-05-07T00:02:00Z | Command | Command event recorded',
       handoffResources: [{ id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' }],
+      handoffActions: [{ findingId: 'finding-1', approvalId: 'approval-1' }],
     });
 
     expect(aiChatStore.context.initialPrompt).toBe('discuss this incident');
     expect(aiChatStore.context.handoffContext).toContain('[Alert Incident Context]');
     expect(aiChatStore.context.handoffResources).toEqual([
       { id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' },
+    ]);
+    expect(aiChatStore.context.handoffActions).toEqual([
+      { findingId: 'finding-1', approvalId: 'approval-1' },
     ]);
 
     aiChatStore.clearInitialPrompt();
@@ -158,6 +162,9 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.handoffContext).toContain('Command event recorded');
     expect(aiChatStore.context.handoffResources).toEqual([
       { id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' },
+    ]);
+    expect(aiChatStore.context.handoffActions).toEqual([
+      { findingId: 'finding-1', approvalId: 'approval-1' },
     ]);
   });
 

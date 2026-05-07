@@ -814,9 +814,12 @@ frontend primitive boundary.
     verification, latest-run, supporting-context evidence, active-finding, and
     resource reference context while forcing request-local approval-required
     mode. Active-finding entries in that assessment handoff may add live pending
-    approval posture only as safe metadata: approval ID, pending status, risk,
-    target, requested/expiry timestamps, and command count. The shared drawer
-    stays a generic shell rather than a Patrol summary prompt builder. The
+    approval posture only as safe structured metadata: approval ID, pending
+    status, risk, target, requested/expiry timestamps, action plan identity,
+    approval policy, plan expiry, dry-run posture, and command count. Those
+    entries may be passed through shared chat transport as `handoff_actions` for
+    model-only refresh, but the shared drawer stays a generic shell rather than
+    a Patrol summary prompt builder. The
     drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
     feature-owned helpers must provide the source labels, attention reason,

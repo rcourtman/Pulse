@@ -24,6 +24,38 @@ export interface AIChatHandoffResource {
   node?: string;
 }
 
+export interface AIChatHandoffAction {
+  findingId?: string;
+  recordId?: string;
+  approvalId?: string;
+  approvalStatus?: string;
+  approvalRequestedAt?: string;
+  approvalExpiresAt?: string;
+  approvalDecidedAt?: string;
+  approvalConsumed?: boolean;
+  actionId?: string;
+  actionState?: string;
+  actionUpdatedAt?: string;
+  actionRequestedBy?: string;
+  actionCapability?: string;
+  actionApprovalPolicy?: string;
+  actionRequiresApproval?: boolean;
+  actionPlanExpiresAt?: string;
+  actionPlanMessage?: string;
+  actionPreflight?: string;
+  actionDryRunSummary?: string;
+  actionResult?: string;
+  fixId?: string;
+  description?: string;
+  riskLevel?: string;
+  destructive?: boolean;
+  targetHost?: string;
+  targetResourceId?: string;
+  targetResourceName?: string;
+  targetResourceType?: string;
+  targetNode?: string;
+}
+
 export interface AIChatContext {
   targetType?: string;
   targetId?: string;
@@ -33,6 +65,7 @@ export interface AIChatContext {
   briefing?: AIChatContextBriefing;
   handoffContext?: string;
   handoffResources?: AIChatHandoffResource[];
+  handoffActions?: AIChatHandoffAction[];
   // Per-request execution mode override; false keeps scoped handoffs approval-required.
   autonomousMode?: boolean;
 }

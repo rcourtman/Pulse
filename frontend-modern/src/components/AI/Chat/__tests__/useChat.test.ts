@@ -245,6 +245,13 @@ describe('useChat', () => {
             node: 'nas-1',
           },
         ],
+        handoffActions: [
+          {
+            findingId: 'finding-1',
+            approvalId: 'approval-1',
+            approvalStatus: 'pending',
+          },
+        ],
       });
 
       const chatCall = mockChat.mock.calls[0];
@@ -256,6 +263,13 @@ describe('useChat', () => {
           name: 'tank',
           type: 'storage',
           node: 'nas-1',
+        },
+      ]);
+      expect(chatCall[10]).toEqual([
+        {
+          findingId: 'finding-1',
+          approvalId: 'approval-1',
+          approvalStatus: 'pending',
         },
       ]);
       dispose();

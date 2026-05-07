@@ -1084,12 +1084,13 @@ only governed prompt/context data, but the submitted chat request must set
 control-level setting, and disclose the temporary approval-required mode in
 the drawer instead of showing the generic Autonomous warning.
 Scoped Assistant handoffs that originate in owned product surfaces may also
-send bounded `handoff_context` text plus structured `handoff_resources` through
-`frontend-modern/src/api/aiChat.ts` and `/api/ai/chat`. That context is
-model-only session metadata, not saved user-authored message text, and the
-backend must clamp the exchange to approval-required mode whenever such scoped
-handoff context or resources are present. Patrol finding IDs remain stricter:
-when `finding_id` resolves, backend-refreshed durable Patrol context replaces
+send bounded `handoff_context` text, structured `handoff_resources`, and safe
+structured `handoff_actions` through `frontend-modern/src/api/aiChat.ts` and
+`/api/ai/chat`. That context is model-only session metadata, not saved
+user-authored message text, and the backend must clamp the exchange to
+approval-required mode whenever such scoped handoff context, resources, or
+action references are present. Patrol finding IDs remain stricter: when
+`finding_id` resolves, backend-refreshed durable Patrol context replaces
 browser-supplied handoff text.
 Direct alert-investigation runtime handoffs follow the same rule even when
 they bypass the chat drawer. `/api/ai/investigate-alert` must set

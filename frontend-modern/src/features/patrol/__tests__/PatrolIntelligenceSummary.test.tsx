@@ -30,6 +30,18 @@ describe('PatrolIntelligenceSummary', () => {
         status: 'pending',
         requestedAt: '2026-05-06T12:00:00Z',
         expiresAt: '2026-05-06T12:10:00Z',
+        plan: {
+          actionId: 'action-1',
+          requiresApproval: true,
+          approvalPolicy: 'admin',
+          message: 'Restart after the backup window clears.',
+          expiresAt: '2026-05-06T12:10:00Z',
+        },
+        preflight: {
+          intendedChange: 'Restart workload service',
+          dryRunAvailable: false,
+          dryRunSummary: 'No provider-supported dry run is available for this action.',
+        },
       },
     ]);
 
@@ -60,6 +72,21 @@ describe('PatrolIntelligenceSummary', () => {
       { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
       { id: 'backup-job', name: 'Nightly backup job', type: 'job', node: undefined },
     ]);
+    expect(context.handoffActions).toHaveLength(1);
+    expect((context.handoffActions as Array<Record<string, unknown>>)[0]).toMatchObject({
+      findingId: 'finding-1',
+      approvalId: 'approval-1',
+      approvalStatus: 'pending',
+      approvalRequestedAt: '2026-05-06T12:00:00Z',
+      approvalExpiresAt: '2026-05-06T12:10:00Z',
+      actionId: 'action-1',
+      actionApprovalPolicy: 'admin',
+      actionRequiresApproval: true,
+      actionPlanExpiresAt: '2026-05-06T12:10:00Z',
+      actionPlanMessage: 'Restart after the backup window clears.',
+      actionPreflight: 'Restart workload service',
+      actionDryRunSummary: 'No provider-supported dry run is available for this action.',
+    });
     expect(context.briefing).toMatchObject({
       suggestedPrompts: [
         'Prioritize findings and safest next step',

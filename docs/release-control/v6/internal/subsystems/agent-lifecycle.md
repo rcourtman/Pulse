@@ -1109,11 +1109,12 @@ resource, or action context, the backend-enforced `autonomous_mode:false`
 clamp is Assistant action-governance, not agent readiness, fleet command
 reachability, or enrollment health.
 Scoped Assistant handoffs from alert or incident surfaces may also send
-bounded `handoff_context` and `handoff_resources` through `/api/ai/chat`
-without a `finding_id`; lifecycle-adjacent surfaces may treat those references
-as AI/runtime explanation context only, and must not reinterpret them as agent
-readiness, install status, command reachability, enrollment health, or fleet
-execution authority.
+bounded `handoff_context`, `handoff_resources`, and Patrol assessment
+`handoff_actions` through `/api/ai/chat` without a `finding_id`;
+lifecycle-adjacent surfaces may treat those references as AI/runtime
+explanation context only, and must not reinterpret them as agent readiness,
+install status, command reachability, enrollment health, fleet execution
+authority, or agent command grants.
 That same shared `internal/api/` dependency also now assumes SSO test and
 metadata-preview routes fail closed on validated outbound URL handling.
 Lifecycle-adjacent setup and hosted bootstrap surfaces may depend on those

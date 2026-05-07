@@ -14,6 +14,7 @@ import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import {
   buildPatrolAssistantFindingBriefing,
+  buildPatrolAssistantApprovalBriefingInput,
   buildPatrolAssistantProposedFixBriefingInput,
   type PatrolAssistantProposedFixBriefingSource,
 } from '@/features/patrol/patrolInvestigationContextModel';
@@ -53,16 +54,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       findingStatus: 'active',
       investigationOutcome: props.investigationOutcome,
       loopState: props.investigationOutcome || 'awaiting_approval',
-      pendingApproval: approval
-        ? {
-            id: approval.id,
-            status: approval.status,
-            riskLevel: approval.riskLevel,
-            requestedAt: approval.requestedAt,
-            expiresAt: approval.expiresAt,
-            targetName: approval.targetName,
-          }
-        : null,
+      pendingApproval: buildPatrolAssistantApprovalBriefingInput(approval),
       proposedFix: buildPatrolAssistantProposedFixBriefingInput(
         fix ||
           (approval

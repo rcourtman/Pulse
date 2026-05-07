@@ -3,8 +3,13 @@ import type {
   IntelligencePolicyPostureSummary,
   ResourceCorrelation,
 } from '@/types/aiIntelligence';
-import type { InvestigationRecord, RemediationPlan } from '@/api/ai';
-import type { AIChatContext, AIChatContextBriefing, AIChatHandoffResource } from '@/stores/aiChat';
+import type { ApprovalRequest, InvestigationRecord, RemediationPlan } from '@/api/ai';
+import type {
+  AIChatContext,
+  AIChatContextBriefing,
+  AIChatHandoffAction,
+  AIChatHandoffResource,
+} from '@/stores/aiChat';
 import type { ResourceChange } from '@/types/resource';
 import {
   formatResourceChangeKind,
@@ -66,6 +71,12 @@ export interface PatrolAssistantApprovalBriefingInput {
   requestedAt?: string | null;
   expiresAt?: string | null;
   targetName?: string | null;
+  actionId?: string | null;
+  actionApprovalPolicy?: string | null;
+  actionPlanExpiresAt?: string | null;
+  actionPlanMessage?: string | null;
+  actionPreflight?: string | null;
+  actionDryRunSummary?: string | null;
 }
 
 export interface PatrolAssistantProposedFixBriefingInput {
@@ -195,6 +206,7 @@ const MAX_ASSESSMENT_FINDINGS = 5;
 const MAX_ASSESSMENT_RECENT_CHANGES = 3;
 const MAX_ASSESSMENT_CORRELATIONS = 3;
 const MAX_ASSESSMENT_RESOURCES = 8;
+const MAX_ASSESSMENT_HANDOFF_ACTIONS = 4;
 const MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS = 3;
 
 export function buildPatrolInvestigationContextSummary(
@@ -304,6 +316,26 @@ export function buildPatrolAssistantProposedFixBriefingInput(
   return briefing;
 }
 
+export function buildPatrolAssistantApprovalBriefingInput(
+  approval?: ApprovalRequest | null,
+): PatrolAssistantApprovalBriefingInput | undefined {
+  if (!approval) return undefined;
+  return {
+    id: normalizeText(approval.id),
+    status: normalizeText(approval.status),
+    riskLevel: normalizeText(approval.riskLevel),
+    requestedAt: normalizeText(approval.requestedAt),
+    expiresAt: normalizeText(approval.expiresAt),
+    targetName: normalizeText(approval.targetName),
+    actionId: normalizeText(approval.plan?.actionId),
+    actionApprovalPolicy: normalizeText(approval.plan?.approvalPolicy),
+    actionPlanExpiresAt: normalizeText(approval.plan?.expiresAt),
+    actionPlanMessage: normalizeText(approval.plan?.message || approval.plan?.summary),
+    actionPreflight: normalizeText(approval.preflight?.intendedChange),
+    actionDryRunSummary: normalizeText(approval.preflight?.dryRunSummary),
+  };
+}
+
 export function buildPatrolAssistantFindingPrompt(
   input: PatrolAssistantFindingPromptInput,
 ): string {
@@ -331,6 +363,7 @@ export function buildPatrolAssessmentAssistantHandoff(
   const handoffContext = buildPatrolAssessmentAssistantModelContext(input);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
+  const handoffActions = buildPatrolAssessmentHandoffActions(input);
 
   return {
     prompt: [
@@ -347,6 +380,7 @@ export function buildPatrolAssessmentAssistantHandoff(
       autonomousMode: false,
       handoffContext,
       handoffResources: buildPatrolAssessmentHandoffResources(input),
+      handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
       briefing: buildPatrolAssessmentAssistantBriefing(input),
       context: {
         source: 'pulse-patrol-assessment',
@@ -588,6 +622,69 @@ function addAssessmentHandoffResource(
     type: existing?.type || normalizedResource.type,
     node: existing?.node || normalizedResource.node,
   });
+}
+
+function buildPatrolAssessmentHandoffActions(
+  input: PatrolAssessmentAssistantHandoffInput,
+): AIChatHandoffAction[] {
+  const actions: AIChatHandoffAction[] = [];
+
+  for (const finding of normalizeAssessmentFindings(input.activeFindings)) {
+    if (actions.length >= MAX_ASSESSMENT_HANDOFF_ACTIONS) break;
+
+    const pendingApproval = normalizeApprovalBriefing(finding.pendingApproval);
+    const proposedFix = normalizeProposedFixBriefing(finding.proposedFix);
+    const record = finding.investigationRecord;
+    const recordFix = record?.proposed_fix;
+    const approvalId = pendingApproval.id || normalizeText(record?.approval_id);
+    const fixId = normalizeText(recordFix?.id);
+    const description =
+      normalizeText(proposedFix?.description) || normalizeText(recordFix?.description);
+
+    if (!approvalId && !fixId && !description && !pendingApproval.actionId) {
+      continue;
+    }
+
+    actions.push({
+      findingId: normalizeText(finding.id) || normalizeText(record?.finding_id) || undefined,
+      recordId: normalizeText(record?.id) || undefined,
+      approvalId: approvalId || undefined,
+      approvalStatus: pendingApproval.status || undefined,
+      approvalRequestedAt: pendingApproval.requestedAt || undefined,
+      approvalExpiresAt: pendingApproval.expiresAt || undefined,
+      actionId: pendingApproval.actionId || undefined,
+      actionApprovalPolicy: pendingApproval.actionApprovalPolicy || undefined,
+      actionRequiresApproval: Boolean(approvalId),
+      actionPlanExpiresAt: pendingApproval.actionPlanExpiresAt || undefined,
+      actionPlanMessage: pendingApproval.actionPlanMessage || undefined,
+      actionPreflight: pendingApproval.actionPreflight || undefined,
+      actionDryRunSummary: pendingApproval.actionDryRunSummary || undefined,
+      fixId: fixId || undefined,
+      description: description || undefined,
+      riskLevel:
+        pendingApproval.riskLevel ||
+        normalizeText(finding.proposedFix?.riskLevel) ||
+        normalizeText(recordFix?.risk_level) ||
+        undefined,
+      destructive: Boolean(proposedFix?.destructive || recordFix?.destructive),
+      targetHost:
+        normalizeText(proposedFix?.targetHost) ||
+        normalizeText(recordFix?.target_host) ||
+        pendingApproval.targetName ||
+        undefined,
+      targetResourceId:
+        normalizeText(finding.resourceId || record?.subject?.resource_id) || undefined,
+      targetResourceName:
+        normalizeText(finding.resourceName || record?.subject?.resource_name) ||
+        pendingApproval.targetName ||
+        undefined,
+      targetResourceType:
+        normalizeText(finding.resourceType || record?.subject?.resource_type) || undefined,
+      targetNode: normalizeText(record?.subject?.node) || undefined,
+    });
+  }
+
+  return actions;
 }
 
 function normalizeAssessmentFindings(
@@ -1571,6 +1668,12 @@ function normalizeApprovalBriefing(
     requestedAt: normalizeText(approval?.requestedAt),
     expiresAt: normalizeText(approval?.expiresAt),
     targetName: normalizeText(approval?.targetName),
+    actionId: normalizeText(approval?.actionId),
+    actionApprovalPolicy: normalizeText(approval?.actionApprovalPolicy),
+    actionPlanExpiresAt: normalizeText(approval?.actionPlanExpiresAt),
+    actionPlanMessage: normalizeText(approval?.actionPlanMessage),
+    actionPreflight: normalizeText(approval?.actionPreflight),
+    actionDryRunSummary: normalizeText(approval?.actionDryRunSummary),
   };
 }
 

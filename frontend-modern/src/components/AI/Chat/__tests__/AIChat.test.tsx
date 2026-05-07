@@ -82,6 +82,7 @@ const {
       briefing: undefined,
       handoffContext: undefined,
       handoffResources: undefined,
+      handoffActions: undefined,
     } as {
       initialPrompt?: string;
       findingId?: string;
@@ -93,6 +94,11 @@ const {
         name?: string;
         type?: string;
         node?: string;
+      }>;
+      handoffActions?: Array<{
+        findingId?: string;
+        approvalId?: string;
+        approvalStatus?: string;
       }>;
       briefing?: {
         sourceLabel: string;
@@ -1128,6 +1134,13 @@ describe('AIChat', () => {
             node: 'nas-1',
           },
         ],
+        handoffActions: [
+          {
+            findingId: 'finding-1',
+            approvalId: 'approval-1',
+            approvalStatus: 'pending',
+          },
+        ],
         briefing: {
           sourceLabel: 'Pulse Alerts',
           title: 'Incident timeline attached',
@@ -1154,6 +1167,13 @@ describe('AIChat', () => {
               name: 'tank',
               type: 'storage',
               node: 'nas-1',
+            },
+          ],
+          handoffActions: [
+            {
+              findingId: 'finding-1',
+              approvalId: 'approval-1',
+              approvalStatus: 'pending',
             },
           ],
         },

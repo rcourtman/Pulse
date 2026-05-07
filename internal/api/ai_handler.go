@@ -782,12 +782,14 @@ type ChatRequest struct {
 	FindingID        string                 `json:"finding_id,omitempty"`
 	HandoffContext   string                 `json:"handoff_context,omitempty"`
 	HandoffResources []chat.HandoffResource `json:"handoff_resources,omitempty"`
+	HandoffActions   []chat.HandoffAction   `json:"handoff_actions,omitempty"`
 	AutonomousMode   *bool                  `json:"autonomous_mode,omitempty"`
 }
 
 const (
 	chatRequestHandoffContextMaxBytes = 16 * 1024
 	chatRequestHandoffResourceLimit   = 8
+	chatRequestHandoffActionLimit     = 4
 )
 
 func chatAutonomousModeForScopedHandoff(requested *bool, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction) *bool {
@@ -831,6 +833,52 @@ func normalizeChatRequestHandoffResources(raw []chat.HandoffResource) []chat.Han
 		})
 	}
 	return resources
+}
+
+func normalizeChatRequestHandoffActions(raw []chat.HandoffAction) []chat.HandoffAction {
+	actions := make([]chat.HandoffAction, 0, min(len(raw), chatRequestHandoffActionLimit))
+	for _, action := range raw {
+		if len(actions) >= chatRequestHandoffActionLimit {
+			break
+		}
+		normalized := chat.HandoffAction{
+			FindingID:              trimChatHandoffField(action.FindingID, 256),
+			RecordID:               trimChatHandoffField(action.RecordID, 256),
+			ApprovalID:             trimChatHandoffField(action.ApprovalID, 256),
+			ApprovalStatus:         trimChatHandoffField(action.ApprovalStatus, 64),
+			ApprovalRequestedAt:    trimChatHandoffField(action.ApprovalRequestedAt, 64),
+			ApprovalExpiresAt:      trimChatHandoffField(action.ApprovalExpiresAt, 64),
+			ApprovalDecidedAt:      trimChatHandoffField(action.ApprovalDecidedAt, 64),
+			ApprovalConsumed:       action.ApprovalConsumed,
+			ActionID:               trimChatHandoffField(action.ActionID, 256),
+			ActionState:            trimChatHandoffField(action.ActionState, 64),
+			ActionUpdatedAt:        trimChatHandoffField(action.ActionUpdatedAt, 64),
+			ActionRequestedBy:      trimChatHandoffField(action.ActionRequestedBy, 128),
+			ActionCapability:       trimChatHandoffField(action.ActionCapability, 128),
+			ActionApprovalPolicy:   trimChatHandoffField(action.ActionApprovalPolicy, 64),
+			ActionRequiresApproval: action.ActionRequiresApproval,
+			ActionPlanExpiresAt:    trimChatHandoffField(action.ActionPlanExpiresAt, 64),
+			ActionPlanMessage:      trimChatHandoffField(action.ActionPlanMessage, 512),
+			ActionPreflight:        trimChatHandoffField(action.ActionPreflight, 512),
+			ActionDryRunSummary:    trimChatHandoffField(action.ActionDryRunSummary, 512),
+			ActionResult:           trimChatHandoffField(action.ActionResult, 64),
+			FixID:                  trimChatHandoffField(action.FixID, 256),
+			Description:            trimChatHandoffField(action.Description, 512),
+			RiskLevel:              trimChatHandoffField(action.RiskLevel, 64),
+			Destructive:            action.Destructive,
+			TargetHost:             trimChatHandoffField(action.TargetHost, 256),
+			TargetResourceID:       trimChatHandoffField(action.TargetResourceID, 256),
+			TargetResourceName:     trimChatHandoffField(action.TargetResourceName, 256),
+			TargetResourceType:     canonicalizeChatMentionType(action.TargetResourceType),
+			TargetNode:             trimChatHandoffField(action.TargetNode, 256),
+		}
+		if handoffActionHasBriefingValue(normalized) ||
+			strings.TrimSpace(normalized.FindingID) != "" ||
+			strings.TrimSpace(normalized.TargetResourceID) != "" {
+			actions = append(actions, normalized)
+		}
+	}
+	return actions
 }
 
 func trimChatHandoffField(raw string, limit int) string {
@@ -2202,7 +2250,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// as the user's authored prompt, so conversation history stays readable.
 	handoffContext := normalizeChatRequestHandoffContext(req.HandoffContext)
 	handoffResources := normalizeChatRequestHandoffResources(req.HandoffResources)
-	var handoffActions []chat.HandoffAction
+	handoffActions := normalizeChatRequestHandoffActions(req.HandoffActions)
 	findingID := strings.TrimSpace(req.FindingID)
 	if findingID == "" && strings.TrimSpace(req.SessionID) != "" {
 		if storedFindingID, err := svc.GetModelHandoffFindingID(ctx, req.SessionID); err != nil {
