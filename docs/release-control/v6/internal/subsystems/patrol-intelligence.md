@@ -165,10 +165,13 @@ Patrol-specific presentation helpers.
    governed approval or proposed-fix review instruction when safe metadata is
    attached, so the operator starts from approval status, risk, dry-run posture,
    and safest-next-step review instead of generic incident discussion. Finding
-   handoffs may also attach a bounded model-only action reference for that same
-   live approval or proposed fix, carrying approval ID/status/risk, action plan
-   identity/policy/expiry, dry-run posture, proposed-fix summary, and target
-   resource references without raw command payloads. Inline
+   handoffs must be assembled through the Patrol-owned handoff model so the
+   prompt, visible briefing, model-only finding context, resource reference,
+   bounded action reference, and request-local approval-required posture stay in
+   sync. The model-only context may include current finding status, recurrence,
+   investigation record facts, evidence, verification, approval posture,
+   dry-run posture, proposed-fix summary, and target resource references without
+   raw command payloads. Inline
    Patrol approval actions that open Assistant must follow the
    same rule: pass approval ID/status/risk/target plus safe summary/count
    metadata as review context, force the request-local approval-required mode,

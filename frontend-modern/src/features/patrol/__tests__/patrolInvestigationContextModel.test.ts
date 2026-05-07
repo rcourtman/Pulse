@@ -4,6 +4,7 @@ import type { RemediationPlan } from '@/api/ai';
 import {
   buildPatrolAssessmentAssistantHandoff,
   buildPatrolAssistantFindingBriefing,
+  buildPatrolAssistantFindingHandoff,
   buildPatrolAssistantFindingHandoffActions,
   buildPatrolAssistantFindingPrompt,
   buildPatrolAssistantProposedFixBriefingInput,
@@ -578,6 +579,76 @@ describe('patrolInvestigationContextModel', () => {
         resourceId: 'agent-1',
       }),
     ).toEqual([]);
+  });
+
+  it('builds finding-level Assistant handoff context, resources, and actions together', () => {
+    const handoff = buildPatrolAssistantFindingHandoff({
+      id: 'finding-1',
+      title: 'Nginx down',
+      subject: 'node-1',
+      description: 'The service stopped responding.',
+      severity: 'warning',
+      findingStatus: 'active',
+      investigationStatus: 'completed',
+      investigationOutcome: 'fix_queued',
+      loopState: 'awaiting_approval',
+      timesRaised: 3,
+      regressionCount: 1,
+      lastRegressionAt: '2026-05-06T11:59:00Z',
+      remediationId: 'remediation-1',
+      resourceId: 'agent-1',
+      resourceName: 'node-1',
+      resourceType: 'agent',
+      detectedAt: '2026-05-06T11:50:00Z',
+      lastSeenAt: '2026-05-06T12:00:00Z',
+      pendingApproval: {
+        id: 'approval-1',
+        status: 'pending',
+        riskLevel: 'high',
+        requestedAt: '2026-05-06T12:00:00Z',
+        expiresAt: '2026-05-06T12:10:00Z',
+        targetName: 'node-1',
+        actionId: 'restart-nginx',
+        actionApprovalPolicy: 'operator',
+        actionPlanMessage: 'Restart nginx after validating load balancer drain.',
+        actionPreflight: 'Would restart nginx on node-1.',
+        actionDryRunSummary: 'One service restart would be attempted.',
+      },
+      proposedFix: buildPatrolAssistantProposedFixBriefingInput({
+        description: 'Restart nginx',
+        commands: ['systemctl restart nginx'],
+        riskLevel: 'high',
+        targetHost: 'node-1',
+      }),
+    });
+
+    expect(handoff.prompt).toContain('Start by reviewing governed approval approval-1');
+    expect(handoff.context).toMatchObject({
+      targetType: 'agent',
+      targetId: 'agent-1',
+      findingId: 'finding-1',
+      autonomousMode: false,
+      handoffResources: [{ id: 'agent-1', name: 'node-1', type: 'agent' }],
+      context: {
+        source: 'pulse-patrol-finding',
+        findingId: 'finding-1',
+        resourceId: 'agent-1',
+        resourceName: 'node-1',
+        resourceType: 'agent',
+        pendingApprovalId: 'approval-1',
+        actionReferenceCount: 1,
+      },
+    });
+    expect(handoff.context.handoffContext).toContain('[Patrol Finding Context]');
+    expect(handoff.context.handoffContext).toContain('Approval: approval-1');
+    expect(handoff.context.handoffContext).toContain(
+      'Dry-Run Posture: One service restart would be attempted.',
+    );
+    expect(handoff.context.handoffContext).toContain(
+      'Command Boundary: Command details stay in governed approval or remediation context',
+    );
+    expect(handoff.context.handoffActions).toHaveLength(1);
+    expect(JSON.stringify(handoff)).not.toContain('systemctl restart nginx');
   });
 
   it('builds a drawer briefing for Assistant handoff without exposing raw commands', () => {

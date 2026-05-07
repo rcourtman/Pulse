@@ -120,6 +120,30 @@ export interface PatrolAssistantFindingBriefingInput {
   investigationRecord?: InvestigationRecord | null;
 }
 
+export interface PatrolAssistantFindingHandoffInput {
+  id?: string | null;
+  title: string;
+  subject: string;
+  description?: string | null;
+  severity?: string | null;
+  findingStatus?: string | null;
+  investigationStatus?: string | null;
+  investigationOutcome?: string | null;
+  loopState?: string | null;
+  timesRaised?: number | null;
+  regressionCount?: number | null;
+  lastRegressionAt?: string | null;
+  remediationId?: string | null;
+  resourceId?: string | null;
+  resourceName?: string | null;
+  resourceType?: string | null;
+  detectedAt?: string | null;
+  lastSeenAt?: string | null;
+  pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
+  proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
+  investigationRecord?: InvestigationRecord | null;
+}
+
 export interface PatrolAssistantFindingModeInput {
   investigationOutcome?: string | null;
   remediationId?: string | null;
@@ -202,6 +226,11 @@ export interface PatrolAssessmentAssistantHandoffInput {
 }
 
 export interface PatrolAssessmentAssistantHandoff {
+  prompt: string;
+  context: Omit<AIChatContext, 'initialPrompt'>;
+}
+
+export interface PatrolAssistantFindingHandoff {
   prompt: string;
   context: Omit<AIChatContext, 'initialPrompt'>;
 }
@@ -449,6 +478,68 @@ export function buildPatrolAssessmentAssistantHandoff(
         correlationDetailCount: correlations.length,
         governedResourceCount: input.investigationContext?.governedResourceCount ?? 0,
         pendingApprovalCount: normalizeAssessmentPendingApprovalCount(input.activeFindings),
+      },
+    },
+  };
+}
+
+export function buildPatrolAssistantFindingHandoff(
+  input: PatrolAssistantFindingHandoffInput,
+): PatrolAssistantFindingHandoff {
+  const findingId = normalizeText(input.id) || normalizeText(input.investigationRecord?.finding_id);
+  const resource = buildPatrolFindingHandoffResource(input);
+  const handoffResources = resource ? [resource] : [];
+  const handoffActions = buildPatrolAssistantFindingHandoffActions(input);
+  const requiresApprovalMode = patrolAssistantFindingHandoffRequiresApprovalMode({
+    investigationOutcome: input.investigationOutcome,
+    remediationId: input.remediationId,
+    pendingApproval: input.pendingApproval,
+    investigationRecord: input.investigationRecord,
+  });
+
+  return {
+    prompt: buildPatrolAssistantFindingPrompt({
+      title: input.title,
+      subject: input.subject,
+      description: normalizeText(input.description),
+      investigationOutcome: input.investigationOutcome,
+      remediationId: input.remediationId,
+      pendingApproval: input.pendingApproval,
+      proposedFix: input.proposedFix,
+      investigationRecord: input.investigationRecord,
+    }),
+    context: {
+      targetType: resource?.type,
+      targetId: resource?.id,
+      findingId: findingId || undefined,
+      autonomousMode: requiresApprovalMode ? false : undefined,
+      handoffContext: buildPatrolAssistantFindingModelContext(input),
+      handoffResources: handoffResources.length > 0 ? handoffResources : undefined,
+      handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
+      briefing: buildPatrolAssistantFindingBriefing({
+        title: input.title,
+        subject: input.subject,
+        severity: input.severity,
+        findingStatus: input.findingStatus,
+        investigationOutcome: input.investigationOutcome,
+        loopState: input.loopState,
+        timesRaised: input.timesRaised,
+        regressionCount: input.regressionCount,
+        lastRegressionAt: input.lastRegressionAt,
+        remediationId: input.remediationId,
+        pendingApproval: input.pendingApproval,
+        proposedFix: input.proposedFix,
+        investigationRecord: input.investigationRecord,
+      }),
+      context: {
+        source: 'pulse-patrol-finding',
+        findingId: findingId || undefined,
+        investigationRecordId: normalizeText(input.investigationRecord?.id) || undefined,
+        resourceId: resource?.id,
+        resourceName: resource?.name,
+        resourceType: resource?.type,
+        pendingApprovalId: normalizeApprovalBriefing(input.pendingApproval).id || undefined,
+        actionReferenceCount: handoffActions.length,
       },
     },
   };
@@ -760,6 +851,25 @@ function buildPatrolAssessmentHandoffResources(
   }
 
   return Array.from(resources.values());
+}
+
+function buildPatrolFindingHandoffResource(
+  input: PatrolAssistantFindingHandoffInput,
+): AIChatHandoffResource | undefined {
+  const subject = input.investigationRecord?.subject;
+  const id = normalizeText(input.resourceId) || normalizeText(subject?.resource_id);
+  if (!id) return undefined;
+
+  return {
+    id,
+    name:
+      normalizeText(input.resourceName) ||
+      normalizeText(subject?.resource_name) ||
+      normalizeText(input.subject) ||
+      undefined,
+    type: normalizeText(input.resourceType) || normalizeText(subject?.resource_type) || undefined,
+    node: normalizeText(subject?.node) || undefined,
+  };
 }
 
 function addAssessmentHandoffResource(
@@ -1241,6 +1351,99 @@ function formatAssessmentFindingContextLine(
   ].filter(isNonEmptyString);
 
   return `Finding ${index}: ${parts.join('; ')}`;
+}
+
+function buildPatrolAssistantFindingModelContext(
+  input: PatrolAssistantFindingHandoffInput,
+): string {
+  const title = normalizeText(input.title) || 'Patrol finding';
+  const subject = normalizeText(input.subject) || 'affected resource';
+  const record = buildPatrolInvestigationRecordPresentation(input.investigationRecord);
+  const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
+  const proposedFix = record.proposedFix || normalizeProposedFixBriefing(input.proposedFix);
+  const resource = buildPatrolFindingHandoffResource(input);
+  const findingId = normalizeText(input.id) || normalizeText(input.investigationRecord?.finding_id);
+  const statusParts = [
+    formatIdentifierLabel(input.severity),
+    formatIdentifierLabel(input.findingStatus),
+    formatIdentifierLabel(input.investigationStatus),
+    formatIdentifierLabel(input.investigationOutcome || input.investigationRecord?.outcome),
+    formatIdentifierLabel(input.loopState),
+  ].filter(isNonEmptyString);
+  const raisedParts = [
+    normalizeNonNegativeCount(input.timesRaised) > 1
+      ? `raised ${normalizeNonNegativeCount(input.timesRaised)} times`
+      : undefined,
+    normalizeNonNegativeCount(input.regressionCount) > 0
+      ? `regressed ${normalizeNonNegativeCount(input.regressionCount)} time${
+          normalizeNonNegativeCount(input.regressionCount) === 1 ? '' : 's'
+        }`
+      : undefined,
+    normalizeText(input.lastRegressionAt)
+      ? `last regression ${normalizeText(input.lastRegressionAt)}`
+      : undefined,
+  ].filter(isNonEmptyString);
+  const attentionReason = buildPatrolAssistantAttentionReason(input, record);
+  const operatorDecision = buildPatrolAssistantOperatorDecision(input);
+  const proposedFixFacts = proposedFix
+    ? formatBriefingStringList(
+        [
+          proposedFix.description,
+          proposedFix.targetHost ? `target ${proposedFix.targetHost}` : undefined,
+          proposedFix.riskLabel ? `${proposedFix.riskLabel.toLowerCase()} risk` : undefined,
+          proposedFix.commandSummary,
+          proposedFix.destructive ? 'destructive proposed fix' : undefined,
+          proposedFix.rationale ? `rationale ${proposedFix.rationale}` : undefined,
+        ],
+        6,
+        'proposed-fix facts',
+      )
+    : undefined;
+
+  return [
+    '[Patrol Finding Context]',
+    'Source: Pulse Patrol finding handoff',
+    formatContextLine('Finding', title),
+    formatContextLine('Finding ID', findingId),
+    formatContextLine('Subject', subject),
+    formatContextLine('Resource', resource ? formatAssessmentResourceLabel(resource) : undefined),
+    formatContextLine('Status', statusParts.join(' · ')),
+    formatContextLine('Detected At', input.detectedAt),
+    formatContextLine('Last Seen At', input.lastSeenAt),
+    formatContextLine('Recurrence', raisedParts.join('; ')),
+    formatContextLine('Description', input.description),
+    formatContextLine('Attention', attentionReason),
+    formatContextLine('Investigation Record', input.investigationRecord?.id),
+    formatContextLine('Investigation Status', record.statusLabel),
+    formatContextLine('Investigation Outcome', record.outcomeLabel),
+    formatContextLine('Investigation Confidence', record.confidenceLabel),
+    formatContextLine('Conclusion', record.conclusion),
+    formatContextLine('Recommended Action', record.recommendedAction),
+    ...record.evidenceSummaries.map((summary, index) =>
+      formatContextLine(`Evidence ${index + 1}`, summary),
+    ),
+    ...record.verificationSummaries.map((summary, index) =>
+      formatContextLine(`Verification ${index + 1}`, summary),
+    ),
+    formatContextLine('Tools Used', record.toolsUsed.join(', ')),
+    formatContextLine('Approval', pendingApproval.id),
+    formatContextLine('Approval Status', pendingApproval.status),
+    formatContextLine('Approval Risk', pendingApproval.riskLevel),
+    formatContextLine('Approval Target', pendingApproval.targetName),
+    formatContextLine('Approval Requested At', pendingApproval.requestedAt),
+    formatContextLine('Approval Expires At', pendingApproval.expiresAt),
+    formatContextLine('Approval Policy', pendingApproval.actionApprovalPolicy),
+    formatContextLine('Approval Plan Expires At', pendingApproval.actionPlanExpiresAt),
+    formatContextLine('Action Plan Summary', pendingApproval.actionPlanMessage),
+    formatContextLine('Action Preflight', pendingApproval.actionPreflight),
+    formatContextLine('Dry-Run Posture', pendingApproval.actionDryRunSummary),
+    formatContextLine('Proposed Fix', proposedFixFacts),
+    formatContextLine('Operator Decision', operatorDecision),
+    'Command Boundary: Command details stay in governed approval or remediation context; this model-only handoff may include command counts but not raw command text.',
+    'Operator Boundary: This Patrol finding handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
+  ]
+    .filter(isNonEmptyString)
+    .join('\n');
 }
 
 function formatAssessmentPendingApprovalContextParts(

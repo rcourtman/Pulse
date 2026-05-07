@@ -472,9 +472,10 @@ the canonical monitored-system blocked payload.
    bounded metadata only so Assistant starts by reviewing approval status, risk,
    dry-run posture, proposed-fix posture, and safest next step without receiving
    raw command or execution payloads; finding-level handoffs may also send one
-   bounded `handoff_actions` entry for that governed approval or proposed fix so
-   the Assistant runtime can refresh action posture from IDs and safe summaries
-   instead of relying on pasted chat text
+   bounded model-only `handoff_context`, one `handoff_resources` target
+   reference, and one `handoff_actions` entry for that governed approval or
+   proposed fix so the Assistant runtime can refresh finding and action posture
+   from IDs and safe summaries instead of relying on pasted chat text
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior

@@ -18,10 +18,8 @@ import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligenc
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import {
-  buildPatrolAssistantFindingBriefing,
-  buildPatrolAssistantFindingHandoffActions,
-  buildPatrolAssistantFindingPrompt,
   buildPatrolAssistantApprovalBriefingInput,
+  buildPatrolAssistantFindingHandoff,
   buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantPrompt,
@@ -489,61 +487,30 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     );
     const proposedFix =
       latestInvestigationProposedFix || buildLiveApprovalProposedFixBriefing(pendingApproval);
-    const prompt = buildPatrolAssistantFindingPrompt({
+    const handoff = buildPatrolAssistantFindingHandoff({
+      id: finding.id,
       title,
       subject,
       description: finding.description,
-      investigationOutcome: finding.investigationOutcome,
-      remediationId: finding.remediationPlanId,
-      pendingApproval: pendingApprovalBriefing,
-      proposedFix,
-      investigationRecord: finding.investigationRecord,
-    });
-    const briefing = buildPatrolAssistantFindingBriefing({
-      title,
-      subject,
       severity: finding.severity,
       findingStatus: finding.status,
+      investigationStatus: finding.investigationStatus,
       investigationOutcome: finding.investigationOutcome,
       loopState: finding.loopState,
       timesRaised: finding.timesRaised,
       regressionCount: finding.regressionCount,
       lastRegressionAt: finding.lastRegressionAt,
       remediationId: finding.remediationPlanId,
-      pendingApproval: pendingApprovalBriefing,
-      proposedFix,
-      investigationRecord: finding.investigationRecord,
-    });
-    const handoffActions = buildPatrolAssistantFindingHandoffActions({
-      id: finding.id,
-      title,
-      description: finding.description,
-      severity: finding.severity,
-      status: finding.status,
       resourceId: finding.resourceId,
       resourceName: finding.resourceName,
       resourceType: finding.resourceType,
-      investigationStatus: finding.investigationStatus,
-      investigationOutcome: finding.investigationOutcome,
-      loopState: finding.loopState,
+      detectedAt: finding.detectedAt,
+      lastSeenAt: finding.lastSeenAt,
       pendingApproval: pendingApprovalBriefing,
       proposedFix,
       investigationRecord: finding.investigationRecord,
     });
-    const requiresApprovalMode = patrolAssistantFindingHandoffRequiresApprovalMode({
-      investigationOutcome: finding.investigationOutcome,
-      remediationId: finding.remediationPlanId,
-      pendingApproval: pendingApprovalBriefing,
-      investigationRecord: finding.investigationRecord,
-    });
-    aiChatStore.openWithPrompt(prompt, {
-      targetType: finding.resourceType,
-      targetId: finding.resourceId,
-      findingId: finding.id,
-      briefing,
-      handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
-      autonomousMode: requiresApprovalMode ? false : undefined,
-    });
+    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
   };
 
   const handleOpenPlanInAssistant = (finding: UnifiedFinding, plan: RemediationPlan, e: Event) => {
