@@ -729,8 +729,11 @@ frontend primitive boundary.
     `frontend-modern/src/components/Settings/useAISettingsState.ts`, and
     `frontend-modern/src/utils/aiSettingsPresentation.ts` must present that
     surface to operators as `Assistant & Patrol` plus provider/model
-    configuration rather than as a generic `AI Services` shell. Runtime
-    controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
+    configuration rather than as a generic `AI Services` shell. Settings-save
+    feedback must preserve provider-specific preflight failures and successful
+    save responses that carry Patrol readiness warnings, including the provider,
+    selected Patrol model, and readiness summary when those fields are present.
+    Runtime controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
     must likewise describe discovery as workload discovery that supplies
     concrete service context to Pulse Assistant and Patrol, not as a generic
     AI context feature. Assistant-only controls inside the shared shell, such

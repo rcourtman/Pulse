@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
@@ -18,6 +18,7 @@ const revertSessionMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const notificationInfoMock = vi.fn();
+const notificationWarningMock = vi.fn();
 const loggerDebugMock = vi.fn();
 const loggerErrorMock = vi.fn();
 const hasFeatureMock = vi.fn();
@@ -51,6 +52,7 @@ vi.mock('@/stores/notifications', () => ({
     success: (...args: unknown[]) => notificationSuccessMock(...args),
     error: (...args: unknown[]) => notificationErrorMock(...args),
     info: (...args: unknown[]) => notificationInfoMock(...args),
+    warning: (...args: unknown[]) => notificationWarningMock(...args),
   },
 }));
 
@@ -116,6 +118,7 @@ const resetAllMocks = () => {
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   notificationInfoMock.mockReset();
+  notificationWarningMock.mockReset();
   loggerDebugMock.mockReset();
   loggerErrorMock.mockReset();
   hasFeatureMock.mockReset();
@@ -479,6 +482,149 @@ describe('AISettings OpenRouter flow', () => {
   });
 });
 
+describe('AISettings provider save failure context', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('names the provider and selected model when a settings save fails after preflight', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      enabled: true,
+      model: 'openrouter:deepseek/deepseek-r1',
+      patrol_model: 'openrouter:deepseek/deepseek-r1',
+      openrouter_configured: true,
+      deepseek_configured: true,
+      configured_providers: ['openrouter', 'deepseek'],
+    });
+    getModelsMock.mockResolvedValue({
+      models: [
+        {
+          id: 'openrouter:deepseek/deepseek-r1',
+          name: 'DeepSeek R1 via OpenRouter',
+        },
+      ],
+    });
+    testProviderMock.mockImplementation(async (provider: string) => ({
+      success: provider !== 'openrouter',
+      message:
+        provider === 'openrouter'
+          ? 'OpenRouter returned 401 during provider preflight'
+          : `${provider} reachable`,
+      provider,
+    }));
+    updateSettingsMock.mockRejectedValue(new Error('Unable to save Assistant & Patrol settings.'));
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(testProviderMock).toHaveBeenCalledWith('openrouter');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        expect.stringContaining('OpenRouter provider'),
+      );
+    });
+    const message = String(notificationErrorMock.mock.calls.at(-1)?.[0] ?? '');
+    expect(message).toContain('model openrouter:deepseek/deepseek-r1');
+    expect(message).toContain('OpenRouter returned 401 during provider preflight');
+    expect(message).toContain('Unable to save Assistant & Patrol settings.');
+  });
+
+  it('warns with Patrol provider and model when settings save but Patrol is not ready', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      enabled: true,
+      model: 'openrouter:deepseek/deepseek-r1',
+      patrol_model: 'openrouter:deepseek/deepseek-r1',
+      openrouter_configured: true,
+      configured_providers: ['openrouter'],
+    });
+    updateSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      enabled: true,
+      model: 'openrouter:deepseek/deepseek-r1',
+      patrol_model: 'openrouter:deepseek/deepseek-r1',
+      openrouter_configured: true,
+      configured_providers: ['openrouter'],
+      patrol_readiness: {
+        status: 'not_ready',
+        ready: false,
+        cause: 'model_unsupported_tools',
+        summary:
+          'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+        provider: 'openrouter',
+        model: 'openrouter:deepseek/deepseek-r1',
+        checks: [],
+      },
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(notificationWarningMock).toHaveBeenCalledWith(
+        expect.stringContaining('Assistant & Patrol settings saved, but Patrol is not ready'),
+      );
+    });
+    const message = String(notificationWarningMock.mock.calls.at(-1)?.[0] ?? '');
+    expect(message).toContain('Provider: OpenRouter');
+    expect(message).toContain('Model: openrouter:deepseek/deepseek-r1');
+    expect(message).toContain('reasoning-only model family');
+    expect(notificationSuccessMock).not.toHaveBeenCalledWith('Assistant & Patrol settings saved');
+  });
+
+  it('does not attach provider context to specific backend validation errors', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      enabled: true,
+      model: 'openrouter:deepseek/deepseek-r1',
+      openrouter_configured: true,
+      configured_providers: ['openrouter'],
+    });
+    testProviderMock.mockResolvedValue({
+      success: false,
+      message: 'OpenRouter returned 401 during provider preflight',
+      provider: 'openrouter',
+    });
+    updateSettingsMock.mockRejectedValue(new Error('Patrol interval must be at least 10 minutes'));
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(testProviderMock).toHaveBeenCalledWith('openrouter');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        'Patrol interval must be at least 10 minutes',
+      );
+    });
+    const message = String(notificationErrorMock.mock.calls.at(-1)?.[0] ?? '');
+    expect(message).not.toContain('OpenRouter provider');
+    expect(message).not.toContain('openrouter:deepseek/deepseek-r1');
+  });
+});
+
 describe('AISettings provider setup flow', () => {
   beforeEach(() => {
     resetAllMocks();
@@ -487,6 +633,94 @@ describe('AISettings provider setup flow', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('warns from setup when the saved provider leaves Patrol not ready', async () => {
+    updateSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      model: 'openrouter:deepseek/deepseek-r1',
+      patrol_model: 'openrouter:deepseek/deepseek-r1',
+      openrouter_configured: true,
+      configured_providers: ['openrouter'],
+      patrol_readiness: {
+        status: 'not_ready',
+        ready: false,
+        cause: 'model_unsupported_tools',
+        summary:
+          'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+        provider: 'openrouter',
+        model: 'openrouter:deepseek/deepseek-r1',
+        checks: [],
+      },
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
+    const setupDialog = await screen.findByRole('dialog', {
+      name: 'Set up Assistant and Patrol',
+    });
+    expect(within(setupDialog).getByText('Set Up Assistant & Patrol')).toBeInTheDocument();
+    fireEvent.click(within(setupDialog).getByRole('button', { name: /OpenRouter/i }));
+    fireEvent.input(screen.getByPlaceholderText('sk-or-...'), {
+      target: { value: 'sk-or-test' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enable Assistant & Patrol' }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledWith({
+        enabled: true,
+        openrouter_api_key: 'sk-or-test',
+      });
+    });
+    await waitFor(() => {
+      expect(notificationWarningMock).toHaveBeenCalledWith(
+        expect.stringContaining('Assistant & Patrol enabled, but Patrol is not ready'),
+      );
+    });
+    const message = String(notificationWarningMock.mock.calls.at(-1)?.[0] ?? '');
+    expect(message).toContain('Provider: OpenRouter');
+    expect(message).toContain('Model: openrouter:deepseek/deepseek-r1');
+    expect(message).toContain('reasoning-only model family');
+    expect(notificationSuccessMock).not.toHaveBeenCalledWith(
+      'Assistant & Patrol enabled! You can customize settings below.',
+    );
+  });
+
+  it('names the setup provider when provider setup save fails generically', async () => {
+    updateSettingsMock.mockRejectedValue(new Error('Unable to save Assistant & Patrol settings.'));
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
+    const setupDialog = await screen.findByRole('dialog', {
+      name: 'Set up Assistant and Patrol',
+    });
+    expect(within(setupDialog).getByText('Set Up Assistant & Patrol')).toBeInTheDocument();
+    fireEvent.click(within(setupDialog).getByRole('button', { name: /OpenRouter/i }));
+    fireEvent.input(screen.getByPlaceholderText('sk-or-...'), {
+      target: { value: 'sk-or-test' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enable Assistant & Patrol' }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        expect.stringContaining('OpenRouter provider'),
+      );
+    });
+    expect(String(notificationErrorMock.mock.calls.at(-1)?.[0] ?? '')).toContain(
+      'Unable to save Assistant & Patrol settings.',
+    );
   });
 
   it('keeps legacy quickstart-only installs on the provider setup path', async () => {

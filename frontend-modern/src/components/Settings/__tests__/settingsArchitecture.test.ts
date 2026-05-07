@@ -357,7 +357,7 @@ describe('settings architecture guardrails', () => {
 
   it('keeps settings copy aligned with Infrastructure as the default workspace', () => {
     expect(generalSettingsPanelSource).toContain(
-      'Replay the four-stop walkthrough of Infrastructure, Workloads, Storage, and',
+      'Manage appearance, layout, and default monitoring cadence.',
     );
     expect(generalSettingsPanelSource).not.toContain('Dashboard, Infrastructure');
     expect(networkBoundarySettingsSectionSource).toContain('Pulse URL for Notifications');
@@ -392,6 +392,19 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain(
       'const [availableModels, setAvailableModels] = createSignal<ModelInfo[]>([]);',
     );
+  });
+
+  it('keeps system AI save feedback tied to provider and Patrol readiness context', () => {
+    expect(aiSettingsStateSource).toContain(
+      "import { apiErrorDetails } from '@/api/responseUtils';",
+    );
+    expect(aiSettingsStateSource).toContain('resolveAISettingsSaveProviderFailure');
+    expect(aiSettingsStateSource).toContain('getAISettingsPatrolReadinessSaveMessage(');
+    expect(aiSettingsStateSource).toContain(
+      "getAISettingsPatrolReadinessSaveMessage(\n        updated.patrol_readiness,\n        'Assistant & Patrol enabled',",
+    );
+    expect(aiSettingsStateSource).toContain('notificationStore.warning(patrolReadinessMessage);');
+    expect(aiSettingsStateSource).toContain('getAISettingsSaveProviderFailureMessage(');
   });
 
   it('keeps infrastructure on a source-manager landing with route-backed dialogs', () => {

@@ -9,6 +9,7 @@ import {
   type ProviderHealthState,
   type ProviderTestResult,
 } from '@/components/Settings/aiSettingsModel';
+import { apiErrorDetails } from '@/api/responseUtils';
 import {
   aiRuntimeModels,
   aiRuntimeModelsError,
@@ -36,6 +37,171 @@ import {
   getAISettingsToggleErrorMessage,
 } from '@/utils/aiSettingsPresentation';
 import { logger } from '@/utils/logger';
+
+type AISettingsSaveProviderFailure = {
+  provider: string;
+  model?: string;
+  providerMessage?: string;
+};
+
+const AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS: Record<AIProvider, string[]> = {
+  anthropic: ['anthropic_api_key'],
+  openai: ['openai_api_key', 'openai_base_url'],
+  openrouter: ['openrouter_api_key'],
+  deepseek: ['deepseek_api_key'],
+  gemini: ['gemini_api_key'],
+  ollama: ['ollama_base_url'],
+};
+
+const compactUnique = (values: Array<string | undefined>): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+};
+
+const isKnownAIProvider = (provider: string): provider is AIProvider =>
+  AI_PROVIDERS.includes(provider as AIProvider);
+
+const providerPayloadEntries = (payload: Record<string, unknown>): string[] =>
+  AI_PROVIDERS.filter((provider) =>
+    AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS[provider].some(
+      (field) => typeof payload[field] === 'string' && String(payload[field]).trim().length > 0,
+    ),
+  );
+
+const modelProviderEntries = (models: string[]): Array<{ provider: string; model: string }> =>
+  models
+    .map((model) => model.trim())
+    .filter(Boolean)
+    .map((model) => ({
+      provider: getProviderFromModelId(model),
+      model,
+    }));
+
+const findModelForProvider = (
+  provider: string,
+  models: Array<{ provider: string; model: string }>,
+): string | undefined => models.find((entry) => entry.provider === provider)?.model;
+
+const isGenericAISettingsSaveFailure = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message.trim().toLowerCase() : '';
+  if (!message) return true;
+  return (
+    message === 'failed to save assistant & patrol settings' ||
+    message === 'unable to save assistant & patrol settings.' ||
+    message === 'unable to save assistant & patrol settings' ||
+    message.includes('failed to save assistant & patrol settings') ||
+    message.startsWith('request failed with status')
+  );
+};
+
+export function getAISettingsSaveProviderFailureMessage(
+  message: string | undefined,
+  failure?: AISettingsSaveProviderFailure | null,
+): string {
+  const baseMessage = getAISettingsSaveErrorMessage(message);
+  if (!failure?.provider) return baseMessage;
+
+  const providerLabel = getAIProviderDisplayName(failure.provider);
+  const lowerBase = baseMessage.toLowerCase();
+  const context = [
+    lowerBase.includes(providerLabel.toLowerCase()) ? undefined : `${providerLabel} provider`,
+    failure.model && !baseMessage.includes(failure.model) ? `model ${failure.model}` : undefined,
+    failure.providerMessage && !baseMessage.includes(failure.providerMessage)
+      ? failure.providerMessage
+      : undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  return context.length > 0 ? `${context.join(' · ')}: ${baseMessage}` : baseMessage;
+}
+
+export function getAISettingsPatrolReadinessSaveMessage(
+  readiness: AISettingsType['patrol_readiness'] | null | undefined,
+  savedLabel = 'Assistant & Patrol settings saved',
+): string | null {
+  if (!readiness || readiness.status === 'ready') return null;
+
+  const provider = readiness.provider ? getAIProviderDisplayName(readiness.provider) : '';
+  const model = readiness.model?.trim();
+  const context = [
+    readiness.summary?.trim(),
+    provider ? `Provider: ${provider}` : undefined,
+    model ? `Model: ${model}` : undefined,
+  ].filter((value): value is string => Boolean(value));
+  const readinessLabel = readiness.status === 'not_ready' ? 'not ready' : 'degraded';
+
+  return context.length > 0
+    ? `${savedLabel}, but Patrol is ${readinessLabel}: ${context.join(' · ')}`
+    : `${savedLabel}, but Patrol is ${readinessLabel}.`;
+}
+
+export function resolveAISettingsSaveProviderFailure(input: {
+  error: unknown;
+  payload: Record<string, unknown>;
+  providerHealth: Record<AIProvider, ProviderHealthState>;
+  models: string[];
+}): AISettingsSaveProviderFailure | null {
+  const details = apiErrorDetails(input.error);
+  const detailProvider = details?.provider?.trim();
+  const detailModel = details?.model?.trim();
+  if (detailProvider) {
+    return {
+      provider: detailProvider,
+      model: detailModel,
+      providerMessage: details?.cause || details?.reason || details?.summary,
+    };
+  }
+
+  const modelEntries = modelProviderEntries(input.models);
+  const payloadProviders = providerPayloadEntries(input.payload);
+  const canUseLocalProviderContext =
+    payloadProviders.length > 0 || isGenericAISettingsSaveFailure(input.error);
+  if (!canUseLocalProviderContext) {
+    return null;
+  }
+  const candidateProviders = compactUnique([
+    ...payloadProviders,
+    ...modelEntries.map((entry) => entry.provider),
+  ]);
+
+  const erroredCandidate = candidateProviders.find(
+    (provider) => isKnownAIProvider(provider) && input.providerHealth[provider].status === 'error',
+  );
+  if (erroredCandidate && isKnownAIProvider(erroredCandidate)) {
+    return {
+      provider: erroredCandidate,
+      model: findModelForProvider(erroredCandidate, modelEntries),
+      providerMessage: input.providerHealth[erroredCandidate].message,
+    };
+  }
+
+  const anyErroredProvider = AI_PROVIDERS.find(
+    (provider) => input.providerHealth[provider].status === 'error',
+  );
+  if (anyErroredProvider) {
+    return {
+      provider: anyErroredProvider,
+      model: findModelForProvider(anyErroredProvider, modelEntries),
+      providerMessage: input.providerHealth[anyErroredProvider].message,
+    };
+  }
+
+  if (candidateProviders.length === 1) {
+    const provider = candidateProviders[0];
+    return {
+      provider,
+      model: findModelForProvider(provider, modelEntries),
+    };
+  }
+
+  return null;
+}
 
 export const useAISettingsState = () => {
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
@@ -379,8 +545,9 @@ export const useAISettingsState = () => {
 
   const handleSetupSubmit = async () => {
     setSetupSaving(true);
+    let payload: Record<string, unknown> = {};
     try {
-      const payload: Record<string, unknown> = { enabled: true };
+      payload = { enabled: true };
 
       if (setupProvider() === 'anthropic') {
         if (!setupApiKey().trim()) {
@@ -427,10 +594,29 @@ export const useAISettingsState = () => {
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
       handleCloseSetupModal();
-      notificationStore.success('Assistant & Patrol enabled! You can customize settings below.');
+      const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
+        updated.patrol_readiness,
+        'Assistant & Patrol enabled',
+      );
+      if (patrolReadinessMessage) {
+        notificationStore.warning(patrolReadinessMessage);
+      } else {
+        notificationStore.success('Assistant & Patrol enabled! You can customize settings below.');
+      }
     } catch (error) {
       logger.error('[AISettings] Setup failed:', error);
-      notificationStore.error(error instanceof Error ? error.message : 'Setup failed');
+      const providerFailure = resolveAISettingsSaveProviderFailure({
+        error,
+        payload,
+        providerHealth,
+        models: [form.model, form.chatModel, form.patrolModel, form.autoFixModel],
+      });
+      notificationStore.error(
+        getAISettingsSaveProviderFailureMessage(
+          error instanceof Error ? error.message : 'Setup failed',
+          providerFailure,
+        ),
+      );
     } finally {
       setSetupSaving(false);
     }
@@ -548,8 +734,9 @@ export const useAISettingsState = () => {
     }
 
     setSaving(true);
+    let payload: Record<string, unknown> = {};
     try {
-      const payload: Record<string, unknown> = {
+      payload = {
         model: selectedModel,
       };
 
@@ -641,11 +828,27 @@ export const useAISettingsState = () => {
       resetForm(updated);
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
-      notificationStore.success('Assistant & Patrol settings saved');
+      const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
+        updated.patrol_readiness,
+      );
+      if (patrolReadinessMessage) {
+        notificationStore.warning(patrolReadinessMessage);
+      } else {
+        notificationStore.success('Assistant & Patrol settings saved');
+      }
     } catch (error) {
       logger.error('[AISettings] Failed to save settings:', error);
+      const providerFailure = resolveAISettingsSaveProviderFailure({
+        error,
+        payload,
+        providerHealth,
+        models: [selectedModel, form.chatModel, form.patrolModel, form.autoFixModel],
+      });
       notificationStore.error(
-        getAISettingsSaveErrorMessage(error instanceof Error ? error.message : ''),
+        getAISettingsSaveProviderFailureMessage(
+          error instanceof Error ? error.message : '',
+          providerFailure,
+        ),
       );
     } finally {
       setSaving(false);
