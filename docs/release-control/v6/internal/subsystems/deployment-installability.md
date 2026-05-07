@@ -238,6 +238,15 @@ server-side update execution surfaces.
    archive filenames through `--archive` so direct Linux and Proxmox LXC users
    can keep the normal service setup while installing the private Pulse Pro
    runtime.
+   Customer-facing private Pro RC/GA promotion is part of that same boundary:
+   after the `pulse-enterprise` Pro release workflow publishes private archives,
+   the private Docker image, and the paid-runtime proof packet, the operator must
+   run `scripts/promote_paid_runtime_release_packet.sh --release-dir <proof-packet-dir> --admin-token-file <explicit-token-file> --execute-live`
+   from `repos/pulse-pro` before sending customer instructions. That command is
+   the canonical live-broker promotion path because it validates the signed proof
+   packet, installs the exact manifest on `pulse-license`, runs the customer-path
+   live proof, and restores the previous remote manifest if the gate fails. GA
+   promotions also require `--allow-ga-prefix`.
    The repo-root VERSION file is part of the same governed boundary and must
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or

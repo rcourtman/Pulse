@@ -14,6 +14,16 @@ exists, is smoke-tested, and has its own customer-safe instructions.
 The public community container image remains a community delivery path and must
 not be described as including the paid Pro runtime.
 
+## 2026-05-07 Update
+
+The Docker deferral in this record is now superseded by the private Pulse Pro
+Docker image plane and the paid-runtime proof packet promotion gate. Current
+customer-facing private Pro RC/GA releases may use the private Pro archive and
+private Pro Docker image only through the license-gated download broker and only
+after `repos/pulse-pro/scripts/promote_paid_runtime_release_packet.sh` passes for
+the generated proof packet. Public GitHub release assets and
+`rcourtman/pulse` Docker images remain community builds.
+
 ## Evidence
 
 - `repos/pulse-pro/docs/migration/paid-v6-upgrade-runbook.md` records the
