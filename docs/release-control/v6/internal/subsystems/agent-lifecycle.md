@@ -1108,6 +1108,11 @@ Patrol finding chat handoffs follow the same ownership split: when
 resource, or action context, the backend-enforced `autonomous_mode:false`
 clamp is Assistant action-governance, not agent readiness, fleet command
 reachability, or enrollment health.
+If the same request also carries recognized Patrol product handoff context,
+resources, or action references, the API handler may merge only same-finding
+secondary model context after backend-refreshed finding context; those merged
+references still must not become agent enrollment, install, readiness, or
+fleet-command authority.
 Scoped Assistant handoffs from alert or incident surfaces may also send
 bounded `handoff_context`, `handoff_resources`, and Patrol assessment
 `handoff_actions` through `/api/ai/chat` without a `finding_id`;

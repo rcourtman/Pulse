@@ -1090,8 +1090,10 @@ structured `handoff_actions` through `frontend-modern/src/api/aiChat.ts` and
 user-authored message text, and the backend must clamp the exchange to
 approval-required mode whenever such scoped handoff context, resources, or
 action references are present. Patrol finding IDs remain stricter: when
-`finding_id` resolves, backend-refreshed durable Patrol context replaces
-browser-supplied handoff text.
+`finding_id` resolves, backend-refreshed durable Patrol context remains the
+canonical authority; the handler may merge only a recognized same-finding
+Patrol product handoff section as secondary model-only briefing, and it must
+drop mismatched resource/action references plus raw command payload lines.
 Direct alert-investigation runtime handoffs follow the same rule even when
 they bypass the chat drawer. `/api/ai/investigate-alert` must set
 `ai.ExecuteRequest.AutonomousMode` to false plus

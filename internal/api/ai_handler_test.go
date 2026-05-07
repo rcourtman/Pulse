@@ -879,6 +879,89 @@ func TestHandleChat_IncludesInvestigationRecordContext(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestHandleChat_MergesSafePatrolFindingRequestHandoffContext(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	detectedAt := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	store := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
+	store.AddFromAI(&unified.UnifiedFinding{
+		ID:                   "finding-123",
+		Source:               unified.SourceAIPatrol,
+		Severity:             unified.SeverityCritical,
+		Category:             unified.CategoryPerformance,
+		ResourceID:           "vm-100",
+		ResourceName:         "web-server",
+		ResourceType:         "vm",
+		Node:                 "pve-1",
+		Title:                "High CPU usage",
+		Description:          "CPU stayed above 95%.",
+		DetectedAt:           detectedAt,
+		LastSeenAt:           detectedAt.Add(2 * time.Minute),
+		InvestigationStatus:  "completed",
+		InvestigationOutcome: "fix_queued",
+		LoopState:            "awaiting_approval",
+	})
+	h.SetUnifiedStore(store)
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			assert.Equal(t, "finding-123", reqArg.FindingID)
+			assert.Contains(t, reqArg.HandoffContext, "[Operator Briefing]")
+			assert.Contains(t, reqArg.HandoffContext, "[Finding Context]")
+			assert.Contains(t, reqArg.HandoffContext, "[Product Handoff Context]")
+			assert.Contains(t, reqArg.HandoffContext, "[Patrol Finding Context]")
+			assert.Contains(t, reqArg.HandoffContext, "Source: Pulse Patrol finding handoff")
+			assert.Contains(t, reqArg.HandoffContext, "Finding ID: finding-123")
+			assert.Contains(t, reqArg.HandoffContext, "Dry-Run Posture: One service restart would be attempted.")
+			assert.Contains(t, reqArg.HandoffContext, "Operator Decision: Review approval approval-frontend before execution.")
+			assert.Contains(t, reqArg.HandoffContext, "Product Handoff Boundary: This product-originated Patrol handoff is secondary to backend-refreshed canonical finding context")
+			assert.NotContains(t, reqArg.HandoffContext, "Raw Command")
+			assert.NotContains(t, reqArg.HandoffContext, "systemctl restart workload.service")
+			assert.NotContains(t, reqArg.HandoffContext, "finding-other")
+			assert.Equal(t, []chat.HandoffResource{{
+				ID:   "vm-100",
+				Name: "web-server",
+				Type: "vm",
+				Node: "pve-1",
+			}}, reqArg.HandoffResources)
+			assert.Equal(t, []chat.HandoffAction{{
+				FindingID:              "finding-123",
+				ApprovalID:             "approval-frontend",
+				ApprovalStatus:         "pending",
+				ActionID:               "action-frontend",
+				ActionApprovalPolicy:   "admin",
+				ActionRequiresApproval: true,
+				ActionDryRunSummary:    "One service restart would be attempted.",
+				FixID:                  "fix-frontend",
+				Description:            "Restart the workload service",
+				RiskLevel:              "high",
+				Destructive:            true,
+				TargetResourceID:       "vm-100",
+				TargetResourceName:     "web-server",
+				TargetResourceType:     "vm",
+				TargetNode:             "pve-1",
+			}}, reqArg.HandoffActions)
+			if assert.NotNil(t, reqArg.AutonomousMode) {
+				assert.False(t, *reqArg.AutonomousMode)
+			}
+		})
+
+	body := `{"prompt":"What should I review?","finding_id":"finding-123","autonomous_mode":true,"handoff_context":"[Patrol Finding Context]\nSource: Pulse Patrol finding handoff\nFinding: High CPU usage\nFinding ID: finding-123\nSubject: web-server\nDry-Run Posture: One service restart would be attempted.\nOperator Decision: Review approval approval-frontend before execution.\nRaw Command: systemctl restart workload.service\nAction Preflight: systemctl restart workload.service","handoff_resources":[{"id":"vm-100","name":"web-server","type":"vm","node":"pve-1"},{"id":"storage-999","name":"unrelated","type":"storage","node":"pve-2"}],"handoff_actions":[{"finding_id":"finding-123","approval_id":"approval-frontend","approval_status":"pending","action_id":"action-frontend","action_approval_policy":"admin","action_requires_approval":true,"action_dry_run_summary":"One service restart would be attempted.","fix_id":"fix-frontend","description":"Restart the workload service","risk_level":"high","destructive":true,"target_resource_id":"vm-100","target_resource_name":"web-server","target_resource_type":"vm","target_node":"pve-1"},{"finding_id":"finding-other","approval_id":"approval-other","description":"Wrong finding"}]}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestHandleChat_RecoversLivePatrolApprovalForFindingHandoffAction(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)

@@ -1886,9 +1886,12 @@ references used to seed canonical approval and action-audit refresh. Frontend
 handoff builders may send these fields for owned alert, incident, or Patrol
 assessment context, but the backend must not persist them as user-authored
 message text and must treat them as explanation/review context only. When a
-Patrol `finding_id` resolves, backend-refreshed durable finding context replaces
-any browser-supplied handoff text or action references so the model cannot
-continue from stale or spoofed Patrol context.
+Patrol `finding_id` resolves, backend-refreshed durable finding context remains
+canonical; the handler may merge only recognized same-finding Patrol product
+handoff text and same-finding resource/action references as secondary
+model-only review context, while dropping mismatched references and raw command
+payload lines so the model cannot continue from stale or spoofed Patrol
+authority.
 Patrol finding handoffs are stricter than ordinary chat requests: when
 `finding_id` resolves to model-only Patrol briefing, resource, or action
 context, `internal/api/ai_handler.go` must clamp the request-local autonomous
@@ -3047,7 +3050,10 @@ Patrol approval, so visible and model-only handoffs stay consistent. Patrol's
 frontend Assistant drawer briefing must use that same operator frame for
 visible handoffs from findings, while the downstream chat
 service hydrates live resource state, timeline, and action audit context around
-that same handoff. Frontend Patrol handoff helpers may consume current pending
+that same handoff. Backend chat handling must treat matching frontend Patrol
+handoff context as secondary to durable finding context, not a replacement for
+server-refreshed approval, resource, or action authority. Frontend Patrol
+handoff helpers may consume current pending
 approval list payloads only as safe metadata for that visible briefing and any
    structured `handoff_actions`: approval ID, status, risk, request/expiry
    timestamps, target label, action ID, approval policy, plan expiry, and dry-run

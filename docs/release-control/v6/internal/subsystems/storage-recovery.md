@@ -403,6 +403,11 @@ bypass the API fail-closed execution gate.
     `finding_id` handoffs with model-only Patrol briefing, resource, or action
     context is Assistant action-governance, not a storage/recovery approval,
     recovery freshness, or restore-command signal.
+    If the resolved `finding_id` request also carries recognized same-finding
+    Patrol product handoff context, resources, or action references, the merged
+    model-only context remains secondary to backend-refreshed finding context
+    and must not become storage freshness, restore eligibility, recovery
+    execution authority, or a storage-local approval shortcut.
     Alert, incident, and Patrol assessment Assistant handoffs that send bounded
     model-only `handoff_context`, `handoff_resources`, or `handoff_actions`
     through `/api/ai/chat` without a `finding_id` stay on that same adjacent
