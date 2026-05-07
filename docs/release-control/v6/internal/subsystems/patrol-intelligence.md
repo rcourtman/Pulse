@@ -783,7 +783,9 @@ order. Approval-linked findings must follow that same ordering so multi-approval
 `Review` actions jump to the most urgent finding instead of an arbitrary one.
 Malformed or missing approval timestamps must sort after valid timestamps and
 must not produce non-deterministic comparator results in the shared urgency
-utility.
+utility. Patrol approval banners must apply the same fail-closed timestamp
+posture to visible countdown copy instead of rendering invalid math such as
+`NaN`.
 Patrol fix approvals also inherit the unified action-governance preflight
 contract: queued fixes must keep their plan-level dry-run availability, safety
 checks, verification steps, approval policy, and action id in the shared

@@ -87,4 +87,49 @@ describe('ApprovalBanner', () => {
 
     expect(onScrollToFinding).toHaveBeenCalledWith('finding-sooner');
   });
+
+  it('renders a deterministic countdown label for a valid single approval expiry', () => {
+    state.pendingApprovals = [approvalRequest({ expiresAt: '2026-03-01T00:06:00Z' })];
+
+    render(() => <ApprovalBanner />);
+
+    expect(screen.getByText('expires 6m 0s')).toBeInTheDocument();
+  });
+
+  it('fails closed instead of rendering NaN when a single approval expiry is malformed', () => {
+    state.pendingApprovals = [approvalRequest({ expiresAt: 'not-a-date' })];
+
+    render(() => <ApprovalBanner />);
+
+    expect(screen.getByText('expiry unavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
+
+  it('fails closed instead of rendering NaN when a single approval expiry is missing', () => {
+    state.pendingApprovals = [
+      approvalRequest({ expiresAt: undefined } as Partial<ApprovalRequest>),
+    ];
+
+    render(() => <ApprovalBanner />);
+
+    expect(screen.getByText('expiry unavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
 });
+
+function approvalRequest(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
+  return {
+    id: 'approval-single',
+    toolId: 'investigation_fix',
+    command: 'restart service',
+    targetType: 'host',
+    targetId: 'finding-single',
+    targetName: 'node-201',
+    context: 'Single approval',
+    riskLevel: 'high',
+    status: 'pending',
+    requestedAt: '2026-03-01T00:01:00Z',
+    expiresAt: '2026-03-01T00:05:00Z',
+    ...overrides,
+  };
+}

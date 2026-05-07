@@ -50,9 +50,13 @@ export function getApprovalRiskSortOrder(level?: string): number {
   return APPROVAL_RISK_SORT_ORDER[normalized] ?? APPROVAL_RISK_SORT_ORDER.unknown;
 }
 
-function getApprovalTimestampSortValue(value?: string | null): number {
+function parseApprovalTimestamp(value?: string | null): number | null {
   const parsed = Date.parse(value ?? '');
-  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getApprovalTimestampSortValue(value?: string | null): number {
+  return parseApprovalTimestamp(value) ?? Number.POSITIVE_INFINITY;
 }
 
 function compareApprovalTimestamps(a?: string | null, b?: string | null): number {
@@ -75,4 +79,17 @@ export function sortPendingApprovalsByUrgency<
 
     return compareApprovalTimestamps(a.requestedAt, b.requestedAt);
   });
+}
+
+export function getApprovalExpiryStatusLabel(expiresAt?: string | null, now = Date.now()): string {
+  const expiryTime = parseApprovalTimestamp(expiresAt);
+  if (expiryTime === null) return 'expiry unavailable';
+
+  const diff = expiryTime - now;
+  if (diff <= 0) return 'expired';
+
+  const mins = Math.floor(diff / 60000);
+  const secs = Math.floor((diff % 60000) / 1000);
+  if (mins > 0) return `expires ${mins}m ${secs}s`;
+  return `expires ${secs}s`;
 }

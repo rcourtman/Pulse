@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getApprovalExpiryStatusLabel,
   getApprovalRiskPresentation,
   sortPendingApprovalsByUrgency,
 } from '@/utils/approvalRiskPresentation';
@@ -89,6 +90,30 @@ describe('approvalRiskPresentation', () => {
       'missing-request',
       'malformed-request',
     ]);
+  });
+
+  it('formats valid approval expiry countdowns', () => {
+    expect(
+      getApprovalExpiryStatusLabel('2026-05-07T10:06:00Z', Date.parse('2026-05-07T10:00:00Z')),
+    ).toBe('expires 6m 0s');
+    expect(
+      getApprovalExpiryStatusLabel('2026-05-07T10:00:45Z', Date.parse('2026-05-07T10:00:00Z')),
+    ).toBe('expires 45s');
+  });
+
+  it('formats expired approval expiries without duplicate expiry wording', () => {
+    expect(
+      getApprovalExpiryStatusLabel('2026-05-07T09:59:00Z', Date.parse('2026-05-07T10:00:00Z')),
+    ).toBe('expired');
+  });
+
+  it('fails closed for malformed or missing approval expiry labels', () => {
+    expect(getApprovalExpiryStatusLabel('not-a-date', Date.parse('2026-05-07T10:00:00Z'))).toBe(
+      'expiry unavailable',
+    );
+    expect(getApprovalExpiryStatusLabel(undefined, Date.parse('2026-05-07T10:00:00Z'))).toBe(
+      'expiry unavailable',
+    );
   });
 });
 

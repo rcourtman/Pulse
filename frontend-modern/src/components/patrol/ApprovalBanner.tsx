@@ -12,7 +12,10 @@ import { Component, Show, createMemo, createSignal, createEffect, onCleanup } fr
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import type { ApprovalRequest } from '@/api/ai';
-import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
+import {
+  getApprovalExpiryStatusLabel,
+  getApprovalRiskPresentation,
+} from '@/utils/approvalRiskPresentation';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckIcon from 'lucide-solid/icons/check';
 import XIcon from 'lucide-solid/icons/x';
@@ -37,14 +40,8 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
 
   const firstApproval = createMemo(() => pending()[0] ?? null);
 
-  const timeRemaining = (expiresAt: string) => {
-    void tick(); // subscribe to tick signal for reactivity
-    const diff = new Date(expiresAt).getTime() - Date.now();
-    if (diff <= 0) return 'expired';
-    const mins = Math.floor(diff / 60000);
-    const secs = Math.floor((diff % 60000) / 1000);
-    if (mins > 0) return `${mins}m ${secs}s`;
-    return `${secs}s`;
+  const expiryStatusLabel = (expiresAt?: string | null) => {
+    return getApprovalExpiryStatusLabel(expiresAt, tick());
   };
 
   const handleApprove = async (approval: ApprovalRequest) => {
@@ -106,7 +103,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                     {firstApprovalRisk()!.label} risk
                   </span>
                   <span class="text-xs text-amber-700 dark:text-amber-300">
-                    expires {timeRemaining(firstApproval()!.expiresAt)}
+                    {expiryStatusLabel(firstApproval()!.expiresAt)}
                   </span>
                 </div>
                 <p
