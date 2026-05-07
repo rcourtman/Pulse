@@ -1049,6 +1049,9 @@ that mention the Infrastructure settings destination now consume
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
 canonical `Settings → Infrastructure` label and source-strategy copy. Shared
 primitives must not fork that string or revive removed nested route labels.
+The shared Assistant drawer owns source-named approval banners for governed
+handoffs. Patrol handoffs render as Patrol, and alert plus alert incident
+timeline handoffs render as alert investigations rather than dashboard briefs.
 
 `SettingsTab` no longer includes `infrastructure-connections` or
 `infrastructure-install`. The single `infrastructure-systems` entry in

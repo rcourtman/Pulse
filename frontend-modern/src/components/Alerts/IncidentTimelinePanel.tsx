@@ -2,6 +2,7 @@ import { Show, For, createMemo, type Accessor } from 'solid-js';
 import type { Incident } from '@/types/api';
 import { filterIncidentEvents } from '@/features/alerts/types';
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
+import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import {
   getAlertTimelineEmptyState,
@@ -49,18 +50,23 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
       <Show when={!props.loading && timeline()}>
         {(loadedTimeline) => (
           <div class="space-y-3">
-            <div class={getAlertIncidentTimelineMetaRowClass()}>
-              <span class={getAlertIncidentTimelineHeadingClass()}>Incident</span>
-              <span>{loadedTimeline().status}</span>
-              <Show when={loadedTimeline().acknowledged}>
-                <span class={getAlertIncidentAcknowledgedBadgeClass()}>acknowledged</span>
-              </Show>
-              <Show when={loadedTimeline().openedAt}>
-                <span>opened {new Date(loadedTimeline().openedAt).toLocaleString()}</span>
-              </Show>
-              <Show when={loadedTimeline().closedAt}>
-                <span>closed {new Date(loadedTimeline().closedAt as string).toLocaleString()}</span>
-              </Show>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div class={getAlertIncidentTimelineMetaRowClass()}>
+                <span class={getAlertIncidentTimelineHeadingClass()}>Incident</span>
+                <span>{loadedTimeline().status}</span>
+                <Show when={loadedTimeline().acknowledged}>
+                  <span class={getAlertIncidentAcknowledgedBadgeClass()}>acknowledged</span>
+                </Show>
+                <Show when={loadedTimeline().openedAt}>
+                  <span>opened {new Date(loadedTimeline().openedAt).toLocaleString()}</span>
+                </Show>
+                <Show when={loadedTimeline().closedAt}>
+                  <span>
+                    closed {new Date(loadedTimeline().closedAt as string).toLocaleString()}
+                  </span>
+                </Show>
+              </div>
+              <IncidentAssistantHandoffButton incident={loadedTimeline()} />
             </div>
             <Show when={events().length > 0}>
               <IncidentEventFilters

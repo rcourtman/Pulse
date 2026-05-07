@@ -1,8 +1,9 @@
-import { render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertResourceIncidentsPanel } from '../AlertResourceIncidentsPanel';
+import { aiChatStore } from '@/stores/aiChat';
 
 vi.mock('@solidjs/router', () => ({
   A: (props: { href: string; children?: JSX.Element; [key: string]: unknown }) => (
@@ -13,36 +14,46 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 describe('AlertResourceIncidentsPanel', () => {
+  afterEach(() => {
+    aiChatStore.close();
+    aiChatStore.clearAllContext();
+    aiChatStore.setEnabled(false);
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
   it('surfaces canonical investigation handoff links for TrueNAS resources', () => {
     render(() => (
       <AlertResourceIncidentsPanel
-        state={{
-          resourceIncidentPanel: () => ({
-            resourceId: 'truenas-main',
-            resourceName: 'TrueNAS Main',
-          }),
-          resourceIncidents: () => ({
-            'truenas-main': [
-              {
-                id: 'incident-1',
-                alertType: 'Storage Health',
-                level: 'critical',
-                status: 'open',
-                acknowledged: false,
-                openedAt: '2026-03-30T09:00:00Z',
-                message: 'Pool tank is DEGRADED',
-                events: [],
-              },
-            ],
-          }),
-          resourceIncidentLoading: () => ({ 'truenas-main': false }),
-          expandedResourceIncidentIds: () => new Set<string>(),
-          resourceIncidentEventFilters: () => new Set<string>(['opened']),
-          setResourceIncidentEventFilters: vi.fn(),
-          refreshResourceIncidentPanel: vi.fn(),
-          setResourceIncidentPanel: vi.fn(),
-          toggleResourceIncidentDetails: vi.fn(),
-        } as any}
+        state={
+          {
+            resourceIncidentPanel: () => ({
+              resourceId: 'truenas-main',
+              resourceName: 'TrueNAS Main',
+            }),
+            resourceIncidents: () => ({
+              'truenas-main': [
+                {
+                  id: 'incident-1',
+                  alertType: 'Storage Health',
+                  level: 'critical',
+                  status: 'open',
+                  acknowledged: false,
+                  openedAt: '2026-03-30T09:00:00Z',
+                  message: 'Pool tank is DEGRADED',
+                  events: [],
+                },
+              ],
+            }),
+            resourceIncidentLoading: () => ({ 'truenas-main': false }),
+            expandedResourceIncidentIds: () => new Set<string>(),
+            resourceIncidentEventFilters: () => new Set<string>(['opened']),
+            setResourceIncidentEventFilters: vi.fn(),
+            refreshResourceIncidentPanel: vi.fn(),
+            setResourceIncidentPanel: vi.fn(),
+            toggleResourceIncidentDetails: vi.fn(),
+          } as any
+        }
         getResource={(resourceId) =>
           resourceId === 'truenas-main'
             ? ({
@@ -67,15 +78,87 @@ describe('AlertResourceIncidentsPanel', () => {
     ).toHaveAttribute('href', '/infrastructure?resource=truenas-main');
     expect(
       screen.getByRole('link', { name: 'Open related workloads for TrueNAS Main' }),
-    ).toHaveAttribute(
-      'href',
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main',
-    );
+    ).toHaveAttribute('href', '/workloads?type=app-container&platform=truenas&agent=truenas-main');
     expect(
       screen.getByRole('link', { name: 'Open related storage for TrueNAS Main' }),
     ).toHaveAttribute('href', '/storage?source=truenas&node=truenas-main');
     expect(
       screen.getByRole('link', { name: 'Open related recovery for TrueNAS Main' }),
     ).toHaveAttribute('href', '/recovery?platform=truenas&node=truenas-main');
+  });
+
+  it('opens Assistant from a resource incident without carrying raw command details', () => {
+    const openWithPromptSpy = vi.spyOn(aiChatStore, 'openWithPrompt');
+    aiChatStore.setEnabled(true);
+
+    render(() => (
+      <AlertResourceIncidentsPanel
+        state={
+          {
+            resourceIncidentPanel: () => ({
+              resourceId: 'truenas-main',
+              resourceName: 'TrueNAS Main',
+            }),
+            resourceIncidents: () => ({
+              'truenas-main': [
+                {
+                  id: 'incident-1',
+                  alertIdentifier: 'storage:tank::zfs-pool-state',
+                  alertType: 'zfs-pool-state',
+                  level: 'critical',
+                  resourceId: 'storage:tank',
+                  resourceName: 'tank',
+                  resourceType: 'storage',
+                  status: 'open',
+                  acknowledged: false,
+                  openedAt: '2026-03-30T09:00:00Z',
+                  message: 'Pool tank is DEGRADED',
+                  events: [
+                    {
+                      id: 'event-1',
+                      type: 'command',
+                      timestamp: '2026-03-30T09:01:00Z',
+                      summary: 'zpool clear tank',
+                      details: {
+                        command: 'zpool clear tank',
+                        output_excerpt: 'secret-output',
+                      },
+                    },
+                  ],
+                },
+              ],
+            }),
+            resourceIncidentLoading: () => ({ 'truenas-main': false }),
+            expandedResourceIncidentIds: () => new Set<string>(),
+            resourceIncidentEventFilters: () => new Set<string>(['command']),
+            setResourceIncidentEventFilters: vi.fn(),
+            refreshResourceIncidentPanel: vi.fn(),
+            setResourceIncidentPanel: vi.fn(),
+            toggleResourceIncidentDetails: vi.fn(),
+          } as any
+        }
+        getResource={() => undefined}
+      />
+    ));
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Discuss incident incident-1 with Pulse Assistant',
+      }),
+    );
+
+    expect(openWithPromptSpy).toHaveBeenCalledTimes(1);
+    const [, context] = openWithPromptSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(context).toMatchObject({
+      targetType: 'storage',
+      targetId: 'storage:tank',
+      autonomousMode: false,
+      briefing: {
+        sourceLabel: 'Pulse Alerts',
+        title: 'Incident timeline attached',
+      },
+    });
+    expect(JSON.stringify(context)).not.toContain('zpool clear tank');
+    expect(JSON.stringify(context)).not.toContain('secret-output');
   });
 });

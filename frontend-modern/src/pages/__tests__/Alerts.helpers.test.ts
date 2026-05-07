@@ -19,6 +19,9 @@ import alertHistoryTableAlertRowSource from '@/features/alerts/AlertHistoryTable
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertResourceIncidentsPanelSource from '@/features/alerts/AlertResourceIncidentsPanel.tsx?raw';
+import incidentAssistantHandoffButtonSource from '@/components/Alerts/IncidentAssistantHandoffButton.tsx?raw';
+import incidentAssistantHandoffModelSource from '@/components/Alerts/incidentAssistantHandoffModel.ts?raw';
+import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
 import alertResourceIncidentsStateSource from '@/features/alerts/useAlertResourceIncidentsState.ts?raw';
 import alertHistoryModelSource from '@/features/alerts/alertHistoryModel.ts?raw';
@@ -466,6 +469,14 @@ describe('tab path helpers', () => {
     expect(alertResourceIncidentsPanelSource).not.toContain('buildInfrastructureResourceLink');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildResourceSurfaceLinksForResource');
     expect(alertResourceIncidentsPanelSource).toContain('{link.compactLabel}');
+    expect(alertResourceIncidentsPanelSource).toContain('IncidentAssistantHandoffButton');
+    expect(incidentTimelinePanelSource).toContain('IncidentAssistantHandoffButton');
+    expect(incidentAssistantHandoffButtonSource).toContain('buildAlertIncidentAssistantHandoff');
+    expect(incidentAssistantHandoffButtonSource).toContain('aiChatStore.openWithPrompt');
+    expect(incidentAssistantHandoffModelSource).toContain('autonomousMode: false');
+    expect(incidentAssistantHandoffModelSource).toContain('Command event recorded');
+    expect(incidentAssistantHandoffModelSource).not.toContain('details.command');
+    expect(incidentAssistantHandoffModelSource).not.toContain('output_excerpt');
     expect(alertHistoryTableSectionSource).toContain('export function AlertHistoryTableSection');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableAlertRow');

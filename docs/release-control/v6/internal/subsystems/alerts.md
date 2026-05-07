@@ -81,6 +81,8 @@ operator-facing alert routing behavior for live runtime alerts.
 59. `internal/alerts/active_cleanup.go`
 60. `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`
 61. `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`
+62. `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
+63. `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`
 
 ## Shared Boundaries
 
@@ -108,9 +110,14 @@ operator-facing alert routing behavior for live runtime alerts.
    `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` and
    `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`;
    these handoffs must preserve alert context, force request-scoped approval
-   mode, attach a visible alert-owned Assistant drawer briefing, and must not
-   instruct the Assistant to execute diagnostics or remediation without operator
-   approval.
+   mode, and render a visible Alerts-owned briefing in the Assistant drawer
+   without transferring raw command payloads.
+8. Add or change Pulse Assistant incident timeline handoffs through
+   `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
+   and `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`;
+   these handoffs must preserve sanitized incident facts and timeline event
+   summaries, force request-scoped approval mode, and keep raw command/output
+   details in the incident or approval surface rather than the chat handoff.
 
 ## Forbidden Paths
 
@@ -697,8 +704,11 @@ That shared timeline runtime state now routes through
 owns incident timeline fetch, expansion state, note-save flow, and shared
 event-filter state for both `frontend-modern/src/features/alerts/OverviewTab.tsx`
 and `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`. Future incident
-timeline control flow should land in that feature hook instead of being
-forked back into either alert surface.
+timeline control flow should land in that feature hook instead of being forked
+back into either alert surface. Alert incident timeline handoffs into Pulse
+Assistant are now owned by the Alerts incident handoff model and carry only
+sanitized incident facts plus event summaries; raw command and output details
+stay in the incident timeline or approval surface.
 
 Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`

@@ -2,6 +2,7 @@ import { A } from '@solidjs/router';
 import { For, Show } from 'solid-js';
 
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
+import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { Card } from '@/components/shared/Card';
 import {
@@ -130,9 +131,7 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
               <Show
                 when={incidents().length > 0}
                 fallback={
-                  <p class="mt-2 text-xs text-muted">
-                    {getAlertResourceIncidentEmptyState().text}
-                  </p>
+                  <p class="mt-2 text-xs text-muted">{getAlertResourceIncidentEmptyState().text}</p>
                 }
               >
                 <div class="mt-3 space-y-3">
@@ -164,31 +163,32 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
 
                       return (
                         <div class={getAlertResourceIncidentCardClass()}>
-                          <div class={getAlertIncidentTimelineMetaRowClass()}>
-                            <span class={getAlertIncidentTimelineHeadingClass()}>
-                              {incident.alertType}
-                            </span>
-                            <span class={getAlertIncidentLevelBadgeClass(incident.level)}>
-                              {incident.level}
-                            </span>
-                            <span class={statusPresentation.className}>
-                              {statusPresentation.label}
-                            </span>
-                            <span>opened {new Date(incident.openedAt).toLocaleString()}</span>
-                            <Show when={incident.closedAt}>
-                              <span>
-                                closed {new Date(incident.closedAt as string).toLocaleString()}
+                          <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div class={getAlertIncidentTimelineMetaRowClass()}>
+                              <span class={getAlertIncidentTimelineHeadingClass()}>
+                                {incident.alertType}
                               </span>
-                            </Show>
+                              <span class={getAlertIncidentLevelBadgeClass(incident.level)}>
+                                {incident.level}
+                              </span>
+                              <span class={statusPresentation.className}>
+                                {statusPresentation.label}
+                              </span>
+                              <span>opened {new Date(incident.openedAt).toLocaleString()}</span>
+                              <Show when={incident.closedAt}>
+                                <span>
+                                  closed {new Date(incident.closedAt as string).toLocaleString()}
+                                </span>
+                              </Show>
+                            </div>
+                            <IncidentAssistantHandoffButton incident={incident} />
                           </div>
                           <Show when={incident.message}>
                             <p class={getAlertIncidentTimelineOutputClass()}>{incident.message}</p>
                           </Show>
                           <Show when={incident.acknowledged && incident.ackUser}>
                             <p class={getAlertIncidentTimelineOutputClass()}>
-                              {getAlertResourceIncidentAcknowledgedByLabel(
-                                incident.ackUser ?? '',
-                              )}
+                              {getAlertResourceIncidentAcknowledgedByLabel(incident.ackUser ?? '')}
                             </p>
                           </Show>
                           <Show when={events.length > 0}>

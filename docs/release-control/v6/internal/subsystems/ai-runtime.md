@@ -72,7 +72,10 @@ runtime cost control, and shared AI transport surfaces.
    accessible-name safe: labelled icon SVGs may remain meaningful when rendered
    standalone, but `frontend-modern/src/AppLayout.tsx` must treat them as
    decorative inside tabs so the announced tab name comes from product chrome
-   and meaningful badge text.
+   and meaningful badge text rather than icon title duplication. Scoped
+   approval handoffs sourced from Patrol, active alerts, or alert incident
+   timelines must render as source-named investigation handoffs in the drawer
+   instead of generic dashboard briefs.
 9. Add or change public AI overview wording through `docs/AI.md`; it may
    describe Assistant and Patrol capabilities, but it must not revive legacy
    commercial shorthand such as `incident memory` as a current product promise.
