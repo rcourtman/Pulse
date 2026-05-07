@@ -112,6 +112,7 @@ func TestHydrateHandoffActionFromApprovalCopiesSafeLifecycleMetadata(t *testing.
 	action := HandoffAction{FindingID: "finding-123"}
 	HydrateHandoffActionFromApproval(&action, &approval.ApprovalRequest{
 		ID:          "approval-123",
+		ToolID:      "investigation_fix",
 		Command:     "systemctl restart workload.service",
 		TargetType:  "vm",
 		TargetID:    "vm-100",
@@ -137,6 +138,9 @@ func TestHydrateHandoffActionFromApprovalCopiesSafeLifecycleMetadata(t *testing.
 
 	if action.ApprovalID != "approval-123" || action.ApprovalStatus != "approved" || !action.ApprovalConsumed {
 		t.Fatalf("approval lifecycle was not hydrated: %#v", action)
+	}
+	if action.ActionRequestedBy != approval.RequesterPulsePatrol {
+		t.Fatalf("approval requester identity was not hydrated: %#v", action)
 	}
 	if action.ApprovalRequestedAt != requestedAt.Format(time.RFC3339) ||
 		action.ApprovalExpiresAt != expiresAt.Format(time.RFC3339) ||

@@ -663,7 +663,10 @@ of creating Patrol-only execution context or collapsing Patrol proposals into
 generic Assistant-origin actions. The approval record itself must also persist
 and expose that requester identity so `/api/ai/approvals` and Assistant
 handoffs preserve Patrol provenance before later action-audit hydration refreshes
-the current action state.
+the current action state. Backend chat refresh of a Patrol finding handoff must
+hydrate the same requester identity directly from the live approval record, so
+Assistant does not depend on browser-authored metadata to distinguish
+Patrol-origin proposals from generic Assistant actions.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`

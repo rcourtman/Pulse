@@ -1385,6 +1385,9 @@ func HydrateHandoffActionFromApproval(action *HandoffAction, req *approval.Appro
 		action.ApprovalDecidedAt = formatHandoffActionTime(*req.DecidedAt)
 	}
 	action.ApprovalConsumed = req.Consumed
+	if requestedBy := strings.TrimSpace(approval.RequesterForRequest(req)); requestedBy != "" {
+		action.ActionRequestedBy = requestedBy
+	}
 	if strings.TrimSpace(action.RiskLevel) == "" {
 		action.RiskLevel = strings.TrimSpace(string(req.RiskLevel))
 	}

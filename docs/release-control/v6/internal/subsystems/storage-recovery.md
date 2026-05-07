@@ -1128,6 +1128,9 @@ incident-adjacent context, including the requester identity that distinguishes
 Patrol-origin proposals from generic Assistant work, but they must not treat the
 pending action state, approval policy, requester, or preflight posture as
 recovery proof or storage-local execution permission.
+Backend-refreshed Assistant handoffs may recover the same requester identity
+from a live approval record before action audit hydration, but storage and
+recovery still consume it only as incident-adjacent provenance.
 That same storage ownership also includes the shared storage-source presentation
 contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and

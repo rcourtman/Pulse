@@ -290,8 +290,9 @@ profile and assignment columns, but embedded table framing must route through
    Patrol queued-fix approvals may now seed the shared action-audit store with
    planned and pending lifecycle evidence, but lifecycle surfaces must treat
    those records and their persisted requester identity as action-governance
-   context only; they do not create install, enrollment, assignment, or
-   fleet-command authority.
+   context only. Backend-refreshed Assistant handoffs may also carry that
+   requester identity as provenance, but it still does not create install,
+   enrollment, assignment, or fleet-command authority.
    Lifecycle flows must not reintroduce anonymous bootstrap identity,
    tenant-local commercial-owner surrogates, or fake activation records when
    they traverse those shared handlers. They also must not infer tenant

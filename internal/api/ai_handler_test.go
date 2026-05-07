@@ -1349,6 +1349,7 @@ func TestHandleChat_RecoversLivePatrolApprovalForFindingHandoffAction(t *testing
 				ApprovalRequestedAt:    approvalRequestedAt,
 				ApprovalExpiresAt:      approvalExpiresAt,
 				ActionID:               "action-live",
+				ActionRequestedBy:      approval.RequesterPulsePatrol,
 				ActionApprovalPolicy:   "admin",
 				ActionRequiresApproval: true,
 				ActionPlanExpiresAt:    actionPlanExpiresAt,
@@ -1365,8 +1366,8 @@ func TestHandleChat_RecoversLivePatrolApprovalForFindingHandoffAction(t *testing
 				TargetResourceType:     "vm",
 				TargetNode:             "pve-1",
 			}}, reqArg.HandoffActions)
-			assert.Contains(t, reqArg.HandoffContext, "Operator Decision: review governed approval approval-live before execution; approval status pending; approval expires "+approvalExpiresAt+"; action action-live; approval policy admin; plan expires "+actionPlanExpiresAt+"; proposed fix fix-123; risk high; destructive true")
-			assert.Contains(t, reqArg.HandoffContext, "Action Posture: approval approval-live; approval status pending; approval requested "+approvalRequestedAt+"; approval expires "+approvalExpiresAt+"; action action-live; approval policy admin; action requires approval true; plan expires "+actionPlanExpiresAt+"; proposed fix fix-123; risk high; destructive true")
+			assert.Contains(t, reqArg.HandoffContext, "Operator Decision: review governed approval approval-live before execution; approval status pending; approval expires "+approvalExpiresAt+"; action action-live; requested by pulse_patrol; approval policy admin; plan expires "+actionPlanExpiresAt+"; proposed fix fix-123; risk high; destructive true")
+			assert.Contains(t, reqArg.HandoffContext, "Action Posture: approval approval-live; approval status pending; approval requested "+approvalRequestedAt+"; approval expires "+approvalExpiresAt+"; action action-live; requested by pulse_patrol; approval policy admin; action requires approval true; plan expires "+actionPlanExpiresAt+"; proposed fix fix-123; risk high; destructive true")
 			assert.NotContains(t, reqArg.HandoffContext, "Action Posture: proposed fix fix-123; risk medium")
 			assert.NotContains(t, reqArg.HandoffContext, "systemctl restart workload.service")
 			assert.NotContains(t, fmt.Sprintf("%#v", reqArg.HandoffActions), "systemctl restart workload.service")

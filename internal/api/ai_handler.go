@@ -1919,6 +1919,9 @@ func unifiedFindingHandoffActionOperatorDecision(action chat.HandoffAction) stri
 	if state := strings.TrimSpace(action.ActionState); state != "" {
 		parts = append(parts, "action state "+state)
 	}
+	if requestedBy := strings.TrimSpace(action.ActionRequestedBy); requestedBy != "" {
+		parts = append(parts, "requested by "+requestedBy)
+	}
 	if policy := strings.TrimSpace(action.ActionApprovalPolicy); policy != "" {
 		parts = append(parts, "approval policy "+policy)
 	}
@@ -1964,6 +1967,9 @@ func unifiedFindingHandoffActionPosture(action chat.HandoffAction) string {
 	}
 	if state := strings.TrimSpace(action.ActionState); state != "" {
 		parts = append(parts, "action state "+state)
+	}
+	if requestedBy := strings.TrimSpace(action.ActionRequestedBy); requestedBy != "" {
+		parts = append(parts, "requested by "+requestedBy)
 	}
 	if policy := strings.TrimSpace(action.ActionApprovalPolicy); policy != "" {
 		parts = append(parts, "approval policy "+policy)

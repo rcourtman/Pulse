@@ -442,7 +442,10 @@ the canonical monitored-system blocked payload.
    Patrol-origin proposals as generic Assistant-origin actions. `/api/ai/approvals`
    must expose the persisted `requestedBy` identity so frontend Assistant
    handoffs can carry Patrol provenance before the chat runtime refreshes the
-   current action state from action audit.
+   current action state from action audit. Backend `/api/ai/chat` refresh of
+   a finding handoff must also recover that requester identity from the live
+   approval record when action audit has not yet hydrated the current action
+   state.
    Action execution is API-owned as the next explicit contract:
    `POST /api/actions/{id}/execute` may only start execution for an approved
    action or an approval-free executable plan, must atomically persist the
@@ -3156,7 +3159,7 @@ visible handoffs from findings, while the downstream chat
 service hydrates live resource state, timeline, and action audit context around
 that same handoff. Backend chat handling must treat matching frontend Patrol
 handoff context as secondary to durable finding context, not a replacement for
-server-refreshed approval, resource, or action authority. Frontend Patrol
+server-refreshed approval, resource, action, or requester authority. Frontend Patrol
 handoff helpers may consume current pending
 approval list payloads only as safe metadata for that visible briefing and any
    structured `handoff_actions`: approval ID, status, risk, request/expiry
