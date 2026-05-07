@@ -76,7 +76,10 @@ runtime cost control, and shared AI transport surfaces.
    and meaningful badge text rather than icon title duplication. Scoped
    approval handoffs sourced from Patrol, active alerts, or alert incident
    timelines must render as source-named investigation handoffs in the drawer
-   instead of generic dashboard briefs.
+   instead of generic dashboard briefs. Source-owned handoff helpers may attach
+   bounded suggested prompts to that briefing, but those prompts are only input
+   starters; they must not auto-submit, bypass approval mode, or carry raw
+   command payloads.
 9. Add or change public AI overview wording through `docs/AI.md`; it may
    describe Assistant and Patrol capabilities, but it must not revive legacy
    commercial shorthand such as `incident memory` as a current product promise.

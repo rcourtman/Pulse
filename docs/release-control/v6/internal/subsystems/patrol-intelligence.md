@@ -194,11 +194,11 @@ Patrol-specific presentation helpers.
    The summary action may pass the current assessment title, health score,
    verification recency, latest run, secondary investigation context, bounded
    recent-change and learned-correlation evidence, active-finding summaries,
-   and structured resource references as model-only context. It must force
-   request-local approval-required mode, keep raw command and approval payloads
-   out of prompt and drawer copy, and frame Assistant as explanation,
-   prioritization, and safe next-step review rather than a generic reactive chat
-   box.
+   structured resource references, and safe source-owned suggested prompts as
+   model-only context. It must force request-local approval-required mode, keep
+   raw command and approval payloads out of prompt and drawer copy, and frame
+   Assistant as explanation, prioritization, and safe next-step review rather
+   than a generic reactive chat box.
 
 ## Current State
 
@@ -252,10 +252,10 @@ opens Assistant through
 `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`, which
 packages the current Patrol assessment, verification posture, latest run,
 secondary investigation context, bounded recent-change and learned-correlation
-evidence, bounded active-finding summaries, and deduped resource references as
-model-only context while forcing `autonomousMode:false` and summarizing
-proposed-fix command-bearing records and command-bearing change events without
-raw command text.
+evidence, bounded active-finding summaries, source-owned suggested prompts, and
+deduped resource references as model-only context while forcing
+`autonomousMode:false` and summarizing proposed-fix command-bearing records and
+command-bearing change events without raw command text.
 That active-runtime label must stay operational rather than verdict-like: the
 header chip should communicate that Patrol is enabled or available, not imply
 that infrastructure health is currently good merely because the runtime is on.

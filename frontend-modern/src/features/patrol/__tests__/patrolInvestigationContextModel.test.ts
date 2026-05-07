@@ -262,6 +262,11 @@ describe('patrolInvestigationContextModel', () => {
       title: 'Patrol assessment attached',
       subject: 'Issues detected',
       safetyNote: 'Diagnostics and remediation require governed approval.',
+      suggestedPrompts: [
+        'Prioritize findings and safest next step',
+        'Explain recent changes and correlations',
+        'Summarize governed remediation risks',
+      ],
     });
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });

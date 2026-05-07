@@ -434,8 +434,8 @@ the canonical monitored-system blocked payload.
    and that same Patrol investigation-context owner, so the current Patrol
    assessment summary may open Assistant with bounded model-only assessment,
    verification, latest-run, supporting-context evidence, active-finding, and
-   resource reference context instead of pasting page-local UI text or raw
-   command payloads into chat
+   resource reference context plus safe source-owned suggested prompts instead
+   of pasting page-local UI text or raw command payloads into chat
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,

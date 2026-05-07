@@ -817,7 +817,10 @@ frontend primitive boundary.
     summary prompt builder. The drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
     feature-owned helpers must provide the source labels, attention reason,
-    evidence summaries, operator-decision copy, action copy, and safety note.
+    evidence summaries, operator-decision copy, action copy, safety note, and
+    any bounded suggested prompts. Suggested prompts may fill the drawer input
+    for the operator, but they must not submit automatically or change the
+    request-local approval-required mode.
     When those feature-owned helpers attach backend model-only context, the
     drawer store may carry only bounded handoff text and structured resource
     references for the shared chat transport; approval, lifecycle, and command

@@ -4,7 +4,10 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { aiChatStore } from '@/stores/aiChat';
 import { eventBus } from '@/stores/events';
 
-const aiChatSource = readFileSync(resolve(process.cwd(), 'src/components/AI/Chat/index.tsx'), 'utf8');
+const aiChatSource = readFileSync(
+  resolve(process.cwd(), 'src/components/AI/Chat/index.tsx'),
+  'utf8',
+);
 
 describe('aiChatStore', () => {
   beforeEach(() => {
@@ -84,7 +87,10 @@ describe('aiChatStore', () => {
   });
 
   it('prefers guestName, then name, then target id for target context labels', () => {
-    aiChatStore.setTargetContext('vm', 'vm-101', { guestName: 'guest-first', name: 'ignored-name' });
+    aiChatStore.setTargetContext('vm', 'vm-101', {
+      guestName: 'guest-first',
+      name: 'ignored-name',
+    });
     expect(aiChatStore.contextItems[0].name).toBe('guest-first');
 
     aiChatStore.openForTarget('agent', 'agent-1', { name: 'node-name' });
@@ -101,12 +107,16 @@ describe('aiChatStore', () => {
       briefing: {
         sourceLabel: 'Pulse Patrol',
         title: 'Investigation record attached',
+        suggestedPrompts: ['Explain recent changes and correlations'],
       },
     });
     expect(aiChatStore.isOpen).toBe(true);
     expect(aiChatStore.context.initialPrompt).toBe('hello');
     expect(aiChatStore.context.targetId).toBe('vm-101');
     expect(aiChatStore.context.briefing?.title).toBe('Investigation record attached');
+    expect(aiChatStore.context.briefing?.suggestedPrompts).toEqual([
+      'Explain recent changes and correlations',
+    ]);
   });
 
   it('preserves scoped autonomous-mode overrides for pre-filled prompts', () => {

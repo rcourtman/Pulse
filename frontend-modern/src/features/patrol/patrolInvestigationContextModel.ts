@@ -170,6 +170,7 @@ const MAX_ASSESSMENT_FINDINGS = 5;
 const MAX_ASSESSMENT_RECENT_CHANGES = 3;
 const MAX_ASSESSMENT_CORRELATIONS = 3;
 const MAX_ASSESSMENT_RESOURCES = 8;
+const MAX_ASSESSMENT_SUGGESTED_PROMPTS = 3;
 
 export function buildPatrolInvestigationContextSummary(
   input: PatrolInvestigationContextSummaryInput,
@@ -341,7 +342,66 @@ function buildPatrolAssessmentAssistantBriefing(
     evidence: [...findingEvidence.slice(0, 3), ...supportingEvidence].slice(0, 5),
     actionLabel: 'Discuss Patrol assessment',
     safetyNote: 'Diagnostics and remediation require governed approval.',
+    suggestedPrompts: buildPatrolAssessmentSuggestedPrompts(input, {
+      findings,
+      recentChanges,
+      correlations,
+    }),
   };
+}
+
+function buildPatrolAssessmentSuggestedPrompts(
+  input: PatrolAssessmentAssistantHandoffInput,
+  normalized: {
+    findings: PatrolAssessmentAssistantFindingInput[];
+    recentChanges: ResourceChange[];
+    correlations: ResourceCorrelation[];
+  },
+): string[] {
+  const prompts: string[] = [];
+  const activeFindingCount = normalizeNonNegativeCount(input.activeFindings?.length);
+  const hasSupportingEvidence =
+    normalized.recentChanges.length > 0 || normalized.correlations.length > 0;
+  const hasGovernedAction = normalized.findings.some(assessmentFindingHasGovernedAction);
+
+  if (activeFindingCount > 0) {
+    prompts.push('Prioritize findings and safest next step');
+  } else {
+    prompts.push('Explain current health and what to watch');
+  }
+
+  if (hasSupportingEvidence) {
+    prompts.push('Explain recent changes and correlations');
+  }
+
+  if (hasGovernedAction) {
+    prompts.push('Summarize governed remediation risks');
+  } else if (activeFindingCount > 0) {
+    prompts.push('List evidence to verify before action');
+  } else if (hasSupportingEvidence) {
+    prompts.push('Identify early warning signals');
+  }
+
+  return Array.from(new Set(prompts.map(normalizeText).filter(isNonEmptyString))).slice(
+    0,
+    MAX_ASSESSMENT_SUGGESTED_PROMPTS,
+  );
+}
+
+function assessmentFindingHasGovernedAction(
+  finding: PatrolAssessmentAssistantFindingInput,
+): boolean {
+  if (
+    patrolAssistantFindingHandoffRequiresApprovalMode({
+      investigationOutcome: finding.investigationOutcome,
+      investigationRecord: finding.investigationRecord,
+    })
+  ) {
+    return true;
+  }
+
+  const loopState = normalizeText(finding.loopState).toLowerCase();
+  return loopState.includes('approval') || loopState.includes('remediation');
 }
 
 function buildPatrolAssessmentAssistantModelContext(

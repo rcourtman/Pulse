@@ -314,6 +314,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const contextBriefing = createMemo(() => aiChatStore.context.briefing);
   const contextBriefingEvidence = createMemo(() => contextBriefing()?.evidence ?? []);
   const contextBriefingDetails = createMemo(() => contextBriefing()?.detailLines ?? []);
+  const contextBriefingSuggestedPrompts = createMemo(
+    () => contextBriefing()?.suggestedPrompts ?? [],
+  );
   const scopedApprovalHandoffLabel = createMemo(() => {
     const source = contextBriefing()?.sourceLabel?.toLowerCase() || '';
     if (source.includes('patrol')) return 'this Patrol handoff';
@@ -347,6 +350,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     return { type: 'thinking', text: 'Thinking...' };
   });
+
+  const handleContextBriefingPrompt = (prompt: string) => {
+    setInput(prompt);
+    setMentionActive(false);
+    setMentionQuery('');
+    queueMicrotask(() => textareaRef?.focus());
+  };
 
   createEffect(() => {
     if (!isOpen()) {
@@ -1235,6 +1245,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <span class="rounded border border-border bg-surface-alt px-2 py-1 text-[11px] text-muted">
                         {item}
                       </span>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              <Show when={contextBriefingSuggestedPrompts().length > 0}>
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                  <For each={contextBriefingSuggestedPrompts()}>
+                    {(prompt) => (
+                      <button
+                        type="button"
+                        onClick={() => handleContextBriefingPrompt(prompt)}
+                        class="max-w-full rounded border border-border bg-surface px-2 py-1 text-left text-[11px] font-medium text-base-content transition-colors hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {prompt}
+                      </button>
                     )}
                   </For>
                 </div>

@@ -104,6 +104,7 @@ const {
         actionLabel?: string;
         commandSummary?: string;
         safetyNote?: string;
+        suggestedPrompts?: string[];
       };
     },
     clearInitialPrompt: vi.fn(),
@@ -323,6 +324,7 @@ describe('AIChat', () => {
           actionLabel: 'Restart the workload service',
           commandSummary: '1 command recorded for approval context',
           safetyNote: 'Command details stay in approval context.',
+          suggestedPrompts: ['Explain recent changes and correlations'],
         },
       };
 
@@ -333,6 +335,12 @@ describe('AIChat', () => {
       expect(screen.getByText('High CPU usage on web-server')).toBeInTheDocument();
       expect(screen.getByText('Backup job saturated CPU.')).toBeInTheDocument();
       expect(screen.getByText('1 command recorded for approval context')).toBeInTheDocument();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Explain recent changes and correlations' }),
+      );
+      expect(screen.getByPlaceholderText('Ask about your infrastructure...')).toHaveValue(
+        'Explain recent changes and correlations',
+      );
       expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
     });
 

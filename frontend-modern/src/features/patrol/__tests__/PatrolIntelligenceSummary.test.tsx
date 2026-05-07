@@ -32,6 +32,13 @@ describe('PatrolIntelligenceSummary', () => {
       { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
       { id: 'backup-job', name: 'Nightly backup job', type: 'job', node: undefined },
     ]);
+    expect(context.briefing).toMatchObject({
+      suggestedPrompts: [
+        'Prioritize findings and safest next step',
+        'Explain recent changes and correlations',
+        'Summarize governed remediation risks',
+      ],
+    });
     expect(JSON.stringify(context)).not.toContain('systemctl restart workload.service');
   });
 });

@@ -14,6 +14,7 @@ export interface AIChatContextBriefing {
   actionLabel?: string;
   commandSummary?: string;
   safetyNote?: string;
+  suggestedPrompts?: string[];
 }
 
 export interface AIChatHandoffResource {
