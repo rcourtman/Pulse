@@ -111,6 +111,9 @@ func TestPatrolService_DismissFinding_RejectsPatrolRuntimeFinding(t *testing.T) 
 	if got := err.Error(); !strings.Contains(got, "cannot be dismissed manually") {
 		t.Fatalf("unexpected error: %q", got)
 	}
+	if got := err.Error(); !strings.Contains(got, "Assistant & Patrol settings") {
+		t.Fatalf("dismissal guidance must point to Assistant & Patrol settings: %q", got)
+	}
 
 	stored := ps.findings.Get("runtime-1")
 	if stored == nil {
@@ -118,6 +121,32 @@ func TestPatrolService_DismissFinding_RejectsPatrolRuntimeFinding(t *testing.T) 
 	}
 	if stored.DismissedReason != "" {
 		t.Fatalf("expected runtime finding to remain active, got dismissed reason %q", stored.DismissedReason)
+	}
+}
+
+func TestPatrolService_RejectManualActionForRuntimeFindingUsesProviderSettingsGuidance(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.findings.Add(&Finding{
+		ID:           "runtime-1",
+		Key:          patrolRuntimeFindingKey,
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		ResourceID:   patrolRuntimeResourceID,
+		ResourceName: "Pulse Patrol Service",
+		ResourceType: "service",
+		Title:        "Pulse Patrol: Provider not ready",
+	})
+
+	err := ps.RejectManualActionForRuntimeFinding("runtime-1", "acknowledged")
+	if err == nil {
+		t.Fatal("expected Patrol runtime finding manual action to be rejected")
+	}
+	got := err.Error()
+	if !strings.Contains(got, "fix Patrol provider configuration in Assistant & Patrol settings") {
+		t.Fatalf("manual action guidance = %q", got)
+	}
+	if strings.Contains(got, "AI settings") {
+		t.Fatalf("manual action guidance must not reference legacy AI settings: %q", got)
 	}
 }
 

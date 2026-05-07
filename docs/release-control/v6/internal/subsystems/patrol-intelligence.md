@@ -479,8 +479,8 @@ That same contract must fail closed on manual lifecycle controls too. Patrol
 runtime findings are Patrol-owned impairment signals, not ordinary estate
 findings, so the findings list must not offer generic acknowledge, snooze,
 dismiss, resolve, or suppress controls for them. The correct operator path is
-to fix Patrol provider configuration and rerun Patrol, optionally adding context
-notes, rather than hiding the runtime issue.
+to fix Patrol provider configuration in Assistant & Patrol settings and rerun
+Patrol, optionally adding context notes, rather than hiding the runtime issue.
 That same runtime-versus-infrastructure split must carry through the summary
 metrics strip as well. When Patrol-owned runtime issues are active, the
 supporting metrics must stop counting them under generic infrastructure

@@ -31,7 +31,7 @@ func patrolFindingUsesSyntheticRuntimeResource(f *Finding) bool {
 
 func patrolRuntimeFindingManualActionError(action string) error {
 	return fmt.Errorf(
-		"Patrol runtime findings cannot be %s manually; update AI settings and rerun Patrol",
+		"Patrol runtime findings cannot be %s manually; fix Patrol provider configuration in Assistant & Patrol settings and rerun Patrol",
 		action,
 	)
 }
