@@ -13,7 +13,7 @@ import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import {
-  buildPatrolAssistantFindingBriefing,
+  buildPatrolAssistantFindingHandoff,
   buildPatrolAssistantApprovalBriefingInput,
   buildPatrolAssistantProposedFixBriefingInput,
   type PatrolAssistantProposedFixBriefingSource,
@@ -44,28 +44,44 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
 
-  const approvalBriefing = (
+  const proposedFixBriefing = (
     approval: ApprovalRequest | null,
     fix?: PatrolAssistantProposedFixBriefingSource | null,
   ) =>
-    buildPatrolAssistantFindingBriefing({
+    buildPatrolAssistantProposedFixBriefingInput(
+      fix ||
+        (approval
+          ? {
+              description: approval.context,
+              riskLevel: approval.riskLevel,
+              targetHost: approval.targetName,
+              commandCount: approval.command ? 1 : 0,
+            }
+          : null),
+    );
+
+  const assistantHandoff = (
+    approval: ApprovalRequest | null,
+    fix?: PatrolAssistantProposedFixBriefingSource | null,
+  ) =>
+    buildPatrolAssistantFindingHandoff({
+      id: props.findingId,
       title: props.findingTitle || 'Patrol finding',
       subject: props.resourceName || 'affected resource',
+      description:
+        approval?.context ||
+        fix?.description ||
+        (!approval && props.investigationOutcome === 'fix_queued'
+          ? 'The original approval details are no longer available. Recover or regenerate the governed approval before execution.'
+          : undefined),
       findingStatus: 'active',
       investigationOutcome: props.investigationOutcome,
       loopState: props.investigationOutcome || 'awaiting_approval',
+      resourceId: props.resourceId,
+      resourceName: props.resourceName,
+      resourceType: props.resourceType,
       pendingApproval: buildPatrolAssistantApprovalBriefingInput(approval),
-      proposedFix: buildPatrolAssistantProposedFixBriefingInput(
-        fix ||
-          (approval
-            ? {
-                description: approval.context,
-                riskLevel: approval.riskLevel,
-                targetHost: approval.targetName,
-                commandCount: approval.command ? 1 : 0,
-              }
-            : null),
-      ),
+      proposedFix: proposedFixBriefing(approval, fix),
     });
 
   const handleFixWithAssistant = (
@@ -74,47 +90,14 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     e: Event,
   ) => {
     e.stopPropagation();
-    const desc = approval?.context || fix?.description || 'No description available';
-    const targetHost = approval?.targetName || fix?.target_host;
-    const riskLevel = approval?.riskLevel || fix?.risk_level || 'unknown';
-    const rationale = fix?.rationale;
-
-    let prompt = `Patrol investigated a finding and queued a governed fix for review.\n\n**Finding:** ${props.findingTitle || 'Unknown finding'} on ${props.resourceName || 'unknown resource'}\n**Proposed fix:** ${desc}`;
-    if (approval?.id) prompt += `\n**Approval:** ${approval.id}`;
-    if (approval?.status) prompt += `\n**Approval status:** ${approval.status}`;
-    if (targetHost) prompt += `\n**Target:** ${targetHost}`;
-    prompt += `\n**Risk level:** ${riskLevel}`;
-    if (rationale) prompt += `\n**Rationale:** ${rationale}`;
-    prompt +=
-      '\n\nUse the attached finding context and governed approval flow. Do not infer, repeat, or execute raw command text from this chat handoff.';
-
-    aiChatStore.openWithPrompt(prompt, {
-      targetType: props.resourceType,
-      targetId: props.resourceId,
-      findingId: props.findingId,
-      briefing: approvalBriefing(approval, fix),
-      autonomousMode: false,
-    });
+    const handoff = assistantHandoff(approval, fix);
+    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
   };
 
   const handleDiscussQueuedFix = (e: Event) => {
     e.stopPropagation();
-    const title = props.findingTitle || 'Patrol finding';
-    const subject = props.resourceName || 'affected resource';
-    aiChatStore.openWithPrompt(
-      [
-        `Patrol queued a governed fix for ${title} on ${subject}, but the live approval payload is no longer available.`,
-        'Use the attached Patrol briefing to explain the current action state, approval recovery path, and safest next step.',
-        'Do not infer, repeat, or execute raw command text from this chat handoff.',
-      ].join('\n\n'),
-      {
-        targetType: props.resourceType,
-        targetId: props.resourceId,
-        findingId: props.findingId,
-        briefing: approvalBriefing(null),
-        autonomousMode: false,
-      },
-    );
+    const handoff = assistantHandoff(null);
+    aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
   };
 
   // Load investigation details when outcome indicates a fix was proposed/executed

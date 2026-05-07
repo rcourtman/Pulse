@@ -877,18 +877,20 @@ frontend primitive boundary.
     structured finding context, so
     Patrol handoffs render as Patrol handoffs or Patrol findings, and alert
     handoffs render as alert investigations, rather than generic dashboard
-    briefs. Patrol approval-row Assistant prompts must
-    follow that same drawer primitive contract: safe approval metadata may enter
-    the prompt and context, but raw command text stays out and the scoped
-    request must pass `autonomousMode:false` instead of changing the user's
-    persistent Assistant control level. Patrol remediation-plan drawer handoffs
-    must use the same primitive boundary: plan title/status/risk, step labels,
-    and command counts may enter Assistant context; raw command and rollback
-    command payloads must stay in the governed remediation/action panel. Finding
-    discussion handoffs that reference a live approval, proposed fix, fix
-    outcome, or remediation plan must also pass `autonomousMode:false` as a
-    request-local override so the drawer shows approval-required posture without
-    mutating the persistent Assistant control setting.
+    briefs. Patrol approval-row Assistant prompts must route through the same
+    feature-owned finding handoff helper rather than hand-written prompt-only
+    drawer opens: safe approval metadata, proposed-fix summaries, resource
+    references, and bounded `handoff_actions` may enter the prompt and context,
+    but raw command text stays out and the scoped request must pass
+    `autonomousMode:false` instead of changing the user's persistent Assistant
+    control level. Patrol remediation-plan drawer handoffs must use the same
+    primitive boundary: plan title/status/risk, step labels, and command counts
+    may enter Assistant context; raw command and rollback command payloads must
+    stay in the governed remediation/action panel. Finding discussion handoffs
+    that reference a live approval, proposed fix, fix outcome, or remediation
+    plan must also pass `autonomousMode:false` as a request-local override so
+    the drawer shows approval-required posture without mutating the persistent
+    Assistant control setting.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like

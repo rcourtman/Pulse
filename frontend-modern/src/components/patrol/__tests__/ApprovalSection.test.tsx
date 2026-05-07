@@ -122,9 +122,15 @@ describe('ApprovalSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
 
-    expect(openWithPromptMock).toHaveBeenCalledWith(
-      expect.stringContaining('Patrol queued a governed fix for CPU saturation on node-1'),
-      {
+    expect(openWithPromptMock).toHaveBeenCalledTimes(1);
+    const [prompt, context] = openWithPromptMock.mock.calls[0];
+    expect(prompt).toContain(
+      "I'd like to discuss this Patrol finding: \"CPU saturation\" on node-1",
+    );
+    expect(prompt).toContain('Start by reviewing the governed proposed fix or action posture');
+    expect(prompt).toContain('Recover or regenerate the governed approval before execution');
+    expect(context).toEqual(
+      expect.objectContaining({
         targetType: 'host',
         targetId: 'host-1',
         findingId: 'finding-1',
@@ -144,8 +150,24 @@ describe('ApprovalSection', () => {
           ],
         }),
         autonomousMode: false,
-      },
+        handoffResources: [{ id: 'host-1', name: 'node-1', node: undefined, type: 'host' }],
+        handoffActions: undefined,
+        context: expect.objectContaining({
+          source: 'pulse-patrol-finding',
+          findingId: 'finding-1',
+          resourceId: 'host-1',
+          resourceName: 'node-1',
+          resourceType: 'host',
+          actionReferenceCount: 0,
+        }),
+      }),
     );
+    expect(context.handoffContext).toContain('[Patrol Finding Context]');
+    expect(context.handoffContext).toContain('Finding ID: finding-1');
+    expect(context.handoffContext).toContain(
+      'Recover or regenerate the governed approval before execution',
+    );
+    expect(context.handoffContext).toContain('Command Boundary:');
   });
 
   it('opens Assistant from a pending Patrol approval without carrying raw command text', async () => {
@@ -180,39 +202,70 @@ describe('ApprovalSection', () => {
 
     expect(openWithPromptMock).toHaveBeenCalledTimes(1);
     const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain('queued a governed fix for review');
-    expect(prompt).toContain('**Approval:** approval-1');
-    expect(prompt).toContain('**Approval status:** pending');
-    expect(prompt).toContain('**Risk level:** high');
+    expect(prompt).toContain('Start by reviewing governed approval approval-1');
+    expect(prompt).toContain('approval status pending');
+    expect(prompt).toContain('high risk');
     expect(prompt).not.toContain('systemctl restart nginx');
     expect(prompt).not.toContain('Please execute this fix');
-    expect(context).toEqual({
-      targetType: 'agent',
-      targetId: 'agent-1',
-      findingId: 'finding-1',
-      briefing: expect.objectContaining({
-        sourceLabel: 'Pulse Patrol',
-        title: 'Operator briefing attached',
-        subject: 'CPU saturation on node-1',
-        statusLabel: 'Pending approval · High risk',
-        detailLines: expect.arrayContaining([
-          expect.stringContaining('live approval pending'),
-          expect.stringContaining('Proposed fix: Restart the workload service'),
-          expect.stringContaining('1 command recorded for approval context'),
-          expect.stringContaining('Review live governed approval approval-1 before execution'),
-        ]),
-        actionLabel: 'Restart the workload service',
-        commandSummary: '1 command recorded for approval context',
-        safetyNote:
-          'Command details stay in approval context; execution requires the governed approval flow.',
-        suggestedPrompts: [
-          'Review approval risk and next step',
-          'Explain current finding status',
-          'Summarize remediation without command text',
+    expect(context).toEqual(
+      expect.objectContaining({
+        targetType: 'agent',
+        targetId: 'agent-1',
+        findingId: 'finding-1',
+        briefing: expect.objectContaining({
+          sourceLabel: 'Pulse Patrol',
+          title: 'Operator briefing attached',
+          subject: 'CPU saturation on node-1',
+          statusLabel: 'Pending approval · High risk',
+          detailLines: expect.arrayContaining([
+            expect.stringContaining('live approval pending'),
+            expect.stringContaining('Proposed fix: Restart the workload service'),
+            expect.stringContaining('1 command recorded for approval context'),
+            expect.stringContaining('Review live governed approval approval-1 before execution'),
+          ]),
+          actionLabel: 'Restart the workload service',
+          commandSummary: '1 command recorded for approval context',
+          safetyNote:
+            'Command details stay in approval context; execution requires the governed approval flow.',
+          suggestedPrompts: [
+            'Review approval risk and next step',
+            'Explain current finding status',
+            'Summarize remediation without command text',
+          ],
+        }),
+        autonomousMode: false,
+        handoffResources: [{ id: 'agent-1', name: 'node-1', node: undefined, type: 'agent' }],
+        handoffActions: [
+          expect.objectContaining({
+            findingId: 'finding-1',
+            approvalId: 'approval-1',
+            approvalStatus: 'pending',
+            actionRequiresApproval: true,
+            description: 'Restart the workload service',
+            riskLevel: 'high',
+            destructive: false,
+            targetHost: 'node-1',
+            targetResourceId: 'agent-1',
+            targetResourceName: 'node-1',
+            targetResourceType: 'agent',
+          }),
         ],
+        context: expect.objectContaining({
+          source: 'pulse-patrol-finding',
+          findingId: 'finding-1',
+          resourceId: 'agent-1',
+          resourceName: 'node-1',
+          resourceType: 'agent',
+          pendingApprovalId: 'approval-1',
+          actionReferenceCount: 1,
+        }),
       }),
-      autonomousMode: false,
-    });
+    );
+    expect(context.handoffContext).toContain('[Patrol Finding Context]');
+    expect(context.handoffContext).toContain('Approval: approval-1');
+    expect(context.handoffContext).toContain('Approval Status: pending');
+    expect(context.handoffContext).toContain('Command Boundary:');
+    expect(JSON.stringify(context.handoffActions)).not.toContain('systemctl restart nginx');
     expect(JSON.stringify(context.briefing)).not.toContain('systemctl restart nginx');
   });
 
@@ -252,37 +305,69 @@ describe('ApprovalSection', () => {
 
     expect(openWithPromptMock).toHaveBeenCalledTimes(1);
     const [prompt, context] = openWithPromptMock.mock.calls[0];
-    expect(prompt).toContain('queued a governed fix for review');
-    expect(prompt).toContain('**Proposed fix:** Restart the workload service');
-    expect(prompt).toContain('**Target:** node-1');
-    expect(prompt).toContain('**Risk level:** high');
+    expect(prompt).toContain('Start by reviewing the governed proposed fix or action posture');
+    expect(prompt).toContain('proposed fix Restart the workload service');
+    expect(prompt).toContain('target node-1');
+    expect(prompt).toContain('high risk');
     expect(prompt).not.toContain('systemctl restart nginx');
-    expect(context).toEqual({
-      targetType: 'agent',
-      targetId: 'agent-1',
-      findingId: 'finding-1',
-      briefing: expect.objectContaining({
-        sourceLabel: 'Pulse Patrol',
-        title: 'Operator briefing attached',
-        subject: 'CPU saturation on node-1',
-        statusLabel: 'Fix Queued',
-        detailLines: expect.arrayContaining([
-          expect.stringContaining('fix queued for governed review'),
-          expect.stringContaining('Proposed fix: Restart the workload service'),
-          expect.stringContaining('Recover or regenerate the governed approval before execution'),
-        ]),
-        actionLabel: 'Restart the workload service',
-        commandSummary: '1 command recorded for approval context',
-        safetyNote:
-          'Command details stay in approval context; destructive actions require governed approval.',
-        suggestedPrompts: [
-          'Review approval risk and next step',
-          'Explain current finding status',
-          'Summarize remediation without command text',
+    expect(context).toEqual(
+      expect.objectContaining({
+        targetType: 'agent',
+        targetId: 'agent-1',
+        findingId: 'finding-1',
+        briefing: expect.objectContaining({
+          sourceLabel: 'Pulse Patrol',
+          title: 'Operator briefing attached',
+          subject: 'CPU saturation on node-1',
+          statusLabel: 'Fix Queued',
+          detailLines: expect.arrayContaining([
+            expect.stringContaining('fix queued for governed review'),
+            expect.stringContaining('Proposed fix: Restart the workload service'),
+            expect.stringContaining(
+              'Recover or regenerate the governed approval before execution',
+            ),
+          ]),
+          actionLabel: 'Restart the workload service',
+          commandSummary: '1 command recorded for approval context',
+          safetyNote:
+            'Command details stay in approval context; destructive actions require governed approval.',
+          suggestedPrompts: [
+            'Review approval risk and next step',
+            'Explain current finding status',
+            'Summarize remediation without command text',
+          ],
+        }),
+        autonomousMode: false,
+        handoffResources: [{ id: 'agent-1', name: 'node-1', node: undefined, type: 'agent' }],
+        handoffActions: [
+          expect.objectContaining({
+            findingId: 'finding-1',
+            approvalId: undefined,
+            actionRequiresApproval: false,
+            description: 'Restart the workload service',
+            riskLevel: 'high',
+            destructive: true,
+            targetHost: 'node-1',
+            targetResourceId: 'agent-1',
+            targetResourceName: 'node-1',
+            targetResourceType: 'agent',
+          }),
         ],
+        context: expect.objectContaining({
+          source: 'pulse-patrol-finding',
+          findingId: 'finding-1',
+          resourceId: 'agent-1',
+          resourceName: 'node-1',
+          resourceType: 'agent',
+          pendingApprovalId: undefined,
+          actionReferenceCount: 1,
+        }),
       }),
-      autonomousMode: false,
-    });
+    );
+    expect(context.handoffContext).toContain('[Patrol Finding Context]');
+    expect(context.handoffContext).toContain('Proposed Fix:');
+    expect(context.handoffContext).toContain('Command Boundary:');
+    expect(JSON.stringify(context.handoffActions)).not.toContain('systemctl restart nginx');
     expect(JSON.stringify(context.briefing)).not.toContain('systemctl restart nginx');
   });
 

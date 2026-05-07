@@ -309,7 +309,13 @@ runtime cost control, and shared AI transport surfaces.
     while preserving the safe visible briefing and request-local
     approval-required posture; later turns must rely on backend-owned session
     model-context hydration and current canonical stores instead of resending
-    stale browser handoff payloads.
+    stale browser handoff payloads. Patrol approval-row Assistant entries are
+    still Patrol finding handoffs, not local prompt-only shortcuts: live
+    approval rows, expired proposed-fix rows, and missing-detail queued-fix
+    recovery rows must route through the shared Patrol finding handoff builder
+    so the backend receives the same bounded model-only finding context,
+    resource reference, and safe action reference posture that the main finding
+    handoff uses.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.

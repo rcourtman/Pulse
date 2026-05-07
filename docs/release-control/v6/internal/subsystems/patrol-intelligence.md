@@ -171,13 +171,16 @@ Patrol-specific presentation helpers.
    sync. The model-only context may include current finding status, recurrence,
    investigation record facts, evidence, verification, approval posture,
    dry-run posture, proposed-fix summary, and target resource references without
-   raw command payloads. Inline
-   Patrol approval actions that open Assistant must follow the
-   same rule: pass approval ID/status/risk/target plus safe summary/count
-   metadata as review context, force the request-local approval-required mode,
-   attach the Patrol-owned visible drawer briefing for the pending approval, and
-   never paste the approval command or proposed-fix command text into the chat
-   prompt. Remediation-plan Assistant
+   raw command payloads. Inline Patrol approval actions in
+   `frontend-modern/src/components/patrol/ApprovalSection.tsx` that open
+   Assistant must follow that same Patrol-owned handoff model rather than a
+   prompt-only local shortcut: pass approval ID/status/risk/target plus safe
+   summary/count metadata as review context, attach the target resource
+   reference, include bounded `handoff_actions` for live approvals or structured
+   proposed fixes when present, force the request-local approval-required mode,
+   attach the Patrol-owned visible drawer briefing for the pending approval or
+   queued-fix recovery state, and never paste the approval command or
+   proposed-fix command text into the chat prompt. Remediation-plan Assistant
    handoffs follow the same boundary: step labels, plan status, risk, and command
    counts are allowed, safe suggested prompts may ask about plan risk,
    prerequisites, rollback, and verification, while command and rollback command
