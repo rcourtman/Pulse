@@ -65,6 +65,12 @@ const compactUnique = (values: Array<string | undefined>): string[] => {
   return result;
 };
 
+const getProviderTestDiagnosticMessage = (result: {
+  message?: string;
+  recommendation?: string;
+}): string =>
+  compactUnique([result.message, result.recommendation]).join(' · ') || 'Connection test failed';
+
 const isKnownAIProvider = (provider: string): provider is AIProvider =>
   AI_PROVIDERS.includes(provider as AIProvider);
 
@@ -453,14 +459,25 @@ export const useAISettingsState = () => {
   ): Promise<ProviderTestResult> => {
     try {
       const result = await AIAPI.testProvider(provider);
+      const message = getProviderTestDiagnosticMessage(result);
       const normalizedResult: ProviderTestResult = {
         provider,
         success: result.success,
-        message: result.message,
+        message,
+        model: result.model,
+        cause: result.cause,
+        summary: result.summary,
+        recommendation: result.recommendation,
+        action: result.action,
       };
       setProviderHealth(provider, {
         status: result.success ? 'ok' : 'error',
-        message: result.message || '',
+        message,
+        model: result.model,
+        cause: result.cause,
+        summary: result.summary,
+        recommendation: result.recommendation,
+        action: result.action,
       });
       if (opts.storeManualResult) {
         setProviderTestResult(normalizedResult);
@@ -476,7 +493,15 @@ export const useAISettingsState = () => {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Connection test failed';
       const result: ProviderTestResult = { provider, success: false, message };
-      setProviderHealth(provider, { status: 'error', message });
+      setProviderHealth(provider, {
+        status: 'error',
+        message,
+        model: undefined,
+        cause: undefined,
+        summary: undefined,
+        recommendation: undefined,
+        action: undefined,
+      });
       if (opts.storeManualResult) {
         setProviderTestResult(result);
       }
@@ -498,7 +523,15 @@ export const useAISettingsState = () => {
     );
     for (const provider of AI_PROVIDERS) {
       if (!configuredProviders.includes(provider)) {
-        setProviderHealth(provider, { status: 'not_configured', message: '' });
+        setProviderHealth(provider, {
+          status: 'not_configured',
+          message: '',
+          model: undefined,
+          cause: undefined,
+          summary: undefined,
+          recommendation: undefined,
+          action: undefined,
+        });
       }
     }
     if (configuredProviders.length === 0) {
@@ -510,7 +543,15 @@ export const useAISettingsState = () => {
     try {
       await Promise.all(
         configuredProviders.map(async (provider) => {
-          setProviderHealth(provider, { status: 'checking', message: '' });
+          setProviderHealth(provider, {
+            status: 'checking',
+            message: '',
+            model: undefined,
+            cause: undefined,
+            summary: undefined,
+            recommendation: undefined,
+            action: undefined,
+          });
           await checkProviderHealth(provider, { notify: false, storeManualResult: false });
         }),
       );
@@ -859,10 +900,11 @@ export const useAISettingsState = () => {
     setTesting(true);
     try {
       const result = await AIAPI.testConnection();
+      const message = getProviderTestDiagnosticMessage(result);
       if (result.success) {
-        notificationStore.success(result.message);
+        notificationStore.success(message);
       } else {
-        notificationStore.error(result.message);
+        notificationStore.error(message);
       }
     } catch (error) {
       logger.error('[AISettings] Test failed:', error);

@@ -53,6 +53,36 @@ func TestPatrolRuntimeFailureFromError_ClassifiesUnavailableModel(t *testing.T) 
 	}
 }
 
+func TestClassifyPatrolRuntimeFailureOmitsRawProviderEvidence(t *testing.T) {
+	diagnostic := ClassifyPatrolRuntimeFailure(errors.New(`API error (401): {"error":"raw upstream credential body"}`))
+
+	if diagnostic.Summary != "Provider authentication issue" {
+		t.Fatalf("unexpected summary %q", diagnostic.Summary)
+	}
+	if diagnostic.Cause != PatrolFailureCauseProviderAuth {
+		t.Fatalf("unexpected cause %q", diagnostic.Cause)
+	}
+	if strings.Contains(diagnostic.Description, "raw upstream credential body") {
+		t.Fatalf("description leaked raw provider detail: %q", diagnostic.Description)
+	}
+	if strings.Contains(diagnostic.Recommendation, "raw upstream credential body") {
+		t.Fatalf("recommendation leaked raw provider detail: %q", diagnostic.Recommendation)
+	}
+}
+
+func TestPatrolRuntimeFailureFromErrorRedactsSecretLikeDetail(t *testing.T) {
+	failure := patrolRuntimeFailureFromError(errors.New(`request failed: Get "https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSy-secret-token": Authorization: Bearer sk-live-secret {"api_key":"sk-json-secret"} https://user:pass@example.test/v1`))
+
+	for _, secret := range []string{"AIzaSy-secret-token", "sk-live-secret", "sk-json-secret", "user:pass@"} {
+		if strings.Contains(failure.Evidence, secret) {
+			t.Fatalf("evidence leaked secret-shaped detail %q: %s", secret, failure.Evidence)
+		}
+	}
+	if !strings.Contains(failure.Evidence, "[redacted]") {
+		t.Fatalf("expected evidence to retain redacted context, got %q", failure.Evidence)
+	}
+}
+
 func TestPatrolRuntimeFailureFromError_DefaultIsActionable(t *testing.T) {
 	failure := patrolRuntimeFailureFromError(errors.New("upstream returned unexpected eof"))
 

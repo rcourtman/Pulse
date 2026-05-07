@@ -295,4 +295,114 @@ test.describe("Assistant & Patrol settings provider setup", () => {
       page.getByText("Model: openrouter:deepseek/deepseek-r1"),
     ).toBeVisible();
   });
+
+  test("settings save failure keeps provider preflight recommendation context", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only settings coverage",
+    );
+
+    await ensureAuthenticated(page);
+
+    const settings: MockAISettings = {
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      model: "openrouter:deepseek/deepseek-r1",
+      patrol_model: "openrouter:deepseek/deepseek-r1",
+      openrouter_configured: true,
+      configured_providers: ["openrouter"],
+    };
+    let updateHits = 0;
+
+    await page.route("**/api/settings/ai", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(settings),
+      });
+    });
+
+    await page.route("**/api/ai/models", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          models: [
+            {
+              id: "openrouter:deepseek/deepseek-r1",
+              name: "DeepSeek R1",
+              notable: true,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.route("**/api/ai/test/openrouter", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: false,
+          message: "Provider authentication issue",
+          provider: "openrouter",
+          model: "openrouter:deepseek/deepseek-r1",
+          cause: "provider_auth",
+          summary:
+            "Pulse Patrol cannot analyze your infrastructure because the provider rejected the configured credentials or account access.",
+          recommendation:
+            "Check the API key or provider authentication in Patrol provider settings, then rerun Patrol.",
+          action: "open_provider_settings",
+        }),
+      });
+    });
+
+    await page.route("**/api/ai/chat/sessions", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+    });
+
+    await page.route("**/api/settings/ai/update", async (route) => {
+      updateHits += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Unable to save Assistant & Patrol settings.",
+        }),
+      });
+    });
+
+    await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByRole("heading", { name: "Assistant & Patrol", level: 1 }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Provider authentication issue").first(),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByText(
+          "Check the API key or provider authentication in Patrol provider settings, then rerun Patrol.",
+        )
+        .first(),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: /save changes/i }).click();
+
+    await expect.poll(() => updateHits).toBe(1);
+    const failureMessage = page.getByText(
+      /OpenRouter provider.*Provider authentication issue.*Unable to save Assistant & Patrol settings/i,
+    );
+    await expect(failureMessage).toBeVisible();
+    await expect(failureMessage).toContainText(
+      "Check the API key or provider authentication in Patrol provider settings",
+    );
+  });
 });

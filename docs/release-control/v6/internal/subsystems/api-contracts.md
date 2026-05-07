@@ -217,6 +217,17 @@ product API routes free of maintainer commercial analytics.
     runtime-failure boolean needed for drawer/session presentation, and
     run-specific fields remain reserved for `patrol_run`.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+    Provider test responses from `/api/ai/test` and provider-specific
+    `/api/ai/test/{provider}` preflight responses must return one safe
+    structured diagnostic envelope: `success`, `message`, optional `model`,
+    `cause`, `summary`, `recommendation`, and `action`, plus `provider` on the
+    provider-specific endpoint.
+    Failure payloads must use the AI runtime's Patrol failure-cause vocabulary
+    and safe remediation text instead of returning raw upstream provider errors,
+    while still leaving those raw details available only to server logs or
+    redacted governed internal Patrol evidence. The frontend API client and
+    settings shell must treat this payload as the canonical provider health
+    contract rather than parsing free-form provider error strings.
 35. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 36. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.

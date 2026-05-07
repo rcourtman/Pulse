@@ -213,6 +213,16 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps Assistant and Patrol provider diagnostics backend-owned in settings state', () => {
+    expect(aiSettingsModelSource).toContain(
+      'export type ProviderTestResult = AIProviderTestResult',
+    );
+    expect(aiSettingsStateSource).toContain('getProviderTestDiagnosticMessage(result)');
+    expect(aiSettingsStateSource).toContain('recommendation: result.recommendation');
+    expect(aiSettingsStateSource).toContain('providerHealth[erroredCandidate].message');
+    expect(aiSettingsStateSource).not.toContain('OpenRouter returned 401');
+  });
+
   it('keeps contextual settings feature gates free of retired commercial telemetry wrappers', () => {
     for (const source of [
       agentProfilesPanelSource,
@@ -385,9 +395,8 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).not.toContain('<select');
     expect(aiModelSelectionSectionSource).not.toContain('<optgroup');
 
-    expect(aiSettingsModelSource).toContain(
-      'import type { AIProvider, AISettings as AISettingsType, ModelInfo }',
-    );
+    expect(aiSettingsModelSource).toContain('AIProviderTestResult');
+    expect(aiSettingsModelSource).toContain('AISettings as AISettingsType');
     expect(aiSettingsModelSource).toContain('export type AIAvailableModel = ModelInfo;');
     expect(aiSettingsStateSource).toContain(
       'const [availableModels, setAvailableModels] = createSignal<ModelInfo[]>([]);',

@@ -514,9 +514,12 @@ describe('AISettings provider save failure context', () => {
     testProviderMock.mockImplementation(async (provider: string) => ({
       success: provider !== 'openrouter',
       message:
+        provider === 'openrouter' ? 'Provider authentication issue' : `${provider} reachable`,
+      recommendation:
         provider === 'openrouter'
-          ? 'OpenRouter returned 401 during provider preflight'
-          : `${provider} reachable`,
+          ? 'Check the API key or provider authentication in Patrol provider settings, then rerun Patrol.'
+          : undefined,
+      cause: provider === 'openrouter' ? 'provider_auth' : undefined,
       provider,
     }));
     updateSettingsMock.mockRejectedValue(new Error('Unable to save Assistant & Patrol settings.'));
@@ -536,7 +539,8 @@ describe('AISettings provider save failure context', () => {
     });
     const message = String(notificationErrorMock.mock.calls.at(-1)?.[0] ?? '');
     expect(message).toContain('model openrouter:deepseek/deepseek-r1');
-    expect(message).toContain('OpenRouter returned 401 during provider preflight');
+    expect(message).toContain('Provider authentication issue');
+    expect(message).toContain('Check the API key or provider authentication');
     expect(message).toContain('Unable to save Assistant & Patrol settings.');
   });
 

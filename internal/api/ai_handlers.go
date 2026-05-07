@@ -2857,27 +2857,80 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 	defer cancel()
 
 	var testResult struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
-		Model   string `json:"model,omitempty"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Model          string `json:"model,omitempty"`
+		Cause          string `json:"cause,omitempty"`
+		Summary        string `json:"summary,omitempty"`
+		Recommendation string `json:"recommendation,omitempty"`
+		Action         string `json:"action,omitempty"`
 	}
 
+	cfg := h.GetAIService(r.Context()).GetConfig()
 	err := h.GetAIService(r.Context()).TestConnection(ctx)
 	if err != nil {
+		diagnostic := ai.ClassifyPatrolRuntimeFailure(err)
 		testResult.Success = false
-		testResult.Message = "Connection test failed"
+		testResult.Message = diagnostic.Summary
+		testResult.Cause = string(diagnostic.Cause)
+		testResult.Summary = diagnostic.Description
+		testResult.Recommendation = diagnostic.Recommendation
+		testResult.Action = "open_provider_settings"
+		if cfg != nil {
+			testResult.Model = config.NormalizeQuickstartModelString(cfg.GetModel())
+		}
 		log.Error().Err(err).Msg("AI connection test failed")
 	} else {
-		cfg := h.GetAIService(r.Context()).GetConfig()
 		testResult.Success = true
 		testResult.Message = "Connection successful"
 		if cfg != nil {
-			testResult.Model = cfg.GetModel()
+			testResult.Model = config.NormalizeQuickstartModelString(cfg.GetModel())
 		}
 	}
 
 	if err := utils.WriteJSONResponse(w, testResult); err != nil {
 		log.Error().Err(err).Msg("Failed to write AI test response")
+	}
+}
+
+type aiProviderTestResponse struct {
+	Success        bool   `json:"success"`
+	Message        string `json:"message"`
+	Provider       string `json:"provider"`
+	Model          string `json:"model,omitempty"`
+	Cause          string `json:"cause,omitempty"`
+	Summary        string `json:"summary,omitempty"`
+	Recommendation string `json:"recommendation,omitempty"`
+	Action         string `json:"action,omitempty"`
+}
+
+func newAIProviderTestResponse(provider string) aiProviderTestResponse {
+	return aiProviderTestResponse{Provider: provider}
+}
+
+func newAIProviderTestNotConfiguredResponse(provider string) aiProviderTestResponse {
+	return aiProviderTestResponse{
+		Success:        false,
+		Message:        "Provider not configured",
+		Provider:       provider,
+		Cause:          string(ai.PatrolFailureCauseProviderNotConfigured),
+		Summary:        "Pulse Patrol cannot test this provider because it is not configured for the current Assistant & Patrol settings.",
+		Recommendation: "Open Assistant & Patrol provider settings, configure the provider credentials or base URL, choose a Patrol model, and run provider preflight again.",
+		Action:         "open_provider_settings",
+	}
+}
+
+func newAIProviderTestFailureResponse(provider, model string, err error) aiProviderTestResponse {
+	diagnostic := ai.ClassifyPatrolRuntimeFailure(err)
+	return aiProviderTestResponse{
+		Success:        false,
+		Message:        diagnostic.Summary,
+		Provider:       provider,
+		Model:          config.NormalizeQuickstartModelString(model),
+		Cause:          string(diagnostic.Cause),
+		Summary:        diagnostic.Description,
+		Recommendation: diagnostic.Recommendation,
+		Action:         "open_provider_settings",
 	}
 }
 
@@ -2914,17 +2967,12 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	var testResult struct {
-		Success  bool   `json:"success"`
-		Message  string `json:"message"`
-		Provider string `json:"provider"`
-	}
-	testResult.Provider = provider
+	testResult := newAIProviderTestResponse(provider)
 
 	// Load config and create provider for testing
 	cfg := h.GetAIService(r.Context()).GetConfig()
 	if cfg == nil {
-		testResult.Success = false
+		testResult = newAIProviderTestNotConfiguredResponse(provider)
 		testResult.Message = "Pulse Assistant not configured"
 		if err := utils.WriteJSONResponse(w, testResult); err != nil {
 			log.Error().Err(err).Msg("failed to write JSON response")
@@ -2934,8 +2982,7 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 
 	// Check if provider is configured
 	if !cfg.HasProvider(provider) {
-		testResult.Success = false
-		testResult.Message = "Provider not configured"
+		testResult = newAIProviderTestNotConfiguredResponse(provider)
 		if err := utils.WriteJSONResponse(w, testResult); err != nil {
 			log.Error().Err(err).Msg("failed to write JSON response")
 		}
@@ -2945,8 +2992,7 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	// Create provider and test connection
 	model, err := ai.ResolvePreferredModelForProvider(ctx, cfg, provider)
 	if err != nil {
-		testResult.Success = false
-		testResult.Message = "Failed to resolve provider model"
+		testResult = newAIProviderTestFailureResponse(provider, "", err)
 		log.Error().Err(err).Str("provider", provider).Msg("AI provider model resolution failed")
 		if err := utils.WriteJSONResponse(w, testResult); err != nil {
 			log.Error().Err(err).Msg("failed to write provider test response")
@@ -2956,8 +3002,7 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 
 	testProvider, err := providers.NewForProvider(cfg, provider, model)
 	if err != nil {
-		testResult.Success = false
-		testResult.Message = "Failed to create provider"
+		testResult = newAIProviderTestFailureResponse(provider, model, err)
 		log.Error().Err(err).Str("provider", provider).Msg("AI provider creation failed")
 		if err := utils.WriteJSONResponse(w, testResult); err != nil {
 			log.Error().Err(err).Msg("failed to write JSON response")
@@ -2967,12 +3012,12 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 
 	err = testProvider.TestConnection(ctx)
 	if err != nil {
-		testResult.Success = false
-		testResult.Message = "Connection test failed"
+		testResult = newAIProviderTestFailureResponse(provider, model, err)
 		log.Error().Err(err).Str("provider", provider).Msg("AI provider connection test failed")
 	} else {
 		testResult.Success = true
 		testResult.Message = "Connection successful"
+		testResult.Model = config.NormalizeQuickstartModelString(model)
 	}
 
 	if err := utils.WriteJSONResponse(w, testResult); err != nil {

@@ -732,7 +732,10 @@ frontend primitive boundary.
     configuration rather than as a generic `AI Services` shell. Settings-save
     feedback must preserve provider-specific preflight failures and successful
     save responses that carry Patrol readiness warnings, including the provider,
-    selected Patrol model, and readiness summary when those fields are present.
+    selected Patrol model, failure cause, safe recommendation, and readiness
+    summary when those fields are present. The settings shell may compose that
+    safe backend diagnostic for display, but it must not infer provider
+    remediation by parsing raw upstream error strings in the browser.
     Runtime controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
     must likewise describe discovery as workload discovery that supplies
     concrete service context to Pulse Assistant and Patrol, not as a generic

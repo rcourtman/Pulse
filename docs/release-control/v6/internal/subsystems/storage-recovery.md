@@ -400,7 +400,7 @@ bypass the API fail-closed execution gate.
     hosted diagnostics do not collapse into false free-tier behavior.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
-    The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, and provider-test model selection remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree.
+    The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, provider-test model selection, and safe provider preflight diagnostics remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree.
     Direct alert-investigation execution controls in `internal/api/ai_handlers.go`
     follow that same split: request-scoped `AutonomousMode:false` and
     `RequireCommandApproval:true` are AI action-governance constraints, not
@@ -2782,6 +2782,12 @@ shared AI/runtime wiring and the poller's provider selection path, but storage
 and recovery surfaces must not grow a second recovery-local config transport
 or provider-shaped configuration payload just because those reads can inform
 operator investigation.
+Provider preflight diagnostics returned by shared AI settings handlers are the
+same AI runtime readiness context. Storage and recovery surfaces may use the
+resulting safe recommendation to direct an operator back to Assistant & Patrol
+settings, but they must not reinterpret provider auth, provider connection, or
+model-selection causes as recovery-source health, backup readiness, or
+storage-control capability.
 That bounded projection is the current TrueNAS floor for storage and recovery:
 operators can inspect TrueNAS pools, datasets, disks, snapshots, and
 replication artifacts through the shared storage and recovery pages plus

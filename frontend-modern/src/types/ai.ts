@@ -131,6 +131,21 @@ export interface AITestResult {
   success: boolean;
   message: string;
   model?: string;
+  cause?: string;
+  summary?: string;
+  recommendation?: string;
+  action?: string;
+}
+
+export interface AIProviderTestResult {
+  success: boolean;
+  message: string;
+  provider: AIProvider;
+  model?: string;
+  cause?: string;
+  summary?: string;
+  recommendation?: string;
+  action?: string;
 }
 
 // Provider descriptions

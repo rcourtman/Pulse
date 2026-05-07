@@ -13,6 +13,7 @@ import type {
   AISettings,
   AISettingsUpdateRequest,
   AITestResult,
+  AIProviderTestResult,
   AIExecuteResponse,
   AIStreamEvent,
   AICostSummary,
@@ -49,12 +50,10 @@ export class AIAPI {
   }
 
   // Test a specific provider connection
-  static async testProvider(
-    provider: string,
-  ): Promise<{ success: boolean; message: string; provider: string }> {
+  static async testProvider(provider: string): Promise<AIProviderTestResult> {
     return apiFetchJSON(`${this.baseUrl}/ai/test/${encodeURIComponent(provider)}`, {
       method: 'POST',
-    }) as Promise<{ success: boolean; message: string; provider: string }>;
+    }) as Promise<AIProviderTestResult>;
   }
 
   // Get available models from the AI provider

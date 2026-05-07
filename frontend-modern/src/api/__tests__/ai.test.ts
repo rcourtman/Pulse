@@ -120,6 +120,27 @@ describe('AIAPI', () => {
     });
   });
 
+  it('returns provider preflight diagnostics without narrowing the API payload', async () => {
+    const diagnostic = {
+      success: false,
+      message: 'Provider authentication issue',
+      provider: 'openrouter',
+      model: 'openrouter:deepseek/deepseek-r1',
+      cause: 'provider_auth',
+      summary:
+        'Pulse Patrol cannot analyze your infrastructure because the provider rejected the configured credentials or account access.',
+      recommendation:
+        'Check the API key or provider authentication in Patrol provider settings, then rerun Patrol.',
+      action: 'open_provider_settings',
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(diagnostic as any);
+
+    await expect(AIAPI.testProvider('openrouter')).resolves.toMatchObject(diagnostic);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/test/openrouter', {
+      method: 'POST',
+    });
+  });
+
   it('fetches canonical intelligence summaries with encoded resource ids', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
     await AIAPI.getIntelligenceSummary();
@@ -139,9 +160,12 @@ describe('AIAPI', () => {
   });
 
   it('treats 402 responses from optional AI paywalled collections as empty state', async () => {
-    const paymentRequiredError = Object.assign(new Error('Approval management requires Pulse Pro'), {
-      status: 402,
-    });
+    const paymentRequiredError = Object.assign(
+      new Error('Approval management requires Pulse Pro'),
+      {
+        status: 402,
+      },
+    );
 
     apiFetchJSONMock.mockRejectedValueOnce(paymentRequiredError);
     await expect(AIAPI.getPendingApprovals()).resolves.toEqual([]);
@@ -179,7 +203,9 @@ describe('AIAPI', () => {
   });
 
   it('does not swallow non-404 investigation lookup failures', async () => {
-    apiFetchJSONMock.mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
+    apiFetchJSONMock.mockRejectedValueOnce(
+      Object.assign(new Error('Payment Required'), { status: 402 }),
+    );
     await expect(AIAPI.getInvestigation('finding-2')).rejects.toThrow('Payment Required');
 
     apiFetchJSONMock.mockRejectedValueOnce(new Error('backend down'));

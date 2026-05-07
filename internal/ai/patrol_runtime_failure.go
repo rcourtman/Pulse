@@ -2,12 +2,35 @@ package ai
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
 
 const patrolRuntimeFailureDetailLimit = 2000
 const patrolProviderNotConfiguredReason = "Patrol provider not configured - open Assistant & Patrol provider settings, configure a provider, and choose a Patrol model that supports tools"
+
+var patrolRuntimeFailureDetailRedactors = []struct {
+	pattern     *regexp.Regexp
+	replacement string
+}{
+	{
+		pattern:     regexp.MustCompile(`(?i)([?&](?:key|api_key|apikey|access_token|token)=)[^\s&"']+`),
+		replacement: `${1}[redacted]`,
+	},
+	{
+		pattern:     regexp.MustCompile(`(?i)("(?:api[_-]?key|apikey|access[_-]?token|token|authorization|x-api-key)"\s*:\s*")[^"]+`),
+		replacement: `${1}[redacted]`,
+	},
+	{
+		pattern:     regexp.MustCompile(`(?i)((?:authorization:\s*bearer|x-api-key:)\s+)[^\s,;]+`),
+		replacement: `${1}[redacted]`,
+	},
+	{
+		pattern:     regexp.MustCompile(`(?i)(https?://)[^\s/@:]+:[^\s/@]+@`),
+		replacement: `${1}[redacted]@`,
+	},
+}
 
 type patrolRuntimeFailure struct {
 	Title          string
@@ -19,12 +42,31 @@ type patrolRuntimeFailure struct {
 	Evidence       string
 }
 
+type PatrolRuntimeFailureDiagnostic struct {
+	Title          string
+	Summary        string
+	Cause          PatrolFailureCause
+	Description    string
+	Recommendation string
+}
+
+func ClassifyPatrolRuntimeFailure(err error) PatrolRuntimeFailureDiagnostic {
+	failure := patrolRuntimeFailureFromError(err)
+	return PatrolRuntimeFailureDiagnostic{
+		Title:          failure.Title,
+		Summary:        failure.Summary,
+		Cause:          failure.Cause,
+		Description:    failure.Description,
+		Recommendation: failure.Recommendation,
+	}
+}
+
 func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	raw := ""
 	if err != nil {
 		raw = strings.TrimSpace(err.Error())
 	}
-	detail := truncateString(raw, patrolRuntimeFailureDetailLimit)
+	detail := truncateString(redactPatrolRuntimeFailureDetail(raw), patrolRuntimeFailureDetailLimit)
 	lower := strings.ToLower(raw)
 
 	failure := patrolRuntimeFailure{
@@ -90,6 +132,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		failure.Description = "Pulse Patrol cannot analyze your infrastructure because the provider rejected the configured credentials or account access."
 		failure.Recommendation = "Check the API key or provider authentication in Patrol provider settings, then rerun Patrol."
 	case strings.Contains(lower, "not configured") ||
+		strings.Contains(lower, "no provider configured") ||
 		strings.Contains(lower, "chat service not available") ||
 		strings.Contains(lower, "provider not available") ||
 		strings.Contains(lower, "failed to create provider"):
@@ -103,7 +146,9 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		strings.Contains(lower, "no such host") ||
 		strings.Contains(lower, "i/o timeout") ||
 		strings.Contains(lower, "context deadline exceeded") ||
-		strings.Contains(lower, "timeout"):
+		strings.Contains(lower, "timeout") ||
+		strings.Contains(lower, "returned status 5") ||
+		strings.Contains(lower, "api error (5"):
 		failure.Title = "Pulse Patrol: Provider connection issue"
 		failure.Summary = "Provider connection issue"
 		failure.Cause = PatrolFailureCauseProviderConnection
@@ -116,6 +161,14 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	}
 
 	return failure
+}
+
+func redactPatrolRuntimeFailureDetail(raw string) string {
+	redacted := raw
+	for _, redactor := range patrolRuntimeFailureDetailRedactors {
+		redacted = redactor.pattern.ReplaceAllString(redacted, redactor.replacement)
+	}
+	return redacted
 }
 
 func newPatrolRuntimeFailureFinding(failure patrolRuntimeFailure, now time.Time) *Finding {

@@ -1215,12 +1215,23 @@ func TestAISettingsHandler_TestConnection_Failure(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Model          string `json:"model"`
+		Cause          string `json:"cause"`
+		Summary        string `json:"summary"`
+		Recommendation string `json:"recommendation"`
+		Action         string `json:"action"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
-	assert.Equal(t, "Connection test failed", resp.Message)
+	assert.Equal(t, "Provider connection issue", resp.Message)
+	assert.Equal(t, "ollama:llama3", resp.Model)
+	assert.Equal(t, string(ai.PatrolFailureCauseProviderConnection), resp.Cause)
+	assert.Contains(t, resp.Summary, "healthy connection")
+	assert.Contains(t, resp.Recommendation, "Check provider reachability")
+	assert.Equal(t, "open_provider_settings", resp.Action)
+	assert.NotContains(t, rec.Body.String(), "Ollama returned status 500")
 }
 
 func TestAISettingsHandler_TestConnection_NoConfig(t *testing.T) {
@@ -1241,12 +1252,16 @@ func TestAISettingsHandler_TestConnection_NoConfig(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Cause          string `json:"cause"`
+		Recommendation string `json:"recommendation"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
-	assert.Equal(t, "Connection test failed", resp.Message)
+	assert.Equal(t, "Provider not ready", resp.Message)
+	assert.Equal(t, string(ai.PatrolFailureCauseProviderNotConfigured), resp.Cause)
+	assert.Contains(t, resp.Recommendation, "provider settings")
 }
 
 // ========================================
@@ -1293,14 +1308,20 @@ func TestAISettingsHandler_TestProvider_NotConfigured(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp struct {
-		Success  bool   `json:"success"`
-		Message  string `json:"message"`
-		Provider string `json:"provider"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Provider       string `json:"provider"`
+		Cause          string `json:"cause"`
+		Recommendation string `json:"recommendation"`
+		Action         string `json:"action"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
 	assert.Equal(t, "Provider not configured", resp.Message)
 	assert.Equal(t, "openai", resp.Provider)
+	assert.Equal(t, string(ai.PatrolFailureCauseProviderNotConfigured), resp.Cause)
+	assert.Contains(t, resp.Recommendation, "configure the provider")
+	assert.Equal(t, "open_provider_settings", resp.Action)
 }
 
 func TestAISettingsHandler_TestProvider_NoAIConfig(t *testing.T) {
@@ -1322,14 +1343,20 @@ func TestAISettingsHandler_TestProvider_NoAIConfig(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp struct {
-		Success  bool   `json:"success"`
-		Message  string `json:"message"`
-		Provider string `json:"provider"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Provider       string `json:"provider"`
+		Cause          string `json:"cause"`
+		Recommendation string `json:"recommendation"`
+		Action         string `json:"action"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
 	assert.Equal(t, "Provider not configured", resp.Message)
 	assert.Equal(t, "ollama", resp.Provider)
+	assert.Equal(t, string(ai.PatrolFailureCauseProviderNotConfigured), resp.Cause)
+	assert.Contains(t, resp.Recommendation, "provider settings")
+	assert.Equal(t, "open_provider_settings", resp.Action)
 }
 
 func TestAISettingsHandler_TestProvider_ConnectionFailure(t *testing.T) {
@@ -1362,14 +1389,132 @@ func TestAISettingsHandler_TestProvider_ConnectionFailure(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp struct {
-		Success  bool   `json:"success"`
-		Message  string `json:"message"`
-		Provider string `json:"provider"`
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Provider       string `json:"provider"`
+		Model          string `json:"model"`
+		Cause          string `json:"cause"`
+		Summary        string `json:"summary"`
+		Recommendation string `json:"recommendation"`
+		Action         string `json:"action"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.False(t, resp.Success)
-	assert.Equal(t, "Connection test failed", resp.Message)
+	assert.Equal(t, "Provider connection issue", resp.Message)
 	assert.Equal(t, "ollama", resp.Provider)
+	assert.Equal(t, "ollama:llama3", resp.Model)
+	assert.Equal(t, string(ai.PatrolFailureCauseProviderConnection), resp.Cause)
+	assert.Contains(t, resp.Summary, "healthy connection")
+	assert.Contains(t, resp.Recommendation, "Check provider reachability")
+	assert.Equal(t, "open_provider_settings", resp.Action)
+	assert.NotContains(t, rec.Body.String(), "Ollama returned status 500")
+}
+
+func TestAISettingsHandler_TestProvider_AuthFailureUsesSafeDiagnostic(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer ollama.Close()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = ollama.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestProvider(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Provider       string `json:"provider"`
+		Model          string `json:"model"`
+		Cause          string `json:"cause"`
+		Summary        string `json:"summary"`
+		Recommendation string `json:"recommendation"`
+		Action         string `json:"action"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Provider authentication issue", resp.Message)
+	assert.Equal(t, "ollama", resp.Provider)
+	assert.Equal(t, "ollama:llama3", resp.Model)
+	assert.Equal(t, string(ai.PatrolFailureCauseProviderAuth), resp.Cause)
+	assert.Contains(t, resp.Summary, "credentials")
+	assert.Contains(t, resp.Recommendation, "API key")
+	assert.Equal(t, "open_provider_settings", resp.Action)
+	assert.NotContains(t, rec.Body.String(), "Ollama returned status 401")
+}
+
+func TestAISettingsHandler_TestProvider_ModelUnavailableUsesSafeDiagnostic(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/version":
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []map[string]any{{"name": "llama3:latest"}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ollama.Close()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:missing:latest"
+	aiCfg.OllamaBaseURL = ollama.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestProvider(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Success        bool   `json:"success"`
+		Message        string `json:"message"`
+		Provider       string `json:"provider"`
+		Model          string `json:"model"`
+		Cause          string `json:"cause"`
+		Summary        string `json:"summary"`
+		Recommendation string `json:"recommendation"`
+		Action         string `json:"action"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Selected model unavailable", resp.Message)
+	assert.Equal(t, "ollama", resp.Provider)
+	assert.Equal(t, "ollama:missing:latest", resp.Model)
+	assert.Equal(t, string(ai.PatrolFailureCauseModelUnavailable), resp.Cause)
+	assert.Contains(t, resp.Summary, "configured Patrol model")
+	assert.Contains(t, resp.Recommendation, "choose one of the models")
+	assert.Equal(t, "open_provider_settings", resp.Action)
+	assert.NotContains(t, rec.Body.String(), "found: llama3:latest")
 }
 
 // ========================================
