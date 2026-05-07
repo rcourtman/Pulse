@@ -877,8 +877,9 @@ frontend primitive boundary.
     assessment handoff may add live pending
     approval posture only as safe structured metadata: approval ID, pending
     status, risk, target, requested/expiry timestamps, action plan identity,
-    approval policy, plan expiry, dry-run posture, and command count. Those
-    entries may be passed through shared chat transport as `handoff_actions` for
+    requester identity, approval policy, plan expiry, dry-run posture, and
+    command count. Those entries may be passed through shared chat transport as
+    `handoff_actions` for
     model-only refresh, but the shared drawer stays a generic shell rather than
     a Patrol summary prompt builder. The Patrol helper may turn those same safe
     references into visible action labels, safety notes, and approval-aware

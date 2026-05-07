@@ -439,7 +439,10 @@ the canonical monitored-system blocked payload.
    hydration. Queueing a Patrol investigation fix must stamp the action request
    and initial lifecycle events as `pulse_patrol`; it must not execute the fix,
    create a Patrol-local audit record that bypasses `/api/actions`, or present
-   Patrol-origin proposals as generic Assistant-origin actions.
+   Patrol-origin proposals as generic Assistant-origin actions. `/api/ai/approvals`
+   must expose the persisted `requestedBy` identity so frontend Assistant
+   handoffs can carry Patrol provenance before the chat runtime refreshes the
+   current action state from action audit.
    Action execution is API-owned as the next explicit contract:
    `POST /api/actions/{id}/execute` may only start execution for an approved
    action or an approval-free executable plan, must atomically persist the
@@ -3157,8 +3160,9 @@ server-refreshed approval, resource, or action authority. Frontend Patrol
 handoff helpers may consume current pending
 approval list payloads only as safe metadata for that visible briefing and any
    structured `handoff_actions`: approval ID, status, risk, request/expiry
-   timestamps, target label, action ID, approval policy, plan expiry, and dry-run
-   summary are allowed. Assessment-level visible briefings may reuse that same
+   timestamps, target label, requester identity, action ID, approval policy,
+   plan expiry, and dry-run summary are allowed. Assessment-level visible
+   briefings may reuse that same
    safe metadata for action labels, safety notes, and approval-aware suggested
    prompts, while approval command text remains inside the governed
    approval/remediation surface.

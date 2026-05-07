@@ -4,6 +4,7 @@ import type { PatrolRunRecord } from '@/api/patrol';
 
 import {
   buildPatrolAssessmentAssistantHandoff,
+  buildPatrolAssistantApprovalBriefingInput,
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingHandoff,
   buildPatrolAssistantFindingHandoffActions,
@@ -375,6 +376,7 @@ describe('patrolInvestigationContextModel', () => {
             actionPlanMessage: 'Restart after the backup window clears.',
             actionPreflight: 'Restart workload service',
             actionDryRunSummary: 'No provider-supported dry run is available for this action.',
+            actionRequestedBy: 'pulse_patrol',
           },
           proposedFix: {
             description: 'Restart the workload service',
@@ -396,6 +398,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffContext).toContain('high risk');
     expect(handoff.context.handoffContext).toContain('approval target web-server');
     expect(handoff.context.handoffContext).toContain('expires 2026-05-06T12:10:00Z');
+    expect(handoff.context.handoffContext).toContain('requested by pulse_patrol');
     expect(handoff.context.handoffContext).toContain('1 command recorded for approval context');
     expect(handoff.context.handoffContext).toContain('destructive proposed fix');
     expect(handoff.context.handoffActions).toHaveLength(1);
@@ -406,6 +409,7 @@ describe('patrolInvestigationContextModel', () => {
       approvalRequestedAt: '2026-05-06T12:00:00Z',
       approvalExpiresAt: '2026-05-06T12:10:00Z',
       actionId: 'action-1',
+      actionRequestedBy: 'pulse_patrol',
       actionApprovalPolicy: 'admin',
       actionRequiresApproval: true,
       actionPlanExpiresAt: '2026-05-06T12:10:00Z',
@@ -641,6 +645,35 @@ describe('patrolInvestigationContextModel', () => {
     expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
   });
 
+  it('carries approval requester identity into safe Patrol handoff metadata', () => {
+    const briefing = buildPatrolAssistantApprovalBriefingInput({
+      id: 'approval-1',
+      toolId: 'investigation_fix',
+      command: 'systemctl restart nginx',
+      targetType: 'investigation',
+      targetId: 'finding-1',
+      targetName: 'node-1',
+      context: 'Restart nginx after Patrol investigation',
+      requestedBy: 'pulse_patrol',
+      riskLevel: 'high',
+      status: 'pending',
+      requestedAt: '2026-05-06T12:00:00Z',
+      expiresAt: '2026-05-06T12:10:00Z',
+      plan: {
+        actionId: 'action-1',
+        approvalPolicy: 'admin',
+      },
+    });
+
+    expect(briefing).toMatchObject({
+      id: 'approval-1',
+      actionId: 'action-1',
+      actionApprovalPolicy: 'admin',
+      actionRequestedBy: 'pulse_patrol',
+    });
+    expect(JSON.stringify(briefing)).not.toContain('systemctl restart nginx');
+  });
+
   it('frames Assistant handoff around the structured Patrol record when one exists', () => {
     expect(
       buildPatrolAssistantFindingPrompt({
@@ -737,6 +770,7 @@ describe('patrolInvestigationContextModel', () => {
         actionPlanMessage: 'Restart nginx after validating load balancer drain.',
         actionPreflight: 'Would restart nginx on node-1.',
         actionDryRunSummary: 'One service restart would be attempted.',
+        actionRequestedBy: 'pulse_patrol',
       },
       proposedFix: buildPatrolAssistantProposedFixBriefingInput({
         description: 'Restart nginx',
@@ -756,6 +790,7 @@ describe('patrolInvestigationContextModel', () => {
         approvalRequestedAt: '2026-05-06T12:00:00Z',
         approvalExpiresAt: '2026-05-06T12:10:00Z',
         actionId: 'restart-nginx',
+        actionRequestedBy: 'pulse_patrol',
         actionApprovalPolicy: 'operator',
         actionRequiresApproval: true,
         actionPlanExpiresAt: '2026-05-06T12:10:00Z',
@@ -818,6 +853,7 @@ describe('patrolInvestigationContextModel', () => {
         actionPlanMessage: 'Restart nginx after validating load balancer drain.',
         actionPreflight: 'Would restart nginx on node-1.',
         actionDryRunSummary: 'One service restart would be attempted.',
+        actionRequestedBy: 'pulse_patrol',
       },
       proposedFix: buildPatrolAssistantProposedFixBriefingInput({
         description: 'Restart nginx',
@@ -846,6 +882,7 @@ describe('patrolInvestigationContextModel', () => {
     });
     expect(handoff.context.handoffContext).toContain('[Patrol Finding Context]');
     expect(handoff.context.handoffContext).toContain('Approval: approval-1');
+    expect(handoff.context.handoffContext).toContain('Action Requested By: pulse_patrol');
     expect(handoff.context.handoffContext).toContain(
       'Dry-Run Posture: One service restart would be attempted.',
     );

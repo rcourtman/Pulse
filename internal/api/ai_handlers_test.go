@@ -2636,9 +2636,10 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 
 	appID := "app-123"
 	_ = approvalStore.CreateApproval(&approval.ApprovalRequest{
-		ID:      appID,
-		Command: "ls -la",
-		Status:  approval.StatusPending,
+		ID:          appID,
+		Command:     "ls -la",
+		RequestedBy: approval.RequesterPulsePatrol,
+		Status:      approval.StatusPending,
 	})
 
 	t.Run("HandleGetApproval", func(t *testing.T) {
@@ -2651,6 +2652,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		err := json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.Equal(t, appID, resp.ID)
+		assert.Equal(t, approval.RequesterPulsePatrol, resp.RequestedBy)
 	})
 
 	t.Run("HandleListApprovals", func(t *testing.T) {
@@ -2667,6 +2669,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, resp.Approvals, 1)
 		assert.Equal(t, appID, resp.Approvals[0].ID)
+		assert.Equal(t, approval.RequesterPulsePatrol, resp.Approvals[0].RequestedBy)
 		assert.Equal(t, 1, resp.Stats["pending"])
 	})
 

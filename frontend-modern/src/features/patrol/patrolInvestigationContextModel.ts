@@ -95,6 +95,7 @@ export interface PatrolAssistantApprovalBriefingInput {
   actionPlanMessage?: string | null;
   actionPreflight?: string | null;
   actionDryRunSummary?: string | null;
+  actionRequestedBy?: string | null;
 }
 
 export interface PatrolAssistantProposedFixBriefingInput {
@@ -414,6 +415,7 @@ export function buildPatrolAssistantApprovalBriefingInput(
     actionPlanMessage: normalizeText(approval.plan?.message || approval.plan?.summary),
     actionPreflight: normalizeText(approval.preflight?.intendedChange),
     actionDryRunSummary: normalizeText(approval.preflight?.dryRunSummary),
+    actionRequestedBy: normalizeText(approval.requestedBy),
   };
 }
 
@@ -1448,6 +1450,7 @@ function buildPatrolFindingHandoffAction(
     approvalRequestedAt: pendingApproval.requestedAt || undefined,
     approvalExpiresAt: pendingApproval.expiresAt || undefined,
     actionId: pendingApproval.actionId || undefined,
+    actionRequestedBy: pendingApproval.actionRequestedBy || undefined,
     actionApprovalPolicy: pendingApproval.actionApprovalPolicy || undefined,
     actionRequiresApproval: Boolean(approvalId),
     actionPlanExpiresAt: pendingApproval.actionPlanExpiresAt || undefined,
@@ -1937,6 +1940,7 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Approval Requested At', pendingApproval.requestedAt),
     formatContextLine('Approval Expires At', pendingApproval.expiresAt),
     formatContextLine('Approval Policy', pendingApproval.actionApprovalPolicy),
+    formatContextLine('Action Requested By', pendingApproval.actionRequestedBy),
     formatContextLine('Approval Plan Expires At', pendingApproval.actionPlanExpiresAt),
     formatContextLine('Action Plan Summary', pendingApproval.actionPlanMessage),
     formatContextLine('Action Preflight', pendingApproval.actionPreflight),
@@ -1977,6 +1981,9 @@ function formatAssessmentPendingApprovalContextParts(
   }
   if (approval.requestedAt) {
     parts.push(`requested ${approval.requestedAt}`);
+  }
+  if (approval.actionRequestedBy) {
+    parts.push(`requested by ${approval.actionRequestedBy}`);
   }
   return parts;
 }
@@ -2371,6 +2378,9 @@ function buildPatrolAssistantOperatorDecision(
       if (pendingApproval.requestedAt) {
         parts.push(`requested ${pendingApproval.requestedAt}`);
       }
+      if (pendingApproval.actionRequestedBy) {
+        parts.push(`requested by ${pendingApproval.actionRequestedBy}`);
+      }
       if (record.proposed_fix) {
         const fixId = normalizeText(record.proposed_fix.id);
         if (fixId) {
@@ -2434,6 +2444,9 @@ function buildPatrolAssistantOperatorDecision(
     }
     if (pendingApproval.requestedAt) {
       parts.push(`Requested: ${pendingApproval.requestedAt}.`);
+    }
+    if (pendingApproval.actionRequestedBy) {
+      parts.push(`Requested by: ${pendingApproval.actionRequestedBy}.`);
     }
     return parts.join(' ');
   }
@@ -2559,6 +2572,7 @@ function normalizeApprovalBriefing(
     actionPlanMessage: normalizeText(approval?.actionPlanMessage),
     actionPreflight: normalizeText(approval?.actionPreflight),
     actionDryRunSummary: normalizeText(approval?.actionDryRunSummary),
+    actionRequestedBy: normalizeText(approval?.actionRequestedBy),
   };
 }
 

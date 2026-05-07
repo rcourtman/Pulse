@@ -24,6 +24,7 @@ type ApprovalInfo struct {
 	TargetID          string                 `json:"targetId"`
 	TargetName        string                 `json:"targetName"`
 	Context           string                 `json:"context"`
+	RequestedBy       string                 `json:"requestedBy,omitempty"`
 	RiskLevel         string                 `json:"riskLevel"`
 	Status            string                 `json:"status"`
 	RequestedAt       time.Time              `json:"requestedAt"`

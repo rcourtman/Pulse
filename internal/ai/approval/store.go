@@ -83,7 +83,8 @@ type ApprovalRequest struct {
 	TargetType  string         `json:"targetType"` // agent, container, vm, node
 	TargetID    string         `json:"targetId"`
 	TargetName  string         `json:"targetName"`
-	Context     string         `json:"context"`   // Why AI wants to run this
+	Context     string         `json:"context"` // Why AI wants to run this
+	RequestedBy string         `json:"requestedBy,omitempty"`
 	RiskLevel   RiskLevel      `json:"riskLevel"` // low, medium, high
 	Status      ApprovalStatus `json:"status"`
 	RequestedAt time.Time      `json:"requestedAt"`
@@ -130,6 +131,9 @@ func BelongsToOrg(req *ApprovalRequest, orgID string) bool {
 func RequesterForRequest(req *ApprovalRequest) string {
 	if req == nil {
 		return RequesterPulseAssistant
+	}
+	if requester := strings.TrimSpace(req.RequestedBy); requester != "" {
+		return requester
 	}
 	if strings.TrimSpace(req.ToolID) == "investigation_fix" ||
 		strings.TrimSpace(req.TargetType) == "investigation" {
@@ -258,6 +262,7 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 	if req.ExpiresAt.IsZero() {
 		req.ExpiresAt = req.RequestedAt.Add(s.defaultTimeout)
 	}
+	req.RequestedBy = RequesterForRequest(req)
 	if req.Plan != nil {
 		if strings.TrimSpace(req.Plan.ActionID) == "" {
 			req.Plan.ActionID = uuid.New().String()

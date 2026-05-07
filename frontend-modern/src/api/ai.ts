@@ -584,6 +584,7 @@ export interface ApprovalRequest {
   targetId: string;
   targetName: string;
   context: string;
+  requestedBy?: string;
   riskLevel: RiskLevel;
   status: ApprovalStatus;
   requestedAt: string;

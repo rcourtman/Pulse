@@ -287,6 +287,9 @@ func TestCreateApproval_UsesPatrolRequesterForInvestigationFixPreflight(t *testi
 	if got := RequesterForRequest(req); got != RequesterPulsePatrol {
 		t.Fatalf("RequesterForRequest = %q, want %q", got, RequesterPulsePatrol)
 	}
+	if req.RequestedBy != RequesterPulsePatrol {
+		t.Fatalf("requestedBy = %q, want %q", req.RequestedBy, RequesterPulsePatrol)
+	}
 	if req.Plan.Preflight == nil {
 		t.Fatal("expected normalized action preflight")
 	}
@@ -295,6 +298,47 @@ func TestCreateApproval_UsesPatrolRequesterForInvestigationFixPreflight(t *testi
 	}
 	if len(req.Plan.Preflight.VerificationSteps) == 0 {
 		t.Fatalf("expected request-context normalized preflight: %#v", req.Plan.Preflight)
+	}
+}
+
+func TestCreateApproval_PreservesExplicitRequester(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	req := &ApprovalRequest{
+		ID:          "approval-explicit-requester",
+		ToolID:      "investigation_fix",
+		Command:     "systemctl restart nginx",
+		TargetType:  "investigation",
+		TargetID:    "finding-123",
+		Context:     "Restart nginx after Patrol investigation",
+		RequestedBy: "pulse_custom",
+		Plan: &unifiedresources.ActionPlan{
+			ActionID:         "action-explicit-requester",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+			PlannedAt:        time.Now().UTC(),
+		},
+	}
+
+	if err := store.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval() error = %v", err)
+	}
+	if req.RequestedBy != "pulse_custom" {
+		t.Fatalf("requestedBy = %q, want pulse_custom", req.RequestedBy)
+	}
+	if got := RequesterForRequest(req); got != "pulse_custom" {
+		t.Fatalf("RequesterForRequest = %q, want pulse_custom", got)
 	}
 }
 

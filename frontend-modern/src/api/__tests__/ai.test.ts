@@ -186,6 +186,24 @@ describe('AIAPI', () => {
     await expect(AIAPI.getPendingApprovals()).resolves.toEqual([]);
   });
 
+  it('preserves approval requester identity from pending approvals', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      approvals: [
+        {
+          id: 'approval-1',
+          requestedBy: 'pulse_patrol',
+        },
+      ],
+    } as any);
+
+    await expect(AIAPI.getPendingApprovals()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'approval-1',
+        requestedBy: 'pulse_patrol',
+      }),
+    ]);
+  });
+
   it('normalizes remediation plans from optional or legacy collection payloads', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ plans: [{ id: 'plan-1' }] } as any);
     await expect(AIAPI.getRemediationPlans()).resolves.toEqual({

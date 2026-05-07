@@ -854,7 +854,10 @@ Assistant handoffs and resource timelines can hydrate the same canonical
 action record before any operator decision or execution occurs. Those queued
 fix records must carry `pulse_patrol` as the requester and lifecycle actor so
 resource timelines preserve the product source of the proposal instead of
-flattening proactive Patrol work into generic Assistant chat activity.
+flattening proactive Patrol work into generic Assistant chat activity. Pending
+approval payloads and Patrol Assistant handoff actions must carry the same
+requester identity as safe metadata, without copying the approval command
+payload into Assistant.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches
