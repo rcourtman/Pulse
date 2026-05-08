@@ -82,6 +82,7 @@ describe('aiIntelligenceStore', () => {
             confidence: 'medium',
             evidence: [],
             verification: [],
+            rollback: [],
             tools_used: [],
             started_at: '2026-03-05T00:00:00Z',
           },

@@ -367,6 +367,7 @@ export interface InvestigationRecordTrigger {
   title?: string;
   detected_at: string;
   description?: string;
+  cause?: string;
 }
 
 export interface InvestigationRecordEvidence {
@@ -396,9 +397,11 @@ export interface InvestigationRecord {
   confidence?: 'low' | 'medium' | 'high';
   evidence: InvestigationRecordEvidence[];
   conclusion?: string;
+  impact?: string;
   recommended_action?: string;
   proposed_fix?: InvestigationRecordFix;
   verification: string[];
+  rollback: string[];
   tools_used: string[];
   started_at: string;
   completed_at?: string;

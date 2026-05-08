@@ -239,7 +239,19 @@ Patrol-specific presentation helpers.
    timeline summary. The inline Patrol investigation surface must also treat a
    structured `investigationRecord` as investigation data, even when the legacy
    investigation-detail endpoint has no separate session payload, so it must not
-   render empty-state copy above a durable Patrol record.
+   render empty-state copy above a durable Patrol record. The Patrol-owned
+   investigation surface must also expose the durable record's `impact`
+   and `rollback` fields: the shared
+   `frontend-modern/src/components/patrol/InvestigationSection.tsx`
+   renderer surfaces an explicit `Impact not assessed` placeholder whenever
+   an investigation record exists with no impact text, and a parallel
+   `Rollback not specified` placeholder whenever rollback is empty, so the
+   operator-visible gap is conspicuous rather than hidden. The Patrol
+   operator briefing card built by
+   `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
+   may include populated impact text in its bounded detail lines but must
+   omit the placeholder copy from that compact card so it stays tight,
+   leaving placeholder rendering to the full investigation surface.
    The primary Patrol assessment summary may open Assistant as a whole-surface
    review handoff, but that handoff must also flow through
    `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`.

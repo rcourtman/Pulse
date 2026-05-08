@@ -227,7 +227,15 @@ runtime cost control, and shared AI transport surfaces.
     `InvestigationSession` as execution detail, but Assistant handoff,
     unified findings, persistence, and approval/remediation context must use
     the durable investigation record when they need operator-facing
-    investigation context. When `/api/ai/chat` receives `finding_id`, the
+    investigation context. The durable record carries top-level `impact`
+    and `rollback` strings alongside the existing `verification` array, so
+    Assistant `/api/ai/chat` enrichment surfaces consequence-if-ignored and
+    undo intent when Patrol has populated them and remains silent when the
+    fields are empty rather than fabricating placeholder analysis through
+    the model. The TS API client must keep its `InvestigationRecord` and
+    `InvestigationRecordTrigger` mirrors aligned with the Go struct,
+    including the `trigger.cause` string, so frontend handoff context does
+    not lose backend-attributed failure cause. When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so

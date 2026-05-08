@@ -112,6 +112,7 @@ describe('InvestigationSection', () => {
         target_host: 'pve-1',
       },
       verification: ['CPU returned below 50%'],
+      rollback: [],
       tools_used: ['metrics.history'],
       started_at: '2026-05-06T12:00:00Z',
     };

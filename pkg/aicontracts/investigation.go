@@ -150,9 +150,11 @@ type InvestigationRecord struct {
 	Confidence        InvestigationRecordConfidence `json:"confidence,omitempty"`
 	Evidence          []InvestigationRecordEvidence `json:"evidence"`
 	Conclusion        string                        `json:"conclusion,omitempty"`
+	Impact            string                        `json:"impact,omitempty"`
 	RecommendedAction string                        `json:"recommended_action,omitempty"`
 	ProposedFix       *InvestigationRecordFix       `json:"proposed_fix,omitempty"`
 	Verification      []string                      `json:"verification"`
+	Rollback          []string                      `json:"rollback"`
 	ToolsUsed         []string                      `json:"tools_used"`
 	StartedAt         time.Time                     `json:"started_at"`
 	CompletedAt       *time.Time                    `json:"completed_at,omitempty"`
@@ -212,6 +214,9 @@ func (r InvestigationRecord) NormalizeCollections() InvestigationRecord {
 	}
 	if r.Verification == nil {
 		r.Verification = []string{}
+	}
+	if r.Rollback == nil {
+		r.Rollback = []string{}
 	}
 	if r.ToolsUsed == nil {
 		r.ToolsUsed = []string{}

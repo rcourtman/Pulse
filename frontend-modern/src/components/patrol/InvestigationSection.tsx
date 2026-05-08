@@ -219,6 +219,21 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             )}
           </Show>
 
+          <Show when={investigationRecord().hasRecord}>
+            <div class="mt-2">
+              <div class="text-[10px] font-medium uppercase text-muted">Impact</div>
+              <p
+                class="mt-1 text-xs"
+                classList={{
+                  'text-muted': Boolean(investigationRecord().impact),
+                  'italic text-muted/70': !investigationRecord().impact,
+                }}
+              >
+                {investigationRecord().impact || 'Impact not assessed'}
+              </p>
+            </div>
+          </Show>
+
           <Show when={investigationRecord().evidenceSummaries.length > 0}>
             <div class="mt-2">
               <div class="text-[10px] font-medium uppercase text-muted">Evidence</div>
@@ -238,6 +253,24 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                   {(item) => <li>{item}</li>}
                 </For>
               </ul>
+            </div>
+          </Show>
+
+          <Show when={investigationRecord().hasRecord}>
+            <div class="mt-2">
+              <div class="text-[10px] font-medium uppercase text-muted">Rollback</div>
+              <Show
+                when={investigationRecord().rollbackSummaries.length > 0}
+                fallback={
+                  <p class="mt-1 text-xs italic text-muted/70">Rollback not specified</p>
+                }
+              >
+                <ul class="mt-1 space-y-1 text-xs text-muted">
+                  <For each={investigationRecord().rollbackSummaries}>
+                    {(item) => <li>{item}</li>}
+                  </For>
+                </ul>
+              </Show>
             </div>
           </Show>
 

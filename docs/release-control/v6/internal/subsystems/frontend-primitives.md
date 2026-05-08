@@ -942,7 +942,14 @@ prompt explain the same operator-facing priority.
     investigation-record framing must derive that prompt copy through
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
     so shared drawer primitives stay shell-owned rather than becoming a
-    Patrol-specific prompt formatter. Patrol assessment-level handoffs must use
+    Patrol-specific prompt formatter. That feature-owned presentation
+    helper is the single emitter for investigation-record `impact` and
+    `rollback` fields: when an investigation record exists but those fields
+    are empty, the helper emits explicit `Impact not assessed` and
+    `Rollback not specified` lines into the model-only Patrol finding
+    prompt context so the operator-visible gap is surfaced to Assistant
+    rather than hidden, and shared chat primitives stay free of that
+    placeholder logic. Patrol assessment-level handoffs must use
     that same feature helper to attach bounded model-only assessment,
     verification, latest-run, supporting-context evidence, active-finding, and
     resource reference context while forcing request-local approval-required

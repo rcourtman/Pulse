@@ -90,6 +90,19 @@ func TestBuildFindingInvestigationRecord_FromSession(t *testing.T) {
 	if record.ApprovalID != "approval-1" {
 		t.Fatalf("approval ID = %q", record.ApprovalID)
 	}
+	if record.Impact != "" {
+		t.Fatalf("expected empty default impact, got %q", record.Impact)
+	}
+	if record.Rollback == nil || len(record.Rollback) != 0 {
+		t.Fatalf("expected normalized empty rollback slice, got %#v", record.Rollback)
+	}
+}
+
+func TestEmptyInvestigationRecord_NormalizesRollback(t *testing.T) {
+	record := aicontracts.EmptyInvestigationRecord()
+	if record.Rollback == nil || len(record.Rollback) != 0 {
+		t.Fatalf("expected empty rollback slice on empty record, got %#v", record.Rollback)
+	}
 }
 
 func TestFindingsStore_UpdateInvestigationRecord(t *testing.T) {

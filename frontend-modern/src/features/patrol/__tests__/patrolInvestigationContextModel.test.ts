@@ -294,6 +294,7 @@ describe('patrolInvestigationContextModel', () => {
               destructive: false,
             },
             verification: ['CPU returned below 50%'],
+            rollback: [],
             tools_used: ['ssh.exec'],
             started_at: '2026-05-06T12:00:00Z',
           },
@@ -849,6 +850,7 @@ describe('patrolInvestigationContextModel', () => {
         rationale: 'The process is wedged after backup IO pressure.',
       },
       verification: ['CPU returned below 50%'],
+      rollback: [],
       tools_used: ['metrics.history', 'ssh.exec'],
       started_at: '2026-05-06T12:00:00Z',
     });
@@ -870,6 +872,36 @@ describe('patrolInvestigationContextModel', () => {
       },
     });
     expect(JSON.stringify(presentation)).not.toContain('systemctl restart workload.service');
+    expect(presentation.rollbackSummaries).toEqual([]);
+    expect(presentation.impact).toBe('');
+  });
+
+  it('surfaces investigation impact and rollback when the backend record carries them', () => {
+    const presentation = buildPatrolInvestigationRecordPresentation({
+      id: 'record-2',
+      finding_id: 'finding-2',
+      subject: { resource_id: 'vm-101' },
+      trigger: { title: 'Backup job failing', detected_at: '2026-05-06T12:00:00Z' },
+      status: 'completed',
+      outcome: 'fix_queued',
+      confidence: 'medium',
+      conclusion: 'Datastore quota exhausted.',
+      impact: 'Nightly backups will be skipped; recovery window grows by one day per skip.',
+      recommended_action: 'Free 200GB on the datastore before the next backup window.',
+      evidence: [{ kind: 'metrics', summary: 'datastore 99% full' }],
+      verification: ['Backup job exits 0 on next run'],
+      rollback: ['Restore prior retention policy', 'Re-pin previous datastore mount'],
+      tools_used: [],
+      started_at: '2026-05-06T12:00:00Z',
+    });
+
+    expect(presentation.impact).toBe(
+      'Nightly backups will be skipped; recovery window grows by one day per skip.',
+    );
+    expect(presentation.rollbackSummaries).toEqual([
+      'Restore prior retention policy',
+      'Re-pin previous datastore mount',
+    ]);
   });
 
   it('normalizes safe proposed-fix briefing metadata without command text', () => {
@@ -936,6 +968,7 @@ describe('patrolInvestigationContextModel', () => {
           status: 'completed',
           evidence: [],
           verification: [],
+          rollback: [],
           tools_used: [],
           started_at: '2026-05-06T12:00:00Z',
         },
@@ -1182,6 +1215,7 @@ describe('patrolInvestigationContextModel', () => {
           destructive: true,
         },
         verification: ['CPU returned below 50%'],
+        rollback: [],
         tools_used: [],
         started_at: '2026-05-06T12:00:00Z',
         approval_id: 'approval-1',
@@ -1303,6 +1337,7 @@ describe('patrolInvestigationContextModel', () => {
             destructive: false,
           },
           verification: [],
+          rollback: [],
           tools_used: [],
           started_at: '2026-05-06T12:00:00Z',
         },

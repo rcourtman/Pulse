@@ -56,9 +56,11 @@ export interface PatrolInvestigationRecordPresentation {
   outcomeLabel?: string;
   confidenceLabel?: string;
   conclusion?: string;
+  impact?: string;
   recommendedAction?: string;
   evidenceSummaries: string[];
   verificationSummaries: string[];
+  rollbackSummaries: string[];
   toolsUsed: string[];
   proposedFix?: {
     description: string;
@@ -394,6 +396,7 @@ export function buildPatrolInvestigationRecordPresentation(
       statusLabel: '',
       evidenceSummaries: [],
       verificationSummaries: [],
+      rollbackSummaries: [],
       toolsUsed: [],
     };
   }
@@ -410,12 +413,17 @@ export function buildPatrolInvestigationRecordPresentation(
       ? `${formatIdentifierLabel(record.confidence)} confidence`
       : undefined,
     conclusion: normalizeText(record.conclusion),
+    impact: normalizeText(record.impact),
     recommendedAction: normalizeText(record.recommended_action),
     evidenceSummaries: (record.evidence || [])
       .map((item) => normalizeText(item.summary || item.kind || item.id))
       .filter(Boolean)
       .slice(0, 3),
     verificationSummaries: (record.verification || [])
+      .map(normalizeText)
+      .filter(Boolean)
+      .slice(0, 3),
+    rollbackSummaries: (record.rollback || [])
       .map(normalizeText)
       .filter(Boolean)
       .slice(0, 3),
@@ -2205,6 +2213,10 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Investigation Outcome', record.outcomeLabel),
     formatContextLine('Investigation Confidence', record.confidenceLabel),
     formatContextLine('Conclusion', record.conclusion),
+    formatContextLine(
+      'Impact',
+      record.hasRecord ? record.impact || 'Impact not assessed' : record.impact,
+    ),
     formatContextLine('Recommended Action', record.recommendedAction),
     ...record.evidenceSummaries.map((summary, index) =>
       formatContextLine(`Evidence ${index + 1}`, summary),
@@ -2212,6 +2224,13 @@ function buildPatrolAssistantFindingModelContext(
     ...record.verificationSummaries.map((summary, index) =>
       formatContextLine(`Verification ${index + 1}`, summary),
     ),
+    ...(record.rollbackSummaries.length > 0
+      ? record.rollbackSummaries.map((summary, index) =>
+          formatContextLine(`Rollback ${index + 1}`, summary),
+        )
+      : record.hasRecord
+        ? [formatContextLine('Rollback', 'Rollback not specified')]
+        : []),
     formatContextLine('Tools Used', record.toolsUsed.join(', ')),
     formatContextLine('Approval', pendingApproval.id),
     formatContextLine('Approval Status', pendingApproval.status),
@@ -2440,6 +2459,7 @@ export function buildPatrolAssistantFindingBriefing(
   const detailLines = [
     attentionReason ? `Attention: ${attentionReason}` : undefined,
     record.conclusion,
+    record.impact ? `Impact: ${record.impact}` : undefined,
     record.recommendedAction,
     proposedFixDetail,
     operatorDecision ? `Decision: ${operatorDecision}` : undefined,

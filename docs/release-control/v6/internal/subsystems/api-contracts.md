@@ -946,7 +946,16 @@ the canonical monitored-system blocked payload.
    investigation-record contract, so unified findings may
    expose `investigation_record` only through the shared
    `aicontracts.InvestigationRecord` payload shape, with frontend API types
-   and backend contract tests updated in the same slice as any field change
+   and backend contract tests updated in the same slice as any field change.
+   That shared shape carries top-level `impact` and `rollback` fields
+   alongside the existing `verification` array so paid Patrol responses
+   can name the consequence of operator inaction and the undo intent for a
+   proposed fix at the record root rather than buried inside per-step fix
+   payload, and `trigger.cause` mirrors the Go failure-cause string in the
+   TS API client so frontend consumers see the same patrol-failure
+   attribution the backend persists. Both `impact` and `rollback` are
+   omitempty/normalize-empty and must remain absent rather than fabricated
+   when Patrol has not yet populated them
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

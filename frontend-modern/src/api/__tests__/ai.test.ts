@@ -77,6 +77,7 @@ describe('AIAPI', () => {
             status: 'completed',
             evidence: [],
             verification: [],
+            rollback: [],
             tools_used: [],
             started_at: '2026-03-01T00:00:00Z',
           },
@@ -94,6 +95,55 @@ describe('AIAPI', () => {
         finding_id: 'f1',
       },
     });
+  });
+
+  it('preserves the structured investigation-record shape including impact, rollback, and trigger cause', async () => {
+    apiFetchJSONMock.mockResolvedValue({
+      findings: [
+        {
+          id: 'f-impact',
+          resource_id: 'vm-101',
+          source: 'threshold',
+          severity: 'critical',
+          category: 'storage',
+          title: 'Datastore quota exhausted',
+          detected_at: '2026-05-08T12:00:00Z',
+          alert_identifier: 'canonical-alert-impact',
+          investigation_record: {
+            id: 'investigation-impact',
+            finding_id: 'f-impact',
+            subject: { resource_id: 'vm-101' },
+            trigger: {
+              detected_at: '2026-05-08T12:00:00Z',
+              title: 'Datastore quota exhausted',
+              cause: 'storage_quota_exceeded',
+            },
+            status: 'completed',
+            outcome: 'fix_queued',
+            confidence: 'medium',
+            conclusion: 'Datastore quota exhausted.',
+            impact: 'Nightly backups will be skipped; recovery window grows by one day per skip.',
+            recommended_action: 'Free 200GB before the next backup window.',
+            evidence: [{ kind: 'metrics', summary: 'datastore 99% full' }],
+            verification: ['Backup job exits 0 on next run'],
+            rollback: ['Restore prior retention policy'],
+            tools_used: [],
+            started_at: '2026-05-08T12:00:00Z',
+          },
+        },
+      ],
+      count: 1,
+    } as any);
+
+    const result = await AIAPI.getUnifiedFindings();
+    const record = result.findings[0].investigation_record;
+
+    expect(record).toBeDefined();
+    expect(record!.impact).toBe(
+      'Nightly backups will be skipped; recovery window grows by one day per skip.',
+    );
+    expect(record!.rollback).toEqual(['Restore prior retention policy']);
+    expect(record!.trigger.cause).toBe('storage_quota_exceeded');
   });
 
   it('encodes dynamic provider, approval, finding, and plan identifiers', async () => {
