@@ -12,6 +12,7 @@ export interface AIChatContextBriefing {
   detailLines?: string[];
   evidence?: string[];
   actionLabel?: string;
+  actionHref?: string;
   commandSummary?: string;
   safetyNote?: string;
   suggestedPrompts?: string[];

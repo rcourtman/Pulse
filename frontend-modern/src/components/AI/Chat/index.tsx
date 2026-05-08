@@ -1594,9 +1594,23 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <Show when={contextBriefing()!.actionLabel || contextBriefing()!.commandSummary}>
                 <div class="mt-2 rounded border border-border bg-surface-alt px-2.5 py-2 text-[11px] text-muted">
                   <Show when={contextBriefing()!.actionLabel}>
-                    <div class="font-medium text-base-content">
-                      {contextBriefing()!.actionLabel}
-                    </div>
+                    <Show
+                      when={contextBriefing()!.actionHref}
+                      fallback={
+                        <div class="font-medium text-base-content">
+                          {contextBriefing()!.actionLabel}
+                        </div>
+                      }
+                    >
+                      {(href) => (
+                        <a
+                          href={href()}
+                          class="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+                        >
+                          {contextBriefing()!.actionLabel}
+                        </a>
+                      )}
+                    </Show>
                   </Show>
                   <Show when={contextBriefing()!.commandSummary}>
                     <div>{contextBriefing()!.commandSummary}</div>

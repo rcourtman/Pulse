@@ -415,6 +415,9 @@ runtime cost control, and shared AI transport surfaces.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not
     mutate chat control settings, execute tools, or reveal raw command payloads.
+    Safe route-owned briefing actions may render as app links when the handoff
+    includes an `actionHref`, but those links are navigation guidance only and
+    do not grant tool execution or approval authority.
     When the drawer renders a request-local approval-required banner for a
     scoped handoff, the banner must derive its subject from the attached
     briefing or structured finding context, so Patrol approval/finding handoffs

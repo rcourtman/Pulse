@@ -1289,6 +1289,7 @@ describe('patrolInvestigationContextModel', () => {
     );
     expect(handoff.context.briefing).toMatchObject({
       actionLabel: 'Open Patrol provider settings',
+      actionHref: '/settings/system-ai',
       suggestedPrompts: [
         'Review Patrol next step',
         'Explain current Patrol loop state',

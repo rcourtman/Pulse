@@ -180,12 +180,12 @@ Patrol-specific presentation helpers.
    and safest-next-step review instead of generic incident discussion. Finding
    handoffs must be assembled through the Patrol-owned handoff model so the
    prompt, visible briefing, model-only finding context, resource reference,
-   safe next-step action label, bounded action reference, and request-local
+   safe next-step action label/href, bounded action reference, and request-local
    approval-required posture stay in sync. The model-only context may include
    current finding status, recurrence, investigation record facts, evidence,
    verification, approval posture, dry-run posture, proposed-fix summary, target
-   resource references, and safe route-owned next-step labels such as provider
-   settings without raw command payloads. Inline Patrol approval actions in
+   resource references, and safe route-owned next-step labels/hrefs such as
+   provider settings without raw command payloads. Inline Patrol approval actions in
    `frontend-modern/src/components/patrol/ApprovalSection.tsx` that open
    Assistant must follow that same Patrol-owned handoff model rather than a
    prompt-only local shortcut: pass approval ID/status/risk/target plus safe

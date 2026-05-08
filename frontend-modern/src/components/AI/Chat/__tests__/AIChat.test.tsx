@@ -113,6 +113,7 @@ const {
         commandSummary?: string;
         safetyNote?: string;
         suggestedPrompts?: string[];
+        actionHref?: string;
       };
     },
     setContext: vi.fn((context: any) => {
@@ -368,6 +369,26 @@ describe('AIChat', () => {
         'Explain recent changes and correlations',
       );
       expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
+    });
+
+    it('renders safe briefing actions as links when a route is attached', () => {
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        autonomousMode: false,
+        briefing: {
+          sourceLabel: 'Pulse Patrol',
+          title: 'Operator briefing attached',
+          subject: 'Provider connection issue on Patrol runtime',
+          actionLabel: 'Open Patrol provider settings',
+          actionHref: '/settings/system-ai',
+        },
+      };
+
+      renderChat();
+
+      expect(
+        screen.getByRole('link', { name: 'Open Patrol provider settings' }),
+      ).toHaveAttribute('href', '/settings/system-ai');
     });
 
     it('uses Patrol briefing context instead of generic empty-state suggestions', () => {

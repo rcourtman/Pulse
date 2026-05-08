@@ -1224,7 +1224,10 @@ handoffs. Patrol handoffs render as Patrol, and alert plus alert incident
 timeline handoffs render as alert investigations rather than dashboard briefs.
 Those same drawer handoffs may carry model-only chat context and resource
 references to the backend, but the drawer remains a presentation and transport
-owner rather than the source of approval or execution truth.
+owner rather than the source of approval or execution truth. If a feature-owned
+briefing includes a safe route-owned `actionHref`, the drawer may render the
+briefing action label as a normal app link; that link is navigation guidance
+only and must not become approval or execution authority.
 
 `SettingsTab` no longer includes `infrastructure-connections` or
 `infrastructure-install`. The single `infrastructure-systems` entry in

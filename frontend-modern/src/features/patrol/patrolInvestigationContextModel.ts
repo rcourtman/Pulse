@@ -2408,6 +2408,11 @@ export function buildPatrolAssistantFindingBriefing(
     .filter(isNonEmptyString)
     .slice(0, 4);
   const verificationLines = record.verificationSummaries.map((summary) => `Verified: ${summary}`);
+  const actionLabel =
+    proposedFix?.description ||
+    (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined) ||
+    nextStepAction.label ||
+    undefined;
 
   return {
     sourceLabel: 'Pulse Patrol',
@@ -2416,11 +2421,8 @@ export function buildPatrolAssistantFindingBriefing(
     statusLabel: statusParts.join(' · ') || undefined,
     detailLines,
     evidence: [...record.evidenceSummaries, ...verificationLines].slice(0, 4),
-    actionLabel:
-      proposedFix?.description ||
-      (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined) ||
-      nextStepAction.label ||
-      undefined,
+    actionLabel,
+    actionHref: actionLabel === nextStepAction.label ? nextStepAction.href || undefined : undefined,
     commandSummary: proposedFix?.commandSummary,
     safetyNote: buildPatrolAssistantSafetyNote(proposedFix, pendingApproval),
     suggestedPrompts: buildPatrolFindingSuggestedPrompts(

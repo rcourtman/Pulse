@@ -107,6 +107,8 @@ describe('aiChatStore', () => {
       briefing: {
         sourceLabel: 'Pulse Patrol',
         title: 'Investigation record attached',
+        actionLabel: 'Open Patrol provider settings',
+        actionHref: '/settings/system-ai',
         suggestedPrompts: ['Explain recent changes and correlations'],
       },
     });
@@ -114,6 +116,8 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.initialPrompt).toBe('hello');
     expect(aiChatStore.context.targetId).toBe('vm-101');
     expect(aiChatStore.context.briefing?.title).toBe('Investigation record attached');
+    expect(aiChatStore.context.briefing?.actionLabel).toBe('Open Patrol provider settings');
+    expect(aiChatStore.context.briefing?.actionHref).toBe('/settings/system-ai');
     expect(aiChatStore.context.briefing?.suggestedPrompts).toEqual([
       'Explain recent changes and correlations',
     ]);
