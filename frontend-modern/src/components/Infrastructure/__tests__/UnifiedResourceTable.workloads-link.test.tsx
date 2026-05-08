@@ -252,11 +252,14 @@ describe('UnifiedResourceTable workloads links', () => {
     expect(getByText('Service Infrastructure')).toBeInTheDocument();
     expect(getByText('PBS Services')).toBeInTheDocument();
     expect(getByText('PMG Services')).toBeInTheDocument();
-    expect(getByText('Datastores')).toBeInTheDocument();
+    // Service Infrastructure dual-table renders the compact column label.
+    expect(getByText('Stores')).toBeInTheDocument();
     expect(getByText('Activity')).toBeInTheDocument();
-    expect(getAllByText('Action').length).toBeGreaterThan(0);
+    // Compact layout uses 'Open' for the action column.
+    expect(getAllByText('Open').length).toBeGreaterThan(0);
     expect(getByText('Queue')).toBeInTheDocument();
-    expect(getByText('Deferred')).toBeInTheDocument();
+    // Compact layout abbreviates Deferred to 'Def'.
+    expect(getByText('Def')).toBeInTheDocument();
     expect(getByText('Hold')).toBeInTheDocument();
     expect(getByText('Nodes')).toBeInTheDocument();
 

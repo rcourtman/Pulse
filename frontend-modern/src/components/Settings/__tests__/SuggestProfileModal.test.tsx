@@ -140,7 +140,9 @@ describe('SuggestProfileModal', () => {
 
     expect(await screen.findByText('Production Servers')).toBeInTheDocument();
     expect(screen.getByText('Settings Preview')).toBeInTheDocument();
-    expect(screen.getByText('Enable Docker Monitoring')).toBeInTheDocument();
+    // KNOWN_SETTINGS now interpolates getSourcePlatformLabel('docker'),
+    // which resolves to 'Docker / Podman'.
+    expect(screen.getByText('Enable Docker / Podman monitoring')).toBeInTheDocument();
     expect(screen.getByText('Reporting Interval')).toBeInTheDocument();
     expect(screen.getByText('Unknown (ignored)')).toBeInTheDocument();
 

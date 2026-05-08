@@ -17,10 +17,15 @@ describe('recovery canonical vocabulary', () => {
   });
 
   it('keeps recovery platform filter iterators platform-first', () => {
-    expect(recoveryProtectedInventorySectionSource).toContain('{(platform) => (');
-    expect(recoveryHistorySectionSource).toContain('{(platform) => (');
-    expect(recoveryProtectedInventorySectionSource).not.toContain('{(provider) => (');
-    expect(recoveryHistorySectionSource).not.toContain('{(provider) => (');
+    // The intent of this guardrail is the canonical "platform" naming over
+    // legacy "provider", not a specific callback shape. Both files now use
+    // block-body callbacks (`(platform) => { const badge = ...; return ... }`)
+    // because they need a local for the badge resolution, so the original
+    // expression-body pattern `(platform) => (` no longer matches.
+    expect(recoveryProtectedInventorySectionSource).toContain('(platform) =>');
+    expect(recoveryHistorySectionSource).toContain('(platform) =>');
+    expect(recoveryProtectedInventorySectionSource).not.toContain('(provider) =>');
+    expect(recoveryHistorySectionSource).not.toContain('(provider) =>');
   });
 
   it('keeps recovery activity focus labels item-first', () => {
