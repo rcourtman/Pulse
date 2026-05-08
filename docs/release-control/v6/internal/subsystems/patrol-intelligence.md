@@ -244,8 +244,10 @@ Patrol-specific presentation helpers.
    safe source-owned suggested prompts as model-only context. The same handoff
    must also carry the Patrol-owned recommended next step as safe bounded
    metadata, including its title, detail copy, action label, and known action
-   kind when present, so Assistant explains the same operator-facing priority
-   shown in the summary card instead of inventing a separate next step. Active-finding
+   kind when present, plus the current action-disabled reason when the visible
+   Patrol-owned action is unavailable, so Assistant explains the same
+   operator-facing priority and current availability shown in the summary card
+   instead of inventing a separate next step. Active-finding
    summaries may include live pending approval posture only as safe metadata:
    approval ID, pending status, risk, target, requested/expiry timestamps,
    action plan identity, approval policy, plan expiry, dry-run posture, and
@@ -351,7 +353,9 @@ dry-run posture when available. When no approval or governed action outranks
 the summary recommendation, the briefing action label and initial prompt may
 lead with that recommendation, but Assistant remains explanatory and may not
 start Patrol runs, settings changes, diagnostics, remediation, or approvals
-from the handoff. Its initial prompt must prioritize approvals or action
+from the handoff; if the recommended action is currently disabled, the prompt
+and briefing must say why instead of describing it as an available action. Its
+initial prompt must prioritize approvals or action
 references before broader assessment discussion while command payloads stay
 out of the drawer.
 Run-history rows now follow that same Assistant handoff model. A selected

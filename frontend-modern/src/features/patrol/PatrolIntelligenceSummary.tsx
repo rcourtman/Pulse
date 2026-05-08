@@ -186,6 +186,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         state.patrolStream.isStreaming())
     );
   });
+  const recommendedNextStepActionDisabledReason = createMemo(() =>
+    recommendedNextStepActionDisabled() ? state.triggerPatrolDisabledReason() : '',
+  );
   const recommendedNextStepActionLabel = createMemo(() => {
     const action = recommendedNextStepAction();
     if (action?.kind !== 'run_patrol') {
@@ -305,6 +308,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         description: recommendation.description,
         actionLabel: recommendation.action?.label,
         actionKind: recommendation.action?.kind,
+        actionDisabledReason: recommendedNextStepActionDisabledReason(),
       },
       activeFindings: activeFindingsWithApprovalContext(),
     });

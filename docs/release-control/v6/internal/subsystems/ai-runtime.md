@@ -363,6 +363,10 @@ runtime cost control, and shared AI transport surfaces.
     next-step/action label from `handoff_summary` when one is available and
     restore the safe recommendation action kind as context metadata instead of
     reducing the saved session to generic assessment context.
+    Live Patrol assessment handoffs that include a currently unavailable
+    Patrol-owned recommendation action must carry the bounded disabled reason in
+    the model-only handoff and visible briefing so Assistant explains the
+    current availability state instead of treating the action as executable.
     Browser-originated `handoff_context`, `handoff_resources`, and
     `handoff_actions` plus safe `handoff_metadata` are one-shot request seeds
     for the first successful chat turn. After that send succeeds, the drawer

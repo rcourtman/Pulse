@@ -206,6 +206,7 @@ export interface PatrolAssessmentRecommendedNextStepInput {
   description?: string | null;
   actionLabel?: string | null;
   actionKind?: PatrolAssessmentRecommendedNextStepActionKind | string | null;
+  actionDisabledReason?: string | null;
 }
 
 export interface PatrolAssessmentAssistantHandoffInput {
@@ -311,6 +312,7 @@ interface NormalizedPatrolAssessmentRecommendedNextStep {
   description?: string;
   actionLabel?: string;
   actionKind?: PatrolAssessmentRecommendedNextStepActionKind;
+  actionDisabledReason?: string;
   actionSummary?: string;
 }
 
@@ -571,6 +573,7 @@ export function buildPatrolAssessmentAssistantHandoff(
           ? {
               recommendedNextStepTitle: recommendedNextStep.title,
               recommendedNextStepActionKind: recommendedNextStep.actionKind,
+              recommendedNextStepActionDisabledReason: recommendedNextStep.actionDisabledReason,
             }
           : {}),
       },
@@ -842,12 +845,46 @@ function buildPatrolAssessmentRecommendationPromptInstruction(
     recommendedNextStep.description
       ? `detail: ${truncateContextText(recommendedNextStep.description, 180)}`
       : undefined,
-    recommendedNextStep.actionLabel
-      ? `available Patrol-owned action: ${recommendedNextStep.actionLabel}`
-      : undefined,
+    formatAssessmentRecommendedNextStepActionInstruction(recommendedNextStep),
   ].filter(isNonEmptyString);
 
   return `${parts.join('; ')}. Explain that recommendation before alternatives, but keep Patrol runs, settings changes, diagnostics, remediation, and approvals in governed controls.`;
+}
+
+function formatAssessmentRecommendedNextStepActionInstruction(
+  recommendedNextStep: NormalizedPatrolAssessmentRecommendedNextStep,
+): string | undefined {
+  if (!recommendedNextStep.actionLabel) return undefined;
+  if (recommendedNextStep.actionDisabledReason) {
+    return `Patrol-owned action "${recommendedNextStep.actionLabel}" is currently unavailable: ${recommendedNextStep.actionDisabledReason}`;
+  }
+  return `available Patrol-owned action: ${recommendedNextStep.actionLabel}`;
+}
+
+function formatAssessmentRecommendedNextStepActionDetail(
+  recommendedNextStep: NormalizedPatrolAssessmentRecommendedNextStep,
+): string | undefined {
+  if (!recommendedNextStep.actionLabel) return undefined;
+  return recommendedNextStep.actionDisabledReason
+    ? `action ${recommendedNextStep.actionLabel} unavailable: ${recommendedNextStep.actionDisabledReason}`
+    : `action ${recommendedNextStep.actionLabel}`;
+}
+
+function formatAssessmentRecommendedNextStepActionAvailability(
+  recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
+): string | undefined {
+  if (!recommendedNextStep?.actionDisabledReason) return undefined;
+  return `unavailable - ${recommendedNextStep.actionDisabledReason}`;
+}
+
+function formatAssessmentRecommendationSafetyNote(
+  base: string,
+  recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
+): string {
+  if (!recommendedNextStep?.actionLabel || !recommendedNextStep.actionDisabledReason) {
+    return base;
+  }
+  return `${base} ${recommendedNextStep.actionLabel} is currently unavailable: ${recommendedNextStep.actionDisabledReason}.`;
 }
 
 function formatAssessmentRecommendedNextStepDetailLine(
@@ -859,7 +896,7 @@ function formatAssessmentRecommendedNextStepDetailLine(
     [
       `Recommended next step: ${recommendedNextStep.title}`,
       recommendedNextStep.description,
-      recommendedNextStep.actionLabel ? `action ${recommendedNextStep.actionLabel}` : undefined,
+      formatAssessmentRecommendedNextStepActionDetail(recommendedNextStep),
     ],
     3,
     'recommendation facts',
@@ -917,16 +954,20 @@ function buildPatrolAssessmentActionPosture(
       actionLabel: recommendedNextStep?.actionLabel
         ? `Recommended: ${recommendedNextStep.actionLabel}`
         : 'Review coverage gap',
-      safetyNote:
+      safetyNote: formatAssessmentRecommendationSafetyNote(
         'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled.',
+        recommendedNextStep,
+      ),
     };
   }
 
   if (recommendedNextStep?.actionLabel || recommendedNextStep?.title) {
     return {
       actionLabel: `Recommended: ${recommendedNextStep.actionLabel || recommendedNextStep.title}`,
-      safetyNote:
+      safetyNote: formatAssessmentRecommendationSafetyNote(
         'Assistant can explain the Patrol recommendation; Patrol runs, settings changes, diagnostics, and remediation remain operator-controlled.',
+        recommendedNextStep,
+      ),
     };
   }
 
@@ -1088,6 +1129,10 @@ function buildPatrolAssessmentAssistantModelContext(
     formatContextLine('Recommended Next Step', recommendedNextStep?.title),
     formatContextLine('Recommended Next Step Detail', recommendedNextStep?.description),
     formatContextLine('Recommended Next Step Action', recommendedNextStep?.actionSummary),
+    formatContextLine(
+      'Recommended Next Step Action Status',
+      formatAssessmentRecommendedNextStepActionAvailability(recommendedNextStep),
+    ),
     formatContextLine('Verification', formatAssessmentVerification(input)),
     formatContextLine('Last Patrol', formatAssessmentRecency(input)),
     formatContextLine('Latest Run', formatAssessmentLatestRun(input)),
@@ -2744,6 +2789,10 @@ function normalizeAssessmentRecommendedNextStep(
     safeActionLabel === WITHHELD_RECOMMENDATION_TEXT && fallbackActionLabel
       ? fallbackActionLabel
       : safeActionLabel || fallbackActionLabel;
+  const actionDisabledReason = formatSafeAssessmentRecommendationText(
+    input.actionDisabledReason,
+    140,
+  );
   const effectiveTitle =
     title === WITHHELD_RECOMMENDATION_TEXT && actionLabel ? actionLabel : title || actionLabel;
   const actionSummary = formatAssessmentRecommendedNextStepActionSummary(actionLabel, actionKind);
@@ -2757,6 +2806,7 @@ function normalizeAssessmentRecommendedNextStep(
     description,
     actionLabel,
     actionKind,
+    actionDisabledReason,
     actionSummary,
   };
 }

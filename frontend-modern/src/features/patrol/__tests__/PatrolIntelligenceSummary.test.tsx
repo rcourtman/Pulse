@@ -129,6 +129,72 @@ describe('PatrolIntelligenceSummary', () => {
     );
     expect(JSON.stringify(context)).not.toContain('systemctl restart workload.service');
   });
+
+  it('passes current run-action availability into assessment Assistant handoff', async () => {
+    const openWithPrompt = vi.spyOn(aiChatStore, 'openWithPrompt').mockImplementation(() => {});
+    vi.spyOn(aiIntelligenceStore, 'loadPendingApprovals').mockResolvedValue(undefined);
+    vi.spyOn(aiIntelligenceStore, 'patrolPendingApprovals', 'get').mockReturnValue([]);
+
+    const patrolState = {
+      ...createPatrolState(),
+      activePatrolFindings: () => [],
+      canTriggerPatrol: () => false,
+      correlationTotal: () => 0,
+      correlations: () => [],
+      intelligenceSummary: () => ({
+        overall_health: {
+          grade: 'C',
+          score: 65,
+          factors: [{ category: 'coverage' }],
+          prediction: 'Patrol coverage is incomplete.',
+        },
+        recent_changes_count: 0,
+        recent_changes: [],
+        policy_posture: {
+          total_resources: 4,
+          sensitivity_counts: {},
+          routing_counts: {},
+        },
+      }),
+      manualRunRequested: () => false,
+      patrolStream: {
+        isStreaming: () => true,
+      },
+      runtimeState: () => 'running',
+      summaryStats: () => ({
+        criticalFindings: 0,
+        warningFindings: 0,
+        totalActive: 0,
+        fixedCount: 0,
+        hasAnyPatrolFindings: false,
+      }),
+      triggerPatrolDisabledReason: () => 'Patrol is already running',
+    } satisfies PatrolIntelligenceState;
+
+    render(() => <PatrolIntelligenceSummary state={patrolState} />);
+
+    fireEvent.click(screen.getByTestId('patrol-assessment-assistant-button'));
+
+    await waitFor(() => expect(openWithPrompt).toHaveBeenCalledTimes(1));
+    const [prompt, context] = openWithPrompt.mock.calls[0] as [string, Record<string, unknown>];
+
+    expect(prompt).toContain(
+      'Patrol-owned action "Run Patrol" is currently unavailable: Patrol is already running',
+    );
+    expect(context.handoffContext).toContain(
+      'Recommended Next Step Action Status: unavailable - Patrol is already running',
+    );
+    expect(context.context).toMatchObject({
+      recommendedNextStepActionKind: 'run_patrol',
+      recommendedNextStepActionDisabledReason: 'Patrol is already running',
+    });
+    expect(context.briefing).toMatchObject({
+      actionLabel: 'Recommended: Run Patrol',
+      safetyNote: expect.stringContaining(
+        'Run Patrol is currently unavailable: Patrol is already running.',
+      ),
+    });
+  });
 });
 
 function createPatrolState(): PatrolIntelligenceState {

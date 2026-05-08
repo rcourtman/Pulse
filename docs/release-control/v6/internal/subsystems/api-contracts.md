@@ -516,6 +516,8 @@ the canonical monitored-system blocked payload.
    counts instead of pasting page-local UI text or raw command payloads into chat,
    and may derive visible action labels, safety notes, and approval-aware
    suggested prompts plus first-turn prompt emphasis from that same safe metadata
+   plus the current disabled reason for a Patrol-owned recommended action when
+   the visible summary action is unavailable,
    so the drawer does not fall back to generic assessment copy when governed
    actions are present or when the summary already exposes a concrete
    recommended next step

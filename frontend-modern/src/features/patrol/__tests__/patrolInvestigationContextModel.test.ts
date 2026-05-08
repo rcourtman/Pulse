@@ -368,6 +368,46 @@ describe('patrolInvestigationContextModel', () => {
     });
   });
 
+  it('marks unavailable recommended Patrol actions in assessment handoffs', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Coverage incomplete',
+        description: 'Patrol coverage is incomplete.',
+      },
+      overallHealth: {
+        grade: 'C',
+        score: 65,
+        factors: [{ category: 'coverage' }],
+      },
+      recommendedNextStep: {
+        title: 'Verify full coverage',
+        description: 'Run a full Patrol sweep before treating this assessment as an all-clear.',
+        actionLabel: 'Run Patrol',
+        actionKind: 'run_patrol',
+        actionDisabledReason: 'Patrol is already running',
+      },
+    });
+
+    expect(handoff.prompt).toContain(
+      'Patrol-owned action "Run Patrol" is currently unavailable: Patrol is already running',
+    );
+    expect(handoff.context.handoffContext).toContain(
+      'Recommended Next Step Action Status: unavailable - Patrol is already running',
+    );
+    expect(handoff.context.context).toMatchObject({
+      recommendedNextStepActionKind: 'run_patrol',
+      recommendedNextStepActionDisabledReason: 'Patrol is already running',
+    });
+    expect(handoff.context.briefing).toMatchObject({
+      actionLabel: 'Recommended: Run Patrol',
+      safetyNote:
+        'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled. Run Patrol is currently unavailable: Patrol is already running.',
+    });
+    expect((handoff.context.briefing?.detailLines ?? []).join(' ')).toContain(
+      'action Run Patrol unavailable: Patrol is already running',
+    );
+  });
+
   it('withholds unsafe recommendation text from assessment handoffs', () => {
     const handoff = buildPatrolAssessmentAssistantHandoff({
       assessment: {

@@ -913,7 +913,10 @@ prompt explain the same operator-facing priority.
     a Patrol summary prompt builder. The Patrol helper may turn those same safe
     references into visible action labels, safety notes, and approval-aware
     suggested prompts or first-turn prompt emphasis for assessment and
-    finding-level handoffs; finding-level drawer opens may also pass one bounded
+    finding-level handoffs; if a source-owned Patrol recommendation action is
+    currently disabled, the helper must pass the bounded disabled reason in
+    visible briefing and model-only context instead of presenting that action as
+    available. Finding-level drawer opens may also pass one bounded
     model-only finding context, one target resource reference, and one
     `handoff_actions` reference for a live approval or proposed fix. It must not
     expose raw command or execution payloads.
