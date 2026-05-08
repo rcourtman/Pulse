@@ -785,10 +785,15 @@ describe('InfrastructureWorkspace', () => {
 
     renderWorkspace();
 
-    await waitFor(() => expect(screen.getByText('Standalone hosts')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Unraid')).toBeInTheDocument());
+    expect(screen.queryByText('Standalone hosts')).toBeNull();
     expect(screen.getByText('Tower')).toBeInTheDocument();
     expect(screen.getByText('Unraid 7.1.0')).toBeInTheDocument();
     expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Add Unraid$/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=unraid', {
+      scroll: false,
+    });
     expect(towerAgent.agentIdentity?.hostProfile).toBe('unraid');
     expect(towerAgent.agentIdentity?.platform).toBe('linux');
 

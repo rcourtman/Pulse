@@ -893,6 +893,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             ? undefined
             : (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))
         }
+        onAddSourceStep={readOnly() ? undefined : (step) => openAddFlow(step as ManagedAddTypeStep)}
         onAddInfrastructure={readOnly() ? undefined : () => openAddFlow('pick')}
         onRunDiscovery={
           readOnly()

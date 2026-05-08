@@ -554,7 +554,10 @@ prompt explain the same operator-facing priority.
    API + Agent coverage. Agent-backed typed add routes keep the same governed
    dialog shell, but their embedded installer surface should stay focused on
    the selected system so the first visible command path does not re-expand
-   into irrelevant platform choices.
+   into irrelevant platform choices. When an already-configured source is an
+   agent-backed host profile, the source manager must group it under the
+   operator-facing profile family and keep its add action on the same typed
+   route instead of collapsing it back into generic standalone-agent copy.
    Credential slots are dispatched by the detected or manually-selected type
    and must still reach the canonical form body rather than diverging into a
    revived provider-specific workspace.

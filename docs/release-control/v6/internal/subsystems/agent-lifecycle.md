@@ -209,6 +209,11 @@ compact: `Add infrastructure` remains the obvious action, the setup summary is
 one short status strip, and detailed governance/fleet state stays in the
 systems table rows or deeper fleet surfaces instead of expanding into duplicate
 explanatory bands above the table.
+Reported agent-backed host profiles must be visible at the source-manager
+grouping level without changing the canonical connection type: an Unraid agent
+row stays `agent` internally, but the connected-systems table groups it under
+the governed `Unraid` host-profile family and routes that group's add action
+back to the typed Unraid onboarding flow.
 Configured-node settings tables follow the same boundary:
 `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx` may own node,
 credential, capability, status, and action cells, but table scroll framing must
