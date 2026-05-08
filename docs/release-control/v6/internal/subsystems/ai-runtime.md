@@ -246,7 +246,15 @@ runtime cost control, and shared AI transport surfaces.
     classifier (`internal/ai/patrol_runtime_failure.go`) is the canonical
     example: it stamps a constant impact string on every runtime-failure
     cause because the operational consequence of a non-running Patrol is
-    invariant across causes, and only the recommendation varies. When `/api/ai/chat` receives `finding_id`, the
+    invariant across causes, and only the recommendation varies. That
+    detection-time impact text propagates through `FindingsStore.Add` (which
+    must overwrite `existing.Impact` alongside `Description` and
+    `Recommendation` so re-detected findings adopt freshly-classified
+    impact rather than preserving stale empty values left by older
+    binaries) and through the Finding to UnifiedFinding conversion in
+    `internal/api/router.go` so the operator-facing
+    `unified.UnifiedFinding` surface receives the same impact string the
+    durable investigation record carries. When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so

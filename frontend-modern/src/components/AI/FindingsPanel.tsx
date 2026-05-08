@@ -875,6 +875,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
         </Show>
         <p class="text-sm text-muted">{finding.description}</p>
+        <Show when={finding.impact}>
+          <p class="text-sm text-base-content mt-2">
+            <span class="font-medium">Impact:</span> {finding.impact}
+          </p>
+        </Show>
         <Show when={finding.recommendation}>
           <p class="text-sm text-base-content mt-2">
             <span class="font-medium">Recommendation:</span> {finding.recommendation}

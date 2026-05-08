@@ -141,6 +141,7 @@ export interface UnifiedFinding {
   severity: 'critical' | 'warning' | 'info' | 'watch';
   title: string;
   description: string;
+  impact?: string;
   recommendation?: string;
   detectedAt: string;
   lastSeenAt?: string;
@@ -204,6 +205,7 @@ function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number):
     severity: validateSeverity(item.severity),
     title: item.title,
     description: item.description,
+    impact: item.impact,
     recommendation: item.recommendation,
     detectedAt: item.detected_at,
     lastSeenAt: item.last_seen_at || item.detected_at,
@@ -242,6 +244,7 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     severity: validateSeverity(item.severity),
     title: item.title,
     description: item.description,
+    impact: item.impact,
     recommendation: item.recommendation,
     detectedAt: item.detected_at,
     lastSeenAt: item.last_seen_at || item.detected_at,

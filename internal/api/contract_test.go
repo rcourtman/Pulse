@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
@@ -2940,6 +2941,38 @@ func TestContract_FindingJSONSnapshot(t *testing.T) {
 	}`
 
 	assertJSONSnapshot(t, got, want)
+}
+
+// TestContract_UnifiedFindingImpactJSONSnapshot pins the canonical JSON shape
+// for UnifiedFinding payloads carrying the operator-facing Impact field. The
+// AI engine populates Finding.Impact at detection time and the Finding to
+// UnifiedFinding conversion in the API router must preserve that string under
+// the canonical "impact" key so the operator-visible card shows
+// consequence-if-ignored copy.
+func TestContract_UnifiedFindingImpactJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
+	finding := unified.UnifiedFinding{
+		ID:             "uf-impact",
+		Source:         unified.SourceAIPatrol,
+		Severity:       unified.SeverityWarning,
+		Category:       unified.CategoryReliability,
+		ResourceID:     "patrol-runtime",
+		ResourceName:   "Pulse Patrol Service",
+		ResourceType:   "service",
+		Title:          "Pulse Patrol: Provider connection issue",
+		Description:    "Pulse Patrol could not maintain a healthy connection to the configured provider during analysis.",
+		Impact:         "While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions, and AI Intelligence summaries cannot refresh.",
+		Recommendation: "Check provider reachability, base URL, firewall or proxy rules, and provider availability, then rerun Patrol.",
+		DetectedAt:     now,
+		LastSeenAt:     now,
+	}
+	got, err := json.Marshal(finding)
+	if err != nil {
+		t.Fatalf("marshal unified finding: %v", err)
+	}
+	if !strings.Contains(string(got), `"impact":"While Patrol cannot analyze`) {
+		t.Fatalf("expected impact field in canonical UnifiedFinding payload, got %s", got)
+	}
 }
 
 func TestContract_ApprovalJSONSnapshot(t *testing.T) {

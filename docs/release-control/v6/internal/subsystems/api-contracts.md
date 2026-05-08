@@ -955,7 +955,17 @@ the canonical monitored-system blocked payload.
    TS API client so frontend consumers see the same patrol-failure
    attribution the backend persists. Both `impact` and `rollback` are
    omitempty/normalize-empty and must remain absent rather than fabricated
-   when Patrol has not yet populated them
+   when Patrol has not yet populated them. Top-level `impact` also lives on
+   `unified.UnifiedFinding` directly, not only on the nested investigation
+   record, so detection-time consequence-if-ignored copy authored on
+   `Finding.Impact` (for example by the Patrol runtime-failure classifier)
+   reaches API consumers even when no investigation record is attached. The
+   Finding to UnifiedFinding conversion in `internal/api/router.go` and the
+   dedup-merge path in `FindingsStore.Add` must both propagate `impact`
+   alongside `description` and `recommendation` rather than dropping it;
+   persisted findings created by older binaries must adopt the
+   freshly-classified impact text on next re-detection rather than
+   preserving the empty value
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

@@ -553,6 +553,41 @@ func TestFindingsStore_Add_UpdateExisting(t *testing.T) {
 	}
 }
 
+// TestFindingsStore_Add_PropagatesImpactFieldOnUpdate covers the dedup-merge
+// path where a re-detected finding carries newly-authored Impact text. The
+// existing finding may have been persisted before Impact was a contract field,
+// so the store must overwrite Impact alongside Description/Recommendation
+// rather than preserve the stale empty value.
+func TestFindingsStore_Add_PropagatesImpactFieldOnUpdate(t *testing.T) {
+	store := NewFindingsStore()
+
+	store.Add(&Finding{
+		ID:          "f-impact",
+		ResourceID:  "res-1",
+		Severity:    FindingSeverityWarning,
+		Title:       "Initial",
+		Description: "Initial",
+		// Impact not authored on first add (e.g., persisted by older binary)
+	})
+
+	store.Add(&Finding{
+		ID:          "f-impact",
+		ResourceID:  "res-1",
+		Severity:    FindingSeverityWarning,
+		Title:       "Initial",
+		Description: "Initial",
+		Impact:      "Workload stalls until pressure clears.",
+	})
+
+	stored := store.Get("f-impact")
+	if stored == nil {
+		t.Fatalf("expected finding to be present after re-add")
+	}
+	if stored.Impact != "Workload stalls until pressure clears." {
+		t.Fatalf("expected Impact to overwrite on update, got %q", stored.Impact)
+	}
+}
+
 func TestFindingsStore_Add_SeverityEscalation(t *testing.T) {
 	store := NewFindingsStore()
 

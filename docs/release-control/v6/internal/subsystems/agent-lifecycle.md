@@ -426,7 +426,11 @@ profile and assignment columns, but embedded table framing must route through
    through shared AI intelligence handlers and `internal/api/router.go`:
    lifecycle surfaces may observe the resulting resource context, but they must
    not reinterpret `investigation_record` as agent enrollment, installer,
-   command policy, or fleet-control authority. Assistant chat enrichment from
+   command policy, or fleet-control authority. The same isolation rule applies
+   to operator-facing finding fields like `impact` and `recommendation`
+   propagated through that router conversion: lifecycle surfaces may render
+   them in finding context but must not treat them as enrollment, installer,
+   or fleet-control authority for the named resource. Assistant chat enrichment from
    `finding_id` follows the same rule: lifecycle-owned command execution and
    agent auto-approval policy stay canonical in the agent/runtime owners, not
    in Patrol investigation-record prompt text. Model-only Assistant handoff

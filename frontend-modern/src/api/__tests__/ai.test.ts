@@ -146,6 +146,35 @@ describe('AIAPI', () => {
     expect(record!.trigger.cause).toBe('storage_quota_exceeded');
   });
 
+  it('preserves UnifiedFinding-level impact text alongside description and recommendation', async () => {
+    apiFetchJSONMock.mockResolvedValue({
+      findings: [
+        {
+          id: 'uf-impact',
+          resource_id: 'patrol-runtime',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'reliability',
+          title: 'Pulse Patrol: Provider connection issue',
+          description:
+            'Pulse Patrol could not maintain a healthy connection to the configured provider during analysis.',
+          impact:
+            'While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions, and AI Intelligence summaries cannot refresh.',
+          recommendation:
+            'Check provider reachability, base URL, firewall or proxy rules, and provider availability, then rerun Patrol.',
+          detected_at: '2026-05-08T12:00:00Z',
+          alert_identifier: 'patrol-runtime-failure',
+        },
+      ],
+      count: 1,
+    } as any);
+
+    const result = await AIAPI.getUnifiedFindings();
+    expect(result.findings[0].impact).toBe(
+      'While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions, and AI Intelligence summaries cannot refresh.',
+    );
+  });
+
   it('encodes dynamic provider, approval, finding, and plan identifiers', async () => {
     apiFetchJSONMock.mockResolvedValue({} as any);
 

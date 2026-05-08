@@ -40,6 +40,7 @@ const mockState = vi.hoisted(() => {
       severity: 'warning',
       title: 'Nextcloud failed readiness checks',
       description: 'Pulse Patrol detected repeated readiness probe failures.',
+      impact: 'Nextcloud is unreachable for users until readiness recovers.',
       detectedAt: '2026-03-30T10:00:00Z',
       lastSeenAt: '2026-03-30T10:05:00Z',
       status: 'active',
@@ -194,6 +195,9 @@ describe('FindingsPanel resource links', () => {
 
     fireEvent.click(screen.getByText('Nextcloud failed readiness checks'));
 
+    expect(
+      screen.getByText('Nextcloud is unreachable for users until readiness recovers.'),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Open related infrastructure for Nextcloud' }),
     ).toHaveAttribute('href', '/infrastructure?resource=app-container%3Atruenas-main%3Anextcloud');

@@ -27,6 +27,7 @@ export interface Finding {
   node?: string;
   title: string;
   description: string;
+  impact?: string;
   recommendation?: string;
   evidence?: string;
   detected_at: string;

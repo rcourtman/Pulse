@@ -986,6 +986,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		// Update existing finding
 		existing.LastSeenAt = time.Now()
 		existing.Description = f.Description
+		existing.Impact = f.Impact
 		existing.Recommendation = f.Recommendation
 		existing.Evidence = f.Evidence
 		existing.Title = f.Title // Update title in case LLM phrased it better

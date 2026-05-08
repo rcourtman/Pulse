@@ -75,6 +75,21 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).not.toContain('Command: `');
     expect(findingsPanelSource).not.toContain('Rollback: `');
   });
+
+  it('renders the operator-facing Impact line between Description and Recommendation', () => {
+    // The expanded finding card must surface Finding.Impact directly so
+    // detection-time consequence-if-ignored copy reaches the operator on the
+    // findings list, not just inside the durable investigation record.
+    expect(findingsPanelSource).toContain('Show when={finding.impact}');
+    expect(findingsPanelSource).toContain('>Impact:</span> {finding.impact}');
+    // Impact must precede Recommendation in the rendered card, mirroring the
+    // narrative order: what we found, why it matters, what to do about it.
+    const impactIndex = findingsPanelSource.indexOf('>Impact:</span>');
+    const recommendationIndex = findingsPanelSource.indexOf('>Recommendation:</span>');
+    expect(impactIndex).toBeGreaterThan(0);
+    expect(recommendationIndex).toBeGreaterThan(0);
+    expect(impactIndex).toBeLessThan(recommendationIndex);
+  });
 });
 
 describe('aiFindingPresentation', () => {

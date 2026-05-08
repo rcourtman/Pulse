@@ -174,6 +174,11 @@ regression protection.
    the same bounded-work rule: the callback may copy the already-materialized
    durable record into unified findings, but it must not add broad resource
    scans, model calls, or persistence walks to protected request setup paths.
+   The same rule covers the operator-facing `impact` and `recommendation`
+   fields copied from Finding to UnifiedFinding through that router callback:
+   the callback may pass them through as already-materialized strings but must
+   not invoke models, persistence walks, or evidence aggregation to derive
+   them on the protected hot path.
    Patrol run Assistant handoff wiring in `internal/api/router.go` follows the
    same protected hot-path rule: the shared callback may resolve one requested
    Patrol run ID from the already-owned Patrol service and strip tool traces

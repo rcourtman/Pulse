@@ -252,6 +252,17 @@ Patrol-specific presentation helpers.
    may include populated impact text in its bounded detail lines but must
    omit the placeholder copy from that compact card so it stays tight,
    leaving placeholder rendering to the full investigation surface.
+   `frontend-modern/src/components/AI/FindingsPanel.tsx` is the canonical
+   renderer for that operator-facing impact text on the unified findings
+   surface: when an expanded finding card has populated `impact`, the panel
+   renders an `Impact:` line between `Description` and `Recommendation`. The
+   TS API client mirrors (`UnifiedFindingRecord.impact`,
+   `Finding.impact`) and the store normalizers
+   (`normalizeUnifiedFindingRecord`, `normalizePatrolFindingRecord`) must
+   carry impact through alongside description and recommendation rather
+   than dropping it; runtime-failure findings produced by
+   `internal/ai/patrol_runtime_failure.go` are the first source to depend
+   on that path reaching the Patrol page surface.
    The primary Patrol assessment summary may open Assistant as a whole-surface
    review handoff, but that handoff must also flow through
    `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`.

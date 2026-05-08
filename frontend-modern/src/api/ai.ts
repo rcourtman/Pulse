@@ -420,6 +420,7 @@ export interface UnifiedFindingRecord {
   node?: string;
   title: string;
   description: string;
+  impact?: string;
   recommendation?: string;
   evidence?: string;
   alertIdentifier?: string;

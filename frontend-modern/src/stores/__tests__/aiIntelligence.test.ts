@@ -61,6 +61,7 @@ describe('aiIntelligenceStore', () => {
           resource_type: 'vm',
           title: 'CPU high',
           description: 'CPU usage is high',
+          impact: 'Workload stalls until CPU pressure clears.',
           detected_at: '2026-03-01T00:00:00Z',
           last_seen_at: '2026-03-05T00:00:00Z',
           times_raised: 5,
@@ -98,6 +99,7 @@ describe('aiIntelligenceStore', () => {
       alertIdentifier: 'instance:node:100::metric/cpu',
       lastSeenAt: '2026-03-05T00:00:00Z',
       timesRaised: 5,
+      impact: 'Workload stalls until CPU pressure clears.',
       investigationRecord: {
         id: 'investigation-1',
         finding_id: 'finding-1',

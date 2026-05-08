@@ -231,7 +231,11 @@ bypass the API fail-closed execution gate.
    When shared `internal/api/` handlers expose structured Patrol readiness or
    provider/model/tool causes, storage and recovery surfaces may treat them only
    as adjacent operator context and must not convert them into storage health,
-   recovery execution, or backup remediation authority.
+   recovery execution, or backup remediation authority. The same rule covers
+   the operator-facing `impact` and `recommendation` fields propagated through
+   `internal/api/router.go` Finding to UnifiedFinding conversion: storage and
+   recovery surfaces may render them as adjacent finding context but must not
+   reinterpret them as backup, restore, or storage remediation authority.
    Shared Patrol autonomy routes may also touch broad `internal/api/` wiring,
    but monitor-mode AI configuration and remediation entitlement responses stay
    AI runtime/API-contract owned and must not become recovery-local policy,
