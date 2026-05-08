@@ -593,6 +593,7 @@ export function buildPatrolAssessmentAssistantHandoff(
       handoffMetadata: {
         kind: 'patrol_assessment',
         recommendedNextStep: recommendedNextStep?.title,
+        recommendedNextStepDetail: recommendedNextStep?.description,
         recommendedNextStepAction: recommendedNextStep?.actionLabel,
         recommendedNextStepActionKind: recommendedNextStep?.actionKind,
         recommendedNextStepActionHref,

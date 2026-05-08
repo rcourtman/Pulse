@@ -54,6 +54,7 @@ export interface ChatSessionHandoffSummary {
   last_known_action_state?: string;
   last_known_action_risk?: string;
   recommended_next_step?: string;
+  recommended_next_step_detail?: string;
   recommended_next_step_action?: string;
   recommended_next_step_action_kind?: string;
   recommended_next_step_action_href?: string;
@@ -67,6 +68,7 @@ export interface ChatHandoffMetadata {
   runStatus?: string;
   runtimeFailure?: boolean;
   recommendedNextStep?: string;
+  recommendedNextStepDetail?: string;
   recommendedNextStepAction?: string;
   recommendedNextStepActionKind?: string;
   recommendedNextStepActionHref?: string;
@@ -319,6 +321,7 @@ export class AIChatAPI {
         run_status: handoffMetadata.runStatus,
         runtime_failure: handoffMetadata.runtimeFailure,
         recommended_next_step: handoffMetadata.recommendedNextStep,
+        recommended_next_step_detail: handoffMetadata.recommendedNextStepDetail,
         recommended_next_step_action: handoffMetadata.recommendedNextStepAction,
         recommended_next_step_action_kind: handoffMetadata.recommendedNextStepActionKind,
         recommended_next_step_action_href: handoffMetadata.recommendedNextStepActionHref,

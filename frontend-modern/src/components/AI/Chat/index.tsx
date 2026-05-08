@@ -181,6 +181,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
   const resourceDetail = formatSessionHandoffResourceDetail(summary);
   const statusLabel = formatSessionHandoffStatus(summary);
   const recommendedNextStep = summary.recommended_next_step?.trim() || '';
+  const recommendedNextStepDetail = summary.recommended_next_step_detail?.trim() || '';
   const recommendedNextStepAction = summary.recommended_next_step_action?.trim() || '';
   const recommendedNextStepActionKind = summary.recommended_next_step_action_kind?.trim() || '';
   const recommendedNextStepActionHref = getSessionHandoffRecommendedActionHref(summary);
@@ -243,6 +244,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       lastKnownActionState: summary.last_known_action_state,
       lastKnownActionRisk: summary.last_known_action_risk,
       recommendedNextStep,
+      recommendedNextStepDetail,
       recommendedNextStepAction,
       recommendedNextStepActionKind,
       recommendedNextStepActionHref,
@@ -275,6 +277,12 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
           : undefined,
         isPatrolAssessment && recommendedNextStep
           ? `Recommended next step: ${recommendedNextStep}`
+          : undefined,
+        isPatrolAssessment && recommendedNextStepDetail
+          ? `Reason: ${recommendedNextStepDetail}`
+          : undefined,
+        isPatrolAssessment && recommendedNextStepAction
+          ? `Available action: ${recommendedNextStepAction}`
           : undefined,
         actionCount > 0
           ? pluralizeCount(actionCount, 'governed action', 'governed actions')

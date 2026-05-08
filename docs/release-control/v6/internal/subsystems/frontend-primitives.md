@@ -209,11 +209,11 @@ work extends shared components instead of creating new local variants.
    it must not infer a finding target from bounded action references or
    reconstruct hidden model context, provider details, retry payloads, commands,
    preflight output, or action results in the browser. If the safe summary
-   includes a Patrol recommended next step, action label, safe action kind, or
-   whitelisted app-route href, the session picker plus restored drawer briefing
-   and action copy must use that recommendation and may carry the safe action
-   kind or href as context metadata rather than falling back to generic handoff
-   copy.
+   includes a Patrol recommended next step, recommendation detail, action
+   label, safe action kind, or whitelisted app-route href, the session picker
+   plus restored drawer briefing and action copy must use that recommendation
+   and may carry the safe detail, action kind, or href as context metadata
+   rather than falling back to generic handoff copy.
    Session-load and new-conversation transitions must be success-bound: if the
    underlying session operation fails, the shared drawer store must not clear or
    replace the current scoped handoff context.

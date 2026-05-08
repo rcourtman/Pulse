@@ -909,6 +909,8 @@ describe('AIChat', () => {
             action_count: 0,
             requires_approval: false,
             recommended_next_step: 'Verify full coverage',
+            recommended_next_step_detail:
+              'Run a full Patrol sweep before treating the assessment as current.',
             recommended_next_step_action: 'Run Patrol',
             recommended_next_step_action_kind: 'run_patrol',
           },
@@ -940,6 +942,8 @@ describe('AIChat', () => {
               kind: 'patrol_assessment',
               findingId: undefined,
               recommendedNextStep: 'Verify full coverage',
+              recommendedNextStepDetail:
+                'Run a full Patrol sweep before treating the assessment as current.',
               recommendedNextStepAction: 'Run Patrol',
               recommendedNextStepActionKind: 'run_patrol',
             }),
@@ -950,6 +954,8 @@ describe('AIChat', () => {
               actionLabel: 'Recommended: Run Patrol',
               detailLines: expect.arrayContaining([
                 'Recommended next step: Verify full coverage',
+                'Reason: Run a full Patrol sweep before treating the assessment as current.',
+                'Available action: Run Patrol',
               ]),
             }),
           }),

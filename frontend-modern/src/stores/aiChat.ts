@@ -64,6 +64,7 @@ export interface AIChatHandoffMetadata {
   runStatus?: string;
   runtimeFailure?: boolean;
   recommendedNextStep?: string;
+  recommendedNextStepDetail?: string;
   recommendedNextStepAction?: string;
   recommendedNextStepActionKind?: string;
   recommendedNextStepActionHref?: string;

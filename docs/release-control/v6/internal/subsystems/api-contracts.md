@@ -2023,7 +2023,7 @@ references used to seed canonical approval and action-audit refresh.
 `handoff_metadata` is the browser-safe identity envelope for restoring saved
 product handoffs, currently including Patrol run kind, run ID, safe run
 type/status, a runtime-failure boolean rather than runtime failure detail, and
-safe Patrol recommended next-step/action labels plus whitelisted app-route
+safe Patrol recommended next-step title/detail/action labels plus whitelisted app-route
 hrefs when the browser handoff already owns that route. Frontend-visible
 Patrol assessment briefings may render those same safe recommendation fields as
 separate title, reason, and route-action facts, but they must not introduce new
@@ -2044,7 +2044,7 @@ carry private Assistant model-context metadata, but that payload is a safe
 reload marker only. It may carry the handoff kind, finding ID, Patrol run ID,
 safe run type/status/runtime-failure flags, counts, primary-resource label,
 last-known approval/action status, risk level, Patrol recommended
-next-step/action labels plus the safe recommendation action kind or whitelisted
+next-step title/detail/action labels plus the safe recommendation action kind or whitelisted
 app-route href when safely extractable from the stored Patrol handoff, and
 summary timestamp; it must
 not serialize the model-only `handoff_context`, runtime failure detail, action

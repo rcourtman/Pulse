@@ -40,6 +40,7 @@ type SessionHandoffSummary struct {
 	LastKnownActionState          string           `json:"last_known_action_state,omitempty"`
 	LastKnownActionRisk           string           `json:"last_known_action_risk,omitempty"`
 	RecommendedNextStep           string           `json:"recommended_next_step,omitempty"`
+	RecommendedNextStepDetail     string           `json:"recommended_next_step_detail,omitempty"`
 	RecommendedNextStepAction     string           `json:"recommended_next_step_action,omitempty"`
 	RecommendedNextStepActionKind string           `json:"recommended_next_step_action_kind,omitempty"`
 	RecommendedNextStepActionHref string           `json:"recommended_next_step_action_href,omitempty"`
@@ -171,6 +172,7 @@ type HandoffMetadata struct {
 	RunStatus                     string `json:"run_status,omitempty"`
 	RuntimeFailure                bool   `json:"runtime_failure,omitempty"`
 	RecommendedNextStep           string `json:"recommended_next_step,omitempty"`
+	RecommendedNextStepDetail     string `json:"recommended_next_step_detail,omitempty"`
 	RecommendedNextStepAction     string `json:"recommended_next_step_action,omitempty"`
 	RecommendedNextStepActionKind string `json:"recommended_next_step_action_kind,omitempty"`
 	RecommendedNextStepActionHref string `json:"recommended_next_step_action_href,omitempty"`

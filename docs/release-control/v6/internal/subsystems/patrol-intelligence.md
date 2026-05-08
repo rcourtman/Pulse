@@ -272,11 +272,11 @@ Patrol-specific presentation helpers.
    as current-assessment context instead of becoming generic scoped context or
    an accidental single-finding session because one bounded action reference
    names a finding. Saved assessment and finding sessions may expose the
-   Patrol-owned recommended next step/action and whitelisted app-route href
-   through the safe `handoff_summary` only after command-like and secret-like
-   text is withheld; live handoffs must send those safe fields through
-   structured `handoff_metadata` where available, and the browser must use
-   them for restored drawer copy without receiving the private model-only
+   Patrol-owned recommended next step title/detail/action and whitelisted
+   app-route href through the safe `handoff_summary` only after command-like
+   and secret-like text is withheld; live handoffs must send those safe fields
+   through structured `handoff_metadata` where available, and the browser must
+   use them for restored drawer copy without receiving the private model-only
    handoff context. Assessment Assistant drawer briefings must present the safe
    recommended step title, reason, and route-owned action as separate operator
    facts instead of compressing them into an opaque context sentence.

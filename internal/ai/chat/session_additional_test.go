@@ -530,6 +530,7 @@ func TestSessionStore_ListKeepsPatrolAssessmentHandoffIdentity(t *testing.T) {
 		"Source: Pulse Patrol current assessment",
 		"Assessment: Coverage incomplete",
 		"Recommended Next Step: Verify full coverage",
+		"Recommended Next Step Detail: Run a full Patrol sweep before treating the assessment as current.",
 		"Recommended Next Step Action: Run Patrol (run_patrol)",
 	}, "\n")
 	if err := store.SetModelHandoffEnvelope(session.ID, "", handoffContext, nil, []HandoffAction{{
@@ -568,6 +569,7 @@ func TestSessionStore_ListKeepsPatrolAssessmentHandoffIdentity(t *testing.T) {
 		t.Fatalf("approval posture = %#v, want safe action summary", summary)
 	}
 	if summary.RecommendedNextStep != "Verify full coverage" ||
+		summary.RecommendedNextStepDetail != "Run a full Patrol sweep before treating the assessment as current." ||
 		summary.RecommendedNextStepAction != "Run Patrol" ||
 		summary.RecommendedNextStepActionKind != "run_patrol" {
 		t.Fatalf("recommended next step summary = %#v, want safe Patrol recommendation", summary)
@@ -653,6 +655,7 @@ func TestSessionStore_ListPrefersStructuredPatrolFindingNextStepMetadata(t *test
 	if err := store.SetModelHandoffEnvelope(session.ID, "finding-provider-settings", handoffContext, nil, nil, HandoffMetadata{
 		Kind:                          "patrol_finding",
 		RecommendedNextStep:           "Open Patrol provider settings",
+		RecommendedNextStepDetail:     "Fix the Patrol runtime issue before continuing.",
 		RecommendedNextStepAction:     "Open Patrol provider settings",
 		RecommendedNextStepActionHref: "/settings/system-ai",
 	}); err != nil {
@@ -669,6 +672,7 @@ func TestSessionStore_ListPrefersStructuredPatrolFindingNextStepMetadata(t *test
 
 	summary := sessions[0].HandoffSummary
 	if summary.RecommendedNextStep != "Open Patrol provider settings" ||
+		summary.RecommendedNextStepDetail != "Fix the Patrol runtime issue before continuing." ||
 		summary.RecommendedNextStepAction != "Open Patrol provider settings" ||
 		summary.RecommendedNextStepActionHref != "/settings/system-ai" {
 		t.Fatalf("next step summary = %#v, want structured safe Patrol next step", summary)
@@ -729,6 +733,7 @@ func TestSessionStore_ListWithholdsUnsafePatrolAssessmentRecommendationSummary(t
 		"[Patrol Assessment Context]",
 		"Source: Pulse Patrol current assessment",
 		"Recommended Next Step: Run sudo systemctl restart workload.service",
+		"Recommended Next Step Detail: Use token abc123 before running curl against the host.",
 		"Recommended Next Step Action: sudo restart (run_patrol)",
 	}, "\n")
 	if err := store.SetModelHandoffEnvelope(session.ID, "", handoffContext, nil, nil, HandoffMetadata{
@@ -747,6 +752,7 @@ func TestSessionStore_ListWithholdsUnsafePatrolAssessmentRecommendationSummary(t
 
 	summary := sessions[0].HandoffSummary
 	if summary.RecommendedNextStep != "" ||
+		summary.RecommendedNextStepDetail != "" ||
 		summary.RecommendedNextStepAction != "" ||
 		summary.RecommendedNextStepActionKind != "" {
 		t.Fatalf("unsafe recommendation summary = %#v, want withheld recommendation fields", summary)

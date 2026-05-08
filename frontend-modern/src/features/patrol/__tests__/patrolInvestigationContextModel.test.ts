@@ -441,6 +441,8 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffMetadata).toMatchObject({
       kind: 'patrol_assessment',
       recommendedNextStep: 'Verify full coverage',
+      recommendedNextStepDetail:
+        'Run a full Patrol sweep before treating this assessment as an all-clear; recent evidence is incomplete or limited to targeted activity.',
       recommendedNextStepAction: 'Run Patrol',
       recommendedNextStepActionKind: 'run_patrol',
     });
@@ -486,6 +488,8 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffMetadata).toMatchObject({
       kind: 'patrol_assessment',
       recommendedNextStep: 'Restore Patrol visibility',
+      recommendedNextStepDetail:
+        'Fix the Patrol runtime issue before treating the assessment as current.',
       recommendedNextStepAction: 'Open Patrol provider settings',
       recommendedNextStepActionKind: 'open_provider_settings',
       recommendedNextStepActionHref: '/settings/system-ai',

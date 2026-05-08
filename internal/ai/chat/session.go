@@ -179,6 +179,7 @@ func NormalizeHandoffMetadata(metadata HandoffMetadata) HandoffMetadata {
 	}
 	if normalized.Kind == sessionHandoffKindPatrolAssessment || normalized.Kind == sessionHandoffKindPatrolFinding {
 		normalized.RecommendedNextStep = safeSessionHandoffSummaryText(metadata.RecommendedNextStep, 160)
+		normalized.RecommendedNextStepDetail = safeSessionHandoffSummaryText(metadata.RecommendedNextStepDetail, 240)
 		normalized.RecommendedNextStepAction = safeSessionHandoffSummaryText(metadata.RecommendedNextStepAction, 120)
 		normalized.RecommendedNextStepActionKind = safePatrolRecommendationActionKind(metadata.RecommendedNextStepActionKind)
 		if normalized.RecommendedNextStepAction != "" {
@@ -243,19 +244,20 @@ func inferPatrolRunHandoffMetadata(handoffContext string) HandoffMetadata {
 	return NormalizeHandoffMetadata(metadata)
 }
 
-func patrolAssessmentRecommendedNextStepSummary(kind string, handoffContext string) (string, string, string) {
+func patrolAssessmentRecommendedNextStepSummary(kind string, handoffContext string) (string, string, string, string) {
 	if kind != sessionHandoffKindPatrolAssessment {
-		return "", "", ""
+		return "", "", "", ""
 	}
 
 	lines := strings.Split(strings.TrimSpace(handoffContext), "\n")
 	if len(lines) == 0 {
-		return "", "", ""
+		return "", "", "", ""
 	}
 
 	sawAssessmentContext := false
 	sawPatrolSource := false
 	var recommendedNextStep string
+	var recommendedNextStepDetail string
 	var recommendedNextStepAction string
 	var recommendedNextStepActionKind string
 	for _, line := range lines {
@@ -281,18 +283,20 @@ func patrolAssessmentRecommendedNextStepSummary(kind string, handoffContext stri
 			}
 		case "recommended next step":
 			recommendedNextStep = safeSessionHandoffSummaryText(value, 160)
+		case "recommended next step detail":
+			recommendedNextStepDetail = safeSessionHandoffSummaryText(value, 240)
 		case "recommended next step action":
 			recommendedNextStepAction, recommendedNextStepActionKind = safePatrolAssessmentRecommendationAction(value)
 		}
 	}
 
 	if !sawAssessmentContext || !sawPatrolSource {
-		return "", "", ""
+		return "", "", "", ""
 	}
 	if recommendedNextStep == "" && recommendedNextStepAction != "" {
 		recommendedNextStep = recommendedNextStepAction
 	}
-	return recommendedNextStep, recommendedNextStepAction, recommendedNextStepActionKind
+	return recommendedNextStep, recommendedNextStepDetail, recommendedNextStepAction, recommendedNextStepActionKind
 }
 
 func safePatrolAssessmentRecommendationAction(value string) (string, string) {
@@ -493,16 +497,20 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 		kind = sessionHandoffKindPatrolFinding
 	}
 	recommendedNextStep := metadata.RecommendedNextStep
+	recommendedNextStepDetail := metadata.RecommendedNextStepDetail
 	recommendedNextStepAction := metadata.RecommendedNextStepAction
 	recommendedNextStepActionKind := metadata.RecommendedNextStepActionKind
 	recommendedNextStepActionHref := metadata.RecommendedNextStepActionHref
-	if recommendedNextStep == "" || recommendedNextStepAction == "" || recommendedNextStepActionKind == "" {
-		contextNextStep, contextNextStepAction, contextNextStepActionKind := patrolAssessmentRecommendedNextStepSummary(
+	if recommendedNextStep == "" || recommendedNextStepDetail == "" || recommendedNextStepAction == "" || recommendedNextStepActionKind == "" {
+		contextNextStep, contextNextStepDetail, contextNextStepAction, contextNextStepActionKind := patrolAssessmentRecommendedNextStepSummary(
 			kind,
 			modelContext.HandoffContext,
 		)
 		if recommendedNextStep == "" {
 			recommendedNextStep = contextNextStep
+		}
+		if recommendedNextStepDetail == "" {
+			recommendedNextStepDetail = contextNextStepDetail
 		}
 		if recommendedNextStepAction == "" {
 			recommendedNextStepAction = contextNextStepAction
@@ -538,6 +546,7 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 		ResourceCount:                 len(resources),
 		ActionCount:                   len(actions),
 		RecommendedNextStep:           recommendedNextStep,
+		RecommendedNextStepDetail:     recommendedNextStepDetail,
 		RecommendedNextStepAction:     recommendedNextStepAction,
 		RecommendedNextStepActionKind: recommendedNextStepActionKind,
 		RecommendedNextStepActionHref: recommendedNextStepActionHref,

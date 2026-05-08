@@ -226,6 +226,7 @@ describe('AIChatAPI', () => {
       {
         kind: 'patrol_finding',
         recommendedNextStep: 'Open Patrol provider settings',
+        recommendedNextStepDetail: 'Fix the Patrol runtime issue before continuing.',
         recommendedNextStepAction: 'Open Patrol provider settings',
         recommendedNextStepActionHref: '/settings/system-ai',
       },
@@ -243,6 +244,7 @@ describe('AIChatAPI', () => {
           handoff_metadata: {
             kind: 'patrol_finding',
             recommended_next_step: 'Open Patrol provider settings',
+            recommended_next_step_detail: 'Fix the Patrol runtime issue before continuing.',
             recommended_next_step_action: 'Open Patrol provider settings',
             recommended_next_step_action_href: '/settings/system-ai',
           },
