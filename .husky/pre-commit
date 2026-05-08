@@ -129,7 +129,12 @@ python3 scripts/release_control/format_staged_go.py
 if command -v golangci-lint >/dev/null 2>&1; then
     if staged_files_match '(^|/).*\.go$|(^|/)go\.(mod|sum|work|work\.sum)$|^\.golangci\.ya?ml$'; then
         echo "Running golangci-lint..."
-        GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" ./...
+        # Lint only packages containing staged Go files, not the entire repo
+        STAGED_GO_PKGS=$(git diff --cached --name-only | grep '\.go$' | xargs -I{} dirname {} 2>/dev/null | sort -u | sed 's|^|./|' | tr '\n' ' ')
+        if [ -z "$STAGED_GO_PKGS" ]; then
+            STAGED_GO_PKGS="./..."
+        fi
+        GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $STAGED_GO_PKGS
     else
         echo "Skipping golangci-lint (no staged Go/module/linter changes)."
     fi
