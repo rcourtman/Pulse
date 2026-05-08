@@ -807,12 +807,13 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 
 		// Test connection
 		testCfg := proxmox.ClientConfig{
-			Host:       node.Host,
-			User:       node.User,
-			Password:   node.Password,
-			TokenName:  node.TokenName,
-			TokenValue: node.TokenValue,
-			VerifySSL:  node.VerifySSL,
+			Host:        node.Host,
+			User:        node.User,
+			Password:    node.Password,
+			TokenName:   node.TokenName,
+			TokenValue:  node.TokenValue,
+			Fingerprint: node.Fingerprint,
+			VerifySSL:   node.VerifySSL,
 		}
 
 		client, err := proxmox.NewClient(testCfg)

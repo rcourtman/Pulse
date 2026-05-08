@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -170,6 +172,67 @@ func TestHandleDiagnostics_CacheIsScopedByOrg(t *testing.T) {
 	}
 	if payload.Version == "cached-org-a" {
 		t.Fatalf("expected org-b diagnostics to bypass org-a cache entry")
+	}
+}
+
+// TestComputeDiagnostics_PVE_HonoursStoredFingerprint verifies that the PVE
+// diagnostic test client uses the per-node TLS fingerprint when one is stored.
+// Regression test: previously the diagnostics handler omitted node.Fingerprint
+// from its testCfg, so connections with VerifySSL=true and a self-signed cert
+// (the standard Proxmox configuration) failed system-CA verification in the
+// diagnostic probe even when the actual poller — which DOES pass the
+// fingerprint — was connecting fine. The PBS section already passed the
+// fingerprint; this test pins the PVE branch to do the same.
+func TestComputeDiagnostics_PVE_HonoursStoredFingerprint(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"node":"node1","status":"online"}]}`))
+		case "/api2/json/nodes/node1/status":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"pveversion":"pve-manager/9.1.9"}}`))
+		case "/api2/json/cluster/status":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	cert := server.Certificate()
+	if cert == nil {
+		t.Fatalf("expected httptest TLS server to expose its leaf certificate")
+	}
+	fingerprint := sha256.Sum256(cert.Raw)
+	storedFingerprint := hex.EncodeToString(fingerprint[:])
+
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{{
+			Name:        "fingerprint-pinned",
+			Host:        server.URL,
+			TokenName:   "user@pam!token",
+			TokenValue:  "secret",
+			VerifySSL:   true, // strict TLS — must rely on stored fingerprint, not system CAs
+			Fingerprint: storedFingerprint,
+		}},
+	}
+	monitor := newMonitorForDiagnostics(t, cfg)
+	router := &Router{config: cfg, monitor: monitor}
+
+	diag := router.computeDiagnostics(context.Background())
+
+	if len(diag.Nodes) != 1 {
+		t.Fatalf("expected 1 PVE node diagnostic, got %d", len(diag.Nodes))
+	}
+	node := diag.Nodes[0]
+	if !node.Connected {
+		t.Fatalf("expected diagnostic to honour stored fingerprint and report Connected=true; got Connected=false, error=%q", node.Error)
+	}
+	if node.AuthMethod != "api_token" {
+		t.Errorf("expected authMethod=api_token, got %q", node.AuthMethod)
 	}
 }
 
