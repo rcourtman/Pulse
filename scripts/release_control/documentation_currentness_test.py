@@ -107,6 +107,16 @@ class DocumentationCurrentnessTest(unittest.TestCase):
                 msg=f"{rel} should not be part of source precedence while marked as historical",
             )
 
+    def test_release_gates_have_high_risk_matrix_sections(self) -> None:
+        matrix = read("docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
+        for gate in STATUS["release_gates"]:
+            gate_id = str(gate["id"])
+            self.assertIn(
+                f"## Gate: `{gate_id}`",
+                matrix,
+                msg=f"release gate {gate_id!r} points at the high-risk matrix but has no section",
+            )
+
     def test_public_ai_autonomy_docs_keep_free_first_boundary(self) -> None:
         ai_doc = read("docs/AI.md")
         autonomy_doc = read("docs/AI_AUTONOMY.md")

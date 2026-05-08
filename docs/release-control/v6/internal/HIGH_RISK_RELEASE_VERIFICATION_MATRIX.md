@@ -361,6 +361,59 @@ Companion drill:
   correctly granted capability, or agent counts/caps disagree across
   enforcement and user-visible surfaces.
 
+## Gate: `paid-runtime-build-attribution-alerting`
+
+- Why this is risky:
+  A paid activation key can be valid even when the local process is the public
+  community build. If Pulse treats that as a normal paid install, the customer
+  can believe Pro is broken while support sees only a valid license.
+- Primary runtime surfaces:
+  `internal/api/license_handlers.go`
+  `frontend-modern/src/stores/license.ts`
+  `frontend-modern/src/utils/licensePresentation.ts`
+  `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+  `pulse-pro/license-server/v6_store.go`
+  `pulse-pro/license-server/admin_handlers.go`
+  `pulse-pro/scripts/promote_paid_runtime_release_packet.sh`
+  `pulse-pro/scripts/v6_paid_runtime_release_gate_proof.sh`
+- Automated proof:
+  `cd ../pulse-pro && bash scripts/v6_paid_user_continuity_preflight.sh`
+  This is the offline contract preflight only. It must keep the product,
+  telemetry, support, private-download, and public-runtime negative proof
+  scripts wired, but it does not clear the gate by itself.
+- Managed runtime proof:
+  After the next aligned Pro RC/GA workflow run publishes private archives,
+  the private Docker image, and the signed proof packet, download the packet
+  with the command printed by the workflow summary. Then run the promotion
+  command printed by the packet downloader from `repos/pulse-pro`.
+- Manual scenario:
+  1. Confirm the promotion command deploys the exact packet manifest and
+     runs the private Pulse Pro customer path.
+  2. Confirm the private path reports `runtime_build=pro`, pulls the private
+     Pro image, activates a paid key, and matches the packet Docker digest.
+  3. Confirm the public Docker negative path accepts the same class of paid
+     key but reports `runtime.build=community`, blocks private runtime
+     capabilities with `paid_runtime_required`, and records
+     `runtime_status=community` in license-server support telemetry.
+  4. Confirm the direct Linux/LXC-style public runtime negative path proves
+     the same community-runtime warning and support telemetry.
+  5. Confirm the local Plans/licensing surface shows the private Pulse Pro
+     download handoff instead of a plan-upgrade prompt for active paid
+     licenses running on the community runtime.
+- Pass when:
+  The private Pro runtime path and both public community negative paths pass
+  against a managed runtime proof packet, support/admin telemetry exposes
+  Pro/community/unknown runtime status, and the customer-facing warning points
+  to the private Pulse Pro downloads page.
+- Latest exercised record:
+  `docs/release-control/v6/internal/records/paid-runtime-build-attribution-alerting-2026-05-07.md`
+- Block release if:
+  The gate has only browser-stubbed/local proof, if public community runtime
+  paid installs can appear healthy, if support telemetry cannot distinguish
+  `pro`, `community`, and `unknown`, or if the proof relies on a hand-entered
+  version, prefix, Docker tag, or evidence directory instead of the signed
+  proof-packet flow.
+
 ## Gate: `rc-to-ga-promotion-readiness`
 
 - Why this is risky:
@@ -532,6 +585,49 @@ Companion drill:
   The prerelease asset path serves the wrong installer logic, the upgrade creates
   duplicate or orphaned agent identity, `updated_from` continuity is missing or
   repeated, or user-visible agent counts drift from runtime enforcement.
+
+## Gate: `mobile-product-purpose-and-first-run-clarity`
+
+- Why this is risky:
+  Pulse Mobile can be technically functional while still failing as a product
+  if users cannot tell why the native app exists, what it owns, and when it
+  should hand off to Pulse web.
+- Primary runtime surfaces:
+  `pulse-mobile/src/screens/StatusScreen.tsx`
+  `pulse-mobile/src/screens/AlertsScreen.tsx`
+  `pulse-mobile/src/screens/OpenPulseScreen.tsx`
+  `pulse-mobile/src/screens/AccessScreen.tsx`
+  `pulse-mobile/src/navigation/...`
+  `pulse-mobile/store/release-readiness.json`
+- Automated proof:
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run release:readiness`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run test:scripts`
+  The automation must report current Android and iOS physical-device evidence
+  for the candidate build before this gate can stay passed.
+- Manual scenario:
+  1. Pair the candidate mobile build to a real self-hosted or Relay-backed
+     Pulse instance on physical Android and iOS devices.
+  2. Confirm the first paired screen makes the app's native companion role
+     clear: status, alerts, notification continuity, paired-access health,
+     Relay-backed Open Pulse handoff, and contextual recovery.
+  3. Confirm the app does not present itself as a miniature web dashboard,
+     command-approval console, or separate control center.
+  4. Confirm empty/all-clear, alert, approval, recovery, Access, Diagnostics,
+     and Open Pulse states make the next useful action obvious without
+     release-team narration.
+  5. Confirm technical readiness evidence for pairing, reconnect,
+     push-routing, approval actions, instance switching, and revoked-access
+     fail-closed behavior is current for the build being promoted.
+- Pass when:
+  A normal operator can understand the native app as a companion to Pulse web
+  on both physical platforms, and the current candidate has matching physical
+  device proof for the companion-role flows.
+- Latest exercised record:
+  `docs/release-control/v6/internal/records/mobile-product-purpose-ga-blocker-2026-04-24.md`
+- Block release if:
+  The app still reads as an unexplained subset of desktop Pulse, if approvals
+  appear to be its primary purpose, if Relay-backed Open Pulse is not a clear
+  handoff, or if physical-device evidence is stale for the candidate build.
 
 ## Gate: `mobile-relay-auth-approvals`
 
