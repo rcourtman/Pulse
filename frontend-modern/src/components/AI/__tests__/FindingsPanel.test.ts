@@ -76,6 +76,15 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).not.toContain('Rollback: `');
   });
 
+  it('surfaces investigation_record.confidence as a badge in the collapsed row', () => {
+    // The seven-question schema's confidence answer should be visible to
+    // operators without expanding the card. The badge sits next to the
+    // investigation outcome badge so trust can be scanned in the row.
+    expect(findingsPanelSource).toContain('finding.investigationRecord?.confidence');
+    expect(findingsPanelSource).toContain('getInvestigationConfidenceBadgeClasses');
+    expect(findingsPanelSource).toContain('confidence');
+  });
+
   it('renders the operator-facing Impact line between Description and Recommendation', () => {
     // The expanded finding card must surface Finding.Impact directly so
     // detection-time consequence-if-ignored copy reaches the operator on the

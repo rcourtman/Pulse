@@ -62,6 +62,7 @@ import {
   getFindingTitlePresentation,
   getFindingRecencyPresentation,
   hasFindingInvestigationDetails,
+  getInvestigationConfidenceBadgeClasses,
   getInvestigationOutcomeBadgeClasses,
   getInvestigationOutcomeLabel,
   getInvestigationStatusLabel,
@@ -704,6 +705,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationOutcomeBadgeClasses(finding.investigationOutcome!)}`}
                 >
                   {getInvestigationOutcomeLabel(finding.investigationOutcome!)}
+                </span>
+              </Show>
+              {/* Investigation confidence badge — surfaces the seven-question
+                  schema's confidence answer in the collapsed row so operators
+                  can scan trust without expanding the card. */}
+              <Show when={finding.investigationRecord?.confidence}>
+                <span
+                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationConfidenceBadgeClasses(finding.investigationRecord!.confidence!)}`}
+                  title={`Investigation confidence: ${finding.investigationRecord!.confidence!}`}
+                >
+                  {finding.investigationRecord!.confidence!} confidence
                 </span>
               </Show>
               {/* Title */}

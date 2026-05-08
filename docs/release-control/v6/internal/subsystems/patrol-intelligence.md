@@ -255,7 +255,16 @@ Patrol-specific presentation helpers.
    `frontend-modern/src/components/AI/FindingsPanel.tsx` is the canonical
    renderer for that operator-facing impact text on the unified findings
    surface: when an expanded finding card has populated `impact`, the panel
-   renders an `Impact:` line between `Description` and `Recommendation`. The
+   renders an `Impact:` line between `Description` and `Recommendation`.
+   The same panel also surfaces `investigation_record.confidence` as a
+   badge in the collapsed finding row (next to the investigation outcome
+   badge) so operators can scan trust without expanding every card. The
+   badge palette is provided by `getInvestigationConfidenceBadgeClasses`
+   in `frontend-modern/src/utils/aiFindingPresentation.ts`: high is
+   reassuringly emphasized, medium is neutral, low is a soft amber.
+   Findings without an investigation record (or without a recorded
+   confidence) must show no confidence badge rather than defaulting to
+   one, mirroring the impact rule that absent metadata is not fabricated. The
    TS API client mirrors (`UnifiedFindingRecord.impact`,
    `Finding.impact`) and the store normalizers
    (`normalizeUnifiedFindingRecord`, `normalizePatrolFindingRecord`) must

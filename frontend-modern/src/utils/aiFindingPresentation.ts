@@ -520,6 +520,18 @@ export const getInvestigationOutcomeBadgeClasses = (
 export const getInvestigationOutcomeLabel = (outcome: InvestigationOutcome | string): string =>
   INVESTIGATION_OUTCOME_LABELS[outcome as InvestigationOutcome] || String(outcome);
 
+// Confidence badge classes mirror severity intuition: high is reassuringly
+// emphasized, medium is neutral, low is a soft amber so the operator notices
+// when the trust signal is weak.
+const INVESTIGATION_CONFIDENCE_CLASSES: Record<string, string> = {
+  high: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  medium: 'border-border bg-surface-alt text-base-content',
+  low: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+};
+
+export const getInvestigationConfidenceBadgeClasses = (confidence: string): string =>
+  INVESTIGATION_CONFIDENCE_CLASSES[confidence] || DEFAULT_BADGE_CLASSES;
+
 export const getInvestigationOutcomeSortOrder = (
   outcome: InvestigationOutcome | string | undefined,
 ): number => {
