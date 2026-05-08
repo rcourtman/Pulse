@@ -288,6 +288,18 @@ runtime cost control, and shared AI transport surfaces.
     and to leave `impact` empty rather than fabricate one when the
     consequence is genuinely unknown; the runtime must not synthesize a
     default in that case.
+    `FindingsStore.GetTrustSummary` returns a snapshot of how currently
+    tracked findings have resolved (tracked, currently-active, resolved,
+    auto-resolved, fix-verified, fix-failed, dismissed-as-noise,
+    dismissed-as-expected, dismissed-as-later, suppressed,
+    regressed-at-least-once). It is the data layer for trust metrics on
+    operator surfaces. The summary is intentionally a snapshot of the
+    in-memory store, not lifetime totals; once findings are cleaned up
+    they no longer contribute. Downstream surfaces must frame the
+    counts as current-state distribution rather than historical
+    aggregates, and the AutoResolved bucket includes both the
+    `Resolve(auto=true)` path and the
+    `UpdateInvestigationOutcome(fix_verified)` path.
     Findings carry a `previous_resolved_fix_summary` field as
     operational memory across regressions: when a finding that had a
     resolved investigation with a proposed fix is re-detected,

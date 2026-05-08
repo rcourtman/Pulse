@@ -1737,9 +1737,75 @@ type FindingsSummary struct {
 	Total    int `json:"total"`
 }
 
+// FindingsTrustSummary is a snapshot of how the currently-tracked findings
+// have resolved over time. It answers the user-facing "do I trust Patrol?"
+// question with concrete counts: how many were auto-resolved, how many were
+// fix-verified, how many were dismissed as noise versus expected behavior.
+//
+// This is a snapshot of the in-memory store; it does not include historical
+// findings that have been cleaned up. Treat the counts as "current state
+// distribution of tracked findings," not lifetime totals.
+type FindingsTrustSummary struct {
+	Tracked              int `json:"tracked"`
+	CurrentlyActive      int `json:"currently_active"`
+	Resolved             int `json:"resolved"`
+	AutoResolved         int `json:"auto_resolved"`
+	FixVerified          int `json:"fix_verified"`
+	FixFailed            int `json:"fix_failed"`
+	DismissedAsNoise     int `json:"dismissed_as_noise"`    // dismissed_reason=not_an_issue
+	DismissedAsExpected  int `json:"dismissed_as_expected"` // dismissed_reason=expected_behavior
+	DismissedAsLater     int `json:"dismissed_as_later"`    // dismissed_reason=will_fix_later
+	Suppressed           int `json:"suppressed"`
+	RegressedAtLeastOnce int `json:"regressed_at_least_once"`
+}
+
 // HasIssues returns true if there are any warning or critical findings
 func (s FindingsSummary) HasIssues() bool {
 	return s.Critical > 0 || s.Warning > 0
+}
+
+// GetTrustSummary returns a snapshot of how currently-tracked findings have
+// resolved. See FindingsTrustSummary for caveats on snapshot vs lifetime
+// totals.
+func (s *FindingsStore) GetTrustSummary() FindingsTrustSummary {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var summary FindingsTrustSummary
+	for _, f := range s.findings {
+		summary.Tracked++
+		if f.IsActive() {
+			summary.CurrentlyActive++
+		}
+		if f.ResolvedAt != nil {
+			summary.Resolved++
+			if f.AutoResolved {
+				summary.AutoResolved++
+			}
+		}
+		if f.Suppressed {
+			summary.Suppressed++
+		}
+		if f.RegressionCount > 0 {
+			summary.RegressedAtLeastOnce++
+		}
+		switch f.InvestigationOutcome {
+		case string(aicontracts.OutcomeFixVerified):
+			summary.FixVerified++
+		case string(aicontracts.OutcomeFixFailed),
+			string(aicontracts.OutcomeFixVerificationFailed):
+			summary.FixFailed++
+		}
+		switch f.DismissedReason {
+		case "not_an_issue":
+			summary.DismissedAsNoise++
+		case "expected_behavior":
+			summary.DismissedAsExpected++
+		case "will_fix_later":
+			summary.DismissedAsLater++
+		}
+	}
+	return summary
 }
 
 // IsHealthy returns true if there are no watch, warning, or critical findings

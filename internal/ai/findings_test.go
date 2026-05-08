@@ -555,6 +555,91 @@ func TestFindingsStore_Add_UpdateExisting(t *testing.T) {
 	}
 }
 
+// TestFindingsStore_GetTrustSummary covers the snapshot counts that answer
+// the operator-facing "do I trust Patrol?" question. It verifies the bucket
+// boundaries for each finding outcome the summary tracks.
+func TestFindingsStore_GetTrustSummary(t *testing.T) {
+	store := NewFindingsStore()
+
+	// Active finding (no resolution, no dismissal)
+	store.Add(&Finding{
+		ID: "f-active", ResourceID: "r1", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Active",
+	})
+
+	// Auto-resolved finding (resolved + auto_resolved=true)
+	store.Add(&Finding{
+		ID: "f-auto", ResourceID: "r2", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Auto",
+	})
+	store.Resolve("f-auto", true)
+
+	// Fix-verified finding (investigation_outcome = fix_verified)
+	store.Add(&Finding{
+		ID: "f-verified", ResourceID: "r3", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Verified",
+	})
+	store.UpdateInvestigationOutcome("f-verified", string(aicontracts.OutcomeFixVerified))
+
+	// Fix-failed finding
+	store.Add(&Finding{
+		ID: "f-failed", ResourceID: "r4", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Failed",
+	})
+	store.UpdateInvestigationOutcome("f-failed", string(aicontracts.OutcomeFixFailed))
+
+	// Dismissed as noise
+	store.Add(&Finding{
+		ID: "f-noise", ResourceID: "r5", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Noise",
+	})
+	store.Dismiss("f-noise", "not_an_issue", "")
+
+	// Dismissed as expected
+	store.Add(&Finding{
+		ID: "f-expected", ResourceID: "r6", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Expected",
+	})
+	store.Dismiss("f-expected", "expected_behavior", "Maintenance window")
+
+	// Regressed at least once: setup via the regression branch
+	store.Add(&Finding{
+		ID: "f-regressed", ResourceID: "r7", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Regressed",
+	})
+	store.Resolve("f-regressed", true)
+	store.Add(&Finding{
+		ID: "f-regressed", ResourceID: "r7", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Regressed",
+	})
+
+	got := store.GetTrustSummary()
+	if got.Tracked != 7 {
+		t.Errorf("Tracked = %d, want 7", got.Tracked)
+	}
+	// AutoResolved counts findings that were resolved without operator action.
+	// Both Resolve(auto=true) and UpdateInvestigationOutcome(fix_verified) set
+	// the AutoResolved flag, so f-auto and f-verified both contribute.
+	if got.AutoResolved != 2 {
+		t.Errorf("AutoResolved = %d, want 2", got.AutoResolved)
+	}
+	if got.FixVerified != 1 {
+		t.Errorf("FixVerified = %d, want 1", got.FixVerified)
+	}
+	if got.FixFailed != 1 {
+		t.Errorf("FixFailed = %d, want 1", got.FixFailed)
+	}
+	if got.DismissedAsNoise != 1 {
+		t.Errorf("DismissedAsNoise = %d, want 1", got.DismissedAsNoise)
+	}
+	if got.DismissedAsExpected != 1 {
+		t.Errorf("DismissedAsExpected = %d, want 1", got.DismissedAsExpected)
+	}
+	if got.RegressedAtLeastOnce != 1 {
+		t.Errorf("RegressedAtLeastOnce = %d, want 1", got.RegressedAtLeastOnce)
+	}
+}
+
 // TestFindingsStore_Add_CapturesPreviousResolvedFixOnRegression covers the
 // regression branch: when a finding that had a resolved investigation with a
 // proposed fix is re-detected, the prior fix description must be preserved on
