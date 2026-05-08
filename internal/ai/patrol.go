@@ -110,6 +110,7 @@ type PatrolStatus struct {
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
 	ID                        string        `json:"id"`
+	Source                    string        `json:"source,omitempty"`
 	StartedAt                 time.Time     `json:"started_at"`
 	CompletedAt               time.Time     `json:"completed_at"`
 	Duration                  time.Duration `json:"-"`
@@ -159,6 +160,7 @@ type PatrolRunRecord struct {
 
 type patrolRunRecordJSON struct {
 	ID                        string           `json:"id"`
+	Source                    string           `json:"source,omitempty"`
 	StartedAt                 time.Time        `json:"started_at"`
 	CompletedAt               time.Time        `json:"completed_at"`
 	DurationMs                int64            `json:"duration_ms"`
@@ -227,6 +229,7 @@ func canonicalPatrolFindingIDs(ids []string) []string {
 }
 
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
+	record.Source = normalizePatrolRunSource(record.Source)
 	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier)
 	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
 	record.ErrorSummary = strings.TrimSpace(redactPatrolRuntimeFailureDetail(record.ErrorSummary))
@@ -236,10 +239,52 @@ func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
 	return record
 }
 
+const PatrolRunSourceDemo = "demo"
+
+func normalizePatrolRunSource(source string) string {
+	return strings.ToLower(strings.TrimSpace(source))
+}
+
+func isDemoPatrolRunRecord(record PatrolRunRecord) bool {
+	if normalizePatrolRunSource(record.Source) == PatrolRunSourceDemo {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(record.ID)), "demo-run-")
+}
+
+func filterPatrolRunRecordsForRuntimeEvidence(records []PatrolRunRecord) []PatrolRunRecord {
+	if IsDemoMode() || len(records) == 0 {
+		return records
+	}
+
+	filtered := make([]PatrolRunRecord, 0, len(records))
+	for _, record := range records {
+		if isDemoPatrolRunRecord(record) {
+			continue
+		}
+		filtered = append(filtered, record)
+	}
+	return filtered
+}
+
+func limitPatrolRunRecords(records []PatrolRunRecord, limit int) []PatrolRunRecord {
+	if limit <= 0 || len(records) == 0 {
+		return records
+	}
+	if limit > MaxPatrolRunHistory {
+		limit = MaxPatrolRunHistory
+	}
+	if limit > len(records) {
+		limit = len(records)
+	}
+	return records[:limit]
+}
+
 func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 	normalized := normalizePatrolRunRecord(r)
 	return json.Marshal(patrolRunRecordJSON{
 		ID:                        normalized.ID,
+		Source:                    normalized.Source,
 		StartedAt:                 normalized.StartedAt,
 		CompletedAt:               normalized.CompletedAt,
 		DurationMs:                normalized.DurationMs,
@@ -290,6 +335,7 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 
 	*r = normalizePatrolRunRecord(PatrolRunRecord{
 		ID:                        payload.ID,
+		Source:                    payload.Source,
 		StartedAt:                 payload.StartedAt,
 		CompletedAt:               payload.CompletedAt,
 		Duration:                  time.Duration(payload.DurationMs) * time.Millisecond,

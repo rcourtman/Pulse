@@ -119,6 +119,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           runtimeState={state.runtimeState()}
           blockedReason={state.blockedReason()}
           overallHealth={state.intelligenceSummary()?.overall_health}
+          findingsSource="patrol"
           runSnapshot={state.selectedRun() ?? undefined}
         />
       </Show>
@@ -140,9 +141,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
                 {PATROL_SUPPORTING_CONTEXT_TITLE}
               </p>
-              <p class="mt-1 text-sm text-muted">
-                {PATROL_SUPPORTING_CONTEXT_DESCRIPTION}
-              </p>
+              <p class="mt-1 text-sm text-muted">{PATROL_SUPPORTING_CONTEXT_DESCRIPTION}</p>
               <Show when={state.investigationContextSummary()}>
                 <p class="mt-1 text-xs text-base-content">{state.investigationContextSummary()}</p>
               </Show>

@@ -116,7 +116,11 @@ runtime cost control, and shared AI transport surfaces.
    failures must be classified in `internal/ai/` before they reach operators,
    surfaced as the synthetic Patrol runtime finding, and preserved on patrol
    run records as structured error summary/detail instead of collapsing to
-   generic analysis-failed copy.
+   generic analysis-failed copy. Demo-mode Patrol run records must carry
+   explicit source provenance and must not persist as live runtime evidence;
+   outside demo mode, run-history reads, run lookup, and Patrol coverage
+   scoring must filter both source-marked and legacy `demo-run-*` records so
+   live assessment state cannot be contaminated by public demo fixtures.
    Unavailable-provider blocked states must direct operators to Assistant &
    Patrol provider settings and tool-capable Patrol model selection, not
    legacy `Settings > Pulse Assistant` copy.

@@ -119,6 +119,10 @@ product API routes free of maintainer commercial analytics.
    `/api/ai/patrol/run` must use the `patrol_readiness_not_ready` error taxonomy
    when it rejects a known-bad Patrol runtime configuration. Bounded `status`,
    `cause`, `provider`, and `model` details are the canonical transport shape.
+   `/api/ai/patrol/findings` is the canonical Patrol-page findings source, and
+   `/api/ai/patrol/runs` records may expose bounded `source` provenance so demo
+   evidence can be separated from live runtime assessment state without
+   changing the stable run payload shape.
 7. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.

@@ -75,6 +75,11 @@ Patrol-specific presentation helpers.
 ## Completion Obligations
 
 1. Update Patrol page, state, presentation helpers, and proof files together when Patrol UX semantics change
+   The Patrol route must source its Patrol findings from the direct Patrol
+   findings transport through the shared intelligence store. Unified findings
+   may remain available to cross-product AI surfaces, but the Patrol page,
+   selected-run findings panel, badges, and active-finding summaries must not
+   infer current Patrol evidence by filtering the unified threshold/AI feed.
 2. Keep Patrol-specific copy and badge logic inside the governed Patrol presentation helpers instead of page-local branches
 3. Update this contract whenever a new Patrol-specific page, store, helper, or presentation component becomes canonical runtime surface area
 4. Keep retired hosted-model and trial-like Patrol acquisition copy out of the

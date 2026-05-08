@@ -502,6 +502,18 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).not.toContain('AIAPI.getRemediationPlans()');
     });
 
+    it('can source Patrol findings from the direct Patrol store boundary', () => {
+      expect(findingsPanelSource).toContain("findingsSource?: 'unified' | 'patrol'");
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindings');
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsSignal()');
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsNeedingAttention');
+      expect(findingsPanelSource).toContain(
+        'aiIntelligenceStore.patrolFindingsWithPendingApprovals',
+      );
+      expect(patrolWorkspaceSource).toContain('findingsSource="patrol"');
+    });
+
     it('routes same-severity ordering through the shared patrol runtime sort helper', () => {
       expect(findingsPanelSource).toContain('getFindingActiveRuntimeSortOrder(a)');
       expect(findingsPanelSource).toContain('getFindingActiveRuntimeSortOrder(b)');

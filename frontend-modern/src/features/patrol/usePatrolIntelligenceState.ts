@@ -21,7 +21,6 @@ import {
 } from '@/stores/aiRuntimeState';
 import { aiChatStore } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
-import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
@@ -548,12 +547,7 @@ export function usePatrolIntelligenceState() {
   });
 
   const selectedRunScopeResourceIds = createMemo(() => getCanonicalScopeResourceIds(selectedRun()));
-  const allPatrolFindings = createMemo(() =>
-    aiIntelligenceStore.findings.filter(
-      (finding) =>
-        finding.source !== 'threshold' && !finding.isThreshold && !hasTriggeringAlert(finding),
-    ),
-  );
+  const allPatrolFindings = createMemo(() => aiIntelligenceStore.patrolFindings);
   const selectedRunPatrolFindings = createMemo(() => {
     const run = selectedRun();
     if (!run) return null;

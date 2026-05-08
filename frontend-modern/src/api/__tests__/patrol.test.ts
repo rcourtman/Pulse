@@ -7,6 +7,7 @@ vi.mock('@/utils/apiClient', () => ({
 import {
   getPatrolStatus,
   getPatrolRun,
+  getPatrolFindings,
   getPatrolRunHistory,
   getPatrolRunHistoryWithToolCalls,
   getPatrolRunWithToolCalls,
@@ -186,6 +187,38 @@ describe('patrol api', () => {
       error_detail: 'provider rejected tool_choice',
       triage_flags: 2,
       triage_skipped_llm: true,
+    });
+  });
+
+  it('fetches direct Patrol findings and preserves canonical alert identity', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce([
+      {
+        id: 'finding-1',
+        severity: 'warning',
+        category: 'reliability',
+        resource_id: 'instance:node:100',
+        resource_name: 'vm-100',
+        resource_type: 'vm',
+        title: 'Provider connection issue',
+        description: 'Patrol could not complete provider analysis.',
+        detected_at: '2026-03-01T00:00:00Z',
+        last_seen_at: '2026-03-01T00:05:00Z',
+        auto_resolved: false,
+        times_raised: 1,
+        suppressed: false,
+        investigation_attempts: 0,
+        alert_identifier: 'instance:node:100::patrol/provider',
+      },
+    ] as any);
+
+    const findings = await getPatrolFindings();
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/findings');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      id: 'finding-1',
+      alertIdentifier: 'instance:node:100::patrol/provider',
+      title: 'Provider connection issue',
     });
   });
 

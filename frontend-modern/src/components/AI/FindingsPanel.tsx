@@ -83,6 +83,7 @@ interface FindingsPanelProps {
   runtimeState?: PatrolRuntimeState;
   blockedReason?: string;
   overallHealth?: IntelligenceHealthScore;
+  findingsSource?: 'unified' | 'patrol';
   runSnapshot?: Pick<
     PatrolRunRecord,
     | 'resources_checked'
@@ -113,6 +114,20 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const [dismissNote, setDismissNote] = createSignal('');
 
   const [dismissedPlanIds, setDismissedPlanIds] = createSignal<string[]>([]);
+  const isPatrolFindingsSource = createMemo(() => props.findingsSource === 'patrol');
+  const sourceFindings = createMemo(() =>
+    isPatrolFindingsSource() ? aiIntelligenceStore.patrolFindings : aiIntelligenceStore.findings,
+  );
+  const sourceFindingsNeedingAttention = createMemo(() =>
+    isPatrolFindingsSource()
+      ? aiIntelligenceStore.patrolFindingsNeedingAttention
+      : aiIntelligenceStore.findingsNeedingAttention,
+  );
+  const sourceFindingsWithPendingApprovals = createMemo(() =>
+    isPatrolFindingsSource()
+      ? aiIntelligenceStore.patrolFindingsWithPendingApprovals
+      : aiIntelligenceStore.findingsWithPendingApprovals,
+  );
 
   const handleDismissPlan = async (plan: RemediationPlan, e: Event) => {
     e.stopPropagation();
@@ -142,7 +157,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   // Load findings and remediation plans on mount
   createEffect(() => {
-    aiIntelligenceStore.loadFindings();
+    if (isPatrolFindingsSource()) {
+      aiIntelligenceStore.loadPatrolFindings();
+    } else {
+      aiIntelligenceStore.loadFindings();
+    }
     aiIntelligenceStore.loadRemediationPlans();
   });
 
@@ -161,7 +180,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       return [];
     }
 
-    let findings = [...aiIntelligenceStore.findings];
+    let findings = [...sourceFindings()];
 
     // Filter by resource if specified
     if (props.resourceId) {
@@ -176,12 +195,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         (f) => f.status === 'resolved' || f.status === 'dismissed' || f.status === 'snoozed',
       );
     } else if (filter() === 'attention') {
-      const attentionIds = new Set(aiIntelligenceStore.findingsNeedingAttention.map((f) => f.id));
+      const attentionIds = new Set(sourceFindingsNeedingAttention().map((f) => f.id));
       findings = findings.filter((f) => attentionIds.has(f.id));
     } else if (filter() === 'approvals') {
-      const approvalFindingIds = new Set(
-        aiIntelligenceStore.findingsWithPendingApprovals.map((f) => f.id),
-      );
+      const approvalFindingIds = new Set(sourceFindingsWithPendingApprovals().map((f) => f.id));
       findings = findings.filter((f) => approvalFindingIds.has(f.id));
     }
 
@@ -233,11 +250,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   });
 
   // Filter to only show Patrol findings (exclude threshold alerts)
-  const allPatrolFindings = createMemo(() =>
-    aiIntelligenceStore.findings.filter(
+  const allPatrolFindings = createMemo(() => {
+    if (isPatrolFindingsSource()) {
+      return sourceFindings();
+    }
+    return sourceFindings().filter(
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
-    ),
-  );
+    );
+  });
   const runSnapshotScopedPatrolFindings = createMemo(() => {
     if (hasUnknownRunSnapshot()) {
       return [];
@@ -250,30 +270,31 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   });
   const useRunSnapshotScopedControls = createMemo(() => props.runSnapshot !== undefined);
   const scopedNeedsAttentionCount = createMemo(() => {
-    const attentionIds = new Set(aiIntelligenceStore.findingsNeedingAttention.map((f) => f.id));
+    const attentionIds = new Set(sourceFindingsNeedingAttention().map((f) => f.id));
     return runSnapshotScopedPatrolFindings().filter((finding) => attentionIds.has(finding.id))
       .length;
   });
   const scopedPendingApprovalCount = createMemo(() => {
-    const approvalIds = new Set(
-      aiIntelligenceStore.findingsWithPendingApprovals.map((finding) => finding.id),
-    );
+    const approvalIds = new Set(sourceFindingsWithPendingApprovals().map((finding) => finding.id));
     return runSnapshotScopedPatrolFindings().filter((finding) => approvalIds.has(finding.id))
       .length;
   });
   const filterCounts = createMemo(() => ({
     needsAttentionCount: useRunSnapshotScopedControls()
       ? scopedNeedsAttentionCount()
-      : aiIntelligenceStore.needsAttentionCount,
+      : sourceFindingsNeedingAttention().length,
     pendingApprovalCount: useRunSnapshotScopedControls()
       ? scopedPendingApprovalCount()
-      : aiIntelligenceStore.patrolPendingApprovalCount,
+      : sourceFindingsWithPendingApprovals().length,
   }));
-  const patrolFindings = createMemo(() =>
-    filteredFindings().filter(
+  const patrolFindings = createMemo(() => {
+    if (isPatrolFindingsSource()) {
+      return filteredFindings();
+    }
+    return filteredFindings().filter(
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
-    ),
-  );
+    );
+  });
   const filterOptions = createMemo(() => buildFindingFilterOptions(filterCounts()));
   const emptyStateCopy = createMemo(() =>
     getPatrolFindingsEmptyState({
@@ -341,7 +362,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   createEffect(() => {
     location.hash;
-    aiIntelligenceStore.findingsSignal();
+    if (isPatrolFindingsSource()) {
+      aiIntelligenceStore.patrolFindingsSignal();
+    } else {
+      aiIntelligenceStore.findingsSignal();
+    }
     requestAnimationFrame(scrollToFindingHash);
   });
 

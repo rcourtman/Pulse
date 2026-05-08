@@ -2473,6 +2473,7 @@ type PatrolRunHistoryData struct {
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
 	ID                        string    `json:"id"`
+	Source                    string    `json:"source,omitempty"`
 	StartedAt                 time.Time `json:"started_at"`
 	CompletedAt               time.Time `json:"completed_at"`
 	DurationMs                int64     `json:"duration_ms"`
@@ -2521,6 +2522,7 @@ type PatrolRunRecord struct {
 
 type patrolRunRecordJSON struct {
 	ID                        string           `json:"id"`
+	Source                    string           `json:"source,omitempty"`
 	StartedAt                 time.Time        `json:"started_at"`
 	CompletedAt               time.Time        `json:"completed_at"`
 	DurationMs                int64            `json:"duration_ms"`
@@ -2589,6 +2591,7 @@ func canonicalPatrolFindingIDs(ids []string) []string {
 }
 
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
+	record.Source = strings.ToLower(strings.TrimSpace(record.Source))
 	alertIdentifier := canonicalPatrolAlertIdentifier(record.AlertIdentifier)
 	record.AlertIdentifier = alertIdentifier
 	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
@@ -2600,6 +2603,7 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 	alertIdentifier := strings.TrimSpace(normalized.AlertIdentifier)
 	return json.Marshal(patrolRunRecordJSON{
 		ID:                        normalized.ID,
+		Source:                    normalized.Source,
 		StartedAt:                 normalized.StartedAt,
 		CompletedAt:               normalized.CompletedAt,
 		DurationMs:                normalized.DurationMs,
@@ -2651,6 +2655,7 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 	alertIdentifier := canonicalPatrolAlertIdentifier(payload.AlertIdentifier)
 	*r = PatrolRunRecord{
 		ID:                        payload.ID,
+		Source:                    strings.ToLower(strings.TrimSpace(payload.Source)),
 		StartedAt:                 payload.StartedAt,
 		CompletedAt:               payload.CompletedAt,
 		DurationMs:                payload.DurationMs,

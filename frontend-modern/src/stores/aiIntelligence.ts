@@ -10,7 +10,14 @@
 
 import { createSignal } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import { acknowledgeFinding, snoozeFinding, dismissFinding, setFindingNote } from '@/api/patrol';
+import {
+  acknowledgeFinding,
+  snoozeFinding,
+  dismissFinding,
+  setFindingNote,
+  getPatrolFindings,
+  type Finding as PatrolFinding,
+} from '@/api/patrol';
 import type {
   RemediationPlan,
   CircuitBreakerStatus,
@@ -94,6 +101,29 @@ function validateSource(value: string | undefined): UnifiedFinding['source'] {
   return 'ai-patrol';
 }
 
+type FindingStatusInput = {
+  status?: string;
+  resolved_at?: string;
+  snoozed_until?: string;
+  dismissed_reason?: string;
+  suppressed?: boolean;
+};
+
+function normalizeFindingStatus(item: FindingStatusInput, now: number): UnifiedFinding['status'] {
+  if (
+    item.status === 'active' ||
+    item.status === 'resolved' ||
+    item.status === 'dismissed' ||
+    item.status === 'snoozed'
+  ) {
+    return item.status;
+  }
+  if (item.resolved_at) return 'resolved';
+  if (item.snoozed_until && new Date(item.snoozed_until).getTime() > now) return 'snoozed';
+  if (item.dismissed_reason || item.suppressed) return 'dismissed';
+  return 'active';
+}
+
 // ============================================
 // Unified Findings
 // ============================================
@@ -156,6 +186,84 @@ export interface UnifiedFinding {
 const [unifiedFindings, setUnifiedFindings] = createSignal<UnifiedFinding[]>([]);
 const [findingsLoading, setFindingsLoading] = createSignal(false);
 const [findingsError, setFindingsError] = createSignal<string | null>(null);
+const [patrolFindings, setPatrolFindings] = createSignal<UnifiedFinding[]>([]);
+const [patrolFindingsLoading, setPatrolFindingsLoading] = createSignal(false);
+const [patrolFindingsError, setPatrolFindingsError] = createSignal<string | null>(null);
+
+function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number): UnifiedFinding {
+  const alertIdentifier = item.alertIdentifier;
+  return {
+    id: item.id,
+    source: validateSource(item.source),
+    resourceId: item.resource_id,
+    resourceName: item.resource_name || item.resource_id,
+    resourceType: item.resource_type || 'unknown',
+    alertIdentifier,
+    isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
+    category: item.category || 'general',
+    severity: validateSeverity(item.severity),
+    title: item.title,
+    description: item.description,
+    recommendation: item.recommendation,
+    detectedAt: item.detected_at,
+    lastSeenAt: item.last_seen_at || item.detected_at,
+    resolvedAt: item.resolved_at,
+    acknowledgedAt: item.acknowledged_at,
+    snoozedUntil: item.snoozed_until,
+    dismissedReason: item.dismissed_reason,
+    userNote: item.user_note,
+    status: normalizeFindingStatus(item, now),
+    correlatedFindingIds: item.correlated_ids,
+    remediationPlanId: item.remediation_id,
+    investigationSessionId: item.investigation_session_id || '',
+    investigationStatus: validateInvestigationStatus(item.investigation_status),
+    investigationOutcome: validateInvestigationOutcome(item.investigation_outcome),
+    lastInvestigatedAt: item.last_investigated_at || undefined,
+    investigationAttempts: item.investigation_attempts || 0,
+    investigationRecord: item.investigation_record,
+    loopState: item.loop_state || undefined,
+    lifecycle: item.lifecycle || [],
+    timesRaised: item.times_raised || 0,
+    regressionCount: item.regression_count || 0,
+    lastRegressionAt: item.last_regression_at || undefined,
+  };
+}
+
+function normalizePatrolFindingRecord(item: PatrolFinding, now: number): UnifiedFinding {
+  return {
+    id: item.id,
+    source: 'ai-patrol',
+    resourceId: item.resource_id,
+    resourceName: item.resource_name || item.resource_id,
+    resourceType: item.resource_type || 'unknown',
+    alertIdentifier: item.alertIdentifier,
+    isThreshold: false,
+    category: item.category || 'general',
+    severity: validateSeverity(item.severity),
+    title: item.title,
+    description: item.description,
+    recommendation: item.recommendation,
+    detectedAt: item.detected_at,
+    lastSeenAt: item.last_seen_at || item.detected_at,
+    resolvedAt: item.resolved_at,
+    acknowledgedAt: item.acknowledged_at,
+    snoozedUntil: item.snoozed_until,
+    dismissedReason: item.dismissed_reason,
+    userNote: item.user_note,
+    status: normalizeFindingStatus(item, now),
+    investigationSessionId: item.investigation_session_id || '',
+    investigationStatus: validateInvestigationStatus(item.investigation_status),
+    investigationOutcome: validateInvestigationOutcome(item.investigation_outcome),
+    lastInvestigatedAt: item.last_investigated_at || undefined,
+    investigationAttempts: item.investigation_attempts || 0,
+    investigationRecord: item.investigation_record,
+    loopState: item.loop_state || undefined,
+    lifecycle: item.lifecycle || [],
+    timesRaised: item.times_raised || 0,
+    regressionCount: item.regression_count || 0,
+    lastRegressionAt: item.last_regression_at || undefined,
+  };
+}
 
 // ============================================
 // Remediation Plans
@@ -226,6 +334,27 @@ function getLivePatrolPendingApprovals() {
   return getLivePendingApprovals().filter(isPatrolInvestigationFixApproval);
 }
 
+function getFindingsWithPendingApprovalsFor(findings: UnifiedFinding[]) {
+  const approvals = getLivePatrolPendingApprovals();
+  const approvalOrder = new Map(
+    sortPendingApprovalsByUrgency(approvals).map((approval, index) => [approval.targetId, index]),
+  );
+  return findings
+    .filter((finding) => hasPendingInvestigationFixApproval(finding.id, approvals))
+    .sort(
+      (a, b) =>
+        (approvalOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+        (approvalOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    );
+}
+
+function getFindingsNeedingAttentionFor(findings: UnifiedFinding[]) {
+  const approvals = getLivePatrolPendingApprovals();
+  return sortFindingsForAttentionQueue(
+    findings.filter((finding) => doesFindingNeedAttention(finding, approvals)),
+  );
+}
+
 // ============================================
 // Circuit Breaker
 // ============================================
@@ -264,6 +393,16 @@ export const aiIntelligenceStore = {
     return findingsError();
   },
   findingsSignal: unifiedFindings,
+  get patrolFindings() {
+    return patrolFindings();
+  },
+  get patrolFindingsLoading() {
+    return patrolFindingsLoading();
+  },
+  get patrolFindingsError() {
+    return patrolFindingsError();
+  },
+  patrolFindingsSignal: patrolFindings,
 
   async loadFindings() {
     setFindingsLoading(true);
@@ -273,64 +412,29 @@ export const aiIntelligenceStore = {
       if (!resp) return;
       const now = Date.now();
 
-      const findings = (resp.findings || []).map((item: UnifiedFindingRecord): UnifiedFinding => {
-        const alertIdentifier = item.alertIdentifier;
-        let status = item.status as UnifiedFinding['status'] | undefined;
-        if (!status) {
-          if (item.resolved_at) {
-            status = 'resolved';
-          } else if (item.snoozed_until && new Date(item.snoozed_until).getTime() > now) {
-            status = 'snoozed';
-          } else if (item.dismissed_reason || item.suppressed) {
-            status = 'dismissed';
-          } else {
-            status = 'active';
-          }
-        }
-
-        return {
-          id: item.id,
-          source: validateSource(item.source),
-          resourceId: item.resource_id,
-          resourceName: item.resource_name || item.resource_id,
-          resourceType: item.resource_type || 'unknown',
-          alertIdentifier,
-          isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
-          category: item.category || 'general',
-          severity: validateSeverity(item.severity),
-          title: item.title,
-          description: item.description,
-          recommendation: item.recommendation,
-          detectedAt: item.detected_at,
-          lastSeenAt: item.last_seen_at || item.detected_at,
-          resolvedAt: item.resolved_at,
-          acknowledgedAt: item.acknowledged_at,
-          snoozedUntil: item.snoozed_until,
-          dismissedReason: item.dismissed_reason,
-          userNote: item.user_note,
-          status,
-          correlatedFindingIds: item.correlated_ids,
-          remediationPlanId: item.remediation_id,
-          investigationSessionId: item.investigation_session_id || '',
-          investigationStatus: validateInvestigationStatus(item.investigation_status),
-          investigationOutcome: validateInvestigationOutcome(item.investigation_outcome),
-          lastInvestigatedAt: item.last_investigated_at || undefined,
-          investigationAttempts: item.investigation_attempts || 0,
-          investigationRecord: item.investigation_record,
-          loopState: item.loop_state || undefined,
-          lifecycle: item.lifecycle || [],
-          timesRaised: item.times_raised || 0,
-          regressionCount: item.regression_count || 0,
-          lastRegressionAt: item.last_regression_at || undefined,
-        };
-      });
-
-      setUnifiedFindings(findings);
+      setUnifiedFindings(
+        (resp.findings || []).map((item) => normalizeUnifiedFindingRecord(item, now)),
+      );
     } catch (e) {
       logger.error('Failed to load unified findings:', e);
       setFindingsError(e instanceof Error ? e.message : 'Failed to load findings');
     } finally {
       setFindingsLoading(false);
+    }
+  },
+
+  async loadPatrolFindings() {
+    setPatrolFindingsLoading(true);
+    setPatrolFindingsError(null);
+    try {
+      const findings = await getPatrolFindings();
+      const now = Date.now();
+      setPatrolFindings(findings.map((item) => normalizePatrolFindingRecord(item, now)));
+    } catch (e) {
+      logger.error('Failed to load Patrol findings:', e);
+      setPatrolFindingsError(e instanceof Error ? e.message : 'Failed to load Patrol findings');
+    } finally {
+      setPatrolFindingsLoading(false);
     }
   },
 
@@ -401,7 +505,7 @@ export const aiIntelligenceStore = {
   async acknowledgeFinding(findingId: string) {
     try {
       await acknowledgeFinding(findingId);
-      await this.loadFindings();
+      await Promise.all([this.loadFindings(), this.loadPatrolFindings()]);
       return true;
     } catch (e) {
       logger.error('Failed to acknowledge finding:', e);
@@ -412,7 +516,7 @@ export const aiIntelligenceStore = {
   async snoozeFinding(findingId: string, durationHours: number) {
     try {
       await snoozeFinding(findingId, durationHours);
-      await this.loadFindings();
+      await Promise.all([this.loadFindings(), this.loadPatrolFindings()]);
       return true;
     } catch (e) {
       logger.error('Failed to snooze finding:', e);
@@ -427,7 +531,7 @@ export const aiIntelligenceStore = {
   ) {
     try {
       await dismissFinding(findingId, reason, note);
-      await this.loadFindings();
+      await Promise.all([this.loadFindings(), this.loadPatrolFindings()]);
       return true;
     } catch (e) {
       logger.error('Failed to dismiss finding:', e);
@@ -440,6 +544,9 @@ export const aiIntelligenceStore = {
       await setFindingNote(findingId, note);
       // Update local state immediately for responsiveness
       setUnifiedFindings((prev) =>
+        prev.map((f) => (f.id === findingId ? { ...f, userNote: note } : f)),
+      );
+      setPatrolFindings((prev) =>
         prev.map((f) => (f.id === findingId ? { ...f, userNote: note } : f)),
       );
       return true;
@@ -469,28 +576,24 @@ export const aiIntelligenceStore = {
   },
 
   get findingsWithPendingApprovals() {
-    const approvals = getLivePatrolPendingApprovals();
-    const approvalOrder = new Map(
-      sortPendingApprovalsByUrgency(approvals).map((approval, index) => [approval.targetId, index]),
-    );
-    return unifiedFindings()
-      .filter((finding) => hasPendingInvestigationFixApproval(finding.id, approvals))
-      .sort(
-        (a, b) =>
-          (approvalOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-          (approvalOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-      );
+    return getFindingsWithPendingApprovalsFor(unifiedFindings());
+  },
+  get patrolFindingsWithPendingApprovals() {
+    return getFindingsWithPendingApprovalsFor(patrolFindings());
   },
 
   get findingsNeedingAttention() {
-    const approvals = getLivePatrolPendingApprovals();
-    return sortFindingsForAttentionQueue(
-      unifiedFindings().filter((finding) => doesFindingNeedAttention(finding, approvals)),
-    );
+    return getFindingsNeedingAttentionFor(unifiedFindings());
+  },
+  get patrolFindingsNeedingAttention() {
+    return getFindingsNeedingAttentionFor(patrolFindings());
   },
 
   get needsAttentionCount() {
     return this.findingsNeedingAttention.length;
+  },
+  get patrolNeedsAttentionCount() {
+    return this.patrolFindingsNeedingAttention.length;
   },
 
   async loadPendingApprovals() {
@@ -517,7 +620,7 @@ export const aiIntelligenceStore = {
     try {
       const result = await AIAPI.approvePendingApproval(approvalId);
       await this.loadPendingApprovals();
-      await this.loadFindings();
+      await Promise.all([this.loadFindings(), this.loadPatrolFindings()]);
       return result;
     } catch (e) {
       logger.error('Failed to approve fix:', e);
@@ -533,7 +636,7 @@ export const aiIntelligenceStore = {
     try {
       await AIAPI.denyPendingApproval(approvalId, reason);
       await this.loadPendingApprovals();
-      await this.loadFindings();
+      await Promise.all([this.loadFindings(), this.loadPatrolFindings()]);
       return true;
     } catch (e) {
       logger.error('Failed to deny fix:', e);
@@ -575,6 +678,7 @@ export const aiIntelligenceStore = {
     await Promise.all([
       this.loadIntelligenceSummary(),
       this.loadFindings(),
+      this.loadPatrolFindings(),
       this.loadCircuitBreakerStatus(),
       this.loadPendingApprovals(),
       this.loadCorrelations(),

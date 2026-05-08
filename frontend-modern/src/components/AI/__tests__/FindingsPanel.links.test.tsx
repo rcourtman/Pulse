@@ -6,6 +6,7 @@ import { FindingsPanel } from '../FindingsPanel';
 
 const mockState = vi.hoisted(() => {
   const loadFindings = vi.fn();
+  const loadPatrolFindings = vi.fn();
   const getRemediationPlans = vi.fn().mockResolvedValue({ plans: [] });
   const getResource = vi.fn((resourceId: string) =>
     resourceId === 'app-container:truenas-main:nextcloud'
@@ -44,12 +45,31 @@ const mockState = vi.hoisted(() => {
       status: 'active',
     },
   ];
+  const patrolFindings = [
+    {
+      id: 'finding-provider-issue',
+      source: 'ai-patrol',
+      resourceId: 'instance:node:100',
+      resourceName: 'vm-100',
+      resourceType: 'vm',
+      alertIdentifier: 'instance:node:100::patrol/provider',
+      category: 'reliability',
+      severity: 'warning',
+      title: 'Provider connection issue',
+      description: 'Pulse Patrol could not complete provider analysis.',
+      detectedAt: '2026-03-30T11:00:00Z',
+      lastSeenAt: '2026-03-30T11:05:00Z',
+      status: 'active',
+    },
+  ];
 
   return {
     findings,
+    patrolFindings,
     getResource,
     getRemediationPlans,
     loadFindings,
+    loadPatrolFindings,
   };
 });
 
@@ -107,13 +127,31 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get findingsError() {
       return null;
     },
+    get patrolFindings() {
+      return mockState.patrolFindings;
+    },
+    get patrolFindingsLoading() {
+      return false;
+    },
+    get patrolFindingsError() {
+      return null;
+    },
     get findingsNeedingAttention() {
+      return [];
+    },
+    get patrolFindingsNeedingAttention() {
       return [];
     },
     get findingsWithPendingApprovals() {
       return [];
     },
+    get patrolFindingsWithPendingApprovals() {
+      return [];
+    },
     get needsAttentionCount() {
+      return 0;
+    },
+    get patrolNeedsAttentionCount() {
       return 0;
     },
     get pendingApprovalCount() {
@@ -126,7 +164,9 @@ vi.mock('@/stores/aiIntelligence', () => ({
       return [];
     },
     findingsSignal: () => mockState.findings,
+    patrolFindingsSignal: () => mockState.patrolFindings,
     loadFindings: mockState.loadFindings,
+    loadPatrolFindings: mockState.loadPatrolFindings,
     loadRemediationPlans: vi.fn(),
   },
 }));
@@ -134,6 +174,7 @@ vi.mock('@/stores/aiIntelligence', () => ({
 describe('FindingsPanel resource links', () => {
   beforeEach(() => {
     mockState.loadFindings.mockClear();
+    mockState.loadPatrolFindings.mockClear();
     mockState.getRemediationPlans.mockClear();
     mockState.getResource.mockClear();
 
@@ -162,5 +203,14 @@ describe('FindingsPanel resource links', () => {
       'href',
       '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
     );
+  });
+
+  it('can render Patrol findings from the direct Patrol source', async () => {
+    render(() => <FindingsPanel findingsSource="patrol" />);
+
+    await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+
+    expect(mockState.loadFindings).not.toHaveBeenCalled();
+    expect(screen.getByText('Provider connection issue')).toBeInTheDocument();
   });
 });

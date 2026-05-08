@@ -48,6 +48,17 @@ export interface Finding {
   last_investigated_at?: string;
   investigation_attempts: number;
   investigation_record?: InvestigationRecord;
+  loop_state?: string;
+  lifecycle?: Array<{
+    at: string;
+    type: string;
+    message?: string;
+    from?: string;
+    to?: string;
+    metadata?: Record<string, string>;
+  }>;
+  regression_count?: number;
+  last_regression_at?: string;
 }
 
 export type InvestigationStatus =
@@ -202,6 +213,13 @@ export interface PatrolStatus {
  */
 export async function getPatrolStatus(): Promise<PatrolStatus> {
   return apiFetchJSON<PatrolStatus>('/api/ai/patrol/status');
+}
+
+export async function getPatrolFindings(): Promise<Finding[]> {
+  const findings = await apiFetchJSON<Finding[]>('/api/ai/patrol/findings');
+  return arrayOrEmpty<Finding>(findings).map((finding) =>
+    promoteLegacyAlertIdentifier(finding as Finding & { alert_identifier?: string }),
+  );
 }
 
 /**
@@ -421,6 +439,7 @@ export interface ToolCallRecord {
 
 export interface PatrolRunRecord {
   id: string;
+  source?: 'demo' | string;
   started_at: string;
   completed_at: string;
   duration_ms: number;

@@ -172,6 +172,7 @@ func (p *PatrolService) injectDemoRunHistory() {
 	// 1. Most recent run (just happened)
 	demoRuns = append(demoRuns, PatrolRunRecord{
 		ID:               fmt.Sprintf("demo-run-%d", now.Unix()),
+		Source:           PatrolRunSourceDemo,
 		StartedAt:        now.Add(-15 * time.Minute),
 		CompletedAt:      now.Add(-14*time.Minute + 15*time.Second),
 		Duration:         75 * time.Second,
@@ -229,6 +230,7 @@ func (p *PatrolService) injectDemoRunHistory() {
 
 		demoRuns = append(demoRuns, PatrolRunRecord{
 			ID:               fmt.Sprintf("demo-run-%d", startTime.Unix()),
+			Source:           PatrolRunSourceDemo,
 			StartedAt:        startTime,
 			CompletedAt:      startTime.Add(duration),
 			Duration:         duration,

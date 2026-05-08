@@ -609,10 +609,8 @@ func (p *PatrolService) DismissFinding(findingID string, reason string, note str
 // GetRunHistory returns the history of patrol runs
 // If limit is > 0, returns at most that many records
 func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
-	if limit <= 0 {
-		return p.runHistoryStore.GetAll()
-	}
-	return p.runHistoryStore.GetRecent(limit)
+	runs := filterPatrolRunRecordsForRuntimeEvidence(p.runHistoryStore.GetAll())
+	return limitPatrolRunRecords(runs, limit)
 }
 
 // GetRunByID returns a single patrol run from history.
@@ -620,7 +618,14 @@ func (p *PatrolService) GetRunByID(id string) (PatrolRunRecord, bool) {
 	if strings.TrimSpace(id) == "" {
 		return PatrolRunRecord{}, false
 	}
-	return p.runHistoryStore.GetByID(id)
+	run, ok := p.runHistoryStore.GetByID(id)
+	if !ok {
+		return PatrolRunRecord{}, false
+	}
+	if !IsDemoMode() && isDemoPatrolRunRecord(run) {
+		return PatrolRunRecord{}, false
+	}
+	return run, true
 }
 
 // GetAllFindings returns all active findings sorted by severity

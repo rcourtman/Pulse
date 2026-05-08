@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 )
 
 // mockPatrolHistoryPersistence implements PatrolHistoryPersistence for testing
@@ -264,6 +265,119 @@ func TestPatrolHistoryPersistenceAdapter_NormalizesAlertIdentity(t *testing.T) {
 	}
 	if loaded[0].AlertIdentifier != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert identifier after load, got %q", loaded[0].AlertIdentifier)
+	}
+}
+
+func TestPatrolHistoryPersistenceAdapter_DoesNotPersistDemoRuns(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+	now := time.Date(2026, 5, 8, 10, 0, 0, 0, time.UTC)
+
+	runs := []PatrolRunRecord{
+		{
+			ID:               "live-run-1",
+			StartedAt:        now.Add(-10 * time.Minute),
+			CompletedAt:      now.Add(-9 * time.Minute),
+			Type:             "patrol",
+			FindingsSummary:  "No issues found",
+			FindingIDs:       []string{},
+			Status:           "healthy",
+			ResourcesChecked: 4,
+		},
+		{
+			ID:               "demo-run-current",
+			Source:           PatrolRunSourceDemo,
+			StartedAt:        now.Add(-5 * time.Minute),
+			CompletedAt:      now.Add(-4 * time.Minute),
+			Type:             "patrol",
+			FindingsSummary:  "2 critical, 3 warnings",
+			FindingIDs:       []string{"demo-storage-critical"},
+			Status:           "issues_found",
+			ResourcesChecked: 47,
+		},
+		{
+			ID:               "demo-run-legacy",
+			StartedAt:        now.Add(-3 * time.Minute),
+			CompletedAt:      now.Add(-2 * time.Minute),
+			Type:             "patrol",
+			FindingsSummary:  "2 critical, 3 warnings",
+			FindingIDs:       []string{"demo-storage-critical"},
+			Status:           "issues_found",
+			ResourcesChecked: 47,
+		},
+	}
+
+	if err := adapter.SavePatrolRunHistory(runs); err != nil {
+		t.Fatalf("save patrol run history: %v", err)
+	}
+
+	persisted, err := persistence.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("load raw patrol run history: %v", err)
+	}
+	if len(persisted.Runs) != 1 {
+		t.Fatalf("expected one persisted live run, got %d", len(persisted.Runs))
+	}
+	if persisted.Runs[0].ID != "live-run-1" {
+		t.Fatalf("expected persisted live run, got %q", persisted.Runs[0].ID)
+	}
+}
+
+func TestPatrolHistoryPersistenceAdapter_PrunesDemoRunsOnLoadOutsideDemoMode(t *testing.T) {
+	original := mockruntime.IsEnabled()
+	t.Cleanup(func() { mockruntime.SetEnabled(original) })
+	mockruntime.SetEnabled(false)
+
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	now := time.Date(2026, 5, 8, 10, 0, 0, 0, time.UTC)
+	if err := persistence.SavePatrolRunHistory([]config.PatrolRunRecord{
+		{
+			ID:               "live-run-1",
+			StartedAt:        now.Add(-10 * time.Minute),
+			CompletedAt:      now.Add(-9 * time.Minute),
+			Type:             "patrol",
+			FindingsSummary:  "No issues found",
+			FindingIDs:       []string{},
+			Status:           "healthy",
+			ResourcesChecked: 4,
+		},
+		{
+			ID:               "demo-run-source",
+			Source:           PatrolRunSourceDemo,
+			StartedAt:        now.Add(-5 * time.Minute),
+			CompletedAt:      now.Add(-4 * time.Minute),
+			Type:             "patrol",
+			FindingsSummary:  "2 critical, 3 warnings",
+			FindingIDs:       []string{"demo-storage-critical"},
+			Status:           "issues_found",
+			ResourcesChecked: 47,
+		},
+		{
+			ID:               "demo-run-legacy",
+			StartedAt:        now.Add(-3 * time.Minute),
+			CompletedAt:      now.Add(-2 * time.Minute),
+			Type:             "patrol",
+			FindingsSummary:  "2 critical, 3 warnings",
+			FindingIDs:       []string{"demo-storage-critical"},
+			Status:           "issues_found",
+			ResourcesChecked: 47,
+		},
+	}); err != nil {
+		t.Fatalf("save raw patrol run history: %v", err)
+	}
+
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+	loaded, err := adapter.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("load patrol run history: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected one live run after pruning demo runs, got %d", len(loaded))
+	}
+	if loaded[0].ID != "live-run-1" {
+		t.Fatalf("expected live-run-1 after pruning demo runs, got %q", loaded[0].ID)
 	}
 }
 

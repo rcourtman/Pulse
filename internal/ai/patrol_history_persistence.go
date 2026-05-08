@@ -28,15 +28,19 @@ func NewPatrolHistoryPersistenceAdapter(cfg *config.ConfigPersistence) *PatrolHi
 // SavePatrolRunHistory saves patrol run history to disk via ConfigPersistence
 func (a *PatrolHistoryPersistenceAdapter) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 	// Convert from ai.PatrolRunRecord to config.PatrolRunRecord
-	records := make([]config.PatrolRunRecord, len(runs))
-	for i, r := range runs {
+	records := make([]config.PatrolRunRecord, 0, len(runs))
+	for _, r := range runs {
 		normalized := normalizePatrolRunRecord(r)
+		if isDemoPatrolRunRecord(normalized) {
+			continue
+		}
 		durationMs := normalized.DurationMs
 		if durationMs == 0 && normalized.Duration > 0 {
 			durationMs = int64(normalized.Duration / time.Millisecond)
 		}
-		records[i] = config.PatrolRunRecord{
+		records = append(records, config.PatrolRunRecord{
 			ID:                        normalized.ID,
+			Source:                    normalized.Source,
 			StartedAt:                 normalized.StartedAt,
 			CompletedAt:               normalized.CompletedAt,
 			DurationMs:                durationMs,
@@ -76,7 +80,7 @@ func (a *PatrolHistoryPersistenceAdapter) SavePatrolRunHistory(runs []PatrolRunR
 			OutputTokens:              normalized.OutputTokens,
 			ToolCalls:                 convertAIToolCallsToConfig(normalized.ToolCalls),
 			ToolCallCount:             normalized.ToolCallCount,
-		}
+		})
 	}
 	return a.config.SavePatrolRunHistory(records)
 }
@@ -90,10 +94,11 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 
 	// Convert from config.PatrolRunRecord to ai.PatrolRunRecord
 	runCount := clampHistoryCount(len(data.Runs), 0, MaxPatrolRunHistory)
-	runs := make([]PatrolRunRecord, runCount)
-	for i, r := range data.Runs[:runCount] {
-		runs[i] = normalizePatrolRunRecord(PatrolRunRecord{
+	runs := make([]PatrolRunRecord, 0, runCount)
+	for _, r := range data.Runs[:runCount] {
+		run := normalizePatrolRunRecord(PatrolRunRecord{
 			ID:                        r.ID,
+			Source:                    r.Source,
 			StartedAt:                 r.StartedAt,
 			CompletedAt:               r.CompletedAt,
 			Duration:                  time.Duration(r.DurationMs) * time.Millisecond, // Convert milliseconds to nanoseconds
@@ -135,6 +140,10 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 			ToolCalls:                 convertConfigToolCallsToAI(r.ToolCalls),
 			ToolCallCount:             r.ToolCallCount,
 		})
+		if !IsDemoMode() && isDemoPatrolRunRecord(run) {
+			continue
+		}
+		runs = append(runs, run)
 	}
 	return runs, nil
 }

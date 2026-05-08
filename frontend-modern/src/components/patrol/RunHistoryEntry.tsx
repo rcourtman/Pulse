@@ -523,6 +523,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               scopeResourceTypes={run.scope_resource_types}
               showScopeWarnings={true}
               showControls={false}
+              findingsSource="patrol"
               runSnapshot={run}
             />
           </div>

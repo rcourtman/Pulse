@@ -11,6 +11,7 @@ vi.mock('@/api/ai', () => ({
 }));
 
 vi.mock('@/api/patrol', () => ({
+  getPatrolFindings: vi.fn(),
   acknowledgeFinding: vi.fn(),
   snoozeFinding: vi.fn(),
   dismissFinding: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 }));
 
 import { AIAPI } from '@/api/ai';
+import { getPatrolFindings } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { presentationPolicyIsDemoMode } from '@/stores/sessionPresentationPolicy';
 
@@ -43,6 +45,7 @@ describe('aiIntelligenceStore', () => {
     vi.clearAllMocks();
     vi.useRealTimers();
     vi.mocked(presentationPolicyIsDemoMode).mockReturnValue(false);
+    vi.mocked(getPatrolFindings).mockResolvedValue([]);
   });
 
   it('loads unified findings with canonical alert identity first', async () => {
@@ -98,6 +101,41 @@ describe('aiIntelligenceStore', () => {
         id: 'investigation-1',
         finding_id: 'finding-1',
       },
+    });
+  });
+
+  it('loads direct Patrol findings for Patrol surfaces', async () => {
+    vi.mocked(getPatrolFindings).mockResolvedValueOnce([
+      {
+        id: 'patrol-finding-1',
+        severity: 'warning',
+        category: 'reliability',
+        resource_id: 'instance:node:100',
+        resource_name: 'vm-100',
+        resource_type: 'vm',
+        title: 'Provider connection issue',
+        description: 'Patrol could not complete provider analysis.',
+        detected_at: '2026-03-01T00:00:00Z',
+        last_seen_at: '2026-03-01T00:05:00Z',
+        auto_resolved: false,
+        alertIdentifier: 'instance:node:100::patrol/provider',
+        times_raised: 1,
+        suppressed: false,
+        investigation_attempts: 0,
+      },
+    ]);
+
+    await aiIntelligenceStore.loadPatrolFindings();
+
+    expect(getPatrolFindings).toHaveBeenCalledTimes(1);
+    expect(aiIntelligenceStore.patrolFindings).toHaveLength(1);
+    expect(aiIntelligenceStore.patrolFindings[0]).toMatchObject({
+      id: 'patrol-finding-1',
+      source: 'ai-patrol',
+      isThreshold: false,
+      status: 'active',
+      alertIdentifier: 'instance:node:100::patrol/provider',
+      lastSeenAt: '2026-03-01T00:05:00Z',
     });
   });
 

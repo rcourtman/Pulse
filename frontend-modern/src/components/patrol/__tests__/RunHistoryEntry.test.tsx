@@ -23,6 +23,7 @@ vi.mock('@/components/AI/FindingsPanel', () => ({
       scopeResourceTypes: Array.isArray(props.scopeResourceTypes)
         ? [...(props.scopeResourceTypes as string[])]
         : props.scopeResourceTypes,
+      findingsSource: props.findingsSource,
       showControls: props.showControls,
       showScopeWarnings: props.showScopeWarnings,
       runSnapshot: props.runSnapshot,
@@ -119,6 +120,7 @@ describe('RunHistoryEntry', () => {
       filterOverride: 'all',
       scopeResourceIds: [],
       scopeResourceTypes: ['vm'],
+      findingsSource: 'patrol',
       showControls: false,
       showScopeWarnings: true,
       runSnapshot: run,
@@ -148,6 +150,7 @@ describe('RunHistoryEntry', () => {
       filterOverride: 'all',
       scopeResourceIds: [],
       scopeResourceTypes: ['vm'],
+      findingsSource: 'patrol',
       showControls: false,
       showScopeWarnings: true,
       runSnapshot: {

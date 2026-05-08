@@ -1054,7 +1054,10 @@ func summarizeRecentPatrolCoverage(
 		return patrolCoverageFactor{}, false
 	}
 
-	recentRuns := runHistoryStore.GetRecent(intelligenceRecentRunLimit)
+	recentRuns := limitPatrolRunRecords(
+		filterPatrolRunRecordsForRuntimeEvidence(runHistoryStore.GetAll()),
+		intelligenceRecentRunLimit,
+	)
 	if len(recentRuns) == 0 {
 		return patrolCoverageFactor{}, false
 	}

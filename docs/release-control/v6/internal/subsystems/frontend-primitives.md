@@ -784,7 +784,11 @@ prompt explain the same operator-facing priority.
     Assistant drawer is not visually hidden behind feature chrome. When a Patrol
     assessment handoff is attached, the shared Assistant drawer empty state must
     stay aligned with that source-named briefing and must not render generic
-    cluster/system starter prompts below the Patrol-owned context.
+    cluster/system starter prompts below the Patrol-owned context. The Patrol
+    feature shell must also consume the Patrol-owned findings source for its
+    findings tab, run-scoped findings panels, and tab badges so shared feature
+    composition does not rebuild Patrol state by filtering the cross-product
+    unified findings feed.
 19. Keep the shared `system-ai` settings shell product-first.
     `frontend-modern/src/components/Settings/AISettings.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
