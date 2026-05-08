@@ -62,6 +62,7 @@ import {
   getFindingTitlePresentation,
   getFindingRecencyPresentation,
   hasFindingInvestigationDetails,
+  hasFindingInvestigationHandoffPointer,
   getInvestigationConfidenceBadgeClasses,
   getInvestigationOutcomeBadgeClasses,
   getInvestigationOutcomeLabel,
@@ -470,12 +471,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     if (finding.investigationRecord?.proposed_fix) {
       return undefined;
     }
-    const hasInvestigationPointer = Boolean(
-      finding.investigationOutcome ||
-      finding.investigationSessionId ||
-      finding.lastInvestigatedAt ||
-      pendingApprovalBriefing?.id,
-    );
+    const hasInvestigationPointer =
+      hasFindingInvestigationHandoffPointer(finding) || Boolean(pendingApprovalBriefing?.id);
     if (!hasInvestigationPointer) {
       return undefined;
     }

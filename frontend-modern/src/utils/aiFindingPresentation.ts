@@ -557,6 +557,23 @@ export const hasFindingInvestigationDetails = (
     (finding.investigationAttempts ?? 0) > 0,
   );
 
+// hasFindingInvestigationHandoffPointer is the narrower check used by the
+// proposed-fix briefing path: it asks whether any finding-side reference
+// exists that would let the assistant resume an investigation, regardless
+// of investigationStatus. Callers OR this with their own approval-side
+// pointer when one applies.
+export const hasFindingInvestigationHandoffPointer = (
+  finding: Pick<
+    UnifiedFinding,
+    'investigationOutcome' | 'investigationSessionId' | 'lastInvestigatedAt'
+  >,
+): boolean =>
+  Boolean(
+    finding.investigationOutcome ||
+    finding.investigationSessionId ||
+    finding.lastInvestigatedAt,
+  );
+
 const ATTENTION_OUTCOMES = new Set([
   'fix_verification_failed',
   'fix_verification_unknown',
