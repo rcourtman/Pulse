@@ -58,19 +58,19 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
             {agentInfo.hostname}
           </span>
         </div>
-        <div class="flex items-center justify-between">
-          <span class="text-muted">Platform</span>
-          <span class="font-medium text-base-content capitalize">
-            {agentInfo.platform || 'Unknown'}
-          </span>
-        </div>
         <div class="flex items-center justify-between gap-2 min-w-0">
           <span class="text-muted shrink-0">OS</span>
           <span
             class="font-medium text-base-content truncate"
-            title={`${agentInfo.osName} ${agentInfo.osVersion}`}
+            title={
+              agentInfo.osName
+                ? `${agentInfo.osName}${agentInfo.osVersion ? ` ${agentInfo.osVersion}` : ''}`
+                : agentInfo.platform || 'Unknown'
+            }
           >
-            {agentInfo.osName} {agentInfo.osVersion}
+            {agentInfo.osName
+              ? `${agentInfo.osName}${agentInfo.osVersion ? ` ${agentInfo.osVersion}` : ''}`
+              : agentInfo.platform || 'Unknown'}
           </span>
         </div>
         <div class="flex items-center justify-between gap-2 min-w-0">
