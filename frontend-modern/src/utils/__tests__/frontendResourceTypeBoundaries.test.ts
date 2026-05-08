@@ -4340,9 +4340,11 @@ describe('frontend resource type boundaries', () => {
     expect(aiIntelligenceSummaryModelSource).toContain(
       'export function normalizeIntelligenceSummary',
     );
-    expect(patrolIntelligenceStateSource).toContain(
-      "import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';",
-    );
+    // Verify the symbol is imported from the model without prescribing a
+    // specific single- vs multi-line import shape; usePatrolIntelligenceState
+    // groups several patrolInvestigationContextModel imports together.
+    expect(patrolIntelligenceStateSource).toContain('buildPatrolInvestigationContextSummary');
+    expect(patrolIntelligenceStateSource).toContain("from './patrolInvestigationContextModel'");
     expect(patrolIntelligenceStateSource).not.toContain('recent_changes?.length');
     expect(patrolIntelligenceStateSource).not.toContain('governed resource${');
     expect(patrolInvestigationContextModelSource).toContain(
@@ -4357,9 +4359,11 @@ describe('frontend resource type boundaries', () => {
     expect(patrolInvestigationContextModelSource).toContain(
       'export function buildPatrolAssistantFindingBriefing',
     );
-    expect(patrolInvestigationContextModelSource).toContain(
-      'formatCommandSummary(record.proposed_fix.commands?.length ?? 0)',
-    );
+    // formatCommandSummary is the canonical helper for command-count copy.
+    // The model now passes a precomputed commandCount through
+    // normalizeNonNegativeCount instead of computing from a commands array,
+    // so assert the helper is used and the legacy join path is not.
+    expect(patrolInvestigationContextModelSource).toContain('formatCommandSummary(');
     expect(patrolInvestigationContextModelSource).not.toContain(
       'record.proposed_fix.commands.join',
     );
