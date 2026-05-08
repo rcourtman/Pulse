@@ -79,7 +79,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             value={query()}
             onInput={(event) => setQuery(event.currentTarget.value)}
             class={searchInputClass}
-            placeholder="Search Unraid, TrueNAS, Proxmox, Docker..."
+            placeholder="Search platforms, hosts, services..."
           />
         </label>
         <Show when={props.onDetectFromAddress}>
@@ -89,7 +89,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             class={`${detectButtonClass} sm:w-auto`}
           >
             <Search class="mr-2 h-4 w-4" />
-            Detect from address
+            Detect API platform
           </button>
         </Show>
       </div>
@@ -108,7 +108,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
           when={visibleItems().length > 0}
           fallback={
             <div class="rounded-md border border-dashed border-border bg-surface-alt p-4 text-sm text-muted">
-              No matching source yet. Try a platform name, a host type, or use detect from address.
+              No matching source yet. Try a platform, host type, service, or API endpoint address.
             </div>
           }
         >

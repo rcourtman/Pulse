@@ -10,9 +10,7 @@ describe('InfrastructureSourcePicker', () => {
   it('labels admitted VMware as first-lab-ready and keeps Pulse Agent on the host profile path', () => {
     render(() => <InfrastructureSourcePicker onSelectStep={vi.fn()} />);
 
-    expect(
-      screen.getByPlaceholderText('Search Unraid, TrueNAS, Proxmox, Docker...'),
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search platforms, hosts, services...')).toBeInTheDocument();
     expect(screen.getByText('Common choices')).toBeInTheDocument();
     expect(screen.getByText('First lab ready')).toBeInTheDocument();
     expect(screen.queryByText('Available now')).toBeNull();
@@ -40,7 +38,7 @@ describe('InfrastructureSourcePicker', () => {
   it('filters the catalog by user-recognizable names and aliases', () => {
     render(() => <InfrastructureSourcePicker onSelectStep={vi.fn()} />);
 
-    fireEvent.input(screen.getByPlaceholderText('Search Unraid, TrueNAS, Proxmox, Docker...'), {
+    fireEvent.input(screen.getByPlaceholderText('Search platforms, hosts, services...'), {
       target: { value: 'nas' },
     });
 

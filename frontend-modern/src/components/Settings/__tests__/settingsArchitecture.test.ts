@@ -509,7 +509,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).not.toContain('Infrastructure coverage');
     expect(infrastructureSourceManagerSource).not.toContain('Fleet governance');
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
-    expect(infrastructureSourcePickerSource).toContain('Detect from address');
+    expect(infrastructureSourcePickerSource).toContain('Detect API platform');
     expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerItems');
     expect(infrastructureSourcePickerSource).toContain('itemMatchesQuery');
     expect(infrastructureSourcePickerSource).toContain('catalogDescription');

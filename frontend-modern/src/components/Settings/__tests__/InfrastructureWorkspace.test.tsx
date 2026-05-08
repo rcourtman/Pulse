@@ -624,9 +624,9 @@ describe('InfrastructureWorkspace', () => {
       screen.getByText('Choose the system, platform, host, or service you want Pulse to monitor.'),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByPlaceholderText('Search Unraid, TrueNAS, Proxmox, Docker...'),
+      within(dialog).getByPlaceholderText('Search platforms, hosts, services...'),
     ).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Detect from address' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Detect API platform' })).toBeInTheDocument();
     expect(within(dialog).getByText('Common choices')).toBeInTheDocument();
     expect(within(dialog).queryByText('Agent telemetry')).toBeNull();
     expect(within(dialog).queryByText('API inventory')).toBeNull();
@@ -640,7 +640,7 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Detect from address' }),
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Detect API platform' }),
     );
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=detect', {
