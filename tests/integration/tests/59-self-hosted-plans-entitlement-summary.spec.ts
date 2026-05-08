@@ -8,6 +8,12 @@ const PRO_RUNTIME_IDENTITY = {
   download_url: 'https://pulserelay.pro/download.html',
 };
 
+const COMMUNITY_RUNTIME_IDENTITY = {
+  build: 'community',
+  label: 'Pulse Community runtime',
+  download_url: 'https://pulserelay.pro/download.html',
+};
+
 const PRO_PLAN_ENTITLEMENTS = {
   capabilities: [
     'update_alerts',
@@ -72,6 +78,38 @@ const PRO_PLAN_RUNTIME_CAPABILITIES = {
   hosted_mode: false,
   max_history_days: 90,
   runtime: PRO_RUNTIME_IDENTITY,
+};
+
+const PRO_PLAN_COMMUNITY_RUNTIME_CAPABILITIES = {
+  ...PRO_PLAN_RUNTIME_CAPABILITIES,
+  capabilities: [
+    'update_alerts',
+    'sso',
+    'ai_patrol',
+    'relay',
+    'mobile_app',
+    'push_notifications',
+    'long_term_metrics',
+    'ai_alerts',
+  ],
+  runtime: COMMUNITY_RUNTIME_IDENTITY,
+  blocked_capabilities: [
+    {
+      key: 'audit_logging',
+      reason: 'paid_runtime_required',
+      action_url: 'https://pulserelay.pro/download.html',
+    },
+    {
+      key: 'rbac',
+      reason: 'paid_runtime_required',
+      action_url: 'https://pulserelay.pro/download.html',
+    },
+    {
+      key: 'advanced_reporting',
+      reason: 'paid_runtime_required',
+      action_url: 'https://pulserelay.pro/download.html',
+    },
+  ],
 };
 
 async function stubSelfHostedPlanEndpoints(
@@ -203,6 +241,50 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(
       currentPlanCard.getByRole('link', { name: 'Open Pulse Pro downloads' }),
     ).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
+  });
+
+  test('warns when an active Pro plan reports the public community runtime', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith('mobile-'),
+      'Desktop-only plans coverage',
+    );
+
+    await stubSelfHostedPlanEndpoints(page, {
+      entitlements: {
+        ...PRO_PLAN_ENTITLEMENTS,
+        runtime: COMMUNITY_RUNTIME_IDENTITY,
+      },
+      runtimeCapabilities: PRO_PLAN_COMMUNITY_RUNTIME_CAPABILITIES,
+    });
+    await ensureAuthenticated(page);
+    await page.goto('/settings/system/billing/plan', {
+      waitUntil: 'domcontentloaded',
+    });
+
+    const currentPlanCard = page
+      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
+      .filter({ has: page.getByText('Current plan: Pulse Pro') })
+      .first();
+
+    await expect(
+      currentPlanCard.getByText('Pro runtime missing'),
+    ).toBeVisible();
+    await expect(
+      currentPlanCard.getByText(/running the community runtime/i),
+    ).toBeVisible();
+    await expect(
+      currentPlanCard.getByText(
+        /public GitHub releases and the public Docker image/i,
+      ),
+    ).toBeVisible();
+    await expect(
+      currentPlanCard.getByRole('link', { name: 'Open Pulse Pro downloads' }),
+    ).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
+    await expect(currentPlanCard.getByText(/upgrade your plan/i)).toHaveCount(
+      0,
+    );
   });
 
   test('surfaces advertised Pro settings sections when Pro capabilities are active', async ({

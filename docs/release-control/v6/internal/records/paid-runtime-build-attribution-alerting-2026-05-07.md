@@ -71,15 +71,18 @@ Local proof added:
 - `npm test -- --run src/utils/__tests__/licensePresentation.test.ts src/components/Settings/__tests__/ProLicensePanel.test.tsx`
 - `npm run type-check` from `repos/pulse/frontend-modern`
 - `PULSE_BASE_URL=http://127.0.0.1:5173 npx playwright test tests/59-self-hosted-plans-entitlement-summary.spec.ts --project=chromium` from `repos/pulse/tests/integration`
+- `GOCACHE=/Volumes/Development/pulse/repos/pulse/tmp/go-build-cache PULSE_E2E_USE_HOT_DEV=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_E2E_HOT_DEV_TAKEOVER=1 npm --prefix tests/integration test -- tests/59-self-hosted-plans-entitlement-summary.spec.ts --project=chromium -g "warns when an active Pro plan reports the public community runtime"` from `repos/pulse`
 
 The Playwright proof exercises the real hot-dev browser surface with a paid Pro
 payload that reports the Pro runtime and a negative paid Pro payload with the
-runtime identity omitted.
+runtime identity omitted. The additional browser-stubbed negative proof now also
+covers the explicit public community runtime response, including the
+private-runtime warning and download handoff in Plans.
 
 ## Remaining Proof Before Passing
 
 The release gate remains pending until the negative path is exercised against a
-managed runtime rather than only a browser-stubbed paid payload. The remaining
+managed runtime rather than only browser-stubbed paid payloads. The remaining
 proof should run a valid paid activation against the public community runtime
 and confirm:
 
