@@ -86,7 +86,10 @@ runtime cost control, and shared AI transport surfaces.
    instead of generic dashboard briefs. Source-owned handoff helpers may attach
    bounded suggested prompts to that briefing, but those prompts are only input
    starters; they must not auto-submit, bypass approval mode, or carry raw
-   command payloads. While such a handoff is attached, the Assistant empty
+   command payloads. Patrol assessment handoffs must use the same
+   `patrol-assessment` target identity for live opens and restored sessions
+   rather than inheriting retired dashboard context. While such a handoff is
+   attached, the Assistant empty
    message state must also remain source-named and must not fall back to generic
    cluster/system starter prompts that compete with the attached briefing.
    Reloaded Assistant sessions may consume the backend-owned

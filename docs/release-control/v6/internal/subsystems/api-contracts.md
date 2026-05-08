@@ -514,6 +514,8 @@ the canonical monitored-system blocked payload.
    structured handoff actions with approval ID/status/risk/target/request/expiry
    metadata, action plan identity/policy/expiry, dry-run posture, and command
    counts instead of pasting page-local UI text or raw command payloads into chat,
+   the drawer target must stay `patrol-assessment` rather than a retired
+   dashboard target,
    and may derive visible action labels, safety notes, and approval-aware
    suggested prompts plus first-turn prompt emphasis from that same safe metadata
    plus the current disabled reason for a Patrol-owned recommended action when

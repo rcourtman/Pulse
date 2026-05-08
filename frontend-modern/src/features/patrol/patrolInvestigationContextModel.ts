@@ -550,7 +550,7 @@ export function buildPatrolAssessmentAssistantHandoff(
   return {
     prompt: buildPatrolAssessmentAssistantPrompt(input, title, description, handoffActions),
     context: {
-      targetType: 'dashboard',
+      targetType: 'patrol-assessment',
       targetId: 'pulse-patrol-assessment',
       autonomousMode: false,
       handoffContext,

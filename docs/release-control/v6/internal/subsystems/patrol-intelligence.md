@@ -247,7 +247,11 @@ Patrol-specific presentation helpers.
    kind when present, plus the current action-disabled reason when the visible
    Patrol-owned action is unavailable, so Assistant explains the same
    operator-facing priority and current availability shown in the summary card
-   instead of inventing a separate next step. Active-finding
+   instead of inventing a separate next step. Assessment-level handoffs must
+   identify the drawer target as
+   `patrol-assessment` with `targetId=pulse-patrol-assessment`, matching saved
+   session restore semantics rather than the retired dashboard target.
+   Active-finding
    summaries may include live pending approval posture only as safe metadata:
    approval ID, pending status, risk, target, requested/expiry timestamps,
    action plan identity, approval policy, plan expiry, dry-run posture, and

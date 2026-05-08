@@ -362,6 +362,11 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffContext).toContain(
       'Supporting Context: 100 recent changes · 29 correlations · 116 policy-covered resources',
     );
+    expect(handoff.context).toMatchObject({
+      targetType: 'patrol-assessment',
+      targetId: 'pulse-patrol-assessment',
+      autonomousMode: false,
+    });
     expect(handoff.context.context).toMatchObject({
       recommendedNextStepTitle: 'Verify full coverage',
       recommendedNextStepActionKind: 'run_patrol',

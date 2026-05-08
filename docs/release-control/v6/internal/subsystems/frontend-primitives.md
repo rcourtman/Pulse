@@ -211,6 +211,10 @@ work extends shared components instead of creating new local variants.
    Session-load and new-conversation transitions must be success-bound: if the
    underlying session operation fails, the shared drawer store must not clear or
    replace the current scoped handoff context.
+   Live Patrol assessment drawer opens must use that same
+   `patrol-assessment`/`pulse-patrol-assessment` target identity rather than a
+   retired dashboard target, so first-open and restored-session chrome remain
+   source-named.
 9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
 10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless
