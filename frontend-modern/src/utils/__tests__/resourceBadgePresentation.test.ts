@@ -116,6 +116,49 @@ describe('resourceBadgePresentation', () => {
     ).toEqual(['Unraid']);
   });
 
+  it('shows storage-owned platform identity without using presentation profiles as PlatformType', () => {
+    const unraidStorage = makeResource({
+      type: 'storage',
+      platformType: 'agent',
+      sourceType: 'agent',
+      sources: ['agent'],
+      platformData: {
+        sources: ['agent'],
+        storage: {
+          platform: 'unraid',
+          type: 'unraid-array',
+          topology: 'array',
+        },
+      },
+      storage: {
+        platform: 'unraid',
+        type: 'unraid-array',
+        topology: 'array',
+      } as Resource['storage'],
+    });
+
+    expect(getInfrastructureSystemIdentityBadges(unraidStorage).map((badge) => badge.label)).toEqual([
+      'Unraid',
+    ]);
+    expect(getInfrastructureSystemIdentitySortLabel(unraidStorage)).toBe('Unraid');
+
+    const pbsDatastore = makeResource({
+      type: 'storage',
+      platformType: 'proxmox-pbs',
+      sourceType: 'api',
+      sources: ['pbs'],
+      storage: {
+        platform: 'pbs',
+        type: 'pbs-datastore',
+        topology: 'datastore',
+      } as Resource['storage'],
+    });
+
+    expect(getInfrastructureSystemIdentityBadges(pbsDatastore).map((badge) => badge.label)).toEqual([
+      'PBS',
+    ]);
+  });
+
   it('does not let stale platform sources override explicit agent host profiles', () => {
     expect(
       getInfrastructureSystemIdentityBadges(
@@ -153,6 +196,27 @@ describe('resourceBadgePresentation', () => {
               platform: 'linux',
               osName: 'Unraid OS 7.1.0',
               osVersion: '7.1.0',
+            },
+          },
+        }),
+      ).map((badge) => badge.label),
+    ).toEqual(['Unraid']);
+  });
+
+  it('uses authoritative top-level sources before stale platformData source hints', () => {
+    expect(
+      getInfrastructureSystemIdentityBadges(
+        makeResource({
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'hybrid',
+          sources: ['agent', 'docker'],
+          platformData: {
+            sources: ['kubernetes'],
+            agent: {
+              platform: 'linux',
+              osName: 'Unraid OS 7.2.2',
+              osVersion: '7.2.2',
             },
           },
         }),

@@ -189,7 +189,11 @@ regression protection.
    from the already-materialized resource incident and storage-risk fields, but
    it must not introduce per-row API reads, broad resource scans, storage
    topology recomputation, or layout-measuring work just to explain warning or
-   degraded rows.
+   degraded rows. Infrastructure table source derivation follows the same
+   bounded-work rule: `unifiedResourceTableStateModel.ts` must read the
+   already-materialized top-level `resource.sources` array before legacy
+   `platformData.sources` hints, and must not reconstruct platform identity by
+   scanning sibling resources or making row-time API calls.
 5. Extend workload hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Workloads/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
    The retired dashboard overview route must not return as a hot-path
    orientation shortcut. First-viewport system count, health, source coverage,

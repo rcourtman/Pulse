@@ -644,13 +644,22 @@ presentation and host/appliance support-floor copy. Raw appliance identity
 aliases such as `unraid-os` may be accepted only through the generated
 host-profile token projection and must resolve to a governed profile id before
 they reach platform filters, source IDs, or top-level resource identity.
+Agent-backed storage resources follow the same distinction: `StorageMeta.platform`
+may carry appliance presentation context such as `unraid` so the operator can see
+what system owns the array, but realtime `platformType` and source filters must
+remain agent-backed unless the storage resource is actually owned by a governed
+API platform such as Proxmox, PBS, TrueNAS, or VMware. Storage resources must not
+fall back to Proxmox solely because their canonical resource type is `storage`.
 That same shared source boundary also applies when unified seeds and
 supplemental providers coexist. If a canonical unified-resource seed omits an
 owned supplemental source such as TrueNAS or VMware, the shared resource API
 must still ingest that provider-owned source instead of letting the seed
-silence the platform entirely. Operator-facing source filters may accept the
-`vmware-vsphere` alias for the VMware platform, but the emitted shared source
-family remains canonical `vmware`.
+silence the platform entirely. When a supplemental provider identity-matches an
+existing resource, adding the source tag alone is not enough; the matching
+provider facet must be merged onto the shared resource so source identity,
+health, routing, and detail payloads cannot disagree. Operator-facing source
+filters may accept the `vmware-vsphere` alias for the VMware platform, but the
+emitted shared source family remains canonical `vmware`.
 That same canonical identity boundary now also applies to infrastructure
 summary emphasis. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
 may vary card presentation, but the active sparkline or density-map series must

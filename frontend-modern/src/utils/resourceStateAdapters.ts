@@ -164,6 +164,9 @@ const mergePlatformData = (
 
 const getResourceRecord = (resource: Resource): JsonRecord => resource as unknown as JsonRecord;
 
+const getExplicitResourceSources = (resource: Resource): string[] | undefined =>
+  readStringArray(getResourceRecord(resource).sources);
+
 const getFacetRecord = (
   resource: Resource,
   platformData: Resource['platformData'] | undefined,
@@ -178,6 +181,11 @@ const deriveLegacySourceList = (
   resource: Resource,
   platformData: Resource['platformData'] | undefined = resource.platformData,
 ): string[] | undefined => {
+  const resourceSources = getExplicitResourceSources(resource);
+  if (resourceSources && resourceSources.length > 0) {
+    return resourceSources;
+  }
+
   const sources: string[] = [];
   if (getFacetRecord(resource, platformData, 'proxmox')) sources.push('proxmox');
   if (getFacetRecord(resource, platformData, 'pbs')) sources.push('pbs');
@@ -286,10 +294,12 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
     }
   }
 
+  const explicitResourceSources = getExplicitResourceSources(resource);
   const normalizedSources =
-    Array.isArray(platformData.sources) && platformData.sources.length > 0
+    explicitResourceSources ??
+    (Array.isArray(platformData.sources) && platformData.sources.length > 0
       ? (platformData.sources as string[])
-      : deriveLegacySourceList(resource, platformData);
+      : deriveLegacySourceList(resource, platformData));
   if (normalizedSources && normalizedSources.length > 0) {
     normalized.sources = normalizedSources;
   }
@@ -445,6 +455,8 @@ const getCanonicalSourceList = (
   resource: Resource,
   platformData?: Resource['platformData'],
 ): string[] | undefined => {
+  const resourceSources = getExplicitResourceSources(resource);
+  if (resourceSources && resourceSources.length > 0) return resourceSources;
   const platformRecord = asRecord(platformData);
   return Array.isArray(platformRecord?.sources) && platformRecord.sources.length > 0
     ? (platformRecord.sources as string[])

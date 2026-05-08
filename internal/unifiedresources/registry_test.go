@@ -2057,6 +2057,82 @@ func TestResourceRegistry_MergePhysicalDiskKeepsIncidentBackedRisk(t *testing.T)
 	}
 }
 
+func TestResourceRegistry_MergeTrueNASPayloadOnIdentityMatch(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 5, 8, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-archive",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "archive",
+				Status:   StatusOnline,
+				LastSeen: now,
+				Agent: &AgentData{
+					Hostname: "archive.local",
+					OSName:   "Debian GNU/Linux",
+				},
+			},
+			Identity: ResourceIdentity{
+				MachineID: "archive-machine",
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+
+	rr.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID: "truenas-archive",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "archive.local",
+				Status:   StatusWarning,
+				LastSeen: now.Add(time.Minute),
+				TrueNAS: &TrueNASData{
+					Hostname:              "archive.local",
+					Version:               "24.10",
+					UptimeSeconds:         86400,
+					StorageRisk:           &StorageRisk{Level: storagehealth.RiskWarning},
+					StorageRiskSummary:    "Pool tank is DEGRADED",
+					StoragePostureSummary: "Pool tank is DEGRADED",
+					ProtectionReduced:     true,
+					ProtectionSummary:     "Pool redundancy is reduced",
+				},
+				Agent: &AgentData{
+					Hostname: "archive.local",
+					OSName:   "TrueNAS SCALE",
+				},
+			},
+			Identity: ResourceIdentity{
+				MachineID: "archive-machine",
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+
+	resources := rr.ListByType(ResourceTypeAgent)
+	if len(resources) != 1 {
+		t.Fatalf("ListByType(ResourceTypeAgent) returned %d resources, want 1", len(resources))
+	}
+	resource := resources[0]
+	if !hasDataSource(resource.Sources, SourceAgent) || !hasDataSource(resource.Sources, SourceTrueNAS) {
+		t.Fatalf("sources = %#v, want agent and truenas", resource.Sources)
+	}
+	if resource.TrueNAS == nil {
+		t.Fatal("expected TrueNAS payload to merge onto matched agent resource")
+	}
+	if resource.TrueNAS.Version != "24.10" || resource.TrueNAS.UptimeSeconds != 86400 {
+		t.Fatalf("TrueNAS payload not refreshed: %+v", resource.TrueNAS)
+	}
+	if resource.TrueNAS.StorageRisk == nil || resource.TrueNAS.StorageRisk.Level != storagehealth.RiskWarning {
+		t.Fatalf("TrueNAS storage risk not merged: %+v", resource.TrueNAS.StorageRisk)
+	}
+	if resource.Agent == nil || resource.Agent.OSName != "Debian GNU/Linux" {
+		t.Fatalf("SourceAgent facet should remain authoritative, got %+v", resource.Agent)
+	}
+}
+
 func hasStorageConsumer(consumers []StorageConsumerMeta, name string, resourceType ResourceType, diskCount int) bool {
 	for _, consumer := range consumers {
 		if consumer.Name == name && consumer.ResourceType == resourceType && consumer.DiskCount == diskCount {

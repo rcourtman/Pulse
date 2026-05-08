@@ -227,6 +227,9 @@ export const shouldShowUnifiedResourceHostTable = (
 ): boolean => primaryResourceCount > 0 || serviceResourceCount === 0;
 
 export const getUnifiedSources = (resource: Resource): string[] => {
+  if (Array.isArray(resource.sources) && resource.sources.length > 0) {
+    return resource.sources;
+  }
   const platformData = resource.platformData as { sources?: string[] } | undefined;
   return platformData?.sources ?? [];
 };

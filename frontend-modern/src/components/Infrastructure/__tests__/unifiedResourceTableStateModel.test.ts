@@ -210,6 +210,14 @@ describe('unifiedResourceTableStateModel', () => {
     expect(
       getUnifiedSources(makeResource('a', { platformData: { sources: ['proxmox', 'agent'] } })),
     ).toEqual(['proxmox', 'agent']);
-    expect(getUnifiedSources(makeResource('b', { platformData: {} }))).toEqual([]);
+    expect(
+      getUnifiedSources(
+        makeResource('b', {
+          sources: ['agent', 'docker'],
+          platformData: { sources: ['kubernetes'] },
+        }),
+      ),
+    ).toEqual(['agent', 'docker']);
+    expect(getUnifiedSources(makeResource('c', { platformData: {} }))).toEqual([]);
   });
 });

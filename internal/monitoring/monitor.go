@@ -4910,6 +4910,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		PlatformID:            platformID,
 		PlatformType:          monitorPlatformType(resource, resourceType),
 		SourceType:            monitorSourceType(resource.Sources),
+		Sources:               monitorSourceKeys(resource.Sources),
 		ParentID:              monitorStringValue(resource.ParentID),
 		ClusterID:             monitorClusterID(resource),
 		Status:                monitorFrontendStatus(resource, resourceType),
@@ -5081,9 +5082,29 @@ func monitorPlatformType(resource unifiedresources.Resource, resourceType string
 	if resource.Availability != nil {
 		return "generic"
 	}
+	if storagePlatform := monitorStoragePlatformType(resource.Storage, resource.Sources); storagePlatform != "" {
+		return storagePlatform
+	}
 	switch resourceType {
-	case "vm", "system-container", "storage", "pool":
+	case "vm", "system-container":
 		return "proxmox-pve"
+	case "storage", "pool":
+		if monitorHasSource(resource.Sources, unifiedresources.SourceProxmox) {
+			return "proxmox-pve"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourcePBS) {
+			return "proxmox-pbs"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceTrueNAS) {
+			return "truenas"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceVMware) {
+			return "vmware-vsphere"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceAgent) {
+			return "agent"
+		}
+		return "generic"
 	case "docker-host", "app-container":
 		return "docker"
 	case "k8s-cluster", "k8s-node", "pod", "k8s-deployment":
@@ -5119,6 +5140,33 @@ func monitorPlatformType(resource unifiedresources.Resource, resourceType string
 			}
 		}
 		return "unknown"
+	}
+}
+
+func monitorStoragePlatformType(storage *unifiedresources.StorageMeta, sources []unifiedresources.DataSource) string {
+	if storage == nil {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(storage.Platform)) {
+	case "proxmox", "proxmox-pve", "pve":
+		return "proxmox-pve"
+	case "pbs", "proxmox-pbs":
+		return "proxmox-pbs"
+	case "truenas":
+		return "truenas"
+	case "vmware", "vmware-vsphere", "vsphere":
+		return "vmware-vsphere"
+	case "docker", "podman":
+		return "docker"
+	case "kubernetes", "k8s":
+		return "kubernetes"
+	case "unraid":
+		if monitorHasSource(sources, unifiedresources.SourceAgent) {
+			return "agent"
+		}
+		return "generic"
+	default:
+		return ""
 	}
 }
 
@@ -5556,19 +5604,7 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 			}
 		}
 	case "storage", "pool":
-		nodeLabel := resource.ParentName
-		if nodeLabel == "" {
-			nodeLabel = monitorStringValue(resource.ParentID)
-		}
-		payload = map[string]interface{}{
-			"instance": platformID,
-			"node":     nodeLabel,
-			"type":     "",
-			"content":  "",
-			"shared":   false,
-			"enabled":  true,
-			"active":   resource.Status == unifiedresources.StatusOnline,
-		}
+		payload = monitorStoragePlatformData(resource, platformID)
 	case "network-endpoint":
 		if resource.Availability != nil {
 			payload = map[string]interface{}{
@@ -5594,12 +5630,95 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 	if payload == nil {
 		return nil
 	}
+	payload = monitorAttachSourceKeys(payload, resource.Sources)
+	if payload == nil {
+		return nil
+	}
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return nil
 	}
 	return encoded
+}
+
+func monitorAttachSourceKeys(payload interface{}, sources []unifiedresources.DataSource) interface{} {
+	sourceKeys := monitorSourceKeys(sources)
+	if len(sourceKeys) == 0 {
+		return payload
+	}
+	if payloadMap, ok := payload.(map[string]interface{}); ok {
+		if payloadMap == nil {
+			return nil
+		}
+		payloadMap["sources"] = sourceKeys
+		return payloadMap
+	}
+	return payload
+}
+
+func monitorStoragePlatformData(resource unifiedresources.Resource, platformID string) map[string]interface{} {
+	nodeLabel := resource.ParentName
+	if nodeLabel == "" {
+		nodeLabel = monitorStringValue(resource.ParentID)
+	}
+	payload := map[string]interface{}{
+		"instance": platformID,
+		"node":     nodeLabel,
+		"active":   resource.Status == unifiedresources.StatusOnline,
+	}
+
+	if resource.Proxmox != nil {
+		if strings.TrimSpace(resource.Proxmox.Instance) != "" {
+			payload["instance"] = strings.TrimSpace(resource.Proxmox.Instance)
+		}
+		if strings.TrimSpace(resource.Proxmox.NodeName) != "" {
+			payload["node"] = strings.TrimSpace(resource.Proxmox.NodeName)
+		}
+	}
+
+	if resource.Storage == nil {
+		payload["type"] = ""
+		payload["content"] = ""
+		payload["shared"] = false
+		payload["enabled"] = true
+		return payload
+	}
+
+	storage := resource.Storage
+	payload["type"] = storage.Type
+	payload["content"] = storage.Content
+	payload["contentTypes"] = append([]string(nil), storage.ContentTypes...)
+	payload["shared"] = storage.Shared
+	payload["enabled"] = storage.Enabled
+	payload["active"] = storage.Active
+	payload["isCeph"] = storage.IsCeph
+	payload["isZfs"] = storage.IsZFS
+	payload["platform"] = storage.Platform
+	payload["topology"] = storage.Topology
+	payload["protection"] = storage.Protection
+	payload["pool"] = storage.Pool
+	payload["path"] = storage.Path
+	payload["nodes"] = append([]string(nil), storage.Nodes...)
+	payload["risk"] = storage.Risk
+	payload["riskSummary"] = storage.RiskSummary
+	payload["postureSummary"] = storage.PostureSummary
+	payload["protectionReduced"] = storage.ProtectionReduced
+	payload["protectionSummary"] = storage.ProtectionSummary
+	payload["rebuildInProgress"] = storage.RebuildInProgress
+	payload["rebuildSummary"] = storage.RebuildSummary
+	payload["arrayState"] = storage.ArrayState
+	payload["syncAction"] = storage.SyncAction
+	payload["syncProgress"] = storage.SyncProgress
+	payload["numProtected"] = storage.NumProtected
+	payload["numDisabled"] = storage.NumDisabled
+	payload["numInvalid"] = storage.NumInvalid
+	payload["numMissing"] = storage.NumMissing
+	payload["zfsPoolState"] = storage.ZFSPoolState
+	payload["zfsReadErrors"] = storage.ZFSReadErrors
+	payload["zfsWriteErrors"] = storage.ZFSWriteErrors
+	payload["zfsChecksumErrors"] = storage.ZFSChecksumErrors
+	return payload
 }
 
 func convertProxmoxDisks(disks []unifiedresources.DiskInfo) []map[string]interface{} {
@@ -5698,6 +5817,26 @@ func monitorHasSource(sources []unifiedresources.DataSource, source unifiedresou
 		}
 	}
 	return false
+}
+
+func monitorSourceKeys(sources []unifiedresources.DataSource) []string {
+	if len(sources) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(sources))
+	seen := make(map[string]struct{}, len(sources))
+	for _, source := range sources {
+		key := strings.TrimSpace(string(source))
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 func monitorSourceType(sources []unifiedresources.DataSource) string {

@@ -154,6 +154,28 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Unraid array is running check')).toBeInTheDocument();
   });
 
+  it('uses canonical system identity in the drawer header for Unraid agent hosts', () => {
+    const resource = baseResource({
+      platformType: 'agent',
+      sourceType: 'hybrid',
+      sources: ['agent', 'docker'],
+      platformData: {
+        sources: ['kubernetes'],
+        agent: {
+          platform: 'linux',
+          osName: 'Unraid OS 7.2.2',
+          osVersion: '7.2.2',
+        },
+      },
+    });
+
+    const { getByTestId, queryByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const headerBadges = getByTestId('resource-header-badges');
+
+    expect(within(headerBadges).getByText('Unraid')).toBeInTheDocument();
+    expect(queryByText('K8s')).toBeNull();
+  });
+
   it('keeps discovery as secondary overview context instead of a peer tab', async () => {
     const { getByRole, getByText, getByTestId, queryByRole, queryByTestId, queryByText } = render(
       () => <ResourceDetailDrawer resource={baseResource({})} />,

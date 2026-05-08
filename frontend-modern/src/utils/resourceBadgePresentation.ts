@@ -365,14 +365,51 @@ const getAvailabilitySystemIdentityBadge = (
   };
 };
 
+const getStoragePlatformSource = (
+  resource: Resource,
+  platformData: Record<string, unknown> | undefined,
+): KnownSourcePlatform | null => {
+  const storage = getFacetRecord(resource, platformData, 'storage');
+  const platform =
+    trimString(storage?.platform) ||
+    (resource.type === 'storage' || resource.type === 'pool' || resource.type === 'datastore'
+      ? trimString(platformData?.platform)
+      : '');
+  return normalizeSourcePlatformKey(platform);
+};
+
+const getStorageSystemIdentityBadge = (
+  resource: Resource,
+  platformData: Record<string, unknown> | undefined,
+): ResourceBadge | null => {
+  const storagePlatform = getStoragePlatformSource(resource, platformData);
+  if (!storagePlatform) return null;
+
+  const badge = getSourcePlatformBadge(storagePlatform);
+  if (!badge) return null;
+
+  const storage = getFacetRecord(resource, platformData, 'storage');
+  const topology = trimString(storage?.topology) || trimString(platformData?.topology);
+  const storageType = trimString(storage?.type) || trimString(platformData?.type);
+  return {
+    label: badge.label,
+    classes: badge.classes,
+    title: titleFromParts(badge.title, topology || storageType),
+  };
+};
+
 export function getInfrastructureSystemIdentityBadges(resource: Resource): ResourceBadge[] {
   const platformData = getPlatformDataRecord(resource) as
     | (Record<string, unknown> & { sources?: string[] })
     | undefined;
-  const rawSources = [
-    ...(Array.isArray(platformData?.sources) ? platformData.sources : []),
-    ...deriveSourceKeysFromFacets(resource, platformData),
-  ];
+  const explicitSources = Array.isArray(resource.sources) ? resource.sources : [];
+  const rawSources =
+    explicitSources.length > 0
+      ? explicitSources
+      : [
+          ...(Array.isArray(platformData?.sources) ? platformData.sources : []),
+          ...deriveSourceKeysFromFacets(resource, platformData),
+        ];
   const sources = normalizeUnifiedSourceKeys(rawSources);
   const availabilityIdentityBadge = getAvailabilitySystemIdentityBadge(
     resource,
@@ -381,6 +418,11 @@ export function getInfrastructureSystemIdentityBadges(resource: Resource): Resou
   );
   if (availabilityIdentityBadge) {
     return [availabilityIdentityBadge];
+  }
+
+  const storageIdentityBadge = getStorageSystemIdentityBadge(resource, platformData);
+  if (storageIdentityBadge) {
+    return [storageIdentityBadge];
   }
 
   const agentIdentityBadge = getAgentSystemIdentityBadge(resource);

@@ -763,6 +763,44 @@ func TestMockOwnedUnifiedMetricSyncDefersToCanonicalSamplerInMockMode(t *testing
 	}
 }
 
+func TestMonitoringBroadcastCarriesCanonicalSourceAndStoragePlatformIdentity(t *testing.T) {
+	input := monitorResourceToConvertInput(unifiedresources.Resource{
+		ID:      "storage-tower-array",
+		Type:    unifiedresources.ResourceTypeStorage,
+		Name:    "Tower Array",
+		Status:  unifiedresources.StatusWarning,
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
+		Storage: &unifiedresources.StorageMeta{
+			Type:     "unraid-array",
+			Platform: "unraid",
+			Topology: "array",
+			Enabled:  true,
+			Active:   true,
+		},
+	})
+
+	if input.PlatformType != "agent" {
+		t.Fatalf("PlatformType = %q, want agent for Unraid agent-backed storage", input.PlatformType)
+	}
+	if input.SourceType != "agent" {
+		t.Fatalf("SourceType = %q, want agent", input.SourceType)
+	}
+	if len(input.Sources) != 1 || input.Sources[0] != string(unifiedresources.SourceAgent) {
+		t.Fatalf("Sources = %#v, want [agent]", input.Sources)
+	}
+
+	payload := string(input.PlatformData)
+	for _, snippet := range []string{
+		`"platform":"unraid"`,
+		`"type":"unraid-array"`,
+		`"sources":["agent"]`,
+	} {
+		if !strings.Contains(payload, snippet) {
+			t.Fatalf("PlatformData must contain %s, got %s", snippet, payload)
+		}
+	}
+}
+
 func TestMonitorSetMockModeAuthorizesBeforeResettingRuntimeState(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

@@ -403,9 +403,12 @@ func TestConvertResourcesForBroadcastIncludesCanonicalHealthContext(t *testing.T
 			LastSeen: time.Date(2026, 5, 8, 11, 30, 0, 0, time.UTC),
 			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
 			Storage: &unifiedresources.StorageMeta{
+				Type:           "unraid-array",
 				Platform:       "unraid",
+				Topology:       "array",
 				RiskSummary:    "Unraid array is running without parity protection",
 				PostureSummary: "Unraid array is running without parity protection",
+				SyncAction:     "check",
 				Risk: &unifiedresources.StorageRisk{
 					Level: storagehealth.RiskWarning,
 					Reasons: []unifiedresources.StorageRiskReason{{
@@ -479,6 +482,16 @@ func TestConvertResourcesForBroadcastIncludesCanonicalHealthContext(t *testing.T
 	}
 
 	var storagePayload struct {
+		PlatformType string   `json:"platformType"`
+		SourceType   string   `json:"sourceType"`
+		Sources      []string `json:"sources"`
+		PlatformData struct {
+			Platform       string `json:"platform"`
+			Type           string `json:"type"`
+			Topology       string `json:"topology"`
+			PostureSummary string `json:"postureSummary"`
+			SyncAction     string `json:"syncAction"`
+		} `json:"platformData"`
 		Storage struct {
 			PostureSummary string `json:"postureSummary"`
 			Risk           struct {
@@ -494,6 +507,18 @@ func TestConvertResourcesForBroadcastIncludesCanonicalHealthContext(t *testing.T
 	}
 	if err := json.Unmarshal(encoded, &storagePayload); err != nil {
 		t.Fatalf("unmarshal storage frontend resource: %v", err)
+	}
+	if storagePayload.PlatformType != "agent" || storagePayload.SourceType != "agent" {
+		t.Fatalf("expected unraid storage to remain agent-backed, got platform=%q source=%q", storagePayload.PlatformType, storagePayload.SourceType)
+	}
+	if len(storagePayload.Sources) != 1 || storagePayload.Sources[0] != "agent" {
+		t.Fatalf("storage sources = %#v, want [agent]", storagePayload.Sources)
+	}
+	if storagePayload.PlatformData.Platform != "unraid" || storagePayload.PlatformData.Type != "unraid-array" || storagePayload.PlatformData.Topology != "array" {
+		t.Fatalf("expected unraid storage platform data, got %+v", storagePayload.PlatformData)
+	}
+	if storagePayload.PlatformData.PostureSummary != "Unraid array is running without parity protection" {
+		t.Fatalf("platformData posture summary = %q", storagePayload.PlatformData.PostureSummary)
 	}
 	if storagePayload.Storage.PostureSummary != "Unraid array is running without parity protection" {
 		t.Fatalf("storage posture summary = %q", storagePayload.Storage.PostureSummary)

@@ -582,6 +582,7 @@ export interface Resource {
   platformId: string;
   platformType: PlatformType;
   sourceType: SourceType;
+  sources?: string[];
 
   // Hierarchy
   parentId?: string; // Parent resource (e.g., VM -> Node)

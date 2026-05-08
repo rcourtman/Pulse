@@ -6,6 +6,7 @@ import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { getAgentStatusIndicator } from '@/utils/status';
 import {
   dedupeResourceBadges,
+  getInfrastructureSystemIdentityBadges,
   getPlatformBadge,
   getSourceBadge,
   getTypeBadge,
@@ -100,13 +101,22 @@ export const useResourceDetailDrawerDerivedState = (
   const typeBadge = createMemo(() => getTypeBadge(resource.type));
   const platformData = createMemo(() => resource.platformData as PlatformData | undefined);
   const unifiedSourceBadges = createMemo(() =>
-    getUnifiedSourceBadges(platformData()?.sources ?? []),
+    getUnifiedSourceBadges(
+      Array.isArray(resource.sources) && resource.sources.length > 0
+        ? resource.sources
+        : (platformData()?.sources ?? []),
+    ),
   );
+  const systemIdentityBadges = createMemo(() => getInfrastructureSystemIdentityBadges(resource));
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
   const headerBadges = createMemo(() =>
     dedupeResourceBadges([
       typeBadge(),
-      ...(hasUnifiedSources() ? unifiedSourceBadges() : [platformBadge(), sourceBadge()]),
+      ...(systemIdentityBadges().length > 0
+        ? systemIdentityBadges()
+        : hasUnifiedSources()
+          ? unifiedSourceBadges()
+          : [platformBadge(), sourceBadge()]),
     ]),
   );
   const policyBadges = createMemo(() => getResourcePolicyBadges(resource.policy));

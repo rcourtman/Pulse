@@ -878,9 +878,10 @@ type ResourceFrontend struct {
 	DisplayName string `json:"displayName"`
 
 	// Platform/Source
-	PlatformID   string `json:"platformId"`
-	PlatformType string `json:"platformType"`
-	SourceType   string `json:"sourceType"`
+	PlatformID   string   `json:"platformId"`
+	PlatformType string   `json:"platformType"`
+	SourceType   string   `json:"sourceType"`
+	Sources      []string `json:"sources,omitempty"`
 
 	// Hierarchy
 	ParentID  string `json:"parentId,omitempty"`

@@ -1273,6 +1273,17 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 		existing.Kubernetes = incoming.Kubernetes
 	case SourcePMG:
 		existing.PMG = incoming.PMG
+	case SourceTrueNAS:
+		existing.TrueNAS = mergeTrueNASData(existing.TrueNAS, incoming.TrueNAS)
+		if incoming.Agent != nil && !hasDataSource(existing.Sources, SourceAgent) {
+			existing.Agent = incoming.Agent
+		}
+		if incoming.Docker != nil && !hasDataSource(existing.Sources, SourceDocker) {
+			existing.Docker = incoming.Docker
+		}
+		if incoming.Storage != nil && existing.Storage == nil {
+			existing.Storage = incoming.Storage
+		}
 	case SourceVMware:
 		existing.VMware = mergeVMwareData(existing.VMware, incoming.VMware)
 	case SourceAvailability:
@@ -1383,6 +1394,48 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 		merged.LinkedAgentID = incoming.LinkedAgentID
 	}
 
+	return &merged
+}
+
+func mergeTrueNASData(existing *TrueNASData, incoming *TrueNASData) *TrueNASData {
+	if existing == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return existing
+	}
+
+	merged := *existing
+	if incoming.Hostname != "" {
+		merged.Hostname = incoming.Hostname
+	}
+	if incoming.Version != "" {
+		merged.Version = incoming.Version
+	}
+	if incoming.UptimeSeconds != 0 {
+		merged.UptimeSeconds = incoming.UptimeSeconds
+	}
+	if incoming.StorageRisk != nil {
+		merged.StorageRisk = cloneStorageRisk(incoming.StorageRisk)
+	}
+	if incoming.StorageRiskSummary != "" {
+		merged.StorageRiskSummary = incoming.StorageRiskSummary
+	}
+	if incoming.StoragePostureSummary != "" {
+		merged.StoragePostureSummary = incoming.StoragePostureSummary
+	}
+	if incoming.ProtectionReduced {
+		merged.ProtectionReduced = true
+	}
+	if incoming.ProtectionSummary != "" {
+		merged.ProtectionSummary = incoming.ProtectionSummary
+	}
+	if incoming.RebuildInProgress {
+		merged.RebuildInProgress = true
+	}
+	if incoming.RebuildSummary != "" {
+		merged.RebuildSummary = incoming.RebuildSummary
+	}
 	return &merged
 }
 

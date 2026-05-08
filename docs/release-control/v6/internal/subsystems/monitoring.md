@@ -178,7 +178,14 @@ state remains a separate `unraid_sync_active` reason. Realtime resource
 broadcasts must preserve canonical identity, discovery target, metrics target,
 incident rollups, and raw `agent`/`storage` facet payloads so frontend
 infrastructure surfaces can explain degraded/warning rows without falling back
-to generic status labels.
+to generic status labels. That realtime broadcast contract also owns source and
+platform identity for storage resources: `internal/monitoring/monitor.go` must
+carry the canonical `Resource.Sources` array onto `ResourceFrontend` and
+`platformData.sources`, and must derive storage `platformType` from the owning
+source/facet instead of treating the `storage` resource type as Proxmox by
+default. Appliance presentation details such as Unraid array identity may remain
+inside storage metadata, but agent-backed storage must stay canonical
+`platformType=agent`.
 VMware vSphere now also has a locked phase-1 ingestion boundary under this
 lane. The admitted direction is vCenter-only in phase 1, and monitoring must
 stay API-first through the

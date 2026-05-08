@@ -348,6 +348,48 @@ describe('resourceStateAdapters nodeFromResource', () => {
     });
   });
 
+  it('uses authoritative top-level sources for realtime storage platform canonicalization', () => {
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'storage:tower-array',
+          type: 'storage',
+          name: 'Tower Array',
+          displayName: 'Tower Array',
+          platformId: 'tower-array',
+          platformType: 'proxmox-pve',
+          sourceType: 'agent',
+          sources: ['agent'],
+          status: 'degraded',
+          lastSeen: Date.now(),
+          storage: {
+            platform: 'unraid',
+            type: 'unraid-array',
+            topology: 'array',
+            postureSummary: 'Unraid array is running without parity protection',
+          },
+          platformData: {
+            platform: 'unraid',
+            type: 'unraid-array',
+            topology: 'array',
+            postureSummary: 'Unraid array is running without parity protection',
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resource.platformType).toBe('agent');
+    expect(resource.sourceType).toBe('agent');
+    expect((resource.platformData as Record<string, unknown>).sources).toEqual(['agent']);
+    expect((resource.platformData as Record<string, unknown>).storage).toMatchObject({
+      platform: 'unraid',
+      type: 'unraid-array',
+      topology: 'array',
+    });
+    expect((resource.platformData as Record<string, unknown>).proxmox).toBeUndefined();
+  });
+
   it('replaces stale platform source facets with the current snapshot sources', () => {
     const existing = {
       id: 'agent-tower',

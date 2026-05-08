@@ -230,6 +230,45 @@ func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 			{name: "pmg explicit", resourceType: "pmg", want: "proxmox-pmg"},
 			{name: "agent explicit", resourceType: "agent", want: "agent"},
 			{
+				name:         "storage proxmox facet",
+				resourceType: "storage",
+				resource:     unifiedresources.Resource{Proxmox: &unifiedresources.ProxmoxData{}},
+				want:         "proxmox-pve",
+			},
+			{
+				name:         "storage truenas metadata",
+				resourceType: "storage",
+				resource:     unifiedresources.Resource{Storage: &unifiedresources.StorageMeta{Platform: "truenas"}},
+				want:         "truenas",
+			},
+			{
+				name:         "storage pbs metadata",
+				resourceType: "storage",
+				resource:     unifiedresources.Resource{Storage: &unifiedresources.StorageMeta{Platform: "pbs"}},
+				want:         "proxmox-pbs",
+			},
+			{
+				name:         "storage vmware metadata",
+				resourceType: "storage",
+				resource:     unifiedresources.Resource{Storage: &unifiedresources.StorageMeta{Platform: "vmware"}},
+				want:         "vmware-vsphere",
+			},
+			{
+				name:         "unraid storage remains agent platform",
+				resourceType: "storage",
+				resource: unifiedresources.Resource{
+					Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
+					Storage: &unifiedresources.StorageMeta{Platform: "unraid"},
+				},
+				want: "agent",
+			},
+			{
+				name:         "unknown storage no longer defaults proxmox",
+				resourceType: "storage",
+				resource:     unifiedresources.Resource{},
+				want:         "generic",
+			},
+			{
 				name:         "fallback k8s precedence",
 				resourceType: "custom",
 				resource:     unifiedresources.Resource{Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker, unifiedresources.SourceK8s}},
@@ -582,6 +621,45 @@ func TestMonitorPlatformData(t *testing.T) {
 		poolPayload := decodePlatformDataPayload(t, monitorPlatformData(resource, "pool", "pve-a"))
 		if poolPayload["active"] != true {
 			t.Fatalf("pool active = %#v, want true", poolPayload["active"])
+		}
+	})
+
+	t.Run("storage payload keeps owned platform metadata", func(t *testing.T) {
+		resource := unifiedresources.Resource{
+			Status:  unifiedresources.StatusWarning,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Storage: &unifiedresources.StorageMeta{
+				Type:              "unraid-array",
+				Platform:          "unraid",
+				Topology:          "array",
+				Content:           "files",
+				ContentTypes:      []string{"files"},
+				Enabled:           true,
+				Active:            true,
+				Protection:        "none",
+				PostureSummary:    "Unraid array is running without parity protection",
+				RebuildInProgress: true,
+				SyncAction:        "check",
+				NumDisabled:       2,
+			},
+		}
+
+		payload := decodePlatformDataPayload(t, monitorPlatformData(resource, "storage", "ignored"))
+		if payload["platform"] != "unraid" {
+			t.Fatalf("platform = %#v, want unraid", payload["platform"])
+		}
+		if payload["type"] != "unraid-array" || payload["topology"] != "array" {
+			t.Fatalf("expected unraid storage identity, got %#v", payload)
+		}
+		if payload["postureSummary"] != "Unraid array is running without parity protection" {
+			t.Fatalf("postureSummary = %#v", payload["postureSummary"])
+		}
+		if payload["syncAction"] != "check" || payload["numDisabled"] != float64(2) {
+			t.Fatalf("expected unraid health detail, got %#v", payload)
+		}
+		sources, ok := payload["sources"].([]interface{})
+		if !ok || len(sources) != 1 || sources[0] != "agent" {
+			t.Fatalf("sources = %#v, want [agent]", payload["sources"])
 		}
 	})
 

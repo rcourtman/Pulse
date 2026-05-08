@@ -910,6 +910,7 @@ type ResourceConvertInput struct {
 	PlatformID            string
 	PlatformType          string
 	SourceType            string
+	Sources               []string
 	ParentID              string
 	ClusterID             string
 	Status                string
@@ -996,6 +997,7 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		PlatformID:            input.PlatformID,
 		PlatformType:          input.PlatformType,
 		SourceType:            input.SourceType,
+		Sources:               append([]string(nil), input.Sources...),
 		ParentID:              input.ParentID,
 		ClusterID:             input.ClusterID,
 		Status:                input.Status,
