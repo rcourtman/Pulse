@@ -70,7 +70,7 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	body := `{"autonomy_level":"monitor","investigation_budget":2,"investigation_timeout_sec":30}`
+	body := `{"autonomy_level":"monitor","full_mode_unlocked":true,"investigation_budget":2,"investigation_timeout_sec":30}`
 	req := newLoopbackRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleUpdatePatrolAutonomyMonitorOnly(rec, req)
@@ -83,12 +83,14 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.True(t, resp.Success)
 	require.Equal(t, config.PatrolAutonomyMonitor, resp.Settings.AutonomyLevel)
+	require.False(t, resp.Settings.FullModeUnlocked)
 	require.Equal(t, 5, resp.Settings.InvestigationBudget)
 	require.Equal(t, 60, resp.Settings.InvestigationTimeoutSec)
 
 	saved, err := persistence.LoadAIConfig()
 	require.NoError(t, err)
 	require.Equal(t, config.PatrolAutonomyMonitor, saved.PatrolAutonomyLevel)
+	require.False(t, saved.PatrolFullModeUnlocked)
 	require.Equal(t, 5, saved.PatrolInvestigationBudget)
 	require.Equal(t, 60, saved.PatrolInvestigationTimeoutSec)
 

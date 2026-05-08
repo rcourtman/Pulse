@@ -57,6 +57,24 @@ export function resolvePatrolAutonomyLevelForSave(
   return level;
 }
 
+export function resolvePatrolAutonomySettingsForSave({
+  level,
+  fullModeUnlocked,
+  autoFixLocked,
+}: {
+  level: PatrolAutonomyLevel;
+  fullModeUnlocked: boolean;
+  autoFixLocked: boolean;
+}): { autonomyLevel: PatrolAutonomyLevel; fullModeUnlocked: boolean } {
+  const canUseFullMode =
+    !autoFixLocked && (level === 'assisted' || level === 'full') && fullModeUnlocked;
+
+  return {
+    autonomyLevel: resolvePatrolAutonomyLevelForSave(level, canUseFullMode, autoFixLocked),
+    fullModeUnlocked: canUseFullMode,
+  };
+}
+
 export function usePatrolIntelligenceState() {
   const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
@@ -493,12 +511,13 @@ export function usePatrolIntelligenceState() {
     try {
       const settings = await getPatrolAutonomySettings();
       if (!settings) return;
-      const effectiveLevel =
-        autoFixLocked() && settings.autonomy_level !== 'monitor'
-          ? 'monitor'
-          : settings.autonomy_level;
-      setAutonomyLevel(effectiveLevel);
-      setFullModeUnlocked(settings.full_mode_unlocked);
+      const effectiveSettings = resolvePatrolAutonomySettingsForSave({
+        level: settings.autonomy_level,
+        fullModeUnlocked: settings.full_mode_unlocked,
+        autoFixLocked: autoFixLocked(),
+      });
+      setAutonomyLevel(effectiveSettings.autonomyLevel);
+      setFullModeUnlocked(effectiveSettings.fullModeUnlocked);
       setInvestigationBudget(settings.investigation_budget);
       setInvestigationTimeout(settings.investigation_timeout_sec);
     } catch (err) {
@@ -511,24 +530,27 @@ export function usePatrolIntelligenceState() {
     if (autoFixLocked() && level !== 'monitor') return;
 
     const previousLevel = autonomyLevel();
-    const effectiveLevel = resolvePatrolAutonomyLevelForSave(
+    const previousFullModeUnlocked = fullModeUnlocked();
+    const effectiveSettings = resolvePatrolAutonomySettingsForSave({
       level,
-      fullModeUnlocked(),
-      autoFixLocked(),
-    );
-    setAutonomyLevel(effectiveLevel);
+      fullModeUnlocked: fullModeUnlocked(),
+      autoFixLocked: autoFixLocked(),
+    });
+    setAutonomyLevel(effectiveSettings.autonomyLevel);
+    setFullModeUnlocked(effectiveSettings.fullModeUnlocked);
     setIsUpdatingAutonomy(true);
 
     try {
       await updatePatrolAutonomySettings({
-        autonomy_level: effectiveLevel,
-        full_mode_unlocked: fullModeUnlocked(),
+        autonomy_level: effectiveSettings.autonomyLevel,
+        full_mode_unlocked: effectiveSettings.fullModeUnlocked,
         investigation_budget: investigationBudget(),
         investigation_timeout_sec: investigationTimeout(),
       });
     } catch (err) {
       console.error('Failed to update autonomy:', err);
       setAutonomyLevel(previousLevel);
+      setFullModeUnlocked(previousFullModeUnlocked);
       notificationStore.error((err as Error).message || 'Failed to update autonomy level');
     } finally {
       setIsUpdatingAutonomy(false);
@@ -582,15 +604,17 @@ export function usePatrolIntelligenceState() {
     setIsSavingAdvanced(true);
     setAdvancedSettingsError(null);
     try {
-      const effectiveLevel = resolvePatrolAutonomyLevelForSave(
-        autonomyLevel(),
-        fullModeUnlocked(),
-        autoFixLocked(),
-      );
+      const effectiveSettings = resolvePatrolAutonomySettingsForSave({
+        level: autonomyLevel(),
+        fullModeUnlocked: fullModeUnlocked(),
+        autoFixLocked: autoFixLocked(),
+      });
+      setAutonomyLevel(effectiveSettings.autonomyLevel);
+      setFullModeUnlocked(effectiveSettings.fullModeUnlocked);
 
       const result = await updatePatrolAutonomySettings({
-        autonomy_level: effectiveLevel,
-        full_mode_unlocked: fullModeUnlocked(),
+        autonomy_level: effectiveSettings.autonomyLevel,
+        full_mode_unlocked: effectiveSettings.fullModeUnlocked,
         investigation_budget: investigationBudget(),
         investigation_timeout_sec: investigationTimeout(),
       });

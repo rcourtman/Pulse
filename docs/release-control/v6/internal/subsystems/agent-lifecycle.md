@@ -250,6 +250,9 @@ profile and assignment columns, but embedded table framing must route through
    `internal/api/` route wiring: monitor-mode configuration and remediation
    entitlement payloads remain AI runtime/API-contract owned and must not create
    agent lifecycle authority, install-token scope, or fleet command semantics.
+   Clearing stale Patrol full-mode unlock state during monitor-only saves is
+   also an AI runtime entitlement clamp, not a lifecycle enrollment or command
+   authority signal.
    Patrol readiness and settings-save payload changes on those shared handlers
    are also adjacent only: structured provider/model/tool causes may be exposed
    to Patrol and Assistant, but they do not grant agent install, enrollment,

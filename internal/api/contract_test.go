@@ -122,7 +122,7 @@ func TestContract_PatrolAutonomyCommunityMonitorUpdatePayload(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	body := `{"autonomy_level":"monitor","investigation_budget":2,"investigation_timeout_sec":30}`
+	body := `{"autonomy_level":"monitor","full_mode_unlocked":true,"investigation_budget":2,"investigation_timeout_sec":30}`
 	req := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
@@ -142,6 +142,7 @@ func TestContract_PatrolAutonomyCommunityMonitorUpdatePayload(t *testing.T) {
 		t.Fatalf("expected success response, got %+v", resp)
 	}
 	if resp.Settings.AutonomyLevel != config.PatrolAutonomyMonitor ||
+		resp.Settings.FullModeUnlocked ||
 		resp.Settings.InvestigationBudget != 5 ||
 		resp.Settings.InvestigationTimeoutSec != 60 {
 		t.Fatalf("unexpected monitor update settings: %+v", resp.Settings)

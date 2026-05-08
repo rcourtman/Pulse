@@ -760,7 +760,11 @@ prompt explain the same operator-facing priority.
     copy. When the failure includes Patrol readiness context, the inline state
     must expose the provider, model, and readiness summary next to a direct
     provider-settings action instead of hiding that diagnosis behind Assistant
-    alone. If that inline state opens Assistant, the Patrol feature must hand off
+    alone. When safe remediation is locked, the same popover state owner must
+    clear stale full-mode unlock state before Apply Configuration submits the
+    monitor-only autonomy payload, so disabled paid controls cannot leak stale
+    permission into a save. If that inline state opens Assistant, the Patrol
+    feature must hand off
     a source-named, model-only briefing and close the popover so the shared
     Assistant drawer is not visually hidden behind feature chrome. When a Patrol
     assessment handoff is attached, the shared Assistant drawer empty state must

@@ -229,6 +229,9 @@ bypass the API fail-closed execution gate.
    but monitor-mode AI configuration and remediation entitlement responses stay
    AI runtime/API-contract owned and must not become recovery-local policy,
    storage remediation authority, or storage-specific license semantics.
+   Clearing stale full-mode unlock state through that monitor-only save path is
+   likewise an AI runtime entitlement clamp, not recovery approval state or
+   storage remediation permission.
    Adjacent Docker / Podman management routes may also share `internal/api/`
    transport with storage/recovery. Storage and recovery consumers must
    preserve the API-owned Docker / Podman agent or host wording for management

@@ -129,6 +129,11 @@ runtime cost control, and shared AI transport surfaces.
    metadata, while manual run requests, scheduled ticks, and scoped
    alert/anomaly runs must fail or skip before LLM execution when the selected
    Patrol model/provider is known not-ready.
+   Monitor-only Patrol autonomy saves are part of the same runtime gate:
+   when the safe-remediation extension or entitlement is unavailable, both the
+   browser state owner and `internal/api/ai_handlers.go` must clear stale
+   full-mode unlock state while clamping autonomy back to `monitor`, so paid
+   remediation permission cannot survive through a free runtime save.
 4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
    External provider-bound unified-resource context must enforce the same

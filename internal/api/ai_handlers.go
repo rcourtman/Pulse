@@ -6983,6 +6983,7 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	}
 
 	autonomyLevel := cfg.GetPatrolAutonomyLevel()
+	fullModeUnlocked := cfg.PatrolFullModeUnlocked
 	// Community tier lock: without ai_autofix, patrol autonomy is findings-only ("monitor").
 	// If config contains a higher level from a previous Pro/trial period, clamp the effective
 	// value at read time so the UI reflects runtime enforcement.
@@ -6990,10 +6991,13 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	if !hasAutoFix && autonomyLevel != config.PatrolAutonomyMonitor {
 		autonomyLevel = config.PatrolAutonomyMonitor
 	}
+	if !hasAutoFix {
+		fullModeUnlocked = false
+	}
 
 	settings := PatrolAutonomyResponse{
 		AutonomyLevel:           autonomyLevel,
-		FullModeUnlocked:        cfg.PatrolFullModeUnlocked,
+		FullModeUnlocked:        fullModeUnlocked,
 		InvestigationBudget:     cfg.GetPatrolInvestigationBudget(),
 		InvestigationTimeoutSec: int(cfg.GetPatrolInvestigationTimeout().Seconds()),
 	}
@@ -7049,10 +7053,10 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 		req.InvestigationTimeoutSec = 1800
 	}
 
-	effectiveUnlocked := cfg.PatrolFullModeUnlocked
-	if req.FullModeUnlocked != nil {
-		effectiveUnlocked = *req.FullModeUnlocked
-	}
+	// This handler is only used when the safe-remediation extension is not active.
+	// Do not preserve stale full-mode acknowledgement or permission state through a
+	// monitor-only save.
+	effectiveUnlocked := false
 
 	cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
 	cfg.PatrolFullModeUnlocked = effectiveUnlocked
@@ -7065,7 +7069,7 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 		return
 	}
 	if err := persistence.SaveAIConfig(*cfg); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Assistant config", nil)
+		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Patrol autonomy settings", nil)
 		return
 	}
 	if err := aiService.LoadConfig(); err != nil {

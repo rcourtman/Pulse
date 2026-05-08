@@ -691,6 +691,84 @@ test.describe("Patrol runtime-state browser contract", () => {
     ).toHaveCount(0);
   });
 
+  test("clamps stale full-mode state before monitor-only Patrol configuration save", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only Patrol configuration coverage",
+    );
+
+    let updatePayload: Record<string, unknown> | null = null;
+
+    await mockRuntimeCapabilities(page, ["ai_patrol", "ai_alerts"]);
+    await ensureAuthenticated(page);
+    await mockBlockedPatrolRuntimeState(page, {
+      autonomyRoute: async (route) => {
+        if (route.request().method() !== "PUT") {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              autonomy_level: "full",
+              full_mode_unlocked: true,
+              investigation_budget: 15,
+              investigation_timeout_sec: 300,
+            }),
+          });
+          return;
+        }
+
+        updatePayload = route.request().postDataJSON() as Record<
+          string,
+          unknown
+        >;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            settings: {
+              autonomy_level: "monitor",
+              full_mode_unlocked: false,
+              investigation_budget: updatePayload.investigation_budget ?? 15,
+              investigation_timeout_sec:
+                updatePayload.investigation_timeout_sec ?? 300,
+            },
+          }),
+        });
+      },
+    });
+
+    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Configure Patrol" }).click();
+    const configPanel = page.getByRole("dialog", {
+      name: "Patrol Configuration",
+    });
+
+    await expect(
+      configPanel.getByRole("button", { name: "Remediate" }),
+    ).toBeDisabled();
+    await configPanel.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await configPanel
+      .getByRole("button", { name: "Apply Configuration" })
+      .click();
+
+    await expect
+      .poll(() => updatePayload)
+      .toMatchObject({
+        autonomy_level: "monitor",
+        full_mode_unlocked: false,
+      });
+    await expect(configPanel).toBeHidden();
+    await expect(
+      page.getByText("Failed to save advanced settings"),
+    ).toHaveCount(0);
+    await expect(page.getByTestId("patrol-configuration-error")).toHaveCount(0);
+  });
+
   test("shows the server reason when a stale manual Patrol run is rejected", async ({
     page,
   }, testInfo) => {

@@ -915,8 +915,11 @@ the canonical monitored-system blocked payload.
    `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and `full` return
    the canonical license-required response instead of a generic save failure,
    and Patrol frontend state owners must clamp stale paid autonomy to `monitor`
-   before submitting that endpoint when the safe-remediation entitlement is not
-   effective
+   and send `full_mode_unlocked:false` before submitting that endpoint when the
+   safe-remediation entitlement is not effective. The monitor-only backend path
+   must likewise clear stale full-mode unlock state in its response and
+   persistence layer instead of preserving paid remediation state through a free
+   configuration save
    and the Patrol settings-save readiness contract, so
    `/api/settings/ai/update` may save a selected Patrol provider/model even
    when that model is not ready for tool-backed Patrol execution, but it must

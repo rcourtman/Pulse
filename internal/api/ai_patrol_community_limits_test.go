@@ -55,6 +55,7 @@ func TestPatrolCommunityAutonomyLockedToMonitor(t *testing.T) {
 	// Persist a higher autonomy level to ensure read-time clamping works.
 	aiCfg := config.NewDefaultAIConfig()
 	aiCfg.PatrolAutonomyLevel = config.PatrolAutonomyApproval
+	aiCfg.PatrolFullModeUnlocked = true
 	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
@@ -76,11 +77,14 @@ func TestPatrolCommunityAutonomyLockedToMonitor(t *testing.T) {
 	if getResp.AutonomyLevel != config.PatrolAutonomyMonitor {
 		t.Fatalf("expected autonomy %q for Community, got %q", config.PatrolAutonomyMonitor, getResp.AutonomyLevel)
 	}
+	if getResp.FullModeUnlocked {
+		t.Fatalf("expected full mode to be locked for Community, got %+v", getResp)
+	}
 
 	// PUT via free adapter should allow findings-only monitor settings and
 	// persist the same clamped runtime limits used by the enterprise handler.
 	freeAdapter := aiAutoFixFreeAdapter{handler: handler}
-	body := `{"autonomy_level":"monitor","investigation_budget":2,"investigation_timeout_sec":30}`
+	body := `{"autonomy_level":"monitor","full_mode_unlocked":true,"investigation_budget":2,"investigation_timeout_sec":30}`
 	putReq := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
 	putRec := httptest.NewRecorder()
 	freeAdapter.HandleUpdatePatrolAutonomy(putRec, putReq)
@@ -100,6 +104,9 @@ func TestPatrolCommunityAutonomyLockedToMonitor(t *testing.T) {
 	if putResp.Settings.AutonomyLevel != config.PatrolAutonomyMonitor {
 		t.Fatalf("expected saved autonomy %q, got %q", config.PatrolAutonomyMonitor, putResp.Settings.AutonomyLevel)
 	}
+	if putResp.Settings.FullModeUnlocked {
+		t.Fatalf("expected monitor-only update to clear full mode, got %+v", putResp.Settings)
+	}
 	if putResp.Settings.InvestigationBudget != 5 || putResp.Settings.InvestigationTimeoutSec != 60 {
 		t.Fatalf("expected clamped budget/timeout 5/60, got %d/%d",
 			putResp.Settings.InvestigationBudget, putResp.Settings.InvestigationTimeoutSec)
@@ -110,6 +117,9 @@ func TestPatrolCommunityAutonomyLockedToMonitor(t *testing.T) {
 	}
 	if saved.PatrolAutonomyLevel != config.PatrolAutonomyMonitor {
 		t.Fatalf("expected persisted autonomy %q, got %q", config.PatrolAutonomyMonitor, saved.PatrolAutonomyLevel)
+	}
+	if saved.PatrolFullModeUnlocked {
+		t.Fatalf("expected persisted full mode unlock to be cleared for Community")
 	}
 	if saved.PatrolInvestigationBudget != 5 || saved.PatrolInvestigationTimeoutSec != 60 {
 		t.Fatalf("expected persisted budget/timeout 5/60, got %d/%d",
