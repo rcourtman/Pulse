@@ -989,7 +989,9 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}
 		}()
 	}
-	defer m.recordTaskResult(InstanceTypePVE, instanceName, pollErr)
+	defer func() {
+		m.recordTaskResult(InstanceTypePVE, instanceName, pollErr)
+	}()
 
 	// Check if context is cancelled
 	select {

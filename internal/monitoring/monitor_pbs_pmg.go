@@ -93,7 +93,9 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			}
 		}()
 	}
-	defer m.recordTaskResult(InstanceTypePBS, instanceName, pollErr)
+	defer func() {
+		m.recordTaskResult(InstanceTypePBS, instanceName, pollErr)
+	}()
 
 	// Check if context is cancelled
 	select {
@@ -479,7 +481,9 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 			}
 		}()
 	}
-	defer m.recordTaskResult(InstanceTypePMG, instanceName, pollErr)
+	defer func() {
+		m.recordTaskResult(InstanceTypePMG, instanceName, pollErr)
+	}()
 
 	select {
 	case <-ctx.Done():
