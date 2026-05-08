@@ -44,12 +44,11 @@ the plumbing is required for that governed surface.
 Candidate lanes should point at the owning target from
 `docs/release-control/control_plane.json` so lane-expansion work is routed to
 an explicit initiative.
-Use `python3 scripts/release_control/status_audit.py --pretty` to see the
-derived `candidate_lane_queue` when agents need a ranked next pick for the
-lane-expansion target.
-Use that same audit output to see the `available_candidate_lane_queue`,
-active claims, expired claims, and any claim conflicts before taking a new
-slice.
+Use `python3 scripts/release_control/status_audit.py --pretty` to see any
+derived `candidate_lane_queue` entries when agents need a ranked next pick for
+the lane-expansion target.
+Use that same audit output to see the `available_candidate_lane_queue`, active
+claims, expired claims, and any claim conflicts before taking a new slice.
 Use `status.json.readiness_assertions` for the active required assertion set, its proof references, and any executable `proof_commands` that readiness assertion guardrails run.
 Use `docs/release-control/control_plane.json` for the active profile and active
 target that sit above this profile.

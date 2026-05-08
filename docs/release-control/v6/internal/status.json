@@ -4498,6 +4498,112 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "L23",
+      "name": "Pulse Intelligence proactive operations",
+      "target_score": 8,
+      "current_score": 8,
+      "status": "target-met",
+      "completion": {
+        "state": "complete",
+        "summary": "Pulse Intelligence proactive operations now has a first-class governed floor: Patrol owns structured detection, investigation, readiness, and run-history records; Assistant handoffs rehydrate safe backend-owned context from those records; and approval, action-audit, resource-policy, and timeline contracts keep explanation, collaboration, approval, and governed action out of generic chat.",
+        "tracking": []
+      },
+      "blockers": [],
+      "subsystems": [],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/AI.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/pulse-intelligence-proactive-operations-lane-2026-05-08.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/security-privacy.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/__tests__/AIChat.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/index.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/FindingsPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_assistant_handoff.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_assistant_handoff_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_handler.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_handler_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "release_gates": [
@@ -5406,72 +5512,8 @@
       "subsystem_ids": []
     }
   ],
-  "coverage_gaps": [
-    {
-      "id": "pulse-intelligence-proactive-operations-product-gap",
-      "summary": "Pulse Assistant and Patrol are governed as AI runtime pieces, but the product lane does not yet carry the stronger proactive Pulse Intelligence contract: Patrol should create trusted structured investigations and Assistant should explain, collaborate, approve, and execute from those records instead of being optimized as a generic chat surface.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-05-06",
-      "lane_ids": [
-        "L6",
-        "L13",
-        "L14",
-        "L18",
-        "L19",
-        "L20"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "api-contracts",
-        "patrol-intelligence",
-        "security-privacy",
-        "unified-resources"
-      ],
-      "proposed_resolution": "new-lane",
-      "coverage_impact": 85,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/AI.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-          "kind": "file"
-        }
-      ]
-    }
-  ],
-  "candidate_lanes": [
-    {
-      "id": "pulse-intelligence-proactive-operations",
-      "name": "Pulse Intelligence proactive operations",
-      "summary": "Promote Pulse Pro's AI value from reactive Assistant chat into proactive infrastructure intelligence: Patrol owns structured detection and investigations; Assistant becomes the contextual explanation, collaboration, approval, and governed action surface; policy-aware data handling, resource timelines, and action audit are treated as product prerequisites rather than optional chat enhancements.",
-      "status": "proposed",
-      "recorded_at": "2026-05-06",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L6",
-        "L13",
-        "L14",
-        "L18",
-        "L19",
-        "L20"
-      ],
-      "coverage_gap_ids": [
-        "pulse-intelligence-proactive-operations-product-gap"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "api-contracts",
-        "patrol-intelligence",
-        "security-privacy",
-        "unified-resources"
-      ]
-    }
-  ],
+  "coverage_gaps": [],
+  "candidate_lanes": [],
   "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
@@ -6069,7 +6111,8 @@
         "L14",
         "L18",
         "L19",
-        "L20"
+        "L20",
+        "L23"
       ]
     }
   ]
