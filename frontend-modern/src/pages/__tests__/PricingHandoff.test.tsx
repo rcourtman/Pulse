@@ -61,22 +61,12 @@ describe('PricingHandoff', () => {
     expect(pricingHandoffSource).not.toContain('<h1');
   });
 
-  it('keeps retired monitored-system pricing handoffs on the neutral Plans surface', async () => {
-    window.history.replaceState({}, '', '/pricing?feature=max_monitored_systems');
-
-    render(() => (
-      <Router>
-        <Route path="/pricing" component={PricingHandoff} />
-        <Route
-          path="/settings/system/billing/plan"
-          component={() => <div>Plans destination</div>}
-        />
-      </Router>
-    ));
-
-    expect(await screen.findByText('Plans destination')).toBeInTheDocument();
-    expect(handoffToExternalPricingMock).not.toHaveBeenCalled();
-  });
+  // The earlier 'retired monitored-system pricing handoffs' case has been
+  // removed: max_monitored_systems is no longer in
+  // RETIRED_TRIAL_PRICING_FEATURES (the set was narrowed to trial features
+  // only). It is now a live paid-feature key that routes to the
+  // self-hosted purchase-start flow rather than the neutral Plans surface.
+  // The trial_expired case below still exercises the retired-feature path.
 
   it('keeps retired trial pricing handoffs on the neutral Plans surface', async () => {
     window.history.replaceState({}, '', '/pricing?feature=trial_expired');
