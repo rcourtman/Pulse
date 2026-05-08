@@ -198,6 +198,13 @@ redeclared in host-agent or settings-table branches. Host-profile detection is
 an identity fact and must not depend on optional storage probes succeeding; an
 Unraid host still reports the governed `unraid` profile and `linux` runtime
 platform when `mdcmd` or array-topology collection is unavailable.
+Unraid array collection belongs to that same runtime-normalized agent path:
+`internal/hostagent/unraid.go` must treat empty `DISK_NP`/`DISK_NP_DSBL`
+slots with no device, id, filesystem, or size as unassigned topology
+placeholders rather than failed disks. Assigned disks may use `diskId`/`rdevId`
+as the serial fallback when Unraid does not expose a separate serial field, so
+monitoring receives stable disk identity without inventing host-profile or
+platform state from optional storage probe success.
 First-class platform hosts that also run the Pulse Agent must keep the same
 operator-facing system identity split: a Proxmox VE node may report a Debian
 runtime platform underneath, but the host-agent OS identity and infrastructure

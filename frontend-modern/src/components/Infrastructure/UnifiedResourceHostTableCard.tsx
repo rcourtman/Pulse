@@ -40,6 +40,7 @@ import {
 } from '@/utils/resourcePolicyPresentation';
 import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
+import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 import { buildWorkloadsHref } from './workloadsLink';
 import { ClusterDeployBanner } from './ClusterDeployBanner';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
@@ -238,6 +239,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 const statusIndicator = createMemo(() =>
                   getAgentStatusIndicator({ status: resource.status }),
                 );
+                const healthIssue = createMemo(() => getResourceHealthIssuePresentation(resource));
                 const metricsKey = createMemo(() => buildMetricKeyForUnifiedResource(resource));
                 const alertResourceIdCandidates = createMemo(() =>
                   hostOverrideIdCandidates(resource),
@@ -369,8 +371,8 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           />
                           <StatusDot
                             variant={statusIndicator().variant}
-                            title={statusIndicator().label}
-                            ariaLabel={statusIndicator().label}
+                            title={healthIssue()?.title || statusIndicator().label}
+                            ariaLabel={healthIssue()?.title || statusIndicator().label}
                             size="xs"
                           />
                           <div class="flex min-w-0 flex-1 flex-col">
@@ -381,6 +383,16 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               >
                                 {displayName()}
                               </span>
+                              <Show when={healthIssue()}>
+                                {(issue) => (
+                                  <span
+                                    class="hidden shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300 lg:inline"
+                                    title={issue().title}
+                                  >
+                                    {issue().compactLabel}
+                                  </span>
+                                )}
+                              </Show>
                               <Show when={shouldShowResourceAlternateName(resource)}>
                                 <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-muted lg:inline">
                                   ({resource.name})

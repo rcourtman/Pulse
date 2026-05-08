@@ -168,6 +168,17 @@ legacy Unraid raw-status normalization at host-agent ingest: when older agents s
 must derive the canonical disk status before storage-risk assessment runs so
 v5 aggregate counters do not override clearly healthy per-disk state during v6
 compatibility operation.
+The same monitoring compatibility boundary owns Unraid slot filtering and
+operator health posture after host-agent ingest. Empty no-present Unraid slots
+must be removed before storage-risk assessment so unassigned array capacity is
+not reported as missing or disabled media. An Unraid array with assigned data
+disks but no configured parity is an attention/warning posture with the
+machine-readable `unraid_no_parity` reason, while active parity check/sync
+state remains a separate `unraid_sync_active` reason. Realtime resource
+broadcasts must preserve canonical identity, discovery target, metrics target,
+incident rollups, and raw `agent`/`storage` facet payloads so frontend
+infrastructure surfaces can explain degraded/warning rows without falling back
+to generic status labels.
 VMware vSphere now also has a locked phase-1 ingestion boundary under this
 lane. The admitted direction is vCenter-only in phase 1, and monitoring must
 stay API-first through the

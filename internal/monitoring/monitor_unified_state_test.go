@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -344,6 +346,160 @@ func TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources(t *
 		if resource.Type == "node" {
 			t.Fatalf("expected canonical broadcast resource types only, got legacy node resource %#v", resource)
 		}
+	}
+}
+
+func TestConvertResourcesForBroadcastIncludesCanonicalHealthContext(t *testing.T) {
+	resources := []unifiedresources.Resource{
+		{
+			ID:               "agent:tower",
+			Type:             unifiedresources.ResourceTypeAgent,
+			Name:             "Tower",
+			Status:           unifiedresources.StatusWarning,
+			LastSeen:         time.Date(2026, 5, 8, 11, 30, 0, 0, time.UTC),
+			Sources:          []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			IncidentCount:    1,
+			IncidentSeverity: storagehealth.RiskWarning,
+			IncidentSummary:  "Unraid array is running without parity protection",
+			Agent: &unifiedresources.AgentData{
+				AgentID:               "agent-1",
+				Hostname:              "tower",
+				OSName:                "Unraid",
+				StoragePostureSummary: "Unraid array is running without parity protection",
+				StorageRisk: &unifiedresources.StorageRisk{
+					Level: storagehealth.RiskWarning,
+					Reasons: []unifiedresources.StorageRiskReason{{
+						Code:     "unraid_no_parity",
+						Severity: storagehealth.RiskWarning,
+						Summary:  "Unraid array is running without parity protection",
+					}},
+				},
+				Unraid: &unifiedresources.HostUnraidMeta{
+					ArrayStarted:   true,
+					ArrayState:     "STARTED",
+					PostureSummary: "Unraid array is running without parity protection",
+					Risk: &unifiedresources.StorageRisk{
+						Level: storagehealth.RiskWarning,
+						Reasons: []unifiedresources.StorageRiskReason{{
+							Code:     "unraid_no_parity",
+							Severity: storagehealth.RiskWarning,
+							Summary:  "Unraid array is running without parity protection",
+						}},
+					},
+				},
+			},
+			Docker: &unifiedresources.DockerData{
+				AgentID:      "agent-1",
+				HostSourceID: "agent-1",
+				Hostname:     "tower",
+				Runtime:      "docker",
+			},
+		},
+		{
+			ID:       "agent:tower/storage:unraid-array",
+			Type:     unifiedresources.ResourceTypeStorage,
+			Name:     "Tower Array",
+			Status:   unifiedresources.StatusWarning,
+			LastSeen: time.Date(2026, 5, 8, 11, 30, 0, 0, time.UTC),
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Storage: &unifiedresources.StorageMeta{
+				Platform:       "unraid",
+				RiskSummary:    "Unraid array is running without parity protection",
+				PostureSummary: "Unraid array is running without parity protection",
+				Risk: &unifiedresources.StorageRisk{
+					Level: storagehealth.RiskWarning,
+					Reasons: []unifiedresources.StorageRiskReason{{
+						Code:     "unraid_no_parity",
+						Severity: storagehealth.RiskWarning,
+						Summary:  "Unraid array is running without parity protection",
+					}},
+				},
+			},
+		},
+	}
+
+	frontend := convertResourcesForBroadcast(resources)
+	if len(frontend) != 2 {
+		t.Fatalf("expected 2 frontend resources, got %d", len(frontend))
+	}
+
+	var agentPayload struct {
+		IncidentSummary string `json:"incidentSummary"`
+		Canonical       struct {
+			PrimaryID string `json:"primaryId"`
+		} `json:"canonicalIdentity"`
+		DiscoveryTarget struct {
+			ResourceType string `json:"resourceType"`
+			AgentID      string `json:"agentId"`
+		} `json:"discoveryTarget"`
+		MetricsTarget struct {
+			ResourceType string `json:"resourceType"`
+			ResourceID   string `json:"resourceId"`
+		} `json:"metricsTarget"`
+		Agent struct {
+			StoragePostureSummary string `json:"storagePostureSummary"`
+			Unraid                struct {
+				PostureSummary string `json:"postureSummary"`
+				Risk           struct {
+					Reasons []struct {
+						Code    string `json:"code"`
+						Summary string `json:"summary"`
+					} `json:"reasons"`
+				} `json:"risk"`
+			} `json:"unraid"`
+		} `json:"agent"`
+	}
+	encoded, err := json.Marshal(frontend[0])
+	if err != nil {
+		t.Fatalf("marshal agent frontend resource: %v", err)
+	}
+	if err := json.Unmarshal(encoded, &agentPayload); err != nil {
+		t.Fatalf("unmarshal agent frontend resource: %v", err)
+	}
+	if agentPayload.IncidentSummary != "Unraid array is running without parity protection" {
+		t.Fatalf("incident summary = %q", agentPayload.IncidentSummary)
+	}
+	if agentPayload.Canonical.PrimaryID != "agent:agent-1" {
+		t.Fatalf("canonical primary ID = %q", agentPayload.Canonical.PrimaryID)
+	}
+	if agentPayload.DiscoveryTarget.ResourceType != "agent" || agentPayload.DiscoveryTarget.AgentID != "agent-1" {
+		t.Fatalf("discovery target = %+v", agentPayload.DiscoveryTarget)
+	}
+	if agentPayload.MetricsTarget.ResourceType != "agent" || agentPayload.MetricsTarget.ResourceID != "agent-1" {
+		t.Fatalf("metrics target = %+v", agentPayload.MetricsTarget)
+	}
+	if agentPayload.Agent.StoragePostureSummary != "Unraid array is running without parity protection" {
+		t.Fatalf("agent storage posture summary = %q", agentPayload.Agent.StoragePostureSummary)
+	}
+	if agentPayload.Agent.Unraid.PostureSummary != "Unraid array is running without parity protection" {
+		t.Fatalf("unraid posture summary = %q", agentPayload.Agent.Unraid.PostureSummary)
+	}
+	if len(agentPayload.Agent.Unraid.Risk.Reasons) != 1 || agentPayload.Agent.Unraid.Risk.Reasons[0].Code != "unraid_no_parity" {
+		t.Fatalf("unraid risk reasons = %#v", agentPayload.Agent.Unraid.Risk.Reasons)
+	}
+
+	var storagePayload struct {
+		Storage struct {
+			PostureSummary string `json:"postureSummary"`
+			Risk           struct {
+				Reasons []struct {
+					Code string `json:"code"`
+				} `json:"reasons"`
+			} `json:"risk"`
+		} `json:"storage"`
+	}
+	encoded, err = json.Marshal(frontend[1])
+	if err != nil {
+		t.Fatalf("marshal storage frontend resource: %v", err)
+	}
+	if err := json.Unmarshal(encoded, &storagePayload); err != nil {
+		t.Fatalf("unmarshal storage frontend resource: %v", err)
+	}
+	if storagePayload.Storage.PostureSummary != "Unraid array is running without parity protection" {
+		t.Fatalf("storage posture summary = %q", storagePayload.Storage.PostureSummary)
+	}
+	if len(storagePayload.Storage.Risk.Reasons) != 1 || storagePayload.Storage.Risk.Reasons[0].Code != "unraid_no_parity" {
+		t.Fatalf("storage risk reasons = %#v", storagePayload.Storage.Risk.Reasons)
 	}
 }
 

@@ -873,6 +873,7 @@ type ResourceFrontend struct {
 	// Identity
 	ID          string `json:"id"`
 	Type        string `json:"type"`
+	Technology  string `json:"technology,omitempty"`
 	Name        string `json:"name"`
 	DisplayName string `json:"displayName"`
 
@@ -900,8 +901,42 @@ type ResourceFrontend struct {
 	LastSeen int64                   `json:"lastSeen"` // Unix milliseconds
 	Alerts   []ResourceAlertFrontend `json:"alerts"`
 
+	IncidentCount         int    `json:"incidentCount,omitempty"`
+	IncidentCode          string `json:"incidentCode,omitempty"`
+	IncidentSeverity      string `json:"incidentSeverity,omitempty"`
+	IncidentSummary       string `json:"incidentSummary,omitempty"`
+	IncidentCategory      string `json:"incidentCategory,omitempty"`
+	IncidentLabel         string `json:"incidentLabel,omitempty"`
+	IncidentPriority      int    `json:"incidentPriority,omitempty"`
+	IncidentImpactSummary string `json:"incidentImpactSummary,omitempty"`
+	IncidentUrgency       string `json:"incidentUrgency,omitempty"`
+	IncidentAction        string `json:"incidentAction,omitempty"`
+
 	// Identity for deduplication
 	Identity *ResourceIdentityFrontend `json:"identity,omitempty"`
+
+	DiscoveryTarget json.RawMessage `json:"discoveryTarget,omitempty"`
+	MetricsTarget   json.RawMessage `json:"metricsTarget,omitempty"`
+	Canonical       json.RawMessage `json:"canonicalIdentity,omitempty"`
+	Policy          json.RawMessage `json:"policy,omitempty"`
+	AISafeSummary   string          `json:"aiSafeSummary,omitempty"`
+	Capabilities    json.RawMessage `json:"capabilities,omitempty"`
+	Relationships   json.RawMessage `json:"relationships,omitempty"`
+	RecentChanges   json.RawMessage `json:"recentChanges,omitempty"`
+	FacetCounts     json.RawMessage `json:"facetCounts,omitempty"`
+	Incidents       json.RawMessage `json:"incidents,omitempty"`
+	Proxmox         json.RawMessage `json:"proxmox,omitempty"`
+	Storage         json.RawMessage `json:"storage,omitempty"`
+	Agent           json.RawMessage `json:"agent,omitempty"`
+	Docker          json.RawMessage `json:"docker,omitempty"`
+	PBS             json.RawMessage `json:"pbs,omitempty"`
+	PMG             json.RawMessage `json:"pmg,omitempty"`
+	Kubernetes      json.RawMessage `json:"kubernetes,omitempty"`
+	PhysicalDisk    json.RawMessage `json:"physicalDisk,omitempty"`
+	Ceph            json.RawMessage `json:"ceph,omitempty"`
+	TrueNAS         json.RawMessage `json:"truenas,omitempty"`
+	VMware          json.RawMessage `json:"vmware,omitempty"`
+	Availability    json.RawMessage `json:"availability,omitempty"`
 
 	// Platform-specific data (JSON blob)
 	PlatformData json.RawMessage `json:"platformData,omitempty"`

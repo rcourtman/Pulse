@@ -399,6 +399,38 @@ export interface ResourceAgentDisk {
   free?: number;
 }
 
+export interface ResourceAgentUnraidDisk {
+  name?: string;
+  device?: string;
+  role?: string;
+  status?: string;
+  rawStatus?: string;
+  serial?: string;
+  filesystem?: string;
+  sizeBytes?: number;
+  slot?: number;
+}
+
+export interface ResourceAgentUnraidMeta {
+  arrayStarted?: boolean;
+  arrayState?: string;
+  syncAction?: string;
+  syncProgress?: number;
+  syncErrors?: number;
+  numProtected?: number;
+  numDisabled?: number;
+  numInvalid?: number;
+  numMissing?: number;
+  disks?: ResourceAgentUnraidDisk[];
+  risk?: ResourceStorageRisk;
+  riskSummary?: string;
+  postureSummary?: string;
+  protectionReduced?: boolean;
+  protectionSummary?: string;
+  rebuildInProgress?: boolean;
+  rebuildSummary?: string;
+}
+
 export interface ResourceAgentMeta {
   agentId?: string;
   agentVersion?: string;
@@ -416,6 +448,14 @@ export interface ResourceAgentMeta {
   disks?: ResourceAgentDisk[];
   sensors?: HostSensorSummary;
   raid?: HostRAIDArray[];
+  unraid?: ResourceAgentUnraidMeta;
+  storageRisk?: ResourceStorageRisk;
+  storageRiskSummary?: string;
+  storagePostureSummary?: string;
+  protectionReduced?: boolean;
+  protectionSummary?: string;
+  rebuildInProgress?: boolean;
+  rebuildSummary?: string;
   commandsEnabled?: boolean;
   tokenId?: string;
   tokenName?: string;

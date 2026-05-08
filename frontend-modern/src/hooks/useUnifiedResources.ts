@@ -8,6 +8,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
+  ResourceAgentUnraidMeta,
   ResourceChange,
   ResourceFacetCounts,
   ResourceDiscoveryTarget,
@@ -17,6 +18,7 @@ import type {
   ResourcePolicyPostureSummary,
   ResourceStatus,
   ResourceStorageMeta,
+  ResourceStorageRisk,
   ResourceType,
   ResourceVMwareMeta,
 } from '@/types/resource';
@@ -191,6 +193,14 @@ type APIResource = {
     disks?: APIAgentDiskInfo[];
     sensors?: APIAgentSensorSummary;
     raid?: APIHostRAIDArray[];
+    unraid?: ResourceAgentUnraidMeta;
+    storageRisk?: ResourceStorageRisk;
+    storageRiskSummary?: string;
+    storagePostureSummary?: string;
+    protectionReduced?: boolean;
+    protectionSummary?: string;
+    rebuildInProgress?: boolean;
+    rebuildSummary?: string;
     commandsEnabled?: boolean;
     tokenId?: string;
     tokenName?: string;

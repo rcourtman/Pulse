@@ -99,13 +99,16 @@ func parseUnraidStatusOutput(output string) (*agentshost.UnraidStorage, error) {
 			Name:       strings.TrimSpace(fields[fmt.Sprintf("diskName.%d", idx)]),
 			Device:     normalizeBlockDevice(firstNonEmpty(fields[fmt.Sprintf("rdevName.%d", idx)], fields[fmt.Sprintf("diskDevice.%d", idx)])),
 			RawStatus:  strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("rdevStatus.%d", idx)], fields[fmt.Sprintf("diskState.%d", idx)])),
-			Serial:     strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("rdevSerial.%d", idx)], fields[fmt.Sprintf("diskSerial.%d", idx)])),
+			Serial:     strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("rdevSerial.%d", idx)], fields[fmt.Sprintf("diskSerial.%d", idx)], fields[fmt.Sprintf("rdevId.%d", idx)], fields[fmt.Sprintf("diskId.%d", idx)])),
 			Filesystem: strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("diskFsType.%d", idx)], fields[fmt.Sprintf("fsType.%d", idx)])),
 			SizeBytes:  parseFirstInt64(fields[fmt.Sprintf("diskSize.%d", idx)], fields[fmt.Sprintf("rdevSize.%d", idx)]),
 			Slot:       idx,
 		}
 		disk.Role = inferUnraidDiskRole(disk.Name, idx)
 		disk.Status = normalizeUnraidDiskStatus(disk.RawStatus, disk.Device)
+		if isUnraidEmptySlot(disk) {
+			continue
+		}
 		if disk.Name == "" {
 			disk.Name = defaultUnraidDiskName(disk.Role, idx)
 		}
@@ -148,9 +151,11 @@ func collectUnraidIndexes(fields map[string]string) []int {
 		"diskSize.",
 		"diskState.",
 		"diskFsType.",
+		"diskId.",
 		"rdevName.",
 		"rdevStatus.",
 		"rdevSerial.",
+		"rdevId.",
 	}
 
 	for key := range fields {
@@ -216,6 +221,19 @@ func defaultUnraidDiskName(role string, idx int) string {
 	default:
 		return ""
 	}
+}
+
+func isUnraidEmptySlot(disk agentshost.UnraidDisk) bool {
+	rawStatus := strings.ToUpper(strings.TrimSpace(disk.RawStatus))
+	status := strings.ToLower(strings.TrimSpace(disk.Status))
+	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
+		return false
+	}
+	return strings.TrimSpace(disk.Name) == "" &&
+		strings.TrimSpace(disk.Device) == "" &&
+		strings.TrimSpace(disk.Serial) == "" &&
+		strings.TrimSpace(disk.Filesystem) == "" &&
+		disk.SizeBytes == 0
 }
 
 func normalizeUnraidDiskStatus(raw string, device string) string {

@@ -222,6 +222,34 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(queryByText('Docker')).toBeNull();
     });
 
+    it('renders compact canonical health reasons without replacing host identity', async () => {
+      const resources = [
+        makeResource(1, {
+          type: 'agent',
+          displayName: 'Tower',
+          status: 'degraded',
+          agent: {
+            storagePostureSummary: 'Unraid array is running without parity protection',
+            rebuildSummary: 'Unraid array is running check',
+          },
+        }),
+      ];
+
+      const { getByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(getByText('Tower')).toBeInTheDocument();
+        expect(getByText('No parity')).toBeInTheDocument();
+      });
+    });
+
     it('surfaces availability probe evidence directly in network endpoint rows', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-05-06T13:00:20Z').getTime());
       const resources = [

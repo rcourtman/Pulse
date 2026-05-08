@@ -137,6 +137,23 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(within(headerBadges).getByText('PVE')).toBeInTheDocument();
   });
 
+  it('explains degraded host storage posture in the current state card', () => {
+    const resource = baseResource({
+      status: 'degraded',
+      agent: {
+        storagePostureSummary: 'Unraid array is running without parity protection',
+        rebuildSummary: 'Unraid array is running check',
+      },
+    });
+
+    const { getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(getByText('No parity')).toBeInTheDocument();
+    expect(getByText('Reason')).toBeInTheDocument();
+    expect(getByText('Unraid array is running without parity protection')).toBeInTheDocument();
+    expect(getByText('Unraid array is running check')).toBeInTheDocument();
+  });
+
   it('keeps discovery as secondary overview context instead of a peer tab', async () => {
     const { getByRole, getByText, getByTestId, queryByRole, queryByTestId, queryByText } = render(
       () => <ResourceDetailDrawer resource={baseResource({})} />,

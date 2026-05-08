@@ -115,6 +115,32 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                 {resource.status || 'unknown'}
               </span>
             </div>
+            <Show when={drawer.healthIssue()}>
+              {(issue) => (
+                <>
+                  <div class="flex items-start justify-between gap-2">
+                    <span class="shrink-0 text-muted">Reason</span>
+                    <span
+                      class="max-w-[68%] text-right font-medium text-amber-700 dark:text-amber-300"
+                      title={issue().title}
+                    >
+                      {issue().primary}
+                    </span>
+                  </div>
+                  <Show when={issue().details.length > 0}>
+                    <div class="flex items-start justify-between gap-2">
+                      <span class="shrink-0 text-muted">Also</span>
+                      <span
+                        class="max-w-[68%] text-right font-medium text-base-content"
+                        title={issue().details.join(' · ')}
+                      >
+                        {issue().details.slice(0, 2).join(' · ')}
+                      </span>
+                    </div>
+                  </Show>
+                </>
+              )}
+            </Show>
             <Show when={resource.uptime}>
               <div class="flex items-center justify-between gap-2">
                 <span class="text-muted">Uptime</span>

@@ -4890,32 +4890,71 @@ func convertResourcesForBroadcast(allResources []unifiedresources.Resource) []mo
 }
 
 func monitorResourceToConvertInput(resource unifiedresources.Resource) models.ResourceConvertInput {
-	unifiedresources.RefreshCanonicalMetadata(&resource)
 	resourceType := monitorFrontendResourceType(resource)
+	if resource.DiscoveryTarget == nil {
+		resource.DiscoveryTarget = monitorDiscoveryTarget(resource, resourceType)
+	}
+	if resource.MetricsTarget == nil {
+		resource.MetricsTarget = monitorMetricsTarget(resource, resourceType)
+	}
+	unifiedresources.RefreshCanonicalMetadata(&resource)
 	name, displayName := monitorFrontendNames(resource, resourceType)
 	platformID := monitorPlatformID(resource, resourceType)
 
 	input := models.ResourceConvertInput{
-		ID:           resource.ID,
-		Type:         resourceType,
-		Name:         name,
-		DisplayName:  displayName,
-		PlatformID:   platformID,
-		PlatformType: monitorPlatformType(resource, resourceType),
-		SourceType:   monitorSourceType(resource.Sources),
-		ParentID:     monitorStringValue(resource.ParentID),
-		ClusterID:    monitorClusterID(resource),
-		Status:       monitorFrontendStatus(resource, resourceType),
-		CPU:          monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU })),
-		Memory:       monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
-		Disk:         monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk })),
-		Temperature:  monitorTemperature(resource),
-		Uptime:       monitorUptime(resource),
-		Tags:         append([]string(nil), resource.Tags...),
-		Labels:       monitorLabels(resource),
-		LastSeenUnix: monitorLastSeenUnix(resource.LastSeen),
-		Identity:     monitorIdentity(resource, name),
-		PlatformData: monitorPlatformData(resource, resourceType, platformID),
+		ID:                    resource.ID,
+		Type:                  resourceType,
+		Technology:            resource.Technology,
+		Name:                  name,
+		DisplayName:           displayName,
+		PlatformID:            platformID,
+		PlatformType:          monitorPlatformType(resource, resourceType),
+		SourceType:            monitorSourceType(resource.Sources),
+		ParentID:              monitorStringValue(resource.ParentID),
+		ClusterID:             monitorClusterID(resource),
+		Status:                monitorFrontendStatus(resource, resourceType),
+		CPU:                   monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU })),
+		Memory:                monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
+		Disk:                  monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk })),
+		Temperature:           monitorTemperature(resource),
+		Uptime:                monitorUptime(resource),
+		Tags:                  append([]string(nil), resource.Tags...),
+		Labels:                monitorLabels(resource),
+		LastSeenUnix:          monitorLastSeenUnix(resource.LastSeen),
+		IncidentCount:         resource.IncidentCount,
+		IncidentCode:          resource.IncidentCode,
+		IncidentSeverity:      string(resource.IncidentSeverity),
+		IncidentSummary:       resource.IncidentSummary,
+		IncidentCategory:      resource.IncidentCategory,
+		IncidentLabel:         resource.IncidentLabel,
+		IncidentPriority:      resource.IncidentPriority,
+		IncidentImpactSummary: resource.IncidentImpactSummary,
+		IncidentUrgency:       resource.IncidentUrgency,
+		IncidentAction:        resource.IncidentAction,
+		Identity:              monitorIdentity(resource, name),
+		DiscoveryTarget:       monitorRawJSON(resource.DiscoveryTarget),
+		MetricsTarget:         monitorRawJSON(resource.MetricsTarget),
+		Canonical:             monitorRawJSON(resource.Canonical),
+		Policy:                monitorRawJSON(resource.Policy),
+		AISafeSummary:         resource.AISafeSummary,
+		Capabilities:          monitorRawJSON(resource.Capabilities),
+		Relationships:         monitorRawJSON(resource.Relationships),
+		RecentChanges:         monitorRawJSON(resource.RecentChanges),
+		FacetCounts:           monitorRawJSON(resource.FacetCounts),
+		Incidents:             monitorRawJSON(resource.Incidents),
+		Proxmox:               monitorRawJSON(resource.Proxmox),
+		Storage:               monitorRawJSON(resource.Storage),
+		Agent:                 monitorRawJSON(resource.Agent),
+		Docker:                monitorRawJSON(resource.Docker),
+		PBS:                   monitorRawJSON(resource.PBS),
+		PMG:                   monitorRawJSON(resource.PMG),
+		Kubernetes:            monitorRawJSON(resource.Kubernetes),
+		PhysicalDisk:          monitorRawJSON(resource.PhysicalDisk),
+		Ceph:                  monitorRawJSON(resource.Ceph),
+		TrueNAS:               monitorRawJSON(resource.TrueNAS),
+		VMware:                monitorRawJSON(resource.VMware),
+		Availability:          monitorRawJSON(resource.Availability),
+		PlatformData:          monitorPlatformData(resource, resourceType, platformID),
 	}
 
 	hasNetwork, rx, tx := monitorNetworkMetricInput(resource.Metrics)
@@ -4924,6 +4963,97 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 	input.NetworkTX = tx
 
 	return input
+}
+
+func monitorRawJSON(value interface{}) json.RawMessage {
+	if value == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil || string(encoded) == "null" {
+		return nil
+	}
+	return encoded
+}
+
+func monitorDiscoveryTarget(resource unifiedresources.Resource, resourceType string) *unifiedresources.DiscoveryTarget {
+	switch resourceType {
+	case "agent", "docker-host":
+		agentID := monitorAgentTargetID(resource)
+		if agentID == "" {
+			return nil
+		}
+		return &unifiedresources.DiscoveryTarget{
+			ResourceType: string(unifiedresources.ResourceTypeAgent),
+			AgentID:      agentID,
+			ResourceID:   agentID,
+			Hostname:     monitorTargetHostname(resource),
+		}
+	default:
+		return nil
+	}
+}
+
+func monitorMetricsTarget(resource unifiedresources.Resource, resourceType string) *unifiedresources.MetricsTarget {
+	switch resourceType {
+	case "agent", "docker-host":
+		agentID := monitorAgentTargetID(resource)
+		if agentID == "" {
+			return nil
+		}
+		return &unifiedresources.MetricsTarget{
+			ResourceType: string(unifiedresources.ResourceTypeAgent),
+			ResourceID:   agentID,
+		}
+	default:
+		return nil
+	}
+}
+
+func monitorAgentTargetID(resource unifiedresources.Resource) string {
+	if resource.Agent != nil {
+		if id := strings.TrimSpace(resource.Agent.AgentID); id != "" {
+			return id
+		}
+	}
+	if resource.Docker != nil {
+		if id := strings.TrimSpace(resource.Docker.AgentID); id != "" {
+			return id
+		}
+		if id := strings.TrimSpace(resource.Docker.HostSourceID); id != "" {
+			return id
+		}
+	}
+	if resource.Kubernetes != nil {
+		if id := strings.TrimSpace(resource.Kubernetes.AgentID); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
+func monitorTargetHostname(resource unifiedresources.Resource) string {
+	if resource.Agent != nil {
+		if hostname := strings.TrimSpace(resource.Agent.Hostname); hostname != "" {
+			return hostname
+		}
+	}
+	if resource.Docker != nil {
+		if hostname := strings.TrimSpace(resource.Docker.Hostname); hostname != "" {
+			return hostname
+		}
+	}
+	if resource.PBS != nil {
+		if hostname := strings.TrimSpace(resource.PBS.Hostname); hostname != "" {
+			return hostname
+		}
+	}
+	if resource.PMG != nil {
+		if hostname := strings.TrimSpace(resource.PMG.Hostname); hostname != "" {
+			return hostname
+		}
+	}
+	return strings.TrimSpace(resource.Name)
 }
 
 func monitorFrontendResourceType(resource unifiedresources.Resource) string {

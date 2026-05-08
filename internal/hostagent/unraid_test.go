@@ -60,6 +60,54 @@ rdevStatus.2=DISK_DSBL
 	}
 }
 
+func TestParseUnraidStatusOutputSkipsEmptyNoPresentSlots(t *testing.T) {
+	output := `
+mdState=STARTED
+mdNumDisabled=2
+mdNumInvalid=2
+mdNumMissing=0
+diskNumber.0=0
+diskName.0=
+diskSize.0=0
+diskId.0=
+rdevStatus.0=DISK_NP_DSBL
+rdevName.0=
+rdevId.0=
+diskNumber.1=1
+diskName.1=md1p1
+diskSize.1=5860522532
+diskId.1=WDC_DATA
+rdevStatus.1=DISK_OK
+rdevName.1=sde
+rdevId.1=WDC_DATA
+diskNumber.5=5
+diskName.5=
+diskSize.5=0
+diskId.5=
+rdevStatus.5=DISK_NP
+rdevName.5=
+rdevId.5=
+diskNumber.29=29
+diskName.29=
+diskSize.29=0
+diskId.29=
+rdevStatus.29=DISK_NP_DSBL
+rdevName.29=
+rdevId.29=
+`
+
+	storage, err := parseUnraidStatusOutput(output)
+	if err != nil {
+		t.Fatalf("parseUnraidStatusOutput() error = %v", err)
+	}
+	if len(storage.Disks) != 1 {
+		t.Fatalf("disk count = %d, want only assigned disks: %+v", len(storage.Disks), storage.Disks)
+	}
+	if got := storage.Disks[0]; got.Name != "md1p1" || got.Status != "online" || got.Serial != "WDC_DATA" {
+		t.Fatalf("unexpected assigned disk: %+v", got)
+	}
+}
+
 func TestCollectUnraidStorageSkipsNonUnraid(t *testing.T) {
 	t.Parallel()
 

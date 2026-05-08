@@ -184,6 +184,12 @@ regression protection.
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather
    than replacing the old callback with persistence-backed router probes.
+   Infrastructure host-table health explanations follow the same hot-path
+   rule. `UnifiedResourceHostTableCard.tsx` may render compact issue labels
+   from the already-materialized resource incident and storage-risk fields, but
+   it must not introduce per-row API reads, broad resource scans, storage
+   topology recomputation, or layout-measuring work just to explain warning or
+   degraded rows.
 5. Extend workload hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Workloads/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
    The retired dashboard overview route must not return as a hot-path
    orientation shortcut. First-viewport system count, health, source coverage,

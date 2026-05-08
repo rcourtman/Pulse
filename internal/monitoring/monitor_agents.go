@@ -1795,6 +1795,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			if status == "" {
 				status = normalizeLegacyUnraidDiskStatus(rawStatus, device)
 			}
+			if isLegacyUnraidEmptySlot(disk, status) {
+				continue
+			}
 			disks = append(disks, models.HostUnraidDisk{
 				Name:       strings.TrimSpace(disk.Name),
 				Device:     device,
@@ -2141,6 +2144,23 @@ func normalizeLegacyUnraidDiskStatus(rawStatus, device string) string {
 	default:
 		return strings.ToLower(status)
 	}
+}
+
+func isLegacyUnraidEmptySlot(disk agentshost.UnraidDisk, normalizedStatus string) bool {
+	rawStatus := strings.ToUpper(strings.TrimSpace(disk.RawStatus))
+	status := strings.ToLower(strings.TrimSpace(normalizedStatus))
+	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
+		return false
+	}
+	name := strings.ToLower(strings.TrimSpace(disk.Name))
+	role := strings.ToLower(strings.TrimSpace(disk.Role))
+	if name != "" && role != "parity" && !strings.HasPrefix(name, "parity") {
+		return false
+	}
+	return strings.TrimSpace(disk.Device) == "" &&
+		strings.TrimSpace(disk.Serial) == "" &&
+		strings.TrimSpace(disk.Filesystem) == "" &&
+		disk.SizeBytes == 0
 }
 
 func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO) string {

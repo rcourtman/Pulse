@@ -203,6 +203,9 @@ func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
 	parityConfigured := false
 	parityHealthy := false
 	for _, disk := range storage.Disks {
+		if isUnraidEmptySlot(disk) {
+			continue
+		}
 		role := strings.ToLower(strings.TrimSpace(disk.Role))
 		status := strings.ToLower(strings.TrimSpace(disk.Status))
 		if role != "parity" {
@@ -240,6 +243,9 @@ func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
 func unraidDiskStateCounts(storage models.HostUnraidStorage) (disabled, invalid, missing int) {
 	hasStructuredStatus := false
 	for _, disk := range storage.Disks {
+		if isUnraidEmptySlot(disk) {
+			continue
+		}
 		status := strings.ToLower(strings.TrimSpace(disk.Status))
 		if status == "" {
 			continue
@@ -258,6 +264,23 @@ func unraidDiskStateCounts(storage models.HostUnraidStorage) (disabled, invalid,
 		return disabled, invalid, missing
 	}
 	return storage.NumDisabled, storage.NumInvalid, storage.NumMissing
+}
+
+func isUnraidEmptySlot(disk models.HostUnraidDisk) bool {
+	rawStatus := strings.ToUpper(strings.TrimSpace(disk.RawStatus))
+	status := strings.ToLower(strings.TrimSpace(disk.Status))
+	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
+		return false
+	}
+	name := strings.ToLower(strings.TrimSpace(disk.Name))
+	role := strings.ToLower(strings.TrimSpace(disk.Role))
+	if name != "" && role != "parity" && !strings.HasPrefix(name, "parity") {
+		return false
+	}
+	return strings.TrimSpace(disk.Device) == "" &&
+		strings.TrimSpace(disk.Serial) == "" &&
+		strings.TrimSpace(disk.Filesystem) == "" &&
+		disk.SizeBytes == 0
 }
 
 func AssessPBSDatastore(datastore models.PBSDatastore) Assessment {

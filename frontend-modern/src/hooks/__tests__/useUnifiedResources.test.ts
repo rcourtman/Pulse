@@ -221,6 +221,35 @@ describe('useUnifiedResources', () => {
           [
             createWsResource({
               cpu: { current: 42 },
+              status: 'degraded',
+              incidentSummary: 'Unraid array is running without parity protection',
+              canonicalIdentity: {
+                primaryId: 'agent:host-1',
+                hostname: 'pve1',
+              },
+              metricsTarget: {
+                resourceType: 'agent',
+                resourceId: 'host-1',
+              },
+              agent: {
+                storagePostureSummary: 'Unraid array is running without parity protection',
+                rebuildSummary: 'Unraid array is running check',
+                unraid: {
+                  risk: {
+                    level: 'warning',
+                    reasons: [
+                      {
+                        code: 'unraid_no_parity',
+                        severity: 'warning',
+                        summary: 'Unraid array is running without parity protection',
+                      },
+                    ],
+                  },
+                },
+              },
+              storage: {
+                postureSummary: 'Unraid array is running without parity protection',
+              },
             }),
           ],
           { key: 'id' },
@@ -241,6 +270,23 @@ describe('useUnifiedResources', () => {
     expect(result!.resources()[0].facetCounts).toEqual({
       recentChanges: 1,
     });
+    expect(result!.resources()[0].canonicalIdentity?.primaryId).toBe('agent:host-1');
+    expect(result!.resources()[0].metricsTarget).toEqual({
+      resourceType: 'agent',
+      resourceId: 'host-1',
+    });
+    expect(result!.resources()[0].incidentSummary).toBe(
+      'Unraid array is running without parity protection',
+    );
+    expect(result!.resources()[0].agent?.storagePostureSummary).toBe(
+      'Unraid array is running without parity protection',
+    );
+    expect(result!.resources()[0].agent?.unraid?.risk?.reasons?.[0]?.code).toBe(
+      'unraid_no_parity',
+    );
+    expect(result!.resources()[0].storage?.postureSummary).toBe(
+      'Unraid array is running without parity protection',
+    );
 
     dispose();
   });

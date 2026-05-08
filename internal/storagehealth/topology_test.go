@@ -227,6 +227,37 @@ func TestAssessUnraidStorageSyncInProgress(t *testing.T) {
 	}
 }
 
+func TestAssessUnraidStorageTreatsEmptyNoPresentSlotsAsUnprotected(t *testing.T) {
+	assessment := AssessUnraidStorage(models.HostUnraidStorage{
+		ArrayStarted: true,
+		NumDisabled:  2,
+		NumInvalid:   2,
+		NumMissing:   0,
+		Disks: []models.HostUnraidDisk{
+			{Name: "parity", Role: "parity", Status: "missing", RawStatus: "DISK_NP_DSBL"},
+			{Name: "md1p1", Device: "/dev/sde", Status: "online", RawStatus: "DISK_OK", SizeBytes: 5860522532},
+			{Status: "missing", RawStatus: "DISK_NP", Slot: 5},
+			{Status: "missing", RawStatus: "DISK_NP_DSBL", Slot: 29},
+		},
+	})
+
+	if assessment.Level != RiskWarning {
+		t.Fatalf("Level = %q, want %q; reasons %+v", assessment.Level, RiskWarning, assessment.Reasons)
+	}
+	foundNoParity := false
+	for _, reason := range assessment.Reasons {
+		switch reason.Code {
+		case "unraid_no_parity":
+			foundNoParity = true
+		case "unraid_missing_disks", "unraid_parity_unavailable", "unraid_disabled_disks", "unraid_invalid_disks":
+			t.Fatalf("unexpected failure reason for empty no-present slots: %+v", assessment.Reasons)
+		}
+	}
+	if !foundNoParity {
+		t.Fatalf("expected no-parity reason, got %+v", assessment.Reasons)
+	}
+}
+
 func TestAssessUnraidStorageUsesDiskStatusesOverAggregateCounters(t *testing.T) {
 	assessment := AssessUnraidStorage(models.HostUnraidStorage{
 		ArrayStarted: true,

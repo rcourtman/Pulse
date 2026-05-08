@@ -855,6 +855,62 @@ func TestApplyHostReportNormalizesLegacyUnraidRawStatuses(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportFiltersLegacyUnraidEmptySlots(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-tower-empty-slots",
+			Version:         "5.1.27",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-tower-empty-slots",
+			Hostname:  "tower",
+			MachineID: "machine-tower-empty-slots",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Unraid: &agentshost.UnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			NumDisabled:  2,
+			NumInvalid:   2,
+			Disks: []agentshost.UnraidDisk{
+				{Name: "parity", Role: "parity", RawStatus: "DISK_NP_DSBL"},
+				{Name: "md1p1", Device: "/dev/sde", RawStatus: "DISK_OK", SizeBytes: 5860522532},
+				{RawStatus: "DISK_NP", Slot: 5},
+				{RawStatus: "DISK_NP_DSBL", Slot: 29},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if host.Unraid == nil {
+		t.Fatal("expected unraid topology on host")
+	}
+	if len(host.Unraid.Disks) != 1 {
+		t.Fatalf("unraid disk count = %d, want only assigned disks: %+v", len(host.Unraid.Disks), host.Unraid.Disks)
+	}
+	if got := host.Unraid.Disks[0]; got.Device != "/dev/sde" || got.Status != "online" {
+		t.Fatalf("unexpected assigned disk: %+v", got)
+	}
+}
+
 func TestApplyHostReportFiltersVendorManagedSystemRAIDArrays(t *testing.T) {
 	t.Helper()
 

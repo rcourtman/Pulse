@@ -254,6 +254,42 @@ func TestBuildReport(t *testing.T) {
 		mc.unraidStorageFn = nil
 	})
 
+	t.Run("Unraid parser skips empty no-present slots", func(t *testing.T) {
+		storage, err := parseUnraidStatusOutput(`
+mdState=STARTED
+diskNumber.0=0
+diskName.0=
+diskSize.0=0
+rdevStatus.0=DISK_NP_DSBL
+rdevName.0=
+diskId.0=
+rdevId.0=
+diskNumber.1=1
+diskName.1=md1p1
+diskSize.1=5860522532
+rdevStatus.1=DISK_OK
+rdevName.1=sde
+diskId.1=WDC_DATA
+rdevId.1=WDC_DATA
+diskNumber.29=29
+diskName.29=
+diskSize.29=0
+rdevStatus.29=DISK_NP
+rdevName.29=
+diskId.29=
+rdevId.29=
+`)
+		if err != nil {
+			t.Fatalf("parseUnraidStatusOutput() error = %v", err)
+		}
+		if len(storage.Disks) != 1 {
+			t.Fatalf("disk count = %d, want assigned slots only: %+v", len(storage.Disks), storage.Disks)
+		}
+		if got := storage.Disks[0]; got.Device != "/dev/sde" || got.Serial != "WDC_DATA" {
+			t.Fatalf("assigned disk = %+v, want device /dev/sde with serial fallback", got)
+		}
+	})
+
 	// Test case 6: SMART collection
 	t.Run("SMART collection", func(t *testing.T) {
 		mc.smartLocalFn = func(_ context.Context, _ []string) ([]DiskSMART, error) {

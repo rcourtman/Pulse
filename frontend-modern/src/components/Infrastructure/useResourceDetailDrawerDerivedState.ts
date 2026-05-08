@@ -64,6 +64,7 @@ import {
   buildVMwareDetailsSummary,
   buildVMwareDetailSections,
 } from './resourceDetailDrawerVmwareModel';
+import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
 type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
@@ -90,6 +91,7 @@ export const useResourceDetailDrawerDerivedState = (
   const resolveResourceLabel = (resourceId: string): string =>
     resolveResourceLabelInput?.(resourceId)?.trim() || resourceId;
   const statusIndicator = createMemo(() => getAgentStatusIndicator({ status: resource.status }));
+  const healthIssue = createMemo(() => getResourceHealthIssuePresentation(resource));
   const lastSeen = createMemo(() => formatRelativeTime(resource.lastSeen));
   const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(resource.lastSeen));
 
@@ -322,6 +324,7 @@ export const useResourceDetailDrawerDerivedState = (
     kubernetesClusterName,
     resolveResourceLabel,
     statusIndicator,
+    healthIssue,
     lastSeen,
     lastSeenAbsolute,
     platformBadge,

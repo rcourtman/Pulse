@@ -350,4 +350,47 @@ describe('resourceStateAdapters nodeFromResource', () => {
     });
     expect(merged.clusterId).toBe('Core Fabric');
   });
+
+  it('preserves canonical health context from realtime resources', () => {
+    const [agent] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'agent:tower',
+          type: 'agent',
+          name: 'Tower',
+          displayName: 'Tower',
+          platformId: 'agent-1',
+          platformType: 'agent',
+          sourceType: 'agent',
+          status: 'degraded',
+          lastSeen: Date.now(),
+          incidentSummary: 'Unraid array is running without parity protection',
+          agent: {
+            osName: 'Unraid',
+            storagePostureSummary: 'Unraid array is running without parity protection',
+            unraid: {
+              postureSummary: 'Unraid array is running without parity protection',
+              risk: {
+                level: 'warning',
+                reasons: [
+                  {
+                    code: 'unraid_no_parity',
+                    severity: 'warning',
+                    summary: 'Unraid array is running without parity protection',
+                  },
+                ],
+              },
+            },
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(agent.incidentSummary).toBe('Unraid array is running without parity protection');
+    expect(agent.agent?.storagePostureSummary).toBe(
+      'Unraid array is running without parity protection',
+    );
+    expect(agent.agent?.unraid?.risk?.reasons?.[0]?.code).toBe('unraid_no_parity');
+  });
 });

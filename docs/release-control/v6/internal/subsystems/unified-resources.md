@@ -186,6 +186,14 @@ cross-source deduplication.
    the shared `Table` wrapper rather than drawer-local scroll divs. This
    includes both current resource drawers and legacy PMG resource panels that
    still consume unified-resource PMG state.
+   Realtime resource payloads are part of the same consumer contract as REST:
+   websocket broadcasts must carry canonical identity, discovery targets,
+   metrics targets, incident rollups, facet counts, and source-specific raw
+   facets such as `agent`, `storage`, `docker`, and provider API facets. Host
+   rows and drawers may present compact issue labels such as Unraid
+   no-parity posture, but those labels must derive from canonical incident or
+   storage-risk summaries already present on the resource rather than local
+   platform heuristics or generic status-only wording.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor

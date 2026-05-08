@@ -146,6 +146,31 @@ func TestStateBroadcastTreatsTypedNilHubAsAbsent(t *testing.T) {
 	}
 }
 
+func TestBroadcastResourceProjectionPreservesCanonicalHealthContext(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"if resource.DiscoveryTarget == nil {",
+		"if resource.MetricsTarget == nil {",
+		"unifiedresources.RefreshCanonicalMetadata(&resource)",
+		"IncidentSummary:       resource.IncidentSummary",
+		"Canonical:             monitorRawJSON(resource.Canonical)",
+		"DiscoveryTarget:       monitorRawJSON(resource.DiscoveryTarget)",
+		"MetricsTarget:         monitorRawJSON(resource.MetricsTarget)",
+		"Storage:               monitorRawJSON(resource.Storage)",
+		"Agent:                 monitorRawJSON(resource.Agent)",
+		"Incidents:             monitorRawJSON(resource.Incidents)",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

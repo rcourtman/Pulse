@@ -203,6 +203,13 @@ bypass the API fail-closed execution gate.
    for healthy resources. Dependency impact belongs to impact summaries and
    detail context, while `Primary Issue` must derive from explicit incidents,
    storage risk summaries, or storage-risk reasons.
+   Unraid storage posture follows that same rule even when it reaches
+   infrastructure through the agent facet instead of the dedicated Storage
+   page: no-parity, parity-unavailable, disabled/missing disk, and sync/check
+   explanations must come from canonical `storage` or `agent.unraid`
+   storage-risk fields. Storage/recovery-adjacent consumers may render those
+   summaries, but they must not infer Unraid array health from generic
+   frontend status labels or from empty no-present slots.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity
