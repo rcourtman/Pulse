@@ -68,19 +68,20 @@ type UnifiedFindingLifecycleEvent struct {
 // UnifiedFinding represents a unified finding that can originate from
 // threshold alerts, AI analysis, or other detection methods
 type UnifiedFinding struct {
-	ID             string          `json:"id"`
-	Source         FindingSource   `json:"source"`
-	Severity       UnifiedSeverity `json:"severity"`
-	Category       UnifiedCategory `json:"category"`
-	ResourceID     string          `json:"resource_id"`
-	ResourceName   string          `json:"resource_name"`
-	ResourceType   string          `json:"resource_type"`
-	Node           string          `json:"node,omitempty"`
-	Title          string          `json:"title"`
-	Description    string          `json:"description"`
-	Impact         string          `json:"impact,omitempty"` // Operator-facing consequence-if-ignored statement
-	Recommendation string          `json:"recommendation,omitempty"`
-	Evidence       string          `json:"evidence,omitempty"`
+	ID                         string          `json:"id"`
+	Source                     FindingSource   `json:"source"`
+	Severity                   UnifiedSeverity `json:"severity"`
+	Category                   UnifiedCategory `json:"category"`
+	ResourceID                 string          `json:"resource_id"`
+	ResourceName               string          `json:"resource_name"`
+	ResourceType               string          `json:"resource_type"`
+	Node                       string          `json:"node,omitempty"`
+	Title                      string          `json:"title"`
+	Description                string          `json:"description"`
+	Impact                     string          `json:"impact,omitempty"` // Operator-facing consequence-if-ignored statement
+	PreviousResolvedFixSummary string          `json:"previous_resolved_fix_summary,omitempty"`
+	Recommendation             string          `json:"recommendation,omitempty"`
+	Evidence                   string          `json:"evidence,omitempty"`
 
 	// Threshold-specific fields (when Source == "threshold")
 	AlertIdentifier string  `json:"-"`
@@ -125,99 +126,101 @@ type UnifiedFinding struct {
 }
 
 type unifiedFindingJSON struct {
-	ID                     string                           `json:"id"`
-	Source                 FindingSource                    `json:"source"`
-	Severity               UnifiedSeverity                  `json:"severity"`
-	Category               UnifiedCategory                  `json:"category"`
-	ResourceID             string                           `json:"resource_id"`
-	ResourceName           string                           `json:"resource_name"`
-	ResourceType           string                           `json:"resource_type"`
-	Node                   string                           `json:"node,omitempty"`
-	Title                  string                           `json:"title"`
-	Description            string                           `json:"description"`
-	Impact                 string                           `json:"impact,omitempty"`
-	Recommendation         string                           `json:"recommendation,omitempty"`
-	Evidence               string                           `json:"evidence,omitempty"`
-	AlertIdentifier        string                           `json:"alert_identifier,omitempty"`
-	AlertType              string                           `json:"alert_type,omitempty"`
-	Value                  float64                          `json:"value,omitempty"`
-	Threshold              float64                          `json:"threshold,omitempty"`
-	IsThreshold            bool                             `json:"is_threshold"`
-	AIContext              string                           `json:"ai_context,omitempty"`
-	RootCauseID            string                           `json:"root_cause_id,omitempty"`
-	CorrelatedIDs          []string                         `json:"correlated_ids,omitempty"`
-	RemediationID          string                           `json:"remediation_id,omitempty"`
-	AIConfidence           float64                          `json:"ai_confidence,omitempty"`
-	EnhancedByAI           bool                             `json:"enhanced_by_ai"`
-	AIEnhancedAt           *time.Time                       `json:"ai_enhanced_at,omitempty"`
-	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string                           `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string                           `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time                       `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int                              `json:"investigation_attempts,omitempty"`
-	InvestigationRecord    *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`
-	LoopState              string                           `json:"loop_state,omitempty"`
-	Lifecycle              []UnifiedFindingLifecycleEvent   `json:"lifecycle,omitempty"`
-	RegressionCount        int                              `json:"regression_count,omitempty"`
-	LastRegressionAt       *time.Time                       `json:"last_regression_at,omitempty"`
-	DetectedAt             time.Time                        `json:"detected_at"`
-	LastSeenAt             time.Time                        `json:"last_seen_at"`
-	ResolvedAt             *time.Time                       `json:"resolved_at,omitempty"`
-	AcknowledgedAt         *time.Time                       `json:"acknowledged_at,omitempty"`
-	SnoozedUntil           *time.Time                       `json:"snoozed_until,omitempty"`
-	DismissedReason        string                           `json:"dismissed_reason,omitempty"`
-	UserNote               string                           `json:"user_note,omitempty"`
-	Suppressed             bool                             `json:"suppressed"`
-	TimesRaised            int                              `json:"times_raised"`
+	ID                         string                           `json:"id"`
+	Source                     FindingSource                    `json:"source"`
+	Severity                   UnifiedSeverity                  `json:"severity"`
+	Category                   UnifiedCategory                  `json:"category"`
+	ResourceID                 string                           `json:"resource_id"`
+	ResourceName               string                           `json:"resource_name"`
+	ResourceType               string                           `json:"resource_type"`
+	Node                       string                           `json:"node,omitempty"`
+	Title                      string                           `json:"title"`
+	Description                string                           `json:"description"`
+	Impact                     string                           `json:"impact,omitempty"`
+	PreviousResolvedFixSummary string                           `json:"previous_resolved_fix_summary,omitempty"`
+	Recommendation             string                           `json:"recommendation,omitempty"`
+	Evidence                   string                           `json:"evidence,omitempty"`
+	AlertIdentifier            string                           `json:"alert_identifier,omitempty"`
+	AlertType                  string                           `json:"alert_type,omitempty"`
+	Value                      float64                          `json:"value,omitempty"`
+	Threshold                  float64                          `json:"threshold,omitempty"`
+	IsThreshold                bool                             `json:"is_threshold"`
+	AIContext                  string                           `json:"ai_context,omitempty"`
+	RootCauseID                string                           `json:"root_cause_id,omitempty"`
+	CorrelatedIDs              []string                         `json:"correlated_ids,omitempty"`
+	RemediationID              string                           `json:"remediation_id,omitempty"`
+	AIConfidence               float64                          `json:"ai_confidence,omitempty"`
+	EnhancedByAI               bool                             `json:"enhanced_by_ai"`
+	AIEnhancedAt               *time.Time                       `json:"ai_enhanced_at,omitempty"`
+	InvestigationSessionID     string                           `json:"investigation_session_id,omitempty"`
+	InvestigationStatus        string                           `json:"investigation_status,omitempty"`
+	InvestigationOutcome       string                           `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt         *time.Time                       `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts      int                              `json:"investigation_attempts,omitempty"`
+	InvestigationRecord        *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`
+	LoopState                  string                           `json:"loop_state,omitempty"`
+	Lifecycle                  []UnifiedFindingLifecycleEvent   `json:"lifecycle,omitempty"`
+	RegressionCount            int                              `json:"regression_count,omitempty"`
+	LastRegressionAt           *time.Time                       `json:"last_regression_at,omitempty"`
+	DetectedAt                 time.Time                        `json:"detected_at"`
+	LastSeenAt                 time.Time                        `json:"last_seen_at"`
+	ResolvedAt                 *time.Time                       `json:"resolved_at,omitempty"`
+	AcknowledgedAt             *time.Time                       `json:"acknowledged_at,omitempty"`
+	SnoozedUntil               *time.Time                       `json:"snoozed_until,omitempty"`
+	DismissedReason            string                           `json:"dismissed_reason,omitempty"`
+	UserNote                   string                           `json:"user_note,omitempty"`
+	Suppressed                 bool                             `json:"suppressed"`
+	TimesRaised                int                              `json:"times_raised"`
 }
 
 func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
 	alertIdentifier := strings.TrimSpace(f.AlertIdentifier)
 	return json.Marshal(unifiedFindingJSON{
-		ID:                     f.ID,
-		Source:                 f.Source,
-		Severity:               f.Severity,
-		Category:               f.Category,
-		ResourceID:             f.ResourceID,
-		ResourceName:           f.ResourceName,
-		ResourceType:           f.ResourceType,
-		Node:                   f.Node,
-		Title:                  f.Title,
-		Description:            f.Description,
-		Impact:                 f.Impact,
-		Recommendation:         f.Recommendation,
-		Evidence:               f.Evidence,
-		AlertIdentifier:        alertIdentifier,
-		AlertType:              f.AlertType,
-		Value:                  f.Value,
-		Threshold:              f.Threshold,
-		IsThreshold:            f.IsThreshold,
-		AIContext:              f.AIContext,
-		RootCauseID:            f.RootCauseID,
-		CorrelatedIDs:          f.CorrelatedIDs,
-		RemediationID:          f.RemediationID,
-		AIConfidence:           f.AIConfidence,
-		EnhancedByAI:           f.EnhancedByAI,
-		AIEnhancedAt:           f.AIEnhancedAt,
-		InvestigationSessionID: f.InvestigationSessionID,
-		InvestigationStatus:    f.InvestigationStatus,
-		InvestigationOutcome:   f.InvestigationOutcome,
-		LastInvestigatedAt:     f.LastInvestigatedAt,
-		InvestigationAttempts:  f.InvestigationAttempts,
-		InvestigationRecord:    f.InvestigationRecord,
-		LoopState:              f.LoopState,
-		Lifecycle:              f.Lifecycle,
-		RegressionCount:        f.RegressionCount,
-		LastRegressionAt:       f.LastRegressionAt,
-		DetectedAt:             f.DetectedAt,
-		LastSeenAt:             f.LastSeenAt,
-		ResolvedAt:             f.ResolvedAt,
-		AcknowledgedAt:         f.AcknowledgedAt,
-		SnoozedUntil:           f.SnoozedUntil,
-		DismissedReason:        f.DismissedReason,
-		UserNote:               f.UserNote,
-		Suppressed:             f.Suppressed,
-		TimesRaised:            f.TimesRaised,
+		ID:                         f.ID,
+		Source:                     f.Source,
+		Severity:                   f.Severity,
+		Category:                   f.Category,
+		ResourceID:                 f.ResourceID,
+		ResourceName:               f.ResourceName,
+		ResourceType:               f.ResourceType,
+		Node:                       f.Node,
+		Title:                      f.Title,
+		Description:                f.Description,
+		Impact:                     f.Impact,
+		PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
+		Recommendation:             f.Recommendation,
+		Evidence:                   f.Evidence,
+		AlertIdentifier:            alertIdentifier,
+		AlertType:                  f.AlertType,
+		Value:                      f.Value,
+		Threshold:                  f.Threshold,
+		IsThreshold:                f.IsThreshold,
+		AIContext:                  f.AIContext,
+		RootCauseID:                f.RootCauseID,
+		CorrelatedIDs:              f.CorrelatedIDs,
+		RemediationID:              f.RemediationID,
+		AIConfidence:               f.AIConfidence,
+		EnhancedByAI:               f.EnhancedByAI,
+		AIEnhancedAt:               f.AIEnhancedAt,
+		InvestigationSessionID:     f.InvestigationSessionID,
+		InvestigationStatus:        f.InvestigationStatus,
+		InvestigationOutcome:       f.InvestigationOutcome,
+		LastInvestigatedAt:         f.LastInvestigatedAt,
+		InvestigationAttempts:      f.InvestigationAttempts,
+		InvestigationRecord:        f.InvestigationRecord,
+		LoopState:                  f.LoopState,
+		Lifecycle:                  f.Lifecycle,
+		RegressionCount:            f.RegressionCount,
+		LastRegressionAt:           f.LastRegressionAt,
+		DetectedAt:                 f.DetectedAt,
+		LastSeenAt:                 f.LastSeenAt,
+		ResolvedAt:                 f.ResolvedAt,
+		AcknowledgedAt:             f.AcknowledgedAt,
+		SnoozedUntil:               f.SnoozedUntil,
+		DismissedReason:            f.DismissedReason,
+		UserNote:                   f.UserNote,
+		Suppressed:                 f.Suppressed,
+		TimesRaised:                f.TimesRaised,
 	})
 }
 
@@ -228,50 +231,51 @@ func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
 	}
 
 	*f = UnifiedFinding{
-		ID:                     payload.ID,
-		Source:                 payload.Source,
-		Severity:               payload.Severity,
-		Category:               payload.Category,
-		ResourceID:             payload.ResourceID,
-		ResourceName:           payload.ResourceName,
-		ResourceType:           payload.ResourceType,
-		Node:                   payload.Node,
-		Title:                  payload.Title,
-		Description:            payload.Description,
-		Impact:                 payload.Impact,
-		Recommendation:         payload.Recommendation,
-		Evidence:               payload.Evidence,
-		AlertIdentifier:        strings.TrimSpace(payload.AlertIdentifier),
-		AlertType:              payload.AlertType,
-		Value:                  payload.Value,
-		Threshold:              payload.Threshold,
-		IsThreshold:            payload.IsThreshold,
-		AIContext:              payload.AIContext,
-		RootCauseID:            payload.RootCauseID,
-		CorrelatedIDs:          payload.CorrelatedIDs,
-		RemediationID:          payload.RemediationID,
-		AIConfidence:           payload.AIConfidence,
-		EnhancedByAI:           payload.EnhancedByAI,
-		AIEnhancedAt:           payload.AIEnhancedAt,
-		InvestigationSessionID: payload.InvestigationSessionID,
-		InvestigationStatus:    payload.InvestigationStatus,
-		InvestigationOutcome:   payload.InvestigationOutcome,
-		LastInvestigatedAt:     payload.LastInvestigatedAt,
-		InvestigationAttempts:  payload.InvestigationAttempts,
-		InvestigationRecord:    payload.InvestigationRecord,
-		LoopState:              payload.LoopState,
-		Lifecycle:              payload.Lifecycle,
-		RegressionCount:        payload.RegressionCount,
-		LastRegressionAt:       payload.LastRegressionAt,
-		DetectedAt:             payload.DetectedAt,
-		LastSeenAt:             payload.LastSeenAt,
-		ResolvedAt:             payload.ResolvedAt,
-		AcknowledgedAt:         payload.AcknowledgedAt,
-		SnoozedUntil:           payload.SnoozedUntil,
-		DismissedReason:        payload.DismissedReason,
-		UserNote:               payload.UserNote,
-		Suppressed:             payload.Suppressed,
-		TimesRaised:            payload.TimesRaised,
+		ID:                         payload.ID,
+		Source:                     payload.Source,
+		Severity:                   payload.Severity,
+		Category:                   payload.Category,
+		ResourceID:                 payload.ResourceID,
+		ResourceName:               payload.ResourceName,
+		ResourceType:               payload.ResourceType,
+		Node:                       payload.Node,
+		Title:                      payload.Title,
+		Description:                payload.Description,
+		Impact:                     payload.Impact,
+		PreviousResolvedFixSummary: payload.PreviousResolvedFixSummary,
+		Recommendation:             payload.Recommendation,
+		Evidence:                   payload.Evidence,
+		AlertIdentifier:            strings.TrimSpace(payload.AlertIdentifier),
+		AlertType:                  payload.AlertType,
+		Value:                      payload.Value,
+		Threshold:                  payload.Threshold,
+		IsThreshold:                payload.IsThreshold,
+		AIContext:                  payload.AIContext,
+		RootCauseID:                payload.RootCauseID,
+		CorrelatedIDs:              payload.CorrelatedIDs,
+		RemediationID:              payload.RemediationID,
+		AIConfidence:               payload.AIConfidence,
+		EnhancedByAI:               payload.EnhancedByAI,
+		AIEnhancedAt:               payload.AIEnhancedAt,
+		InvestigationSessionID:     payload.InvestigationSessionID,
+		InvestigationStatus:        payload.InvestigationStatus,
+		InvestigationOutcome:       payload.InvestigationOutcome,
+		LastInvestigatedAt:         payload.LastInvestigatedAt,
+		InvestigationAttempts:      payload.InvestigationAttempts,
+		InvestigationRecord:        payload.InvestigationRecord,
+		LoopState:                  payload.LoopState,
+		Lifecycle:                  payload.Lifecycle,
+		RegressionCount:            payload.RegressionCount,
+		LastRegressionAt:           payload.LastRegressionAt,
+		DetectedAt:                 payload.DetectedAt,
+		LastSeenAt:                 payload.LastSeenAt,
+		ResolvedAt:                 payload.ResolvedAt,
+		AcknowledgedAt:             payload.AcknowledgedAt,
+		SnoozedUntil:               payload.SnoozedUntil,
+		DismissedReason:            payload.DismissedReason,
+		UserNote:                   payload.UserNote,
+		Suppressed:                 payload.Suppressed,
+		TimesRaised:                payload.TimesRaised,
 	}
 	return nil
 }
@@ -625,6 +629,9 @@ func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool
 		}
 		if finding.Impact != "" {
 			existing.Impact = finding.Impact
+		}
+		if finding.PreviousResolvedFixSummary != "" {
+			existing.PreviousResolvedFixSummary = finding.PreviousResolvedFixSummary
 		}
 		if finding.Evidence != "" {
 			existing.Evidence = finding.Evidence

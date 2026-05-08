@@ -2943,6 +2943,34 @@ func TestContract_FindingJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+// TestContract_UnifiedFindingPreviousResolvedFixSummaryJSONSnapshot pins the
+// canonical JSON shape for the operational-memory field that preserves the
+// prior successful fix summary across regressions. The Finding to
+// UnifiedFinding conversion in the API router must emit this field under
+// the canonical "previous_resolved_fix_summary" key so Assistant context
+// and operator surfaces can reason about "what worked last time."
+func TestContract_UnifiedFindingPreviousResolvedFixSummaryJSONSnapshot(t *testing.T) {
+	finding := unified.UnifiedFinding{
+		ID:                         "uf-regress",
+		Source:                     unified.SourceAIPatrol,
+		Severity:                   unified.SeverityWarning,
+		Category:                   unified.CategoryReliability,
+		ResourceID:                 "vm-100",
+		Title:                      "Service stalled",
+		Description:                "Service stopped responding again",
+		PreviousResolvedFixSummary: "Restart the workload service after backup window clears",
+		DetectedAt:                 time.Date(2026, 5, 8, 12, 0, 0, 0, time.UTC),
+		LastSeenAt:                 time.Date(2026, 5, 8, 12, 5, 0, 0, time.UTC),
+	}
+	got, err := json.Marshal(finding)
+	if err != nil {
+		t.Fatalf("marshal unified finding: %v", err)
+	}
+	if !strings.Contains(string(got), `"previous_resolved_fix_summary":"Restart the workload service after backup window clears"`) {
+		t.Fatalf("expected previous_resolved_fix_summary field in canonical UnifiedFinding payload, got %s", got)
+	}
+}
+
 // TestContract_UnifiedFindingImpactJSONSnapshot pins the canonical JSON shape
 // for UnifiedFinding payloads carrying the operator-facing Impact field. The
 // AI engine populates Finding.Impact at detection time and the Finding to

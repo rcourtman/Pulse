@@ -430,7 +430,11 @@ profile and assignment columns, but embedded table framing must route through
    to operator-facing finding fields like `impact` and `recommendation`
    propagated through that router conversion: lifecycle surfaces may render
    them in finding context but must not treat them as enrollment, installer,
-   or fleet-control authority for the named resource. Assistant chat enrichment from
+   or fleet-control authority for the named resource. The same scope applies
+   to the `previous_resolved_fix_summary` operational-memory field carried on
+   findings across regressions: lifecycle surfaces may render it in finding
+   context but must not replay the recorded fix description as an installer
+   command, enrollment action, or fleet-control instruction. Assistant chat enrichment from
    `finding_id` follows the same rule: lifecycle-owned command execution and
    agent auto-approval policy stay canonical in the agent/runtime owners, not
    in Patrol investigation-record prompt text. Model-only Assistant handoff

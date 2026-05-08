@@ -178,7 +178,11 @@ regression protection.
    fields copied from Finding to UnifiedFinding through that router callback:
    the callback may pass them through as already-materialized strings but must
    not invoke models, persistence walks, or evidence aggregation to derive
-   them on the protected hot path.
+   them on the protected hot path. The `previous_resolved_fix_summary`
+   operational-memory field follows the same constraint: the router callback
+   passes the already-captured string from `FindingsStore.Add` rather than
+   reaching back into investigation history or persistence to re-derive it
+   inside the request setup path.
    Patrol run Assistant handoff wiring in `internal/api/router.go` follows the
    same protected hot-path rule: the shared callback may resolve one requested
    Patrol run ID from the already-owned Patrol service and strip tool traces

@@ -236,6 +236,12 @@ bypass the API fail-closed execution gate.
    `internal/api/router.go` Finding to UnifiedFinding conversion: storage and
    recovery surfaces may render them as adjacent finding context but must not
    reinterpret them as backup, restore, or storage remediation authority.
+   The `previous_resolved_fix_summary` operational-memory field carried on
+   findings across regressions follows the same scope: storage and recovery
+   surfaces may render it as adjacent finding context but must not
+   auto-apply the recorded fix description as a backup, restore, or storage
+   remediation action; replaying a prior fix is the action broker's
+   authority, not the storage/recovery surface's.
    Shared Patrol autonomy routes may also touch broad `internal/api/` wiring,
    but monitor-mode AI configuration and remediation entitlement responses stay
    AI runtime/API-contract owned and must not become recovery-local policy,

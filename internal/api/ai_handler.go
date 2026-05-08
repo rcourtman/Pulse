@@ -1002,6 +1002,12 @@ func buildUnifiedFindingChatContext(f *unified.UnifiedFinding, lookup unifiedFin
 	if f.LastRegressionAt != nil {
 		appendChatContextLine(&b, "Last Regression At", f.LastRegressionAt.Format(time.RFC3339))
 	}
+	// Surface the prior successful fix as operational memory so Assistant
+	// and any AI investigation can reason about what worked previously
+	// instead of treating each regression as a blank-slate diagnosis.
+	if strings.TrimSpace(f.PreviousResolvedFixSummary) != "" {
+		appendChatContextLine(&b, "Previous Resolved Fix", f.PreviousResolvedFixSummary)
+	}
 	appendChatContextLine(&b, "User Note", f.UserNote)
 	if f.AcknowledgedAt != nil {
 		appendChatContextLine(&b, "Finding Acknowledged At", f.AcknowledgedAt.Format(time.RFC3339))

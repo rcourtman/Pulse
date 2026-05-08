@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 func TestFinding_IsActive(t *testing.T) {
@@ -550,6 +552,66 @@ func TestFindingsStore_Add_UpdateExisting(t *testing.T) {
 	}
 	if stored.TimesRaised != 2 {
 		t.Errorf("Expected TimesRaised=2, got %d", stored.TimesRaised)
+	}
+}
+
+// TestFindingsStore_Add_CapturesPreviousResolvedFixOnRegression covers the
+// regression branch: when a finding that had a resolved investigation with a
+// proposed fix is re-detected, the prior fix description must be preserved on
+// PreviousResolvedFixSummary as operational memory before InvestigationRecord
+// is cleared. Without this capture the next investigation cannot reason about
+// what worked last time.
+func TestFindingsStore_Add_CapturesPreviousResolvedFixOnRegression(t *testing.T) {
+	store := NewFindingsStore()
+
+	// Initial detection
+	store.Add(&Finding{
+		ID:          "f-regress",
+		ResourceID:  "vm-100",
+		Severity:    FindingSeverityWarning,
+		Category:    FindingCategoryReliability,
+		Title:       "Service stalled",
+		Description: "Service stopped responding",
+	})
+
+	// Mark the finding as resolved with an investigation record carrying a
+	// proposed fix, mimicking a successful Patrol-then-fix loop. UpdateInvestigationRecord
+	// and ResolveWithReason mutate the canonical stored finding (Get returns a copy).
+	store.UpdateInvestigationRecord("f-regress", &aicontracts.InvestigationRecord{
+		ID:        "investigation-1",
+		FindingID: "f-regress",
+		Status:    aicontracts.InvestigationStatusCompleted,
+		Outcome:   aicontracts.OutcomeFixVerified,
+		ProposedFix: &aicontracts.InvestigationRecordFix{
+			ID:          "fix-1",
+			Description: "Restart the workload service after backup window clears",
+			Commands:    []string{"systemctl restart workload.service"},
+		},
+		Verification: []string{"Service is responsive within 60s"},
+		ToolsUsed:    []string{"ssh.exec"},
+	})
+	store.ResolveWithReason("f-regress", "verified-recovery")
+
+	// Re-detection of the same finding triggers the regression branch.
+	store.Add(&Finding{
+		ID:          "f-regress",
+		ResourceID:  "vm-100",
+		Severity:    FindingSeverityWarning,
+		Category:    FindingCategoryReliability,
+		Title:       "Service stalled",
+		Description: "Service stopped responding again",
+	})
+
+	regressed := store.Get("f-regress")
+	if regressed.RegressionCount != 1 {
+		t.Fatalf("expected RegressionCount=1, got %d", regressed.RegressionCount)
+	}
+	if regressed.InvestigationRecord != nil {
+		t.Fatalf("expected InvestigationRecord cleared on regression, got %#v", regressed.InvestigationRecord)
+	}
+	want := "Restart the workload service after backup window clears"
+	if regressed.PreviousResolvedFixSummary != want {
+		t.Fatalf("expected PreviousResolvedFixSummary=%q, got %q", want, regressed.PreviousResolvedFixSummary)
 	}
 }
 

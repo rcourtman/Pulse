@@ -965,7 +965,17 @@ the canonical monitored-system blocked payload.
    alongside `description` and `recommendation` rather than dropping it;
    persisted findings created by older binaries must adopt the
    freshly-classified impact text on next re-detection rather than
-   preserving the empty value
+   preserving the empty value.
+   `unified.UnifiedFinding` also carries a
+   `previous_resolved_fix_summary` operational-memory field captured at
+   regression time from
+   `existing.InvestigationRecord.ProposedFix.Description`. The
+   AddFromAI update branch must propagate non-empty
+   `previous_resolved_fix_summary` into the existing finding using the
+   same overwrite pattern as `description`, `impact`, and
+   `recommendation`, and the Finding to UnifiedFinding conversion in
+   `internal/api/router.go` must copy `f.PreviousResolvedFixSummary`
+   alongside the other operator-facing strings
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

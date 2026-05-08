@@ -1482,6 +1482,54 @@ func TestHandleChat_ClearsStoredFindingContextWhenFollowUpFindingMissing(t *test
 	mockSvc.AssertExpectations(t)
 }
 
+func TestBuildUnifiedFindingChatContext_SurfacesPreviousResolvedFix(t *testing.T) {
+	// When a finding has regressed and the prior fix description was
+	// preserved on PreviousResolvedFixSummary, the chat context must surface
+	// it as operational memory so Assistant and any downstream investigation
+	// reason about what worked previously instead of treating each
+	// regression as a blank-slate diagnosis.
+	finding := &unified.UnifiedFinding{
+		ID:                         "f-regress",
+		Source:                     unified.SourceAIPatrol,
+		Severity:                   unified.SeverityWarning,
+		Category:                   unified.CategoryReliability,
+		ResourceID:                 "vm-100",
+		Title:                      "Service stalled",
+		Description:                "Service stopped responding again",
+		PreviousResolvedFixSummary: "Restart the workload service after backup window clears",
+	}
+
+	ctx := buildUnifiedFindingChatContext(finding, nil, nil)
+	if !strings.Contains(ctx, "Previous Resolved Fix:") {
+		t.Fatalf("expected chat context to include Previous Resolved Fix line, got: %s", ctx)
+	}
+	if !strings.Contains(ctx, "Restart the workload service after backup window clears") {
+		t.Fatalf("expected chat context to include the prior fix description, got: %s", ctx)
+	}
+}
+
+func TestBuildUnifiedFindingChatContext_OmitsPreviousResolvedFixWhenAbsent(t *testing.T) {
+	// Findings that have not regressed (or regressed without a recorded
+	// proposed fix) must not emit the Previous Resolved Fix line — the
+	// shared appendChatContextLine helper drops empty values, but this
+	// assertion pins the contract so future refactors do not turn the
+	// missing-memory case into a confusing empty line.
+	finding := &unified.UnifiedFinding{
+		ID:          "f-fresh",
+		Source:      unified.SourceAIPatrol,
+		Severity:    unified.SeverityWarning,
+		Category:    unified.CategoryReliability,
+		ResourceID:  "vm-200",
+		Title:       "Fresh issue",
+		Description: "Newly detected issue",
+	}
+
+	ctx := buildUnifiedFindingChatContext(finding, nil, nil)
+	if strings.Contains(ctx, "Previous Resolved Fix") {
+		t.Fatalf("expected chat context to omit Previous Resolved Fix when absent, got: %s", ctx)
+	}
+}
+
 func TestUnifiedFindingChatStatusLifecycleStates(t *testing.T) {
 	now := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
 	resolvedAt := now.Add(-time.Minute)

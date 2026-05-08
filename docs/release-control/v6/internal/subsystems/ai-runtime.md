@@ -287,7 +287,19 @@ runtime cost control, and shared AI transport surfaces.
     operational consequences (named workloads, jobs, recovery windows)
     and to leave `impact` empty rather than fabricate one when the
     consequence is genuinely unknown; the runtime must not synthesize a
-    default in that case. When `/api/ai/chat` receives `finding_id`, the
+    default in that case.
+    Findings carry a `previous_resolved_fix_summary` field as
+    operational memory across regressions: when a finding that had a
+    resolved investigation with a proposed fix is re-detected,
+    `FindingsStore.Add` captures
+    `existing.InvestigationRecord.ProposedFix.Description` into the new
+    field BEFORE clearing the investigation record, and the chat-context
+    builder surfaces it as a "Previous Resolved Fix" line so Assistant
+    sees what worked last time rather than treating each regression as a
+    blank-slate diagnosis. The summary mirrors onto
+    `unified.UnifiedFinding` and propagates through the Finding to
+    UnifiedFinding conversion in `internal/api/router.go` and through
+    `UnifiedStore.AddFromAI`'s update branch (non-empty overwrite). When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so
