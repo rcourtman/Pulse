@@ -204,6 +204,11 @@ desktop source-management table also inherits the surrounding settings panel
 frame and the shared `Table` shell from `frontend-primitives`; lifecycle work
 must not restore a local `overflow-x-auto` wrapper or a page-local table card
 around that table.
+The same source-manager landing surface must keep onboarding primary and
+compact: `Add infrastructure` remains the obvious action, the setup summary is
+one short status strip, and detailed governance/fleet state stays in the
+systems table rows or deeper fleet surfaces instead of expanding into duplicate
+explanatory bands above the table.
 Configured-node settings tables follow the same boundary:
 `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx` may own node,
 credential, capability, status, and action cells, but table scroll framing must

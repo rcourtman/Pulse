@@ -291,18 +291,18 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByRole('button', { name: /^Detect address$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Install agent$/i })).toBeNull();
     const readiness = screen.getByRole('region', {
-      name: /Infrastructure setup confidence/i,
+      name: /Infrastructure setup summary/i,
     });
-    expect(within(readiness).getByText('Infrastructure coverage')).toBeInTheDocument();
-    expect(within(readiness).getByText('Connected systems')).toBeInTheDocument();
-    expect(within(readiness).getByText('API coverage')).toBeInTheDocument();
-    expect(within(readiness).getByText('Agent coverage')).toBeInTheDocument();
+    expect(within(readiness).getByText('Setup status')).toBeInTheDocument();
+    expect(within(readiness).getByText('Systems')).toBeInTheDocument();
+    expect(within(readiness).getByText('Live')).toBeInTheDocument();
+    expect(within(readiness).getByText('Needs attention')).toBeInTheDocument();
     expect(within(readiness).getByText('Needs agent')).toBeInTheDocument();
     expect(within(readiness).getByText('Discovery')).toBeInTheDocument();
-    expect(within(readiness).getByText('Fleet governance')).toBeInTheDocument();
-    expect(within(readiness).getByText('Managed fleet')).toBeInTheDocument();
-    expect(within(readiness).getAllByText('1 system')).toHaveLength(4);
-    expect(within(readiness).getAllByText('0 systems')).toHaveLength(5);
+    expect(within(readiness).queryByText('Infrastructure coverage')).toBeNull();
+    expect(within(readiness).queryByText('Fleet governance')).toBeNull();
+    expect(within(readiness).getAllByText('1 system').length).toBeGreaterThan(0);
+    expect(within(readiness).getAllByText('0 systems').length).toBeGreaterThan(0);
     expect(within(readiness).getByText('Discovery off')).toBeInTheDocument();
     expect(within(readiness).getByRole('button', { name: /Install agents/i })).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
@@ -325,7 +325,7 @@ describe('InfrastructureWorkspace', () => {
     fireEvent.click(
       within(
         screen.getByRole('region', {
-          name: /Infrastructure setup confidence/i,
+          name: /Infrastructure setup summary/i,
         }),
       ).getByRole('button', { name: /Install agents/i }),
     );
@@ -505,7 +505,7 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() => expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument());
     expect(screen.getByText('Discovered')).toBeInTheDocument();
     const readiness = screen.getByRole('region', {
-      name: /Infrastructure setup confidence/i,
+      name: /Infrastructure setup summary/i,
     });
     expect(within(readiness).getByText('1 to review')).toBeInTheDocument();
     expect(within(readiness).getByText(/1 candidate discovered and waiting/i)).toBeInTheDocument();

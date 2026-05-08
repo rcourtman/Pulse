@@ -238,12 +238,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   );
   const connectedSystemCount = createMemo(() => props.rows().length);
   const discoveredCandidateCount = createMemo(() => props.discoveredNodes().length);
-  const apiCoveredSystemCount = createMemo(
-    () => props.rows().filter((row) => rowHasApiCoverage(row)).length,
-  );
-  const agentCoveredSystemCount = createMemo(
-    () => props.rows().filter((row) => rowHasAgentCoverage(row)).length,
-  );
   const apiOnlySystemCount = createMemo(
     () => props.rows().filter((row) => rowHasApiCoverage(row) && !rowHasAgentCoverage(row)).length,
   );
@@ -261,28 +255,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         .rows()
         .filter((row) =>
           rowHasFleetTone(row, (signal) => signal.tone === 'warning' || signal.tone === 'critical'),
-        ).length,
-  );
-  const credentialIssueSystemCount = createMemo(
-    () =>
-      props
-        .rows()
-        .filter((row) =>
-          rowHasFleetTone(
-            row,
-            (signal) => signal.key === 'credentials' && signal.tone === 'critical',
-          ),
-        ).length,
-  );
-  const remoteControlEnabledSystemCount = createMemo(
-    () =>
-      props
-        .rows()
-        .filter((row) =>
-          rowHasFleetTone(
-            row,
-            (signal) => signal.key === 'remote-control' && signal.tone === 'info',
-          ),
         ).length,
   );
   const discoveryReadinessLabel = createMemo(() => {
@@ -306,9 +278,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     if (connectedSystemCount() === 0) {
       return {
         kind: 'add',
-        label: 'Choose source type',
-        detail:
-          'Choose a supported platform API or install Pulse Agent to start building the unified infrastructure model.',
+        label: 'Add infrastructure',
+        detail: 'Add a platform, host, NAS, cluster, or endpoint to start monitoring.',
         onClick: props.onAddInfrastructure,
       };
     }
@@ -340,6 +311,28 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       detail: completeAction.detail,
     };
   });
+  const setupSummaryMetrics = createMemo(() => [
+    {
+      label: 'Systems',
+      value: formatCount(connectedSystemCount(), 'system'),
+    },
+    {
+      label: 'Live',
+      value: formatCount(liveFleetSystemCount(), 'system'),
+    },
+    {
+      label: 'Needs attention',
+      value: formatCount(fleetAttentionSystemCount(), 'system'),
+    },
+    {
+      label: 'Needs agent',
+      value: formatCount(apiOnlySystemCount(), 'system'),
+    },
+    {
+      label: 'Discovery',
+      value: discoveryReadinessLabel(),
+    },
+  ]);
 
   const [layoutWidth, setLayoutWidth] = createSignal(
     typeof window !== 'undefined' ? window.innerWidth : 1024,
@@ -447,27 +440,35 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     </>
   );
 
-  const setupConfidenceBand = () => (
+  const setupSummaryBand = () => (
     <section
-      aria-label="Infrastructure setup confidence"
-      class="border-b border-border bg-surface px-4 py-4"
+      aria-label="Infrastructure setup summary"
+      class="border-b border-border bg-surface px-4 py-3"
     >
-      <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-        <div class="max-w-3xl">
-          <h3 class="text-sm font-semibold text-base-content">Infrastructure coverage</h3>
-          <p class="mt-1 text-sm leading-5 text-muted">
-            This is the source map Pulse uses to understand the estate. Confirm the API inventory,
-            agent telemetry, scan scope, and any pending discovery candidates before relying on
-            monitoring views or automation.
-          </p>
-        </div>
-
+      <h3 class="sr-only">Setup status</h3>
+      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <dl class="grid min-w-0 flex-1 grid-cols-2 overflow-hidden rounded-md border border-border-subtle bg-border-subtle sm:grid-cols-3 xl:grid-cols-5">
+          <For each={setupSummaryMetrics()}>
+            {(metric, index) => (
+              <div
+                class={`bg-surface px-3 py-3 ${
+                  index() === setupSummaryMetrics().length - 1 ? 'col-span-2 sm:col-span-1' : ''
+                }`}
+              >
+                <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+                  {metric.label}
+                </dt>
+                <dd class="mt-1 text-sm font-semibold text-base-content">{metric.value}</dd>
+              </div>
+            )}
+          </For>
+        </dl>
         <Show when={!props.readOnly && Boolean(setupConfidenceAction().onClick)}>
           <button
             type="button"
             onClick={() => setupConfidenceAction().onClick?.()}
             disabled={setupConfidenceAction().disabled}
-            class={`${workspaceSecondaryButtonClass} self-start`}
+            class={`${workspaceSecondaryButtonClass} self-start xl:self-center`}
           >
             {setupConfidenceActionIcon(setupConfidenceAction().kind)}
             {setupConfidenceAction().label}
@@ -475,97 +476,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         </Show>
       </div>
 
-      <dl class="mt-4 grid gap-0 border-y border-border-subtle sm:grid-cols-2 xl:grid-cols-5">
-        <div class="border-b border-border-subtle px-3 py-3 sm:border-r xl:border-b-0">
-          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-            Connected systems
-          </dt>
-          <dd class="mt-1 text-sm font-semibold text-base-content">
-            {formatCount(connectedSystemCount(), 'system')}
-          </dd>
-        </div>
-        <div class="border-b border-border-subtle px-3 py-3 xl:border-b-0 xl:border-r">
-          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-            API coverage
-          </dt>
-          <dd class="mt-1 text-sm font-semibold text-base-content">
-            {formatCount(apiCoveredSystemCount(), 'system')}
-          </dd>
-        </div>
-        <div class="border-b border-border-subtle px-3 py-3 sm:border-b-0 sm:border-r">
-          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-            Agent coverage
-          </dt>
-          <dd class="mt-1 text-sm font-semibold text-base-content">
-            {formatCount(agentCoveredSystemCount(), 'system')}
-          </dd>
-        </div>
-        <div class="border-b border-border-subtle px-3 py-3 sm:border-b-0 xl:border-r">
-          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-            Needs agent
-          </dt>
-          <dd class="mt-1 text-sm font-semibold text-base-content">
-            {formatCount(apiOnlySystemCount(), 'system')}
-          </dd>
-        </div>
-        <div class="px-3 py-3">
-          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Discovery</dt>
-          <dd class="mt-1 text-sm font-semibold text-base-content">{discoveryReadinessLabel()}</dd>
-        </div>
-      </dl>
-
       <p class="mt-3 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
-
-      <div class="mt-5 border-t border-border-subtle pt-4">
-        <div class="max-w-3xl">
-          <h3 class="text-sm font-semibold text-base-content">Fleet governance</h3>
-          <p class="mt-1 text-sm leading-5 text-muted">
-            Enrollment, liveness, version drift, adapter health, config state, credentials, update
-            status, and remote-control posture come from the same governed connections ledger.
-          </p>
-        </div>
-
-        <dl class="mt-3 grid gap-0 border-y border-border-subtle sm:grid-cols-2 xl:grid-cols-5">
-          <div class="border-b border-border-subtle px-3 py-3 sm:border-r xl:border-b-0">
-            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-              Managed fleet
-            </dt>
-            <dd class="mt-1 text-sm font-semibold text-base-content">
-              {formatCount(connectedSystemCount(), 'system')}
-            </dd>
-          </div>
-          <div class="border-b border-border-subtle px-3 py-3 xl:border-b-0 xl:border-r">
-            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Live</dt>
-            <dd class="mt-1 text-sm font-semibold text-base-content">
-              {formatCount(liveFleetSystemCount(), 'system')}
-            </dd>
-          </div>
-          <div class="border-b border-border-subtle px-3 py-3 sm:border-b-0 sm:border-r">
-            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-              Needs attention
-            </dt>
-            <dd class="mt-1 text-sm font-semibold text-base-content">
-              {formatCount(fleetAttentionSystemCount(), 'system')}
-            </dd>
-          </div>
-          <div class="border-b border-border-subtle px-3 py-3 sm:border-b-0 xl:border-r">
-            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-              Credential issues
-            </dt>
-            <dd class="mt-1 text-sm font-semibold text-base-content">
-              {formatCount(credentialIssueSystemCount(), 'system')}
-            </dd>
-          </div>
-          <div class="px-3 py-3">
-            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-              Remote control
-            </dt>
-            <dd class="mt-1 text-sm font-semibold text-base-content">
-              {formatCount(remoteControlEnabledSystemCount(), 'system')}
-            </dd>
-          </div>
-        </dl>
-      </div>
     </section>
   );
 
@@ -585,7 +496,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         noPadding
       >
         {headerActions()}
-        {setupConfidenceBand()}
+        {setupSummaryBand()}
 
         <Show when={!useCardLayout()}>
           <Table class="w-full min-w-[820px] table-fixed text-sm">

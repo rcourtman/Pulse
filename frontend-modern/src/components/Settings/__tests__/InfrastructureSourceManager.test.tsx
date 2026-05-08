@@ -61,10 +61,10 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
   };
 };
 
-describe('InfrastructureSourceManager fleet governance', () => {
+describe('InfrastructureSourceManager setup summary', () => {
   afterEach(() => cleanup());
 
-  it('surfaces governed fleet counts and row-level attention signals', () => {
+  it('keeps setup status compact while preserving row-level attention signals', () => {
     render(() => (
       <InfrastructureSourceManager
         rows={() => [
@@ -105,11 +105,12 @@ describe('InfrastructureSourceManager fleet governance', () => {
       />
     ));
 
-    expect(screen.getByText('Fleet governance')).toBeInTheDocument();
-    expect(screen.getByText('Managed fleet')).toBeInTheDocument();
+    expect(screen.getByText('Setup status')).toBeInTheDocument();
+    expect(screen.getByText('Systems')).toBeInTheDocument();
+    expect(screen.getByText('Live')).toBeInTheDocument();
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
-    expect(screen.getByText('Credential issues')).toBeInTheDocument();
-    expect(screen.getByText('Remote control')).toBeInTheDocument();
+    expect(screen.getByText('Needs agent')).toBeInTheDocument();
+    expect(screen.queryByText('Fleet governance')).toBeNull();
     expect(screen.getByText('Credentials invalid')).toBeInTheDocument();
     expect(screen.getByText('Remote control enabled')).toBeInTheDocument();
   });
