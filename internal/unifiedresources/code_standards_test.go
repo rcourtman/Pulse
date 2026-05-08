@@ -358,7 +358,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// at approval time. Pinning it here keeps the broker contract
 			// honest: drift refusal cannot silently turn into another error
 			// kind that callers fail to detect.
-			"ErrActionPlanDrift = errors.New(",
+			"ErrActionPlanDrift        = errors.New(",
 		},
 		filepath.Join(".", "store.go"): {
 			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",

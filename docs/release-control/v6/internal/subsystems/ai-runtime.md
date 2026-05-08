@@ -303,6 +303,14 @@ runtime cost control, and shared AI transport surfaces.
     action path uses a different hash function (`actionPlanHashForParams`)
     so a coherent canonical-hash refactor must precede adding the same
     check there.
+    Drift refusal must also persist a Failed audit record with the
+    Request, Plan, and Approvals snapshots intact and a Result whose
+    ErrorMessage is prefixed `plan_drift:` so the audit trail shows
+    every drift attempt that was caught. Operators reviewing the action
+    audit history must be able to see drift refusals as first-class
+    audit rows, not only in WARN-level logs; the `plan_drift:` prefix
+    is a stable token for audit-UI filters and alert rules to
+    distinguish drift from generic execution failures.
     `FindingsStore.GetTrustSummary` returns a snapshot of how currently
     tracked findings have resolved (tracked, currently-active, resolved,
     auto-resolved, fix-verified, fix-failed, dismissed-as-noise,

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -556,6 +557,28 @@ func TestExecuteCommandWithAuditRefusesPayloadDriftAgainstApprovedPlan(t *testin
 		t.Fatalf("expected nil result on drift refusal, got %#v", result)
 	}
 	agentServer.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+
+	// Drift refusal must be observable in the audit history, not just in
+	// WARN logs. Operators reviewing the action audit trail need to see
+	// "Pulse caught this drift attempt" recorded as a Failed action with
+	// a plan_drift error message.
+	audits, err := actionStore.GetActionAudits("agent-1", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(audits) != 1 {
+		t.Fatalf("expected 1 drift-refused audit record, got %d", len(audits))
+	}
+	driftAudit := audits[0]
+	if driftAudit.State != unifiedresources.ActionStateFailed {
+		t.Fatalf("drift audit state = %q, want %q", driftAudit.State, unifiedresources.ActionStateFailed)
+	}
+	if driftAudit.Result == nil || driftAudit.Result.Success {
+		t.Fatalf("expected drift audit Result.Success=false, got %#v", driftAudit.Result)
+	}
+	if driftAudit.Result == nil || !strings.Contains(driftAudit.Result.ErrorMessage, "plan_drift") {
+		t.Fatalf("expected drift audit ErrorMessage to include plan_drift, got %q", driftAudit.Result.ErrorMessage)
+	}
 }
 
 // TestExecuteCommandWithAuditAllowsMatchingPlanHash covers the positive case:

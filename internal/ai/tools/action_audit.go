@@ -74,32 +74,6 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	}
 	approvalRecords := approvalRecordsForID(approvalID)
 
-	// Plan-drift check: the operator approved a specific command + target +
-	// reason combination, and the broker must refuse to run a different one
-	// even when the approval ID resolves. Compares the approved hash against
-	// a freshly-recomputed approval-equivalent hash from the actual payload.
-	if planFromApproval {
-		if driftErr := validateApprovedCommandPlanHash(
-			plan.PlanHash,
-			plan.ActionID,
-			plan.RequestID,
-			capabilityName,
-			resourceID,
-			payload.Command,
-			payload.TargetType,
-			payload.TargetID,
-			reason,
-		); driftErr != nil {
-			log.Warn().
-				Str("action_id", plan.ActionID).
-				Str("approval_id", approvalID).
-				Str("capability", capabilityName).
-				Err(driftErr).
-				Msg("Refusing action execution: payload does not match approved plan hash")
-			return nil, driftErr
-		}
-	}
-
 	record := unifiedresources.ActionAuditRecord{
 		ID:        actionID,
 		CreatedAt: now,
@@ -123,6 +97,43 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 		Plan: plan,
 	}
 	record.Approvals = approvalRecords
+
+	// Plan-drift check: the operator approved a specific command + target +
+	// reason combination, and the broker must refuse to run a different one
+	// even when the approval ID resolves. Compares the approved hash against
+	// a freshly-recomputed approval-equivalent hash from the actual payload.
+	// Persists a refused audit record so operators can see drift caught in
+	// the audit history rather than only in WARN logs.
+	if planFromApproval {
+		if driftErr := validateApprovedCommandPlanHash(
+			plan.PlanHash,
+			plan.ActionID,
+			plan.RequestID,
+			capabilityName,
+			resourceID,
+			payload.Command,
+			payload.TargetType,
+			payload.TargetID,
+			reason,
+		); driftErr != nil {
+			log.Warn().
+				Str("action_id", plan.ActionID).
+				Str("approval_id", approvalID).
+				Str("capability", capabilityName).
+				Err(driftErr).
+				Msg("Refusing action execution: payload does not match approved plan hash")
+			now := time.Now().UTC()
+			record.State = unifiedresources.ActionStateFailed
+			record.UpdatedAt = now
+			record.Result = &unifiedresources.ExecutionResult{
+				Success:      false,
+				ErrorMessage: fmt.Sprintf("plan_drift: %s", driftErr.Error()),
+			}
+			e.recordActionAudit(record)
+			e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "plan drift refused")
+			return nil, driftErr
+		}
+	}
 
 	record, err := e.recordActionExecutionStart(record, approvalID, requestedBy, fmt.Sprintf("dispatching command to agent %s", agentID), planFromApproval)
 	if err != nil {
