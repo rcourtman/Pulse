@@ -60,7 +60,12 @@ const connectionAgentHostProfileLabel = (
   if (hostProfile) {
     return getAgentHostProfileFamily(hostProfile) ?? prettifyPlatform(hostProfile);
   }
-  return prettifyPlatform(identity?.platform ?? identity?.osName);
+  // Prefer osName over platform: osName carries the specific platform identity
+  // ("Proxmox VE", "Unraid", "TrueNAS SCALE") while platform is the broader OS
+  // family ("debian", "linux") that loses that identity on display.
+  const osName = identity?.osName?.trim();
+  const platform = identity?.platform?.trim();
+  return prettifyPlatform(osName || platform);
 };
 
 const isIPv4Literal = (value: string): boolean => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value);
