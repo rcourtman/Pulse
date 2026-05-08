@@ -250,6 +250,27 @@ func TestDefaultModelForProvider_UsesCanonicalProviderFallbacks(t *testing.T) {
 	}
 }
 
+func TestDeepSeekModelCatalogHelpers(t *testing.T) {
+	if got := DeepSeekV4ModelIDs(); len(got) != 2 || got[0] != DeepSeekModelV4Flash || got[1] != DeepSeekModelV4Pro {
+		t.Fatalf("DeepSeekV4ModelIDs() = %#v", got)
+	}
+	if got := DeepSeekLegacyAliasModelIDs(); len(got) != 2 || got[0] != DeepSeekModelLegacyChat || got[1] != DeepSeekModelLegacyReasoner {
+		t.Fatalf("DeepSeekLegacyAliasModelIDs() = %#v", got)
+	}
+	if !IsDeepSeekV4Model(" DeepSeek-V4-Flash ") {
+		t.Fatal("expected DeepSeek V4 Flash helper to normalize case and whitespace")
+	}
+	if IsDeepSeekV4Model(DeepSeekModelLegacyChat) {
+		t.Fatal("legacy alias must not be classified as a current V4 model")
+	}
+	if !IsDeepSeekLegacyAliasModel(" DEEPSEEK-REASONER ") {
+		t.Fatal("expected DeepSeek legacy alias helper to normalize case and whitespace")
+	}
+	if IsDeepSeekLegacyAliasModel(DeepSeekModelV4Pro) {
+		t.Fatal("current V4 model must not be classified as a legacy alias")
+	}
+}
+
 func TestAIConfig_GetConfiguredProviders(t *testing.T) {
 	tests := []struct {
 		name   string

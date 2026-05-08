@@ -145,6 +145,43 @@ const (
 	DefaultGeminiBaseURL     = "https://generativelanguage.googleapis.com/v1beta"
 )
 
+const (
+	DeepSeekModelV4Flash        = "deepseek-v4-flash"
+	DeepSeekModelV4Pro          = "deepseek-v4-pro"
+	DeepSeekModelLegacyChat     = "deepseek-chat"
+	DeepSeekModelLegacyReasoner = "deepseek-reasoner"
+)
+
+// DeepSeekV4ModelIDs returns the current direct DeepSeek model IDs Pulse treats
+// as tool-capable for Assistant and Patrol runtime paths.
+func DeepSeekV4ModelIDs() []string {
+	return []string{DeepSeekModelV4Flash, DeepSeekModelV4Pro}
+}
+
+// DeepSeekLegacyAliasModelIDs returns direct DeepSeek aliases that are still
+// accepted by the provider but should be presented as legacy aliases.
+func DeepSeekLegacyAliasModelIDs() []string {
+	return []string{DeepSeekModelLegacyChat, DeepSeekModelLegacyReasoner}
+}
+
+func IsDeepSeekV4Model(model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case DeepSeekModelV4Flash, DeepSeekModelV4Pro:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsDeepSeekLegacyAliasModel(model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case DeepSeekModelLegacyChat, DeepSeekModelLegacyReasoner:
+		return true
+	default:
+		return false
+	}
+}
+
 // NewDefaultAIConfig returns an AIConfig with sensible defaults
 func NewDefaultAIConfig() *AIConfig {
 	return &AIConfig{
@@ -353,7 +390,7 @@ func DefaultModelForProvider(provider string) string {
 	case AIProviderOpenRouter:
 		return FormatModelString(AIProviderOpenRouter, "openai/gpt-4o-mini")
 	case AIProviderDeepSeek:
-		return FormatModelString(AIProviderDeepSeek, "deepseek-v4-flash")
+		return FormatModelString(AIProviderDeepSeek, DeepSeekModelV4Flash)
 	case AIProviderGemini:
 		return FormatModelString(AIProviderGemini, "gemini-1.5-pro")
 	case AIProviderOllama:

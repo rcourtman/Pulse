@@ -113,12 +113,12 @@ func patrolDeepSeekModelName(normalizedModel string) string {
 
 func patrolDeepSeekModelSupportsTools(normalizedModel string) bool {
 	model := patrolDeepSeekModelName(normalizedModel)
-	return model == "deepseek-v4-flash" || model == "deepseek-v4-pro"
+	return config.IsDeepSeekV4Model(model)
 }
 
 func patrolDeepSeekLegacyAlias(normalizedModel string) bool {
 	model := patrolDeepSeekModelName(normalizedModel)
-	return model == "deepseek-chat" || model == "deepseek-reasoner"
+	return config.IsDeepSeekLegacyAliasModel(model)
 }
 
 func patrolConfigReadiness(provider, model, status string, cause PatrolFailureCause, summary string) PatrolConfigReadiness {

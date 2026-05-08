@@ -494,6 +494,12 @@ provider-owned fallback must track the current V4 API contract and use
 `deepseek-chat` or `deepseek-reasoner`; AI runtime context-window and cost
 budgeting must likewise know the V4 Flash/Pro 1M context and distinct pricing
 classes before Patrol treats those models as ready.
+The shared `/api/ai/models` catalog must preserve that same direct-provider
+fallback posture for configured DeepSeek paths: when DeepSeek live catalog
+listing fails or omits current V4 entries, the backend catalog must still
+surface direct `deepseek-v4-flash` and `deepseek-v4-pro` options plus clearly
+labelled legacy aliases so saved Patrol or Assistant selections do not render
+as unrelated default models in the browser.
 Retired quickstart ownership is now an inert compatibility boundary, not a
 self-hosted GA runtime path. The old quickstart provider, bootstrap manager,
 and local token-cache persistence API are removed from the Pulse runtime;

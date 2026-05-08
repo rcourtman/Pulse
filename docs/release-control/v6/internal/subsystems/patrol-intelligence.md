@@ -338,7 +338,12 @@ owns local toggle optimism, run-status orchestration, and Patrol-only copy,
 including runtime-availability messaging that stays Patrol-first in
 operator-facing shells and uses provider/API-key wording only for the actual
 configuration boundary, but the underlying AI runtime catalog must stay shared
-with chat and AI settings.
+with chat and AI settings. The Patrol configuration model selector must remain
+state-driven across async settings/catalog loading: a saved direct-provider
+model such as `deepseek:deepseek-v4-flash` must render as that provider model
+once the shared catalog supplies it, not fall back visually to the default
+model or an unrelated OpenRouter entry because the popover mounted after the
+catalog request completed.
 The Patrol page now also treats Patrol runtime availability as a first-class
 render contract: the header chip, primary summary card, and status bar must
 all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`

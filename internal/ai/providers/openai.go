@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -184,8 +185,9 @@ func (c *OpenAIClient) supportsForcedToolChoice(model string) bool {
 	if !c.isDeepSeek() {
 		return true
 	}
-	switch normalizeOpenAICompatibleModelName(model) {
-	case "deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner":
+	normalized := normalizeOpenAICompatibleModelName(model)
+	switch {
+	case config.IsDeepSeekV4Model(normalized), config.IsDeepSeekLegacyAliasModel(normalized):
 		return true
 	default:
 		return false

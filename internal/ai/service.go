@@ -4469,20 +4469,22 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 			log.Warn().Err(err).Str("provider", providerName).Msg("failed to fetch models from provider")
 			// Keep stale entry (don't overwrite or delete) — the provider's
 			// previous models remain visible until a successful fetch replaces them.
+			if !hasEntry || len(entry.models) == 0 {
+				if fallbackModels := providerCatalogFallbackModels(providerName); len(fallbackModels) > 0 {
+					s.modelsCache.mu.Lock()
+					s.modelsCache.providers[providerName] = providerModelsEntry{
+						at:     time.Now(),
+						models: prefixProviderModels(providerName, fallbackModels),
+					}
+					s.modelsCache.mu.Unlock()
+				}
+			}
 			continue
 		}
+		models = mergeProviderCatalogFallbackModels(providerName, models)
 
 		// Build prefixed model list for this provider
-		prefixed := make([]providers.ModelInfo, 0, len(models))
-		for _, m := range models {
-			prefixed = append(prefixed, providers.ModelInfo{
-				ID:          config.FormatModelString(providerName, m.ID),
-				Name:        m.Name,
-				Description: providerDisplayName(providerName) + ": " + m.ID,
-				CreatedAt:   m.CreatedAt,
-				Notable:     m.Notable,
-			})
-		}
+		prefixed := prefixProviderModels(providerName, models)
 
 		s.modelsCache.mu.Lock()
 		s.modelsCache.providers[providerName] = providerModelsEntry{
@@ -4503,6 +4505,87 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 	s.modelsCache.mu.RUnlock()
 
 	return allModels, allCached, nil
+}
+
+func prefixProviderModels(providerName string, models []providers.ModelInfo) []providers.ModelInfo {
+	prefixed := make([]providers.ModelInfo, 0, len(models))
+	for _, m := range models {
+		if strings.TrimSpace(m.ID) == "" {
+			continue
+		}
+		description := strings.TrimSpace(m.Description)
+		if description == "" {
+			description = providerDisplayName(providerName) + ": " + m.ID
+		}
+		prefixed = append(prefixed, providers.ModelInfo{
+			ID:          config.FormatModelString(providerName, m.ID),
+			Name:        m.Name,
+			Description: description,
+			CreatedAt:   m.CreatedAt,
+			Notable:     m.Notable,
+		})
+	}
+	return prefixed
+}
+
+func mergeProviderCatalogFallbackModels(providerName string, models []providers.ModelInfo) []providers.ModelInfo {
+	fallbacks := providerCatalogFallbackModels(providerName)
+	if len(fallbacks) == 0 {
+		return models
+	}
+	seen := make(map[string]struct{}, len(models)+len(fallbacks))
+	merged := make([]providers.ModelInfo, 0, len(models)+len(fallbacks))
+	for _, model := range models {
+		id := strings.ToLower(strings.TrimSpace(model.ID))
+		if id == "" {
+			continue
+		}
+		seen[id] = struct{}{}
+		merged = append(merged, model)
+	}
+	for _, fallback := range fallbacks {
+		id := strings.ToLower(strings.TrimSpace(fallback.ID))
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		merged = append(merged, fallback)
+	}
+	return merged
+}
+
+func providerCatalogFallbackModels(providerName string) []providers.ModelInfo {
+	switch providerName {
+	case config.AIProviderDeepSeek:
+		return []providers.ModelInfo{
+			{
+				ID:          config.DeepSeekModelV4Flash,
+				Name:        "DeepSeek V4 Flash",
+				Description: "DeepSeek: current V4 Flash direct API model",
+				Notable:     true,
+			},
+			{
+				ID:          config.DeepSeekModelV4Pro,
+				Name:        "DeepSeek V4 Pro",
+				Description: "DeepSeek: current V4 Pro direct API model",
+				Notable:     true,
+			},
+			{
+				ID:          config.DeepSeekModelLegacyChat,
+				Name:        "DeepSeek Chat (legacy alias)",
+				Description: "DeepSeek: legacy alias currently routing to V4 Flash",
+			},
+			{
+				ID:          config.DeepSeekModelLegacyReasoner,
+				Name:        "DeepSeek Reasoner (legacy alias)",
+				Description: "DeepSeek: legacy alias currently routing to V4 Flash",
+			},
+		}
+	default:
+		return nil
+	}
 }
 
 func buildModelsCacheKey(cfg *config.AIConfig) string {

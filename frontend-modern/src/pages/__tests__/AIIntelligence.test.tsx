@@ -181,6 +181,9 @@ vi.mock('@/stores/aiIntelligence', () => {
     get findings() {
       return intelligenceState.findings;
     },
+    get patrolFindings() {
+      return intelligenceState.findings;
+    },
     get intelligenceSummary() {
       return intelligenceState.summary;
     },
@@ -720,6 +723,50 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps a saved direct-provider Patrol model selected after the catalog loads', async () => {
+    apiFetchJSONMock.mockImplementation(async (path: string) => {
+      if (path === '/api/ai/models') {
+        return {
+          models: [
+            {
+              id: 'deepseek:deepseek-v4-flash',
+              name: 'DeepSeek V4 Flash',
+              description: 'DeepSeek: current V4 Flash direct API model',
+            },
+          ],
+        };
+      }
+      if (path === '/api/settings/ai') {
+        return {
+          ...defaultAISettings,
+          model: 'openrouter:minimax/minimax-m2.5',
+          patrol_model: 'deepseek:deepseek-v4-flash',
+        };
+      }
+      if (path === '/api/settings/ai/update') {
+        return defaultAISettings;
+      }
+      return {};
+    });
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/models');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Patrol' }));
+
+    const select = screen.getByLabelText('Provider model') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(select.value).toBe('deepseek:deepseek-v4-flash');
+    });
+    expect(select.selectedOptions[0]?.textContent).toContain('DeepSeek V4 Flash');
   });
 
   it('unlocks paid patrol controls when the entitlement grants the features', async () => {

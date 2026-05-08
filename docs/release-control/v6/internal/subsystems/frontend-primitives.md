@@ -771,7 +771,11 @@ prompt explain the same operator-facing priority.
     copy. When the failure includes Patrol readiness context, the inline state
     must expose the provider, model, and readiness summary next to a direct
     provider-settings action instead of hiding that diagnosis behind Assistant
-    alone. Successful provider-model saves that return a not-ready Patrol
+    alone. The provider-model selector in that popover must stay bound to the
+    shared runtime settings/model catalog even when the popover mounts after
+    async catalog loading, so a saved direct-provider Patrol model renders as
+    that model instead of visually falling back to the default selection.
+    Successful provider-model saves that return a not-ready Patrol
     readiness snapshot must use that same inline surface with `needs attention`
     wording, while Assistant receives a saved configuration issue rather than a
     failed-save handoff. When safe remediation is locked, the same popover

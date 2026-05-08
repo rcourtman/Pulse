@@ -1143,6 +1143,11 @@ the canonical monitored-system blocked payload.
     store after an owned settings mutation, but they must not reintroduce
     page-local mount loops that fetch `/api/settings/ai` or `/api/ai/models`
     separately for chat, Patrol, and cost/budget views.
+    The `/api/ai/models` catalog must also include backend-owned
+    direct-provider fallback entries for configured DeepSeek V4 paths when
+    live provider catalog reads fail, so Patrol and Assistant model selectors
+    keep saved `deepseek:` selections visible without inventing page-local
+    catalog entries or falling back to another provider's model.
 26. Keep API-backed first-target onboarding canonical on that same shared
     infrastructure-settings boundary:
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,

@@ -2592,6 +2592,49 @@ func TestService_ListModelsWithCache_ProviderErrors(t *testing.T) {
 	}
 }
 
+func TestService_ListModelsWithCache_DeepSeekCatalogFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	persistence := config.NewConfigPersistence(tmpDir)
+	if err := persistence.SaveAIConfig(config.AIConfig{
+		Enabled:        true,
+		Model:          config.DefaultModelForProvider(config.AIProviderDeepSeek),
+		PatrolModel:    config.FormatModelString(config.AIProviderDeepSeek, config.DeepSeekModelV4Flash),
+		DeepSeekAPIKey: "test-key",
+	}); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	svc := NewService(persistence, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	models, cached, err := svc.ListModelsWithCache(ctx)
+	if err != nil {
+		t.Fatalf("ListModelsWithCache should not fail when DeepSeek catalog fetch fails: %v", err)
+	}
+	if cached {
+		t.Fatal("expected fallback catalog response to be uncached")
+	}
+
+	ids := make(map[string]providers.ModelInfo, len(models))
+	for _, model := range models {
+		ids[model.ID] = model
+	}
+	for _, want := range []string{
+		config.FormatModelString(config.AIProviderDeepSeek, config.DeepSeekModelV4Flash),
+		config.FormatModelString(config.AIProviderDeepSeek, config.DeepSeekModelV4Pro),
+		config.FormatModelString(config.AIProviderDeepSeek, config.DeepSeekModelLegacyChat),
+		config.FormatModelString(config.AIProviderDeepSeek, config.DeepSeekModelLegacyReasoner),
+	} {
+		if _, ok := ids[want]; !ok {
+			t.Fatalf("expected DeepSeek fallback model %q in %+v", want, models)
+		}
+	}
+	if got := ids[config.FormatModelString(config.AIProviderDeepSeek, config.DeepSeekModelV4Flash)].Name; got != "DeepSeek V4 Flash" {
+		t.Fatalf("unexpected DeepSeek V4 Flash display name %q", got)
+	}
+}
+
 // ============================================================================
 // GetDebugContext - Truncation
 // ============================================================================

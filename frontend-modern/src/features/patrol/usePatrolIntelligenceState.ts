@@ -167,9 +167,10 @@ export function usePatrolIntelligenceState() {
   const [patrolAlertTriggers, setPatrolAlertTriggers] = createSignal<boolean>(true);
   const [patrolAnomalyTriggers, setPatrolAnomalyTriggers] = createSignal<boolean>(true);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
+  const [patrolModelSelectElement, setPatrolModelSelectElement] =
+    createSignal<HTMLSelectElement>();
 
   let advancedSettingsRef: HTMLDivElement | undefined;
-  let patrolModelSelectRef: HTMLSelectElement | undefined;
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
   let scrollToFindingTimerRef: ReturnType<typeof setTimeout> | undefined;
   let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
@@ -181,7 +182,7 @@ export function usePatrolIntelligenceState() {
   };
 
   const setPatrolModelSelectRef = (element: HTMLSelectElement | undefined) => {
-    patrolModelSelectRef = element;
+    setPatrolModelSelectElement(() => element);
   };
 
   const clearSafetyTimer = () => {
@@ -247,9 +248,12 @@ export function usePatrolIntelligenceState() {
 
   createEffect(() => {
     const model = patrolModel();
-    const models = availableModels();
-    if (patrolModelSelectRef && models.length > 0 && model) {
-      patrolModelSelectRef.value = model;
+    const select = patrolModelSelectElement();
+    // Track model catalog changes so a valid selected model is reapplied after
+    // async options are mounted into the configuration popover.
+    availableModels();
+    if (select) {
+      select.value = model;
     }
   });
 
