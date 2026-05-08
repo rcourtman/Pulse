@@ -887,6 +887,8 @@ describe('AIChat', () => {
             resource_count: 2,
             action_count: 0,
             requires_approval: false,
+            recommended_next_step: 'Verify full coverage',
+            recommended_next_step_action: 'Run Patrol',
           },
         },
       ]);
@@ -914,12 +916,17 @@ describe('AIChat', () => {
             context: expect.objectContaining({
               kind: 'patrol_assessment',
               findingId: undefined,
+              recommendedNextStep: 'Verify full coverage',
+              recommendedNextStepAction: 'Run Patrol',
             }),
             briefing: expect.objectContaining({
               sourceLabel: 'Pulse Patrol',
               title: 'Patrol assessment handoff',
               subject: 'Current Patrol assessment',
-              actionLabel: 'Review Patrol assessment',
+              actionLabel: 'Recommended: Run Patrol',
+              detailLines: expect.arrayContaining([
+                'Recommended next step: Verify full coverage',
+              ]),
             }),
           }),
         );

@@ -329,7 +329,9 @@ runtime cost control, and shared AI transport surfaces.
     handoffs. That summary may include the handoff kind, finding ID, resource
     and Patrol run ID, safe run type/status/runtime-failure flags, resource and
     action counts, a primary resource label, last-known approval/action status,
-    risk level, and timestamp, but it must not expose model-only handoff text,
+    risk level, timestamp, and Patrol assessment recommended next-step/action
+    labels only when they can be safely extracted from the stored assessment
+    handoff, but it must not expose model-only handoff text,
     runtime failure detail, action preflight/result bodies, remediation
     descriptions, raw commands, or approval command payloads. Its
     `requires_approval` field is a current operator-decision flag only: pending
@@ -341,7 +343,8 @@ runtime cost control, and shared AI transport surfaces.
     safe visible briefing: the next chat turn must carry
     `autonomous_mode:false` even when the summary is context-only and has no
     queued action, while the visible badge/action copy must still reflect the
-    actual last-known action state instead of inventing a pending approval. That
+    actual last-known action state or Patrol assessment recommendation instead
+    of inventing a pending approval. That
     restoration is success-bound: if the underlying session message load fails,
     the drawer must leave the current context untouched instead of applying
     summary-derived Patrol or approval state for a session the operator is not

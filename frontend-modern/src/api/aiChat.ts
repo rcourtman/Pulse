@@ -53,6 +53,8 @@ export interface ChatSessionHandoffSummary {
   last_known_approval_status?: string;
   last_known_action_state?: string;
   last_known_action_risk?: string;
+  recommended_next_step?: string;
+  recommended_next_step_action?: string;
   updated_at?: string;
 }
 

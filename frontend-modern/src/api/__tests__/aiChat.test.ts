@@ -50,6 +50,8 @@ describe('AIChatAPI', () => {
         last_known_approval_status: 'pending',
         last_known_action_state: 'awaiting_approval',
         last_known_action_risk: 'high',
+        recommended_next_step: 'Review pending Patrol approval',
+        recommended_next_step_action: 'Review approvals',
         updated_at: '2026-05-06T12:08:00Z',
       },
     };

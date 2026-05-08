@@ -25,21 +25,23 @@ type Session struct {
 // session-scoped model handoff metadata. It intentionally omits model-only
 // context text and raw remediation details.
 type SessionHandoffSummary struct {
-	Kind                    string           `json:"kind,omitempty"`
-	FindingID               string           `json:"finding_id,omitempty"`
-	RunID                   string           `json:"run_id,omitempty"`
-	RunType                 string           `json:"run_type,omitempty"`
-	RunStatus               string           `json:"run_status,omitempty"`
-	RuntimeFailure          bool             `json:"runtime_failure,omitempty"`
-	HasModelContext         bool             `json:"has_model_context"`
-	ResourceCount           int              `json:"resource_count,omitempty"`
-	PrimaryResource         *HandoffResource `json:"primary_resource,omitempty"`
-	ActionCount             int              `json:"action_count,omitempty"`
-	RequiresApproval        bool             `json:"requires_approval,omitempty"`
-	LastKnownApprovalStatus string           `json:"last_known_approval_status,omitempty"`
-	LastKnownActionState    string           `json:"last_known_action_state,omitempty"`
-	LastKnownActionRisk     string           `json:"last_known_action_risk,omitempty"`
-	UpdatedAt               *time.Time       `json:"updated_at,omitempty"`
+	Kind                      string           `json:"kind,omitempty"`
+	FindingID                 string           `json:"finding_id,omitempty"`
+	RunID                     string           `json:"run_id,omitempty"`
+	RunType                   string           `json:"run_type,omitempty"`
+	RunStatus                 string           `json:"run_status,omitempty"`
+	RuntimeFailure            bool             `json:"runtime_failure,omitempty"`
+	HasModelContext           bool             `json:"has_model_context"`
+	ResourceCount             int              `json:"resource_count,omitempty"`
+	PrimaryResource           *HandoffResource `json:"primary_resource,omitempty"`
+	ActionCount               int              `json:"action_count,omitempty"`
+	RequiresApproval          bool             `json:"requires_approval,omitempty"`
+	LastKnownApprovalStatus   string           `json:"last_known_approval_status,omitempty"`
+	LastKnownActionState      string           `json:"last_known_action_state,omitempty"`
+	LastKnownActionRisk       string           `json:"last_known_action_risk,omitempty"`
+	RecommendedNextStep       string           `json:"recommended_next_step,omitempty"`
+	RecommendedNextStepAction string           `json:"recommended_next_step_action,omitempty"`
+	UpdatedAt                 *time.Time       `json:"updated_at,omitempty"`
 }
 
 // Message represents a chat message

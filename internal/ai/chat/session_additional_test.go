@@ -525,7 +525,14 @@ func TestSessionStore_ListKeepsPatrolAssessmentHandoffIdentity(t *testing.T) {
 		t.Fatalf("failed to create session: %v", err)
 	}
 
-	if err := store.SetModelHandoffEnvelope(session.ID, "", "[Patrol Assessment Context]\nSource: Pulse Patrol current assessment", nil, []HandoffAction{{
+	handoffContext := strings.Join([]string{
+		"[Patrol Assessment Context]",
+		"Source: Pulse Patrol current assessment",
+		"Assessment: Coverage incomplete",
+		"Recommended Next Step: Verify full coverage",
+		"Recommended Next Step Action: Run Patrol (run_patrol)",
+	}, "\n")
+	if err := store.SetModelHandoffEnvelope(session.ID, "", handoffContext, nil, []HandoffAction{{
 		FindingID:        "finding-123",
 		ApprovalID:       "approval-123",
 		ApprovalStatus:   "pending",
@@ -559,6 +566,60 @@ func TestSessionStore_ListKeepsPatrolAssessmentHandoffIdentity(t *testing.T) {
 	}
 	if summary.LastKnownApprovalStatus != "pending" || summary.LastKnownActionRisk != "high" {
 		t.Fatalf("approval posture = %#v, want safe action summary", summary)
+	}
+	if summary.RecommendedNextStep != "Verify full coverage" || summary.RecommendedNextStepAction != "Run Patrol" {
+		t.Fatalf("recommended next step summary = %#v, want safe Patrol recommendation", summary)
+	}
+	payload, err := json.Marshal(sessions)
+	if err != nil {
+		t.Fatalf("Marshal sessions failed: %v", err)
+	}
+	publicJSON := string(payload)
+	for _, forbidden := range []string{
+		"Coverage incomplete",
+		"Restart the workload service",
+		"vm-100",
+	} {
+		if strings.Contains(publicJSON, forbidden) {
+			t.Fatalf("public session JSON leaked %q: %s", forbidden, publicJSON)
+		}
+	}
+}
+
+func TestSessionStore_ListWithholdsUnsafePatrolAssessmentRecommendationSummary(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	handoffContext := strings.Join([]string{
+		"[Patrol Assessment Context]",
+		"Source: Pulse Patrol current assessment",
+		"Recommended Next Step: Run sudo systemctl restart workload.service",
+		"Recommended Next Step Action: sudo restart (run_patrol)",
+	}, "\n")
+	if err := store.SetModelHandoffEnvelope(session.ID, "", handoffContext, nil, nil, HandoffMetadata{
+		Kind: "patrol_assessment",
+	}); err != nil {
+		t.Fatalf("SetModelHandoffEnvelope failed: %v", err)
+	}
+
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].HandoffSummary == nil {
+		t.Fatalf("sessions = %#v, want one session with handoff summary", sessions)
+	}
+
+	summary := sessions[0].HandoffSummary
+	if summary.RecommendedNextStep != "" || summary.RecommendedNextStepAction != "" {
+		t.Fatalf("unsafe recommendation summary = %#v, want withheld recommendation fields", summary)
 	}
 }
 

@@ -153,6 +153,8 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
   const resourceLabel = formatSessionHandoffResourceLabel(summary);
   const resourceDetail = formatSessionHandoffResourceDetail(summary);
   const statusLabel = formatSessionHandoffStatus(summary);
+  const recommendedNextStep = summary.recommended_next_step?.trim() || '';
+  const recommendedNextStepAction = summary.recommended_next_step_action?.trim() || '';
   const actionCount = summary.action_count ?? 0;
   const resourceCount = summary.resource_count ?? 0;
   const findingId = summary.finding_id?.trim() || undefined;
@@ -211,6 +213,8 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       lastKnownApprovalStatus: summary.last_known_approval_status,
       lastKnownActionState: summary.last_known_action_state,
       lastKnownActionRisk: summary.last_known_action_risk,
+      recommendedNextStep,
+      recommendedNextStepAction,
       updatedAt: summary.updated_at,
     },
     findingId,
@@ -238,6 +242,9 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
         resourceCount > 1
           ? pluralizeCount(resourceCount, 'linked resource', 'linked resources')
           : undefined,
+        isPatrolAssessment && recommendedNextStep
+          ? `Recommended next step: ${recommendedNextStep}`
+          : undefined,
         actionCount > 0
           ? pluralizeCount(actionCount, 'governed action', 'governed actions')
           : undefined,
@@ -246,11 +253,15 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       actionLabel: summary.requires_approval
         ? 'Approval required'
         : isPatrolConfigurationFailure
-          ? 'Review Patrol configuration issue'
-          : isPatrolAssessment
-            ? 'Review Patrol assessment'
-            : isPatrolRun && summary.runtime_failure
-              ? 'Review Patrol runtime issue'
+        ? 'Review Patrol configuration issue'
+        : isPatrolAssessment
+          ? recommendedNextStepAction
+            ? `Recommended: ${recommendedNextStepAction}`
+            : recommendedNextStep
+              ? `Recommended: ${recommendedNextStep}`
+              : 'Review Patrol assessment'
+          : isPatrolRun && summary.runtime_failure
+            ? 'Review Patrol runtime issue'
               : isPatrolRun
                 ? 'Review Patrol run'
                 : actionCount > 0
