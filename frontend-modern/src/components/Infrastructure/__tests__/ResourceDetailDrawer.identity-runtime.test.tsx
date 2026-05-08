@@ -672,15 +672,12 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('stable')).toBeInTheDocument();
     expect(getByText('Notes')).toBeInTheDocument();
     expect(getByText('3')).toBeInTheDocument();
-    expect(queryByText('Storage 1')).toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Show correlations' }));
+    // Correlations now render inline inside the expanded context panel
+    // rather than behind a separate Show/Hide correlations toggle, so they
+    // are visible as soon as Show context is clicked.
     await waitFor(() => {
       expect(getByText('Storage 1')).toBeInTheDocument();
     });
-    expect(
-      getByRole('button', { name: 'Hide correlations' })
-        .parentElement?.querySelector('.mt-0\\.5.text-\\[10px\\].text-muted'),
-    ).toBeNull();
     expect(
       getByRole('link', {
         name: 'Open dependency resource storage-1 in Infrastructure',
