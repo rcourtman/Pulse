@@ -6,6 +6,7 @@ import reportingResourceTypesSource from '@/components/Settings/reportingResourc
 import reportingResourceTypesUtilSource from '@/utils/reportingResourceTypes.ts?raw';
 import chartsApiSource from '@/api/charts.ts?raw';
 import investigateAlertButtonSource from '@/components/Alerts/InvestigateAlertButton.tsx?raw';
+import alertAssistantHandoffModelSource from '@/components/Alerts/alertAssistantHandoffModel.ts?raw';
 import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
@@ -662,8 +663,13 @@ describe('frontend resource type boundaries', () => {
       "guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>",
     );
 
-    expect(investigateAlertButtonSource).toContain('resolveAlertTargetType');
+    // resolveAlertTargetType moved from InvestigateAlertButton into the
+    // alert handoff model when the button was refactored to delegate via
+    // buildAlertAssistantHandoff. The button no longer reaches into the
+    // canonical resolver directly; the model owns that boundary.
+    expect(alertAssistantHandoffModelSource).toContain('resolveAlertTargetType');
     expect(investigateAlertButtonSource).not.toContain('canonicalizeFrontendResourceType');
+    expect(alertAssistantHandoffModelSource).not.toContain('canonicalizeFrontendResourceType');
     expect(alertTargetTypesSource).toContain('canonicalizeFrontendResourceType');
     expect(resourceBadgesSource).toContain('@/utils/resourceBadgePresentation');
     expect(resourceBadgePresentationSource).toContain('getResourceTypePresentation');
