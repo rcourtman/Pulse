@@ -498,8 +498,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   };
 
-  const handleDiscussWithAssistant = async (finding: UnifiedFinding, e: Event) => {
-    e.stopPropagation();
+  const openFindingInAssistant = async (
+    finding: UnifiedFinding,
+    intent: 'discuss' | 'explain',
+  ) => {
     await aiIntelligenceStore.loadPendingApprovals();
     const subject = getFindingSubjectPresentation(finding).label;
     const title = getFindingTitlePresentation(finding).label;
@@ -537,8 +539,19 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       proposedFix,
       investigationRecord: finding.investigationRecord,
       nextStepAction,
+      intent,
     });
     aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
+  };
+
+  const handleDiscussWithAssistant = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    await openFindingInAssistant(finding, 'discuss');
+  };
+
+  const handleExplainFinding = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    await openFindingInAssistant(finding, 'explain');
   };
 
   const handleOpenPlanInAssistant = (finding: UnifiedFinding, plan: RemediationPlan, e: Event) => {
@@ -1022,6 +1035,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               Add Note
             </button>
           </Show>
+          <button
+            type="button"
+            onClick={(e) => handleExplainFinding(finding, e)}
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+            title="Open Assistant with an explanation prompt"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            Explain
+          </button>
           <button
             type="button"
             onClick={(e) => handleDiscussWithAssistant(finding, e)}

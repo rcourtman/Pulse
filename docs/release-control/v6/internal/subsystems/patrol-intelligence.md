@@ -258,7 +258,17 @@ Patrol-specific presentation helpers.
    renders an `Impact:` line between `Description` and `Recommendation`.
    The same panel also surfaces `investigation_record.confidence` as a
    badge in the collapsed finding row (next to the investigation outcome
-   badge) so operators can scan trust without expanding every card. The
+   badge) so operators can scan trust without expanding every card.
+   Findings carry contextual Assistant entry points keyed on intent: the
+   default "Discuss with Assistant" button opens an open-ended chat
+   handoff, and a parallel "Explain" button opens the same handoff with
+   a `PatrolAssistantFindingIntent='explain'` seed that asks the LLM to
+   walk through what we know, why it matters, how confident the
+   analysis is, and whether the recommended action is appropriate. Both
+   buttons must route through `buildPatrolAssistantFindingHandoff` so
+   the structured context (investigation record, operational memory,
+   pending approval, proposed fix, next-step action) is attached
+   uniformly; only the leading sentence differs by intent. The
    badge palette is provided by `getInvestigationConfidenceBadgeClasses`
    in `frontend-modern/src/utils/aiFindingPresentation.ts`: high is
    reassuringly emphasized, medium is neutral, low is a soft amber.

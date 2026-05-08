@@ -876,6 +876,27 @@ describe('patrolInvestigationContextModel', () => {
     expect(presentation.impact).toBe('');
   });
 
+  it('seeds an explain-intent prompt with explanation framing rather than discussion framing', () => {
+    const discussPrompt = buildPatrolAssistantFindingPrompt({
+      title: 'Backup job failing',
+      subject: 'vm-101',
+      description: 'Datastore quota exhausted',
+    });
+    const explainPrompt = buildPatrolAssistantFindingPrompt({
+      title: 'Backup job failing',
+      subject: 'vm-101',
+      description: 'Datastore quota exhausted',
+      intent: 'explain',
+    });
+
+    expect(discussPrompt).toContain("I'd like to discuss");
+    expect(explainPrompt).toContain('Explain this Patrol finding');
+    expect(explainPrompt.toLowerCase()).toContain('walk me through what we know');
+    // Both prompts include the title and subject so the seed reads naturally.
+    expect(explainPrompt).toContain('Backup job failing');
+    expect(explainPrompt).toContain('vm-101');
+  });
+
   it('surfaces investigation impact and rollback when the backend record carries them', () => {
     const presentation = buildPatrolInvestigationRecordPresentation({
       id: 'record-2',

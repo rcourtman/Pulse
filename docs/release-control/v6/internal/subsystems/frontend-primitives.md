@@ -942,9 +942,13 @@ prompt explain the same operator-facing priority.
     investigation-record framing must derive that prompt copy through
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
     so shared drawer primitives stay shell-owned rather than becoming a
-    Patrol-specific prompt formatter. That feature-owned presentation
-    helper is the single emitter for investigation-record `impact` and
-    `rollback` fields: when an investigation record exists but those fields
+    Patrol-specific prompt formatter. The Patrol-owned helper exposes a
+    `PatrolAssistantFindingIntent` parameter ('discuss' | 'explain') so
+    contextual entry points can vary the seeded leading sentence without
+    duplicating the structured-context attachment; shared drawer
+    primitives must not branch on intent themselves. That feature-owned
+    presentation helper is the single emitter for investigation-record
+    `impact` and `rollback` fields: when an investigation record exists but those fields
     are empty, the helper emits explicit `Impact not assessed` and
     `Rollback not specified` lines into the model-only Patrol finding
     prompt context so the operator-visible gap is surfaced to Assistant

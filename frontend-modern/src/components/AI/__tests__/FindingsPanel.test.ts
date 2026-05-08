@@ -76,6 +76,17 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).not.toContain('Rollback: `');
   });
 
+  it('exposes an Explain entry point that seeds Assistant with an explanation prompt', () => {
+    // The Explain button is a contextual entry point parallel to "Discuss with
+    // Assistant" but with an intent that produces explanation framing rather
+    // than open-ended discussion. Both flow through the same handoff builder
+    // so context attachment stays uniform.
+    expect(findingsPanelSource).toContain('handleExplainFinding');
+    expect(findingsPanelSource).toContain("openFindingInAssistant(finding, 'explain')");
+    expect(findingsPanelSource).toMatch(/>\s*Explain\s*</);
+    expect(findingsPanelSource).toContain("openFindingInAssistant(finding, 'discuss')");
+  });
+
   it('surfaces investigation_record.confidence as a badge in the collapsed row', () => {
     // The seven-question schema's confidence answer should be visible to
     // operators without expanding the card. The badge sits next to the

@@ -966,6 +966,14 @@ the canonical monitored-system blocked payload.
    persisted findings created by older binaries must adopt the
    freshly-classified impact text on next re-detection rather than
    preserving the empty value.
+   The Patrol Assistant handoff carries an optional
+   `intent` field of type `PatrolAssistantFindingIntent`
+   (`'discuss' | 'explain'`) so contextual entry points on the finding
+   surface can route through the same handoff builder while seeding
+   different leading sentences. The structured handoff context
+   (investigation record, operational memory, pending approval,
+   proposed fix, next-step action) must be attached identically across
+   intents; only the seed prompt's framing varies.
    `unified.UnifiedFinding` also carries a
    `previous_resolved_fix_summary` operational-memory field captured at
    regression time from

@@ -73,6 +73,8 @@ export interface PatrolInvestigationRecordPresentation {
   error?: string;
 }
 
+export type PatrolAssistantFindingIntent = 'discuss' | 'explain';
+
 export interface PatrolAssistantFindingPromptInput {
   title: string;
   subject: string;
@@ -83,6 +85,7 @@ export interface PatrolAssistantFindingPromptInput {
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
   nextStepAction?: PatrolAssistantNextStepInput | null;
+  intent?: PatrolAssistantFindingIntent;
 }
 
 export interface PatrolAssistantApprovalBriefingInput {
@@ -167,6 +170,7 @@ export interface PatrolAssistantFindingHandoffInput {
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
   nextStepAction?: PatrolAssistantNextStepInput | null;
+  intent?: PatrolAssistantFindingIntent;
 }
 
 export interface PatrolAssistantFindingModeInput {
@@ -502,8 +506,17 @@ export function buildPatrolAssistantFindingPrompt(
   const actionInstruction = buildPatrolAssistantFindingActionPromptInstruction(input);
   const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
 
-  let prompt = `I'd like to discuss this Patrol finding: "${title}" on ${subject}.`;
-  if (hasRecord) {
+  let prompt: string;
+  if (input.intent === 'explain') {
+    prompt =
+      `Explain this Patrol finding: "${title}" on ${subject}. ` +
+      'Walk me through what we know, why it matters for the affected workloads, ' +
+      'how confident the analysis is, and whether the recommended action is the right next step. ' +
+      'Use the structured investigation record and operational memory in the attached context as the primary source.';
+  } else {
+    prompt = `I'd like to discuss this Patrol finding: "${title}" on ${subject}.`;
+  }
+  if (hasRecord && input.intent !== 'explain') {
     prompt +=
       '\n\nPulse Patrol has a structured investigation record for this finding. Use that record as the main context before suggesting next actions.';
   }
@@ -648,6 +661,7 @@ export function buildPatrolAssistantFindingHandoff(
       proposedFix: input.proposedFix,
       investigationRecord: input.investigationRecord,
       nextStepAction: input.nextStepAction,
+      intent: input.intent,
     }),
     context: {
       targetType: resource?.type,
