@@ -10,6 +10,62 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
+// TestMemoryStore_RecordActionAuditAppliesRedaction is an integration check
+// at the registry-store boundary. The MemoryStore is the backing store the
+// registry uses in tests and contract examples, and operator-authored audit
+// fields must be scrubbed of secret shapes uniformly across both SQLite and
+// in-memory persistence so test fixtures cannot accidentally exercise an
+// unredacted path that production never sees.
+func TestMemoryStore_RecordActionAuditAppliesRedaction(t *testing.T) {
+	store := NewMemoryStore()
+	now := time.Now().UTC()
+	record := ActionAuditRecord{
+		ID:        "act-redact",
+		CreatedAt: now,
+		UpdatedAt: now,
+		State:     ActionStatePlanned,
+		Request: ActionRequest{
+			RequestID:      "req-redact",
+			ResourceID:     "vm-100",
+			CapabilityName: "pulse_control",
+			Reason:         "rotate sk-leakedkey1234567 because it appeared in logs",
+			RequestedBy:    "operator@example.com",
+			Params: map[string]any{
+				"command":    "curl -H 'Authorization: Bearer eyJleak' https://api.example.com",
+				"targetType": "agent",
+			},
+		},
+		Plan: ActionPlan{
+			ActionID:  "act-redact",
+			RequestID: "req-redact",
+			Allowed:   true,
+			PlanHash:  "deadbeef",
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	stored, ok, err := store.GetActionAudit("act-redact")
+	if err != nil {
+		t.Fatalf("GetActionAudit: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected stored audit, got none")
+	}
+	if strings.Contains(stored.Request.Reason, "sk-leakedkey1234567") {
+		t.Fatalf("Reason still contains secret after persistence: %s", stored.Request.Reason)
+	}
+	if cmd, _ := stored.Request.Params["command"].(string); strings.Contains(cmd, "eyJleak") {
+		t.Fatalf("Params[command] still contains Bearer token: %s", cmd)
+	}
+	// Plan fields must be untouched so PlanHash-based drift detection
+	// continues to work.
+	if stored.Plan.PlanHash != "deadbeef" {
+		t.Fatalf("Plan.PlanHash mutated by redaction: %s", stored.Plan.PlanHash)
+	}
+}
+
 func TestResourceRegistry_ListByType(t *testing.T) {
 	rr := NewRegistry(nil)
 

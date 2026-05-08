@@ -492,7 +492,26 @@ AI-only summary payloads, or page-local heuristics.
     `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
     and the unified-resource selectors it composes. The header must not become
     a second state owner, scope banner, or provider-local filter surface.
-20. Keep governed-action drift refusal canonical in
+20. Keep audit-log persistence credential-safe.
+    `internal/unifiedresources/audit_redaction.go` provides
+    `RedactAuditText` and `RedactAuditRecord`, and every
+    `ActionAuditRecord` persistence boundary in
+    `internal/unifiedresources/store.go` (`RecordActionAudit`,
+    `RecordActionExecutionStart`, `RecordActionExecutionResult` for both
+    the SQLite and in-memory store implementations) must call
+    `RedactAuditRecord` before writing. Operators sometimes paste
+    secrets into a natural-language `reason`, and command output
+    sometimes echoes tokens; both must be scrubbed to redaction
+    markers (`[redacted]`, `[redacted-secret]`,
+    `[redacted-credentials]`) before plaintext SQL persistence.
+    `Plan`, `Approvals`, and identity fields are produced by Pulse
+    rather than operators or external command output and must be left
+    untouched by redaction (mutating them would break the
+    `PlanHash`-based drift detection contract). The redactor set is
+    intentionally narrower than the patrol-failure redactor: arbitrary
+    URLs are preserved so operators can reference runbooks, ticket
+    links, and GitHub issues in audit reasons.
+21. Keep governed-action drift refusal canonical in
     `internal/unifiedresources/actions.go`. `ErrActionPlanDrift` is the
     error any broker must return when the payload presented at execute
     time hashes to anything different than the approval-recorded

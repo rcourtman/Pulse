@@ -951,7 +951,11 @@ func (s *SQLiteResourceStore) RecordActionAudit(record ActionAuditRecord) error 
 	if err != nil {
 		return err
 	}
-	record = normalized
+	// Redact known secret shapes from operator-authored text and command
+	// output before persisting. The audit log is plaintext SQL; raw
+	// secrets pasted into a reason field or echoed in command output
+	// must not be retained.
+	record = RedactAuditRecord(normalized)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1124,6 +1128,9 @@ func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecor
 	if normalizedEvent.ActionID != normalizedRecord.ID {
 		return fmt.Errorf("action execution start event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
 	}
+	// Redact secret shapes from operator-authored fields and command
+	// output before persisting; see RecordActionAudit for the contract.
+	normalizedRecord = RedactAuditRecord(normalizedRecord)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1180,6 +1187,9 @@ func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditReco
 	if normalizedEvent.ActionID != normalizedRecord.ID {
 		return fmt.Errorf("action execution result event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
 	}
+	// Redact secret shapes from operator-authored fields and command
+	// output before persisting; see RecordActionAudit for the contract.
+	normalizedRecord = RedactAuditRecord(normalizedRecord)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1630,7 +1640,12 @@ func (m *MemoryStore) RecordActionAudit(record ActionAuditRecord) error {
 	if err != nil {
 		return err
 	}
-	record = normalized
+	// Redact secret shapes from operator-authored fields and command
+	// output before persisting in-memory too. The MemoryStore is used in
+	// tests and contract examples; redaction must apply uniformly so test
+	// fixtures cannot accidentally exercise an unredacted persistence
+	// path that production never sees.
+	record = RedactAuditRecord(normalized)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1707,6 +1722,9 @@ func (m *MemoryStore) RecordActionExecutionStart(record ActionAuditRecord, event
 	if normalizedEvent.ActionID != normalizedRecord.ID {
 		return fmt.Errorf("action execution start event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
 	}
+	// Redact secret shapes from operator-authored fields and command
+	// output before persisting; see RecordActionAudit for the contract.
+	normalizedRecord = RedactAuditRecord(normalizedRecord)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1746,6 +1764,9 @@ func (m *MemoryStore) RecordActionExecutionResult(record ActionAuditRecord, even
 	if normalizedEvent.ActionID != normalizedRecord.ID {
 		return fmt.Errorf("action execution result event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
 	}
+	// Redact secret shapes from operator-authored fields and command
+	// output before persisting; see RecordActionAudit for the contract.
+	normalizedRecord = RedactAuditRecord(normalizedRecord)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

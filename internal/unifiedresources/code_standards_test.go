@@ -365,6 +365,17 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
 			"func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
 			"func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			// Audit-log secret redaction must run at every persistence
+			// boundary so operator-authored reasons and command output do
+			// not leak credentials into the plaintext SQL audit history.
+			// Pin the call sites in store.go to keep redaction wired even
+			// across future refactors.
+			"record = RedactAuditRecord(normalized)",
+			"normalizedRecord = RedactAuditRecord(normalizedRecord)",
+		},
+		filepath.Join(".", "audit_redaction.go"): {
+			"func RedactAuditText(s string) string",
+			"func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord",
 		},
 		filepath.Join("..", "api", "actions.go"): {
 			"type ActionExecutor interface",
