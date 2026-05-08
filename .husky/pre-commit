@@ -134,7 +134,16 @@ if command -v golangci-lint >/dev/null 2>&1; then
         if [ -z "$STAGED_GO_PKGS" ]; then
             STAGED_GO_PKGS="./..."
         fi
-        GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $STAGED_GO_PKGS
+        # Report only issues introduced by the staged diff. Pre-existing
+        # violations in touched packages do not block new commits, but any
+        # new violation on a changed line still fails the commit. Override
+        # with GOLANGCI_LINT_NEW_FROM_REV=HEAD~5 etc, or "" to lint everything.
+        NEW_FROM_REV="${GOLANGCI_LINT_NEW_FROM_REV-HEAD}"
+        NEW_FROM_FLAG=""
+        if [ -n "$NEW_FROM_REV" ]; then
+            NEW_FROM_FLAG="--new-from-rev=$NEW_FROM_REV"
+        fi
+        GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $NEW_FROM_FLAG $STAGED_GO_PKGS
     else
         echo "Skipping golangci-lint (no staged Go/module/linter changes)."
     fi
