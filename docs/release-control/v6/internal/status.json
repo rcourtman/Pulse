@@ -5137,7 +5137,7 @@
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "managed-runtime-exercise",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L2",
@@ -5151,7 +5151,7 @@
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/paid-runtime-build-attribution-alerting-2026-05-07.md",
           "kind": "file",
-          "evidence_tier": "local-rehearsal"
+          "evidence_tier": "managed-runtime-exercise"
         }
       ]
     },

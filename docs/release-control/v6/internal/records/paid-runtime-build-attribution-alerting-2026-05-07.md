@@ -2,7 +2,7 @@
 
 Date: 2026-05-07
 Owner: paid-runtime-build-attribution-alerting
-Evidence tier: local-rehearsal
+Evidence tier: managed-runtime-exercise
 
 ## Decision
 
@@ -79,23 +79,59 @@ runtime identity omitted. The additional browser-stubbed negative proof now also
 covers the explicit public community runtime response, including the
 private-runtime warning and download handoff in Plans.
 
-## Remaining Proof Before Passing
+## Managed Runtime Exercise - 2026-05-08
 
-The release gate remains pending until the negative path is exercised against a
-managed runtime rather than only browser-stubbed paid payloads. The remaining
-proof should run a valid paid activation against the public community runtime
-and confirm:
+The remaining managed-runtime proof was exercised against a local v6 license
+server and real Pulse runtimes instead of browser-stubbed paid payloads:
 
-- Pulse reports `runtime.build=community` in local entitlement/runtime payloads;
-- Pro-only runtime capabilities are blocked with `paid_runtime_required`;
-- Plans displays the private-runtime warning and download handoff;
-- license-server support/admin telemetry records `runtime_status=community`;
-- the private Pulse Pro runtime path still reports `runtime_status=pro`.
+- local v6 license server on `127.0.0.1:19080` with an isolated throwaway
+  Ed25519 test key and `canary_public_v6_plans.json`;
+- public community runtime built from `cmd/pulse`, launched with isolated
+  `PULSE_DATA_DIR=/tmp/pulse-community-runtime-proof` and activated with a
+  local test Pro license for `runtime-proof-community@test.local`;
+- private Pro runtime built from `repos/pulse-enterprise/cmd/pulse-enterprise`,
+  launched with isolated `PULSE_DATA_DIR=/tmp/pulse-pro-runtime-proof` and
+  activated with a separate local test Pro license for
+  `runtime-proof-pro@test.local`;
+- the real frontend at `http://127.0.0.1:5173/settings/system/billing/plan`
+  proxying to those runtimes for browser-visible Plans proof.
 
-Direct Linux/LXC coverage should use the same contract with the private archive
-and public community archive before this gate is marked `passed`.
+Observed results:
+
+- community runtime entitlement payload reported `tier=pro`,
+  `subscription_state=active`, and `runtime.build=community`;
+- community runtime `/api/license/runtime-capabilities` reported
+  `runtime.build=community` and blocked `agent_profiles`, `ai_alerts`,
+  `ai_autofix`, `audit_logging`, `kubernetes_ai`, and `rbac` with
+  `paid_runtime_required`;
+- Plans showed `Current plan: Pulse Pro`, `Pro runtime missing`, the
+  `running the community runtime` warning, and the `Open Pulse Pro downloads`
+  handoff;
+- license-server admin/customer support JSON recorded the community install with
+  `runtime_build=community`, `runtime_status=community`, and per-license
+  `installations_runtime={community:1, pro:0, unknown:0}`;
+- Pro runtime entitlement and runtime-capability payloads reported
+  `runtime.build=pro`, no blocked capabilities, and the Plans value proof showed
+  `Pulse Pro runtime` as `Active`;
+- license-server admin/customer support JSON recorded the Pro install with
+  `runtime_build=pro`, `runtime_status=pro`, and per-license
+  `installations_runtime={community:0, pro:1, unknown:0}`.
+
+Proof commands used in the managed exercise:
+
+- `GOCACHE=/Volumes/Development/pulse/repos/pulse/tmp/go-build-cache go build -buildvcs=false -o /tmp/pulse-community-runtime-proof/pulse-community ./cmd/pulse`
+- `GOCACHE=/Volumes/Development/pulse/repos/pulse/tmp/go-build-cache go build -buildvcs=false -o /tmp/pulse-pro-runtime-proof/pulse-pro ./cmd/pulse-enterprise` from `repos/pulse-enterprise`
+- `curl -fsS -b /tmp/pulse-runtime-proof-community-cookies.txt http://127.0.0.1:7655/api/license/runtime-capabilities`
+- `curl -fsS -b /tmp/pulse-runtime-proof-pro-cookies.txt http://127.0.0.1:7655/api/license/runtime-capabilities`
+- `curl -fsS 'http://127.0.0.1:19080/v1/admin/customer?email=runtime-proof-community@test.local' -H 'X-API-Token: <local-admin-token>'`
+- `curl -fsS 'http://127.0.0.1:19080/v1/admin/customer?email=runtime-proof-pro@test.local' -H 'X-API-Token: <local-admin-token>'`
+- Browser DOM proof against `http://127.0.0.1:5173/settings/system/billing/plan`
+  for both the community-runtime warning state and the clean Pro-runtime state.
 
 ## Result
 
-This record creates a new release-ready gate. It should remain pending until the
-product-visible detection, telemetry, support view, and proof path exist.
+The release-ready gate is passed. Paid Pro activation can no longer silently look
+healthy on a community runtime: the runtime contract reaches Pulse, Pro-only
+runtime features are blocked at the runtime-capability boundary, Plans gives the
+operator a private-runtime warning and download handoff, and license-server
+support telemetry distinguishes community, Pro, and unknown runtime states.
