@@ -60,6 +60,10 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('investigationRecord: finding.investigationRecord');
     expect(findingsPanelSource).toContain('pendingApproval: pendingApprovalBriefing');
     expect(findingsPanelSource).toContain('proposedFix,');
+    expect(findingsPanelSource).toContain(
+      'const nextStepAction = getFindingPrimaryActionPresentation(finding);',
+    );
+    expect(findingsPanelSource).toContain('nextStepAction,');
     expect(findingsPanelSource).toContain('AIAPI.getInvestigation(finding.id)');
     expect(findingsPanelSource).toContain('await aiIntelligenceStore.loadPendingApprovals()');
   });

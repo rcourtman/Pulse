@@ -512,6 +512,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     );
     const proposedFix =
       latestInvestigationProposedFix || buildLiveApprovalProposedFixBriefing(pendingApproval);
+    const nextStepAction = getFindingPrimaryActionPresentation(finding);
     const handoff = buildPatrolAssistantFindingHandoff({
       id: finding.id,
       title,
@@ -534,6 +535,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       pendingApproval: pendingApprovalBriefing,
       proposedFix,
       investigationRecord: finding.investigationRecord,
+      nextStepAction,
     });
     aiChatStore.openWithPrompt(handoff.prompt, handoff.context);
   };

@@ -356,10 +356,11 @@ the canonical monitored-system blocked payload.
     `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
     `internal/api/contract_test.go` together. Patrol-originated handoffs must
     keep `[Operator Briefing]`, `[Finding Context]`, `[Finding Lifecycle
-    Context]`, structured handoff resources, related root-cause/correlation
-    finding context, and structured handoff actions model-only, with the
-    briefing summarizing operator next steps, latest lifecycle event, and
-    governed action posture without raw command text. Structured handoff action
+    Context]`, structured handoff resources, safe route-owned next-step action
+    labels, related root-cause/correlation finding context, and structured
+    handoff actions model-only, with the briefing summarizing operator next
+    steps, latest lifecycle event, and governed action posture without raw
+    command text. Structured handoff action
     references may use the current live Patrol investigation-fix approval for
     the finding when that approval is newer than the approval ID on the durable
     record, but the payload may carry only IDs, status/risk/target metadata,

@@ -951,9 +951,10 @@ prompt explain the same operator-facing priority.
     currently disabled, the helper must pass the bounded disabled reason in
     visible briefing and model-only context instead of presenting that action as
     available. Finding-level drawer opens may also pass one bounded
-    model-only finding context, one target resource reference, and one
-    `handoff_actions` reference for a live approval or proposed fix. It must not
-    expose raw command or execution payloads.
+    model-only finding context, one target resource reference, one safe
+    route-owned next-step action label/href, and one `handoff_actions` reference
+    for a live approval or proposed fix. It must not expose raw command or
+    execution payloads.
     The
     drawer may render a generic
     context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but

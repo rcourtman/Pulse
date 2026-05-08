@@ -80,6 +80,7 @@ export interface PatrolAssistantFindingPromptInput {
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
+  nextStepAction?: PatrolAssistantNextStepInput | null;
 }
 
 export interface PatrolAssistantApprovalBriefingInput {
@@ -105,6 +106,11 @@ export interface PatrolAssistantProposedFixBriefingInput {
   rationale?: string | null;
   commandCount?: number | null;
   destructive?: boolean | null;
+}
+
+export interface PatrolAssistantNextStepInput {
+  label?: string | null;
+  href?: string | null;
 }
 
 export interface PatrolAssistantProposedFixBriefingSource {
@@ -133,6 +139,7 @@ export interface PatrolAssistantFindingBriefingInput {
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
+  nextStepAction?: PatrolAssistantNextStepInput | null;
 }
 
 export interface PatrolAssistantFindingHandoffInput {
@@ -157,6 +164,7 @@ export interface PatrolAssistantFindingHandoffInput {
   pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
   proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
   investigationRecord?: InvestigationRecord | null;
+  nextStepAction?: PatrolAssistantNextStepInput | null;
 }
 
 export interface PatrolAssistantFindingModeInput {
@@ -484,6 +492,7 @@ export function buildPatrolAssistantFindingPrompt(
   const description = normalizeText(input.description);
   const hasRecord = Boolean(input.investigationRecord?.id);
   const actionInstruction = buildPatrolAssistantFindingActionPromptInstruction(input);
+  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
 
   let prompt = `I'd like to discuss this Patrol finding: "${title}" on ${subject}.`;
   if (hasRecord) {
@@ -492,6 +501,9 @@ export function buildPatrolAssistantFindingPrompt(
   }
   if (actionInstruction) {
     prompt += `\n\n${actionInstruction}`;
+  }
+  if (nextStepAction.label) {
+    prompt += `\n\nPatrol's visible next step is "${nextStepAction.label}". Treat it as operator guidance for review, not an execution command.`;
   }
   if (description) {
     prompt += `\n\n${description}`;
@@ -608,6 +620,7 @@ export function buildPatrolAssistantFindingHandoff(
   const resource = buildPatrolFindingHandoffResource(input);
   const handoffResources = resource ? [resource] : [];
   const handoffActions = buildPatrolAssistantFindingHandoffActions(input);
+  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
 
   return {
     prompt: buildPatrolAssistantFindingPrompt({
@@ -619,6 +632,7 @@ export function buildPatrolAssistantFindingHandoff(
       pendingApproval: input.pendingApproval,
       proposedFix: input.proposedFix,
       investigationRecord: input.investigationRecord,
+      nextStepAction: input.nextStepAction,
     }),
     context: {
       targetType: resource?.type,
@@ -642,6 +656,7 @@ export function buildPatrolAssistantFindingHandoff(
         pendingApproval: input.pendingApproval,
         proposedFix: input.proposedFix,
         investigationRecord: input.investigationRecord,
+        nextStepAction: input.nextStepAction,
       }),
       context: {
         source: 'pulse-patrol-finding',
@@ -651,6 +666,8 @@ export function buildPatrolAssistantFindingHandoff(
         resourceName: resource?.name,
         resourceType: resource?.type,
         pendingApprovalId: normalizeApprovalBriefing(input.pendingApproval).id || undefined,
+        nextStepActionLabel: nextStepAction.label || undefined,
+        nextStepActionHref: nextStepAction.href || undefined,
         actionReferenceCount: handoffActions.length,
       },
     },
@@ -2113,6 +2130,7 @@ function buildPatrolAssistantFindingModelContext(
       ? `last regression ${normalizeText(input.lastRegressionAt)}`
       : undefined,
   ].filter(isNonEmptyString);
+  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
   const attentionReason = buildPatrolAssistantAttentionReason(input, record);
   const operatorDecision = buildPatrolAssistantOperatorDecision(input);
   const proposedFixFacts = proposedFix
@@ -2169,6 +2187,8 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Action Preflight', pendingApproval.actionPreflight),
     formatContextLine('Dry-Run Posture', pendingApproval.actionDryRunSummary),
     formatContextLine('Proposed Fix', proposedFixFacts),
+    formatContextLine('Patrol Next Step', nextStepAction.label),
+    formatContextLine('Patrol Next Step Route', nextStepAction.href),
     formatContextLine('Operator Decision', operatorDecision),
     'Command Boundary: Command details stay in governed approval or remediation context; this model-only handoff may include command counts but not raw command text.',
     'Operator Boundary: This Patrol finding handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
@@ -2355,6 +2375,7 @@ export function buildPatrolAssistantFindingBriefing(
   const subject = normalizeText(input.subject) || 'affected resource';
   const pendingApproval = normalizeApprovalBriefing(input.pendingApproval);
   const proposedFix = record.proposedFix || normalizeProposedFixBriefing(input.proposedFix);
+  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
   const approvalStatusParts = !record.hasRecord
     ? [
         pendingApproval.status ? `${formatIdentifierLabel(pendingApproval.status)} approval` : '',
@@ -2397,7 +2418,9 @@ export function buildPatrolAssistantFindingBriefing(
     evidence: [...record.evidenceSummaries, ...verificationLines].slice(0, 4),
     actionLabel:
       proposedFix?.description ||
-      (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined),
+      (pendingApproval.id ? `Approval ${pendingApproval.id}` : undefined) ||
+      nextStepAction.label ||
+      undefined,
     commandSummary: proposedFix?.commandSummary,
     safetyNote: buildPatrolAssistantSafetyNote(proposedFix, pendingApproval),
     suggestedPrompts: buildPatrolFindingSuggestedPrompts(
@@ -2452,11 +2475,14 @@ function buildPatrolFindingSuggestedPrompts(
   const hasRecurrence =
     normalizeNonNegativeCount(input.regressionCount) > 0 ||
     normalizeNonNegativeCount(input.timesRaised) > 1;
+  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
 
   if (requiresApproval) {
     prompts.push('Review approval risk and next step');
   } else if (record.hasRecord) {
     prompts.push('Prioritize finding and safest next step');
+  } else if (nextStepAction.label) {
+    prompts.push('Review Patrol next step');
   } else {
     prompts.push('Explain current finding status');
   }
@@ -2475,6 +2501,8 @@ function buildPatrolFindingSuggestedPrompts(
     prompts.push('Summarize remediation without command text');
   } else if (requiresApproval) {
     prompts.push('List approval prerequisites before action');
+  } else if (nextStepAction.label) {
+    prompts.push('Check prerequisites before next step');
   } else if (hasRecurrence) {
     prompts.push('Explain recurrence and what changed');
   } else if (hasLoopState) {
@@ -2703,6 +2731,10 @@ function buildPatrolAssistantOperatorDecision(
   if (loopState.includes('investigat')) {
     return 'Wait for Patrol to finish the investigation before approving remediation.';
   }
+  const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
+  if (nextStepAction.label) {
+    return `Use Patrol's next step: ${nextStepAction.label}; review the finding context before changing settings or rerunning Patrol.`;
+  }
   if (normalizeText(input.findingStatus).toLowerCase() === 'active') {
     return 'Continue investigation or monitoring; no governed action reference is ready.';
   }
@@ -2758,6 +2790,15 @@ function normalizeProposedFixBriefing(
   }
 
   return normalized;
+}
+
+function normalizePatrolAssistantNextStepAction(
+  action?: PatrolAssistantNextStepInput | null,
+): Required<PatrolAssistantNextStepInput> {
+  return {
+    label: normalizeText(action?.label),
+    href: normalizeText(action?.href),
+  };
 }
 
 function formatPatrolAssistantProposedFixDetail(

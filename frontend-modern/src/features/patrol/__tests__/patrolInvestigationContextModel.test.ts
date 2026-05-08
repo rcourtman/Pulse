@@ -1262,6 +1262,10 @@ describe('patrolInvestigationContextModel', () => {
       resourceId: 'pulse-patrol-runtime',
       resourceName: 'Patrol runtime',
       resourceType: 'service',
+      nextStepAction: {
+        label: 'Open Patrol provider settings',
+        href: '/settings/system-ai',
+      },
     });
 
     expect(handoff.context).toMatchObject({
@@ -1275,10 +1279,29 @@ describe('patrolInvestigationContextModel', () => {
         resourceId: 'pulse-patrol-runtime',
         resourceName: 'Patrol runtime',
         resourceType: 'service',
+        nextStepActionLabel: 'Open Patrol provider settings',
+        nextStepActionHref: '/settings/system-ai',
         actionReferenceCount: 0,
       },
     });
+    expect(handoff.prompt).toContain(
+      'Patrol\'s visible next step is "Open Patrol provider settings"',
+    );
+    expect(handoff.context.briefing).toMatchObject({
+      actionLabel: 'Open Patrol provider settings',
+      suggestedPrompts: [
+        'Review Patrol next step',
+        'Explain current Patrol loop state',
+        'Check prerequisites before next step',
+      ],
+    });
     expect(handoff.context.handoffActions).toBeUndefined();
+    expect(handoff.context.handoffContext).toContain(
+      'Patrol Next Step: Open Patrol provider settings',
+    );
+    expect(handoff.context.handoffContext).toContain(
+      'Patrol Next Step Route: /settings/system-ai',
+    );
     expect(handoff.context.handoffContext).toContain(
       'Operator Boundary: This Patrol finding handoff is model-only context',
     );
