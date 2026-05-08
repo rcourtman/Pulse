@@ -18,7 +18,10 @@ import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscoverySettingsDialog';
-import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
+import {
+  InfrastructureInstallerSection,
+  type InfrastructureInstallerFocus,
+} from './InfrastructureInstallerSection';
 import { InfrastructureSourceManager } from './InfrastructureSourceManager';
 import { InfrastructureSourcePicker } from './InfrastructureSourcePicker';
 import {
@@ -69,6 +72,16 @@ const ADD_STEP_TO_TYPE: Record<ManagedAddTypeStep, ConnectionType> = {
   availability: 'availability',
   truenas: 'truenas',
   vmware: 'vmware',
+};
+
+const ADD_STEP_TO_INSTALLER_FOCUS: Partial<
+  Record<ManagedAddTypeStep, InfrastructureInstallerFocus>
+> = {
+  agent: 'agent',
+  'linux-host': 'linux-host',
+  unraid: 'unraid',
+  docker: 'docker',
+  kubernetes: 'kubernetes',
 };
 
 const closeButtonClass =
@@ -126,6 +139,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const activeCatalogItem = createMemo(() =>
     getInfrastructureSourcePickerItemForRouteStep(routeStep()),
   );
+  const activeInstallerFocus = createMemo<InfrastructureInstallerFocus>(() => {
+    const step = routeStep();
+    if (!step || step === 'pick' || step === 'detect') return 'agent';
+    return ADD_STEP_TO_INSTALLER_FOCUS[step as ManagedAddTypeStep] ?? 'agent';
+  });
   const editingConnection = createMemo<Connection | null>(() => editingRow()?.connection ?? null);
   const attachedAgentConnections = createMemo(() =>
     (editingRow()?.attachedConnections ?? []).filter((connection) => connection.type === 'agent'),
@@ -337,7 +355,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           <AgentProfilesPanel />
         </div>
       </Show>
-      <InfrastructureInstallerSection />
+      <InfrastructureInstallerSection focus={activeInstallerFocus()} />
     </div>
   );
 

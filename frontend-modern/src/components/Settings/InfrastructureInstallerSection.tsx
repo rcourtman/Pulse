@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -12,20 +12,145 @@ import {
 } from '@/utils/unifiedAgentInventoryPresentation';
 import {
   INSTALL_PROFILE_OPTIONS,
+  type AgentPlatform,
+  type InfrastructureCommandSection,
   type InstallProfile,
 } from './infrastructureOperationsModel';
 import { useInfrastructureOperationsContext } from './useInfrastructureOperationsState';
 
-export const InfrastructureInstallerSection: Component = () => {
+export type InfrastructureInstallerFocus =
+  | 'agent'
+  | 'linux-host'
+  | 'unraid'
+  | 'docker'
+  | 'kubernetes';
+
+interface InfrastructureInstallerSectionProps {
+  focus?: InfrastructureInstallerFocus;
+}
+
+type InfrastructureCommandSectionWithPlatform = InfrastructureCommandSection & {
+  platform: AgentPlatform;
+};
+
+type InfrastructureInstallerFocusPresentation = {
+  title: string;
+  description: string;
+  recommendationTitle: string;
+  recommendationDetail: string;
+  preferredProfile: InstallProfile;
+  platforms: readonly AgentPlatform[];
+};
+
+const ALL_AGENT_PLATFORMS: readonly AgentPlatform[] = ['linux', 'macos', 'freebsd', 'windows'];
+
+const INSTALLER_FOCUS_PRESENTATION: Record<
+  InfrastructureInstallerFocus,
+  InfrastructureInstallerFocusPresentation
+> = {
+  agent: {
+    title: 'Install on a host',
+    description:
+      'Start here to add the first system you want Pulse to monitor, then expand into Docker, Kubernetes, Proxmox, and related infrastructure.',
+    recommendationTitle: 'Recommended install model',
+    recommendationDetail:
+      'Pulse Agent is a low-overhead background service. Install it on each machine where you want full node-local telemetry such as temperatures, SMART disk health, services, Docker, or Kubernetes coverage. For Proxmox clusters, keep the cluster API connection for platform inventory and add the agent to each node for host-level augmentation.',
+    preferredProfile: 'auto',
+    platforms: ALL_AGENT_PLATFORMS,
+  },
+  'linux-host': {
+    title: 'Install on a host',
+    description:
+      'Choose the command for the operating system on the machine you want Pulse to monitor.',
+    recommendationTitle: 'Host install path',
+    recommendationDetail:
+      'Install Pulse Agent on the machine itself. Pulse will collect host telemetry, services, SMART disk health, sensors, and network metrics from that host after it checks in.',
+    preferredProfile: 'auto',
+    platforms: ALL_AGENT_PLATFORMS,
+  },
+  unraid: {
+    title: 'Install on Unraid',
+    description:
+      'Run the Linux installer from the Unraid terminal or SSH session on the server you want Pulse to monitor.',
+    recommendationTitle: 'Unraid install path',
+    recommendationDetail:
+      'Install Pulse Agent directly on the Unraid server. Pulse will classify the reporting host as Unraid from the agent host profile and collect array health, disks, SMART, services, Docker containers, and host telemetry.',
+    preferredProfile: 'auto',
+    platforms: ['linux'],
+  },
+  docker: {
+    title: 'Install on the Docker host',
+    description:
+      'Run the installer on the machine that runs Docker or Podman so Pulse can discover containers from that host.',
+    recommendationTitle: 'Docker install path',
+    recommendationDetail:
+      'Install Pulse Agent on the Docker or Podman host. The Docker profile is selected for this flow so copied commands force container monitoring when automatic detection is restricted.',
+    preferredProfile: 'docker',
+    platforms: ['linux'],
+  },
+  kubernetes: {
+    title: 'Install on a Kubernetes node',
+    description:
+      'Run the installer on a cluster node that should report Kubernetes workload context and host telemetry.',
+    recommendationTitle: 'Kubernetes install path',
+    recommendationDetail:
+      'Install Pulse Agent on a Kubernetes node. The Kubernetes profile is selected for this flow so copied commands enable workload context while preserving node-local telemetry.',
+    preferredProfile: 'kubernetes',
+    platforms: ['linux'],
+  },
+};
+
+const getCommandSectionTitle = (
+  section: InfrastructureCommandSectionWithPlatform,
+  focus: InfrastructureInstallerFocus,
+): string => {
+  if (section.platform !== 'linux') return section.title;
+  if (focus === 'unraid') return 'Run on Unraid';
+  if (focus === 'docker') return 'Run on the Docker host';
+  if (focus === 'kubernetes') return 'Run on a Kubernetes node';
+  return section.title;
+};
+
+const getCommandSectionDescription = (
+  section: InfrastructureCommandSectionWithPlatform,
+  focus: InfrastructureInstallerFocus,
+): string => {
+  if (section.platform !== 'linux') return section.description;
+  if (focus === 'unraid') {
+    return 'Use the Linux installer from Unraid terminal or SSH. The agent stores its local uninstall helper under the Unraid plugin path.';
+  }
+  if (focus === 'docker') {
+    return 'Use the Linux installer on the Docker or Podman host. Commands in this flow include the Docker profile.';
+  }
+  if (focus === 'kubernetes') {
+    return 'Use the Linux installer on a Kubernetes node. Commands in this flow include the Kubernetes profile.';
+  }
+  return section.description;
+};
+
+export const InfrastructureInstallerSection: Component<InfrastructureInstallerSectionProps> = (
+  props,
+) => {
   const state = useInfrastructureOperationsContext();
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
+  const focus = createMemo<InfrastructureInstallerFocus>(() => props.focus ?? 'agent');
+  const presentation = createMemo(() => INSTALLER_FOCUS_PRESENTATION[focus()]);
+  const commandSections = createMemo(() =>
+    state
+      .commandSections()
+      .filter((section) => presentation().platforms.includes(section.platform)),
+  );
+
+  createEffect(() => {
+    state.handleInstallProfileChange(presentation().preferredProfile);
+  });
 
   return (
     <SettingsPanel
-      title={state.isEmbedded() ? 'Install on a host' : 'Infrastructure'}
+      title={state.isEmbedded() ? presentation().title : 'Infrastructure'}
       description={
         state.isEmbedded()
-          ? 'Start here to add the first system you want Pulse to monitor, then expand into Docker, Kubernetes, Proxmox, and related infrastructure.'
+          ? presentation().description
           : 'Primary setup hub for installing Pulse on the first host you want to monitor, then expanding into Docker, Kubernetes, Proxmox, and related infrastructure.'
       }
       bodyClass="space-y-5"
@@ -139,12 +264,9 @@ export const InfrastructureInstallerSection: Component = () => {
 
       <div class="space-y-5">
         <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-50">
-          <p class="font-semibold">Recommended install model</p>
+          <p class="font-semibold">{presentation().recommendationTitle}</p>
           <p class="mt-1 text-xs text-emerald-800 dark:text-emerald-200">
-            Pulse Agent is a low-overhead background service. Install it on each machine where you
-            want full node-local telemetry such as temperatures, SMART disk health, services,
-            Docker, or Kubernetes coverage. For Proxmox clusters, keep the cluster API connection
-            for platform inventory and add the agent to each node for host-level augmentation.
+            {presentation().recommendationDetail}
           </p>
         </div>
 
@@ -260,12 +382,16 @@ export const InfrastructureInstallerSection: Component = () => {
               </p>
             </div>
             <div class="grid gap-3 lg:grid-cols-2">
-              <For each={state.commandSections()}>
+              <For each={commandSections()}>
                 {(section) => (
                   <div class="rounded-md border border-border bg-surface px-3 py-3">
                     <div class="space-y-1">
-                      <h5 class="text-sm font-semibold text-base-content">{section.title}</h5>
-                      <p class="text-xs text-muted">{section.description}</p>
+                      <h5 class="text-sm font-semibold text-base-content">
+                        {getCommandSectionTitle(section, focus())}
+                      </h5>
+                      <p class="text-xs text-muted">
+                        {getCommandSectionDescription(section, focus())}
+                      </p>
                     </div>
                     <div class="mt-3 flex flex-wrap gap-2">
                       <For each={section.snippets}>
@@ -467,12 +593,16 @@ export const InfrastructureInstallerSection: Component = () => {
             </div>
 
             <div class="space-y-4">
-              <For each={state.commandSections()}>
+              <For each={commandSections()}>
                 {(section) => (
                   <div class="space-y-3 rounded-md border border-border p-4">
                     <div class="space-y-1">
-                      <h5 class="text-sm font-semibold text-base-content">{section.title}</h5>
-                      <p class="text-xs text-muted">{section.description}</p>
+                      <h5 class="text-sm font-semibold text-base-content">
+                        {getCommandSectionTitle(section, focus())}
+                      </h5>
+                      <p class="text-xs text-muted">
+                        {getCommandSectionDescription(section, focus())}
+                      </p>
                     </div>
                     <div class="space-y-3">
                       <For each={section.snippets}>

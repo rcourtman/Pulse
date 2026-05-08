@@ -133,7 +133,11 @@ vi.mock('../useConnectionsLedger', () => ({
 }));
 
 vi.mock('../InfrastructureInstallerSection', () => ({
-  InfrastructureInstallerSection: () => <div data-testid="install-section">install</div>,
+  InfrastructureInstallerSection: (props: { focus?: string }) => (
+    <div data-testid="install-section" data-focus={props.focus}>
+      install
+    </div>
+  ),
 }));
 
 vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
@@ -617,9 +621,7 @@ describe('InfrastructureWorkspace', () => {
     const dialog = screen.getByRole('dialog');
     expect(screen.getAllByText('Add infrastructure').length).toBeGreaterThan(0);
     expect(
-      screen.getByText(
-        'Choose the system, platform, host, or service you want Pulse to monitor.',
-      ),
+      screen.getByText('Choose the system, platform, host, or service you want Pulse to monitor.'),
     ).toBeInTheDocument();
     expect(
       within(dialog).getByPlaceholderText('Search Unraid, TrueNAS, Proxmox, Docker...'),
@@ -686,6 +688,16 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(screen.getAllByText('Add Pulse Agent').length).toBeGreaterThan(0);
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
+    expect(screen.getByTestId('install-section')).toHaveAttribute('data-focus', 'agent');
+  });
+
+  it('tailors agent-backed catalog routes to the selected system', async () => {
+    routeState.search = '?add=unraid';
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.getAllByText('Add Unraid').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('install-section')).toHaveAttribute('data-focus', 'unraid');
   });
 
   it('renders a direct type route before the add dialog mounts', async () => {

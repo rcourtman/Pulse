@@ -548,7 +548,10 @@ prompt explain the same operator-facing priority.
    The picker must keep that first choice in recognizable system/service
    vocabulary, while the typed add dialog may use the shared source-strategy
    vocabulary after selection to explain API inventory, Agent telemetry, or
-   API + Agent coverage.
+   API + Agent coverage. Agent-backed typed add routes keep the same governed
+   dialog shell, but their embedded installer surface should stay focused on
+   the selected system so the first visible command path does not re-expand
+   into irrelevant platform choices.
    Credential slots are dispatched by the detected or manually-selected type
    and must still reach the canonical form body rather than diverging into a
    revived provider-specific workspace.

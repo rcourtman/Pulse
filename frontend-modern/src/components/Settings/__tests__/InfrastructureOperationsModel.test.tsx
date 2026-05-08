@@ -222,14 +222,23 @@ describe('infrastructure operations model', () => {
 
   it('keeps the embedded installer section on the canonical host-install framing', () => {
     expect(infrastructureInstallerSectionSource).toContain(
-      "title={state.isEmbedded() ? 'Install on a host' : 'Infrastructure'}",
+      "title={state.isEmbedded() ? presentation().title : 'Infrastructure'}",
+    );
+    expect(infrastructureInstallerSectionSource).toContain('Install on Unraid');
+    expect(infrastructureInstallerSectionSource).toContain('Run on Unraid');
+    expect(infrastructureInstallerSectionSource).toContain('Install on the Docker host');
+    expect(infrastructureInstallerSectionSource).toContain('Install on a Kubernetes node');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'state.handleInstallProfileChange(presentation().preferredProfile)',
     );
     expect(infrastructureInstallerSectionSource).toContain('Generate install token');
     expect(infrastructureInstallerSectionSource).toContain('Generate token');
     expect(infrastructureInstallerSectionSource).toContain(
       'This is the Pulse Agent handoff from first-run setup inside Add infrastructure.',
     );
-    expect(infrastructureInstallerSectionSource).toContain('Pulse Agent is a low-overhead background service.');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'Pulse Agent is a low-overhead background service.',
+    );
     expect(infrastructureInstallerSectionSource).toContain(
       'For Proxmox clusters, keep the cluster API',
     );
@@ -285,16 +294,16 @@ describe('infrastructure operations model', () => {
   });
 
   it('does not reintroduce the retired reporting state hook on the operations state', async () => {
-    const operationsStateSource = await import(
-      '../useInfrastructureOperationsState?raw'
-    ).then((mod) => (mod as { default: string }).default);
+    const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
     expect(operationsStateSource).not.toContain('useInfrastructureReportingState');
   });
 
   it('keeps discovered-node filtering anchored to canonical represented-host dedupe', async () => {
-    const discoveryStateSource = await import(
-      '../useInfrastructureDiscoveryRuntimeState?raw'
-    ).then((mod) => (mod as { default: string }).default);
+    const discoveryStateSource = await import('../useInfrastructureDiscoveryRuntimeState?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
     expect(discoveryStateSource).toContain('filterRepresentedDiscoveredServers');
     expect(discoveryStateSource).toContain('nodes()');
   });

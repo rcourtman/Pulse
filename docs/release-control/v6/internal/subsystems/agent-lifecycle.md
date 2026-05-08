@@ -186,7 +186,11 @@ Unraid, TrueNAS, Proxmox, Docker, Kubernetes, or standalone hosts, and the
 helper maps those choices into API-backed, agent-backed, or availability-probe
 routes only after selection. The first picker surface must support aliases for
 common operator terms and must not make API/agent/probe taxonomy the primary
-choice model.
+choice model. Agent-backed typed routes must keep that context in the
+installer: Unraid, Docker, Kubernetes, and generic host choices may share the
+same unified agent installer, but their visible title, recommendation copy,
+preferred install profile, and first command section must match the selected
+system instead of falling back to an all-platform generic agent screen.
 Agent runtime normalization must use that same governed host-profile manifest:
 profile identity tokens and runtime platform fallback values such as
 `unraid` -> `linux` are generated into the runtime resolver instead of being
