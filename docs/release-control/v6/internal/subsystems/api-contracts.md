@@ -2028,7 +2028,9 @@ hrefs when the browser handoff already owns that route. Frontend-visible
 Patrol assessment briefings may render those same safe recommendation fields as
 separate title, reason, and route-action facts, but they must not introduce new
 browser-owned authority beyond the structured handoff metadata and bounded
-chat context.
+chat context. Browser-visible suggested prompts may follow the structured
+recommendation action, such as provider-settings recovery for runtime
+visibility failures, while remaining review prompts rather than API authority.
 Frontend handoff builders may send these fields for owned alert, incident,
 Patrol assessment, Patrol finding, or Patrol run-history context, but the
 backend must not

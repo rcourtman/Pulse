@@ -1076,6 +1076,15 @@ function buildPatrolAssessmentSuggestedPrompts(
     normalized.correlations.length > 0 ||
     input.investigationContext?.hasContext === true;
   const hasGovernedAction = normalized.findings.some(assessmentFindingHasGovernedAction);
+  const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
+
+  if (recommendedNextStep?.actionKind === 'open_provider_settings') {
+    return formatPatrolSuggestedPrompts([
+      'Explain why Patrol visibility is blocked',
+      'What should I check in provider settings?',
+      'What should I verify after restoring Patrol?',
+    ]);
+  }
 
   if (activeFindingCount > 0) {
     prompts.push('Prioritize findings and safest next step');

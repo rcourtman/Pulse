@@ -471,6 +471,11 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.briefing).toMatchObject({
       actionLabel: 'Recommended: Open Patrol provider settings',
       actionHref: '/settings/system-ai',
+      suggestedPrompts: [
+        'Explain why Patrol visibility is blocked',
+        'What should I check in provider settings?',
+        'What should I verify after restoring Patrol?',
+      ],
     });
     expect(handoff.context.briefing?.detailLines).toEqual(
       expect.arrayContaining([

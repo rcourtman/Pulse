@@ -279,7 +279,10 @@ Patrol-specific presentation helpers.
    use them for restored drawer copy without receiving the private model-only
    handoff context. Assessment Assistant drawer briefings must present the safe
    recommended step title, reason, and route-owned action as separate operator
-   facts instead of compressing them into an opaque context sentence.
+   facts instead of compressing them into an opaque context sentence, and the
+   suggested prompts must follow the structured recommendation action so
+   provider-setting/runtime-visibility failures lead with provider checks and
+   post-restore verification rather than generic coverage questions.
    When the current Patrol assessment is coverage-incomplete with no active
    infrastructure finding, the same handoff model must frame the briefing as a
    verification gap: the prompt leads with what scoped activity did and did not

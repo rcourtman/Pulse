@@ -964,8 +964,10 @@ prompt explain the same operator-facing priority.
     available. Assessment recommendation briefings must keep the safe
     recommendation title, reason, and route-owned action as separate visible
     drawer facts so the shared Assistant shell presents operator guidance
-    without parsing a compressed context sentence. Finding-level drawer opens
-    may also pass one bounded
+    without parsing a compressed context sentence. The same feature helper owns
+    recommendation-aware suggested prompts; shared drawer primitives must render
+    those prompts without replacing a provider-settings recovery path with
+    generic coverage wording. Finding-level drawer opens may also pass one bounded
     model-only finding context, one target resource reference, one safe
     route-owned next-step action label/href, and one `handoff_actions` reference
     for a live approval or proposed fix. It must not expose raw command or
