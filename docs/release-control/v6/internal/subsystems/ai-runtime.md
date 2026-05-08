@@ -265,7 +265,17 @@ runtime cost control, and shared AI transport surfaces.
     Description and Recommendation: AddFromAlert backfills empty Impact
     on existing findings; AddFromAI overwrites existing Impact when the
     incoming finding carries one. Unknown alert types must return an
-    empty impact rather than synthesizing generic copy. When `/api/ai/chat` receives `finding_id`, the
+    empty impact rather than synthesizing generic copy.
+    Investigation-record `Rollback` is sourced from the canonical
+    `RemediationPlan` when one exists for the finding:
+    `AggregatePlanRollbackSteps` in
+    `internal/ai/investigation_records.go` flattens
+    `RemediationStep.Rollback` strings into a deduplicated record-level
+    slice, and the patrol findings build site
+    (`internal/ai/patrol_findings.go`) populates `record.Rollback` from
+    `remediationEngine.GetPlanForFinding` when the engine and an active
+    plan are present. Rollback must remain absent rather than fabricated
+    when no plan exists, mirroring the impact rule. When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so

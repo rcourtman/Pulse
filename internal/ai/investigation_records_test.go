@@ -106,6 +106,52 @@ func TestEmptyInvestigationRecord_NormalizesRollback(t *testing.T) {
 	}
 }
 
+func TestAggregatePlanRollbackSteps(t *testing.T) {
+	t.Run("nil plan returns empty slice", func(t *testing.T) {
+		got := AggregatePlanRollbackSteps(nil)
+		if got == nil || len(got) != 0 {
+			t.Fatalf("expected empty slice for nil plan, got %#v", got)
+		}
+	})
+
+	t.Run("aggregates rollback strings from steps and drops empties", func(t *testing.T) {
+		plan := &aicontracts.RemediationPlan{
+			Steps: []aicontracts.RemediationStep{
+				{Order: 1, Description: "Restart service", Rollback: "systemctl stop unit && restore prior config"},
+				{Order: 2, Description: "Reseat datastore", Rollback: ""}, // empty rollback skipped
+				{Order: 3, Description: "Re-enable cron", Rollback: "Disable cron and revert maintenance window"},
+			},
+		}
+		got := AggregatePlanRollbackSteps(plan)
+		want := []string{
+			"systemctl stop unit && restore prior config",
+			"Disable cron and revert maintenance window",
+		}
+		if len(got) != len(want) {
+			t.Fatalf("expected %d rollback steps, got %d (%#v)", len(want), len(got), got)
+		}
+		for i, w := range want {
+			if got[i] != w {
+				t.Fatalf("step %d: expected %q, got %q", i, w, got[i])
+			}
+		}
+	})
+
+	t.Run("deduplicates identical rollback strings", func(t *testing.T) {
+		plan := &aicontracts.RemediationPlan{
+			Steps: []aicontracts.RemediationStep{
+				{Order: 1, Rollback: "rollback-a"},
+				{Order: 2, Rollback: "rollback-a"}, // duplicate
+				{Order: 3, Rollback: "rollback-b"},
+			},
+		}
+		got := AggregatePlanRollbackSteps(plan)
+		if len(got) != 2 {
+			t.Fatalf("expected 2 unique rollback steps, got %#v", got)
+		}
+	})
+}
+
 func TestFindingsStore_UpdateInvestigationRecord(t *testing.T) {
 	store := NewFindingsStore()
 	store.Add(&Finding{

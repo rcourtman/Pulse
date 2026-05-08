@@ -1250,6 +1250,16 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 				latestInvestigation = orchestrator.GetInvestigationByFinding(latest.ID)
 			}
 			if record := BuildFindingInvestigationRecord(latest, latestInvestigation); record != nil {
+				// When a remediation plan exists for this finding, lift its
+				// per-step rollback strings into record.Rollback so the
+				// operator-facing investigation surface answers
+				// "what's the undo for the proposed fix?" at the record root
+				// rather than only in nested per-step payload.
+				if engine := p.remediationEngine; engine != nil {
+					if plan := engine.GetPlanForFinding(latest.ID); plan != nil {
+						record.Rollback = AggregatePlanRollbackSteps(plan)
+					}
+				}
 				if p.findings.UpdateInvestigationRecord(latest.ID, record) {
 					if refreshed := p.findings.Get(latest.ID); refreshed != nil {
 						latest = refreshed

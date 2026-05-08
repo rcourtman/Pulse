@@ -149,6 +149,22 @@ func investigationRecordFixFromSession(fix *aicontracts.Fix) *aicontracts.Invest
 	return &recordFix
 }
 
+// AggregatePlanRollbackSteps lifts the rollback strings authored on a
+// remediation plan's steps into a flat, deduplicated slice suitable for the
+// record-level InvestigationRecord.Rollback field. Empty rollback steps are
+// dropped, and nil plans return an empty slice. The caller is responsible
+// for calling this only when a remediation plan exists for the finding.
+func AggregatePlanRollbackSteps(plan *aicontracts.RemediationPlan) []string {
+	if plan == nil {
+		return []string{}
+	}
+	steps := make([]string, 0, len(plan.Steps))
+	for _, step := range plan.Steps {
+		steps = append(steps, step.Rollback)
+	}
+	return uniqueNonEmptyStrings(steps)
+}
+
 func investigationRecordVerificationNotes(outcome aicontracts.InvestigationOutcome) []string {
 	switch outcome {
 	case aicontracts.OutcomeResolved, aicontracts.OutcomeFixVerified:
