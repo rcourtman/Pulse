@@ -78,6 +78,128 @@ func TestNew_AllowsInsecureRemoteHTTPPulseURL(t *testing.T) {
 	}
 }
 
+func TestNew_ResolvesProxmoxVEHostIdentity(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:        "pve-host",
+				HostID:          "hid",
+				Platform:        "debian",
+				PlatformFamily:  "debian",
+				PlatformVersion: "13.4",
+				KernelVersion:   "7.0.0-3-pve",
+				KernelArch:      runtime.GOARCH,
+			}, nil
+		},
+		statFn: func(name string) (os.FileInfo, error) {
+			if name == "/etc/pve" {
+				return nil, nil
+			}
+			return nil, os.ErrNotExist
+		},
+		lookPathFn: func(file string) (string, error) {
+			if file == "pveversion" {
+				return "/usr/bin/pveversion", nil
+			}
+			return "", os.ErrNotExist
+		},
+		commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name != "/usr/bin/pveversion" {
+				t.Fatalf("command name = %q, want /usr/bin/pveversion", name)
+			}
+			return "pve-manager/9.1.9/ee7bad0a3d1546c9 (running kernel: 7.0.0-3-pve)", nil
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:  "token",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if agent.platform != "debian" {
+		t.Fatalf("platform = %q, want Debian runtime platform", agent.platform)
+	}
+	if agent.osName != proxmoxPVEOSName {
+		t.Fatalf("osName = %q, want %q", agent.osName, proxmoxPVEOSName)
+	}
+	if agent.osVersion != "9.1.9" {
+		t.Fatalf("osVersion = %q, want 9.1.9", agent.osVersion)
+	}
+}
+
+func TestNew_DoesNotUseDebianVersionForProxmoxVE(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:        "pve-host",
+				HostID:          "hid",
+				Platform:        "debian",
+				PlatformFamily:  "debian",
+				PlatformVersion: "13.4",
+				KernelVersion:   "7.0.0-3-pve",
+				KernelArch:      runtime.GOARCH,
+			}, nil
+		},
+		statFn: func(name string) (os.FileInfo, error) {
+			if name == "/etc/pve" {
+				return nil, nil
+			}
+			return nil, os.ErrNotExist
+		},
+		lookPathFn: func(file string) (string, error) {
+			return "", os.ErrNotExist
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:  "token",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if agent.osName != proxmoxPVEOSName {
+		t.Fatalf("osName = %q, want %q", agent.osName, proxmoxPVEOSName)
+	}
+	if agent.osVersion != "" {
+		t.Fatalf("osVersion = %q, want empty Proxmox version when pveversion is unavailable", agent.osVersion)
+	}
+}
+
+func TestCleanProxmoxPVEVersion(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "short output",
+			raw:  "pve-manager/9.1.9/ee7bad0a3d1546c9 (running kernel: 7.0.0-3-pve)",
+			want: "9.1.9",
+		},
+		{
+			name: "verbose output",
+			raw:  "proxmox-ve: 9.1-1\npve-manager/9.1.9/ee7bad0a3d1546c9\n",
+			want: "9.1.9",
+		},
+		{
+			name: "unrelated",
+			raw:  "Debian GNU/Linux 13",
+			want: "",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cleanProxmoxPVEVersion(tt.raw); got != tt.want {
+				t.Fatalf("cleanProxmoxPVEVersion() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNew_RequiresAPITokenWhenEnrollmentEnabled(t *testing.T) {
 	mc := &mockCollector{
 		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {

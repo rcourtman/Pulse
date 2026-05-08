@@ -198,6 +198,11 @@ redeclared in host-agent or settings-table branches. Host-profile detection is
 an identity fact and must not depend on optional storage probes succeeding; an
 Unraid host still reports the governed `unraid` profile and `linux` runtime
 platform when `mdcmd` or array-topology collection is unavailable.
+First-class platform hosts that also run the Pulse Agent must keep the same
+operator-facing system identity split: a Proxmox VE node may report a Debian
+runtime platform underneath, but the host-agent OS identity and infrastructure
+System badge must resolve and present `Proxmox VE` / `PVE` from PVE runtime
+evidence instead of exposing the Debian base distro as the primary system label.
 The lifecycle-owned infrastructure source manager also owns platform/system
 grouping as source-management content, but not its table band presentation:
 `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` must

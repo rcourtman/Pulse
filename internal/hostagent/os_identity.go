@@ -1,11 +1,16 @@
 package hostagent
 
 import (
+	"context"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var unraidVersionPattern = regexp.MustCompile(`\b\d+(?:\.\d+)+(?:[-+._][A-Za-z0-9]+)*\b|\b\d+\b`)
+var proxmoxPVEVersionPattern = regexp.MustCompile(`(?i)\bpve-manager/([^/\s]+)`)
+
+const proxmoxPVEOSName = "Proxmox VE"
 
 func resolveHostOSIdentity(collector SystemCollector, osName, osVersion string) (string, string) {
 	currentName := strings.TrimSpace(osName)
@@ -16,27 +21,30 @@ func resolveHostOSIdentity(collector SystemCollector, osName, osVersion string) 
 	}
 
 	if name, version, ok := detectSynologyOSIdentity(collector); ok {
-		if version == "" {
-			version = currentVersion
-		}
-		return name, strings.TrimSpace(version)
+		return resolvedDetectedHostOSIdentity(name, version, currentVersion, true)
 	}
 
 	if name, version, ok := detectQNAPOSIdentity(collector); ok {
-		if version == "" {
-			version = currentVersion
-		}
-		return name, strings.TrimSpace(version)
+		return resolvedDetectedHostOSIdentity(name, version, currentVersion, true)
 	}
 
 	if name, version, ok := detectUnraidOSIdentity(collector); ok {
-		if version == "" {
-			version = currentVersion
-		}
-		return name, strings.TrimSpace(version)
+		return resolvedDetectedHostOSIdentity(name, version, currentVersion, true)
+	}
+
+	if name, version, ok := detectProxmoxVEOSIdentity(collector); ok {
+		return resolvedDetectedHostOSIdentity(name, version, currentVersion, false)
 	}
 
 	return currentName, currentVersion
+}
+
+func resolvedDetectedHostOSIdentity(name, version, currentVersion string, allowVersionFallback bool) (string, string) {
+	version = strings.TrimSpace(version)
+	if version == "" && allowVersionFallback {
+		version = currentVersion
+	}
+	return strings.TrimSpace(name), strings.TrimSpace(version)
 }
 
 func detectSynologyOSIdentity(collector SystemCollector) (string, string, bool) {
@@ -161,6 +169,46 @@ func detectUnraidOSIdentity(collector SystemCollector) (string, string, bool) {
 
 	version := cleanUnraidVersion(string(data))
 	return "Unraid", version, true
+}
+
+func detectProxmoxVEOSIdentity(collector SystemCollector) (string, string, bool) {
+	hasPVE := false
+	if _, err := collector.Stat("/etc/pve"); err == nil {
+		hasPVE = true
+	}
+
+	pveVersionPath, err := collector.LookPath("pveversion")
+	if err == nil {
+		hasPVE = true
+	}
+
+	if !hasPVE {
+		if _, err := collector.LookPath("pvesh"); err != nil {
+			return "", "", false
+		}
+	}
+
+	version := ""
+	if pveVersionPath != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if output, err := collector.CommandCombinedOutput(ctx, pveVersionPath); err == nil {
+			version = cleanProxmoxPVEVersion(output)
+		}
+	}
+
+	return proxmoxPVEOSName, version, true
+}
+
+func cleanProxmoxPVEVersion(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if match := proxmoxPVEVersionPattern.FindStringSubmatch(raw); len(match) == 2 {
+		return strings.TrimSpace(match[1])
+	}
+	return ""
 }
 
 func detectUnraidOSReleaseIdentity(collector SystemCollector) (string, string, bool) {
