@@ -184,6 +184,20 @@ export interface PatrolTriggerStatus {
   anomaly_triggers_enabled: boolean;
 }
 
+export interface FindingsTrustSummary {
+  tracked: number;
+  currently_active: number;
+  resolved: number;
+  auto_resolved: number;
+  fix_verified: number;
+  fix_failed: number;
+  dismissed_as_noise: number;
+  dismissed_as_expected: number;
+  dismissed_as_later: number;
+  suppressed: number;
+  regressed_at_least_once: number;
+}
+
 export interface PatrolStatus {
   runtime_state: PatrolRuntimeState;
   running: boolean;
@@ -207,6 +221,7 @@ export interface PatrolStatus {
   upgrade_url?: string;
   readiness?: PatrolReadiness;
   summary: FindingsSummary;
+  trust?: FindingsTrustSummary;
 }
 
 /**

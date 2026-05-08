@@ -277,4 +277,37 @@ describe('patrol api', () => {
 
     await expect(getPatrolRunWithToolCalls('run-3')).resolves.toBeNull();
   });
+
+  it('preserves the FindingsTrustSummary block on patrol status responses', async () => {
+    // The trust block surfaces FindingsStore.GetTrustSummary on the patrol
+    // page. The TS mirror must round-trip the exact field names from the
+    // backend snake_case payload so the workspace strip can read them.
+    apiFetchJSONMock.mockResolvedValueOnce({
+      runtime_state: 'active',
+      healthy: true,
+      summary: { critical: 0, warning: 1, watch: 0, info: 0 },
+      trust: {
+        tracked: 4,
+        currently_active: 1,
+        resolved: 2,
+        auto_resolved: 1,
+        fix_verified: 1,
+        fix_failed: 0,
+        dismissed_as_noise: 1,
+        dismissed_as_expected: 0,
+        dismissed_as_later: 0,
+        suppressed: 0,
+        regressed_at_least_once: 1,
+      },
+    } as any);
+
+    await expect(getPatrolStatus()).resolves.toMatchObject({
+      trust: {
+        tracked: 4,
+        fix_verified: 1,
+        dismissed_as_noise: 1,
+        regressed_at_least_once: 1,
+      },
+    });
+  });
 });

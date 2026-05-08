@@ -242,6 +242,11 @@ bypass the API fail-closed execution gate.
    auto-apply the recorded fix description as a backup, restore, or storage
    remediation action; replaying a prior fix is the action broker's
    authority, not the storage/recovery surface's.
+   The `trust` block on the patrol-status response
+   (`FindingsTrustSummary`) follows the same scope: storage and recovery
+   surfaces may read it as adjacent operator context but must not derive
+   backup, restore, or storage remediation authority from any of its
+   counters.
    Shared Patrol autonomy routes may also touch broad `internal/api/` wiring,
    but monitor-mode AI configuration and remediation entitlement responses stay
    AI runtime/API-contract owned and must not become recovery-local policy,

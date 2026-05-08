@@ -2943,6 +2943,35 @@ func TestContract_FindingJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+// TestContract_PatrolStatusTrustJSONSnapshot pins the canonical JSON shape
+// for the trust snapshot block carried on the patrol-status response. The
+// PatrolStatusResponse.Trust field surfaces FindingsTrustSummary on the
+// operator-facing Patrol page so trust signals (fix verified, dismissed as
+// noise, etc.) are scannable without expanding individual findings.
+func TestContract_PatrolStatusTrustJSONSnapshot(t *testing.T) {
+	trust := ai.FindingsTrustSummary{
+		Tracked:              4,
+		CurrentlyActive:      1,
+		Resolved:             2,
+		AutoResolved:         1,
+		FixVerified:          1,
+		FixFailed:            0,
+		DismissedAsNoise:     1,
+		DismissedAsExpected:  0,
+		DismissedAsLater:     0,
+		Suppressed:           0,
+		RegressedAtLeastOnce: 1,
+	}
+	got, err := json.Marshal(trust)
+	if err != nil {
+		t.Fatalf("marshal trust summary: %v", err)
+	}
+	want := `{"tracked":4,"currently_active":1,"resolved":2,"auto_resolved":1,"fix_verified":1,"fix_failed":0,"dismissed_as_noise":1,"dismissed_as_expected":0,"dismissed_as_later":0,"suppressed":0,"regressed_at_least_once":1}`
+	if string(got) != want {
+		t.Fatalf("trust summary JSON drift:\n got: %s\nwant: %s", got, want)
+	}
+}
+
 // TestContract_UnifiedFindingPreviousResolvedFixSummaryJSONSnapshot pins the
 // canonical JSON shape for the operational-memory field that preserves the
 // prior successful fix summary across regressions. The Finding to

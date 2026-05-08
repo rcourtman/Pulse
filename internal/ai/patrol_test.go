@@ -722,6 +722,35 @@ func TestPatrolService_GetFindingsSummary(t *testing.T) {
 	}
 }
 
+func TestPatrolService_GetFindingsTrustSummary(t *testing.T) {
+	// PatrolService.GetFindingsTrustSummary delegates to the FindingsStore-
+	// level method. This verifies the accessor is wired correctly so
+	// patrol-status responses can include the snapshot without callers
+	// reaching past the service boundary.
+	ps := NewPatrolService(nil, nil)
+
+	ps.findings.Add(&Finding{
+		ID: "f-active", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Active",
+	})
+	ps.findings.Add(&Finding{
+		ID: "f-noise", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, Title: "Noise",
+	})
+	ps.findings.Dismiss("f-noise", "not_an_issue", "")
+
+	summary := ps.GetFindingsTrustSummary()
+	if summary.Tracked != 2 {
+		t.Errorf("Expected Tracked=2, got %d", summary.Tracked)
+	}
+	if summary.DismissedAsNoise != 1 {
+		t.Errorf("Expected DismissedAsNoise=1, got %d", summary.DismissedAsNoise)
+	}
+	if summary.CurrentlyActive != 1 {
+		t.Errorf("Expected CurrentlyActive=1, got %d", summary.CurrentlyActive)
+	}
+}
+
 func TestPatrolService_GetRunHistory(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 

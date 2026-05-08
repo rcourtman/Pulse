@@ -966,6 +966,17 @@ the canonical monitored-system blocked payload.
    persisted findings created by older binaries must adopt the
    freshly-classified impact text on next re-detection rather than
    preserving the empty value.
+   The patrol-status response (`PatrolStatusResponse`) carries an
+   optional `trust` block of type `ai.FindingsTrustSummary` that
+   surfaces the trust-metrics snapshot for the Patrol page. The block
+   is populated when a patrol service is available and omitted
+   otherwise; the JSON keys are `tracked`, `currently_active`,
+   `resolved`, `auto_resolved`, `fix_verified`, `fix_failed`,
+   `dismissed_as_noise`, `dismissed_as_expected`, `dismissed_as_later`,
+   `suppressed`, and `regressed_at_least_once`. The TS API client
+   carries a parallel `FindingsTrustSummary` interface in
+   `frontend-modern/src/api/patrol.ts` and a `trust?` field on
+   `PatrolStatus`. Snapshot semantics, not lifetime totals.
    The Patrol Assistant handoff carries an optional
    `intent` field of type `PatrolAssistantFindingIntent`
    (`'discuss' | 'explain'`) so contextual entry points on the finding

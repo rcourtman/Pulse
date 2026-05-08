@@ -259,6 +259,15 @@ Patrol-specific presentation helpers.
    The same panel also surfaces `investigation_record.confidence` as a
    badge in the collapsed finding row (next to the investigation outcome
    badge) so operators can scan trust without expanding every card.
+   The Patrol page renders a small Trust strip above the Findings/Runs
+   tab bar that surfaces `state.patrolStatus()?.trust` (the
+   FindingsTrustSummary block on the patrol-status response) as compact
+   signals: fixes verified, auto-resolved, dismissed-as-noise,
+   dismissed-as-expected, currently-active, and regressed-at-least-once.
+   The strip is hidden when every signal is zero so a fresh install
+   does not show an empty pill. The strip must read field names that
+   exist on `FindingsTrustSummary`; new strip categories must extend
+   that contract first rather than inventing per-page keys.
    Findings carry contextual Assistant entry points keyed on intent: the
    default "Discuss with Assistant" button opens an open-ended chat
    handoff, and a parallel "Explain" button opens the same handoff with

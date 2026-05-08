@@ -530,6 +530,12 @@ func (p *PatrolService) GetFindingsSummary() FindingsSummary {
 	return p.findings.GetSummary()
 }
 
+// GetFindingsTrustSummary returns a snapshot of how currently-tracked
+// findings have resolved. See FindingsTrustSummary for snapshot semantics.
+func (p *PatrolService) GetFindingsTrustSummary() FindingsTrustSummary {
+	return p.findings.GetTrustSummary()
+}
+
 // ResolveFinding marks a finding as resolved with a resolution note
 // This is called when the AI successfully fixes an issue
 func (p *PatrolService) ResolveFinding(findingID string, resolutionNote string) error {

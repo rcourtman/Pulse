@@ -293,7 +293,11 @@ runtime cost control, and shared AI transport surfaces.
     auto-resolved, fix-verified, fix-failed, dismissed-as-noise,
     dismissed-as-expected, dismissed-as-later, suppressed,
     regressed-at-least-once). It is the data layer for trust metrics on
-    operator surfaces. The summary is intentionally a snapshot of the
+    operator surfaces. `PatrolService.GetFindingsTrustSummary` exposes
+    the same snapshot through the service boundary, and the
+    patrol-status API response carries it under
+    `PatrolStatusResponse.Trust` so the Patrol page can render a Trust
+    strip without callers reaching past the service boundary. The summary is intentionally a snapshot of the
     in-memory store, not lifetime totals; once findings are cleaned up
     they no longer contribute. Downstream surfaces must frame the
     counts as current-state distribution rather than historical

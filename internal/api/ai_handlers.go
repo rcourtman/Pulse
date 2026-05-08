@@ -4902,6 +4902,11 @@ type PatrolStatusResponse struct {
 		Watch    int `json:"watch"`
 		Info     int `json:"info"`
 	} `json:"summary"`
+	// Trust is a snapshot of how currently-tracked findings have resolved.
+	// Operators use this to scan whether Patrol's analysis has been useful:
+	// fix-verified and dismissed-as-noise grow as the system gets sharper.
+	// Snapshot semantics, not lifetime totals; nil when no patrol service.
+	Trust     *ai.FindingsTrustSummary `json:"trust,omitempty"`
 	Readiness *PatrolReadinessResponse `json:"readiness,omitempty"`
 }
 
@@ -5204,6 +5209,9 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	response.Summary.Warning = summary.Warning
 	response.Summary.Watch = summary.Watch
 	response.Summary.Info = summary.Info
+
+	trust := patrol.GetFindingsTrustSummary()
+	response.Trust = &trust
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write patrol status response")

@@ -876,6 +876,31 @@ describe('patrolInvestigationContextModel', () => {
     expect(presentation.impact).toBe('');
   });
 
+  it('does not let the patrol context model synthesize impact from trust counters', () => {
+    // Trust counters (FindingsTrustSummary on the patrol-status response) are
+    // an operator-page concern, not a per-finding context concern. The
+    // investigation-context model must not derive impact, recommendation, or
+    // any other per-finding text from trust counts; the source authoring rule
+    // (see ai-runtime contract) forbids synthesis from severity, category,
+    // OR aggregate counts. This test pins that boundary.
+    const presentation = buildPatrolInvestigationRecordPresentation({
+      id: 'rec-trust-isolation',
+      finding_id: 'f-trust-isolation',
+      subject: { resource_id: 'vm-9' },
+      trigger: { detected_at: '2026-05-08T12:00:00Z' },
+      status: 'completed',
+      // Intentionally empty impact/rollback so the test reflects what the
+      // model produces when only trust signals are available externally.
+      evidence: [],
+      verification: [],
+      rollback: [],
+      tools_used: [],
+      started_at: '2026-05-08T12:00:00Z',
+    });
+    expect(presentation.impact).toBeFalsy();
+    expect(presentation.rollbackSummaries).toEqual([]);
+  });
+
   it('seeds an explain-intent prompt with explanation framing rather than discussion framing', () => {
     const discussPrompt = buildPatrolAssistantFindingPrompt({
       title: 'Backup job failing',

@@ -946,7 +946,13 @@ prompt explain the same operator-facing priority.
     `PatrolAssistantFindingIntent` parameter ('discuss' | 'explain') so
     contextual entry points can vary the seeded leading sentence without
     duplicating the structured-context attachment; shared drawer
-    primitives must not branch on intent themselves. That feature-owned
+    primitives must not branch on intent themselves. Patrol-page
+    surfaces may also render a Trust strip from
+    `state.patrolStatus()?.trust`, but the strip must read field names
+    that exist on `FindingsTrustSummary`; shared drawer/chrome
+    primitives stay free of the trust shape so adding new trust signals
+    goes through the contract first rather than per-shell branching.
+    That feature-owned
     presentation helper is the single emitter for investigation-record
     `impact` and `rollback` fields: when an investigation record exists but those fields
     are empty, the helper emits explicit `Impact not assessed` and

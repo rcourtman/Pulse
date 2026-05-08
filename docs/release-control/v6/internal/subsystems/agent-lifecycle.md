@@ -434,7 +434,11 @@ profile and assignment columns, but embedded table framing must route through
    to the `previous_resolved_fix_summary` operational-memory field carried on
    findings across regressions: lifecycle surfaces may render it in finding
    context but must not replay the recorded fix description as an installer
-   command, enrollment action, or fleet-control instruction. Assistant chat enrichment from
+   command, enrollment action, or fleet-control instruction. The same
+   scope applies to the `trust` block on the patrol-status response
+   (`FindingsTrustSummary`): lifecycle surfaces may read it as adjacent
+   operator context but must not derive enrollment, installer, or
+   fleet-control authority from any of its counters. Assistant chat enrichment from
    `finding_id` follows the same rule: lifecycle-owned command execution and
    agent auto-approval policy stay canonical in the agent/runtime owners, not
    in Patrol investigation-record prompt text. Model-only Assistant handoff
