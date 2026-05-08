@@ -330,8 +330,9 @@ runtime cost control, and shared AI transport surfaces.
     and Patrol run ID, safe run type/status/runtime-failure flags, resource and
     action counts, a primary resource label, last-known approval/action status,
     risk level, timestamp, and Patrol assessment recommended next-step/action
-    labels only when they can be safely extracted from the stored assessment
-    handoff, but it must not expose model-only handoff text,
+    labels plus the safe recommendation action kind only when they can be
+    safely extracted from the stored assessment handoff, but it must not expose
+    model-only handoff text,
     runtime failure detail, action preflight/result bodies, remediation
     descriptions, raw commands, or approval command payloads. Its
     `requires_approval` field is a current operator-decision flag only: pending
@@ -359,8 +360,9 @@ runtime cost control, and shared AI transport surfaces.
     opening the session picker instead of presenting mount-time cached
     summaries as the operator's decision surface. For restored Patrol
     assessment sessions, that picker must present the safe recommended
-    next-step/action label from `handoff_summary` when one is available instead
-    of reducing the saved session to generic assessment context.
+    next-step/action label from `handoff_summary` when one is available and
+    restore the safe recommendation action kind as context metadata instead of
+    reducing the saved session to generic assessment context.
     Browser-originated `handoff_context`, `handoff_resources`, and
     `handoff_actions` plus safe `handoff_metadata` are one-shot request seeds
     for the first successful chat turn. After that send succeeds, the drawer

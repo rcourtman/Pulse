@@ -163,6 +163,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
   const statusLabel = formatSessionHandoffStatus(summary);
   const recommendedNextStep = summary.recommended_next_step?.trim() || '';
   const recommendedNextStepAction = summary.recommended_next_step_action?.trim() || '';
+  const recommendedNextStepActionKind = summary.recommended_next_step_action_kind?.trim() || '';
   const actionCount = summary.action_count ?? 0;
   const resourceCount = summary.resource_count ?? 0;
   const findingId = summary.finding_id?.trim() || undefined;
@@ -223,6 +224,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       lastKnownActionRisk: summary.last_known_action_risk,
       recommendedNextStep,
       recommendedNextStepAction,
+      recommendedNextStepActionKind,
       updatedAt: summary.updated_at,
     },
     findingId,

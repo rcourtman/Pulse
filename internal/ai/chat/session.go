@@ -223,20 +223,21 @@ func inferPatrolRunHandoffMetadata(handoffContext string) HandoffMetadata {
 	return NormalizeHandoffMetadata(metadata)
 }
 
-func patrolAssessmentRecommendedNextStepSummary(kind string, handoffContext string) (string, string) {
+func patrolAssessmentRecommendedNextStepSummary(kind string, handoffContext string) (string, string, string) {
 	if kind != sessionHandoffKindPatrolAssessment {
-		return "", ""
+		return "", "", ""
 	}
 
 	lines := strings.Split(strings.TrimSpace(handoffContext), "\n")
 	if len(lines) == 0 {
-		return "", ""
+		return "", "", ""
 	}
 
 	sawAssessmentContext := false
 	sawPatrolSource := false
 	var recommendedNextStep string
 	var recommendedNextStepAction string
+	var recommendedNextStepActionKind string
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "[Patrol Assessment Context]" {
@@ -261,36 +262,39 @@ func patrolAssessmentRecommendedNextStepSummary(kind string, handoffContext stri
 		case "recommended next step":
 			recommendedNextStep = safeSessionHandoffSummaryText(value, 160)
 		case "recommended next step action":
-			recommendedNextStepAction = safePatrolAssessmentRecommendationAction(value)
+			recommendedNextStepAction, recommendedNextStepActionKind = safePatrolAssessmentRecommendationAction(value)
 		}
 	}
 
 	if !sawAssessmentContext || !sawPatrolSource {
-		return "", ""
+		return "", "", ""
 	}
 	if recommendedNextStep == "" && recommendedNextStepAction != "" {
 		recommendedNextStep = recommendedNextStepAction
 	}
-	return recommendedNextStep, recommendedNextStepAction
+	return recommendedNextStep, recommendedNextStepAction, recommendedNextStepActionKind
 }
 
-func safePatrolAssessmentRecommendationAction(value string) string {
+func safePatrolAssessmentRecommendationAction(value string) (string, string) {
 	action := safeSessionHandoffSummaryText(value, 120)
 	if action == "" {
-		return ""
+		return "", ""
 	}
-	for _, suffix := range []string{
-		" (discuss_assessment)",
-		" (open_provider_settings)",
-		" (review_approvals)",
-		" (review_findings)",
-		" (run_patrol)",
+	for _, candidate := range []struct {
+		suffix string
+		kind   string
+	}{
+		{" (discuss_assessment)", "discuss_assessment"},
+		{" (open_provider_settings)", "open_provider_settings"},
+		{" (review_approvals)", "review_approvals"},
+		{" (review_findings)", "review_findings"},
+		{" (run_patrol)", "run_patrol"},
 	} {
-		if strings.HasSuffix(action, suffix) {
-			return strings.TrimSpace(strings.TrimSuffix(action, suffix))
+		if strings.HasSuffix(action, candidate.suffix) {
+			return strings.TrimSpace(strings.TrimSuffix(action, candidate.suffix)), candidate.kind
 		}
 	}
-	return action
+	return action, ""
 }
 
 func safeSessionHandoffSummaryText(value string, maxRunes int) string {
@@ -396,23 +400,24 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 	} else if findingID != "" {
 		kind = sessionHandoffKindPatrolFinding
 	}
-	recommendedNextStep, recommendedNextStepAction := patrolAssessmentRecommendedNextStepSummary(
+	recommendedNextStep, recommendedNextStepAction, recommendedNextStepActionKind := patrolAssessmentRecommendedNextStepSummary(
 		kind,
 		modelContext.HandoffContext,
 	)
 
 	summary := &SessionHandoffSummary{
-		Kind:                      kind,
-		FindingID:                 findingID,
-		RunID:                     metadata.RunID,
-		RunType:                   metadata.RunType,
-		RunStatus:                 metadata.RunStatus,
-		RuntimeFailure:            metadata.RuntimeFailure,
-		HasModelContext:           strings.TrimSpace(modelContext.HandoffContext) != "",
-		ResourceCount:             len(resources),
-		ActionCount:               len(actions),
-		RecommendedNextStep:       recommendedNextStep,
-		RecommendedNextStepAction: recommendedNextStepAction,
+		Kind:                          kind,
+		FindingID:                     findingID,
+		RunID:                         metadata.RunID,
+		RunType:                       metadata.RunType,
+		RunStatus:                     metadata.RunStatus,
+		RuntimeFailure:                metadata.RuntimeFailure,
+		HasModelContext:               strings.TrimSpace(modelContext.HandoffContext) != "",
+		ResourceCount:                 len(resources),
+		ActionCount:                   len(actions),
+		RecommendedNextStep:           recommendedNextStep,
+		RecommendedNextStepAction:     recommendedNextStepAction,
+		RecommendedNextStepActionKind: recommendedNextStepActionKind,
 	}
 	if kind != sessionHandoffKindPatrolRun {
 		summary.RunID = ""

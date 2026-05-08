@@ -2007,8 +2007,8 @@ carry private Assistant model-context metadata, but that payload is a safe
 reload marker only. It may carry the handoff kind, finding ID, Patrol run ID,
 safe run type/status/runtime-failure flags, counts, primary-resource label,
 last-known approval/action status, risk level, Patrol assessment recommended
-next-step/action labels when safely extractable from the stored assessment
-handoff, and summary timestamp; it must
+next-step/action labels plus the safe recommendation action kind when safely
+extractable from the stored assessment handoff, and summary timestamp; it must
 not serialize the model-only `handoff_context`, runtime failure detail, action
 preflight/result bodies, remediation descriptions, raw commands, or approval
 command payloads.

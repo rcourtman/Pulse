@@ -889,6 +889,7 @@ describe('AIChat', () => {
             requires_approval: false,
             recommended_next_step: 'Verify full coverage',
             recommended_next_step_action: 'Run Patrol',
+            recommended_next_step_action_kind: 'run_patrol',
           },
         },
       ]);
@@ -919,6 +920,7 @@ describe('AIChat', () => {
               findingId: undefined,
               recommendedNextStep: 'Verify full coverage',
               recommendedNextStepAction: 'Run Patrol',
+              recommendedNextStepActionKind: 'run_patrol',
             }),
             briefing: expect.objectContaining({
               sourceLabel: 'Pulse Patrol',

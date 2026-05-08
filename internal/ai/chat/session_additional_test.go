@@ -567,7 +567,9 @@ func TestSessionStore_ListKeepsPatrolAssessmentHandoffIdentity(t *testing.T) {
 	if summary.LastKnownApprovalStatus != "pending" || summary.LastKnownActionRisk != "high" {
 		t.Fatalf("approval posture = %#v, want safe action summary", summary)
 	}
-	if summary.RecommendedNextStep != "Verify full coverage" || summary.RecommendedNextStepAction != "Run Patrol" {
+	if summary.RecommendedNextStep != "Verify full coverage" ||
+		summary.RecommendedNextStepAction != "Run Patrol" ||
+		summary.RecommendedNextStepActionKind != "run_patrol" {
 		t.Fatalf("recommended next step summary = %#v, want safe Patrol recommendation", summary)
 	}
 	payload, err := json.Marshal(sessions)
@@ -618,7 +620,9 @@ func TestSessionStore_ListWithholdsUnsafePatrolAssessmentRecommendationSummary(t
 	}
 
 	summary := sessions[0].HandoffSummary
-	if summary.RecommendedNextStep != "" || summary.RecommendedNextStepAction != "" {
+	if summary.RecommendedNextStep != "" ||
+		summary.RecommendedNextStepAction != "" ||
+		summary.RecommendedNextStepActionKind != "" {
 		t.Fatalf("unsafe recommendation summary = %#v, want withheld recommendation fields", summary)
 	}
 }
