@@ -92,8 +92,8 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(typeColumnUsers).toEqual([
-      '../Workloads/guestRowModel.tsx',
       '../Recovery/Recovery.tsx',
+      '../Workloads/guestRowModel.tsx',
     ]);
 
     expect(inlineTypeColumnUsers).toEqual([]);
@@ -127,8 +127,8 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(directHelperImportUsers).toEqual([
-      '../Workloads/guestRowModel.tsx',
       '../Recovery/Recovery.tsx',
+      '../Workloads/guestRowModel.tsx',
     ]);
   });
 
