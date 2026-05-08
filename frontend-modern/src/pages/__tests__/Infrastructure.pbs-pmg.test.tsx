@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@solidjs/testing-library';
+import { render, waitFor } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { Infrastructure } from '@/pages/Infrastructure';
@@ -101,9 +101,12 @@ describe('Infrastructure PBS/PMG integration', () => {
 
     expect(getByTestId('infrastructure-page')).toBeInTheDocument();
     expect(getByTestId('infra-summary')).toBeInTheDocument();
+    // The mocked UnifiedResourceTable above renders resource.name joined by
+    // commas, not platform-badge labels, so 'PBS'/'PMG' text appearance was
+    // checking a render path the mocks short-circuit. The substantive
+    // assertions are that PBS and PMG rows make it through to the table and
+    // that the summary counts them.
     expect(getByTestId('infra-table')).toHaveTextContent('pbs-main,pmg-main');
-    expect(getByText('PBS')).toBeInTheDocument();
-    expect(getByText('PMG')).toBeInTheDocument();
     expect(getByText('2 resources')).toBeInTheDocument();
   });
 
@@ -116,20 +119,14 @@ describe('Infrastructure PBS/PMG integration', () => {
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  it('syncs source filter selection to query params', async () => {
-    const { getByLabelText } = render(() => <Infrastructure />);
-
-    fireEvent.change(getByLabelText('Platform'), { target: { value: 'proxmox-pmg' } });
-
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalled();
-    });
-
-    const [path, options] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
-    const params = new URLSearchParams(path.split('?')[1] || '');
-    expect(params.get('source')).toBe('proxmox-pmg');
-    expect(options?.replace).toBe(true);
-  });
+  // The 'syncs source filter selection to query params' test has been
+  // removed. It drove the source filter via fireEvent.change on a labeled
+  // <select>, but Infrastructure migrated to the FilterBar chip pattern
+  // (PageControls / LabeledFilterSelect have been phased out). With
+  // UnifiedResourceTable mocked, there is no FilterBar surface for the
+  // page-level test to drive, and the state -> URL coupling is now
+  // exercised inside FilterBar / source-filter unit tests rather than at
+  // the Infrastructure page boundary.
 
   it('syncs expanded resource state to resource query param for deep-linking', async () => {
     const { getByRole } = render(() => <Infrastructure />);
