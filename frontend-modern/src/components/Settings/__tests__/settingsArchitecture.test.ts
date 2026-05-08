@@ -456,7 +456,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('flex h-full min-h-0 flex-col');
     expect(infrastructureWorkspaceSource).toContain('showSlotHeader={false}');
     expect(infrastructureWorkspaceSource).toContain(
-      "onDetectFromAddress={() => openAddFlow('detect')}",
+      "onDetectApiPlatform={() => openAddFlow('detect')}",
     );
     expect(infrastructureWorkspaceSource).toContain("onBackToCatalog={() => openAddFlow('pick')}");
     expect(infrastructureWorkspaceSource).not.toContain('trackInitialCatalogSelection');
@@ -532,10 +532,10 @@ describe('settings architecture guardrails', () => {
       "from '@/utils/infrastructureOnboardingPresentation';",
     );
     expect(connectionEditorSource).toContain('<AddressProbeStep');
-    expect(connectionEditorSource).toContain('Address probe');
+    expect(connectionEditorSource).toContain('API platform probe');
     expect(connectionEditorSource).toContain('flex h-full min-h-0 flex-col');
     expect(connectionEditorSource).toContain('Back to source types');
-    expect(connectionEditorSource).toContain('Back to detect');
+    expect(connectionEditorSource).toContain('Back to API probe');
     expect(connectionEditorSource).toContain('Install Pulse Agent');
     expect(connectionEditorSource).not.toContain('buildConnectionEditorCatalogEntries');
     expect(connectionEditorSource).not.toContain('selectedFamilyId');
@@ -545,7 +545,7 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).not.toContain('Back to platforms');
     expect(connectionEditorSource).not.toContain('NodeModal');
 
-    expect(addressProbeStepSource).toContain('Probe address');
+    expect(addressProbeStepSource).toContain('Probe API endpoint');
     expect(addressProbeStepSource).toContain('install Pulse Agent instead');
     expect(addressProbeStepSource).toContain('Choose a source type instead');
     expect(addressProbeStepSource).toContain('getInfrastructureAgentHostProfileSupportText');

@@ -1,5 +1,8 @@
 import { createEffect, createSignal, on } from 'solid-js';
-import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyIsReadOnly,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
 import { resolveCanonicalSelfHostedBillingHref } from '@/utils/pricingHandoff';
 import {
   buildInfrastructureOnboardingPath,
@@ -91,6 +94,7 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
         }
 
         if (
+          sessionPresentationPolicyResolved() &&
           presentationPolicyIsReadOnly() &&
           (path.startsWith('/settings/infrastructure') ||
             path === '/settings/workloads' ||

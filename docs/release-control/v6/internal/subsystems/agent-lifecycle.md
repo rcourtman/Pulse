@@ -1452,7 +1452,7 @@ action, and the page does not fork back into a second monitored-systems ledger
 below.
 Adding infrastructure therefore happens in two governed steps. The
 `?add=pick` modal owns grouped source-type selection and may offer
-`Detect from address` as a secondary utility. The `?add=detect` modal owns
+`Detect API platform` as a secondary utility. The `?add=detect` modal owns
 probe-driven handoff into `ConnectionEditor.tsx`, while typed add routes jump
 straight into the matching credential or install body. The shared Settings
 sidebar still owns only the top-level `Infrastructure` destination; movement

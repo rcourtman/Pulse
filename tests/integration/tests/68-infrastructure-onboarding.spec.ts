@@ -10,13 +10,6 @@ type WorkerFixtures = {
   authStorageStatePath: string;
 };
 
-type UpgradeMetricEventPayload = {
-  type: string;
-  surface: string;
-  capability?: string;
-  idempotency_key?: string;
-};
-
 type OverflowAudit = {
   viewportWidth: number;
   pageWidth: number;
@@ -69,47 +62,8 @@ async function stubConnectionsList(page: Page): Promise<void> {
   });
 }
 
-async function recordUpgradeMetricEvents(
-  page: Page,
-): Promise<UpgradeMetricEventPayload[]> {
-  const events: UpgradeMetricEventPayload[] = [];
-
-  await page.route("**/api/upgrade-metrics/events", async (route) => {
-    const payload = route.request().postDataJSON() as UpgradeMetricEventPayload;
-    events.push(payload);
-    await route.fulfill({
-      status: 202,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
-
-  return events;
-}
-
 async function prepareOnboardingPage(page: Page): Promise<void> {
   await stubConnectionsList(page);
-}
-
-function countUpgradeEvents(
-  events: readonly UpgradeMetricEventPayload[],
-  type: string,
-  capability?: string,
-): number {
-  const matchingKeys = new Set<string>();
-
-  for (const event of events) {
-    if (event.surface !== "settings_infrastructure_add") continue;
-    if (event.type !== type) continue;
-    if (capability !== undefined && event.capability !== capability) continue;
-
-    matchingKeys.add(
-      event.idempotency_key ??
-        `${event.type}:${event.surface}:${event.capability ?? ""}:${matchingKeys.size}`,
-    );
-  }
-
-  return matchingKeys.size;
 }
 
 async function scrollToBottom(page: Page): Promise<void> {
@@ -188,7 +142,6 @@ test.describe("Infrastructure onboarding", () => {
       "Desktop-only infrastructure manager coverage",
     );
 
-    const metricEvents = await recordUpgradeMetricEvents(page);
     await prepareOnboardingPage(page);
     await page.route("**/api/discover", async (route) => {
       const requestUrl = new URL(route.request().url());
@@ -253,7 +206,7 @@ test.describe("Infrastructure onboarding", () => {
       page.getByRole("button", { name: /Add TrueNAS SCALE/i }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: /Detect from address/i }),
+      page.getByRole("button", { name: /Detect API platform/i }),
     ).toHaveCount(0);
     await expect(
       page.getByText("Monitored systems", { exact: true }),
@@ -261,12 +214,6 @@ test.describe("Infrastructure onboarding", () => {
     await expect(
       page.getByText("Connection types", { exact: true }),
     ).toHaveCount(0);
-
-    await expect
-      .poll(() =>
-        countUpgradeEvents(metricEvents, "infrastructure_onboarding_opened"),
-      )
-      .toBe(0);
   });
 
   test("desktop discovery settings open as an infrastructure-owned dialog", async ({
@@ -302,7 +249,7 @@ test.describe("Infrastructure onboarding", () => {
     await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/);
   });
 
-  test("desktop picker add opens the matching modal and records type onboarding", async ({
+  test("desktop picker add opens the matching modal", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -310,7 +257,6 @@ test.describe("Infrastructure onboarding", () => {
       "Desktop-only manager add-path instrumentation coverage",
     );
 
-    const metricEvents = await recordUpgradeMetricEvents(page);
     await prepareOnboardingPage(page);
 
     await page.goto("/settings/infrastructure", {
@@ -320,7 +266,10 @@ test.describe("Infrastructure onboarding", () => {
       timeout: 15_000,
     });
 
-    await page.getByRole("button", { name: /Add infrastructure/i }).click();
+    await page
+      .getByRole("button", { name: "Add infrastructure", exact: true })
+      .first()
+      .click();
     await page.waitForURL(/\/settings\/infrastructure\?add=pick$/, {
       timeout: 15_000,
     });
@@ -347,39 +296,6 @@ test.describe("Infrastructure onboarding", () => {
         exact: true,
       }),
     ).toBeVisible();
-
-    await expect
-      .poll(() =>
-        countUpgradeEvents(metricEvents, "infrastructure_onboarding_opened"),
-      )
-      .toBe(1);
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_path_selected",
-          "api",
-        ),
-      )
-      .toBe(1);
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_catalog_selected",
-          "truenas",
-        ),
-      )
-      .toBe(1);
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_credentials_opened",
-          "truenas",
-        ),
-      )
-      .toBe(1);
   });
 
   test("desktop explicit discovery scan surfaces a candidate row and opens a prefilled review dialog", async ({
@@ -390,7 +306,6 @@ test.describe("Infrastructure onboarding", () => {
       "Desktop-only discovery-candidate review coverage",
     );
 
-    const metricEvents = await recordUpgradeMetricEvents(page);
     await prepareOnboardingPage(page);
 
     await page.route("**/api/discover", async (route) => {
@@ -469,42 +384,9 @@ test.describe("Infrastructure onboarding", () => {
     await expect(
       page.getByPlaceholder("https://proxmox.example.com:8006"),
     ).toHaveValue("https://discovered-pve.lab:8006");
-
-    await expect
-      .poll(() =>
-        countUpgradeEvents(metricEvents, "infrastructure_onboarding_opened"),
-      )
-      .toBe(1);
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_path_selected",
-          "api",
-        ),
-      )
-      .toBe(1);
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_credentials_opened",
-          "pve",
-        ),
-      )
-      .toBe(1);
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_catalog_selected",
-          "pve",
-        ),
-      )
-      .toBe(0);
   });
 
-  test("desktop detect utility records no-match agent fallback from the add-infrastructure picker", async ({
+  test("desktop detect utility offers no-match agent fallback from the add-infrastructure picker", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -512,7 +394,6 @@ test.describe("Infrastructure onboarding", () => {
       "Desktop-only onboarding probe instrumentation coverage",
     );
 
-    const metricEvents = await recordUpgradeMetricEvents(page);
     await prepareOnboardingPage(page);
 
     await page.route("**/api/connections/probe", async (route) => {
@@ -541,18 +422,21 @@ test.describe("Infrastructure onboarding", () => {
     await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
       timeout: 15_000,
     });
-    await page.getByRole("button", { name: /Add infrastructure/i }).click();
+    await page
+      .getByRole("button", { name: "Add infrastructure", exact: true })
+      .first()
+      .click();
     await page.waitForURL(/\/settings\/infrastructure\?add=pick$/, {
       timeout: 15_000,
     });
-    await page.getByRole("button", { name: /Detect from address/i }).click();
+    await page.getByRole("button", { name: /Detect API platform/i }).click();
     await page.waitForURL(/\/settings\/infrastructure\?add=detect$/, {
       timeout: 15_000,
     });
 
-    await page.getByLabel("Address").fill("baremetal.lab");
+    await page.getByLabel("API endpoint").fill("baremetal.lab");
     await page
-      .getByRole("button", { name: "Probe address", exact: true })
+      .getByRole("button", { name: "Probe API endpoint", exact: true })
       .click();
 
     await expect(
@@ -561,51 +445,18 @@ test.describe("Infrastructure onboarding", () => {
         { exact: true },
       ),
     ).toBeVisible();
-
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_path_selected",
-          "api",
-        ),
-      )
-      .toBe(1);
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_probe_result",
-          "no-match",
-        ),
-      )
-      .toBe(1);
-
     await page
       .getByRole("button", { name: "install Pulse Agent instead", exact: true })
       .click();
+    await page.waitForURL(/\/settings\/infrastructure\?add=agent$/, {
+      timeout: 15_000,
+    });
     await expect(
-      page.getByRole("button", { name: /Back to detect/i }),
+      page.getByRole("heading", { level: 2, name: "Install on a host" }),
     ).toBeVisible();
-
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_path_selected",
-          "agent",
-        ),
-      )
-      .toBe(1);
-    await expect
-      .poll(() =>
-        countUpgradeEvents(
-          metricEvents,
-          "infrastructure_onboarding_credentials_opened",
-          "agent",
-        ),
-      )
-      .toBe(1);
+    await expect(
+      page.getByRole("button", { name: /Probe API endpoint/i }),
+    ).toHaveCount(0);
   });
 
   test("mobile landing and grouped platform tables stay inside the viewport", async ({

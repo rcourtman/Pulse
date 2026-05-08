@@ -37,7 +37,7 @@ describe('ConnectionEditor', () => {
     const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'pve.lab' } });
 
-    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /probe api endpoint/i }));
 
     await waitFor(() => expect(mockedProbe).toHaveBeenCalledWith('pve.lab'));
 
@@ -61,7 +61,7 @@ describe('ConnectionEditor', () => {
       />
     ));
 
-    expect(screen.getByText('Address probe')).toBeInTheDocument();
+    expect(screen.getByText('API platform probe')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Back to source types/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
 
@@ -83,7 +83,7 @@ describe('ConnectionEditor', () => {
 
     const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: '192.168.1.50' } });
-    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /probe api endpoint/i }));
 
     await waitFor(() =>
       expect(screen.getByText(/No supported API-backed platform detected/i)).toBeInTheDocument(),
@@ -107,7 +107,7 @@ describe('ConnectionEditor', () => {
 
     const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'baremetal.lan' } });
-    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /probe api endpoint/i }));
     await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
 
     const agentButton = await screen.findByRole('button', {
@@ -146,17 +146,17 @@ describe('ConnectionEditor', () => {
 
     const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'truenas.lab' } });
-    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /probe api endpoint/i }));
 
     fireEvent.click((await screen.findByText('https://truenas.lab')).closest('button')!);
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
 
-    fireEvent.click(screen.getByRole('button', { name: /Back to detect/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Back to API probe/i }));
 
     const resetInput = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     expect(resetInput.value).toBe('');
     expect(screen.queryByTestId('slot')).toBeNull();
-    expect(screen.getByText('Address probe')).toBeInTheDocument();
+    expect(screen.getByText('API platform probe')).toBeInTheDocument();
   });
 
   it('opens direct type routes without the detect setup', async () => {
@@ -171,7 +171,7 @@ describe('ConnectionEditor', () => {
     ));
 
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
-    expect(screen.queryByRole('button', { name: /probe address/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /probe api endpoint/i })).not.toBeInTheDocument();
   });
 
   it('skips probe setup when an initialType is supplied in edit mode', () => {

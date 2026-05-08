@@ -3,10 +3,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { useSettingsNavigation } from '../useSettingsNavigation';
 
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
+const sessionPresentationPolicyResolvedMock = vi.hoisted(() => vi.fn(() => true));
 const navigateSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyIsReadOnly: () => presentationPolicyIsReadOnlyMock(),
+  sessionPresentationPolicyResolved: () => sessionPresentationPolicyResolvedMock(),
 }));
 
 function renderHarness(pathname = '/settings', search = '', hash = '') {
@@ -36,7 +38,9 @@ describe('useSettingsNavigation', () => {
     cleanup();
     navigateSpy.mockReset();
     presentationPolicyIsReadOnlyMock.mockReset();
+    sessionPresentationPolicyResolvedMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
+    sessionPresentationPolicyResolvedMock.mockReturnValue(true);
   });
 
   it('lands /settings on reporting inventory when the session is read-only', async () => {
@@ -59,6 +63,20 @@ describe('useSettingsNavigation', () => {
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
       scroll: false,
+    });
+  });
+
+  it('does not strip infrastructure onboarding queries before presentation policy resolves', async () => {
+    presentationPolicyIsReadOnlyMock.mockReturnValue(true);
+    sessionPresentationPolicyResolvedMock.mockReturnValue(false);
+
+    renderHarness('/settings/infrastructure', '?add=pick');
+
+    await waitFor(() => {
+      expect(navigateSpy).not.toHaveBeenCalledWith('/settings/infrastructure', {
+        replace: true,
+        scroll: false,
+      });
     });
   });
 

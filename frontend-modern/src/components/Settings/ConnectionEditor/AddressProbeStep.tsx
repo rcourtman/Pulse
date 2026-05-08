@@ -30,7 +30,7 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
     <form class="space-y-4" onSubmit={handleSubmit}>
       <div class={formField}>
         <label class={formLabel} for="connection-address">
-          Address
+          API endpoint
         </label>
         <input
           id="connection-address"
@@ -44,8 +44,8 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           disabled={props.state.phase() === 'probing'}
         />
         <p class={formHelpText}>
-          Paste a hostname, IP, or URL to identify a supported platform. Pulse validates the match
-          and asks for credentials next.
+          Paste a hostname, IP, or URL for a supported API-backed platform. Pulse validates the
+          match and asks for credentials next.
         </p>
       </div>
 
@@ -55,7 +55,7 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
           disabled={props.state.phase() === 'probing' || props.state.address().trim().length === 0}
         >
-          {props.state.phase() === 'probing' ? 'Probing…' : 'Probe address'}
+          {props.state.phase() === 'probing' ? 'Probing…' : 'Probe API endpoint'}
         </button>
       </div>
 

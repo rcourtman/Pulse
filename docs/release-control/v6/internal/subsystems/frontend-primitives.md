@@ -325,6 +325,10 @@ prompt explain the same operator-facing priority.
    session presentation policy says the operator cannot manage setup, `/settings`
    and sidebar navigation must land on the canonical reporting/control surface
    instead of setup-oriented install routes.
+   Route normalization must wait until that presentation policy has resolved
+   before stripping infrastructure onboarding queries such as `?add=pick`,
+   `?add=agent`, or `?add=detect`, so first-session and explicit add-flow
+   handoffs do not lose their modal target during session bootstrap.
    That same settings-shell boundary also owns explicit organization-route
    stability. Deep links such as `/settings/organization`,
    `/settings/organization/access`, and adjacent organization shells must keep

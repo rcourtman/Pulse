@@ -677,7 +677,7 @@ describe('InfrastructureWorkspace', () => {
       within(screen.getByRole('dialog')).getByRole('button', { name: /Back to source types/i }),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByRole('dialog')).getByRole('button', { name: /Probe address/i }),
+      within(screen.getByRole('dialog')).getByRole('button', { name: /Probe API endpoint/i }),
     ).toBeInTheDocument();
   });
 

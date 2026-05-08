@@ -74,7 +74,7 @@ export function createConnectionEditorState(): ConnectionEditorState {
   const runProbe = async () => {
     const value = address().trim();
     if (!isSubmittableAddress(value)) {
-      setErrorMessage('Enter an address to probe.');
+      setErrorMessage('Enter an API endpoint to probe.');
       setPhase('error');
       return 'error';
     }

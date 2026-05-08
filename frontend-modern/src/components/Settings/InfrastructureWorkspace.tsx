@@ -960,7 +960,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <Match when={routeStep() === 'pick'}>
                   <InfrastructureSourcePicker
                     onSelectStep={(step) => openAddFlow(step as ManagedAddTypeStep)}
-                    onDetectFromAddress={() => openAddFlow('detect')}
+                    onDetectApiPlatform={() => openAddFlow('detect')}
                   />
                 </Match>
 

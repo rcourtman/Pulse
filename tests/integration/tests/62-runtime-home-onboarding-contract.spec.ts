@@ -39,14 +39,16 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe("runtime-home onboarding contract", () => {
   test.setTimeout(180_000);
 
-  test("normalizes the agent install handoff onto the shared infrastructure workspace", async ({
+  test("opens the agent install handoff on the shared infrastructure workspace", async ({
     page,
   }) => {
     await page.goto("/settings/infrastructure?add=agent", {
       waitUntil: "domcontentloaded",
     });
 
-    await page.waitForURL(/\/settings\/infrastructure$/, { timeout: 15_000 });
+    await page.waitForURL(/\/settings\/infrastructure\?add=agent$/, {
+      timeout: 15_000,
+    });
     await expect(
       page.getByRole("heading", {
         level: 1,
@@ -54,24 +56,35 @@ test.describe("runtime-home onboarding contract", () => {
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 2, name: "Install on a host" }),
+      page.getByRole("dialog").getByRole("heading", {
+        name: "Add Pulse Agent",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("dialog").getByRole("heading", {
+        level: 2,
+        name: "Install on a host",
+      }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Generate token/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Probe address/i }),
+      page.getByRole("button", { name: /Probe API endpoint/i }),
     ).toHaveCount(0);
   });
 
-  test("normalizes the platform-pick handoff onto the shared infrastructure workspace", async ({
+  test("opens the platform-pick handoff on the shared infrastructure workspace", async ({
     page,
   }) => {
     await page.goto("/settings/infrastructure?add=pick", {
       waitUntil: "domcontentloaded",
     });
 
-    await page.waitForURL(/\/settings\/infrastructure$/, { timeout: 15_000 });
+    await page.waitForURL(/\/settings\/infrastructure\?add=pick$/, {
+      timeout: 15_000,
+    });
     await expect(
       page.getByRole("heading", {
         level: 1,
@@ -79,7 +92,9 @@ test.describe("runtime-home onboarding contract", () => {
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Probe address/i }),
+      page.getByRole("dialog").getByRole("button", {
+        name: /Detect API platform/i,
+      }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Generate token/i }),
@@ -101,10 +116,10 @@ test.describe("runtime-home onboarding contract", () => {
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 3, name: "Monitored systems" }),
+      page.getByText("Infrastructure systems", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Probe address/i }),
+      page.getByRole("button", { name: /Probe API endpoint/i }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { level: 2, name: "Install on a host" }),

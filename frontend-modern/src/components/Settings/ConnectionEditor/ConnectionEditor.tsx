@@ -101,7 +101,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
             <section class="space-y-4 rounded-xl border border-border bg-surface p-4">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="space-y-1">
-                  <div class="text-sm font-semibold text-base-content">Address probe</div>
+                  <div class="text-sm font-semibold text-base-content">API platform probe</div>
                   <p class="text-xs text-muted">
                     Pulse can auto-detect these platforms from an address when their management API
                     is reachable.
@@ -162,7 +162,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                 onClick={reopenProbe}
                 class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
               >
-                ← Back to detect
+                ← Back to API probe
               </button>
             </Show>
           </div>

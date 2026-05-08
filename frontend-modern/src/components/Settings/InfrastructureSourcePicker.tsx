@@ -12,7 +12,7 @@ import {
 
 interface InfrastructureSourcePickerProps {
   onSelectStep: (step: InfrastructureSourcePickerRouteStep) => void;
-  onDetectFromAddress?: () => void;
+  onDetectApiPlatform?: () => void;
 }
 
 const detectButtonClass =
@@ -82,10 +82,10 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             placeholder="Search platforms, hosts, services..."
           />
         </label>
-        <Show when={props.onDetectFromAddress}>
+        <Show when={props.onDetectApiPlatform}>
           <button
             type="button"
-            onClick={props.onDetectFromAddress}
+            onClick={props.onDetectApiPlatform}
             class={`${detectButtonClass} sm:w-auto`}
           >
             <Search class="mr-2 h-4 w-4" />
