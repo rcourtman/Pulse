@@ -498,6 +498,12 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 		finding.Recommendation = generateRecommendation(alertType, alert.GetValue(), alert.GetThreshold())
 	}
 
+	// Author detection-time impact text per alert type. The text describes the
+	// operational consequence of operator inaction; it does not vary with
+	// severity or threshold value because the consequence shape is intrinsic
+	// to the alert type.
+	finding.Impact = generateImpact(alertType)
+
 	return finding
 }
 
@@ -514,6 +520,17 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 			existing.LastSeenAt = alert.GetLastSeen()
 			existing.Value = alert.GetValue()
 			existing.TimesRaised++
+
+			// Backfill detection-time impact for findings that pre-date the
+			// Impact contract: if the persisted finding has no impact and the
+			// alert type has a curated impact line, adopt it on re-fire.
+			// Description and Recommendation intentionally remain non-refreshed
+			// so this addition does not change historical alert wording.
+			if existing.Impact == "" {
+				if impact := generateImpact(alert.GetAlertType()); impact != "" {
+					existing.Impact = impact
+				}
+			}
 
 			// Re-open if the finding was resolved (alert fired again)
 			if existing.ResolvedAt != nil {
@@ -605,6 +622,9 @@ func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool
 		}
 		if finding.Recommendation != "" {
 			existing.Recommendation = finding.Recommendation
+		}
+		if finding.Impact != "" {
+			existing.Impact = finding.Impact
 		}
 		if finding.Evidence != "" {
 			existing.Evidence = finding.Evidence
@@ -1208,6 +1228,31 @@ func generateTitle(alertType, resourceName string, value, threshold float64) str
 		return fmt.Sprintf("%s is powered off", resourceName)
 	default:
 		return fmt.Sprintf("%s alert on %s", alertType, resourceName)
+	}
+}
+
+// generateImpact returns the operator-facing consequence-if-ignored statement
+// for a threshold alert, keyed on alert type. The text is hand-authored per
+// alert kind so the operator sees the same operational consequence regardless
+// of which AI runtime (or none) is active.
+func generateImpact(alertType string) string {
+	switch alertType {
+	case "cpu":
+		return "Workloads on this resource slow down or queue requests; sustained pressure can stall services and propagate latency to dependent workloads."
+	case "memory":
+		return "Memory pressure can trigger OOM kills or swap thrashing, terminating processes or stalling the host until pressure clears."
+	case "disk":
+		return "Writes will start failing when the disk fills, which can corrupt running workloads and stop logging, monitoring, and backup jobs."
+	case "usage", "storage":
+		return "Storage writes will start failing when capacity is exhausted, blocking new data, snapshots, and backup retention."
+	case "temperature":
+		return "Sustained heat throttles performance and shortens hardware life; in critical ranges the system can shut down or fail unexpectedly."
+	case "offline", "nodeOffline":
+		return "Workloads on this resource are unreachable; backups, scheduled jobs, and dependent services on this host stop until it returns."
+	case "poweredOff":
+		return "Nothing on this resource is running, so any workload, backup, or dependent service it provides is unavailable."
+	default:
+		return ""
 	}
 }
 

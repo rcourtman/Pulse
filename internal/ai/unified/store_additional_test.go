@@ -160,6 +160,40 @@ func TestUnifiedStore_AddFromAI_Existing(t *testing.T) {
 	}
 }
 
+// TestUnifiedStore_AddFromAI_PropagatesImpactOnUpdate covers the path where
+// a re-detected AI patrol finding carries newly-authored Impact text. The
+// update branch must overwrite existing.Impact alongside Description and
+// Recommendation rather than dropping it, so findings persisted by older
+// binaries adopt the freshly-classified impact line on next propagation.
+func TestUnifiedStore_AddFromAI_PropagatesImpactOnUpdate(t *testing.T) {
+	store := NewUnifiedStore(DefaultAlertToFindingConfig())
+	initial := &UnifiedFinding{
+		ID:         "ai-impact",
+		Source:     SourceAIPatrol,
+		Severity:   SeverityWarning,
+		ResourceID: "res-1",
+		Title:      "Pulse Patrol: Provider issue",
+		// Impact intentionally empty (older binary persisted this finding)
+	}
+	store.AddFromAI(initial)
+
+	update := &UnifiedFinding{
+		ID:         "ai-impact",
+		Source:     SourceAIPatrol,
+		Severity:   SeverityWarning,
+		ResourceID: "res-1",
+		Title:      "Pulse Patrol: Provider issue",
+		Impact:     "While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions.",
+	}
+	updated, isNew := store.AddFromAI(update)
+	if isNew {
+		t.Fatalf("expected existing update")
+	}
+	if updated.Impact != update.Impact {
+		t.Fatalf("expected Impact to overwrite on update, got %q", updated.Impact)
+	}
+}
+
 func TestUnifiedStore_BasicMutations(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	alert := &SimpleAlertAdapter{

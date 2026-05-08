@@ -254,7 +254,18 @@ runtime cost control, and shared AI transport surfaces.
     binaries) and through the Finding to UnifiedFinding conversion in
     `internal/api/router.go` so the operator-facing
     `unified.UnifiedFinding` surface receives the same impact string the
-    durable investigation record carries. When `/api/ai/chat` receives `finding_id`, the
+    durable investigation record carries. Threshold-alert findings author
+    impact through a parallel hand-curated catalog in
+    `internal/ai/unified/alerts.go` (`generateImpact`), keyed on alert
+    type rather than severity or category, so threshold findings carry
+    consequence-if-ignored copy at detection time without depending on an
+    AI investigation. The unified-store update paths
+    (`UnifiedStore.AddFromAlert` and `UnifiedStore.AddFromAI`) must
+    propagate Impact on re-detected findings the same way they propagate
+    Description and Recommendation: AddFromAlert backfills empty Impact
+    on existing findings; AddFromAI overwrites existing Impact when the
+    incoming finding carries one. Unknown alert types must return an
+    empty impact rather than synthesizing generic copy. When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so

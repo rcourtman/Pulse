@@ -1,6 +1,7 @@
 package unified
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -52,6 +53,51 @@ func TestUnifiedStore_AddFromAlert(t *testing.T) {
 
 	if finding.ResourceID != "vm-101" {
 		t.Errorf("Expected resource ID vm-101, got %s", finding.ResourceID)
+	}
+
+	// Impact text is authored per alert type at detection time so the operator
+	// sees consequence-if-ignored copy regardless of whether an AI investigation
+	// has run.
+	if finding.Impact == "" {
+		t.Error("Expected detection-time impact text on cpu alert finding, got empty string")
+	}
+}
+
+func TestGenerateImpact_AuthorsConsequenceForKnownAlertTypes(t *testing.T) {
+	cases := []struct {
+		alertType   string
+		mustContain string
+	}{
+		{"cpu", "slow down"},
+		{"memory", "OOM"},
+		{"disk", "fail"},
+		{"usage", "writes will start failing"},
+		{"storage", "writes will start failing"},
+		{"temperature", "throttles"},
+		{"offline", "unreachable"},
+		{"nodeOffline", "unreachable"},
+		{"poweredOff", "unavailable"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.alertType, func(t *testing.T) {
+			impact := generateImpact(tc.alertType)
+			if impact == "" {
+				t.Fatalf("expected non-empty impact for %q", tc.alertType)
+			}
+			if !strings.Contains(strings.ToLower(impact), strings.ToLower(tc.mustContain)) {
+				t.Fatalf("impact for %q missing expected token %q: %s", tc.alertType, tc.mustContain, impact)
+			}
+		})
+	}
+}
+
+func TestGenerateImpact_ReturnsEmptyForUnknownAlertType(t *testing.T) {
+	// Unknown alert types return an empty string rather than synthesizing
+	// generic impact copy. The contract is that impact is hand-authored per
+	// finding source; if the source has no curated text, the operator sees
+	// nothing rather than fabricated analysis.
+	if got := generateImpact("totally-unknown-alert-kind"); got != "" {
+		t.Fatalf("expected empty impact for unknown alert type, got %q", got)
 	}
 }
 
