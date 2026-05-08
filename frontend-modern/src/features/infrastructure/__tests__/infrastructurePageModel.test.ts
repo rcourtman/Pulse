@@ -37,9 +37,11 @@ describe('infrastructurePageModel', () => {
     const derivation = buildInfrastructurePageFilterDerivation(resources, '', '', '');
 
     expect(Array.from(derivation.availableSources)).toEqual(['agent', 'proxmox-pve']);
+    // sourceOptions follow DEFAULT_INFRASTRUCTURE_SOURCE_ORDER from the
+    // platform manifest: agent, truenas, proxmox-pve, ...
     expect(derivation.sourceOptions).toEqual([
-      { key: 'proxmox-pve', label: 'PVE' },
       { key: 'agent', label: 'Agent' },
+      { key: 'proxmox-pve', label: 'PVE' },
     ]);
     expect(derivation.statusOptions).toEqual([
       { key: 'online', label: 'Online' },
@@ -111,9 +113,10 @@ describe('infrastructurePageModel', () => {
     );
 
     expect(Array.from(derivation.availableSources)).toEqual(['proxmox-pve']);
+    // truenas precedes proxmox-pve in DEFAULT_INFRASTRUCTURE_SOURCE_ORDER.
     expect(derivation.sourceOptions).toEqual([
-      { key: 'proxmox-pve', label: 'PVE' },
       { key: 'truenas', label: 'TrueNAS' },
+      { key: 'proxmox-pve', label: 'PVE' },
     ]);
     expect(derivation.activeFilterCount).toBe(1);
     expect(derivation.hasActiveFilters).toBe(true);
