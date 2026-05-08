@@ -146,6 +146,35 @@ describe('AIAPI', () => {
     expect(record!.trigger.cause).toBe('storage_quota_exceeded');
   });
 
+  it('preserves previous_resolved_fix_summary on UnifiedFinding payloads for operational memory', async () => {
+    // The previous-fix summary is captured at regression time and surfaced
+    // both in chat context and on the finding card. The TS API client must
+    // round-trip the snake_case field so the store normalizer can promote
+    // it to the camelCase previousResolvedFixSummary on UnifiedFinding.
+    apiFetchJSONMock.mockResolvedValue({
+      findings: [
+        {
+          id: 'f-regress',
+          resource_id: 'vm-100',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'reliability',
+          title: 'Service stalled',
+          description: 'Service stopped responding again',
+          previous_resolved_fix_summary:
+            'Restart the workload service after backup window clears',
+          detected_at: '2026-05-08T12:00:00Z',
+        },
+      ],
+      count: 1,
+    } as any);
+
+    const result = await AIAPI.getUnifiedFindings();
+    expect(result.findings[0].previous_resolved_fix_summary).toBe(
+      'Restart the workload service after backup window clears',
+    );
+  });
+
   it('preserves UnifiedFinding-level impact text alongside description and recommendation', async () => {
     apiFetchJSONMock.mockResolvedValue({
       findings: [

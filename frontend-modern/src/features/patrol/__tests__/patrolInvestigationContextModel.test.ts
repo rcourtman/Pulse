@@ -876,6 +876,33 @@ describe('patrolInvestigationContextModel', () => {
     expect(presentation.impact).toBe('');
   });
 
+  it('keeps previous-fix operational memory at the finding shell, not in record presentation', () => {
+    // Operational memory (previousResolvedFixSummary) lives on the finding
+    // shell and is rendered by FindingsPanel as a distinct row. The
+    // investigation-record presentation must not absorb it into impact,
+    // verification, or rollback — those represent the CURRENT investigation,
+    // not history. This test pins the boundary so future refactors do not
+    // collapse the per-record schema with the per-finding memory shell.
+    const presentation = buildPatrolInvestigationRecordPresentation({
+      id: 'rec-prev-fix-isolation',
+      finding_id: 'f-prev-fix-isolation',
+      subject: { resource_id: 'vm-9' },
+      trigger: { detected_at: '2026-05-08T12:00:00Z' },
+      status: 'completed',
+      evidence: [],
+      verification: [],
+      rollback: [],
+      tools_used: [],
+      started_at: '2026-05-08T12:00:00Z',
+    });
+    // The presentation shape exposes confidence, conclusion, impact,
+    // recommendedAction, etc., but no previousResolvedFixSummary field —
+    // that lives on UnifiedFinding/Finding shells, not InvestigationRecord.
+    const opaque = presentation as unknown as Record<string, unknown>;
+    expect(opaque.previousResolvedFixSummary).toBeUndefined();
+    expect(opaque.previous_resolved_fix_summary).toBeUndefined();
+  });
+
   it('does not let the patrol context model synthesize impact from trust counters', () => {
     // Trust counters (FindingsTrustSummary on the patrol-status response) are
     // an operator-page concern, not a per-finding context concern. The

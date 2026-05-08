@@ -985,6 +985,14 @@ the canonical monitored-system blocked payload.
    (investigation record, operational memory, pending approval,
    proposed fix, next-step action) must be attached identically across
    intents; only the seed prompt's framing varies.
+   The TS API client mirrors the
+   `previous_resolved_fix_summary` field on both `UnifiedFindingRecord`
+   (in `frontend-modern/src/api/ai.ts`) and `Finding`
+   (in `frontend-modern/src/api/patrol.ts`), and the store normalizer
+   promotes it to the camelCase `previousResolvedFixSummary` on the
+   store-level `UnifiedFinding` so finding-card render code can read
+   it. Without this mirror, the field stays backend-only and operators
+   cannot see "what worked last time" without opening Assistant.
    `unified.UnifiedFinding` also carries a
    `previous_resolved_fix_summary` operational-memory field captured at
    regression time from

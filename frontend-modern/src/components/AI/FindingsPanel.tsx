@@ -910,6 +910,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <span class="font-medium">Recommendation:</span> {finding.recommendation}
           </p>
         </Show>
+        <Show when={finding.previousResolvedFixSummary}>
+          <p class="text-sm text-base-content mt-2 px-2 py-1 rounded border border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/30">
+            <span class="font-medium text-emerald-800 dark:text-emerald-300">
+              Last time this resolved:
+            </span>{' '}
+            {finding.previousResolvedFixSummary}
+          </p>
+        </Show>
         <Show when={(finding.regressionCount || 0) > 0}>
           <p class="text-xs text-amber-700 dark:text-amber-300 mt-2">
             Regressions: {finding.regressionCount}

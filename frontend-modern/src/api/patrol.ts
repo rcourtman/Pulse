@@ -28,6 +28,7 @@ export interface Finding {
   title: string;
   description: string;
   impact?: string;
+  previous_resolved_fix_summary?: string;
   recommendation?: string;
   evidence?: string;
   detected_at: string;

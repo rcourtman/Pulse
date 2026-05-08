@@ -76,6 +76,16 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).not.toContain('Rollback: `');
   });
 
+  it('renders previousResolvedFixSummary as operational memory in the expanded card', () => {
+    // The previous-fix summary is captured at regression time and surfaced
+    // in chat context for Assistant. The expanded card must also show it
+    // directly so operators see "what worked last time" without opening
+    // Assistant. The styling is intentionally distinct (emerald accent) so
+    // it reads as a positive memory cue rather than another alert.
+    expect(findingsPanelSource).toContain('finding.previousResolvedFixSummary');
+    expect(findingsPanelSource).toContain('Last time this resolved');
+  });
+
   it('exposes an Explain entry point that seeds Assistant with an explanation prompt', () => {
     // The Explain button is a contextual entry point parallel to "Discuss with
     // Assistant" but with an intent that produces explanation framing rather

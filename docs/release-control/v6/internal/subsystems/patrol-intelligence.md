@@ -259,6 +259,15 @@ Patrol-specific presentation helpers.
    The same panel also surfaces `investigation_record.confidence` as a
    badge in the collapsed finding row (next to the investigation outcome
    badge) so operators can scan trust without expanding every card.
+   `FindingsPanel.tsx` also renders the
+   `previousResolvedFixSummary` operational-memory field directly on
+   the expanded finding card with emerald-accented styling, so
+   operators see "what worked last time" inline without having to
+   open Assistant. The summary lives on the finding shell
+   (`UnifiedFinding`/`Finding`), not on the per-record investigation
+   presentation; the Patrol-owned investigation-context model must not
+   absorb it into impact, verification, or rollback (those represent
+   the current investigation, not history).
    The Patrol page renders a small Trust strip above the Findings/Runs
    tab bar that surfaces `state.patrolStatus()?.trust` (the
    FindingsTrustSummary block on the patrol-status response) as compact

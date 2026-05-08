@@ -315,7 +315,12 @@ runtime cost control, and shared AI transport surfaces.
     blank-slate diagnosis. The summary mirrors onto
     `unified.UnifiedFinding` and propagates through the Finding to
     UnifiedFinding conversion in `internal/api/router.go` and through
-    `UnifiedStore.AddFromAI`'s update branch (non-empty overwrite). When `/api/ai/chat` receives `finding_id`, the
+    `UnifiedStore.AddFromAI`'s update branch (non-empty overwrite). The
+    TS API client mirrors the field on `UnifiedFindingRecord` and
+    `Finding`, the aiIntelligence store normalizer copies it through as
+    `previousResolvedFixSummary`, and `FindingsPanel.tsx` renders it on
+    the expanded finding card so the operator sees the memory cue
+    inline rather than only inside Assistant chat context. When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so
