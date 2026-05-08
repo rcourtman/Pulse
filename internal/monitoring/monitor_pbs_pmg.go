@@ -188,6 +188,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsInst.Status = "offline"
 			pbsInst.ConnectionHealth = "error"
 			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
+			pollErr = monErr
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to connect to PBS")
 			m.setProviderConnectionHealth(InstanceTypePBS, instanceName, false)
 

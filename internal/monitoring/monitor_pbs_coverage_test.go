@@ -64,6 +64,21 @@ func TestMonitor_PollPBSInstance_AuthFailure(t *testing.T) {
 		t.Error("Expected connection health to be false")
 	}
 
+	// Regression: pollStatusMap must record the failure. A defer-arg bug
+	// previously captured pollErr at register-time (always nil), so failed
+	// polls were recorded as success and the connections aggregator reported
+	// broken instances as healthy.
+	if status := m.pollStatusMap["pbs::pbs-auth-fail"]; status == nil {
+		t.Fatal("expected pollStatusMap entry for pbs::pbs-auth-fail, got nil")
+	} else {
+		if !status.LastSuccess.IsZero() {
+			t.Errorf("expected LastSuccess to remain zero on auth failure, got %v", status.LastSuccess)
+		}
+		if status.ConsecutiveFailures == 0 {
+			t.Error("expected ConsecutiveFailures > 0 after auth failure, got 0")
+		}
+	}
+
 	// We can't easily check authFailures map as it is private and no getter (except checking if it backs off?)
 }
 

@@ -249,4 +249,19 @@ func TestPollPMGInstanceRecordsAuthFailures(t *testing.T) {
 	if failures := mon.authFailures["pmg-failing"]; failures != 1 {
 		t.Fatalf("expected one auth failure tracked, got %d", failures)
 	}
+
+	// Regression: pollStatusMap must record the failure. A defer-arg bug
+	// previously captured pollErr at register-time (always nil), so failed
+	// polls were recorded as success and the connections aggregator reported
+	// broken instances as healthy.
+	status := mon.pollStatusMap["pmg::failing"]
+	if status == nil {
+		t.Fatal("expected pollStatusMap entry for pmg::failing, got nil")
+	}
+	if !status.LastSuccess.IsZero() {
+		t.Errorf("expected LastSuccess to remain zero on auth failure, got %v", status.LastSuccess)
+	}
+	if status.ConsecutiveFailures == 0 {
+		t.Error("expected ConsecutiveFailures > 0 after auth failure, got 0")
+	}
 }
