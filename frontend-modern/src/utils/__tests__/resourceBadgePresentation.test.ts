@@ -331,6 +331,30 @@ describe('resourceBadgePresentation', () => {
     ).toEqual(['PVE 8.3.3', 'Agent']);
   });
 
+  it('prefers platform-facet version over agent OS version on hybrid-source resources', () => {
+    const resource = makeResource({
+      type: 'agent',
+      platformType: 'proxmox-pve',
+      sourceType: 'hybrid',
+      sources: ['proxmox', 'agent'],
+      platformData: {
+        sources: ['proxmox', 'agent'],
+        agent: {
+          platform: 'debian',
+          osName: 'Debian GNU/Linux',
+          osVersion: '12',
+        },
+        proxmox: {
+          pveVersion: '8.3.2',
+        },
+      },
+    });
+
+    expect(getInfrastructureSystemIdentityBadges(resource).map((badge) => badge.label)).toEqual([
+      'PVE 8.3.2',
+    ]);
+  });
+
   it('keeps top-level platform facets ahead of collection method identity', () => {
     const resource = makeResource({
       platformType: 'agent',
