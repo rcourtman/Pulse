@@ -217,6 +217,10 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsModelSource).toContain(
       'export type ProviderTestResult = AIProviderTestResult',
     );
+    expect(aiSettingsModelSource).toContain(
+      "{ value: 'deepseek', title: 'DeepSeek', description: 'V4' }",
+    );
+    expect(aiSettingsModelSource).not.toContain("description: 'V3'");
     expect(aiSettingsStateSource).toContain('getProviderTestDiagnosticMessage(result)');
     expect(aiSettingsStateSource).toContain('recommendation: result.recommendation');
     expect(aiSettingsStateSource).toContain('providerHealth[erroredCandidate].message');

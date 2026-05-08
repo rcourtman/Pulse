@@ -771,7 +771,10 @@ prompt explain the same operator-facing priority.
     selected Patrol model, failure cause, safe recommendation, and readiness
     summary when those fields are present. The settings shell may compose that
     safe backend diagnostic for display, but it must not infer provider
-    remediation by parsing raw upstream error strings in the browser.
+    remediation by parsing raw upstream error strings in the browser. Provider
+    setup cards must describe provider families through the current
+    backend-owned provider contract; DeepSeek setup copy is the V4 family and
+    must not regress to old V3 or compatibility-alias wording.
     Runtime controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
     must likewise describe discovery as workload discovery that supplies
     concrete service context to Pulse Assistant and Patrol, not as a generic

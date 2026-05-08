@@ -154,7 +154,7 @@ export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   openai: 'GPT models from OpenAI',
   openrouter: 'Unified gateway for OpenAI-compatible models',
   ollama: 'Local models via Ollama',
-  deepseek: 'DeepSeek reasoning models',
+  deepseek: 'DeepSeek V4 models',
   gemini: 'Gemini models from Google',
 };
 

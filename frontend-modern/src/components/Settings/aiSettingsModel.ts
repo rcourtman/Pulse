@@ -66,7 +66,7 @@ export const AI_SETUP_PROVIDER_OPTIONS: SelectionCardOption<AIProvider>[] = [
   { value: 'anthropic', title: 'Anthropic', description: 'Claude' },
   { value: 'openai', title: 'OpenAI', description: 'ChatGPT' },
   { value: 'openrouter', title: 'OpenRouter', description: 'Gateway' },
-  { value: 'deepseek', title: 'DeepSeek', description: 'V3' },
+  { value: 'deepseek', title: 'DeepSeek', description: 'V4' },
   { value: 'gemini', title: 'Gemini', description: 'Google' },
   { value: 'ollama', title: 'Ollama', description: 'Local' },
 ];

@@ -166,7 +166,7 @@ func TestNewFromConfig_DeepSeekWithAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled:        true,
 		DeepSeekAPIKey: "test-api-key",
-		Model:          "deepseek:deepseek-chat",
+		Model:          "deepseek:deepseek-v4-flash",
 	}
 	provider, err := NewFromConfig(cfg)
 	if err != nil {
@@ -184,7 +184,7 @@ func TestNewFromConfig_DeepSeekWithAPIKey(t *testing.T) {
 func TestNewFromConfig_DeepSeekNoAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled: true,
-		Model:   "deepseek:deepseek-chat",
+		Model:   "deepseek:deepseek-v4-flash",
 	}
 	_, err := NewFromConfig(cfg)
 	if err == nil {
@@ -336,7 +336,7 @@ func TestNewForProvider_DeepSeek(t *testing.T) {
 		Enabled:        true,
 		DeepSeekAPIKey: "test-key",
 	}
-	provider, err := NewForProvider(cfg, config.AIProviderDeepSeek, "deepseek-chat")
+	provider, err := NewForProvider(cfg, config.AIProviderDeepSeek, "deepseek-v4-flash")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestNewForProvider_DeepSeekNoAPIKey(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled: true,
 	}
-	_, err := NewForProvider(cfg, config.AIProviderDeepSeek, "deepseek-chat")
+	_, err := NewForProvider(cfg, config.AIProviderDeepSeek, "deepseek-v4-flash")
 	if err == nil {
 		t.Error("Expected error for DeepSeek without API key")
 	}
