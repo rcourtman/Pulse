@@ -165,11 +165,15 @@ type HandoffAction struct {
 // model-only handoff. It must not include model context text, command payloads,
 // remediation details, or provider/runtime error detail.
 type HandoffMetadata struct {
-	Kind           string `json:"kind,omitempty"`
-	RunID          string `json:"run_id,omitempty"`
-	RunType        string `json:"run_type,omitempty"`
-	RunStatus      string `json:"run_status,omitempty"`
-	RuntimeFailure bool   `json:"runtime_failure,omitempty"`
+	Kind                          string `json:"kind,omitempty"`
+	RunID                         string `json:"run_id,omitempty"`
+	RunType                       string `json:"run_type,omitempty"`
+	RunStatus                     string `json:"run_status,omitempty"`
+	RuntimeFailure                bool   `json:"runtime_failure,omitempty"`
+	RecommendedNextStep           string `json:"recommended_next_step,omitempty"`
+	RecommendedNextStepAction     string `json:"recommended_next_step_action,omitempty"`
+	RecommendedNextStepActionKind string `json:"recommended_next_step_action_kind,omitempty"`
+	RecommendedNextStepActionHref string `json:"recommended_next_step_action_href,omitempty"`
 }
 
 // ExecuteRequest represents a chat execution request

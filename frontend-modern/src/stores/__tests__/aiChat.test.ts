@@ -111,6 +111,12 @@ describe('aiChatStore', () => {
         actionHref: '/settings/system-ai',
         suggestedPrompts: ['Explain recent changes and correlations'],
       },
+      handoffMetadata: {
+        kind: 'patrol_finding',
+        recommendedNextStep: 'Open Patrol provider settings',
+        recommendedNextStepAction: 'Open Patrol provider settings',
+        recommendedNextStepActionHref: '/settings/system-ai',
+      },
     });
     expect(aiChatStore.isOpen).toBe(true);
     expect(aiChatStore.context.initialPrompt).toBe('hello');
@@ -121,6 +127,10 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.briefing?.suggestedPrompts).toEqual([
       'Explain recent changes and correlations',
     ]);
+    expect(aiChatStore.context.handoffMetadata).toMatchObject({
+      kind: 'patrol_finding',
+      recommendedNextStepActionHref: '/settings/system-ai',
+    });
   });
 
   it('preserves scoped autonomous-mode overrides for pre-filled prompts', () => {

@@ -574,6 +574,8 @@ export function buildPatrolAssessmentAssistantHandoff(
   const title = normalizeText(input.assessment?.title) || 'Pulse Patrol assessment';
   const description = normalizeText(input.assessment?.description);
   const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
+  const recommendedNextStepActionHref =
+    getAssessmentRecommendedNextStepActionHref(recommendedNextStep);
   const handoffContext = buildPatrolAssessmentAssistantModelContext(input);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
@@ -590,6 +592,10 @@ export function buildPatrolAssessmentAssistantHandoff(
       handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
       handoffMetadata: {
         kind: 'patrol_assessment',
+        recommendedNextStep: recommendedNextStep?.title,
+        recommendedNextStepAction: recommendedNextStep?.actionLabel,
+        recommendedNextStepActionKind: recommendedNextStep?.actionKind,
+        recommendedNextStepActionHref,
       },
       briefing: buildPatrolAssessmentAssistantBriefing(input),
       context: {
@@ -642,6 +648,14 @@ export function buildPatrolAssistantFindingHandoff(
       handoffContext: buildPatrolAssistantFindingModelContext(input),
       handoffResources: handoffResources.length > 0 ? handoffResources : undefined,
       handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
+      handoffMetadata: nextStepAction.label
+        ? {
+            kind: 'patrol_finding',
+            recommendedNextStep: nextStepAction.label,
+            recommendedNextStepAction: nextStepAction.label,
+            recommendedNextStepActionHref: nextStepAction.href || undefined,
+          }
+        : undefined,
       briefing: buildPatrolAssistantFindingBriefing({
         title: input.title,
         subject: input.subject,

@@ -186,7 +186,11 @@ work extends shared components instead of creating new local variants.
    `handoffContext`, `handoffResources`, `handoffActions`, and safe
    `handoffMetadata` while preserving the safe visible briefing and scoped
    approval-required posture, so later turns rely on backend session hydration
-   instead of resending stale browser context. The drawer must treat
+   instead of resending stale browser context. When a Patrol handoff includes a
+   safe next-step label, action kind, or whitelisted app-route href, those
+   reload-safe fields must travel through `handoffMetadata` rather than relying
+   on the browser to reconstruct them from model-only handoff text. The drawer
+   must treat
    `handoff_summary.requires_approval` as a current pending-decision flag, not a
    historical action marker, so completed or rejected handoff actions render as
    action context rather than pending approval. A restored Patrol run summary

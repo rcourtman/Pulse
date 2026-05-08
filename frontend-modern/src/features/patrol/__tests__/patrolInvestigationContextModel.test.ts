@@ -438,6 +438,12 @@ describe('patrolInvestigationContextModel', () => {
       recommendedNextStepTitle: 'Verify full coverage',
       recommendedNextStepActionKind: 'run_patrol',
     });
+    expect(handoff.context.handoffMetadata).toMatchObject({
+      kind: 'patrol_assessment',
+      recommendedNextStep: 'Verify full coverage',
+      recommendedNextStepAction: 'Run Patrol',
+      recommendedNextStepActionKind: 'run_patrol',
+    });
   });
 
   it('links route-owned Patrol assessment recommendations in Assistant briefing', () => {
@@ -469,6 +475,13 @@ describe('patrolInvestigationContextModel', () => {
     );
     expect(handoff.context.context).toMatchObject({
       recommendedNextStepActionKind: 'open_provider_settings',
+    });
+    expect(handoff.context.handoffMetadata).toMatchObject({
+      kind: 'patrol_assessment',
+      recommendedNextStep: 'Restore Patrol visibility',
+      recommendedNextStepAction: 'Open Patrol provider settings',
+      recommendedNextStepActionKind: 'open_provider_settings',
+      recommendedNextStepActionHref: '/settings/system-ai',
     });
   });
 
@@ -1327,6 +1340,12 @@ describe('patrolInvestigationContextModel', () => {
         'Explain current Patrol loop state',
         'Check prerequisites before next step',
       ],
+    });
+    expect(handoff.context.handoffMetadata).toMatchObject({
+      kind: 'patrol_finding',
+      recommendedNextStep: 'Open Patrol provider settings',
+      recommendedNextStepAction: 'Open Patrol provider settings',
+      recommendedNextStepActionHref: '/settings/system-ai',
     });
     expect(handoff.context.handoffActions).toBeUndefined();
     expect(handoff.context.handoffContext).toContain(

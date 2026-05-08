@@ -2022,9 +2022,12 @@ and timeline hydration, and `handoff_actions` are structured approval/action
 references used to seed canonical approval and action-audit refresh.
 `handoff_metadata` is the browser-safe identity envelope for restoring saved
 product handoffs, currently including Patrol run kind, run ID, safe run
-type/status, and a runtime-failure boolean rather than runtime failure detail.
+type/status, a runtime-failure boolean rather than runtime failure detail, and
+safe Patrol recommended next-step/action labels plus whitelisted app-route
+hrefs when the browser handoff already owns that route.
 Frontend handoff builders may send these fields for owned alert, incident,
-Patrol assessment, or Patrol run-history context, but the backend must not
+Patrol assessment, Patrol finding, or Patrol run-history context, but the
+backend must not
 persist them as user-authored message text and must treat them as
 explanation/review context only. When a Patrol `finding_id` resolves,
 backend-refreshed durable finding context remains canonical; the handler may

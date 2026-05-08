@@ -382,7 +382,9 @@ runtime cost control, and shared AI transport surfaces.
     current availability state instead of treating the action as executable.
     Browser-originated `handoff_context`, `handoff_resources`, and
     `handoff_actions` plus safe `handoff_metadata` are one-shot request seeds
-    for the first successful chat turn. After that send succeeds, the drawer
+    for the first successful chat turn. Safe Patrol next-step labels and
+    route-owned hrefs belong in `handoff_metadata` first, with model-context
+    text parsing only as a legacy fallback. After that send succeeds, the drawer
     must clear those request payloads while preserving the safe visible
     briefing and request-local
     approval-required posture; later turns must rely on backend-owned session

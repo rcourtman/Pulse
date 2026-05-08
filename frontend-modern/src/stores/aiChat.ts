@@ -63,6 +63,10 @@ export interface AIChatHandoffMetadata {
   runType?: string;
   runStatus?: string;
   runtimeFailure?: boolean;
+  recommendedNextStep?: string;
+  recommendedNextStepAction?: string;
+  recommendedNextStepActionKind?: string;
+  recommendedNextStepActionHref?: string;
 }
 
 export interface AIChatContext {

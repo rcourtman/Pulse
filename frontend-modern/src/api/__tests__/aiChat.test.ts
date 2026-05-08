@@ -200,6 +200,57 @@ describe('AIChatAPI', () => {
     );
   });
 
+  it('includes browser-safe Patrol recommendation metadata when supplied', async () => {
+    const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIChatAPI.chat(
+      'discuss finding',
+      'session-finding',
+      undefined,
+      vi.fn(),
+      undefined,
+      undefined,
+      'finding-provider-settings',
+      false,
+      undefined,
+      undefined,
+      undefined,
+      {
+        kind: 'patrol_finding',
+        recommendedNextStep: 'Open Patrol provider settings',
+        recommendedNextStepAction: 'Open Patrol provider settings',
+        recommendedNextStepActionHref: '/settings/system-ai',
+      },
+    );
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/ai/chat',
+      expect.objectContaining({
+        body: JSON.stringify({
+          prompt: 'discuss finding',
+          session_id: 'session-finding',
+          model: undefined,
+          finding_id: 'finding-provider-settings',
+          autonomous_mode: false,
+          handoff_metadata: {
+            kind: 'patrol_finding',
+            recommended_next_step: 'Open Patrol provider settings',
+            recommended_next_step_action: 'Open Patrol provider settings',
+            recommended_next_step_action_href: '/settings/system-ai',
+          },
+        }),
+      }),
+    );
+  });
+
   it('includes a Patrol finding id when supplied for Assistant context', async () => {
     const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
     const releaseLock = vi.fn();

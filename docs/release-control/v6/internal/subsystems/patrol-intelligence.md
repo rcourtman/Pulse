@@ -274,8 +274,10 @@ Patrol-specific presentation helpers.
    names a finding. Saved assessment and finding sessions may expose the
    Patrol-owned recommended next step/action and whitelisted app-route href
    through the safe `handoff_summary` only after command-like and secret-like
-   text is withheld; the browser must use those fields for restored drawer copy
-   without receiving the private model-only handoff context.
+   text is withheld; live handoffs must send those safe fields through
+   structured `handoff_metadata` where available, and the browser must use
+   them for restored drawer copy without receiving the private model-only
+   handoff context.
    When the current Patrol assessment is coverage-incomplete with no active
    infrastructure finding, the same handoff model must frame the briefing as a
    verification gap: the prompt leads with what scoped activity did and did not

@@ -153,6 +153,7 @@ func NormalizeHandoffMetadata(metadata HandoffMetadata) HandoffMetadata {
 	switch kind {
 	case sessionHandoffKindPatrolAssessment,
 		sessionHandoffKindPatrolConfigurationFailure,
+		sessionHandoffKindPatrolFinding,
 		sessionHandoffKindPatrolRun:
 	default:
 		return HandoffMetadata{}
@@ -167,6 +168,25 @@ func NormalizeHandoffMetadata(metadata HandoffMetadata) HandoffMetadata {
 	}
 	if normalized.Kind == sessionHandoffKindPatrolRun && normalized.RunID == "" {
 		return HandoffMetadata{}
+	}
+	if normalized.Kind != sessionHandoffKindPatrolRun {
+		normalized.RunID = ""
+		normalized.RunType = ""
+		normalized.RunStatus = ""
+	}
+	if normalized.Kind != sessionHandoffKindPatrolRun && normalized.Kind != sessionHandoffKindPatrolConfigurationFailure {
+		normalized.RuntimeFailure = false
+	}
+	if normalized.Kind == sessionHandoffKindPatrolAssessment || normalized.Kind == sessionHandoffKindPatrolFinding {
+		normalized.RecommendedNextStep = safeSessionHandoffSummaryText(metadata.RecommendedNextStep, 160)
+		normalized.RecommendedNextStepAction = safeSessionHandoffSummaryText(metadata.RecommendedNextStepAction, 120)
+		normalized.RecommendedNextStepActionKind = safePatrolRecommendationActionKind(metadata.RecommendedNextStepActionKind)
+		if normalized.RecommendedNextStepAction != "" {
+			normalized.RecommendedNextStepActionHref = safePatrolHandoffRoute(metadata.RecommendedNextStepActionHref)
+		}
+		if normalized.RecommendedNextStep == "" && normalized.RecommendedNextStepAction != "" {
+			normalized.RecommendedNextStep = normalized.RecommendedNextStepAction
+		}
 	}
 	return normalized
 }
@@ -295,6 +315,20 @@ func safePatrolAssessmentRecommendationAction(value string) (string, string) {
 		}
 	}
 	return action, ""
+}
+
+func safePatrolRecommendationActionKind(value string) string {
+	normalized := strings.ToLower(trimHandoffMetadataField(value, 64))
+	switch normalized {
+	case "discuss_assessment",
+		"open_provider_settings",
+		"review_approvals",
+		"review_findings",
+		"run_patrol":
+		return normalized
+	default:
+		return ""
+	}
 }
 
 func patrolFindingNextStepSummary(kind string, handoffContext string) (string, string) {
@@ -458,19 +492,39 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 	} else if findingID != "" {
 		kind = sessionHandoffKindPatrolFinding
 	}
-	recommendedNextStep, recommendedNextStepAction, recommendedNextStepActionKind := patrolAssessmentRecommendedNextStepSummary(
-		kind,
-		modelContext.HandoffContext,
-	)
-	recommendedNextStepActionHref := ""
-	if recommendedNextStepAction == "" {
-		recommendedNextStepAction, recommendedNextStepActionHref = patrolFindingNextStepSummary(
+	recommendedNextStep := metadata.RecommendedNextStep
+	recommendedNextStepAction := metadata.RecommendedNextStepAction
+	recommendedNextStepActionKind := metadata.RecommendedNextStepActionKind
+	recommendedNextStepActionHref := metadata.RecommendedNextStepActionHref
+	if recommendedNextStep == "" || recommendedNextStepAction == "" || recommendedNextStepActionKind == "" {
+		contextNextStep, contextNextStepAction, contextNextStepActionKind := patrolAssessmentRecommendedNextStepSummary(
 			kind,
 			modelContext.HandoffContext,
 		)
-		if recommendedNextStep == "" && recommendedNextStepAction != "" {
-			recommendedNextStep = recommendedNextStepAction
+		if recommendedNextStep == "" {
+			recommendedNextStep = contextNextStep
 		}
+		if recommendedNextStepAction == "" {
+			recommendedNextStepAction = contextNextStepAction
+		}
+		if recommendedNextStepActionKind == "" {
+			recommendedNextStepActionKind = contextNextStepActionKind
+		}
+	}
+	if recommendedNextStepAction == "" || recommendedNextStepActionHref == "" {
+		contextNextStepAction, contextNextStepActionHref := patrolFindingNextStepSummary(
+			kind,
+			modelContext.HandoffContext,
+		)
+		if recommendedNextStepAction == "" {
+			recommendedNextStepAction = contextNextStepAction
+		}
+		if recommendedNextStepActionHref == "" {
+			recommendedNextStepActionHref = contextNextStepActionHref
+		}
+	}
+	if recommendedNextStep == "" && recommendedNextStepAction != "" {
+		recommendedNextStep = recommendedNextStepAction
 	}
 
 	summary := &SessionHandoffSummary{
