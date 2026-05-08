@@ -801,6 +801,141 @@ func TestMonitoringBroadcastCarriesCanonicalSourceAndStoragePlatformIdentity(t *
 	}
 }
 
+// TestMonitoringBroadcastDualSourceProxmoxAgentNodeKeepsProxmoxPlatformIdentity
+// pins the Pi case: a Proxmox VE node with a linked Pulse host agent must
+// resolve to platformType="proxmox-pve" and surface both sources in
+// platformData. Regression guard for any future change that lets the agent
+// facet override the Proxmox identity.
+func TestMonitoringBroadcastDualSourceProxmoxAgentNodeKeepsProxmoxPlatformIdentity(t *testing.T) {
+	input := monitorResourceToConvertInput(unifiedresources.Resource{
+		ID:      "agent-pi-host",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "pi",
+		Status:  unifiedresources.StatusOnline,
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName:   "pi",
+			Instance:   "pi",
+			PVEVersion: "8.3.1",
+		},
+		Agent: &unifiedresources.AgentData{
+			AgentID:  "agent-pi",
+			Hostname: "pi",
+			OSName:   "Proxmox VE",
+		},
+	})
+
+	if input.PlatformType != "proxmox-pve" {
+		t.Fatalf("PlatformType = %q, want proxmox-pve for Proxmox node linked to host agent", input.PlatformType)
+	}
+	if input.SourceType != "hybrid" {
+		t.Fatalf("SourceType = %q, want hybrid", input.SourceType)
+	}
+	wantSources := []string{"proxmox", "agent"}
+	if len(input.Sources) != len(wantSources) {
+		t.Fatalf("Sources = %#v, want %#v", input.Sources, wantSources)
+	}
+	for i, want := range wantSources {
+		if input.Sources[i] != want {
+			t.Fatalf("Sources[%d] = %q, want %q (full = %#v)", i, input.Sources[i], want, input.Sources)
+		}
+	}
+
+	payload := string(input.PlatformData)
+	for _, snippet := range []string{
+		`"pveVersion":"8.3.1"`,
+		`"sources":["proxmox","agent"]`,
+	} {
+		if !strings.Contains(payload, snippet) {
+			t.Fatalf("PlatformData must contain %s, got %s", snippet, payload)
+		}
+	}
+}
+
+// TestMonitoringBroadcastDualSourceTrueNASAgentKeepsTrueNASPlatformIdentity
+// pins the TrueNAS appliance + linked host agent case to platformType="truenas"
+// so a future code path cannot quietly demote the appliance identity to
+// "agent" once the agent facet is also populated.
+func TestMonitoringBroadcastDualSourceTrueNASAgentKeepsTrueNASPlatformIdentity(t *testing.T) {
+	input := monitorResourceToConvertInput(unifiedresources.Resource{
+		ID:      "agent-truenas-host",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "truenas-1",
+		Status:  unifiedresources.StatusOnline,
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS, unifiedresources.SourceAgent},
+		TrueNAS: &unifiedresources.TrueNASData{
+			Hostname: "truenas-1",
+			Version:  "TrueNAS-SCALE-24.10.0",
+		},
+		Agent: &unifiedresources.AgentData{
+			AgentID:  "agent-truenas",
+			Hostname: "truenas-1",
+			OSName:   "TrueNAS SCALE",
+		},
+	})
+
+	if input.PlatformType != "truenas" {
+		t.Fatalf("PlatformType = %q, want truenas for TrueNAS appliance linked to host agent", input.PlatformType)
+	}
+	if input.SourceType != "hybrid" {
+		t.Fatalf("SourceType = %q, want hybrid", input.SourceType)
+	}
+	wantSources := []string{"truenas", "agent"}
+	if len(input.Sources) != len(wantSources) {
+		t.Fatalf("Sources = %#v, want %#v", input.Sources, wantSources)
+	}
+	for i, want := range wantSources {
+		if input.Sources[i] != want {
+			t.Fatalf("Sources[%d] = %q, want %q (full = %#v)", i, input.Sources[i], want, input.Sources)
+		}
+	}
+
+	payload := string(input.PlatformData)
+	if !strings.Contains(payload, `"sources":["truenas","agent"]`) {
+		t.Fatalf("PlatformData must contain hybrid source list, got %s", payload)
+	}
+}
+
+// TestMonitoringBroadcastUnraidAgentHostKeepsAgentPlatformType pins the Tower
+// case: an Unraid host whose only data source is the Pulse agent stays on
+// platformType="agent". The frontend resolves the "Unraid" identity badge via
+// host profile / OSName; the contract platformType must not promote OSName
+// strings to platform identifiers.
+func TestMonitoringBroadcastUnraidAgentHostKeepsAgentPlatformType(t *testing.T) {
+	input := monitorResourceToConvertInput(unifiedresources.Resource{
+		ID:      "agent-tower-host",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "tower",
+		Status:  unifiedresources.StatusOnline,
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
+		Agent: &unifiedresources.AgentData{
+			AgentID:  "agent-tower",
+			Hostname: "tower",
+			OSName:   "Unraid OS 7.2.2",
+		},
+	})
+
+	if input.PlatformType != "agent" {
+		t.Fatalf("PlatformType = %q, want agent for single-source Unraid host agent", input.PlatformType)
+	}
+	if input.SourceType != "agent" {
+		t.Fatalf("SourceType = %q, want agent", input.SourceType)
+	}
+	if len(input.Sources) != 1 || input.Sources[0] != "agent" {
+		t.Fatalf("Sources = %#v, want [agent]", input.Sources)
+	}
+
+	payload := string(input.PlatformData)
+	for _, snippet := range []string{
+		`"osName":"Unraid OS 7.2.2"`,
+		`"sources":["agent"]`,
+	} {
+		if !strings.Contains(payload, snippet) {
+			t.Fatalf("PlatformData must contain %s, got %s", snippet, payload)
+		}
+	}
+}
+
 func TestMonitorSetMockModeAuthorizesBeforeResettingRuntimeState(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {
