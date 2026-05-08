@@ -107,6 +107,43 @@ const titleFromParts = (...parts: Array<string | undefined>): string | undefined
   return title || undefined;
 };
 
+const UNKNOWN_VERSION_VALUES = new Set(['unknown', 'n/a', 'na', 'none', '-']);
+
+const normalizeVersion = (value: unknown): string => {
+  if (typeof value !== 'string' && typeof value !== 'number') return '';
+  const version = `${value}`.trim();
+  if (!version || UNKNOWN_VERSION_VALUES.has(version.toLowerCase())) return '';
+  return version;
+};
+
+const getRecordVersion = (
+  record: Record<string, unknown> | undefined,
+  ...fields: string[]
+): string => {
+  if (!record) return '';
+  for (const field of fields) {
+    const version = normalizeVersion(record[field]);
+    if (version) return version;
+  }
+  return '';
+};
+
+const withBadgeVersion = (badge: ResourceBadge, version: string): ResourceBadge => {
+  const normalizedVersion = normalizeVersion(version);
+  if (!normalizedVersion || badge.label.toLowerCase().includes(normalizedVersion.toLowerCase())) {
+    return badge;
+  }
+  const title = badge.title ?? badge.label;
+  const titleWithVersion = title.toLowerCase().includes(normalizedVersion.toLowerCase())
+    ? title
+    : titleFromParts(title, normalizedVersion);
+  return {
+    ...badge,
+    label: `${badge.label} ${normalizedVersion}`,
+    title: titleWithVersion ?? badge.title,
+  };
+};
+
 const normalizeUnifiedSourceKeys = (sources?: string[] | null): KnownSourcePlatform[] => {
   if (!sources || sources.length === 0) return [];
   const normalized = sources
@@ -258,6 +295,30 @@ const getKnownHostIdentitySource = (...values: string[]): KnownSourcePlatform | 
 const getAgentRecord = (resource: Resource): Record<string, unknown> | undefined =>
   getPlatformAgentRecord(resource) ?? asRecord(getResourceRecord(resource).agent);
 
+const getAgentIdentitySource = (
+  agent: Record<string, unknown> | undefined,
+): KnownSourcePlatform | null => {
+  const hostProfile = trimString(agent?.hostProfile);
+  if (hostProfile) {
+    const profile = getAgentHostProfileManifestEntry(hostProfile);
+    if (profile && getSourcePlatformManifestEntry(profile.id)) {
+      return profile.id as KnownSourcePlatform;
+    }
+  }
+  return getKnownHostIdentitySource(trimString(agent?.platform), trimString(agent?.osName));
+};
+
+const getAgentPlatformVersion = (
+  resource: Resource,
+  source?: KnownSourcePlatform | null,
+): string => {
+  const agent = getAgentRecord(resource);
+  if (!agent) return '';
+  const agentIdentitySource = getAgentIdentitySource(agent);
+  if (source && agentIdentitySource !== source) return '';
+  return getRecordVersion(agent, 'osVersion', 'version');
+};
+
 const hasExplicitAgentHostProfile = (resource: Resource): boolean => {
   const agent = getAgentRecord(resource);
   const hostProfile = trimString(agent?.hostProfile);
@@ -294,11 +355,15 @@ const getAgentSystemIdentityBadge = (resource: Resource): ResourceBadge | null =
     const profileFamily = getAgentHostProfileFamily(hostProfile);
     const label = badge?.label ?? profileFamily;
     if (label) {
-      return {
-        label,
-        classes: badge?.classes ?? `${baseBadge} ${typeClasses}`,
-        title: titleFromParts(osName || badge?.title || profileFamily || label, osVersion) ?? label,
-      };
+      return withBadgeVersion(
+        {
+          label,
+          classes: badge?.classes ?? `${baseBadge} ${typeClasses}`,
+          title:
+            titleFromParts(osName || badge?.title || profileFamily || label, osVersion) ?? label,
+        },
+        osVersion,
+      );
     }
   }
 
@@ -306,21 +371,27 @@ const getAgentSystemIdentityBadge = (resource: Resource): ResourceBadge | null =
   if (knownSource) {
     const badge = getSourcePlatformBadge(knownSource);
     if (badge) {
-      return {
-        label: badge.label,
-        classes: badge.classes,
-        title: titleFromParts(osName || badge.title, osVersion) ?? badge.title,
-      };
+      return withBadgeVersion(
+        {
+          label: badge.label,
+          classes: badge.classes,
+          title: titleFromParts(osName || badge.title, osVersion) ?? badge.title,
+        },
+        osVersion,
+      );
     }
   }
 
   const osLabel = getHostOsLabel(osName, platform);
   if (osLabel) {
-    return {
-      label: osLabel,
-      classes: `${baseBadge} ${typeClasses}`,
-      title: titleFromParts(osName || osLabel, osVersion),
-    };
+    return withBadgeVersion(
+      {
+        label: osLabel,
+        classes: `${baseBadge} ${typeClasses}`,
+        title: titleFromParts(osName || osLabel, osVersion),
+      },
+      osVersion,
+    );
   }
 
   return null;
@@ -378,6 +449,77 @@ const getStoragePlatformSource = (
   return normalizeSourcePlatformKey(platform);
 };
 
+const getSystemSourceVersion = (
+  resource: Resource,
+  platformData: Record<string, unknown> | undefined,
+  source: KnownSourcePlatform,
+): string => {
+  const platformRecord = getFacetRecord(resource, platformData, 'platform');
+  const sourceRecord = getFacetRecord(resource, platformData, source);
+  switch (source) {
+    case 'proxmox-pve': {
+      const proxmox = getFacetRecord(resource, platformData, 'proxmox');
+      return (
+        getRecordVersion(proxmox, 'pveVersion', 'version') ||
+        getRecordVersion(platformData, 'pveVersion') ||
+        getAgentPlatformVersion(resource, source)
+      );
+    }
+    case 'proxmox-pbs': {
+      const pbs = getFacetRecord(resource, platformData, 'pbs');
+      return getRecordVersion(pbs, 'version') || getRecordVersion(platformData, 'version');
+    }
+    case 'proxmox-pmg': {
+      const pmg = getFacetRecord(resource, platformData, 'pmg');
+      return getRecordVersion(pmg, 'version') || getRecordVersion(platformData, 'version');
+    }
+    case 'truenas': {
+      const truenas = getFacetRecord(resource, platformData, 'truenas');
+      return (
+        getRecordVersion(truenas, 'version', 'osVersion') ||
+        getRecordVersion(platformData, 'version') ||
+        getAgentPlatformVersion(resource, source)
+      );
+    }
+    case 'vmware-vsphere': {
+      const vmware = getFacetRecord(resource, platformData, 'vmware');
+      return getRecordVersion(
+        vmware,
+        'version',
+        'productVersion',
+        'apiVersion',
+        'vcenterVersion',
+      );
+    }
+    case 'kubernetes': {
+      const kubernetes = getFacetRecord(resource, platformData, 'kubernetes');
+      return getRecordVersion(kubernetes, 'version', 'serverVersion', 'gitVersion');
+    }
+    case 'docker': {
+      const docker = getFacetRecord(resource, platformData, 'docker');
+      return getRecordVersion(docker, 'runtimeVersion', 'dockerVersion', 'version');
+    }
+    case 'unraid':
+      return getAgentPlatformVersion(resource, source) || getRecordVersion(platformData, 'osVersion');
+    default:
+      return (
+        getRecordVersion(sourceRecord, 'version', 'osVersion', 'productVersion') ||
+        getRecordVersion(platformRecord, 'version', 'osVersion', 'productVersion')
+      );
+  }
+};
+
+const getVersionedSourceBadge = (
+  resource: Resource,
+  platformData: Record<string, unknown> | undefined,
+  source: KnownSourcePlatform,
+): ResourceBadge | null => {
+  const badge = getUnifiedSourceBadges([source])[0];
+  return badge
+    ? withBadgeVersion(badge, getSystemSourceVersion(resource, platformData, source))
+    : null;
+};
+
 const getStorageSystemIdentityBadge = (
   resource: Resource,
   platformData: Record<string, unknown> | undefined,
@@ -391,11 +533,14 @@ const getStorageSystemIdentityBadge = (
   const storage = getFacetRecord(resource, platformData, 'storage');
   const topology = trimString(storage?.topology) || trimString(platformData?.topology);
   const storageType = trimString(storage?.type) || trimString(platformData?.type);
-  return {
-    label: badge.label,
-    classes: badge.classes,
-    title: titleFromParts(badge.title, topology || storageType),
-  };
+  return withBadgeVersion(
+    {
+      label: badge.label,
+      classes: badge.classes,
+      title: titleFromParts(badge.title, topology || storageType),
+    },
+    getSystemSourceVersion(resource, platformData, storagePlatform),
+  );
 };
 
 export function getInfrastructureSystemIdentityBadges(resource: Resource): ResourceBadge[] {
@@ -436,7 +581,8 @@ export function getInfrastructureSystemIdentityBadges(resource: Resource): Resou
 
   const systemSource = firstSystemSource(sources, resource.platformType);
   if (systemSource) {
-    return buildUnifiedSourceBadges([systemSource]);
+    const badge = getVersionedSourceBadge(resource, platformData, systemSource);
+    return badge ? [badge] : [];
   }
 
   if (agentIdentityBadge) {

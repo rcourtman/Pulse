@@ -43,6 +43,8 @@ describe('sourcePlatforms', () => {
     it('matches governed display tokens from the platform manifest', () => {
       expect(getSourcePlatformPresentation('Unraid')).toMatchObject({ label: 'Unraid' });
       expect(getSourcePlatformPresentation('Proxmox VE')).toMatchObject({ label: 'PVE' });
+      expect(getSourcePlatformPresentation('unraid')?.tone).toContain('yellow');
+      expect(getSourcePlatformPresentation('proxmox-pve')?.tone).toContain('orange');
     });
 
     it('returns null for unknown platforms', () => {

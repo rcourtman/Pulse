@@ -644,6 +644,11 @@ presentation and host/appliance support-floor copy. Raw appliance identity
 aliases such as `unraid-os` may be accepted only through the generated
 host-profile token projection and must resolve to a governed profile id before
 they reach platform filters, source IDs, or top-level resource identity.
+Frontend resource identity presenters may append a runtime version to a
+displayed system badge only when that version is sourced from the same canonical
+platform or host-profile identity, such as PVE `pveVersion`, PBS `version`, or
+an agent OS report that resolves to Unraid or Proxmox VE. They must not attach
+a collector OS version to a different API-backed platform identity.
 Agent-backed storage resources follow the same distinction: `StorageMeta.platform`
 may carry appliance presentation context such as `unraid` so the operator can see
 what system owns the array, but realtime `platformType` and source filters must

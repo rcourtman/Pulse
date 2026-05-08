@@ -330,7 +330,7 @@
         "assistant_control": "n/a"
       },
       "ui_label": "Unraid",
-      "ui_tone": "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
+      "ui_tone": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
       "aliases": [],
       "display_tokens": [
         "Unraid"

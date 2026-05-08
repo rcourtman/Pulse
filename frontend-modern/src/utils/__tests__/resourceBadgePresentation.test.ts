@@ -78,7 +78,7 @@ describe('resourceBadgePresentation', () => {
           },
         }),
       ).map((badge) => badge.label),
-    ).toEqual(['Unraid']);
+    ).toEqual(['Unraid 7.1.0']);
 
     expect(
       getInfrastructureSystemIdentityBadges(
@@ -113,7 +113,7 @@ describe('resourceBadgePresentation', () => {
           },
         }),
       ).map((badge) => badge.label),
-    ).toEqual(['Unraid']);
+    ).toEqual(['Unraid 7.2.2']);
   });
 
   it('shows storage-owned platform identity without using presentation profiles as PlatformType', () => {
@@ -137,9 +137,9 @@ describe('resourceBadgePresentation', () => {
       } as Resource['storage'],
     });
 
-    expect(getInfrastructureSystemIdentityBadges(unraidStorage).map((badge) => badge.label)).toEqual([
-      'Unraid',
-    ]);
+    expect(getInfrastructureSystemIdentityBadges(unraidStorage).map((badge) => badge.label)).toEqual(
+      ['Unraid'],
+    );
     expect(getInfrastructureSystemIdentitySortLabel(unraidStorage)).toBe('Unraid');
 
     const pbsDatastore = makeResource({
@@ -180,7 +180,7 @@ describe('resourceBadgePresentation', () => {
           },
         }),
       ).map((badge) => badge.label),
-    ).toEqual(['Unraid']);
+    ).toEqual(['Unraid 7.2.2']);
   });
 
   it('uses governed host identity tokens for legacy agent profile reports', () => {
@@ -200,7 +200,7 @@ describe('resourceBadgePresentation', () => {
           },
         }),
       ).map((badge) => badge.label),
-    ).toEqual(['Unraid']);
+    ).toEqual(['Unraid 7.1.0']);
   });
 
   it('uses authoritative top-level sources before stale platformData source hints', () => {
@@ -221,7 +221,7 @@ describe('resourceBadgePresentation', () => {
           },
         }),
       ).map((badge) => badge.label),
-    ).toEqual(['Unraid']);
+    ).toEqual(['Unraid 7.2.2']);
   });
 
   it('matches governed platform display tokens inside reported host identity text', () => {
@@ -261,6 +261,44 @@ describe('resourceBadgePresentation', () => {
       'PVE',
     ]);
     expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('PVE');
+  });
+
+  it('shows platform versions when the reported version belongs to the platform identity', () => {
+    const agentDiscoveredPve = makeResource({
+      type: 'agent',
+      platformType: 'agent',
+      sourceType: 'agent',
+      sources: ['agent'],
+      platformData: {
+        sources: ['agent'],
+        agent: {
+          platform: 'debian',
+          osName: 'Proxmox VE',
+          osVersion: '9.1.9',
+        },
+      },
+    });
+
+    expect(
+      getInfrastructureSystemIdentityBadges(agentDiscoveredPve).map((badge) => badge.label),
+    ).toEqual(['PVE 9.1.9']);
+
+    const apiBackedPve = makeResource({
+      type: 'agent',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      sources: ['proxmox'],
+      platformData: {
+        sources: ['proxmox'],
+        proxmox: {
+          pveVersion: '8.3.2',
+        },
+      },
+    });
+
+    expect(getInfrastructureSystemIdentityBadges(apiBackedPve).map((badge) => badge.label)).toEqual(
+      ['PVE 8.3.2'],
+    );
   });
 
   it('keeps top-level platform facets ahead of collection method identity', () => {
