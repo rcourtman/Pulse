@@ -146,11 +146,30 @@ const getSessionHandoffBadgeLabel = (summary: ChatSessionHandoffSummary) => {
 };
 
 const formatSessionHandoffRecommendationLabel = (summary: ChatSessionHandoffSummary) => {
-  if (!isPatrolAssessmentSessionHandoff(summary)) return '';
+  if (!isPatrolSessionHandoff(summary)) return '';
   const action = summary.recommended_next_step_action?.trim();
-  if (action) return `Recommended: ${action}`;
+  if (action) return isPatrolFindingSessionHandoff(summary) ? action : `Recommended: ${action}`;
   const nextStep = summary.recommended_next_step?.trim();
   return nextStep ? `Recommended: ${nextStep}` : '';
+};
+
+const getSessionHandoffRecommendedActionHref = (
+  summary: ChatSessionHandoffSummary,
+): string | undefined => {
+  const summaryHref = summary.recommended_next_step_action_href?.trim();
+  if (summaryHref === '/settings/system-ai' || summaryHref === '/patrol') {
+    return summaryHref;
+  }
+
+  switch (summary.recommended_next_step_action_kind?.trim()) {
+    case 'open_provider_settings':
+      return '/settings/system-ai';
+    case 'review_approvals':
+    case 'review_findings':
+      return '/patrol';
+    default:
+      return undefined;
+  }
 };
 
 const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | undefined => {
@@ -164,6 +183,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
   const recommendedNextStep = summary.recommended_next_step?.trim() || '';
   const recommendedNextStepAction = summary.recommended_next_step_action?.trim() || '';
   const recommendedNextStepActionKind = summary.recommended_next_step_action_kind?.trim() || '';
+  const recommendedNextStepActionHref = getSessionHandoffRecommendedActionHref(summary);
   const actionCount = summary.action_count ?? 0;
   const resourceCount = summary.resource_count ?? 0;
   const findingId = summary.finding_id?.trim() || undefined;
@@ -225,6 +245,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       recommendedNextStep,
       recommendedNextStepAction,
       recommendedNextStepActionKind,
+      recommendedNextStepActionHref,
       updatedAt: summary.updated_at,
     },
     findingId,
@@ -274,9 +295,19 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
             ? 'Review Patrol runtime issue'
               : isPatrolRun
                 ? 'Review Patrol run'
-                : actionCount > 0
-                  ? 'Governed action context'
-                  : undefined,
+                : isPatrolFinding && recommendedNextStepAction
+                  ? recommendedNextStepAction
+                  : actionCount > 0
+                    ? 'Governed action context'
+                    : undefined,
+      actionHref:
+        !summary.requires_approval &&
+        recommendedNextStepActionHref &&
+        (isPatrolFinding ||
+          (isPatrolAssessment &&
+            Boolean(recommendedNextStepAction || recommendedNextStep)))
+          ? recommendedNextStepActionHref
+          : undefined,
       commandSummary: statusLabel
         ? isPatrolRun
           ? `Run state: ${statusLabel}`

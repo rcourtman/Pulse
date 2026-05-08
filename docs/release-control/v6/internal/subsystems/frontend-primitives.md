@@ -198,16 +198,18 @@ work extends shared components instead of creating new local variants.
    review, but `handoffContext`, `handoffResources`, and `handoffActions` for
    run-history context must stay absent from the browser request so the backend
    can rebuild model-bound context from the stored Patrol run. Restored
-   Patrol assessment and Patrol configuration-failure sessions follow the same
-   safe-summary rule: the drawer may restore source label, title, target type,
-   status badge, action label, and suggested prompts from `handoff_summary`, but
+   Patrol assessment, Patrol finding, and Patrol configuration-failure sessions
+   follow the same safe-summary rule: the drawer may restore source label,
+   title, target type, status badge, action label, and suggested prompts from
+   `handoff_summary`, but
    it must not infer a finding target from bounded action references or
    reconstruct hidden model context, provider details, retry payloads, commands,
    preflight output, or action results in the browser. If the safe summary
-   includes a Patrol assessment recommended next step, action label, or safe
-   action kind, the session picker plus restored drawer briefing and action
-   copy must use that recommendation and may carry the safe action kind as
-   context metadata rather than falling back to generic assessment copy.
+   includes a Patrol recommended next step, action label, safe action kind, or
+   whitelisted app-route href, the session picker plus restored drawer briefing
+   and action copy must use that recommendation and may carry the safe action
+   kind or href as context metadata rather than falling back to generic handoff
+   copy.
    Session-load and new-conversation transitions must be success-bound: if the
    underlying session operation fails, the shared drawer store must not clear or
    replace the current scoped handoff context.

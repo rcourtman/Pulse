@@ -53,6 +53,7 @@ describe('AIChatAPI', () => {
         recommended_next_step: 'Review pending Patrol approval',
         recommended_next_step_action: 'Review approvals',
         recommended_next_step_action_kind: 'review_approvals',
+        recommended_next_step_action_href: '/patrol',
         updated_at: '2026-05-06T12:08:00Z',
       },
     };

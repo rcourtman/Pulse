@@ -588,6 +588,89 @@ func TestSessionStore_ListKeepsPatrolAssessmentHandoffIdentity(t *testing.T) {
 	}
 }
 
+func TestSessionStore_ListKeepsSafePatrolFindingNextStepRoute(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	handoffContext := strings.Join([]string{
+		"[Patrol Finding Context]",
+		"Source: Pulse Patrol finding handoff",
+		"Finding ID: finding-provider-settings",
+		"Patrol Next Step: Open Patrol provider settings",
+		"Patrol Next Step Route: /settings/system-ai",
+	}, "\n")
+	if err := store.SetModelHandoffEnvelope(session.ID, "finding-provider-settings", handoffContext, nil, nil, HandoffMetadata{}); err != nil {
+		t.Fatalf("SetModelHandoffEnvelope failed: %v", err)
+	}
+
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].HandoffSummary == nil {
+		t.Fatalf("sessions = %#v, want one session with handoff summary", sessions)
+	}
+
+	summary := sessions[0].HandoffSummary
+	if summary.Kind != sessionHandoffKindPatrolFinding {
+		t.Fatalf("handoff kind = %q, want %q", summary.Kind, sessionHandoffKindPatrolFinding)
+	}
+	if summary.FindingID != "finding-provider-settings" {
+		t.Fatalf("finding ID = %q, want finding-provider-settings", summary.FindingID)
+	}
+	if summary.RecommendedNextStep != "Open Patrol provider settings" ||
+		summary.RecommendedNextStepAction != "Open Patrol provider settings" ||
+		summary.RecommendedNextStepActionHref != "/settings/system-ai" {
+		t.Fatalf("next step summary = %#v, want safe route-owned Patrol next step", summary)
+	}
+}
+
+func TestSessionStore_ListWithholdsUnsafePatrolFindingNextStepRoute(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	handoffContext := strings.Join([]string{
+		"[Patrol Finding Context]",
+		"Source: Pulse Patrol finding handoff",
+		"Finding ID: finding-provider-settings",
+		"Patrol Next Step: Open Patrol provider settings",
+		"Patrol Next Step Route: javascript:alert(1)",
+	}, "\n")
+	if err := store.SetModelHandoffEnvelope(session.ID, "finding-provider-settings", handoffContext, nil, nil, HandoffMetadata{}); err != nil {
+		t.Fatalf("SetModelHandoffEnvelope failed: %v", err)
+	}
+
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].HandoffSummary == nil {
+		t.Fatalf("sessions = %#v, want one session with handoff summary", sessions)
+	}
+
+	summary := sessions[0].HandoffSummary
+	if summary.RecommendedNextStepAction != "Open Patrol provider settings" {
+		t.Fatalf("next step action = %q, want safe label preserved", summary.RecommendedNextStepAction)
+	}
+	if summary.RecommendedNextStepActionHref != "" {
+		t.Fatalf("next step href = %q, want unsafe route withheld", summary.RecommendedNextStepActionHref)
+	}
+}
+
 func TestSessionStore_ListWithholdsUnsafePatrolAssessmentRecommendationSummary(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {

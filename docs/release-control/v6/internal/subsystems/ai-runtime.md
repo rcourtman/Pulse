@@ -341,10 +341,10 @@ runtime cost control, and shared AI transport surfaces.
     handoffs. That summary may include the handoff kind, finding ID, resource
     and Patrol run ID, safe run type/status/runtime-failure flags, resource and
     action counts, a primary resource label, last-known approval/action status,
-    risk level, timestamp, and Patrol assessment recommended next-step/action
-    labels plus the safe recommendation action kind only when they can be
-    safely extracted from the stored assessment handoff, but it must not expose
-    model-only handoff text,
+    risk level, timestamp, and Patrol recommended next-step/action labels plus
+    the safe recommendation action kind or whitelisted app-route href only when
+    they can be safely extracted from the stored Patrol handoff, but it must not
+    expose model-only handoff text,
     runtime failure detail, action preflight/result bodies, remediation
     descriptions, raw commands, or approval command payloads. Its
     `requires_approval` field is a current operator-decision flag only: pending
@@ -371,10 +371,11 @@ runtime cost control, and shared AI transport surfaces.
     The Assistant drawer must also fetch that current session list before
     opening the session picker instead of presenting mount-time cached
     summaries as the operator's decision surface. For restored Patrol
-    assessment sessions, that picker must present the safe recommended
-    next-step/action label from `handoff_summary` when one is available and
-    restore the safe recommendation action kind as context metadata instead of
-    reducing the saved session to generic assessment context.
+    assessment or finding sessions, that picker must present the safe
+    recommended next-step/action label from `handoff_summary` when one is
+    available and restore the safe recommendation action kind or route-owned
+    href as context metadata instead of reducing the saved session to generic
+    context.
     Live Patrol assessment handoffs that include a currently unavailable
     Patrol-owned recommendation action must carry the bounded disabled reason in
     the model-only handoff and visible briefing so Assistant explains the

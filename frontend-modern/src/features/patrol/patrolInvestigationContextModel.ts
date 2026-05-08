@@ -857,6 +857,7 @@ function buildPatrolAssessmentAssistantBriefing(
       .slice(0, 5),
     evidence: [...findingEvidence.slice(0, 3), ...supportingEvidence].slice(0, 5),
     actionLabel: actionPosture.actionLabel,
+    actionHref: actionPosture.actionHref,
     safetyNote: actionPosture.safetyNote,
     suggestedPrompts: buildPatrolAssessmentSuggestedPrompts(input, {
       findings,
@@ -935,14 +936,30 @@ function formatAssessmentRecommendedNextStepDetailLine(
   );
 }
 
+function getAssessmentRecommendedNextStepActionHref(
+  recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
+): string | undefined {
+  switch (recommendedNextStep?.actionKind) {
+    case 'open_provider_settings':
+      return '/settings/system-ai';
+    case 'review_approvals':
+    case 'review_findings':
+      return '/patrol';
+    default:
+      return undefined;
+  }
+}
+
 function buildPatrolAssessmentActionPosture(
   input: PatrolAssessmentAssistantHandoffInput,
   handoffActions: AIChatHandoffAction[],
-): { actionLabel: string; safetyNote: string } {
+): { actionLabel: string; actionHref?: string; safetyNote: string } {
   const pendingApprovalCount = normalizeAssessmentPendingApprovalCount(input.activeFindings);
   const actionCount = handoffActions.length;
   const hasCoverageGap = assessmentHasCoverageGap(input);
   const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
+  const recommendedNextStepActionHref =
+    getAssessmentRecommendedNextStepActionHref(recommendedNextStep);
   const hasDryRunPosture = handoffActions.some((action) =>
     Boolean(normalizeText(action.actionDryRunSummary) || normalizeText(action.actionPreflight)),
   );
@@ -986,6 +1003,7 @@ function buildPatrolAssessmentActionPosture(
       actionLabel: recommendedNextStep?.actionLabel
         ? `Recommended: ${recommendedNextStep.actionLabel}`
         : 'Review coverage gap',
+      actionHref: recommendedNextStep?.actionLabel ? recommendedNextStepActionHref : undefined,
       safetyNote: formatAssessmentRecommendationSafetyNote(
         'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled.',
         recommendedNextStep,
@@ -996,6 +1014,7 @@ function buildPatrolAssessmentActionPosture(
   if (recommendedNextStep?.actionLabel || recommendedNextStep?.title) {
     return {
       actionLabel: `Recommended: ${recommendedNextStep.actionLabel || recommendedNextStep.title}`,
+      actionHref: recommendedNextStep.actionLabel ? recommendedNextStepActionHref : undefined,
       safetyNote: formatAssessmentRecommendationSafetyNote(
         'Assistant can explain the Patrol recommendation; Patrol runs, settings changes, diagnostics, and remediation remain operator-controlled.',
         recommendedNextStep,

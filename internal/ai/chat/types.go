@@ -42,6 +42,7 @@ type SessionHandoffSummary struct {
 	RecommendedNextStep           string           `json:"recommended_next_step,omitempty"`
 	RecommendedNextStepAction     string           `json:"recommended_next_step_action,omitempty"`
 	RecommendedNextStepActionKind string           `json:"recommended_next_step_action_kind,omitempty"`
+	RecommendedNextStepActionHref string           `json:"recommended_next_step_action_href,omitempty"`
 	UpdatedAt                     *time.Time       `json:"updated_at,omitempty"`
 }
 

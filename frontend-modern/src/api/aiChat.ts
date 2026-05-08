@@ -56,6 +56,7 @@ export interface ChatSessionHandoffSummary {
   recommended_next_step?: string;
   recommended_next_step_action?: string;
   recommended_next_step_action_kind?: string;
+  recommended_next_step_action_href?: string;
   updated_at?: string;
 }
 

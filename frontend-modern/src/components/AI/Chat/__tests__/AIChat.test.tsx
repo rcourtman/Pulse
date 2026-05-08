@@ -1100,6 +1100,9 @@ describe('AIChat', () => {
             },
             action_count: 0,
             requires_approval: false,
+            recommended_next_step: 'Open Patrol provider settings',
+            recommended_next_step_action: 'Open Patrol provider settings',
+            recommended_next_step_action_href: '/settings/system-ai',
           },
         },
       ]);
@@ -1113,6 +1116,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
         expect(screen.getByText('Context attached')).toBeInTheDocument();
+        expect(screen.getByText('Open Patrol provider settings')).toBeInTheDocument();
       });
 
       fireEvent.click(screen.getByText('Context-only Patrol follow-up'));
@@ -1126,11 +1130,15 @@ describe('AIChat', () => {
             context: expect.objectContaining({
               actionCount: 0,
               requiresApproval: false,
+              recommendedNextStep: 'Open Patrol provider settings',
+              recommendedNextStepAction: 'Open Patrol provider settings',
+              recommendedNextStepActionHref: '/settings/system-ai',
             }),
             briefing: expect.objectContaining({
               sourceLabel: 'Pulse Patrol',
               title: 'Patrol finding on web-server',
-              actionLabel: undefined,
+              actionLabel: 'Open Patrol provider settings',
+              actionHref: '/settings/system-ai',
             }),
           }),
         );

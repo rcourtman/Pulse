@@ -440,6 +440,38 @@ describe('patrolInvestigationContextModel', () => {
     });
   });
 
+  it('links route-owned Patrol assessment recommendations in Assistant briefing', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Patrol runtime issue',
+        description: 'Patrol coverage is incomplete.',
+      },
+      overallHealth: {
+        grade: 'C',
+        score: 60,
+        factors: [{ category: 'coverage' }],
+      },
+      recommendedNextStep: {
+        title: 'Restore Patrol visibility',
+        description: 'Fix the Patrol runtime issue before treating the assessment as current.',
+        actionLabel: 'Open Patrol provider settings',
+        actionKind: 'open_provider_settings',
+      },
+      activeFindings: [],
+    });
+
+    expect(handoff.context.briefing).toMatchObject({
+      actionLabel: 'Recommended: Open Patrol provider settings',
+      actionHref: '/settings/system-ai',
+    });
+    expect(handoff.context.handoffContext).toContain(
+      'Recommended Next Step Action: Open Patrol provider settings (open_provider_settings)',
+    );
+    expect(handoff.context.context).toMatchObject({
+      recommendedNextStepActionKind: 'open_provider_settings',
+    });
+  });
+
   it('marks unavailable recommended Patrol actions in assessment handoffs', () => {
     const handoff = buildPatrolAssessmentAssistantHandoff({
       assessment: {

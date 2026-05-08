@@ -297,6 +297,64 @@ func safePatrolAssessmentRecommendationAction(value string) (string, string) {
 	return action, ""
 }
 
+func patrolFindingNextStepSummary(kind string, handoffContext string) (string, string) {
+	if kind != sessionHandoffKindPatrolFinding {
+		return "", ""
+	}
+
+	lines := strings.Split(strings.TrimSpace(handoffContext), "\n")
+	if len(lines) == 0 {
+		return "", ""
+	}
+
+	sawFindingContext := false
+	sawPatrolSource := false
+	var nextStepAction string
+	var nextStepActionHref string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "[Patrol Finding Context]" {
+			sawFindingContext = true
+			continue
+		}
+		if !sawFindingContext {
+			continue
+		}
+
+		label, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		label = strings.ToLower(strings.TrimSpace(label))
+		value = strings.TrimSpace(value)
+		switch label {
+		case "source":
+			if strings.EqualFold(value, "Pulse Patrol finding handoff") {
+				sawPatrolSource = true
+			}
+		case "patrol next step":
+			nextStepAction = safeSessionHandoffSummaryText(value, 120)
+		case "patrol next step route":
+			nextStepActionHref = safePatrolHandoffRoute(value)
+		}
+	}
+
+	if !sawFindingContext || !sawPatrolSource || nextStepAction == "" {
+		return "", ""
+	}
+	return nextStepAction, nextStepActionHref
+}
+
+func safePatrolHandoffRoute(value string) string {
+	route := trimHandoffMetadataField(value, 160)
+	switch route {
+	case "/patrol", "/settings/system-ai":
+		return route
+	default:
+		return ""
+	}
+}
+
 func safeSessionHandoffSummaryText(value string, maxRunes int) string {
 	normalized := trimHandoffMetadataField(value, maxRunes)
 	if normalized == "" || sessionHandoffSummaryTextShouldBeWithheld(normalized) {
@@ -404,6 +462,16 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 		kind,
 		modelContext.HandoffContext,
 	)
+	recommendedNextStepActionHref := ""
+	if recommendedNextStepAction == "" {
+		recommendedNextStepAction, recommendedNextStepActionHref = patrolFindingNextStepSummary(
+			kind,
+			modelContext.HandoffContext,
+		)
+		if recommendedNextStep == "" && recommendedNextStepAction != "" {
+			recommendedNextStep = recommendedNextStepAction
+		}
+	}
 
 	summary := &SessionHandoffSummary{
 		Kind:                          kind,
@@ -418,6 +486,7 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 		RecommendedNextStep:           recommendedNextStep,
 		RecommendedNextStepAction:     recommendedNextStepAction,
 		RecommendedNextStepActionKind: recommendedNextStepActionKind,
+		RecommendedNextStepActionHref: recommendedNextStepActionHref,
 	}
 	if kind != sessionHandoffKindPatrolRun {
 		summary.RunID = ""
