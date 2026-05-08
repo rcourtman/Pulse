@@ -145,6 +145,45 @@ func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
 	assert.Equal(t, "CPU at 92% over 15 minutes", input.Evidence)
 }
 
+func TestHandlePatrolReportFinding_PassesImpactWhenAuthored(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
+	exec := newPatrolTestExecutor(creator)
+
+	args := validReportArgs()
+	args["impact"] = "Customer-facing latency rises and request queue depth grows; sustained CPU pressure will time out user requests."
+
+	result, err := handlePatrolReportFinding(context.Background(), exec, args)
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(extractText(result)), &parsed))
+	assert.Equal(t, true, parsed["ok"])
+
+	require.Len(t, creator.createCalls, 1)
+	assert.Equal(t,
+		"Customer-facing latency rises and request queue depth grows; sustained CPU pressure will time out user requests.",
+		creator.createCalls[0].Impact,
+	)
+}
+
+func TestHandlePatrolReportFinding_LeavesImpactEmptyWhenOmitted(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
+	exec := newPatrolTestExecutor(creator)
+
+	// validReportArgs intentionally omits impact, mirroring the LLM choosing
+	// to leave it empty rather than fabricating one. The contract is that an
+	// omitted impact is honored verbatim — no default copy is synthesized.
+	result, err := handlePatrolReportFinding(context.Background(), exec, validReportArgs())
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(extractText(result)), &parsed))
+	assert.Equal(t, true, parsed["ok"])
+
+	require.Len(t, creator.createCalls, 1)
+	assert.Equal(t, "", creator.createCalls[0].Impact)
+}
+
 func TestHandlePatrolReportFinding_AcceptsPhysicalDiskResourceType(t *testing.T) {
 	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)

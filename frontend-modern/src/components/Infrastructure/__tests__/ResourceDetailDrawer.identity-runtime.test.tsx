@@ -172,7 +172,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     const { getByTestId, queryByText } = render(() => <ResourceDetailDrawer resource={resource} />);
     const headerBadges = getByTestId('resource-header-badges');
 
-    expect(within(headerBadges).getByText('Unraid')).toBeInTheDocument();
+    expect(within(headerBadges).getByText('Unraid 7.2.2')).toBeInTheDocument();
     expect(queryByText('K8s')).toBeNull();
   });
 

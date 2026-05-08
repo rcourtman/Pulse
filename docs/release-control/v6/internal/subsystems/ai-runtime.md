@@ -275,7 +275,19 @@ runtime cost control, and shared AI transport surfaces.
     (`internal/ai/patrol_findings.go`) populates `record.Rollback` from
     `remediationEngine.GetPlanForFinding` when the engine and an active
     plan are present. Rollback must remain absent rather than fabricated
-    when no plan exists, mirroring the impact rule. When `/api/ai/chat` receives `finding_id`, the
+    when no plan exists, mirroring the impact rule.
+    LLM-generated AI patrol findings author impact through the
+    `patrol_report_finding` tool schema in
+    `internal/ai/tools/tools_patrol.go`: the tool exposes an optional
+    `impact` parameter, `PatrolFindingInput.Impact` carries it through,
+    and `patrolFindingCreatorAdapter.CreateFinding` writes it onto
+    `Finding.Impact` so the LLM's authored consequence-if-ignored copy
+    flows through the same propagation path used by curated catalogs.
+    The patrol system prompt instructs the LLM to author concrete
+    operational consequences (named workloads, jobs, recovery windows)
+    and to leave `impact` empty rather than fabricate one when the
+    consequence is genuinely unknown; the runtime must not synthesize a
+    default in that case. When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so

@@ -58,6 +58,10 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 						Type:        "string",
 						Description: "Detailed description of the issue found",
 					},
+					"impact": {
+						Type:        "string",
+						Description: "Operator-facing consequence-if-ignored statement: what specifically happens, and to which workloads or jobs, if the operator does nothing. Concrete operational consequences only — do not echo severity or category. Leave empty if the consequence is genuinely unknown rather than fabricating one.",
+					},
 					"recommendation": {
 						Type:        "string",
 						Description: "Specific actionable recommendation for the operator",
@@ -218,6 +222,7 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	}
 
 	// Extract optional fields
+	impact, _ := args["impact"].(string)
 	recommendation, _ := args["recommendation"].(string)
 	evidence, _ := args["evidence"].(string)
 
@@ -230,6 +235,7 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 		ResourceType:   resourceType,
 		Title:          title,
 		Description:    description,
+		Impact:         impact,
 		Recommendation: recommendation,
 		Evidence:       evidence,
 	}

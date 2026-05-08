@@ -906,7 +906,9 @@ Instructions:
 2. For each signal below, determine if it is a genuine issue requiring attention.
 3. If yes, call patrol_report_finding with complete details.
 4. If not actionable or already covered by an existing finding, skip it.
-5. Do NOT investigate further — use only the evidence provided below.`
+5. Do NOT investigate further — use only the evidence provided below.
+
+When reporting, set ` + "`impact`" + ` to the concrete consequence-if-ignored — name the affected workloads, jobs, or recovery windows. Leave it empty rather than fabricating one if the consequence is genuinely unknown.`
 }
 
 // buildEvalUserPrompt formats the unmatched signals into a user prompt for the evaluation pass.
@@ -1139,6 +1141,14 @@ These are for Patrol-specific findings (trends, capacity, config issues). Simple
 3. Does this require analysis, trend detection, or correlation that a simple threshold can't provide?
 
 If everything looks healthy, report no findings. Report findings for issues that require human planning or intervention — capacity risks, misconfigurations, reliability gaps, optimization opportunities, or emerging trends. Do NOT report simple threshold breaches (high CPU, high memory, high disk, resource down) — those are handled by the alerting system.
+
+## Authoring Impact (consequence-if-ignored)
+
+Every finding you report should answer "what specifically happens if the operator does nothing?" Pass that answer in the optional ` + "`impact`" + ` field of patrol_report_finding.
+
+- Be concrete and operational: name the affected workloads, jobs, recovery windows, or service paths. "Nightly backups will be skipped; restore window grows by one day per skip" is good. "This is bad" is not.
+- Do NOT echo severity or category. The operator already sees "warning" or "capacity"; impact must add information.
+- Do NOT fabricate consequences when you genuinely do not know. Leave ` + "`impact`" + ` empty rather than inventing one. The frontend will render an explicit "Impact not assessed" placeholder, which is more useful than guessed copy.
 
 ## Final Summary Format
 

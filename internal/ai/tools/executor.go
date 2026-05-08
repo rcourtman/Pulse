@@ -112,6 +112,7 @@ type PatrolFindingInput struct {
 	ResourceType   string `json:"resource_type"`
 	Title          string `json:"title"`
 	Description    string `json:"description"`
+	Impact         string `json:"impact,omitempty"`
 	Recommendation string `json:"recommendation,omitempty"`
 	Evidence       string `json:"evidence,omitempty"`
 }

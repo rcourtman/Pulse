@@ -771,6 +771,7 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 		ResourceType:   input.ResourceType,
 		Title:          input.Title,
 		Description:    input.Description,
+		Impact:         input.Impact,
 		Recommendation: input.Recommendation,
 		Evidence:       input.Evidence,
 		Source:         "ai-analysis",
