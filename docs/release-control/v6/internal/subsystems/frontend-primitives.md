@@ -764,7 +764,11 @@ prompt explain the same operator-facing priority.
     copy. When the failure includes Patrol readiness context, the inline state
     must expose the provider, model, and readiness summary next to a direct
     provider-settings action instead of hiding that diagnosis behind Assistant
-    alone. When safe remediation is locked, the same popover state owner must
+    alone. Successful provider-model saves that return a not-ready Patrol
+    readiness snapshot must use that same inline surface with `needs attention`
+    wording, while Assistant receives a saved configuration issue rather than a
+    failed-save handoff. When safe remediation is locked, the same popover
+    state owner must
     clear stale full-mode unlock state before Apply Configuration submits the
     monitor-only autonomy payload, so disabled paid controls cannot leak stale
     permission into a save. If that inline state opens Assistant, the Patrol

@@ -232,6 +232,12 @@ async function mockBlockedPatrolRuntimeState(
   page: Page,
   options: {
     autonomyRoute?: (route: Route) => Promise<void>;
+    models?: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      notable?: boolean;
+    }>;
     status?: Record<string, unknown>;
   } = {},
 ): Promise<void> {
@@ -272,7 +278,7 @@ async function mockBlockedPatrolRuntimeState(
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ models: [] }),
+      body: JSON.stringify({ models: options.models ?? [] }),
     });
   });
 
@@ -691,6 +697,121 @@ test.describe("Patrol runtime-state browser contract", () => {
     ).toHaveCount(0);
   });
 
+  test("surfaces model readiness blocker after Patrol provider-model save", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only Patrol configuration coverage",
+    );
+
+    let settingsUpdatePayload: Record<string, unknown> | null = null;
+    const unsupportedModel = "ollama:deepseek-r1:7b";
+
+    await mockRuntimeCapabilities(page, ["ai_patrol", "ai_alerts"]);
+    await ensureAuthenticated(page);
+    await page.route("**/api/settings/ai/update", async (route) => {
+      settingsUpdatePayload = route.request().postDataJSON() as Record<
+        string,
+        unknown
+      >;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          enabled: true,
+          configured: true,
+          model: "ollama:llama3",
+          chat_model: "ollama:llama3",
+          patrol_model: unsupportedModel,
+          patrol_interval_minutes: 360,
+          patrol_enabled: true,
+          alert_triggered_analysis: false,
+          patrol_alert_triggers_enabled: true,
+          patrol_anomaly_triggers_enabled: true,
+          patrol_event_triggers_enabled: true,
+          patrol_auto_fix: false,
+          anthropic_configured: false,
+          openai_configured: false,
+          openrouter_configured: false,
+          deepseek_configured: false,
+          gemini_configured: false,
+          ollama_configured: true,
+          ollama_base_url: "http://127.0.0.1:11434",
+          configured_providers: ["ollama"],
+          custom_context: "",
+          auth_method: "api_key",
+          oauth_connected: false,
+          request_timeout_seconds: 300,
+          control_level: "read_only",
+          protected_guests: [],
+          discovery_enabled: false,
+          discovery_interval_hours: 0,
+          patrol_readiness: {
+            status: "not_ready",
+            ready: false,
+            cause: "model_unsupported_tools",
+            summary: PATROL_REASONING_ONLY_REJECTION,
+            provider: "ollama",
+            model: unsupportedModel,
+            checks: [
+              {
+                id: "tools",
+                status: "not_ready",
+                cause: "model_unsupported_tools",
+                label: "Patrol tools",
+                message: PATROL_REASONING_ONLY_REJECTION,
+                action: "open_provider_settings",
+              },
+            ],
+          },
+        }),
+      });
+    });
+    await mockBlockedPatrolRuntimeState(page, {
+      models: [{ id: unsupportedModel, name: "DeepSeek R1" }],
+    });
+
+    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Configure Patrol" }).click();
+    const configPanel = page.getByRole("dialog", {
+      name: "Patrol Configuration",
+    });
+
+    await configPanel
+      .getByLabel("Provider model")
+      .selectOption(unsupportedModel);
+    await expect
+      .poll(() => settingsUpdatePayload)
+      .toMatchObject({ patrol_model: unsupportedModel });
+
+    const inlineError = configPanel.getByTestId("patrol-configuration-error");
+    await expect(inlineError).toBeVisible();
+    await expect(inlineError).toContainText(
+      "Patrol configuration needs attention",
+    );
+    await expect(inlineError).toContainText(
+      "Patrol model was saved, but Patrol is not ready to run.",
+    );
+    await expect(inlineError).toContainText(PATROL_REASONING_ONLY_REJECTION);
+    await expect(inlineError).toContainText(
+      "patrol_readiness_not_ready · model_unsupported_tools",
+    );
+    await expect(inlineError).toContainText("Provider: ollama");
+    await expect(inlineError).toContainText(`Model: ${unsupportedModel}`);
+    await expect(page.getByText("Failed to update patrol model")).toHaveCount(
+      0,
+    );
+
+    await inlineError
+      .getByTestId("patrol-configuration-error-assistant-button")
+      .click();
+    await expect(configPanel).toBeHidden();
+    await expect(page.getByLabel("Assistant context")).toContainText(
+      "Patrol configuration issue attached",
+    );
+  });
+
   test("clamps stale full-mode state before monitor-only Patrol configuration save", async ({
     page,
   }, testInfo) => {
@@ -855,7 +976,11 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(
       page.getByText("Selected model does not support Patrol tools"),
     ).toBeVisible();
-    await expect(page.getByText(/tool_choice/)).toBeVisible();
+    await expect(
+      page.getByText("Provider rejected Patrol tool calls"),
+    ).toBeVisible();
+    await expect(page.getByText(/tool_choice/)).toHaveCount(0);
+    await expect(page.getByText(/No endpoints found/)).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "Open Patrol provider settings" }),
     ).toHaveAttribute("href", "/settings/system-ai");

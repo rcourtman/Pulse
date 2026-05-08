@@ -45,6 +45,19 @@ type PatrolAPIError = Error & {
 const patrolErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() ? error.message : fallback;
 
+const buildReadinessDetails = (
+  readiness: NonNullable<AISettings['patrol_readiness']>,
+): Record<string, string> => {
+  const details: Record<string, string> = {
+    status: readiness.status,
+  };
+  if (readiness.cause?.trim()) details.cause = readiness.cause.trim();
+  if (readiness.summary?.trim()) details.summary = readiness.summary.trim();
+  if (readiness.provider?.trim()) details.provider = readiness.provider.trim();
+  if (readiness.model?.trim()) details.model = readiness.model.trim();
+  return details;
+};
+
 export function resolvePatrolAutonomyLevelForSave(
   level: PatrolAutonomyLevel,
   fullModeUnlocked: boolean,
@@ -72,6 +85,54 @@ export function resolvePatrolAutonomySettingsForSave({
   return {
     autonomyLevel: resolvePatrolAutonomyLevelForSave(level, canUseFullMode, autoFixLocked),
     fullModeUnlocked: canUseFullMode,
+  };
+}
+
+export function buildPatrolSettingsReadinessFailure({
+  settings,
+  message,
+  autonomyLevel,
+  fullModeUnlocked,
+  investigationBudget,
+  investigationTimeoutSec,
+  runtimeState,
+  blockedReason,
+  blockedCause,
+}: {
+  settings: AISettings | null | undefined;
+  message?: string;
+  autonomyLevel?: string;
+  fullModeUnlocked?: boolean;
+  investigationBudget?: number;
+  investigationTimeoutSec?: number;
+  runtimeState?: string;
+  blockedReason?: string;
+  blockedCause?: string;
+}): PatrolConfigurationFailureInput | null {
+  const readiness = settings?.patrol_readiness;
+  if (!readiness || readiness.status !== 'not_ready') return null;
+
+  return {
+    message:
+      message || readiness.summary || 'Patrol settings were saved, but Patrol is not ready to run.',
+    code: 'patrol_readiness_not_ready',
+    status: 409,
+    saved: true,
+    details: buildReadinessDetails(readiness),
+    autonomyLevel,
+    fullModeUnlocked,
+    investigationBudget,
+    investigationTimeoutSec,
+    readiness: {
+      status: readiness.status,
+      cause: readiness.cause,
+      summary: readiness.summary,
+      provider: readiness.provider,
+      model: readiness.model,
+    },
+    runtimeState,
+    blockedReason,
+    blockedCause,
   };
 }
 
@@ -211,9 +272,28 @@ export function usePatrolIntelligenceState() {
     applyPatrolAISettings(aiRuntimeSettings());
   });
 
+  const surfaceSavedPatrolReadinessIssue = (
+    settings: AISettings | null | undefined,
+    message?: string,
+  ) => {
+    const failure = buildPatrolSettingsReadinessFailure({
+      settings,
+      message,
+      autonomyLevel: autonomyLevel(),
+      fullModeUnlocked: fullModeUnlocked(),
+      investigationBudget: investigationBudget(),
+      investigationTimeoutSec: investigationTimeout(),
+      runtimeState: runtimeState(),
+      blockedReason: blockedReason(),
+      blockedCause: patrolStatus()?.blocked_cause,
+    });
+    setAdvancedSettingsError(failure);
+  };
+
   async function handleTogglePatrol() {
     if (isTogglingPatrol()) return;
     setIsTogglingPatrol(true);
+    setAdvancedSettingsError(null);
     const previousValue = patrolEnabledLocal();
     const newValue = !previousValue;
     setPatrolEnabledLocal(newValue);
@@ -232,6 +312,10 @@ export function usePatrolIntelligenceState() {
       if (typeof data?.patrol_interval_minutes === 'number') {
         setPatrolInterval(data.patrol_interval_minutes);
       }
+      surfaceSavedPatrolReadinessIssue(
+        data,
+        'Patrol setting was saved, but Patrol is not ready to run.',
+      );
       if (refetchPatrolStatus) {
         refetchPatrolStatus();
       }
@@ -281,13 +365,19 @@ export function usePatrolIntelligenceState() {
   async function handleModelChange(modelId: string) {
     if (isUpdatingSettings()) return;
     setIsUpdatingSettings(true);
+    setAdvancedSettingsError(null);
     try {
       const updated = await AIAPI.updateSettings({ patrol_model: modelId });
       syncAIRuntimeSettings(updated);
       setPatrolModel(updated.patrol_model || modelId);
+      surfaceSavedPatrolReadinessIssue(
+        updated,
+        'Patrol model was saved, but Patrol is not ready to run.',
+      );
       await refetchPatrolStatus();
     } catch (err) {
       console.error('Failed to update patrol model:', err);
+      setAdvancedSettingsError(buildAdvancedSettingsFailure(err, 'Failed to update Patrol model'));
       notificationStore.error(patrolErrorMessage(err, 'Failed to update patrol model'));
     } finally {
       setIsUpdatingSettings(false);
@@ -297,11 +387,16 @@ export function usePatrolIntelligenceState() {
   async function handleIntervalChange(minutes: number) {
     if (isUpdatingSettings()) return;
     setIsUpdatingSettings(true);
+    setAdvancedSettingsError(null);
     try {
       const updated = await AIAPI.updateSettings({ patrol_interval_minutes: minutes });
       syncAIRuntimeSettings(updated);
       setPatrolInterval(updated.patrol_interval_minutes ?? minutes);
       setPatrolEnabledLocal((updated.patrol_interval_minutes ?? minutes) > 0);
+      surfaceSavedPatrolReadinessIssue(
+        updated,
+        'Patrol schedule was saved, but Patrol is not ready to run.',
+      );
       refetchPatrolStatus();
     } catch (err) {
       console.error('Failed to update patrol interval:', err);
@@ -314,11 +409,16 @@ export function usePatrolIntelligenceState() {
   async function handleAlertTriggeredAnalysisChange(enabled: boolean) {
     if (isUpdatingSettings()) return;
     setIsUpdatingSettings(true);
+    setAdvancedSettingsError(null);
     const previous = alertTriggeredAnalysis();
     setAlertTriggeredAnalysis(enabled);
     try {
       const updated = await AIAPI.updateSettings({ alert_triggered_analysis: enabled });
       syncAIRuntimeSettings(updated);
+      surfaceSavedPatrolReadinessIssue(
+        updated,
+        'Patrol setting was saved, but Patrol is not ready to run.',
+      );
     } catch (err) {
       console.error('Failed to update alert-triggered analysis:', err);
       setAlertTriggeredAnalysis(previous);
@@ -331,11 +431,16 @@ export function usePatrolIntelligenceState() {
   async function handlePatrolAlertTriggersChange(enabled: boolean) {
     if (isUpdatingSettings()) return;
     setIsUpdatingSettings(true);
+    setAdvancedSettingsError(null);
     const previous = patrolAlertTriggers();
     setPatrolAlertTriggers(enabled);
     try {
       const updated = await AIAPI.updateSettings({ patrol_alert_triggers_enabled: enabled });
       syncAIRuntimeSettings(updated);
+      surfaceSavedPatrolReadinessIssue(
+        updated,
+        'Patrol trigger setting was saved, but Patrol is not ready to run.',
+      );
     } catch (err) {
       console.error('Failed to update alert-triggered patrols:', err);
       setPatrolAlertTriggers(previous);
@@ -350,11 +455,16 @@ export function usePatrolIntelligenceState() {
   async function handlePatrolAnomalyTriggersChange(enabled: boolean) {
     if (isUpdatingSettings()) return;
     setIsUpdatingSettings(true);
+    setAdvancedSettingsError(null);
     const previous = patrolAnomalyTriggers();
     setPatrolAnomalyTriggers(enabled);
     try {
       const updated = await AIAPI.updateSettings({ patrol_anomaly_triggers_enabled: enabled });
       syncAIRuntimeSettings(updated);
+      surfaceSavedPatrolReadinessIssue(
+        updated,
+        'Patrol trigger setting was saved, but Patrol is not ready to run.',
+      );
     } catch (err) {
       console.error('Failed to update anomaly-triggered patrols:', err);
       setPatrolAnomalyTriggers(previous);
@@ -557,9 +667,12 @@ export function usePatrolIntelligenceState() {
     }
   }
 
-  const buildAdvancedSettingsFailure = (err: unknown): PatrolConfigurationFailureInput => {
+  const buildAdvancedSettingsFailure = (
+    err: unknown,
+    fallback = 'Failed to save Patrol configuration',
+  ): PatrolConfigurationFailureInput => {
     const apiError = err as PatrolAPIError;
-    const message = patrolErrorMessage(err, 'Failed to save Patrol configuration');
+    const message = patrolErrorMessage(err, fallback);
     const readiness = patrolReadiness();
     const apiDetails = apiError.details ?? {};
     const hasReadinessDetails =

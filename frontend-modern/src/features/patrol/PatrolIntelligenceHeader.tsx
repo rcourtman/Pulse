@@ -433,7 +433,11 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                             data-testid="patrol-configuration-error"
                             class="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2.5 text-red-950 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"
                           >
-                            <p class="text-xs font-semibold">Patrol configuration was not saved</p>
+                            <p class="text-xs font-semibold">
+                              {failure().saved
+                                ? 'Patrol configuration needs attention'
+                                : 'Patrol configuration was not saved'}
+                            </p>
                             <p class="mt-1 text-xs leading-relaxed">{failure().message}</p>
                             <Show
                               when={

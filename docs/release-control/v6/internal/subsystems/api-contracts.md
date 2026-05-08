@@ -924,8 +924,12 @@ the canonical monitored-system blocked payload.
    `/api/settings/ai/update` may save a selected Patrol provider/model even
    when that model is not ready for tool-backed Patrol execution, but it must
    echo `patrol_readiness` with stable `cause` metadata and execution routes
-   must continue to fail closed before model calls
-   and the structured investigation-record contract, so unified findings may
+   must continue to fail closed before model calls. Frontend Patrol settings
+   consumers must surface that saved-but-not-ready response as a saved
+   configuration issue with the echoed provider, model, cause, and summary
+   instead of reporting the successful save as a failed save or hiding the
+   readiness blocker behind a generic notification; and the structured
+   investigation-record contract, so unified findings may
    expose `investigation_record` only through the shared
    `aicontracts.InvestigationRecord` payload shape, with frontend API types
    and backend contract tests updated in the same slice as any field change

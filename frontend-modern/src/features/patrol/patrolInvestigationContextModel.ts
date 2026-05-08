@@ -277,6 +277,7 @@ export interface PatrolConfigurationFailureInput {
   message: string;
   code?: string;
   status?: number;
+  saved?: boolean;
   details?: Record<string, string>;
   autonomyLevel?: string;
   fullModeUnlocked?: boolean;
@@ -690,6 +691,7 @@ export function buildPatrolConfigurationFailureHandoff(
 ): PatrolConfigurationFailureHandoff {
   const message = normalizeText(input.message) || 'Patrol configuration could not be saved.';
   const code = normalizeText(input.code);
+  const issueLabel = input.saved ? 'Patrol configuration issue' : 'Patrol configuration failure';
   const readinessSummary = normalizeText(input.readiness?.summary);
   const cause = normalizeText(input.readiness?.cause) || normalizeText(input.blockedCause);
   const provider = normalizeText(input.readiness?.provider);
@@ -715,7 +717,7 @@ export function buildPatrolConfigurationFailureHandoff(
       },
       briefing: {
         sourceLabel: 'Pulse Patrol',
-        title: 'Patrol configuration failure attached',
+        title: `${issueLabel.charAt(0).toUpperCase()}${issueLabel.slice(1)} attached`,
         subject: code ? `${code}: ${message}` : message,
         statusLabel:
           [input.status ? `HTTP ${input.status}` : undefined, cause]
@@ -723,7 +725,7 @@ export function buildPatrolConfigurationFailureHandoff(
             .join(' · ') || undefined,
         detailLines: detailLines.slice(0, 4),
         evidence: formatConfigurationFailureDetails(input.details).slice(0, 4),
-        actionLabel: 'Review Patrol configuration failure',
+        actionLabel: `Review ${issueLabel}`,
         safetyNote:
           'Assistant can explain the configuration state; provider changes, retries, and remediation remain operator-controlled.',
         suggestedPrompts: formatPatrolSuggestedPrompts([
@@ -1245,8 +1247,9 @@ function buildPatrolConfigurationFailurePrompt(
   detailLines: string[],
 ): string {
   const code = normalizeText(input.code);
+  const issueLabel = input.saved ? 'configuration issue' : 'configuration failure';
   return [
-    'Discuss this Pulse Patrol configuration failure.',
+    `Discuss this Pulse Patrol ${issueLabel}.`,
     code ? `Server code: ${code}.` : undefined,
     `Start by explaining this failure: ${truncateContextText(message, 220)}.`,
     detailLines.length > 0 ? `Attached details: ${detailLines.join('; ')}.` : undefined,

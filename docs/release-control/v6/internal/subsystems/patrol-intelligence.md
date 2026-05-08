@@ -395,6 +395,12 @@ must send safe `handoff_metadata.kind=patrol_configuration_failure` plus only
 the runtime-failure boolean needed for drawer/session presentation, so the
 saved session restores as a Patrol configuration issue without carrying raw
 provider, credential, command, or retry payloads into the browser.
+Successful provider-model saves that return
+`patrol_readiness.status=not_ready` are still configuration issues, not silent
+successes: the Patrol popover must keep the saved provider/model visible,
+render a `Patrol configuration needs attention` inline state with the returned
+readiness cause and summary, and hand off to Assistant as a model-only Patrol
+configuration issue rather than as a save failure.
 The readiness contract now applies before Patrol work is admitted, not only
 after a page render: recoverable Patrol provider/model settings saves must
 persist and echo structured readiness cause metadata, manual run requests must

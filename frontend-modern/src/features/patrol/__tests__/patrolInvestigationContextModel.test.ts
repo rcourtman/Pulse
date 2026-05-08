@@ -668,6 +668,27 @@ describe('patrolInvestigationContextModel', () => {
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart pulse.service');
   });
 
+  it('labels saved Patrol configuration readiness issues separately from save failures', () => {
+    const handoff = buildPatrolConfigurationFailureHandoff({
+      saved: true,
+      message: 'Patrol was saved, but the selected model cannot run Patrol tools yet.',
+      code: 'patrol_readiness_not_ready',
+      readiness: {
+        status: 'not_ready',
+        cause: 'model_unsupported_tools',
+        summary: 'The selected Patrol model cannot run tools.',
+        provider: 'ollama',
+        model: 'ollama:deepseek-r1:7b',
+      },
+    });
+
+    expect(handoff.prompt).toContain('Discuss this Pulse Patrol configuration issue');
+    expect(handoff.context.briefing).toMatchObject({
+      title: 'Patrol configuration issue attached',
+      actionLabel: 'Review Patrol configuration issue',
+    });
+  });
+
   it('builds operator-facing Patrol record presentation without exposing raw commands', () => {
     const presentation = buildPatrolInvestigationRecordPresentation({
       id: 'record-1',
