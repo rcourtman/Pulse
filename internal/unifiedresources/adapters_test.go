@@ -146,11 +146,10 @@ func TestResourceFromHostProjectsAgentHostProfile(t *testing.T) {
 	host := models.Host{
 		ID:        "tower-host",
 		Hostname:  "tower",
-		Platform:  "unraid",
+		Platform:  "slackware",
 		OSName:    "Unraid",
 		OSVersion: "7.1.0",
 		Status:    "online",
-		Unraid:    &models.HostUnraidStorage{ArrayStarted: true},
 	}
 
 	resource, _ := resourceFromHost(host)

@@ -834,7 +834,10 @@ the canonical monitored-system blocked payload.
     `agentIdentity.platform` remains the canonical runtime platform such as
     `linux`, while `agentIdentity.hostProfile` carries the governed profile id
     such as `unraid`; frontend clients must not re-promote those profile ids
-    into first-class platform types.
+    into first-class platform types. Once a governed host profile is resolved,
+    the runtime platform is the profile's manifest runtime platform even when
+    the host's base distro token is something implementation-specific such as
+    Slackware on Unraid.
     Unified-resource agent payloads use the same split: `agent.platform` is
     the normalized runtime platform and `agent.hostProfile` is the optional
     governed profile id for host/appliance presentation.

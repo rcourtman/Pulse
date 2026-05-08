@@ -153,13 +153,36 @@ func detectQNAPOSIdentity(collector SystemCollector) (string, string, bool) {
 func detectUnraidOSIdentity(collector SystemCollector) (string, string, bool) {
 	data, err := collector.ReadFile(hostAgentUnraidVersionPath)
 	if err != nil {
-		if _, statErr := collector.Stat(hostAgentUnraidVersionPath); statErr != nil {
-			return "", "", false
+		if _, statErr := collector.Stat(hostAgentUnraidVersionPath); statErr == nil {
+			return "Unraid", "", true
 		}
-		return "Unraid", "", true
+		return detectUnraidOSReleaseIdentity(collector)
 	}
 
 	version := cleanUnraidVersion(string(data))
+	return "Unraid", version, true
+}
+
+func detectUnraidOSReleaseIdentity(collector SystemCollector) (string, string, bool) {
+	data, err := collector.ReadFile("/etc/os-release")
+	if err != nil || len(data) == 0 {
+		return "", "", false
+	}
+
+	values := parseAssignmentConfig(string(data))
+	hints := strings.ToLower(strings.Join([]string{
+		values["id"],
+		values["name"],
+		values["pretty_name"],
+	}, " "))
+	if !strings.Contains(hints, "unraid") {
+		return "", "", false
+	}
+
+	version := strings.TrimSpace(values["version_id"])
+	if version == "" {
+		version = cleanUnraidVersion(values["version"])
+	}
 	return "Unraid", version, true
 }
 

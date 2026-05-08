@@ -236,6 +236,9 @@ func New(cfg Config) (*Agent, error) {
 	}
 	osVersion := strings.TrimSpace(info.PlatformVersion)
 	osName, osVersion = resolveHostOSIdentity(collector, osName, osVersion)
+	if profile, ok := platformsupport.AgentHostProfileForIdentity(osName, platform); ok {
+		platform = platformsupport.NormalizeRuntimePlatformForAgentHostProfile(profile.ID, platform)
+	}
 	kernelVersion := strings.TrimSpace(info.KernelVersion)
 	arch := strings.TrimSpace(info.KernelArch)
 	if arch == "" {

@@ -12,6 +12,8 @@ import {
   AGENT_HOST_PROFILE_IDS,
   PLATFORM_TYPE_KEYS,
   PRESENTATION_ONLY_PLATFORM_IDS,
+  SOURCE_AGENT_HOST_PROFILE_HOST_IDENTITY_TOKENS,
+  getAgentHostProfileManifestEntry,
   getAgentHostProfileFamily,
   getAgentHostProfileRuntimePlatform,
   getSourcePlatformCanonicalProjections,
@@ -154,6 +156,13 @@ describe('sourcePlatforms', () => {
       expect(AGENT_HOST_PROFILE_IDS).toEqual(['unraid']);
       expect(getAgentHostProfileFamily('unraid')).toBe('Unraid');
       expect(getAgentHostProfileRuntimePlatform('unraid')).toBe('linux');
+      expect(SOURCE_AGENT_HOST_PROFILE_HOST_IDENTITY_TOKENS.unraid).toEqual([
+        'unraid',
+        'unraid-os',
+        'unraid os',
+      ]);
+      expect(getAgentHostProfileManifestEntry('unraid-os')?.id).toBe('unraid');
+      expect(getAgentHostProfileManifestEntry('Unraid OS')?.id).toBe('unraid');
       expect(PLATFORM_TYPE_KEYS).not.toContain('unraid');
       expect(PRESENTATION_ONLY_PLATFORM_IDS).toContain('unraid');
     });

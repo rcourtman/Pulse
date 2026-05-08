@@ -225,7 +225,7 @@ func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testin
 			{
 				ID:              "pi",
 				Hostname:        "pi",
-				Platform:        "unraid",
+				Platform:        "slackware",
 				OSName:          "Unraid",
 				OSVersion:       "7.1.0",
 				KernelVersion:   "6.12.0",

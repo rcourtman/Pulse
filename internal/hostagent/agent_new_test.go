@@ -516,6 +516,87 @@ Platform = QNAP
 			t.Fatalf("normalisePlatform(unraid) = %q, want linux", got)
 		}
 	})
+
+	t.Run("unraid normalizes slackware base platform", func(t *testing.T) {
+		mc := &mockCollector{
+			goos: "linux",
+			hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+				return &gohost.InfoStat{
+					Hostname:        "tower",
+					HostID:          "hid",
+					Platform:        "slackware",
+					PlatformFamily:  "slackware",
+					PlatformVersion: "15.0+",
+					KernelVersion:   "6.12.54-Unraid",
+					KernelArch:      runtime.GOARCH,
+				}, nil
+			},
+			readFileFn: func(name string) ([]byte, error) {
+				switch name {
+				case "/etc/unraid-version":
+					return []byte(`version="7.2.2"`), nil
+				default:
+					return nil, os.ErrNotExist
+				}
+			},
+		}
+
+		agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel, Collector: mc})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if agent.platform != "linux" {
+			t.Fatalf("platform = %q, want linux", agent.platform)
+		}
+		if agent.osName != "Unraid" {
+			t.Fatalf("osName = %q, want Unraid", agent.osName)
+		}
+		if agent.osVersion != "7.2.2" {
+			t.Fatalf("osVersion = %q, want 7.2.2", agent.osVersion)
+		}
+	})
+
+	t.Run("unraid from os release fallback", func(t *testing.T) {
+		mc := &mockCollector{
+			goos: "linux",
+			hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+				return &gohost.InfoStat{
+					Hostname:        "tower",
+					HostID:          "hid",
+					Platform:        "slackware",
+					PlatformFamily:  "slackware",
+					PlatformVersion: "15.0+",
+					KernelArch:      runtime.GOARCH,
+				}, nil
+			},
+			readFileFn: func(name string) ([]byte, error) {
+				switch name {
+				case "/etc/os-release":
+					return []byte(`NAME="Unraid OS"
+ID="unraid-os"
+VERSION_ID="7.2.2"
+PRETTY_NAME="Unraid OS 7.2 x86_64"
+`), nil
+				default:
+					return nil, os.ErrNotExist
+				}
+			},
+		}
+
+		agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel, Collector: mc})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if agent.platform != "linux" {
+			t.Fatalf("platform = %q, want linux", agent.platform)
+		}
+		if agent.osName != "Unraid" {
+			t.Fatalf("osName = %q, want Unraid", agent.osName)
+		}
+		if agent.osVersion != "7.2.2" {
+			t.Fatalf("osVersion = %q, want 7.2.2", agent.osVersion)
+		}
+	})
 }
 
 func TestNew_UsesCustomCABundleForHTTPTransport(t *testing.T) {

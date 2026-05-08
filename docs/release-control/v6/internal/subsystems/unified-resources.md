@@ -622,7 +622,10 @@ such as `linux` without making the appliance profile a unified-resource
 platform. Unified-resource `AgentData` must carry that distinction explicitly:
 `agent.platform` is the normalized runtime platform, while
 `agent.hostProfile` carries a governed profile id such as `unraid` for
-presentation and host/appliance support-floor copy.
+presentation and host/appliance support-floor copy. Raw appliance identity
+aliases such as `unraid-os` may be accepted only through the generated
+host-profile token projection and must resolve to a governed profile id before
+they reach platform filters, source IDs, or top-level resource identity.
 That same shared source boundary also applies when unified seeds and
 supplemental providers coexist. If a canonical unified-resource seed omits an
 owned supplemental source such as TrueNAS or VMware, the shared resource API

@@ -194,7 +194,10 @@ system instead of falling back to an all-platform generic agent screen.
 Agent runtime normalization must use that same governed host-profile manifest:
 profile identity tokens and runtime platform fallback values such as
 `unraid` -> `linux` are generated into the runtime resolver instead of being
-redeclared in host-agent or settings-table branches.
+redeclared in host-agent or settings-table branches. Host-profile detection is
+an identity fact and must not depend on optional storage probes succeeding; an
+Unraid host still reports the governed `unraid` profile and `linux` runtime
+platform when `mdcmd` or array-topology collection is unavailable.
 The lifecycle-owned infrastructure source manager also owns platform/system
 grouping as source-management content, but not its table band presentation:
 `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` must

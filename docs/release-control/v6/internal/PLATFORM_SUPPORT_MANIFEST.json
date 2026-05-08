@@ -16,7 +16,9 @@
       "governance_state": "supported",
       "readiness_stage": "supported",
       "host_identity_tokens": [
-        "unraid"
+        "unraid",
+        "unraid-os",
+        "unraid os"
       ],
       "runtime_platform": "linux",
       "support_floor": {
