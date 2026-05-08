@@ -608,12 +608,6 @@ export function buildPatrolAssistantFindingHandoff(
   const resource = buildPatrolFindingHandoffResource(input);
   const handoffResources = resource ? [resource] : [];
   const handoffActions = buildPatrolAssistantFindingHandoffActions(input);
-  const requiresApprovalMode = patrolAssistantFindingHandoffRequiresApprovalMode({
-    investigationOutcome: input.investigationOutcome,
-    remediationId: input.remediationId,
-    pendingApproval: input.pendingApproval,
-    investigationRecord: input.investigationRecord,
-  });
 
   return {
     prompt: buildPatrolAssistantFindingPrompt({
@@ -630,7 +624,7 @@ export function buildPatrolAssistantFindingHandoff(
       targetType: resource?.type,
       targetId: resource?.id,
       findingId: findingId || undefined,
-      autonomousMode: requiresApprovalMode ? false : undefined,
+      autonomousMode: false,
       handoffContext: buildPatrolAssistantFindingModelContext(input),
       handoffResources: handoffResources.length > 0 ? handoffResources : undefined,
       handoffActions: handoffActions.length > 0 ? handoffActions : undefined,

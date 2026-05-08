@@ -1250,6 +1250,40 @@ describe('patrolInvestigationContextModel', () => {
     ).toBe(false);
   });
 
+  it('keeps context-only Patrol finding handoffs approval scoped', () => {
+    const handoff = buildPatrolAssistantFindingHandoff({
+      id: 'finding-context-only',
+      title: 'Provider connection issue',
+      subject: 'Patrol runtime',
+      description: 'Pulse Patrol could not maintain a healthy provider connection.',
+      severity: 'warning',
+      findingStatus: 'active',
+      loopState: 'detected',
+      resourceId: 'pulse-patrol-runtime',
+      resourceName: 'Patrol runtime',
+      resourceType: 'service',
+    });
+
+    expect(handoff.context).toMatchObject({
+      targetType: 'service',
+      targetId: 'pulse-patrol-runtime',
+      findingId: 'finding-context-only',
+      autonomousMode: false,
+      context: {
+        source: 'pulse-patrol-finding',
+        findingId: 'finding-context-only',
+        resourceId: 'pulse-patrol-runtime',
+        resourceName: 'Patrol runtime',
+        resourceType: 'service',
+        actionReferenceCount: 0,
+      },
+    });
+    expect(handoff.context.handoffActions).toBeUndefined();
+    expect(handoff.context.handoffContext).toContain(
+      'Operator Boundary: This Patrol finding handoff is model-only context',
+    );
+  });
+
   it('builds an operator briefing from current finding facts before a Patrol record exists', () => {
     expect(
       buildPatrolAssistantFindingBriefing({

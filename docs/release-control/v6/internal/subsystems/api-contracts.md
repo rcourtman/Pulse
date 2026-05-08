@@ -369,10 +369,11 @@ the canonical monitored-system blocked payload.
     remediation-plan handoffs must use the same boundary for frontend-authored
     prompts: plan status, risk, step labels, and command counts are allowed,
     while raw command and rollback command payloads remain in governed action
-    surfaces. Frontend finding-discussion handoffs that carry any live approval,
-    proposed-fix, fix outcome, or remediation-plan reference must force a
+    surfaces. Frontend Patrol finding-discussion handoffs must force a
     request-local approval-required Assistant mode instead of inheriting the
-    user's persistent autonomous control setting. Frontend-visible Patrol
+    user's persistent autonomous control setting; live approval, proposed-fix,
+    fix-outcome, and remediation-plan references only add structured action
+    posture, they are not the trigger for the boundary. Frontend-visible Patrol
     briefing payloads may include short suggested prompts, but those prompts
     must be derived from the same safe action posture, evidence, recurrence, and
     remediation-plan metadata as the briefing and must never carry raw approval,

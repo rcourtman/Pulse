@@ -999,11 +999,11 @@ prompt explain the same operator-facing priority.
     control level. Patrol remediation-plan drawer handoffs must use the same
     primitive boundary: plan title/status/risk, step labels, and command counts
     may enter Assistant context; raw command and rollback command payloads must
-    stay in the governed remediation/action panel. Finding discussion handoffs
-    that reference a live approval, proposed fix, fix outcome, or remediation
-    plan must also pass `autonomousMode:false` as a request-local override so
-    the drawer shows approval-required posture without mutating the persistent
-    Assistant control setting.
+    stay in the governed remediation/action panel. All Patrol finding
+    discussion handoffs, including context-only findings without a live approval
+    or proposed fix, must pass `autonomousMode:false` as a request-local
+    override so the drawer shows approval-required posture without mutating the
+    persistent Assistant control setting.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like

@@ -199,10 +199,10 @@ Patrol-specific presentation helpers.
    prerequisites, rollback, and verification, while command and rollback command
    text stays in the governed remediation or approval surface. Generic finding
    discussion handoffs must also force request-local approval-required mode for
-   any non-empty Patrol `finding_id`, including findings that reference a live
-   approval, proposed fix, fix outcome, or remediation plan, so default
-   autonomous Assistant settings cannot bypass the Patrol action-governance
-   boundary. The assembled handoff must still pass
+   any non-empty Patrol `finding_id`, including context-only findings and
+   findings that reference a live approval, proposed fix, fix outcome, or
+   remediation plan, so default autonomous Assistant settings cannot bypass the
+   Patrol action-governance boundary. The assembled handoff must still pass
    through the Assistant runtime's resource-policy sanitizer before prompt
    injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
