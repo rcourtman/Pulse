@@ -1347,19 +1347,23 @@ process the buffered frame set and route tool-call assembly plus final done
 event emission through the same canonical finalizer used for `[DONE]` instead
 of dropping the last chunk or leaving tool calls unfinalized on clean close.
 That same provider-transport boundary owns OpenAI-compatible tool protocol
-adaptation. When a direct provider such as DeepSeek accepts tools but rejects
-forced specific or required `tool_choice` values, the shared OpenAI-compatible
-client must degrade offered-tool requests to provider-supported auto tool
-selection instead of surfacing a raw provider protocol error to Assistant or
-Patrol. Reasoning-backed provider turns that return tool calls with
-`reasoning_content` must preserve that reasoning state on the following
-tool-result turn when the provider requires it, so Assistant and Patrol can
-complete multi-turn tool use against live BYOK providers.
+adaptation. For direct DeepSeek provider paths, the shared OpenAI-compatible
+client must preserve specific or required `tool_choice` values for current
+DeepSeek V4 tool-capable models and the legacy aliases that currently route to
+that V4 contract. Unknown direct DeepSeek model IDs must still degrade offered
+tool requests to provider-supported auto tool selection so provider errors
+remain model/readiness diagnostics instead of forced-tool protocol noise.
+Reasoning-backed provider turns that return tool calls with `reasoning_content`
+must preserve that reasoning state on the following tool-result turn when the
+provider requires it, so Assistant and Patrol can complete multi-turn tool use
+against live BYOK providers.
 Readiness classification for the same provider path must be model-aware, not
-provider-only. Known live-proven DeepSeek V4 tool-capable models may report
-Patrol readiness as ready; unknown DeepSeek aliases may still warn until
-proved, and known reasoning-only families must continue to fail closed before
-Patrol work is admitted.
+provider-only. Current official DeepSeek V4 tool-capable models may report
+Patrol readiness as ready; legacy DeepSeek aliases may only warn with the
+alias-retirement posture and a recommendation to select the current V4 model
+IDs; unknown direct DeepSeek model IDs must be not-ready with
+`model_unavailable`; and known reasoning-only families must continue to fail
+closed before Patrol work is admitted.
 That same browser-owned chat read model must keep target normalization helper-
 driven. Assistant shells may still derive legacy VM identifiers or display
 labels for read-only targeting, but they must do so through shared helpers and

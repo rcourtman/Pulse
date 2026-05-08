@@ -57,6 +57,22 @@ func TestPatrolRuntimeFailureFromError_ClassifiesUnavailableModel(t *testing.T) 
 	}
 }
 
+func TestPatrolRuntimeFailureFromError_ClassifiesInvalidProviderModel(t *testing.T) {
+	err := errors.New(`agentic patrol failed: API error (400): invalid model "deepseek-v4-flush7pro"`)
+
+	failure := patrolRuntimeFailureFromError(err)
+
+	if failure.Cause != PatrolFailureCauseModelUnavailable {
+		t.Fatalf("unexpected cause %q", failure.Cause)
+	}
+	if strings.Contains(failure.Evidence, "deepseek-v4-flush7pro") {
+		t.Fatalf("evidence leaked raw provider model detail: %q", failure.Evidence)
+	}
+	if !strings.Contains(failure.Evidence, "Selected provider model is not available") {
+		t.Fatalf("expected safe model-unavailable evidence, got %q", failure.Evidence)
+	}
+}
+
 func TestClassifyPatrolRuntimeFailureOmitsRawProviderEvidence(t *testing.T) {
 	diagnostic := ClassifyPatrolRuntimeFailure(errors.New(`API error (401): {"error":"raw upstream credential body"}`))
 

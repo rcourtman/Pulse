@@ -109,7 +109,9 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	case strings.Contains(lower, "model") && (strings.Contains(lower, "not available") ||
 		strings.Contains(lower, "not found") ||
 		strings.Contains(lower, "does not exist") ||
-		strings.Contains(lower, "no such model")):
+		strings.Contains(lower, "no such model") ||
+		strings.Contains(lower, "invalid model") ||
+		strings.Contains(lower, "unsupported model")):
 		failure.Title = "Pulse Patrol: Selected model unavailable"
 		failure.Summary = "Selected model unavailable"
 		failure.Cause = PatrolFailureCauseModelUnavailable
@@ -203,6 +205,13 @@ func summarizePatrolRuntimeFailureDetail(raw string) string {
 		return "Provider rejected Patrol tool calls. Choose a Patrol model and endpoint with tool-call support."
 	case strings.Contains(lower, "reasoning_content"):
 		return "Provider rejected Patrol reasoning state. Retry with a provider route that supports the selected model's reasoning and tool protocol."
+	case strings.Contains(lower, "model") && (strings.Contains(lower, "not available") ||
+		strings.Contains(lower, "not found") ||
+		strings.Contains(lower, "does not exist") ||
+		strings.Contains(lower, "no such model") ||
+		strings.Contains(lower, "invalid model") ||
+		strings.Contains(lower, "unsupported model")):
+		return "Selected provider model is not available from this provider path."
 	case strings.Contains(lower, "insufficient balance") ||
 		strings.Contains(lower, "402") ||
 		strings.Contains(lower, "payment required") ||

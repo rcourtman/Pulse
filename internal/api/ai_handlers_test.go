@@ -297,13 +297,27 @@ func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
 			},
 		},
 		{
-			name:            "deepseek aliases warn instead of silently ready",
+			name:            "deepseek legacy aliases warn instead of silently ready",
 			patrolAvailable: true,
 			wantStatus:      patrolReadinessWarning,
 			wantReady:       true,
 			wantCheckID:     "tools",
 			wantCheck:       patrolReadinessWarning,
-			wantSummary:     "DeepSeek model capability varies",
+			wantSummary:     "legacy alias currently routes to V4 Flash",
+			configure: func(aiCfg *config.AIConfig) {
+				aiCfg.Enabled = true
+				aiCfg.Model = "deepseek:deepseek-chat"
+				aiCfg.DeepSeekAPIKey = "test-key"
+			},
+		},
+		{
+			name:            "deepseek typo blocks before Patrol runtime",
+			patrolAvailable: true,
+			wantStatus:      patrolReadinessNotReady,
+			wantReady:       false,
+			wantCheckID:     "tools",
+			wantCheck:       patrolReadinessNotReady,
+			wantSummary:     "current official DeepSeek API catalog",
 			configure: func(aiCfg *config.AIConfig) {
 				aiCfg.Enabled = true
 				aiCfg.Model = "deepseek:deepseek-v4-flush7pro"

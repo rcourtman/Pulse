@@ -92,6 +92,26 @@ func TestEvaluatePatrolConfigReadiness_AssignsStableCause(t *testing.T) {
 			},
 		},
 		{
+			name:      "deepseek legacy alias warns",
+			wantCause: PatrolFailureCauseModelToolSupportUnverified,
+			wantReady: true,
+			configure: func(cfg *config.AIConfig) {
+				cfg.Enabled = true
+				cfg.DeepSeekAPIKey = "sk-test"
+				cfg.PatrolModel = "deepseek:deepseek-chat"
+			},
+		},
+		{
+			name:      "deepseek typo is not ready",
+			wantCause: PatrolFailureCauseModelUnavailable,
+			wantReady: false,
+			configure: func(cfg *config.AIConfig) {
+				cfg.Enabled = true
+				cfg.DeepSeekAPIKey = "sk-test"
+				cfg.PatrolModel = "deepseek:deepseek-v4-flush7pro"
+			},
+		},
+		{
 			name:      "ready",
 			wantCause: PatrolFailureCauseNone,
 			wantReady: true,

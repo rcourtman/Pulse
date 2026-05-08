@@ -77,8 +77,8 @@ func EvaluatePatrolConfigReadiness(cfg *config.AIConfig) PatrolConfigReadiness {
 func PatrolToolReadinessForModel(provider, model string) (string, PatrolFailureCause, string) {
 	normalizedModel := strings.ToLower(strings.TrimSpace(model))
 	switch {
-	case provider == config.AIProviderDeepSeek && patrolDeepSeekModelSupportsTools(normalizedModel):
-		return PatrolReadinessReady, PatrolFailureCauseNone, "The selected DeepSeek model supports Patrol's tool-backed analysis contract."
+	case provider == config.AIProviderDeepSeek:
+		return patrolDeepSeekToolReadiness(normalizedModel)
 	case strings.Contains(normalizedModel, "deepseek-r1") ||
 		strings.Contains(normalizedModel, "/r1") ||
 		strings.Contains(normalizedModel, ":r1") ||
@@ -89,16 +89,36 @@ func PatrolToolReadinessForModel(provider, model string) (string, PatrolFailureC
 		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, "OpenRouter routes vary by model and endpoint. Patrol will fail closed if the routed model rejects tools or tool_choice."
 	case provider == config.AIProviderOllama:
 		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, "Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification."
-	case provider == config.AIProviderDeepSeek:
-		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, "DeepSeek model capability varies by model. Patrol requires a model that supports tool calling."
 	default:
 		return PatrolReadinessReady, PatrolFailureCauseNone, "The selected provider path supports Patrol's tool-backed analysis contract."
 	}
 }
 
+func patrolDeepSeekToolReadiness(normalizedModel string) (string, PatrolFailureCause, string) {
+	model := patrolDeepSeekModelName(normalizedModel)
+	switch {
+	case patrolDeepSeekModelSupportsTools(model):
+		return PatrolReadinessReady, PatrolFailureCauseNone, "The selected DeepSeek model supports Patrol's tool-backed analysis contract."
+	case patrolDeepSeekLegacyAlias(model):
+		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, "The selected DeepSeek legacy alias currently routes to V4 Flash, but DeepSeek will retire legacy aliases on July 24, 2026. Select deepseek-v4-flash or deepseek-v4-pro for Patrol."
+	default:
+		return PatrolReadinessNotReady, PatrolFailureCauseModelUnavailable, "The selected DeepSeek model is not in the current official DeepSeek API catalog. Patrol supports deepseek-v4-flash or deepseek-v4-pro."
+	}
+}
+
+func patrolDeepSeekModelName(normalizedModel string) string {
+	model := strings.ToLower(strings.TrimSpace(normalizedModel))
+	return strings.TrimPrefix(model, string(config.AIProviderDeepSeek)+":")
+}
+
 func patrolDeepSeekModelSupportsTools(normalizedModel string) bool {
-	model := strings.TrimPrefix(normalizedModel, string(config.AIProviderDeepSeek)+":")
+	model := patrolDeepSeekModelName(normalizedModel)
 	return model == "deepseek-v4-flash" || model == "deepseek-v4-pro"
+}
+
+func patrolDeepSeekLegacyAlias(normalizedModel string) bool {
+	model := patrolDeepSeekModelName(normalizedModel)
+	return model == "deepseek-chat" || model == "deepseek-reasoner"
 }
 
 func patrolConfigReadiness(provider, model, status string, cause PatrolFailureCause, summary string) PatrolConfigReadiness {

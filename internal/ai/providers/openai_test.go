@@ -400,12 +400,17 @@ func TestOpenAIClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
 	assert.True(t, doneCalled)
 }
 
-func TestOpenAIClient_Chat_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
+func TestOpenAIClient_Chat_DeepSeekV4PreservesForcedToolChoice(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
 		assert.Equal(t, "deepseek-v4-flash", got["model"])
-		assert.Equal(t, "auto", got["tool_choice"])
+		assert.Equal(t, map[string]interface{}{
+			"type": "function",
+			"function": map[string]interface{}{
+				"name": "ping",
+			},
+		}, got["tool_choice"])
 		require.Len(t, got["tools"], 1)
 
 		_ = json.NewEncoder(w).Encode(openaiResponse{
@@ -434,12 +439,12 @@ func TestOpenAIClient_Chat_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestOpenAIClient_ChatStream_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
+func TestOpenAIClient_ChatStream_DeepSeekV4PreservesRequiredToolChoice(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
 		assert.Equal(t, "deepseek-v4-flash", got["model"])
-		assert.Equal(t, "auto", got["tool_choice"])
+		assert.Equal(t, "required", got["tool_choice"])
 		require.Len(t, got["tools"], 1)
 
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -460,6 +465,40 @@ func TestOpenAIClient_ChatStream_DeepSeekCoercesForcedToolChoiceToAuto(t *testin
 		},
 		ToolChoice: &ToolChoice{Type: ToolChoiceAny},
 	}, func(event StreamEvent) {})
+	require.NoError(t, err)
+}
+
+func TestOpenAIClient_Chat_UnknownDeepSeekModelCoercesForcedToolChoiceToAuto(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		assert.Equal(t, "deepseek-v4-flush7pro", got["model"])
+		assert.Equal(t, "auto", got["tool_choice"])
+		require.Len(t, got["tools"], 1)
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-deepseek-unknown-tools",
+			Model: "deepseek-v4-flush7pro",
+			Choices: []openaiChoice{
+				{
+					Message:      openaiRespMsg{Role: "assistant", Content: "ok"},
+					FinishReason: "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "deepseek-v4-flush7pro", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/v1/chat/completions#deepseek.com"
+
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Use the tool"}},
+		Tools: []Tool{
+			{Name: "ping", Description: "Ping", InputSchema: map[string]interface{}{"type": "object"}},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceTool, Name: "ping"},
+	})
 	require.NoError(t, err)
 }
 

@@ -181,7 +181,15 @@ func (c *OpenAIClient) shouldSendReasoningContent() bool {
 }
 
 func (c *OpenAIClient) supportsForcedToolChoice(model string) bool {
-	return !c.isDeepSeek()
+	if !c.isDeepSeek() {
+		return true
+	}
+	switch normalizeOpenAICompatibleModelName(model) {
+	case "deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner":
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *OpenAIClient) toolChoiceForModel(model string, choice *ToolChoice) interface{} {
@@ -189,6 +197,14 @@ func (c *OpenAIClient) toolChoiceForModel(model string, choice *ToolChoice) inte
 		return "auto"
 	}
 	return convertToolChoiceToOpenAI(choice)
+}
+
+func normalizeOpenAICompatibleModelName(model string) string {
+	model = strings.ToLower(strings.TrimSpace(model))
+	for _, prefix := range []string{"openai:", "openrouter:", "deepseek:"} {
+		model = strings.TrimPrefix(model, prefix)
+	}
+	return model
 }
 
 func (c *OpenAIClient) applyProviderHeaders(req *http.Request) {
@@ -353,9 +369,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		if len(openaiReq.Tools) > 0 {
 			// Map ToolChoice to OpenAI format
 			// OpenAI uses "required" instead of Anthropic's "any"
-			// DeepSeek's direct API accepts tools with auto choice, but rejects
-			// forced specific/required tool_choice values for reasoning-backed
-			// models such as V4 Flash/Pro.
+			// DeepSeek V4 supports the OpenAI tool_choice contract. Unknown
+			// direct DeepSeek model IDs fall back to auto so provider errors
+			// become model/readiness diagnostics instead of forced-tool noise.
 			openaiReq.ToolChoice = c.toolChoiceForModel(model, req.ToolChoice)
 		}
 	}
@@ -759,9 +775,9 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		}
 		if len(openaiReq.Tools) > 0 {
 			// Map ToolChoice to OpenAI format (same as non-streaming)
-			// DeepSeek's direct API accepts tools with auto choice, but rejects
-			// forced specific/required tool_choice values for reasoning-backed
-			// models such as V4 Flash/Pro.
+			// DeepSeek V4 supports the OpenAI tool_choice contract. Unknown
+			// direct DeepSeek model IDs fall back to auto so provider errors
+			// become model/readiness diagnostics instead of forced-tool noise.
 			openaiReq.ToolChoice = c.toolChoiceForModel(model, req.ToolChoice)
 		}
 	}
