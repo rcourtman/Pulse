@@ -26,8 +26,8 @@ import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
-  dedupeResourceBadges,
   getInfrastructureSystemIdentityBadges,
+  getInfrastructureSystemTitleBadges,
   getPlatformBadge,
   getSourceBadge,
   getUnifiedSourceBadges,
@@ -322,7 +322,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   getInfrastructureSystemIdentityBadges(resource),
                 );
                 const systemTitleBadges = createMemo(() =>
-                  dedupeResourceBadges([...systemBadges(), ...sourceBadges()]),
+                  getInfrastructureSystemTitleBadges(systemBadges(), sourceBadges()),
                 );
                 const policyBadges = createMemo(() =>
                   getResourcePolicyTableBadges(resource.policy),

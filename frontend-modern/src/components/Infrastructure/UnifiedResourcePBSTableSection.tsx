@@ -16,8 +16,8 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import {
-  dedupeResourceBadges,
   getInfrastructureSystemIdentityBadges,
+  getInfrastructureSystemTitleBadges,
   getPlatformBadge,
   getSourceBadge,
   getUnifiedSourceBadges,
@@ -123,7 +123,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                 getInfrastructureSystemIdentityBadges(resource),
               );
               const systemTitleBadges = createMemo(() =>
-                dedupeResourceBadges([...systemBadges(), ...sourceBadges()]),
+                getInfrastructureSystemTitleBadges(systemBadges(), sourceBadges()),
               );
               const healthClass = createMemo(
                 () =>

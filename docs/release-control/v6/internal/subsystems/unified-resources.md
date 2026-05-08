@@ -156,6 +156,9 @@ cross-source deduplication.
    infrastructure platform first, while full merged-source detail remains
    available for tooltips, accessibility metadata, and routing. Agent telemetry
    is collection-method detail when a provider/API platform is also present.
+   When the primary system identity includes a platform version, table metadata
+   must suppress an otherwise duplicate unversioned platform source badge while
+   preserving non-duplicate collection context such as Pulse Agent.
    Infrastructure table presentation controls must describe the table mode
    rather than a platform-specific resource concept: the grouped/flat toggle
    uses operator-facing `Grouped` and `List` wording with a `Group by`

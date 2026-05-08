@@ -812,6 +812,10 @@ adding extra Agent badge width or sorting primarily by the telemetry method.
 When a row is only known through an agent or container runtime, the table must
 prefer reported OS/appliance identity before falling back to Docker/runtime
 capability labels.
+When the displayed system badge already includes the platform version, row title
+metadata must not spend extra badge/title budget repeating that same platform as
+an unversioned source; it may keep non-duplicate collection context such as
+Pulse Agent.
 That derived workload owner now also routes grouped row windowing through
 `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, which
 owns row-window thresholds, overscan behavior, reveal-index clamping, and

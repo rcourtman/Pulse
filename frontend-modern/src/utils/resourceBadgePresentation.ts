@@ -144,6 +144,20 @@ const withBadgeVersion = (badge: ResourceBadge, version: string): ResourceBadge 
   };
 };
 
+const VERSIONED_BADGE_SUFFIX_PATTERN = /\s+v?\d+(?:[._-]\d+)*(?:[-+~:][0-9a-z][0-9a-z._:+~-]*)?$/i;
+
+const normalizeBadgeIdentityLabel = (value: string): string =>
+  value.trim().toLowerCase().replace(VERSIONED_BADGE_SUFFIX_PATTERN, '').trim();
+
+const badgeIdentityLabels = (badge: ResourceBadge): string[] =>
+  Array.from(
+    new Set(
+      [badge.label, badge.title]
+        .map((value) => (value ? normalizeBadgeIdentityLabel(value) : ''))
+        .filter(Boolean),
+    ),
+  );
+
 const normalizeUnifiedSourceKeys = (sources?: string[] | null): KnownSourcePlatform[] => {
   if (!sources || sources.length === 0) return [];
   const normalized = sources
@@ -483,13 +497,7 @@ const getSystemSourceVersion = (
     }
     case 'vmware-vsphere': {
       const vmware = getFacetRecord(resource, platformData, 'vmware');
-      return getRecordVersion(
-        vmware,
-        'version',
-        'productVersion',
-        'apiVersion',
-        'vcenterVersion',
-      );
+      return getRecordVersion(vmware, 'version', 'productVersion', 'apiVersion', 'vcenterVersion');
     }
     case 'kubernetes': {
       const kubernetes = getFacetRecord(resource, platformData, 'kubernetes');
@@ -500,7 +508,9 @@ const getSystemSourceVersion = (
       return getRecordVersion(docker, 'runtimeVersion', 'dockerVersion', 'version');
     }
     case 'unraid':
-      return getAgentPlatformVersion(resource, source) || getRecordVersion(platformData, 'osVersion');
+      return (
+        getAgentPlatformVersion(resource, source) || getRecordVersion(platformData, 'osVersion')
+      );
     default:
       return (
         getRecordVersion(sourceRecord, 'version', 'osVersion', 'productVersion') ||
@@ -625,6 +635,19 @@ export function dedupeResourceBadges(
     seen.add(normalizedLabel);
     return true;
   });
+}
+
+export function getInfrastructureSystemTitleBadges(
+  systemBadges: ResourceBadge[],
+  sourceBadges: ResourceBadge[],
+): ResourceBadge[] {
+  const systemIdentities = new Set(systemBadges.flatMap(badgeIdentityLabels));
+  return dedupeResourceBadges([
+    ...systemBadges,
+    ...sourceBadges.filter((badge) =>
+      badgeIdentityLabels(badge).every((identity) => !systemIdentities.has(identity)),
+    ),
+  ]);
 }
 
 export function getContainerRuntimeBadge(

@@ -217,9 +217,47 @@ describe('UnifiedResourceTable performance contract', () => {
 
       await waitFor(() => {
         expect(getByText('System')).toBeInTheDocument();
-        expect(getByText('Unraid')).toBeInTheDocument();
+        expect(getByText('Unraid 7.1.0')).toBeInTheDocument();
       });
       expect(queryByText('Docker')).toBeNull();
+    });
+
+    it('keeps versioned platform identity from repeating as a plain source in system titles', async () => {
+      const resources = [
+        makeResource(1, {
+          type: 'agent',
+          displayName: 'pi',
+          platformType: 'proxmox-pve',
+          sourceType: 'hybrid',
+          sources: ['proxmox', 'agent'],
+          platformData: {
+            sources: ['proxmox', 'agent'],
+            proxmox: {
+              pveVersion: '',
+            },
+            agent: {
+              platform: 'raspbian',
+              osName: 'Proxmox VE',
+              osVersion: '8.3.3',
+            },
+          },
+        }),
+      ];
+
+      const { container, getByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(getByText('PVE 8.3.3')).toBeInTheDocument();
+      });
+      expect(container.querySelector('[aria-label="System: PVE 8.3.3, Agent"]')).toBeTruthy();
+      expect(container.querySelector('[aria-label="System: PVE 8.3.3, PVE, Agent"]')).toBeNull();
     });
 
     it('renders compact canonical health reasons without replacing host identity', async () => {

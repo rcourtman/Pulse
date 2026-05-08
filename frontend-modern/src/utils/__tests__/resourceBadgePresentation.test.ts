@@ -4,6 +4,7 @@ import {
   getInfrastructurePlatformBadges,
   getInfrastructureSystemIdentityBadges,
   getInfrastructureSystemIdentitySortLabel,
+  getInfrastructureSystemTitleBadges,
   getPlatformBadge,
   getSourceBadge,
   getTypeBadge,
@@ -137,9 +138,9 @@ describe('resourceBadgePresentation', () => {
       } as Resource['storage'],
     });
 
-    expect(getInfrastructureSystemIdentityBadges(unraidStorage).map((badge) => badge.label)).toEqual(
-      ['Unraid'],
-    );
+    expect(
+      getInfrastructureSystemIdentityBadges(unraidStorage).map((badge) => badge.label),
+    ).toEqual(['Unraid']);
     expect(getInfrastructureSystemIdentitySortLabel(unraidStorage)).toBe('Unraid');
 
     const pbsDatastore = makeResource({
@@ -154,9 +155,9 @@ describe('resourceBadgePresentation', () => {
       } as Resource['storage'],
     });
 
-    expect(getInfrastructureSystemIdentityBadges(pbsDatastore).map((badge) => badge.label)).toEqual([
-      'PBS',
-    ]);
+    expect(getInfrastructureSystemIdentityBadges(pbsDatastore).map((badge) => badge.label)).toEqual(
+      ['PBS'],
+    );
   });
 
   it('does not let stale platform sources override explicit agent host profiles', () => {
@@ -299,6 +300,35 @@ describe('resourceBadgePresentation', () => {
     expect(getInfrastructureSystemIdentityBadges(apiBackedPve).map((badge) => badge.label)).toEqual(
       ['PVE 8.3.2'],
     );
+  });
+
+  it('does not repeat the unversioned platform source after a versioned system identity', () => {
+    const agentDiscoveredPve = makeResource({
+      type: 'agent',
+      platformType: 'proxmox-pve',
+      sourceType: 'hybrid',
+      sources: ['proxmox', 'agent'],
+      platformData: {
+        sources: ['proxmox', 'agent'],
+        agent: {
+          platform: 'raspbian',
+          osName: 'Proxmox VE',
+          osVersion: '8.3.3',
+        },
+        proxmox: {
+          pveVersion: '',
+        },
+      },
+    });
+
+    const systemBadges = getInfrastructureSystemIdentityBadges(agentDiscoveredPve);
+    const sourceBadges = getUnifiedSourceBadges(agentDiscoveredPve.sources);
+
+    expect(systemBadges.map((badge) => badge.label)).toEqual(['PVE 8.3.3']);
+    expect(sourceBadges.map((badge) => badge.label)).toEqual(['PVE', 'Agent']);
+    expect(
+      getInfrastructureSystemTitleBadges(systemBadges, sourceBadges).map((badge) => badge.label),
+    ).toEqual(['PVE 8.3.3', 'Agent']);
   });
 
   it('keeps top-level platform facets ahead of collection method identity', () => {
