@@ -17,6 +17,8 @@ vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   isHostedModeEnabled: (...args: unknown[]) => isHostedModeEnabledMock(...args),
   runtimeCapabilitiesLoaded: (...args: unknown[]) => runtimeCapabilitiesLoadedMock(...args),
+  getRuntimeCapabilityBlock: () => undefined,
+  isRuntimeCapabilityBlocked: () => false,
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({

@@ -25,6 +25,8 @@ vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   runtimeCapabilitiesLoaded: () => true,
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  getRuntimeCapabilityBlock: () => undefined,
+  isRuntimeCapabilityBlocked: () => false,
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
