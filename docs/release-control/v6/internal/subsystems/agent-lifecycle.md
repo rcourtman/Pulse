@@ -213,7 +213,9 @@ Reported agent-backed host profiles must be visible at the source-manager
 grouping level without changing the canonical connection type: an Unraid agent
 row stays `agent` internally, but the connected-systems table groups it under
 the governed `Unraid` host-profile family and routes that group's add action
-back to the typed Unraid onboarding flow.
+back to the typed Unraid onboarding flow. Discovered source candidates remain
+attached to the base source group until a configured agent reports a governed
+host profile; discovery must not be visually inherited by a profiled group.
 Configured-node settings tables follow the same boundary:
 `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx` may own node,
 credential, capability, status, and action cells, but table scroll framing must

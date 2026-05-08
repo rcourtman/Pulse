@@ -324,6 +324,19 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     rows: [],
   });
 
+  const visibleSourceGroupsForProduct = (
+    product: ReturnType<typeof getInfrastructureSourceManagerProducts>[number],
+    configuredGroups: readonly ConfiguredSourceGroup[],
+    hasDiscoveredRows: boolean,
+  ): ConfiguredSourceGroup[] => {
+    const groups = [...configuredGroups];
+    const hasFallbackGroup = groups.some((group) => group.id === product.type);
+    if (groups.length === 0 || (hasDiscoveredRows && !hasFallbackGroup)) {
+      groups.push(fallbackConfiguredGroupForProduct(product));
+    }
+    return groups;
+  };
+
   const handleGroupAddSource = (group: ConfiguredSourceGroup) => {
     if (group.actionStep && props.onAddSourceStep) {
       props.onAddSourceStep(group.actionStep);
@@ -637,11 +650,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                   const configuredRows = () => groupedConfiguredRows().get(product.type) ?? [];
                   const configuredGroups = () =>
                     configuredSourceGroupsForProduct(product, configuredRows());
-                  const visibleConfiguredGroups = () =>
-                    configuredGroups().length > 0
-                      ? configuredGroups()
-                      : [fallbackConfiguredGroupForProduct(product)];
                   const discoveredRows = () => groupedDiscoveredRows().get(product.type) ?? [];
+                  const visibleConfiguredGroups = () =>
+                    visibleSourceGroupsForProduct(
+                      product,
+                      configuredGroups(),
+                      discoveredRows().length > 0,
+                    );
                   const groupRowClass = () =>
                     getGroupedTableRowClass('border-b border-border-subtle');
 
@@ -946,83 +961,87 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                 )}
                               </For>
                             </Show>
+
+                            <Show when={group.id === product.type && discoveredRows().length > 0}>
+                              <For each={discoveredRows()}>
+                                {(server) => {
+                                  return (
+                                    <TableRow class={discoveryRowClass}>
+                                      <TableCell class="py-1 pl-3 pr-3 align-top">
+                                        <div
+                                          class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
+                                          title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
+                                        >
+                                          {discoveredServerName(server)}
+                                        </div>
+                                      </TableCell>
+
+                                      <TableCell class="px-3 py-1 align-top">
+                                        <span
+                                          class="inline-flex items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
+                                          title="Discovery candidate — review to attach a source"
+                                        >
+                                          Candidate
+                                        </span>
+                                      </TableCell>
+
+                                      <TableCell class="px-3 py-1 align-top">
+                                        <div
+                                          class="truncate whitespace-nowrap text-[12px] text-muted"
+                                          title={discoveredServerEndpoint(server)}
+                                        >
+                                          {discoveredServerEndpoint(server)}
+                                        </div>
+                                      </TableCell>
+
+                                      <TableCell class="px-3 py-1 align-top">
+                                        <div
+                                          class="whitespace-normal break-words text-[12px] leading-4 text-muted"
+                                          title={discoveredCoverageText(server)}
+                                        >
+                                          {discoveredCoverageText(server)}
+                                        </div>
+                                      </TableCell>
+
+                                      <TableCell class="px-3 py-1 align-top">
+                                        <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                                          <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+                                            Discovered
+                                          </span>
+                                          <span class="whitespace-nowrap text-[12px] text-muted/90">
+                                            {lastDiscoveryResultText() ?? 'Waiting for scan'}
+                                          </span>
+                                        </div>
+                                      </TableCell>
+
+                                      <Show when={actionColumnVisible()}>
+                                        <TableCell class="px-3 py-1 align-top text-right">
+                                          <Show
+                                            when={props.onReviewDiscoveredSource}
+                                            fallback={
+                                              <span class="text-xs text-muted">Read only</span>
+                                            }
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                props.onReviewDiscoveredSource?.(server)
+                                              }
+                                              class={inlineButtonClass}
+                                            >
+                                              Review
+                                            </button>
+                                          </Show>
+                                        </TableCell>
+                                      </Show>
+                                    </TableRow>
+                                  );
+                                }}
+                              </For>
+                            </Show>
                           </>
                         )}
                       </For>
-
-                      <Show when={discoveredRows().length > 0}>
-                        <For each={discoveredRows()}>
-                          {(server) => {
-                            return (
-                              <TableRow class={discoveryRowClass}>
-                                <TableCell class="py-1 pl-3 pr-3 align-top">
-                                  <div
-                                    class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
-                                    title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
-                                  >
-                                    {discoveredServerName(server)}
-                                  </div>
-                                </TableCell>
-
-                                <TableCell class="px-3 py-1 align-top">
-                                  <span
-                                    class="inline-flex items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
-                                    title="Discovery candidate — review to attach a source"
-                                  >
-                                    Candidate
-                                  </span>
-                                </TableCell>
-
-                                <TableCell class="px-3 py-1 align-top">
-                                  <div
-                                    class="truncate whitespace-nowrap text-[12px] text-muted"
-                                    title={discoveredServerEndpoint(server)}
-                                  >
-                                    {discoveredServerEndpoint(server)}
-                                  </div>
-                                </TableCell>
-
-                                <TableCell class="px-3 py-1 align-top">
-                                  <div
-                                    class="whitespace-normal break-words text-[12px] leading-4 text-muted"
-                                    title={discoveredCoverageText(server)}
-                                  >
-                                    {discoveredCoverageText(server)}
-                                  </div>
-                                </TableCell>
-
-                                <TableCell class="px-3 py-1 align-top">
-                                  <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                    <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
-                                      Discovered
-                                    </span>
-                                    <span class="whitespace-nowrap text-[12px] text-muted/90">
-                                      {lastDiscoveryResultText() ?? 'Waiting for scan'}
-                                    </span>
-                                  </div>
-                                </TableCell>
-
-                                <Show when={actionColumnVisible()}>
-                                  <TableCell class="px-3 py-1 align-top text-right">
-                                    <Show
-                                      when={props.onReviewDiscoveredSource}
-                                      fallback={<span class="text-xs text-muted">Read only</span>}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => props.onReviewDiscoveredSource?.(server)}
-                                        class={inlineButtonClass}
-                                      >
-                                        Review
-                                      </button>
-                                    </Show>
-                                  </TableCell>
-                                </Show>
-                              </TableRow>
-                            );
-                          }}
-                        </For>
-                      </Show>
                     </>
                   );
                 }}
@@ -1049,15 +1068,17 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 const configuredRows = () => groupedConfiguredRows().get(product.type) ?? [];
                 const configuredGroups = () =>
                   configuredSourceGroupsForProduct(product, configuredRows());
-                const visibleConfiguredGroups = () =>
-                  configuredGroups().length > 0
-                    ? configuredGroups()
-                    : [fallbackConfiguredGroupForProduct(product)];
                 const discoveredRows = () => groupedDiscoveredRows().get(product.type) ?? [];
+                const visibleConfiguredGroups = () =>
+                  visibleSourceGroupsForProduct(
+                    product,
+                    configuredGroups(),
+                    discoveredRows().length > 0,
+                  );
 
                 return (
                   <For each={visibleConfiguredGroups()}>
-                    {(group, groupIndex) => (
+                    {(group) => (
                       <section class="space-y-2">
                         <header class="flex items-center justify-between gap-2">
                           <h3 class="text-[14px] font-semibold text-base-content">{group.label}</h3>
@@ -1257,7 +1278,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                           }}
                         </For>
 
-                        <Show when={groupIndex() === 0}>
+                        <Show when={group.id === product.type && discoveredRows().length > 0}>
                           <For each={discoveredRows()}>
                             {(server) => (
                               <article class="rounded-md border border-blue-200 bg-blue-50/50 p-3 shadow-sm dark:border-blue-900 dark:bg-blue-950/20">

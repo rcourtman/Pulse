@@ -490,6 +490,10 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('aria-label={group.actionLabel}');
     expect(infrastructureWorkspaceSource).toContain('onAddSourceStep');
     expect(infrastructureSourceManagerSource).toContain('getAgentHostProfileFamily');
+    expect(infrastructureSourceManagerSource).toContain('visibleSourceGroupsForProduct');
+    expect(infrastructureSourceManagerSource).toContain(
+      'group.id === product.type && discoveredRows().length > 0',
+    );
     expect(infrastructureSourceManagerSource).toContain('Review');
     expect(infrastructureSourceManagerSource).toContain('Manage');
     expect(infrastructureSourceManagerSource).not.toContain('Detect address');
