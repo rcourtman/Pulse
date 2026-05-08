@@ -284,3 +284,74 @@ func TestGetHealthyClientNoHealthyEndpointsError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+// TestGetHealthyClientPreservesPerEndpointReason guards that the wrapped
+// "no healthy nodes available" error includes each endpoint's recorded
+// failure reason. Previously the wrapper only emitted endpoint URLs and
+// the literal phrase "endpoints unreachable", which silently turned auth
+// failures into "unreachable" upstream — the connections aggregator's
+// auth-error regex never matched, so a token rejected with 401 on every
+// endpoint surfaced as `state: "unreachable"` instead of `unauthorized`.
+func TestGetHealthyClientPreservesPerEndpointReason(t *testing.T) {
+	now := time.Now()
+
+	t.Run("all endpoints failed auth", func(t *testing.T) {
+		cc := &ClusterClient{
+			name:      "homelab",
+			endpoints: []string{"https://192.168.0.5:8006", "https://192.168.0.134:8006"},
+			clients:   map[string]*Client{},
+			nodeHealth: map[string]bool{
+				"https://192.168.0.5:8006":   false,
+				"https://192.168.0.134:8006": false,
+			},
+			lastError: map[string]string{
+				"https://192.168.0.5:8006":   "Authentication failed - check API token or credentials",
+				"https://192.168.0.134:8006": "Authentication failed - check API token or credentials",
+			},
+			lastHealthCheck: map[string]time.Time{
+				"https://192.168.0.5:8006":   now,
+				"https://192.168.0.134:8006": now,
+			},
+			rateLimitUntil: make(map[string]time.Time),
+		}
+
+		_, err := cc.getHealthyClient(context.Background())
+		if err == nil {
+			t.Fatal("expected error when no healthy endpoints")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "Authentication failed") {
+			t.Fatalf("expected per-endpoint auth reason in error, got: %v", msg)
+		}
+		if !strings.Contains(msg, "https://192.168.0.5:8006") || !strings.Contains(msg, "https://192.168.0.134:8006") {
+			t.Fatalf("expected both endpoints listed, got: %v", msg)
+		}
+	})
+
+	t.Run("endpoint with no recorded reason", func(t *testing.T) {
+		cc := &ClusterClient{
+			name:      "homelab",
+			endpoints: []string{"node1"},
+			clients:   map[string]*Client{},
+			nodeHealth: map[string]bool{
+				"node1": false,
+			},
+			lastError:       map[string]string{}, // intentionally empty
+			lastHealthCheck: map[string]time.Time{"node1": now},
+			rateLimitUntil:  make(map[string]time.Time),
+		}
+		// Need >1 endpoint to hit the multi-endpoint code path; add a second.
+		cc.endpoints = append(cc.endpoints, "node2")
+		cc.nodeHealth["node2"] = false
+		cc.lastHealthCheck["node2"] = now
+
+		_, err := cc.getHealthyClient(context.Background())
+		if err == nil {
+			t.Fatal("expected error when no healthy endpoints")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "no recorded reason") {
+			t.Fatalf("expected fallback reason text, got: %v", msg)
+		}
+	})
+}

@@ -480,11 +480,22 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			// Mark it as healthy optimistically
 			cc.nodeHealth[cc.endpoints[0]] = true
 		} else {
-			// Provide detailed error with endpoint status
+			// Provide detailed error with endpoint status. Surfacing the
+			// per-endpoint reason (already sanitized) preserves the original
+			// failure category so callers — and the connections aggregator's
+			// auth-error regex in particular — can distinguish "authentication
+			// failed" from "network unreachable" instead of seeing every
+			// cluster-wide failure as "unreachable".
 			unhealthyList := make([]string, 0, len(cc.endpoints))
+			endpointReasons := make([]string, 0, len(cc.endpoints))
 			for _, ep := range cc.endpoints {
 				if !cc.nodeHealth[ep] {
 					unhealthyList = append(unhealthyList, ep)
+					if reason := strings.TrimSpace(cc.lastError[ep]); reason != "" {
+						endpointReasons = append(endpointReasons, fmt.Sprintf("%s: %s", ep, reason))
+					} else {
+						endpointReasons = append(endpointReasons, fmt.Sprintf("%s: no recorded reason", ep))
+					}
 				}
 			}
 			log.Error().
@@ -492,7 +503,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 				Strs("unhealthyEndpoints", unhealthyList).
 				Int("totalEndpoints", len(cc.endpoints)).
 				Msg("All cluster endpoints are unhealthy - verify network connectivity and API accessibility from Pulse server")
-			return nil, fmt.Errorf("no healthy nodes available in cluster %s (all %d endpoints unreachable: %v)", cc.name, len(cc.endpoints), unhealthyList)
+			return nil, fmt.Errorf("no healthy nodes available in cluster %s (%d endpoints failed: %s)", cc.name, len(cc.endpoints), strings.Join(endpointReasons, "; "))
 		}
 	}
 
