@@ -357,7 +357,10 @@ runtime cost control, and shared AI transport surfaces.
     omit raw commands, preflight bodies, and execution output.
     The Assistant drawer must also fetch that current session list before
     opening the session picker instead of presenting mount-time cached
-    summaries as the operator's decision surface.
+    summaries as the operator's decision surface. For restored Patrol
+    assessment sessions, that picker must present the safe recommended
+    next-step/action label from `handoff_summary` when one is available instead
+    of reducing the saved session to generic assessment context.
     Browser-originated `handoff_context`, `handoff_resources`, and
     `handoff_actions` plus safe `handoff_metadata` are one-shot request seeds
     for the first successful chat turn. After that send succeeds, the drawer

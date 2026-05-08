@@ -902,6 +902,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
         expect(screen.getByText('Assessment context')).toBeInTheDocument();
+        expect(screen.getByText('Recommended: Run Patrol')).toBeInTheDocument();
       });
 
       fireEvent.click(screen.getByText('Assessment follow-up'));

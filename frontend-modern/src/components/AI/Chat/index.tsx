@@ -145,6 +145,14 @@ const getSessionHandoffBadgeLabel = (summary: ChatSessionHandoffSummary) => {
   return summary.has_model_context ? 'Context attached' : 'Scoped handoff';
 };
 
+const formatSessionHandoffRecommendationLabel = (summary: ChatSessionHandoffSummary) => {
+  if (!isPatrolAssessmentSessionHandoff(summary)) return '';
+  const action = summary.recommended_next_step_action?.trim();
+  if (action) return `Recommended: ${action}`;
+  const nextStep = summary.recommended_next_step?.trim();
+  return nextStep ? `Recommended: ${nextStep}` : '';
+};
+
 const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | undefined => {
   const summary = session?.handoff_summary;
   if (!summary) return undefined;
@@ -1385,6 +1393,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                         {(status) => (
                                           <span class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
                                             {status()}
+                                          </span>
+                                        )}
+                                      </Show>
+                                      <Show when={formatSessionHandoffRecommendationLabel(summary())}>
+                                        {(recommendation) => (
+                                          <span class="max-w-full truncate rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                                            {recommendation()}
                                           </span>
                                         )}
                                       </Show>
