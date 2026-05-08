@@ -353,7 +353,7 @@ func DefaultModelForProvider(provider string) string {
 	case AIProviderOpenRouter:
 		return FormatModelString(AIProviderOpenRouter, "openai/gpt-4o-mini")
 	case AIProviderDeepSeek:
-		return FormatModelString(AIProviderDeepSeek, "deepseek-chat")
+		return FormatModelString(AIProviderDeepSeek, "deepseek-v4-flash")
 	case AIProviderGemini:
 		return FormatModelString(AIProviderGemini, "gemini-1.5-pro")
 	case AIProviderOllama:

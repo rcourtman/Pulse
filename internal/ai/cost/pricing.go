@@ -29,7 +29,7 @@ type modelPrice struct {
 	OutputUSDPerMTok float64
 }
 
-const pricingAsOf = "2025-12"
+const pricingAsOf = "2026-04"
 
 // PricingAsOf indicates the effective date of the pricing table used for estimation.
 func PricingAsOf() string {
@@ -49,8 +49,10 @@ var providerPrices = map[string][]modelPrice{
 		{Pattern: "claude-haiku*", InputUSDPerMTok: 0.25, OutputUSDPerMTok: 1.25},
 	},
 	"deepseek": {
-		// DeepSeek docs include an "input cache hit" discount; this uses cache-miss rates for conservative estimates.
-		{Pattern: "deepseek-*", InputUSDPerMTok: 0.28, OutputUSDPerMTok: 0.42},
+		// DeepSeek docs include an input cache-hit discount; this uses cache-miss rates for conservative estimates.
+		{Pattern: "deepseek-v4-flash*", InputUSDPerMTok: 0.14, OutputUSDPerMTok: 0.28},
+		{Pattern: "deepseek-v4-pro*", InputUSDPerMTok: 0.435, OutputUSDPerMTok: 0.87},
+		{Pattern: "deepseek-*", InputUSDPerMTok: 0.14, OutputUSDPerMTok: 0.28},
 	},
 	"gemini": {
 		// Gemini pricing (as of December 2025)

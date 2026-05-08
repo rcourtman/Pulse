@@ -82,6 +82,16 @@ func TestEvaluatePatrolConfigReadiness_AssignsStableCause(t *testing.T) {
 			},
 		},
 		{
+			name:      "deepseek v4 pro ready",
+			wantCause: PatrolFailureCauseNone,
+			wantReady: true,
+			configure: func(cfg *config.AIConfig) {
+				cfg.Enabled = true
+				cfg.DeepSeekAPIKey = "sk-test"
+				cfg.PatrolModel = "deepseek:deepseek-v4-pro"
+			},
+		},
+		{
 			name:      "ready",
 			wantCause: PatrolFailureCauseNone,
 			wantReady: true,

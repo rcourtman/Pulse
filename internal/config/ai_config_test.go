@@ -234,7 +234,7 @@ func TestDefaultModelForProvider_UsesCanonicalProviderFallbacks(t *testing.T) {
 		{provider: AIProviderAnthropic, expected: "anthropic:claude-3-5-sonnet-latest"},
 		{provider: AIProviderOpenAI, expected: "openai:gpt-4o"},
 		{provider: AIProviderOpenRouter, expected: "openrouter:openai/gpt-4o-mini"},
-		{provider: AIProviderDeepSeek, expected: "deepseek:deepseek-chat"},
+		{provider: AIProviderDeepSeek, expected: "deepseek:deepseek-v4-flash"},
 		{provider: AIProviderGemini, expected: "gemini:gemini-1.5-pro"},
 		{provider: AIProviderOllama, expected: "ollama:llama3.2"},
 		{provider: AIProviderQuickstart, expected: ""},

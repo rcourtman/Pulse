@@ -162,7 +162,7 @@ func TestDefaultModelForProvider(t *testing.T) {
 		{
 			name:     "deepseek",
 			provider: AIProviderDeepSeek,
-			want:     FormatModelString(AIProviderDeepSeek, "deepseek-chat"),
+			want:     FormatModelString(AIProviderDeepSeek, "deepseek-v4-flash"),
 		},
 		{
 			name:     "gemini",

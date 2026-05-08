@@ -183,6 +183,8 @@ func TestEstimateUSD_DeepSeekModels(t *testing.T) {
 		{"deepseek-chat", true},
 		{"deepseek-coder", true},
 		{"deepseek-reasoner", true},
+		{"deepseek-v4-flash", true},
+		{"deepseek-v4-pro", true},
 		{"unknown-deepseek", false},
 	}
 

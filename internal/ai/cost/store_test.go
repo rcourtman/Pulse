@@ -193,7 +193,16 @@ func TestEstimateUSDKnownAndUnknownModels(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected deepseek pricing to be known for deepseek-reasoner")
 	}
-	expected = 0.70 // 1M input * $0.28 + 1M output * $0.42
+	expected = 0.42 // 1M input * $0.14 + 1M output * $0.28
+	if math.Abs(usd-expected) > 0.0001 {
+		t.Fatalf("expected usd %.4f, got %.4f", expected, usd)
+	}
+
+	usd, ok, _ = EstimateUSD("deepseek", "deepseek-v4-pro", 1_000_000, 1_000_000)
+	if !ok {
+		t.Fatalf("expected deepseek pricing to be known for deepseek-v4-pro")
+	}
+	expected = 1.305 // 1M input * $0.435 + 1M output * $0.87
 	if math.Abs(usd-expected) > 0.0001 {
 		t.Fatalf("expected usd %.4f, got %.4f", expected, usd)
 	}

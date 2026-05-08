@@ -35,8 +35,10 @@ var modelContextWindows = map[string]int{
 	"gemini-1.5-flash": 1_048_576,
 
 	// DeepSeek
-	"deepseek-chat":     128_000,
-	"deepseek-reasoner": 128_000,
+	"deepseek-v4-flash": 1_000_000,
+	"deepseek-v4-pro":   1_000_000,
+	"deepseek-chat":     1_000_000,
+	"deepseek-reasoner": 1_000_000,
 
 	// MiniMax
 	"MiniMax-Text-01": 1_000_000,

@@ -470,7 +470,12 @@ provider catalog, or a provider returns no usable models, the effective BYOK
 selection may fall back only to the provider-owned default declared in
 `internal/config/ai.go`. Runtime startup, connection-test, and load-config
 paths may not return an empty effective model or borrow another provider's
-selection just because live model discovery was unavailable.
+selection just because live model discovery was unavailable. DeepSeek's
+provider-owned fallback must track the current V4 API contract and use
+`deepseek-v4-flash` rather than retired compatibility aliases such as
+`deepseek-chat` or `deepseek-reasoner`; AI runtime context-window and cost
+budgeting must likewise know the V4 Flash/Pro 1M context and distinct pricing
+classes before Patrol treats those models as ready.
 Retired quickstart ownership is now an inert compatibility boundary, not a
 self-hosted GA runtime path. The old quickstart provider, bootstrap manager,
 and local token-cache persistence API are removed from the Pulse runtime;

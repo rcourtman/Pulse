@@ -10,6 +10,9 @@ func TestContextWindowTokens_ExactMatch(t *testing.T) {
 		{model: "claude-opus-4", want: 200_000},
 		{model: "gpt-4", want: 8_192},
 		{model: "gemini-1.5-pro", want: 2_097_152},
+		{model: "deepseek-v4-flash", want: 1_000_000},
+		{model: "deepseek-v4-pro", want: 1_000_000},
+		{model: "deepseek-chat", want: 1_000_000},
 	}
 
 	for _, tc := range testCases {
