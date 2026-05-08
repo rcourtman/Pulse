@@ -11,6 +11,7 @@ var unraidVersionPattern = regexp.MustCompile(`\b\d+(?:\.\d+)+(?:[-+._][A-Za-z0-
 var proxmoxPVEVersionPattern = regexp.MustCompile(`(?i)\bpve-manager/([^/\s]+)`)
 
 const proxmoxPVEOSName = "Proxmox VE"
+const proxmoxPVEVersionCommandTimeout = 10 * time.Second
 
 func resolveHostOSIdentity(collector SystemCollector, osName, osVersion string) (string, string) {
 	currentName := strings.TrimSpace(osName)
@@ -189,15 +190,43 @@ func detectProxmoxVEOSIdentity(collector SystemCollector) (string, string, bool)
 	}
 
 	version := ""
-	if pveVersionPath != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
+	if packageVersion := detectProxmoxVEPackageVersion(collector); packageVersion != "" {
+		version = packageVersion
+	} else if pveVersionPath != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), proxmoxPVEVersionCommandTimeout)
 		if output, err := collector.CommandCombinedOutput(ctx, pveVersionPath); err == nil {
 			version = cleanProxmoxPVEVersion(output)
 		}
+		cancel()
 	}
 
 	return proxmoxPVEOSName, version, true
+}
+
+func detectProxmoxVEPackageVersion(collector SystemCollector) string {
+	dpkgQueryPath, err := collector.LookPath("dpkg-query")
+	if err != nil || dpkgQueryPath == "" {
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	output, err := collector.CommandCombinedOutput(ctx, dpkgQueryPath, "-W", "-f=${Version}", "pve-manager")
+	if err != nil {
+		return ""
+	}
+	return cleanProxmoxPVEPackageVersion(output)
+}
+
+func cleanProxmoxPVEPackageVersion(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.ContainsAny(raw, "\r\n\t ") {
+		return ""
+	}
+	return raw
 }
 
 func cleanProxmoxPVEVersion(raw string) string {

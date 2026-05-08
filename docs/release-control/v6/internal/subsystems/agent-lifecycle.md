@@ -210,6 +210,10 @@ operator-facing system identity split: a Proxmox VE node may report a Debian
 runtime platform underneath, but the host-agent OS identity and infrastructure
 System badge must resolve and present `Proxmox VE` / `PVE` from PVE runtime
 evidence instead of exposing the Debian base distro as the primary system label.
+The agent-side PVE version probe must prefer fast package metadata such as the
+installed `pve-manager` package before falling back to `pveversion`, and that
+fallback budget must tolerate slower ARM/Pi PVE installs so platform identity
+does not lose the runtime version on small lab nodes.
 The lifecycle-owned infrastructure source manager also owns platform/system
 grouping as source-management content, but not its table band presentation:
 `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` must
@@ -2148,6 +2152,11 @@ When gopsutil reports generic Linux platform fields on NAS appliances,
 or QNAP QTS/QuTS version manifests before the first report is built, so
 downstream monitoring and alerting do not depend on hostname or display-name
 heuristics to infer the real vendor OS.
+Proxmox VE host identity follows the same vendor-aware rule: when `/etc/pve`,
+`pveversion`, or Proxmox package metadata proves the host is PVE,
+`internal/hostagent/` must report `Proxmox VE` plus the PVE product version
+when available, while preserving the underlying Linux runtime platform for
+runtime/platform-normalization decisions.
 That same runtime continuity must stay on direct lifecycle proof routes too:
 changes under `internal/hostagent/` must continue to carry the explicit
 `unified-agent-runtime` proof, and changes under `internal/agentupdate/` must

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -127,6 +128,126 @@ func TestNew_ResolvesProxmoxVEHostIdentity(t *testing.T) {
 	}
 	if agent.osVersion != "9.1.9" {
 		t.Fatalf("osVersion = %q, want 9.1.9", agent.osVersion)
+	}
+}
+
+func TestNew_ResolvesProxmoxVEVersionFromPackageMetadata(t *testing.T) {
+	pveVersionCalled := false
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:        "pve-host",
+				HostID:          "hid",
+				Platform:        "raspbian",
+				PlatformFamily:  "debian",
+				PlatformVersion: "12.12",
+				KernelVersion:   "6.12.47+rpt-rpi-v8",
+				KernelArch:      runtime.GOARCH,
+			}, nil
+		},
+		statFn: func(name string) (os.FileInfo, error) {
+			if name == "/etc/pve" {
+				return nil, nil
+			}
+			return nil, os.ErrNotExist
+		},
+		lookPathFn: func(file string) (string, error) {
+			switch file {
+			case "dpkg-query":
+				return "/usr/bin/dpkg-query", nil
+			case "pveversion":
+				return "/usr/bin/pveversion", nil
+			default:
+				return "", os.ErrNotExist
+			}
+		},
+		commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+			switch name {
+			case "/usr/bin/dpkg-query":
+				wantArgs := []string{"-W", "-f=${Version}", "pve-manager"}
+				if !reflect.DeepEqual(arg, wantArgs) {
+					t.Fatalf("dpkg-query args = %#v, want %#v", arg, wantArgs)
+				}
+				return "8.3.3", nil
+			case "/usr/bin/pveversion":
+				pveVersionCalled = true
+				return "pve-manager/8.3.3/bbba1c53a1a65b24", nil
+			default:
+				t.Fatalf("unexpected command %q", name)
+				return "", nil
+			}
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:  "token",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if agent.osName != proxmoxPVEOSName {
+		t.Fatalf("osName = %q, want %q", agent.osName, proxmoxPVEOSName)
+	}
+	if agent.osVersion != "8.3.3" {
+		t.Fatalf("osVersion = %q, want 8.3.3", agent.osVersion)
+	}
+	if pveVersionCalled {
+		t.Fatal("expected package metadata to avoid slow pveversion fallback")
+	}
+}
+
+func TestNew_UsesLongerProxmoxVEVersionFallbackBudget(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:        "pve-host",
+				HostID:          "hid",
+				Platform:        "raspbian",
+				PlatformFamily:  "debian",
+				PlatformVersion: "12.12",
+				KernelVersion:   "6.12.47+rpt-rpi-v8",
+				KernelArch:      runtime.GOARCH,
+			}, nil
+		},
+		statFn: func(name string) (os.FileInfo, error) {
+			if name == "/etc/pve" {
+				return nil, nil
+			}
+			return nil, os.ErrNotExist
+		},
+		lookPathFn: func(file string) (string, error) {
+			if file == "pveversion" {
+				return "/usr/bin/pveversion", nil
+			}
+			return "", os.ErrNotExist
+		},
+		commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name != "/usr/bin/pveversion" {
+				t.Fatalf("command name = %q, want /usr/bin/pveversion", name)
+			}
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("expected pveversion context to carry a deadline")
+			}
+			if remaining := time.Until(deadline); remaining < 7*time.Second {
+				t.Fatalf("pveversion timeout remaining = %v, want at least 7s", remaining)
+			}
+			return "pve-manager/8.3.3/bbba1c53a1a65b24 (running kernel: 6.12.47+rpt-rpi-v8)", nil
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:  "token",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if agent.osVersion != "8.3.3" {
+		t.Fatalf("osVersion = %q, want 8.3.3", agent.osVersion)
 	}
 }
 
