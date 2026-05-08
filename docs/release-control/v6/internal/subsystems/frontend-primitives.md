@@ -329,6 +329,11 @@ prompt explain the same operator-facing priority.
    before stripping infrastructure onboarding queries such as `?add=pick`,
    `?add=agent`, or `?add=detect`, so first-session and explicit add-flow
    handoffs do not lose their modal target during session bootstrap.
+   When those infrastructure modal targets are preserved, the settings shell
+   must keep the owning add-flow copy intact: the detect target is an API
+   platform probe, not a generic infrastructure-source detector, and its outer
+   dialog frame should match the management-API endpoint language owned by the
+   agent-lifecycle onboarding contract.
    That same settings-shell boundary also owns explicit organization-route
    stability. Deep links such as `/settings/organization`,
    `/settings/organization/access`, and adjacent organization shells must keep

@@ -824,7 +824,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const addDialogTitle = createMemo(() => {
     const step = routeStep();
     if (!step || step === 'pick') return 'Add infrastructure';
-    if (step === 'detect') return 'Detect infrastructure source';
+    if (step === 'detect') return 'Detect API platform';
     const catalogItem = activeCatalogItem();
     if (catalogItem) return `Add ${catalogItem.label}`;
     return `Add ${describeManagedSourceType(activeAddType())}`;
@@ -836,7 +836,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       return 'Choose the system, platform, host, or service you want Pulse to monitor.';
     }
     if (step === 'detect') {
-      return 'Probe an address and let Pulse open the matching credential flow when it recognizes the platform.';
+      return 'Probe a management API endpoint and let Pulse open the matching credential flow when it recognizes the platform.';
     }
     const discovered = selectedDiscoveredSource();
     if (discovered && discovered.type === activeAddType()) {

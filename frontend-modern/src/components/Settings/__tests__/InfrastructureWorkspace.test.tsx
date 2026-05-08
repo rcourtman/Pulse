@@ -667,10 +667,10 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(screen.getByText('Detect infrastructure source')).toBeInTheDocument();
+    expect(screen.getByText('Detect API platform')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Probe an address and let Pulse open the matching credential flow when it recognizes the platform.',
+        'Probe a management API endpoint and let Pulse open the matching credential flow when it recognizes the platform.',
       ),
     ).toBeInTheDocument();
     expect(

@@ -1453,7 +1453,10 @@ below.
 Adding infrastructure therefore happens in two governed steps. The
 `?add=pick` modal owns grouped source-type selection and may offer
 `Detect API platform` as a secondary utility. The `?add=detect` modal owns
-probe-driven handoff into `ConnectionEditor.tsx`, while typed add routes jump
+probe-driven handoff into `ConnectionEditor.tsx`; its outer shell title and
+description must also use API-platform / management-API-endpoint language so
+operators do not mistake the probe for Unraid, Docker, or generic Pulse Agent
+host detection. Typed add routes jump
 straight into the matching credential or install body. The shared Settings
 sidebar still owns only the top-level `Infrastructure` destination; movement
 between landing, picker, detect flow, add form, and edit form belongs to
