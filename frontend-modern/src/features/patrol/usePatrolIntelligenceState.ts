@@ -30,6 +30,7 @@ import { normalizePatrolRuntimeBlockedReason } from '@/utils/patrolRuntimePresen
 import {
   buildPatrolConfigurationFailureHandoff,
   buildPatrolInvestigationContextSummary,
+  selectPatrolSupportingRecentChanges,
   type PatrolConfigurationFailureInput,
 } from './patrolInvestigationContextModel';
 
@@ -563,9 +564,18 @@ export function usePatrolIntelligenceState() {
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
   const circuitBreakerStatus = createMemo(() => aiIntelligenceStore.circuitBreakerStatus);
   const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
+  const supportingRecentChanges = createMemo(() =>
+    selectPatrolSupportingRecentChanges(intelligenceSummary()?.recent_changes),
+  );
+  const supportingRecentChangeCount = createMemo(() => {
+    if (Array.isArray(intelligenceSummary()?.recent_changes)) {
+      return supportingRecentChanges().length;
+    }
+    return intelligenceSummary()?.recent_changes_count;
+  });
   const investigationContext = createMemo(() =>
     buildPatrolInvestigationContextSummary({
-      recentChangesCount: intelligenceSummary()?.recent_changes_count,
+      recentChangesCount: supportingRecentChangeCount(),
       correlations: aiIntelligenceStore.correlations,
       policyPosture: policyPosture(),
     }),
@@ -955,6 +965,7 @@ export function usePatrolIntelligenceState() {
     showInvestigationContext,
     shouldSurfaceInvestigationContext,
     summaryStats,
+    supportingRecentChanges,
     triggerPatrolDisabledReason,
   };
 }

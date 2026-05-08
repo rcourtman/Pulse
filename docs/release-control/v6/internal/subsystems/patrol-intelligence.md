@@ -962,6 +962,11 @@ The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical
 timeline is surfaced.
+Patrol-owned supporting context may still apply a bounded explanation-layer
+normalization before rendering recent changes or attaching them to Assistant:
+same-state timeline records must describe the changed substate, such as Docker
+image status or command posture, instead of surfacing no-op wording like an
+`online` to `online` transition in the Patrol page or Assistant handoff.
 The Patrol page and resource drawer now keep canonical relationship semantics
 in the backend correlation path, while the visible frontend stays
 timeline-first and does not surface a separate relationship presentation

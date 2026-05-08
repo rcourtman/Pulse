@@ -300,7 +300,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         summaryText: state.investigationContextSummary(),
       },
       supportingEvidence: {
-        recentChanges: state.intelligenceSummary()?.recent_changes,
+        recentChanges: state.supportingRecentChanges(),
         correlations: state.correlations(),
       },
       recommendedNextStep: {

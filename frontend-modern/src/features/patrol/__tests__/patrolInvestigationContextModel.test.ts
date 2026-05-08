@@ -17,6 +17,7 @@ import {
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantPrompt,
   patrolAssistantFindingHandoffRequiresApprovalMode,
+  selectPatrolSupportingRecentChanges,
 } from '../patrolInvestigationContextModel';
 
 describe('patrolInvestigationContextModel', () => {
@@ -95,6 +96,72 @@ describe('patrolInvestigationContextModel', () => {
       hasContext: false,
       summaryText: '',
     });
+  });
+
+  it('normalizes same-state recent changes before Patrol uses them as Assistant context', () => {
+    const changes = selectPatrolSupportingRecentChanges([
+      {
+        id: 'change-1',
+        observedAt: '2026-05-06T12:08:00Z',
+        resourceId: 'app-container-1',
+        kind: 'state_transition',
+        from: 'online',
+        to: 'online',
+        sourceType: 'pulse_diff',
+        sourceAdapter: 'docker_adapter',
+        confidence: 'high',
+        reason: 'resource state changed',
+        metadata: {
+          changedFields: ['docker.command'],
+        },
+      },
+    ]);
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({
+      from: undefined,
+      to: undefined,
+      reason: 'Docker command changed while online',
+    });
+  });
+
+  it('keeps same-state recent changes out of Patrol Assistant no-op wording', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Patrol runtime issue',
+        description: 'Coverage is incomplete.',
+      },
+      investigationContext: {
+        recentChangeCount: 1,
+        correlationCount: 0,
+        governedResourceCount: 0,
+        hasContext: true,
+        summaryText: '1 recent change',
+      },
+      supportingEvidence: {
+        recentChanges: [
+          {
+            id: 'change-1',
+            observedAt: '2026-05-06T12:08:00Z',
+            resourceId: 'app-container-1',
+            kind: 'state_transition',
+            from: 'online',
+            to: 'online',
+            sourceType: 'pulse_diff',
+            sourceAdapter: 'docker_adapter',
+            confidence: 'high',
+            reason: 'resource state changed',
+            metadata: {
+              changedFields: ['docker.command'],
+            },
+          },
+        ],
+      },
+      activeFindings: [],
+    });
+
+    expect(handoff.context.handoffContext).toContain('Docker command changed while online');
+    expect(handoff.context.handoffContext).not.toContain('online to online');
   });
 
   it('builds a model-only Assistant handoff for the current Patrol assessment', () => {

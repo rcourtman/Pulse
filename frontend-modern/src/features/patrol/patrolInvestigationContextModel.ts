@@ -307,6 +307,19 @@ const MAX_ASSESSMENT_RESOURCES = 8;
 const MAX_ASSESSMENT_HANDOFF_ACTIONS = 4;
 const MAX_PATROL_RUN_HANDOFF_RESOURCES = 8;
 const MAX_PATROL_BRIEFING_SUGGESTED_PROMPTS = 3;
+const SAME_STATE_CHANGED_FIELD_LABELS: Record<string, string> = {
+  'docker.command': 'Docker command',
+  'docker.updateStatus': 'Docker image status',
+  'proxmox.lifecycle': 'Proxmox lifecycle',
+  status: 'status',
+  incidents: 'incident state',
+  relationships: 'relationships',
+  capabilities: 'capabilities',
+  tags: 'tags',
+  parentId: 'parent relationship',
+  customUrl: 'custom URL',
+  identity: 'identity',
+};
 
 interface NormalizedPatrolAssessmentRecommendedNextStep {
   title: string;
@@ -356,6 +369,12 @@ export function buildPatrolInvestigationContextSummary(
     hasContext: parts.length > 0,
     summaryText: parts.join(' · '),
   };
+}
+
+export function selectPatrolSupportingRecentChanges(
+  changes?: ResourceChange[] | null,
+): ResourceChange[] {
+  return normalizeAssessmentRecentChanges(changes);
 }
 
 export function buildPatrolInvestigationRecordPresentation(
@@ -1658,7 +1677,72 @@ function normalizeAssessmentRecentChanges(changes?: ResourceChange[] | null): Re
         normalizeText(change.id) || normalizeText(change.resourceId) || normalizeText(change.kind),
       ),
     ),
-  ).slice(0, MAX_ASSESSMENT_RECENT_CHANGES);
+  )
+    .map(normalizePatrolSupportingRecentChange)
+    .slice(0, MAX_ASSESSMENT_RECENT_CHANGES);
+}
+
+function normalizePatrolSupportingRecentChange(change: ResourceChange): ResourceChange {
+  if (!isSameStateTransition(change)) {
+    return change;
+  }
+
+  const reason = formatSameStateTransitionReason(change);
+  return {
+    ...change,
+    from: undefined,
+    to: undefined,
+    reason,
+  };
+}
+
+function isSameStateTransition(change: ResourceChange): boolean {
+  if (change.kind !== 'state_transition' && change.kind !== 'restart') {
+    return false;
+  }
+  const from = normalizeText(change.from).toLowerCase();
+  const to = normalizeText(change.to).toLowerCase();
+  return Boolean(from && to && from === to);
+}
+
+function formatSameStateTransitionReason(change: ResourceChange): string {
+  const state = normalizeText(change.from) || normalizeText(change.to) || 'current state';
+  const changedFieldLabels = getSameStateChangedFieldLabels(change);
+  if (changedFieldLabels.length > 0) {
+    return `${formatCompactLabelList(changedFieldLabels)} changed while ${state}`;
+  }
+
+  const reason = normalizeText(change.reason);
+  if (reason && reason.toLowerCase() !== 'resource state changed') {
+    return `${reason} while ${state}`;
+  }
+
+  return `state details changed while ${state}`;
+}
+
+function getSameStateChangedFieldLabels(change: ResourceChange): string[] {
+  const changedFields = change.metadata?.changedFields;
+  if (!Array.isArray(changedFields)) {
+    return [];
+  }
+
+  const labels: string[] = [];
+  for (const field of changedFields) {
+    const key = normalizeText(String(field));
+    if (!key) continue;
+    const label = SAME_STATE_CHANGED_FIELD_LABELS[key] ?? formatIdentifierLabel(key);
+    if (label && !labels.includes(label)) {
+      labels.push(label);
+    }
+  }
+  return labels;
+}
+
+function formatCompactLabelList(labels: string[]): string {
+  if (labels.length === 0) return '';
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels[0]}, ${labels[1]}, and ${labels.length - 2} more`;
 }
 
 function normalizeAssessmentCorrelations(

@@ -378,6 +378,32 @@ function createPatrolState(): PatrolIntelligenceState {
     patrolStream: {
       isStreaming: () => false,
     },
+    supportingRecentChanges: () => [
+      {
+        id: 'change-1',
+        observedAt: '2026-05-06T12:08:00Z',
+        resourceId: 'vm-100',
+        kind: 'metric_anomaly',
+        sourceType: 'heuristic',
+        sourceAdapter: 'proxmox_adapter',
+        confidence: 'high',
+        relatedResources: ['backup-job'],
+        reason: 'CPU spike after backup job',
+      },
+      {
+        id: 'change-2',
+        observedAt: '2026-05-06T12:07:00Z',
+        resourceId: 'vm-100',
+        kind: 'command_executed',
+        sourceType: 'agent_action',
+        sourceAdapter: 'agent:ops-helper',
+        confidence: 'medium',
+        reason: 'systemctl restart workload.service',
+        metadata: {
+          command: 'systemctl restart workload.service',
+        },
+      },
+    ],
     setActiveTab: vi.fn(),
     setFindingsFilterOverride: vi.fn(),
     setSelectedRun: vi.fn(),

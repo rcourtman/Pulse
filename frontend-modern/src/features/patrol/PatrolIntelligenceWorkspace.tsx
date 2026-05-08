@@ -171,7 +171,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
                     class="space-y-0"
                     title="Recent changes"
                     subtitle={PATROL_SUPPORTING_CONTEXT_CHANGE_SUBTITLE}
-                    changes={state.intelligenceSummary()?.recent_changes}
+                    changes={state.supportingRecentChanges()}
                     maxChanges={3}
                     compact
                   />

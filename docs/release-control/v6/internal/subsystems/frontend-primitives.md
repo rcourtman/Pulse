@@ -760,7 +760,10 @@ prompt explain the same operator-facing priority.
     decorative rather than a second label source. The Patrol-owned supporting-context
     presenter must also keep the disclosure toggle plus evidence-boundary copy
     centralized instead of letting the workspace reintroduce inline shell-local
-    trust wording. The same shared feature-shell boundary owns the
+    trust wording, while the Patrol investigation-context owner normalizes
+    same-state recent-change records into changed-substate wording before the
+    workspace or Assistant handoff renders them. The same shared feature-shell
+    boundary owns the
     commercial-facing Patrol capability language: Pro-locked helper copy,
     autonomy segmented controls, and run-history/result labels must use
     `Remediate`, `remediated`, or safe remediation wording while legacy API
