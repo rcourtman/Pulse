@@ -114,6 +114,7 @@ type Finding struct {
 	Node           string          `json:"node,omitempty"`
 	Title          string          `json:"title"`
 	Description    string          `json:"description"`
+	Impact         string          `json:"impact,omitempty"` // Operator-facing consequence-if-ignored statement
 	Recommendation string          `json:"recommendation,omitempty"`
 	Evidence       string          `json:"evidence,omitempty"` // data/commands that led to this finding
 	Source         string          `json:"source,omitempty"`   // "ai-analysis" for LLM findings, empty for rule-based
@@ -159,6 +160,7 @@ type findingJSON struct {
 	Node                   string                           `json:"node,omitempty"`
 	Title                  string                           `json:"title"`
 	Description            string                           `json:"description"`
+	Impact                 string                           `json:"impact,omitempty"`
 	Recommendation         string                           `json:"recommendation,omitempty"`
 	Evidence               string                           `json:"evidence,omitempty"`
 	Source                 string                           `json:"source,omitempty"`
@@ -200,6 +202,7 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		Node:                   f.Node,
 		Title:                  f.Title,
 		Description:            f.Description,
+		Impact:                 f.Impact,
 		Recommendation:         f.Recommendation,
 		Evidence:               f.Evidence,
 		Source:                 f.Source,
@@ -246,6 +249,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		Node:                   payload.Node,
 		Title:                  payload.Title,
 		Description:            payload.Description,
+		Impact:                 payload.Impact,
 		Recommendation:         payload.Recommendation,
 		Evidence:               payload.Evidence,
 		Source:                 payload.Source,

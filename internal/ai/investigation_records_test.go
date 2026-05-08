@@ -21,6 +21,7 @@ func TestBuildFindingInvestigationRecord_FromSession(t *testing.T) {
 		Node:                   "pve-1",
 		Title:                  "High CPU",
 		Description:            "CPU above threshold",
+		Impact:                 "Workload stalls until CPU pressure clears.",
 		Recommendation:         "Reduce CPU pressure",
 		Evidence:               "cpu=96%",
 		Source:                 "ai-analysis",
@@ -90,8 +91,8 @@ func TestBuildFindingInvestigationRecord_FromSession(t *testing.T) {
 	if record.ApprovalID != "approval-1" {
 		t.Fatalf("approval ID = %q", record.ApprovalID)
 	}
-	if record.Impact != "" {
-		t.Fatalf("expected empty default impact, got %q", record.Impact)
+	if record.Impact != "Workload stalls until CPU pressure clears." {
+		t.Fatalf("expected finding impact to propagate to record, got %q", record.Impact)
 	}
 	if record.Rollback == nil || len(record.Rollback) != 0 {
 		t.Fatalf("expected normalized empty rollback slice, got %#v", record.Rollback)

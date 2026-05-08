@@ -40,6 +40,7 @@ func BuildFindingInvestigationRecord(f *Finding, session *InvestigationSession) 
 		Outcome:           aicontracts.InvestigationOutcome(strings.TrimSpace(f.InvestigationOutcome)),
 		Evidence:          investigationRecordEvidenceForFinding(f),
 		Conclusion:        strings.TrimSpace(f.Description),
+		Impact:            strings.TrimSpace(f.Impact),
 		RecommendedAction: strings.TrimSpace(f.Recommendation),
 		Verification:      investigationRecordVerificationNotes(aicontracts.InvestigationOutcome(strings.TrimSpace(f.InvestigationOutcome))),
 		ToolsUsed:         []string{},

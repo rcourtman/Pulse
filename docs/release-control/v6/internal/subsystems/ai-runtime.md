@@ -235,7 +235,18 @@ runtime cost control, and shared AI transport surfaces.
     the model. The TS API client must keep its `InvestigationRecord` and
     `InvestigationRecordTrigger` mirrors aligned with the Go struct,
     including the `trigger.cause` string, so frontend handoff context does
-    not lose backend-attributed failure cause. When `/api/ai/chat` receives `finding_id`, the
+    not lose backend-attributed failure cause. Detection-time finding
+    creation may author `Finding.Impact` directly so the
+    consequence-if-ignored statement is set at finding birth rather than
+    waiting for an AI investigation to derive it;
+    `BuildFindingInvestigationRecord` then propagates `Finding.Impact`
+    into `InvestigationRecord.Impact` without transformation, and the AI
+    engine must not synthesize impact text from severity or category when
+    the finding source has not authored one. The Patrol runtime-failure
+    classifier (`internal/ai/patrol_runtime_failure.go`) is the canonical
+    example: it stamps a constant impact string on every runtime-failure
+    cause because the operational consequence of a non-running Patrol is
+    invariant across causes, and only the recommendation varies. When `/api/ai/chat` receives `finding_id`, the
     runtime must enrich the provider turn from that durable record while
     preserving the user's authored prompt as the persisted conversation
     message; the model-only handoff may persist as session metadata so

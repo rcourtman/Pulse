@@ -55,10 +55,17 @@ type patrolRuntimeFailure struct {
 	Summary        string
 	Cause          PatrolFailureCause
 	Description    string
+	Impact         string
 	Recommendation string
 	Detail         string
 	Evidence       string
 }
+
+// patrolRuntimeFailureImpact is the shared consequence-if-ignored statement
+// for any Patrol runtime failure. The cause varies but the operational
+// consequence is constant: while Patrol is not analyzing, alerts continue
+// to fire without enrichment.
+const patrolRuntimeFailureImpact = "While Patrol cannot analyze, alerts continue to fire without evidence or recommended actions, and AI Intelligence summaries cannot refresh."
 
 type PatrolRuntimeFailureDiagnostic struct {
 	Title          string
@@ -92,6 +99,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 		Summary:        "Provider analysis error",
 		Cause:          PatrolFailureCauseProviderConnection,
 		Description:    "Pulse Patrol reached the configured provider, but the provider did not complete the Patrol analysis request.",
+		Impact:         patrolRuntimeFailureImpact,
 		Recommendation: "Review the Patrol provider settings, selected model, and provider logs, then rerun Patrol after the provider path is healthy.",
 		Detail:         detail,
 	}
@@ -253,6 +261,7 @@ func newPatrolRuntimeFailureFinding(failure patrolRuntimeFailure, now time.Time)
 		ResourceType:   "service",
 		Title:          failure.Title,
 		Description:    failure.Description,
+		Impact:         failure.Impact,
 		Recommendation: failure.Recommendation,
 		Evidence:       failure.Evidence,
 		FailureCause:   string(failure.Cause),

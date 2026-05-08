@@ -13,6 +13,34 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+func TestPatrolRuntimeFailureFromError_PopulatesImpactForAllCauses(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"tool_calling_unsupported", errors.New(`API error (404): No endpoints found that support the provided 'tool_choice' value`)},
+		{"model_unavailable", errors.New(`model "qwen3.5:2b" is not available`)},
+		{"provider_billing", errors.New(`API error (402): insufficient balance`)},
+		{"provider_rate_limited", errors.New(`API error (429): rate limit exceeded`)},
+		{"provider_auth", errors.New(`API error (401): unauthorized`)},
+		{"provider_not_configured", errors.New(`provider not configured`)},
+		{"provider_connection", errors.New(`failed to connect: i/o timeout`)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			failure := patrolRuntimeFailureFromError(tc.err)
+			if failure.Impact != patrolRuntimeFailureImpact {
+				t.Fatalf("expected shared runtime-failure impact, got %q", failure.Impact)
+			}
+			finding := newPatrolRuntimeFailureFinding(failure, time.Now())
+			if finding.Impact != patrolRuntimeFailureImpact {
+				t.Fatalf("expected finding impact to inherit from failure, got %q", finding.Impact)
+			}
+		})
+	}
+}
+
 func TestPatrolRuntimeFailureFromError_ClassifiesToolCallingUnsupported(t *testing.T) {
 	err := errors.New(`agentic patrol failed: API error (404): {"error":{"message":"No endpoints found that support the provided 'tool_choice' value."}}`)
 
