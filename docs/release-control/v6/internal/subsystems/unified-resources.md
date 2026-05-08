@@ -492,6 +492,23 @@ AI-only summary payloads, or page-local heuristics.
     `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
     and the unified-resource selectors it composes. The header must not become
     a second state owner, scope banner, or provider-local filter surface.
+20. Keep governed-action drift refusal canonical in
+    `internal/unifiedresources/actions.go`. `ErrActionPlanDrift` is the
+    error any broker must return when the payload presented at execute
+    time hashes to anything different than the approval-recorded
+    `planHash`. Brokers must refuse rather than silently downgrade drift
+    into a generic execution error or "plan expired" outcome — those
+    are distinct refusal kinds (operator never approved vs operator
+    approved a different action vs approval window passed) and audit
+    review and operator UI surfaces should treat them differently. The
+    drift contract is "the operator approved exactly this (command,
+    target, reason) combination"; the freshly-recomputed
+    approval-equivalent hash and the recorded `planHash` are how we
+    enforce that. New broker call sites that introduce additional
+    governed-action paths must either reuse the existing approval-
+    equivalent hash or extend the canonical hash set in
+    `internal/ai/tools/action_audit.go` rather than adding ad-hoc
+    comparison logic.
 
 ## Current State
 
@@ -2155,6 +2172,20 @@ Action plans in `actions.go` still keep stale-plan protection to the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields, so stale execution
 checks stay in the shared resource action model rather than provider-local
 helpers.
+
+`actions.go` also owns the canonical drift error vocabulary for the
+governed-action broker. `ErrActionPlanDrift` is returned by brokers when
+the payload presented at execute time hashes to anything different than
+the approval-recorded `planHash`. Brokers must refuse execution rather
+than silently downgrade drift into a generic execution error or a
+"plan expired" outcome: the contract is "the operator approved exactly
+this (command, target, reason) combination" and a different combination
+cannot run under the stale approval. The error sits alongside
+`ErrActionNotApproved`, `ErrActionPlanExpired`, and the other governed
+refusal kinds so callers can distinguish "operator never approved" from
+"operator approved a different action" from "approval window passed" —
+each is a distinct safety failure that audit review and operator UI
+surfaces should treat differently.
 The shared change presentation helper also owns the canonical kind, source
 type, and source adapter labels for those timeline entries, so summary cards
 and drawer history surfaces both read the same badge vocabulary instead of

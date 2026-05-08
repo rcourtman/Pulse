@@ -353,6 +353,12 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func BeginActionExecution(record ActionAuditRecord, actor string, now time.Time)",
 			"func CompleteActionExecution(record ActionAuditRecord, result *ExecutionResult, actor string, now time.Time)",
 			"func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error",
+			// ErrActionPlanDrift is the canonical error returned when the
+			// payload at execute time does not match the PlanHash recorded
+			// at approval time. Pinning it here keeps the broker contract
+			// honest: drift refusal cannot silently turn into another error
+			// kind that callers fail to detect.
+			"ErrActionPlanDrift = errors.New(",
 		},
 		filepath.Join(".", "store.go"): {
 			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",

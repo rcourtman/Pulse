@@ -470,6 +470,184 @@ func TestRecordApprovalDecisionDoesNotRegressExecutingAudit(t *testing.T) {
 	}
 }
 
+// TestExecuteCommandWithAuditRefusesPayloadDriftAgainstApprovedPlan covers the
+// safety guarantee that the operator approved exactly one (command, target,
+// reason) combination. If the payload presented at execute time hashes to
+// anything different than the approved plan, the broker must refuse rather
+// than dispatch a drifted command under a stale approval.
+func TestExecuteCommandWithAuditRefusesPayloadDriftAgainstApprovedPlan(t *testing.T) {
+	actionStore := unifiedresources.NewMemoryStore()
+	approvalStore, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DisablePersistence: true,
+	})
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	previousApprovalStore := approval.GetStore()
+	approval.SetStore(approvalStore)
+	t.Cleanup(func() { approval.SetStore(previousApprovalStore) })
+
+	now := time.Now().UTC()
+	approvedHash := approvalPlanHash(
+		"act-drift",
+		"approval-drift",
+		"pulse_control",
+		"agent-1",
+		"systemctl restart workload",
+		"agent",
+		"agent-1",
+		"restart workload service",
+	)
+	plan := unifiedresources.ActionPlan{
+		ActionID:         "act-drift",
+		RequestID:        "approval-drift",
+		Allowed:          true,
+		RequiresApproval: true,
+		ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+		PlannedAt:        now,
+		ExpiresAt:        now.Add(5 * time.Minute),
+		PlanHash:         approvedHash,
+	}
+	req := &approval.ApprovalRequest{
+		ID:         "approval-drift",
+		Command:    "systemctl restart workload",
+		TargetType: "agent",
+		TargetID:   "agent-1",
+		TargetName: "agent-1",
+		Context:    "restart workload service",
+		Plan:       &plan,
+	}
+	if err := approvalStore.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval: %v", err)
+	}
+	if _, err := approvalStore.Approve("approval-drift", "operator@example.com"); err != nil {
+		t.Fatalf("Approve: %v", err)
+	}
+
+	agentServer := &mockAgentServer{}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: actionStore,
+	})
+	executor.recordPendingApprovalAction(req)
+
+	// Payload deliberately differs from the approved command. The hash check
+	// must catch this and refuse.
+	result, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"agent-1",
+		"approval-drift",
+		true,
+		"agent-1",
+		agentexec.ExecuteCommandPayload{
+			Command:    "rm -rf /var/log/pulse",
+			TargetType: "agent",
+			TargetID:   "agent-1",
+		},
+		"pulse_control",
+		"restart workload service",
+	)
+	if !errors.Is(err, unifiedresources.ErrActionPlanDrift) {
+		t.Fatalf("executeCommandWithAudit error = %v, want ErrActionPlanDrift", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on drift refusal, got %#v", result)
+	}
+	agentServer.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// TestExecuteCommandWithAuditAllowsMatchingPlanHash covers the positive case:
+// when the payload at execute time hashes identically to the approved plan,
+// dispatch proceeds normally.
+func TestExecuteCommandWithAuditAllowsMatchingPlanHash(t *testing.T) {
+	actionStore := unifiedresources.NewMemoryStore()
+	approvalStore, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DisablePersistence: true,
+	})
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	previousApprovalStore := approval.GetStore()
+	approval.SetStore(approvalStore)
+	t.Cleanup(func() { approval.SetStore(previousApprovalStore) })
+
+	now := time.Now().UTC()
+	approvedHash := approvalPlanHash(
+		"act-match",
+		"approval-match",
+		"pulse_control",
+		"agent-1",
+		"uptime",
+		"agent",
+		"agent-1",
+		"check uptime",
+	)
+	plan := unifiedresources.ActionPlan{
+		ActionID:         "act-match",
+		RequestID:        "approval-match",
+		Allowed:          true,
+		RequiresApproval: true,
+		ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+		PlannedAt:        now,
+		ExpiresAt:        now.Add(5 * time.Minute),
+		PlanHash:         approvedHash,
+	}
+	req := &approval.ApprovalRequest{
+		ID:         "approval-match",
+		Command:    "uptime",
+		TargetType: "agent",
+		TargetID:   "agent-1",
+		TargetName: "agent-1",
+		Context:    "check uptime",
+		Plan:       &plan,
+	}
+	if err := approvalStore.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval: %v", err)
+	}
+	if _, err := approvalStore.Approve("approval-match", "operator@example.com"); err != nil {
+		t.Fatalf("Approve: %v", err)
+	}
+
+	agentServer := &mockAgentServer{}
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-1", mock.Anything).Return(&agentexec.CommandResultPayload{
+		Success:  true,
+		Stdout:   "up 4 days",
+		ExitCode: 0,
+	}, nil).Once()
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: actionStore,
+	})
+	executor.recordPendingApprovalAction(req)
+
+	result, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"agent-1",
+		"approval-match",
+		true,
+		"agent-1",
+		agentexec.ExecuteCommandPayload{
+			Command:    "uptime",
+			TargetType: "agent",
+			TargetID:   "agent-1",
+		},
+		"pulse_control",
+		"check uptime",
+	)
+	if err != nil {
+		t.Fatalf("executeCommandWithAudit: %v", err)
+	}
+	if result == nil || result.Stdout != "up 4 days" {
+		t.Fatalf("command result = %#v", result)
+	}
+	agentServer.AssertExpectations(t)
+}
+
 func TestExecuteCommandWithDeniedApprovalDoesNotDispatch(t *testing.T) {
 	actionStore := unifiedresources.NewMemoryStore()
 	approvalStore, err := approval.NewStore(approval.StoreConfig{
@@ -484,6 +662,20 @@ func TestExecuteCommandWithDeniedApprovalDoesNotDispatch(t *testing.T) {
 	t.Cleanup(func() { approval.SetStore(previousApprovalStore) })
 
 	now := time.Now().UTC()
+	// PlanHash is the approval-equivalent hash of the (command, target,
+	// reason) the operator approved. This test covers the denial path, so
+	// the hash must match the executing payload to isolate denial as the
+	// reason for refusal — otherwise the broker's drift check fires first.
+	deniedHash := approvalPlanHash(
+		"act-denied-command",
+		"approval-denied-command",
+		"pulse_control",
+		"agent-1",
+		"rm -rf /tmp/pulse-test",
+		"agent",
+		"agent-1",
+		"unsafe cleanup command",
+	)
 	plan := unifiedresources.ActionPlan{
 		ActionID:         "act-denied-command",
 		RequestID:        "approval-denied-command",
@@ -494,7 +686,7 @@ func TestExecuteCommandWithDeniedApprovalDoesNotDispatch(t *testing.T) {
 		ExpiresAt:        now.Add(5 * time.Minute),
 		ResourceVersion:  "resource:sha256:test",
 		PolicyVersion:    "policy:sha256:test",
-		PlanHash:         "sha256:test",
+		PlanHash:         deniedHash,
 	}
 	req := &approval.ApprovalRequest{
 		ID:         "approval-denied-command",

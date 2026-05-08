@@ -74,6 +74,32 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	}
 	approvalRecords := approvalRecordsForID(approvalID)
 
+	// Plan-drift check: the operator approved a specific command + target +
+	// reason combination, and the broker must refuse to run a different one
+	// even when the approval ID resolves. Compares the approved hash against
+	// a freshly-recomputed approval-equivalent hash from the actual payload.
+	if planFromApproval {
+		if driftErr := validateApprovedCommandPlanHash(
+			plan.PlanHash,
+			plan.ActionID,
+			plan.RequestID,
+			capabilityName,
+			resourceID,
+			payload.Command,
+			payload.TargetType,
+			payload.TargetID,
+			reason,
+		); driftErr != nil {
+			log.Warn().
+				Str("action_id", plan.ActionID).
+				Str("approval_id", approvalID).
+				Str("capability", capabilityName).
+				Err(driftErr).
+				Msg("Refusing action execution: payload does not match approved plan hash")
+			return nil, driftErr
+		}
+	}
+
 	record := unifiedresources.ActionAuditRecord{
 		ID:        actionID,
 		CreatedAt: now,
@@ -723,6 +749,34 @@ func approvalAuditResourceID(targetType, targetID, targetName string) string {
 		return targetID
 	}
 	return targetType + ":" + targetID
+}
+
+// validateApprovedCommandPlanHash recomputes the approval-equivalent plan
+// hash from the actual payload presented at execute time and compares it to
+// the hash recorded at approval time. If approvedHash is empty (older
+// approval records, or contract paths that did not author one), validation
+// is skipped and existing behavior is preserved. If the hashes differ, the
+// broker must refuse execution: the operator approved a specific command +
+// target + reason combination, and a different one is now being requested.
+//
+// The hash function used here matches `approvalPlanHash` (the function
+// invoked at approval-creation time) so direct comparison is meaningful.
+// `actionPlanHash` shape differs slightly (no field-level whitespace
+// trimming) and would produce false-positive drift on legitimate payloads.
+func validateApprovedCommandPlanHash(
+	approvedHash string,
+	actionID, requestID, capabilityName, resourceID string,
+	command, targetType, targetID, reason string,
+) error {
+	approvedHash = strings.TrimSpace(approvedHash)
+	if approvedHash == "" {
+		return nil
+	}
+	fresh := approvalPlanHash(actionID, requestID, capabilityName, resourceID, command, targetType, targetID, reason)
+	if fresh == approvedHash {
+		return nil
+	}
+	return fmt.Errorf("%w (approved %s, payload %s)", unifiedresources.ErrActionPlanDrift, approvedHash, fresh)
 }
 
 func actionPlanHash(actionID, requestID, capabilityName, resourceID string, payload agentexec.ExecuteCommandPayload, reason string) string {

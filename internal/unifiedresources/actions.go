@@ -127,8 +127,14 @@ type ActionEngine interface {
 }
 
 var (
-	ErrActionNotPending       = errors.New("action is not pending approval")
-	ErrActionNotApproved      = errors.New("action is not approved for execution")
+	ErrActionNotPending  = errors.New("action is not pending approval")
+	ErrActionNotApproved = errors.New("action is not approved for execution")
+	// ErrActionPlanDrift is returned when the payload presented at execute
+	// time does not match the plan hash recorded at approval time. The hash
+	// is the contract for "the operator approved exactly this action"; if
+	// it does not match, the broker must refuse execution rather than run a
+	// drifted plan under a stale approval.
+	ErrActionPlanDrift        = errors.New("approved plan hash does not match execution payload; refusing to run drifted plan")
 	ErrActionNotExecuting     = errors.New("action is not executing")
 	ErrActionAlreadyExecuting = errors.New("action is already executing")
 	ErrActionExecutionFinal   = errors.New("action execution is already final")

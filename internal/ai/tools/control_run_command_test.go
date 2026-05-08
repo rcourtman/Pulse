@@ -158,6 +158,22 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		approval.SetStore(store)
 		defer approval.SetStore(nil)
 
+		// PlanHash is the approval-equivalent hash of the (command, target,
+		// reason) the operator approved. The broker's drift check refuses
+		// execution when the executing payload hashes to anything different.
+		// For this happy-path test, compute the hash with the exact inputs
+		// executeCommandWithAudit will see when executeRunCommand routes the
+		// approved "uptime" command to the resolved tower agent.
+		approvedHash := approvalPlanHash(
+			"action-1",
+			"approval-1",
+			"pulse_control",
+			"tower",
+			"uptime",
+			"agent",
+			"",
+			`run command "uptime" on tower`,
+		)
 		req := &approval.ApprovalRequest{
 			ID:         "approval-1",
 			Command:    "uptime",
@@ -170,7 +186,7 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 				RequiresApproval: true,
 				ApprovalPolicy:   unifiedresources.ApprovalAdmin,
 				Message:          "run command",
-				PlanHash:         "hash-1",
+				PlanHash:         approvedHash,
 			},
 		}
 		require.NoError(t, store.CreateApproval(req))
@@ -222,7 +238,7 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		require.Len(t, audits, 1)
 		assert.Equal(t, "action-1", audits[0].ID)
 		assert.Equal(t, unifiedresources.ActionStateCompleted, audits[0].State)
-		assert.Equal(t, "hash-1", audits[0].Plan.PlanHash)
+		assert.Equal(t, approvedHash, audits[0].Plan.PlanHash)
 	})
 
 	t.Run("ExecuteSuccess", func(t *testing.T) {

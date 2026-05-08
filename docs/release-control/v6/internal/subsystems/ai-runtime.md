@@ -288,6 +288,21 @@ runtime cost control, and shared AI transport surfaces.
     and to leave `impact` empty rather than fabricate one when the
     consequence is genuinely unknown; the runtime must not synthesize a
     default in that case.
+    The action broker enforces a plan-hash drift check at the execute
+    boundary: when an approval ID resolves to a stored plan with a
+    PlanHash, the freshly-recomputed approval-equivalent hash from the
+    actual payload (using `approvalPlanHash`, the same function used at
+    approval-creation time) must match. Mismatch returns
+    `ErrActionPlanDrift` and refuses dispatch; the contract is "the
+    operator approved exactly this (command, target, reason)
+    combination" and a different one cannot run under the stale
+    approval. When `approvedHash` is empty (older approval records, or
+    contract paths that did not author one), validation is skipped to
+    preserve existing behavior. The check is currently wired in
+    `executeCommandWithAudit` for shell-command actions; the native-
+    action path uses a different hash function (`actionPlanHashForParams`)
+    so a coherent canonical-hash refactor must precede adding the same
+    check there.
     `FindingsStore.GetTrustSummary` returns a snapshot of how currently
     tracked findings have resolved (tracked, currently-active, resolved,
     auto-resolved, fix-verified, fix-failed, dismissed-as-noise,
