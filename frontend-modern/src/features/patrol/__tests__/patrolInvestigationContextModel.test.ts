@@ -470,6 +470,13 @@ describe('patrolInvestigationContextModel', () => {
       actionLabel: 'Recommended: Open Patrol provider settings',
       actionHref: '/settings/system-ai',
     });
+    expect(handoff.context.briefing?.detailLines).toEqual(
+      expect.arrayContaining([
+        'Recommended next step: Restore Patrol visibility',
+        'Reason: Fix the Patrol runtime issue before treating the assessment as current.',
+        'Available action: Open Patrol provider settings',
+      ]),
+    );
     expect(handoff.context.handoffContext).toContain(
       'Recommended Next Step Action: Open Patrol provider settings (open_provider_settings)',
     );
@@ -520,8 +527,12 @@ describe('patrolInvestigationContextModel', () => {
       safetyNote:
         'Assistant can explain the gap; full Patrol runs, diagnostics, and remediation remain operator-controlled. Run Patrol is currently unavailable: Patrol is already running.',
     });
-    expect((handoff.context.briefing?.detailLines ?? []).join(' ')).toContain(
-      'action Run Patrol unavailable: Patrol is already running',
+    expect(handoff.context.briefing?.detailLines).toEqual(
+      expect.arrayContaining([
+        'Recommended next step: Verify full coverage',
+        'Reason: Run a full Patrol sweep before treating this assessment as an all-clear.',
+        'Action unavailable: Run Patrol - Patrol is already running',
+      ]),
     );
   });
 

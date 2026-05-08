@@ -846,8 +846,8 @@ function buildPatrolAssessmentAssistantBriefing(
   const latestRun = formatAssessmentLatestRun(input);
   const contextSummary = normalizeText(input.investigationContext?.summaryText);
   const recommendedNextStep = normalizeAssessmentRecommendedNextStep(input.recommendedNextStep);
-  const recommendedNextStepLine =
-    formatAssessmentRecommendedNextStepDetailLine(recommendedNextStep);
+  const recommendedNextStepLines =
+    formatAssessmentRecommendedNextStepDetailLines(recommendedNextStep);
   const findings = normalizeAssessmentFindings(input.activeFindings);
   const recentChanges = normalizeAssessmentRecentChanges(input.supportingEvidence?.recentChanges);
   const correlations = normalizeAssessmentCorrelations(input.supportingEvidence?.correlations);
@@ -866,9 +866,9 @@ function buildPatrolAssessmentAssistantBriefing(
     title: 'Patrol assessment attached',
     subject: title,
     statusLabel: [health, attentionSummary].filter(isNonEmptyString).join(' · ') || undefined,
-    detailLines: [description, recommendedNextStepLine, verification, latestRun, contextSummary]
+    detailLines: [description, ...recommendedNextStepLines, verification, latestRun, contextSummary]
       .filter(isNonEmptyString)
-      .slice(0, 5),
+      .slice(0, 7),
     evidence: [...findingEvidence.slice(0, 3), ...supportingEvidence].slice(0, 5),
     actionLabel: actionPosture.actionLabel,
     actionHref: actionPosture.actionHref,
@@ -908,13 +908,13 @@ function formatAssessmentRecommendedNextStepActionInstruction(
   return `available Patrol-owned action: ${recommendedNextStep.actionLabel}`;
 }
 
-function formatAssessmentRecommendedNextStepActionDetail(
+function formatAssessmentRecommendedNextStepActionBriefingDetail(
   recommendedNextStep: NormalizedPatrolAssessmentRecommendedNextStep,
 ): string | undefined {
   if (!recommendedNextStep.actionLabel) return undefined;
   return recommendedNextStep.actionDisabledReason
-    ? `action ${recommendedNextStep.actionLabel} unavailable: ${recommendedNextStep.actionDisabledReason}`
-    : `action ${recommendedNextStep.actionLabel}`;
+    ? `Action unavailable: ${recommendedNextStep.actionLabel} - ${recommendedNextStep.actionDisabledReason}`
+    : `Available action: ${recommendedNextStep.actionLabel}`;
 }
 
 function formatAssessmentRecommendedNextStepActionAvailability(
@@ -934,20 +934,16 @@ function formatAssessmentRecommendationSafetyNote(
   return `${base} ${recommendedNextStep.actionLabel} is currently unavailable: ${recommendedNextStep.actionDisabledReason}.`;
 }
 
-function formatAssessmentRecommendedNextStepDetailLine(
+function formatAssessmentRecommendedNextStepDetailLines(
   recommendedNextStep?: NormalizedPatrolAssessmentRecommendedNextStep,
-): string | undefined {
-  if (!recommendedNextStep) return undefined;
+): string[] {
+  if (!recommendedNextStep) return [];
 
-  return formatBriefingStringList(
-    [
-      `Recommended next step: ${recommendedNextStep.title}`,
-      recommendedNextStep.description,
-      formatAssessmentRecommendedNextStepActionDetail(recommendedNextStep),
-    ],
-    3,
-    'recommendation facts',
-  );
+  return [
+    `Recommended next step: ${recommendedNextStep.title}`,
+    recommendedNextStep.description ? `Reason: ${recommendedNextStep.description}` : undefined,
+    formatAssessmentRecommendedNextStepActionBriefingDetail(recommendedNextStep),
+  ].filter(isNonEmptyString);
 }
 
 function getAssessmentRecommendedNextStepActionHref(

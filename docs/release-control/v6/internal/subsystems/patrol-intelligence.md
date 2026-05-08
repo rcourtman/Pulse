@@ -277,7 +277,9 @@ Patrol-specific presentation helpers.
    text is withheld; live handoffs must send those safe fields through
    structured `handoff_metadata` where available, and the browser must use
    them for restored drawer copy without receiving the private model-only
-   handoff context.
+   handoff context. Assessment Assistant drawer briefings must present the safe
+   recommended step title, reason, and route-owned action as separate operator
+   facts instead of compressing them into an opaque context sentence.
    When the current Patrol assessment is coverage-incomplete with no active
    infrastructure finding, the same handoff model must frame the briefing as a
    verification gap: the prompt leads with what scoped activity did and did not

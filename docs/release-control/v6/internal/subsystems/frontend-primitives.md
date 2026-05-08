@@ -961,7 +961,11 @@ prompt explain the same operator-facing priority.
     finding-level handoffs; if a source-owned Patrol recommendation action is
     currently disabled, the helper must pass the bounded disabled reason in
     visible briefing and model-only context instead of presenting that action as
-    available. Finding-level drawer opens may also pass one bounded
+    available. Assessment recommendation briefings must keep the safe
+    recommendation title, reason, and route-owned action as separate visible
+    drawer facts so the shared Assistant shell presents operator guidance
+    without parsing a compressed context sentence. Finding-level drawer opens
+    may also pass one bounded
     model-only finding context, one target resource reference, one safe
     route-owned next-step action label/href, and one `handoff_actions` reference
     for a live approval or proposed fix. It must not expose raw command or

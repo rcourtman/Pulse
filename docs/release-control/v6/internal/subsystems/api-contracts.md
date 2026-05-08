@@ -2024,7 +2024,11 @@ references used to seed canonical approval and action-audit refresh.
 product handoffs, currently including Patrol run kind, run ID, safe run
 type/status, a runtime-failure boolean rather than runtime failure detail, and
 safe Patrol recommended next-step/action labels plus whitelisted app-route
-hrefs when the browser handoff already owns that route.
+hrefs when the browser handoff already owns that route. Frontend-visible
+Patrol assessment briefings may render those same safe recommendation fields as
+separate title, reason, and route-action facts, but they must not introduce new
+browser-owned authority beyond the structured handoff metadata and bounded
+chat context.
 Frontend handoff builders may send these fields for owned alert, incident,
 Patrol assessment, Patrol finding, or Patrol run-history context, but the
 backend must not
