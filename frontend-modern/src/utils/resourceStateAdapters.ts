@@ -31,6 +31,7 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
+  normalizeSourcePlatformKey,
   resolvePlatformTypeFromSources,
   resolveSourceTypeFromSources,
 } from '@/utils/sourcePlatforms';
@@ -77,6 +78,28 @@ const mergeStringArrays = (incoming?: string[], existing?: string[]): string[] |
   return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
 };
 
+const readStringArray = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const normalized = value
+    .map((entry) => asString(entry))
+    .filter((entry): entry is string => Boolean(entry));
+  return normalized.length > 0 ? Array.from(new Set(normalized)) : undefined;
+};
+
+const normalizeSourceToken = (value: string): string =>
+  normalizeSourcePlatformKey(value) || value.trim().toLowerCase();
+
+const sourceListHas = (sources: string[] | undefined, ...candidates: string[]): boolean => {
+  if (!sources || sources.length === 0) return false;
+  const sourceSet = new Set(sources.map((source) => normalizeSourceToken(source)));
+  return candidates.some((candidate) => sourceSet.has(normalizeSourceToken(candidate)));
+};
+
+const shouldKeepSourceFacet = (
+  authoritativeSources: string[] | undefined,
+  ...sourceCandidates: string[]
+): boolean => !authoritativeSources || sourceListHas(authoritativeSources, ...sourceCandidates);
+
 const mergeRecord = <T extends JsonRecord>(incoming?: T, existing?: T): T | undefined => {
   if (!incoming) return existing;
   if (!existing) return incoming;
@@ -92,22 +115,32 @@ const mergePlatformData = (
   if (!incoming) return existingValue;
   if (!existing) return incomingValue;
 
+  const incomingSources = readStringArray(incoming.sources);
+  const existingSources = readStringArray(existing.sources);
+  const sources = incomingSources ?? existingSources;
   const merged: JsonRecord = { ...existing, ...incoming };
-  for (const key of [
-    'agent',
-    'docker',
-    'proxmox',
-    'pbs',
-    'pmg',
-    'kubernetes',
-    'vmware',
-    'storage',
-    'availability',
-    'physicalDisk',
-    'ceph',
-    'metrics',
-    'discoveryTarget',
-  ]) {
+
+  for (const [key, ...sourceCandidates] of [
+    ['agent', 'agent'],
+    ['docker', 'docker'],
+    ['proxmox', 'proxmox-pve'],
+    ['pbs', 'proxmox-pbs'],
+    ['pmg', 'proxmox-pmg'],
+    ['kubernetes', 'kubernetes'],
+    ['vmware', 'vmware-vsphere'],
+    ['availability', 'availability'],
+  ] as const) {
+    if (!shouldKeepSourceFacet(incomingSources, ...sourceCandidates)) {
+      delete merged[key];
+      continue;
+    }
+    const nested = mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
+    if (nested) {
+      merged[key] = nested;
+    }
+  }
+
+  for (const key of ['storage', 'physicalDisk', 'ceph', 'metrics', 'discoveryTarget']) {
     const nested = mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
     if (nested) {
       merged[key] = nested;
@@ -122,10 +155,6 @@ const mergePlatformData = (
     merged.sourceStatus = sourceStatus;
   }
 
-  const sources = mergeStringArrays(
-    Array.isArray(incoming.sources) ? (incoming.sources as string[]) : undefined,
-    Array.isArray(existing.sources) ? (existing.sources as string[]) : undefined,
-  );
   if (sources) {
     merged.sources = sources;
   }
@@ -133,7 +162,35 @@ const mergePlatformData = (
   return merged;
 };
 
-const deriveLegacySourceList = (resource: Resource): string[] | undefined => {
+const getResourceRecord = (resource: Resource): JsonRecord => resource as unknown as JsonRecord;
+
+const getFacetRecord = (
+  resource: Resource,
+  platformData: Resource['platformData'] | undefined,
+  key: string,
+): JsonRecord | undefined => {
+  const resourceRecord = getResourceRecord(resource);
+  const platformRecord = asRecord(platformData);
+  return asRecord(resourceRecord[key]) || asRecord(platformRecord?.[key]);
+};
+
+const deriveLegacySourceList = (
+  resource: Resource,
+  platformData: Resource['platformData'] | undefined = resource.platformData,
+): string[] | undefined => {
+  const sources: string[] = [];
+  if (getFacetRecord(resource, platformData, 'proxmox')) sources.push('proxmox');
+  if (getFacetRecord(resource, platformData, 'pbs')) sources.push('pbs');
+  if (getFacetRecord(resource, platformData, 'pmg')) sources.push('pmg');
+  if (getFacetRecord(resource, platformData, 'vmware')) sources.push('vmware');
+  if (getFacetRecord(resource, platformData, 'kubernetes')) sources.push('kubernetes');
+  if (getFacetRecord(resource, platformData, 'docker')) sources.push('docker');
+  if (getFacetRecord(resource, platformData, 'availability')) sources.push('availability');
+  if (getFacetRecord(resource, platformData, 'agent')) sources.push('agent');
+  if (sources.length > 0) {
+    return Array.from(new Set(sources));
+  }
+
   if (
     resource.type === 'network-endpoint' ||
     resource.platformType === 'availability' ||
@@ -163,22 +220,81 @@ const deriveLegacySourceList = (resource: Resource): string[] | undefined => {
   }
 };
 
+const hasLegacyProxmoxShape = (
+  resource: Resource,
+  platformData: JsonRecord,
+  sources?: string[],
+): boolean =>
+  resource.platformType === 'proxmox-pve' ||
+  sourceListHas(sources, 'proxmox-pve') ||
+  [
+    'instance',
+    'node',
+    'clusterName',
+    'vmid',
+    'cpus',
+    'template',
+    'swapUsed',
+    'swapTotal',
+    'balloon',
+  ].some((key) => platformData[key] !== undefined);
+
 const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformData'] => {
   const platformData = asRecord(resource.platformData);
   if (!platformData) {
-    return resource.platformData;
+    const normalizedSources = deriveLegacySourceList(resource);
+    if (!normalizedSources || normalizedSources.length === 0) {
+      return resource.platformData;
+    }
+    const normalized: JsonRecord = { sources: normalizedSources };
+    const resourceRecord = getResourceRecord(resource);
+    for (const [key, value] of [
+      ['agent', resourceRecord.agent],
+      ['docker', resourceRecord.docker],
+      ['proxmox', resourceRecord.proxmox],
+      ['pbs', resourceRecord.pbs],
+      ['pmg', resourceRecord.pmg],
+      ['kubernetes', resourceRecord.kubernetes],
+      ['vmware', resourceRecord.vmware],
+      ['storage', resourceRecord.storage],
+      ['availability', resourceRecord.availability],
+      ['physicalDisk', resourceRecord.physicalDisk],
+    ] as const) {
+      if (value !== undefined) {
+        normalized[key] = value;
+      }
+    }
+    return normalized;
   }
 
   const normalized: JsonRecord = { ...platformData };
+  const resourceRecord = getResourceRecord(resource);
+  for (const key of [
+    'agent',
+    'docker',
+    'proxmox',
+    'pbs',
+    'pmg',
+    'kubernetes',
+    'vmware',
+    'storage',
+    'availability',
+    'physicalDisk',
+  ] as const) {
+    if (!asRecord(normalized[key]) && asRecord(resourceRecord[key])) {
+      normalized[key] = resourceRecord[key];
+    }
+  }
+
   const normalizedSources =
     Array.isArray(platformData.sources) && platformData.sources.length > 0
       ? (platformData.sources as string[])
-      : deriveLegacySourceList(resource);
+      : deriveLegacySourceList(resource, platformData);
   if (normalizedSources && normalizedSources.length > 0) {
     normalized.sources = normalizedSources;
   }
 
-  if (!asRecord(platformData.agent)) {
+  if (!asRecord(normalized.agent)) {
     const agentPayload: JsonRecord = {};
     for (const [legacyKey, nextKey] of [
       ['agentId', 'agentId'],
@@ -204,7 +320,7 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
     }
   }
 
-  if (!asRecord(platformData.docker)) {
+  if (!asRecord(normalized.docker)) {
     const dockerPayload: JsonRecord = {};
     for (const [legacyKey, nextKey] of [
       ['agentId', 'agentId'],
@@ -237,7 +353,10 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
     }
   }
 
-  if (!asRecord(platformData.proxmox)) {
+  if (
+    !asRecord(normalized.proxmox) &&
+    hasLegacyProxmoxShape(resource, platformData, normalizedSources)
+  ) {
     const proxmoxPayload: JsonRecord = {};
     for (const [legacyKey, nextKey] of [
       ['instance', 'instance'],
@@ -260,7 +379,7 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
     }
   }
 
-  if (!asRecord(platformData.pbs)) {
+  if (!asRecord(normalized.pbs)) {
     const pbsPayload: JsonRecord = {};
     if (platformData.host !== undefined) pbsPayload.hostname = platformData.host;
     if (platformData.version !== undefined) pbsPayload.version = platformData.version;
@@ -275,7 +394,7 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
     }
   }
 
-  if (!asRecord(platformData.pmg)) {
+  if (!asRecord(normalized.pmg)) {
     const pmgPayload: JsonRecord = {};
     if (platformData.host !== undefined) pmgPayload.hostname = platformData.host;
     if (platformData.version !== undefined) pmgPayload.version = platformData.version;
@@ -299,7 +418,7 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
     }
   }
 
-  if (!asRecord(platformData.kubernetes)) {
+  if (!asRecord(normalized.kubernetes)) {
     const kubernetesPayload: JsonRecord = {};
     for (const [legacyKey, nextKey] of [
       ['agentId', 'agentId'],
@@ -329,7 +448,7 @@ const getCanonicalSourceList = (
   const platformRecord = asRecord(platformData);
   return Array.isArray(platformRecord?.sources) && platformRecord.sources.length > 0
     ? (platformRecord.sources as string[])
-    : deriveLegacySourceList({ ...resource, platformData });
+    : deriveLegacySourceList(resource, platformData);
 };
 
 const hasAvailabilityFacet = (
@@ -393,11 +512,22 @@ const mergeCanonicalIdentity = (
   };
 };
 
+const mergeCanonicalSourceFacet = <T extends JsonRecord>(
+  incomingFacet: T | undefined,
+  existingFacet: T | undefined,
+  incomingSources: string[] | undefined,
+  ...sourceCandidates: string[]
+): T | undefined =>
+  shouldKeepSourceFacet(incomingSources, ...sourceCandidates)
+    ? mergeRecord(incomingFacet, existingFacet)
+    : incomingFacet;
+
 export const mergeCanonicalResource = (incoming: Resource, existing?: Resource): Resource => {
   if (!existing) {
     return incoming;
   }
   const existingCanonical = canonicalizeRealtimeResource(existing);
+  const incomingSources = getCanonicalSourceList(incoming, incoming.platformData);
   return {
     ...existingCanonical,
     ...incoming,
@@ -413,26 +543,42 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
     recentChanges: incoming.recentChanges ?? existingCanonical.recentChanges,
     facetCounts: incoming.facetCounts ?? existingCanonical.facetCounts,
     diskIO: incoming.diskIO ?? existingCanonical.diskIO,
-    agent: mergeRecord(
+    agent: mergeCanonicalSourceFacet(
       incoming.agent as JsonRecord | undefined,
       existingCanonical.agent as JsonRecord | undefined,
+      incomingSources,
+      'agent',
     ) as Resource['agent'],
-    proxmox: mergeRecord(
+    proxmox: mergeCanonicalSourceFacet(
       incoming.proxmox as JsonRecord | undefined,
       existingCanonical.proxmox as JsonRecord | undefined,
+      incomingSources,
+      'proxmox-pve',
     ) as Resource['proxmox'],
-    pbs: mergeRecord(
+    pbs: mergeCanonicalSourceFacet(
       incoming.pbs as JsonRecord | undefined,
       existingCanonical.pbs as JsonRecord | undefined,
+      incomingSources,
+      'proxmox-pbs',
     ) as Resource['pbs'],
-    kubernetes: mergeRecord(
+    kubernetes: mergeCanonicalSourceFacet(
       incoming.kubernetes as JsonRecord | undefined,
       existingCanonical.kubernetes as JsonRecord | undefined,
+      incomingSources,
+      'kubernetes',
     ) as Resource['kubernetes'],
-    vmware: mergeRecord(
+    vmware: mergeCanonicalSourceFacet(
       incoming.vmware as JsonRecord | undefined,
       existingCanonical.vmware as JsonRecord | undefined,
+      incomingSources,
+      'vmware-vsphere',
     ) as Resource['vmware'],
+    availability: mergeCanonicalSourceFacet(
+      incoming.availability as JsonRecord | undefined,
+      existingCanonical.availability as JsonRecord | undefined,
+      incomingSources,
+      'availability',
+    ) as Resource['availability'],
     storage: mergeRecord(
       incoming.storage as JsonRecord | undefined,
       existingCanonical.storage as JsonRecord | undefined,

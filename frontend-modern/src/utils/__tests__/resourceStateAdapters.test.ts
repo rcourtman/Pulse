@@ -304,6 +304,161 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect((resource.platformData as Record<string, unknown>).sources).toEqual(['availability']);
   });
 
+  it('canonicalizes top-level Proxmox and agent facets as one hybrid PVE resource', () => {
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'agent-pi',
+          type: 'agent',
+          name: 'pi',
+          displayName: 'pi',
+          platformId: 'pi',
+          platformType: 'agent',
+          sourceType: 'agent',
+          status: 'online',
+          lastSeen: Date.now(),
+          proxmox: {
+            nodeName: 'pi',
+            instance: 'pi',
+          },
+          agent: {
+            hostname: 'pi',
+            platform: 'debian',
+            osName: 'Debian GNU/Linux',
+            osVersion: '12',
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resource.platformType).toBe('proxmox-pve');
+    expect(resource.sourceType).toBe('hybrid');
+    expect(resource.proxmox).toMatchObject({ nodeName: 'pi', instance: 'pi' });
+    expect(resource.agent).toMatchObject({ hostname: 'pi', osName: 'Debian GNU/Linux' });
+    expect((resource.platformData as Record<string, unknown>).sources).toEqual([
+      'proxmox',
+      'agent',
+    ]);
+    expect((resource.platformData as Record<string, unknown>).proxmox).toMatchObject({
+      nodeName: 'pi',
+    });
+    expect((resource.platformData as Record<string, unknown>).agent).toMatchObject({
+      hostname: 'pi',
+    });
+  });
+
+  it('replaces stale platform source facets with the current snapshot sources', () => {
+    const existing = {
+      id: 'agent-tower',
+      type: 'agent',
+      name: 'Tower',
+      displayName: 'Tower',
+      platformId: 'tower',
+      platformType: 'proxmox-pve',
+      sourceType: 'hybrid',
+      status: 'degraded',
+      lastSeen: Date.now(),
+      proxmox: {
+        nodeName: 'Tower',
+      },
+      agent: {
+        hostname: 'Tower',
+        hostProfile: 'unraid',
+        osName: 'Unraid',
+      },
+      platformData: {
+        sources: ['proxmox', 'docker', 'agent'],
+        proxmox: {
+          nodeName: 'Tower',
+        },
+        docker: {
+          runtime: 'docker',
+        },
+        agent: {
+          hostname: 'Tower',
+          hostProfile: 'unraid',
+          osName: 'Unraid',
+        },
+      },
+    } as Resource;
+
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'agent-tower',
+          type: 'agent',
+          name: 'Tower',
+          displayName: 'Tower',
+          platformId: 'tower',
+          platformType: 'agent',
+          sourceType: 'hybrid',
+          status: 'degraded',
+          lastSeen: Date.now(),
+          agent: {
+            hostname: 'Tower',
+            hostProfile: 'unraid',
+            osName: 'Unraid',
+          },
+          docker: {
+            runtime: 'docker',
+          },
+        } as Resource,
+      ],
+      [existing],
+    );
+
+    expect(resource.platformType).toBe('docker');
+    expect(resource.sourceType).toBe('hybrid');
+    expect(resource.proxmox).toBeUndefined();
+    expect(resource.agent).toMatchObject({ hostProfile: 'unraid', osName: 'Unraid' });
+    expect((resource.platformData as Record<string, unknown>).sources).toEqual(['docker', 'agent']);
+    expect((resource.platformData as Record<string, unknown>).proxmox).toBeUndefined();
+  });
+
+  it('does not synthesize a Proxmox facet from flat agent disk telemetry', () => {
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'agent-tower',
+          type: 'agent',
+          name: 'Tower',
+          displayName: 'Tower',
+          platformId: 'tower',
+          platformType: 'agent',
+          sourceType: 'hybrid',
+          status: 'degraded',
+          lastSeen: Date.now(),
+          agent: {
+            hostname: 'Tower',
+            hostProfile: 'unraid',
+            osName: 'Unraid',
+          },
+          docker: {
+            runtime: 'docker',
+          },
+          platformData: {
+            osName: 'Unraid',
+            osVersion: '7.2.2',
+            platform: 'linux',
+            disks: [
+              {
+                device: 'rootfs',
+                mountpoint: '/',
+                filesystem: 'rootfs',
+              },
+            ],
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resource.platformType).toBe('docker');
+    expect((resource.platformData as Record<string, unknown>).sources).toEqual(['docker', 'agent']);
+    expect((resource.platformData as Record<string, unknown>).proxmox).toBeUndefined();
+  });
+
   it('preserves richer existing resource details when realtime updates are thinner', () => {
     const existing: Resource = {
       id: 'node-1',

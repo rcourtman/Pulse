@@ -194,6 +194,11 @@ cross-source deduplication.
    no-parity posture, but those labels must derive from canonical incident or
    storage-risk summaries already present on the resource rather than local
    platform heuristics or generic status-only wording.
+   Frontend canonicalization must treat top-level source facets as source
+   evidence when `platformData.sources` is absent, but it must not invent
+   provider facets from generic agent telemetry: flat agent disk payloads stay
+   under the agent source and do not become Proxmox facets without explicit
+   Proxmox source, node, or workload-shape evidence.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
@@ -272,6 +277,11 @@ AI-only summary payloads, or page-local heuristics.
    must merge into the existing canonical resource snapshot instead of
    downgrading richer REST-only infrastructure details such as disk I/O, source
    metadata, or platform summary fields after first hydrate. For default
+   Source lists and their source-specific facets are the exception: a current
+   snapshot with canonical source evidence replaces stale source lists and
+   removes provider facets that no longer have matching source evidence, so
+   rows do not keep displaying a previous platform identity after websocket
+   refreshes. For default
    `initialHydration: 'immediate'` consumers, that same path must not paint the
    thinner websocket transport before the first canonical REST snapshot exists;
    only explicit `prefer-ws` consumers may render directly from the realtime

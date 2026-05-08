@@ -64,6 +64,41 @@ const hostOsLabelPatterns: Array<{ pattern: RegExp; label: string }> = [
 
 const trimString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+
+const getResourceRecord = (resource: Resource): Record<string, unknown> =>
+  resource as unknown as Record<string, unknown>;
+
+const getFacetRecord = (
+  resource: Resource,
+  platformData: Record<string, unknown> | undefined,
+  key: string,
+): Record<string, unknown> | undefined =>
+  asRecord(getResourceRecord(resource)[key]) || asRecord(platformData?.[key]);
+
+const deriveSourceKeysFromFacets = (
+  resource: Resource,
+  platformData: Record<string, unknown> | undefined,
+): string[] => {
+  const sources: string[] = [];
+  for (const [key, source] of [
+    ['proxmox', 'proxmox'],
+    ['pbs', 'pbs'],
+    ['pmg', 'pmg'],
+    ['vmware', 'vmware'],
+    ['kubernetes', 'kubernetes'],
+    ['docker', 'docker'],
+    ['availability', 'availability'],
+    ['agent', 'agent'],
+  ] as const) {
+    if (getFacetRecord(resource, platformData, key)) {
+      sources.push(source);
+    }
+  }
+  return sources;
+};
+
 const titleFromParts = (...parts: Array<string | undefined>): string | undefined => {
   const title = parts
     .map((part) => (part || '').trim())
@@ -220,6 +255,23 @@ const getKnownHostIdentitySource = (...values: string[]): KnownSourcePlatform | 
   return null;
 };
 
+const getAgentRecord = (resource: Resource): Record<string, unknown> | undefined =>
+  getPlatformAgentRecord(resource) ?? asRecord(getResourceRecord(resource).agent);
+
+const hasExplicitAgentHostProfile = (resource: Resource): boolean => {
+  const agent = getAgentRecord(resource);
+  const hostProfile = trimString(agent?.hostProfile);
+  return Boolean(hostProfile && getAgentHostProfileManifestEntry(hostProfile));
+};
+
+const hasPrimarySystemFacet = (
+  resource: Resource,
+  platformData: Record<string, unknown> | undefined,
+): boolean =>
+  ['proxmox', 'pbs', 'pmg', 'vmware', 'kubernetes'].some((key) =>
+    Boolean(getFacetRecord(resource, platformData, key)),
+  );
+
 const getHostOsLabel = (...values: string[]): string | null => {
   for (const value of values) {
     if (!value) continue;
@@ -230,7 +282,7 @@ const getHostOsLabel = (...values: string[]): string | null => {
 };
 
 const getAgentSystemIdentityBadge = (resource: Resource): ResourceBadge | null => {
-  const agent = getPlatformAgentRecord(resource);
+  const agent = getAgentRecord(resource);
   if (!agent) return null;
 
   const hostProfile = trimString(agent.hostProfile);
@@ -277,15 +329,16 @@ const getAgentSystemIdentityBadge = (resource: Resource): ResourceBadge | null =
 const getAvailabilitySystemIdentityBadge = (
   resource: Resource,
   platformData: Record<string, unknown> | undefined,
+  rawSources: string[],
 ): ResourceBadge | null => {
-  const availability = platformData?.availability as
+  const availability = (asRecord(platformData?.availability) ||
+    asRecord(getResourceRecord(resource).availability)) as
     | { address?: string; protocol?: string; port?: number }
     | undefined;
-  const sources = (platformData?.sources as string[] | undefined) ?? [];
   const isAvailabilityEndpoint =
     resource.type === 'network-endpoint' ||
     Boolean(availability) ||
-    sources.some((source) => source.trim().toLowerCase() === 'availability');
+    rawSources.some((source) => source.trim().toLowerCase() === 'availability');
 
   if (!isAvailabilityEndpoint) return null;
 
@@ -316,10 +369,27 @@ export function getInfrastructureSystemIdentityBadges(resource: Resource): Resou
   const platformData = getPlatformDataRecord(resource) as
     | (Record<string, unknown> & { sources?: string[] })
     | undefined;
-  const sources = normalizeUnifiedSourceKeys(platformData?.sources);
-  const availabilityIdentityBadge = getAvailabilitySystemIdentityBadge(resource, platformData);
+  const rawSources = [
+    ...(Array.isArray(platformData?.sources) ? platformData.sources : []),
+    ...deriveSourceKeysFromFacets(resource, platformData),
+  ];
+  const sources = normalizeUnifiedSourceKeys(rawSources);
+  const availabilityIdentityBadge = getAvailabilitySystemIdentityBadge(
+    resource,
+    platformData,
+    rawSources,
+  );
   if (availabilityIdentityBadge) {
     return [availabilityIdentityBadge];
+  }
+
+  const agentIdentityBadge = getAgentSystemIdentityBadge(resource);
+  if (
+    agentIdentityBadge &&
+    hasExplicitAgentHostProfile(resource) &&
+    !hasPrimarySystemFacet(resource, platformData)
+  ) {
+    return [agentIdentityBadge];
   }
 
   const systemSource = firstSystemSource(sources, resource.platformType);
@@ -327,7 +397,6 @@ export function getInfrastructureSystemIdentityBadges(resource: Resource): Resou
     return buildUnifiedSourceBadges([systemSource]);
   }
 
-  const agentIdentityBadge = getAgentSystemIdentityBadge(resource);
   if (agentIdentityBadge) {
     return [agentIdentityBadge];
   }
@@ -345,7 +414,7 @@ export function getInfrastructureSystemIdentityBadges(resource: Resource): Resou
     return [platformBadge];
   }
 
-  return getInfrastructurePlatformBadges(platformData?.sources);
+  return getInfrastructurePlatformBadges(rawSources);
 }
 
 export function getInfrastructureSystemIdentitySortLabel(resource: Resource): string {

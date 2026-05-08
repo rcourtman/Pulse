@@ -92,6 +92,54 @@ describe('resourceBadgePresentation', () => {
     ).toEqual(['Docker / Podman']);
   });
 
+  it('shows Unraid as the system identity for agent resources that also report Docker', () => {
+    expect(
+      getInfrastructureSystemIdentityBadges(
+        makeResource({
+          type: 'agent',
+          platformType: 'docker',
+          sourceType: 'hybrid',
+          platformData: {
+            sources: ['docker', 'agent'],
+            docker: {
+              runtime: 'docker',
+            },
+            agent: {
+              platform: 'linux',
+              hostProfile: 'unraid',
+              osName: 'Unraid',
+              osVersion: '7.2.2',
+            },
+          },
+        }),
+      ).map((badge) => badge.label),
+    ).toEqual(['Unraid']);
+  });
+
+  it('does not let stale platform sources override explicit agent host profiles', () => {
+    expect(
+      getInfrastructureSystemIdentityBadges(
+        makeResource({
+          type: 'agent',
+          platformType: 'proxmox-pve',
+          sourceType: 'hybrid',
+          platformData: {
+            sources: ['proxmox', 'docker', 'agent'],
+            docker: {
+              runtime: 'docker',
+            },
+            agent: {
+              platform: 'linux',
+              hostProfile: 'unraid',
+              osName: 'Unraid',
+              osVersion: '7.2.2',
+            },
+          },
+        }),
+      ).map((badge) => badge.label),
+    ).toEqual(['Unraid']);
+  });
+
   it('uses governed host identity tokens for legacy agent profile reports', () => {
     expect(
       getInfrastructureSystemIdentityBadges(
@@ -144,6 +192,28 @@ describe('resourceBadgePresentation', () => {
         },
       },
     });
+
+    expect(getInfrastructureSystemIdentityBadges(resource).map((badge) => badge.label)).toEqual([
+      'PVE',
+    ]);
+    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('PVE');
+  });
+
+  it('keeps top-level platform facets ahead of collection method identity', () => {
+    const resource = makeResource({
+      platformType: 'agent',
+      sourceType: 'agent',
+      proxmox: {
+        nodeName: 'pi',
+        instance: 'pi',
+      },
+      agent: {
+        hostname: 'pi',
+        platform: 'debian',
+        osName: 'Debian GNU/Linux',
+        osVersion: '12',
+      },
+    } as Partial<Resource>);
 
     expect(getInfrastructureSystemIdentityBadges(resource).map((badge) => badge.label)).toEqual([
       'PVE',
