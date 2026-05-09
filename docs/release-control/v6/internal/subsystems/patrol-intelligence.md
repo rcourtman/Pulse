@@ -1108,3 +1108,10 @@ and must NOT appear for `will_fix_later` itself or for findings with no
 prior regression. This is the operator-facing half of "Pulse learns from
 operator dismissal patterns" — a recurring issue should not be silently
 buried just because the operator is moving fast on triage.
+The collapsed finding row must also surface `regressionCount` as a small
+pill next to the investigation-confidence badge whenever
+`regressionCount > 0`, so a triaging operator scanning the list can spot
+"this is not a one-off" without expanding each card. The pill stays
+absent on fresh detections (count == 0) so the row stays clean for
+ordinary findings, and the styling (amber tone) reads as a recurrence
+signal rather than a generic muted note.

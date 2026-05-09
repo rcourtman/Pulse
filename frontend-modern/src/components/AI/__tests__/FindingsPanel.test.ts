@@ -124,6 +124,24 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('Pulse will permanently suppress');
   });
 
+  it('surfaces regressionCount as a pill on the collapsed finding row', () => {
+    // regressionCount is the strongest "this is not a one-off" signal Pulse
+    // can give an operator scanning a list. The pill must appear in the
+    // collapsed row (alongside the confidence badge) so triage decisions
+    // can be made without expanding each card. The pill must only appear
+    // when regressionCount > 0 — fresh detections must stay clean.
+    expect(findingsPanelSource).toContain('(finding.regressionCount || 0) > 0');
+    expect(findingsPanelSource).toContain('regressed {finding.regressionCount}×');
+    expect(findingsPanelSource).toContain('text-amber-700 dark:text-amber-300');
+    // The regression pill must sit next to the confidence badge in source order
+    // so the row reads as one trust-related cluster.
+    const confidenceIndex = findingsPanelSource.indexOf('confidence');
+    const regressionIndex = findingsPanelSource.indexOf('regressed {finding.regressionCount}×');
+    expect(confidenceIndex).toBeGreaterThan(0);
+    expect(regressionIndex).toBeGreaterThan(0);
+    expect(regressionIndex).toBeGreaterThan(confidenceIndex);
+  });
+
   it('warns the operator before dismissing a recurrent finding as not_an_issue or expected_behavior', () => {
     // not_an_issue and expected_behavior both stay quiet forever after dismiss.
     // If the finding has already regressed before, the operator may be

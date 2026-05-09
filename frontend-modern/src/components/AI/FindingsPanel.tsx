@@ -745,6 +745,19 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   {finding.investigationRecord!.confidence!} confidence
                 </span>
               </Show>
+              {/* Regression pill — Pulse's "Learn" signal on the collapsed row.
+                  A finding that has regressed before is not a one-off; it
+                  needs to be triaged differently from a fresh detection.
+                  Sits next to the confidence badge so trust + recurrence
+                  can be scanned together without expanding the card. */}
+              <Show when={(finding.regressionCount || 0) > 0}>
+                <span
+                  class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300"
+                  title={`This finding has regressed ${finding.regressionCount} time${finding.regressionCount === 1 ? '' : 's'} after being resolved before.`}
+                >
+                  regressed {finding.regressionCount}×
+                </span>
+              </Show>
               {/* Title */}
               <span
                 class={`font-medium text-sm truncate ${
