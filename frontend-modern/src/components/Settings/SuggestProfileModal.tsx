@@ -558,7 +558,9 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 {formatRelativeTime(item.createdAt)}
                               </span>
                             </div>
-                            <p class="text-xs text-muted mt-1 truncate">{item.prompt}</p>
+                            <p class="text-xs text-muted mt-1 truncate" title={item.prompt}>
+                              {item.prompt}
+                            </p>
                           </button>
                         )}
                       </For>

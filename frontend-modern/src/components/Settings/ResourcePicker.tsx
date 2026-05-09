@@ -252,10 +252,13 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
                       {/* Name and ID */}
                       <div class="flex-1 min-w-0">
-                        <div class="text-sm text-white sm:truncate break-words">
+                        <div
+                          class="text-sm text-white sm:truncate break-words"
+                          title={getPreferredInfrastructureDisplayName(resource)}
+                        >
                           {getPreferredInfrastructureDisplayName(resource)}
                         </div>
-                        <div class="text-xs text-slate-500 sm:truncate break-all">
+                        <div class="text-xs text-slate-500 sm:truncate break-all" title={resource.id}>
                           {resource.id}
                         </div>
                         <div class="mt-1 flex flex-wrap items-center gap-1 sm:hidden">

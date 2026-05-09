@@ -332,7 +332,10 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               All events
             </button>
             <span class="text-muted">/</span>
-            <span class="min-w-0 truncate font-medium text-base-content">
+            <span
+              class="min-w-0 truncate font-medium text-base-content"
+              title={props.selectedHistoryItemLabel()}
+            >
               {props.selectedHistoryItemLabel()}
             </span>
           </div>
