@@ -1467,7 +1467,7 @@ describe('shared primitive guardrails', () => {
     // Type-ahead: a search input narrows the visible filter (or value) list
     // and Enter commits the active item, so power users can pick a filter
     // with one click + a few keystrokes instead of three clicks.
-    expect(addFilterMenuSource).toContain("aria-label={activeFilter() ? 'Filter values' : 'Filter filters'}");
+    expect(addFilterMenuSource).toContain("aria-label={activeFilter() ? 'Search values' : 'Search filters'}");
     expect(addFilterMenuSource).toContain('filteredGroupedAvailable');
     expect(addFilterMenuSource).toContain('flatVisibleFilters');
     expect(addFilterMenuSource).toContain('filteredOptions');

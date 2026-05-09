@@ -246,8 +246,8 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
               value={query()}
               onInput={(event) => setQuery(event.currentTarget.value)}
               onKeyDown={handleSearchKeyDown}
-              placeholder={activeFilter() ? 'Filter values...' : 'Filter filters...'}
-              aria-label={activeFilter() ? 'Filter values' : 'Filter filters'}
+              placeholder={activeFilter() ? 'Search values...' : 'Search filters...'}
+              aria-label={activeFilter() ? 'Search values' : 'Search filters'}
               class="w-full bg-transparent py-1.5 pl-7 pr-2 text-xs text-base-content placeholder-muted outline-none"
             />
           </div>
