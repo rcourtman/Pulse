@@ -506,6 +506,15 @@ shell clickable behind another overlay.
 
 ## Current State
 
+The investigation enrichment path in `MaybeInvestigateFinding`
+adds at most one operator-state projection lookup per investigation
+(in-memory via the existing provider) and zero additional reads —
+`OperationalMemory` is built from fields the internal Finding
+already carries. Investigation enrichment does not multiply
+per-finding cost as the operator-state surface grows; the projection
+serves both suppression and investigation reads from a single
+shape.
+
 The agent SSE stream at `/api/agent/events` keeps publishers
 non-blocking by design: the broadcaster's per-subscriber buffer is
 bounded (64 events) and a full buffer drops the event for that

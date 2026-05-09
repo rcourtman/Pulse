@@ -13233,6 +13233,24 @@ func assertJSONSnapshot(t *testing.T, got []byte, want string) {
 	}
 }
 
+// TestContract_InvestigationProjectionCarriesNeverAutoRemediate pins
+// the cross-path agreement: the projection-builder closure in
+// router.go must populate NeverAutoRemediate on the projection so
+// the investigation read path sees the same lock-against-remediation
+// flag the action broker enforces. Without this, Patrol could
+// propose fixes on locked resources that the broker would refuse —
+// the fix proposal shouldn't have happened in the first place.
+func TestContract_InvestigationProjectionCarriesNeverAutoRemediate(t *testing.T) {
+	source, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "NeverAutoRemediate:   state.NeverAutoRemediate,") {
+		t.Error("router.go must populate NeverAutoRemediate on the projection so the investigation read path sees the operator's lock — drift here means Patrol can propose fixes the broker refuses")
+	}
+}
+
 // TestContract_AgentEventsStreamPublishesOnFindingCreated pins the
 // agent SSE stream's most consequential producer hook: the
 // findings-runtime callback in router.go must publish a

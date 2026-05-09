@@ -567,8 +567,15 @@ func (f *Finding) CanRetryInvestigation() bool {
 // ToCoreFinding converts to the shared InvestigationFinding type used by the
 // investigation orchestrator. Centralised here so a field added to
 // InvestigationFinding causes a compile error in exactly one place.
+//
+// The OperationalMemory projection is populated unconditionally from
+// fields the internal Finding already carries (regression count,
+// previous resolved fix). OperatorContext is NOT populated here
+// because that data lives in the unified-resources store, which this
+// package does not import. Callers that have access to the operator
+// state attach it via WithOperatorContext after conversion.
 func (f *Finding) ToCoreFinding() *InvestigationFinding {
-	return &InvestigationFinding{
+	core := &InvestigationFinding{
 		ID:                     f.ID,
 		Key:                    f.Key,
 		Severity:               string(f.Severity),
@@ -586,6 +593,23 @@ func (f *Finding) ToCoreFinding() *InvestigationFinding {
 		LastInvestigatedAt:     f.LastInvestigatedAt,
 		InvestigationAttempts:  f.InvestigationAttempts,
 	}
+
+	// Populate operational memory from fields the internal Finding
+	// already accumulates. Only attach when there is something
+	// meaningful to say — a fresh finding (no regressions, no prior
+	// fix, no raises beyond 1) leaves the field nil so the
+	// orchestrator can treat absence as "no prior history" rather
+	// than parsing a zero-valued struct.
+	if f.RegressionCount > 0 || f.PreviousResolvedFixSummary != "" || f.TimesRaised > 1 {
+		core.OperationalMemory = &aicontracts.FindingOperationalMemory{
+			RegressionCount:            f.RegressionCount,
+			LastRegressionAt:           f.LastRegressionAt,
+			PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
+			TimesRaised:                f.TimesRaised,
+		}
+	}
+
+	return core
 }
 
 // Getter methods for aicontracts.OrchestratorAIFinding interface
@@ -692,6 +716,14 @@ type ResourceOperatorStateMaintenanceWindow struct {
 type ResourceOperatorStateProjection struct {
 	MaintenanceWindow    *ResourceOperatorStateMaintenanceWindow
 	IntentionallyOffline bool
+	// NeverAutoRemediate is the operator's "do not act on this
+	// resource" flag. The findings store does not consume it during
+	// suppression (that's the action broker's concern), but the
+	// investigation runtime needs it so the orchestrator can avoid
+	// proposing fixes that the broker would refuse. Carrying it on
+	// the same projection means the suppression and investigation
+	// hot paths share a single read.
+	NeverAutoRemediate bool
 }
 
 // ResourceOperatorStateProvider is the narrow interface the findings
@@ -738,6 +770,23 @@ func (s *FindingsStore) SetResourceOperatorStateProvider(p ResourceOperatorState
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.resourceOperatorStateProvider = p
+}
+
+// OperatorStateProjectionFor exposes the operator-state projection for
+// a resource so callers outside the suppression hot path (e.g. the
+// patrol investigation runtime, when it's about to hand a finding to
+// the orchestrator) can attach the same per-resource intent the
+// store uses internally. Returns false when no provider is wired or
+// when the provider reports no state for the resource — callers
+// branch on the bool rather than parsing zero-valued projections.
+func (s *FindingsStore) OperatorStateProjectionFor(resourceID string, now time.Time) (ResourceOperatorStateProjection, bool) {
+	s.mu.RLock()
+	provider := s.resourceOperatorStateProvider
+	s.mu.RUnlock()
+	if provider == nil || resourceID == "" {
+		return ResourceOperatorStateProjection{}, false
+	}
+	return provider.OperatorStateProjection(resourceID, now)
 }
 
 // SetPersistence sets the persistence layer and loads existing findings

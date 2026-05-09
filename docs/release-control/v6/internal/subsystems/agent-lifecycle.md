@@ -917,6 +917,15 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+The router projection-builder (`internal/api/router.go`) that wires
+the operator-state provider into the findings runtime now also
+populates `NeverAutoRemediate` on the projection. The investigation
+runtime reads the same projection to attach `OperatorContext` to
+findings handed to the orchestrator, so investigation reasoning sees
+the same lock-against-remediation flag that the action broker
+enforces downstream — no possible drift between "what Patrol
+proposes" and "what the broker accepts."
+
 `/api/agent/events` is the SSE stream agents subscribe to for
 real-time notifications (`finding.created` events plus a 15-second
 heartbeat keepalive). The broadcaster drops events for slow

@@ -1842,6 +1842,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 						}
 						projection := ai.ResourceOperatorStateProjection{
 							IntentionallyOffline: state.IntentionallyOffline,
+							NeverAutoRemediate:   state.NeverAutoRemediate,
 						}
 						if state.IsInMaintenanceAt(now) {
 							projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{

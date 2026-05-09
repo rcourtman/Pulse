@@ -591,6 +591,29 @@ call (active maintenance window plus the `IntentionallyOffline`
 flag) so adding new signals later does not multiply round-trips per
 finding.
 
+The investigation runtime now hands the orchestrator a Finding
+pre-enriched with operator-set state and operational memory.
+`MaybeInvestigateFinding` (in `internal/ai/patrol_findings.go`)
+calls `f.ToCoreFinding()` then attaches a
+`FindingOperatorContext` from the in-memory operator-state
+projection (intentionally offline, never auto-remediate, active
+maintenance window) and a `FindingOperationalMemory` projection
+(regression count, previous resolved fix summary, times raised)
+populated from fields the internal `Finding` already carries. The
+orchestrator (in pulse-pro) consumes these fields when reasoning
+about the next move — it does not need a separate read to get
+the situated picture, and it can avoid proposing fixes the
+operator has locked the resource against.
+
+`ResourceOperatorStateProjection` carries `NeverAutoRemediate`
+alongside `IntentionallyOffline` and `MaintenanceWindow` so the
+investigation read path and the suppression read path share a
+single projection. The findings store exposes the projection via
+`OperatorStateProjectionFor`; the suppression hot path keeps its
+existing internal access. Both paths see the same operator-state
+facts so investigation reasoning and suppression behavior cannot
+drift against each other.
+
 A cross-slice consequence worth pinning: operator-state-suppressed
 findings (auto-dismissed with `DismissedReason="expected_behavior"`
 and `operator_state_cause` metadata) are also ineligible for

@@ -1198,6 +1198,21 @@ the other. The section uses `createNonSuspendingQuery` rather than
 `createResource` so the drawer's parent Suspense boundary does not
 flicker the page-level fallback while operator state is in flight.
 
+The investigation runtime hands the orchestrator a finding
+pre-enriched with the operator-set state and operational memory it
+needs to reason from. The `aicontracts.Finding` shape carries an
+optional `OperatorContext` (intentionally offline, never
+auto-remediate, maintenance window) and an `OperationalMemory`
+projection (regression count, previous resolved fix summary, times
+raised); `MaybeInvestigateFinding` populates both from the
+in-process findings store and the operator-state provider before
+calling the orchestrator. This is the data path that converts
+"Pulse holds privileged context" into "Pulse uses privileged
+context" — the orchestrator (in pulse-pro) reads the fields when
+formatting its system prompt, so investigations on locked or
+under-maintenance resources reason from the operator's
+commitments instead of contradicting them.
+
 The findings store also consumes per-resource operator-set state via
 the narrow `ResourceOperatorStateProvider` interface installed by
 `SetResourceOperatorStateProvider`. The API layer wires an adapter

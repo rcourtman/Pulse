@@ -1343,6 +1343,17 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+`aicontracts.Finding` (the shape Patrol hands the investigation
+orchestrator) carries optional `OperatorContext` and
+`OperationalMemory` projections. The router-side wire-up populates
+the operator-state projection with `NeverAutoRemediate` alongside
+`IntentionallyOffline` and the maintenance-window block, and the
+investigation runtime in `internal/ai/patrol_findings.go` attaches
+the projection to the Finding before calling the orchestrator. This
+is the one in-process write path that decides what the orchestrator
+sees about operator commitments; all consumers (in-process Patrol,
+external Claude Code, future MCP) read the same enriched shape.
+
 `/api/agent/events` is the agent SSE stream — the substrate piece
 that closes the agent-paradigm triangle (discovery + bundled reads +
 push notifications). Agents subscribe once and receive real-time

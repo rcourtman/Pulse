@@ -1216,6 +1216,42 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 	// Convert Finding to shared finding type for the investigation orchestrator
 	invFinding := f.ToCoreFinding()
 
+	// Attach the operator-set state for the finding's resource so the
+	// orchestrator's reasoning can incorporate the operator's
+	// commitments (intentionally offline, never auto-remediate, active
+	// maintenance window). Without this, Patrol can propose fixes that
+	// contradict the operator's intent — the action broker refuses
+	// them downstream (slice 33's `resource_remediation_locked:`), but
+	// the proposal shouldn't have happened in the first place. The
+	// projection is also the data path "Pulse uses the privileged
+	// context" that defines the product's differentiation.
+	if p.findings != nil {
+		now := time.Now()
+		if projection, ok := p.findings.OperatorStateProjectionFor(f.ResourceID, now); ok {
+			ctx := &aicontracts.FindingOperatorContext{
+				IntentionallyOffline: projection.IntentionallyOffline,
+				NeverAutoRemediate:   projection.NeverAutoRemediate,
+			}
+			if window := projection.MaintenanceWindow; window != nil {
+				ctx.MaintenanceWindowActive = !now.Before(window.StartAt) && now.Before(window.EndAt)
+				start := window.StartAt
+				end := window.EndAt
+				ctx.MaintenanceStartAt = &start
+				ctx.MaintenanceEndAt = &end
+				ctx.MaintenanceReason = window.Reason
+			}
+			// Attach only when something meaningful is set —
+			// otherwise leave the field nil so the orchestrator can
+			// branch on absence rather than on zero values.
+			if ctx.IntentionallyOffline ||
+				ctx.NeverAutoRemediate ||
+				ctx.MaintenanceStartAt != nil ||
+				ctx.MaintenanceWindowActive {
+				invFinding.OperatorContext = ctx
+			}
+		}
+	}
+
 	// Trigger investigation in background with a timeout to prevent indefinite runs.
 	// Track with WaitGroup so graceful shutdown can wait for completion.
 	p.investigationWg.Add(1)

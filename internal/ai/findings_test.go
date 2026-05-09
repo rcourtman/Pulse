@@ -2109,3 +2109,116 @@ func TestFindingsStore_OperatorStateSuppressedFindingsDoNotTriggerInvestigation(
 		})
 	}
 }
+
+func TestToCoreFinding_AttachesOperationalMemoryWhenHistoryExists(t *testing.T) {
+	// The orchestrator (in pulse-pro) reads OperationalMemory to know
+	// "what we already know" about this finding — regression count,
+	// previous fix that worked, total times raised. Without it, the
+	// LLM proposing a fix has no operational context and may suggest
+	// something that has already been tried and failed. Pin the
+	// projection so the in-repo data path stays wired.
+	regressionTime := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+	f := &Finding{
+		ID:                         "f-history",
+		ResourceID:                 "vm:101",
+		Severity:                   FindingSeverityWarning,
+		Title:                      "Disk pressure",
+		RegressionCount:            3,
+		LastRegressionAt:           &regressionTime,
+		PreviousResolvedFixSummary: "Free 200GB before backup window",
+		TimesRaised:                7,
+	}
+
+	core := f.ToCoreFinding()
+	if core.OperationalMemory == nil {
+		t.Fatal("OperationalMemory must be attached when the finding has prior history")
+	}
+	if core.OperationalMemory.RegressionCount != 3 {
+		t.Errorf("regression count: got %d want 3", core.OperationalMemory.RegressionCount)
+	}
+	if core.OperationalMemory.PreviousResolvedFixSummary != "Free 200GB before backup window" {
+		t.Errorf("previous fix summary must round-trip; got %q", core.OperationalMemory.PreviousResolvedFixSummary)
+	}
+	if core.OperationalMemory.TimesRaised != 7 {
+		t.Errorf("times raised: got %d want 7", core.OperationalMemory.TimesRaised)
+	}
+	if core.OperationalMemory.LastRegressionAt == nil || !core.OperationalMemory.LastRegressionAt.Equal(regressionTime) {
+		t.Errorf("last regression timestamp must round-trip; got %v", core.OperationalMemory.LastRegressionAt)
+	}
+}
+
+func TestToCoreFinding_LeavesOperationalMemoryNilForFreshFindings(t *testing.T) {
+	// A fresh finding (first detection, no regressions, no prior fix)
+	// must NOT carry an OperationalMemory — the orchestrator's
+	// reasoning should treat absence as "no prior history" rather
+	// than parsing a zero-valued struct.
+	f := &Finding{
+		ID:          "f-fresh",
+		ResourceID:  "vm:102",
+		Severity:    FindingSeverityWarning,
+		Title:       "CPU saturated",
+		TimesRaised: 1, // first raise — not regression history
+	}
+
+	core := f.ToCoreFinding()
+	if core.OperationalMemory != nil {
+		t.Errorf("OperationalMemory must be nil for fresh findings; got %+v", core.OperationalMemory)
+	}
+}
+
+func TestFindingsStore_OperatorStateProjectionFor_ReturnsFalseWithoutProvider(t *testing.T) {
+	// Default store with no provider wired must report false so
+	// callers can branch on absence rather than parsing zero-valued
+	// projections.
+	store := NewFindingsStore()
+	_, ok := store.OperatorStateProjectionFor("vm:101", time.Now())
+	if ok {
+		t.Error("expected false when no provider is wired")
+	}
+}
+
+func TestFindingsStore_OperatorStateProjectionFor_ProxiesProvider(t *testing.T) {
+	// When a provider is wired, OperatorStateProjectionFor must
+	// surface the same projection the suppression hot path sees.
+	// The investigation runtime relies on this to attach
+	// OperatorContext to findings handed to the orchestrator —
+	// drift between this read path and the suppression read path
+	// would mean the orchestrator reasons against different facts
+	// than the suppression branch.
+	store := NewFindingsStore()
+	expected := ResourceOperatorStateProjection{
+		IntentionallyOffline: true,
+		NeverAutoRemediate:   true,
+	}
+	store.SetResourceOperatorStateProvider(
+		ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+			return expected, true
+		}),
+	)
+
+	got, ok := store.OperatorStateProjectionFor("vm:locked", time.Now())
+	if !ok {
+		t.Fatal("expected projection from wired provider")
+	}
+	if got.IntentionallyOffline != expected.IntentionallyOffline {
+		t.Errorf("IntentionallyOffline must round-trip; got %v want %v", got.IntentionallyOffline, expected.IntentionallyOffline)
+	}
+	if got.NeverAutoRemediate != expected.NeverAutoRemediate {
+		t.Errorf("NeverAutoRemediate must round-trip — investigation runtime reads this projection too; got %v want %v", got.NeverAutoRemediate, expected.NeverAutoRemediate)
+	}
+}
+
+func TestFindingsStore_OperatorStateProjectionFor_RejectsEmptyResourceID(t *testing.T) {
+	// Defensive: empty resource ID short-circuits to false rather
+	// than calling the provider with a useless query.
+	store := NewFindingsStore()
+	store.SetResourceOperatorStateProvider(
+		ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+			t.Fatal("provider must not be called with empty resource id")
+			return ResourceOperatorStateProjection{}, false
+		}),
+	)
+	if _, ok := store.OperatorStateProjectionFor("", time.Now()); ok {
+		t.Error("expected false on empty resource id")
+	}
+}

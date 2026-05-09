@@ -947,6 +947,13 @@ bypass the API fail-closed execution gate.
 
 ## Current State
 
+The investigation enrichment path reads operator-state from the
+in-memory provider already wired against the durable
+`resource_operator_state` SQLite table, so an operator's
+commitments survive across restarts on the investigation read path
+the same way they do on the suppression read path — both flow
+through the same provider over the same durable table.
+
 The agent SSE stream at `/api/agent/events` is in-memory and
 stateless. No persistence; each connection starts fresh from the
 moment of subscribe. Agents that need to catch up across reconnects

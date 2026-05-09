@@ -75,6 +75,62 @@ type Finding struct {
 	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
 	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
 	InvestigationAttempts  int        `json:"investigation_attempts"`
+
+	// OperatorContext carries the operator's per-resource intent the
+	// investigation runtime should respect when reasoning about this
+	// finding. nil when no operator-set state has been recorded for
+	// the resource. The orchestrator (in pulse-pro) consumes this to
+	// avoid proposing fixes that contradict operator commitments —
+	// e.g. if NeverAutoRemediate is set, propose investigation-only
+	// outputs instead of remediation actions; if a maintenance
+	// window is active, frame the finding as "expected during
+	// maintenance" rather than urgent.
+	OperatorContext *FindingOperatorContext `json:"operator_context,omitempty"`
+
+	// OperationalMemory carries the regression and fix history Pulse
+	// already accumulated for this finding's identity. It exists to
+	// give the orchestrator's reasoning a "what we already know" block
+	// without it having to query the findings store separately. nil
+	// when there is no prior history (fresh finding).
+	OperationalMemory *FindingOperationalMemory `json:"operational_memory,omitempty"`
+}
+
+// FindingOperatorContext is the orchestrator-facing projection of
+// operator-set state for the finding's resource. Mirrors the shape of
+// `internal/api/agent_resource_context.go`'s
+// AgentResourceOperatorState so external agents and the in-process
+// orchestrator see the same field names.
+type FindingOperatorContext struct {
+	IntentionallyOffline    bool       `json:"intentionally_offline"`
+	NeverAutoRemediate      bool       `json:"never_auto_remediate"`
+	MaintenanceStartAt      *time.Time `json:"maintenance_start_at,omitempty"`
+	MaintenanceEndAt        *time.Time `json:"maintenance_end_at,omitempty"`
+	MaintenanceReason       string     `json:"maintenance_reason,omitempty"`
+	Criticality             string     `json:"criticality,omitempty"`
+	Note                    string     `json:"note,omitempty"`
+	MaintenanceWindowActive bool       `json:"maintenance_window_active"`
+}
+
+// FindingOperationalMemory bundles the regression-and-fix history
+// the orchestrator should reason from when proposing the next move.
+// All fields zero/empty mean "no operational memory" — the
+// orchestrator should treat the finding as fresh.
+type FindingOperationalMemory struct {
+	// RegressionCount is the number of times this finding has been
+	// resolved and re-detected. >0 means "this is not a one-off."
+	RegressionCount int `json:"regression_count"`
+	// LastRegressionAt is the most recent regression timestamp.
+	LastRegressionAt *time.Time `json:"last_regression_at,omitempty"`
+	// PreviousResolvedFixSummary is the description of the proposed
+	// fix that resolved the finding the last time it was active.
+	// Captured at regression time from the prior investigation
+	// record. Operator memory: "what worked last time."
+	PreviousResolvedFixSummary string `json:"previous_resolved_fix_summary,omitempty"`
+	// TimesRaised is the total raise count across all detections.
+	// Distinct from RegressionCount because it includes
+	// re-detections while still active (not just regressions
+	// after resolution).
+	TimesRaised int `json:"times_raised"`
 }
 
 // ---------------------------------------------------------------------------
