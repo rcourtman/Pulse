@@ -75,7 +75,10 @@ const workspaceSecondaryButtonClass =
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
 const wrappedFieldClass = 'whitespace-normal break-words leading-4';
-const CARD_LAYOUT_MAX_WIDTH_PX = 767;
+// The connected-systems table sets `min-w-[820px]`; switch to the card
+// layout whenever the measured container can't fit that, otherwise the
+// table renders but overflows horizontally inside the settings panel.
+const CARD_LAYOUT_MAX_WIDTH_PX = 819;
 
 const sortRows = (rows: readonly InfrastructureSystemRow[]): InfrastructureSystemRow[] =>
   [...rows].sort((left, right) => left.name.localeCompare(right.name));
