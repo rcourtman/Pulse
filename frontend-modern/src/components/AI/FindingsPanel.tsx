@@ -47,6 +47,8 @@ import {
   buildFindingFilterOptions,
   formatFindingForClipboard,
   formatFindingLifecycleType,
+  formatOperatorStateDismissCauseLabel,
+  getOperatorStateDismissCause,
   formatFindingLoopState,
   getFindingActiveRuntimeSortOrder,
   getFindingSeverityPresentation,
@@ -816,6 +818,26 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <Show when={finding.dismissedReason}>
                 <span class="ml-2 text-muted">
                   {' · '}({formatIdentifierLabel(finding.dismissedReason)})
+                </span>
+              </Show>
+              {/* Distinguish Pulse-auto-suppressed dismissals from operator
+                  decisions — both serialize as DismissedReason=
+                  'expected_behavior' on the wire, but the auto-dismiss
+                  carries `operator_state_cause` lifecycle metadata. The
+                  badge attributes the suppression so the operator sees
+                  "Pulse stayed quiet because of my maintenance window"
+                  vs "I decided this was expected." */}
+              <Show
+                when={(() => {
+                  const cause = getOperatorStateDismissCause(finding);
+                  return cause && formatOperatorStateDismissCauseLabel(cause);
+                })()}
+              >
+                <span
+                  class="ml-2 text-blue-600 dark:text-blue-400"
+                  title="Auto-suppressed by Pulse based on operator-set state for this resource."
+                >
+                  {' · '}auto: {formatOperatorStateDismissCauseLabel(getOperatorStateDismissCause(finding))}
                 </span>
               </Show>
               <Show when={finding.dismissedReason === 'will_fix_later' && finding.remindAt}>

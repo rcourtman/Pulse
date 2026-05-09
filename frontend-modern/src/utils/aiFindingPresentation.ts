@@ -811,3 +811,52 @@ export const formatFindingForClipboard = (
   }
   return lines.join('\n');
 };
+
+/**
+ * Returns the canonical `operator_state_cause` for a finding's most
+ * recent dismissed lifecycle event, or "" when the finding has not been
+ * auto-dismissed by operator-state suppression. Scans newest-first and
+ * stops at the first `dismissed` event so a manual operator dismissal
+ * that supersedes an earlier auto-dismiss is reported as manual (no
+ * stale cause leaks through). Mirrors the Go-side
+ * `findOperatorStateDismissCause` helper from
+ * `internal/ai/findings.go`.
+ *
+ * Used by render code to badge auto-dismissed findings differently
+ * from manual operator dismissals — both show DismissedReason=
+ * 'expected_behavior' on the wire but tell different stories: Pulse
+ * auto-handled vs operator decided.
+ */
+export const getOperatorStateDismissCause = (
+  finding: Pick<UnifiedFinding, 'lifecycle'>,
+): string => {
+  const lifecycle = finding.lifecycle;
+  if (!lifecycle || lifecycle.length === 0) return '';
+  for (let i = lifecycle.length - 1; i >= 0; i -= 1) {
+    const ev = lifecycle[i];
+    if (ev.type !== 'dismissed') continue;
+    const cause = ev.metadata?.operator_state_cause;
+    if (cause) return cause;
+    // First dismissed event without cause is a manual dismissal that
+    // supersedes any earlier auto-dismiss — stop scanning so a stale
+    // earlier cause does not falsely badge the finding as
+    // auto-suppressed.
+    return '';
+  }
+  return '';
+};
+
+/**
+ * Human-readable label for an `operator_state_cause` value. Returns
+ * empty string for unknown values so render code can gate cleanly.
+ */
+export const formatOperatorStateDismissCauseLabel = (cause: string): string => {
+  switch (cause) {
+    case 'maintenance_window':
+      return 'maintenance';
+    case 'intentionally_offline':
+      return 'intentionally offline';
+    default:
+      return '';
+  }
+};

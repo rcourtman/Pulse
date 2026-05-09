@@ -1222,7 +1222,21 @@ auto-dismissed under `operator_state_cause` re-detects after the
 suppression has lifted (maintenance window passed,
 `IntentionallyOffline` cleared, or provider unwired), the
 new-finding path wakes it with a `suppression_lifted` lifecycle
-event carrying the previous cause. Time-bounded operator
+event carrying the previous cause.
+
+The operator-facing FindingsPanel must also distinguish
+auto-suppressed dismissals from manual operator dismissals on the
+row. Both serialize as `DismissedReason="expected_behavior"`, but
+the auto-dismiss carries `operator_state_cause` lifecycle metadata.
+A parallel "auto: maintenance" / "auto: intentionally offline"
+badge sits next to the existing dismissed-reason badge so the
+operator sees who closed the loop — Pulse on their behalf vs their
+own decision. The badge routes through the canonical
+`getOperatorStateDismissCause` and
+`formatOperatorStateDismissCauseLabel` helpers; the lifecycle scan
+mirrors the Go-side helper's newest-first contract so a manual
+dismissal that supersedes an earlier auto-dismiss is reported as
+manual. Time-bounded operator
 commitments do not silently turn into permanent dismissals; manual
 operator dismissals (no `operator_state_cause` metadata) are
 unaffected by this wake path because the helper that detects the

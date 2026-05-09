@@ -5,6 +5,8 @@ import {
   buildFindingFilterOptions,
   formatFindingForClipboard,
   formatFindingLifecycleType,
+  formatOperatorStateDismissCauseLabel,
+  getOperatorStateDismissCause,
   formatFindingLoopState,
   getFindingActiveRuntimeSortOrder,
   getFindingEmptyStateCopy,
@@ -1104,6 +1106,86 @@ describe('aiFindingPresentation', () => {
           '2h ago',
         ),
       ).toBe('Fixed by Patrol 2h ago');
+    });
+  });
+
+  describe('operator-state dismiss cause attribution', () => {
+    it('reports the most recent operator_state_cause from the lifecycle', () => {
+      // Lifecycle scan must be newest-first so a later auto-dismiss
+      // overrides an older manual one. Mirror the Go-side helper's
+      // contract — the rendering branch depends on it for the badge.
+      expect(
+        getOperatorStateDismissCause({
+          lifecycle: [
+            { at: '2026-04-01T00:00:00Z', type: 'dismissed', metadata: { reason: 'expected_behavior' } },
+            { at: '2026-04-02T00:00:00Z', type: 'undismissed' },
+            {
+              at: '2026-04-03T00:00:00Z',
+              type: 'dismissed',
+              metadata: { operator_state_cause: 'maintenance_window' },
+            },
+          ],
+        } as never),
+      ).toBe('maintenance_window');
+    });
+
+    it('returns empty when the most recent dismissed event is a manual operator dismissal', () => {
+      // A manual dismiss that supersedes an earlier auto-dismiss must
+      // NOT report the stale auto-dismiss cause — that would falsely
+      // badge the finding as auto-suppressed when the operator
+      // overrode it.
+      expect(
+        getOperatorStateDismissCause({
+          lifecycle: [
+            {
+              at: '2026-04-01T00:00:00Z',
+              type: 'dismissed',
+              metadata: { operator_state_cause: 'maintenance_window' },
+            },
+            { at: '2026-04-02T00:00:00Z', type: 'undismissed' },
+            { at: '2026-04-03T00:00:00Z', type: 'dismissed', metadata: { reason: 'expected_behavior' } },
+          ],
+        } as never),
+      ).toBe('');
+    });
+
+    it('returns empty for findings without lifecycle entries', () => {
+      expect(getOperatorStateDismissCause({ lifecycle: undefined } as never)).toBe('');
+      expect(getOperatorStateDismissCause({ lifecycle: [] } as never)).toBe('');
+    });
+
+    it('formats canonical operator-state causes as human labels', () => {
+      expect(formatOperatorStateDismissCauseLabel('maintenance_window')).toBe('maintenance');
+      expect(formatOperatorStateDismissCauseLabel('intentionally_offline')).toBe(
+        'intentionally offline',
+      );
+      // Unknown causes return empty so render code can gate cleanly
+      // and not show a bogus "auto: <unknown>" badge.
+      expect(formatOperatorStateDismissCauseLabel('something_new')).toBe('');
+      expect(formatOperatorStateDismissCauseLabel('')).toBe('');
+    });
+  });
+
+  describe('FindingsPanel operator-state dismiss badge wiring', () => {
+    it('renders an "auto: <cause>" badge for operator-state-driven dismissals', () => {
+      // Both manual and auto-dismissed findings show DismissedReason=
+      // expected_behavior; the auto-dismiss is distinguished by the
+      // operator_state_cause lifecycle metadata. Pin the wiring so the
+      // FindingsPanel renders the parallel badge through the canonical
+      // helper, not by re-implementing the lifecycle scan inline.
+      expect(findingsPanelSource).toContain('getOperatorStateDismissCause(finding)');
+      expect(findingsPanelSource).toContain('formatOperatorStateDismissCauseLabel(');
+      expect(findingsPanelSource).toMatch(/auto: \{formatOperatorStateDismissCauseLabel/);
+      // The badge sits next to the existing dismissed-reason badge in
+      // source order so the two pieces of information read together
+      // (the reason and the attribution).
+      const dismissedReasonIndex = findingsPanelSource.indexOf(
+        '({formatIdentifierLabel(finding.dismissedReason)})',
+      );
+      const autoBadgeIndex = findingsPanelSource.indexOf('auto: {formatOperatorStateDismissCauseLabel');
+      expect(dismissedReasonIndex).toBeGreaterThan(0);
+      expect(autoBadgeIndex).toBeGreaterThan(0);
+      expect(autoBadgeIndex).toBeGreaterThan(dismissedReasonIndex);
     });
   });
 });
