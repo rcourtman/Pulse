@@ -527,8 +527,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 onClick={props.onRunDiscovery}
                 disabled={props.discoveryScanStatus().scanning}
                 class={utilityToolbarButtonClass}
-                aria-label="Run discovery"
-                title="Run discovery"
+                aria-label="Run discovery scan"
+                title="Scan configured networks for reachable Proxmox VE, TrueNAS, PBS, PMG, and VMware vCenter endpoints. Discovered candidates appear here for review before they are added."
               >
                 <RotateCw
                   class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
@@ -542,8 +542,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 type="button"
                 onClick={props.onOpenDiscoverySettings}
                 class={utilityToolbarButtonClass}
-                aria-label="Discovery settings"
-                title="Discovery settings"
+                aria-label="Open discovery settings"
+                title="Configure which networks and ports Pulse scans for platform APIs, and how often."
               >
                 <SlidersHorizontal class="h-4 w-4" />
                 Discovery settings
