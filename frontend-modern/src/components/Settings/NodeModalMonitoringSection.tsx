@@ -68,7 +68,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
       <Show when={modalProps.nodeType === 'pve'}>
         <div class="space-y-3">
           <SectionHeader
-            title="Data collection"
+            title="Collection scope"
             size="sm"
             class="mb-1"
             titleClass="text-base-content"
@@ -233,7 +233,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
       <Show when={modalProps.nodeType === 'pbs'}>
         <div class="space-y-3">
           <SectionHeader
-            title="Data collection"
+            title="Collection scope"
             size="sm"
             class="mb-1"
             titleClass="text-base-content"
@@ -329,7 +329,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
       <Show when={modalProps.nodeType === 'pmg'}>
         <div class="space-y-3">
           <SectionHeader
-            title="Data collection"
+            title="Collection scope"
             size="sm"
             class="mb-1"
             titleClass="text-base-content"

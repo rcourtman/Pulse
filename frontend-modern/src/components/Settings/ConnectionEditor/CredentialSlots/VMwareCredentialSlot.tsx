@@ -337,6 +337,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
             disabled={
               props.state.saving() || props.state.testing() || props.state.previewing()
             }
+            title="Show the resources Pulse would ingest from this connection without saving or starting polling."
           >
             {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
           </button>

@@ -388,6 +388,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             class={buttonClass}
             onClick={() => void props.state.previewCurrentForm()}
             disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
+            title="Show the resources Pulse would ingest from this connection without saving or starting polling."
           >
             {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
           </button>

@@ -291,6 +291,33 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             </p>
           </div>
 
+          <div class="ml-6 rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900">
+            <p class="mb-2 text-sm font-semibold text-blue-800 dark:text-blue-200">
+              What this token authorizes:
+            </p>
+            <ul class="space-y-1 text-xs text-blue-700 dark:text-blue-300">
+              <li class="flex items-start">
+                <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
+                <span>Pulse Agent on this host reports its own telemetry to this Pulse instance.</span>
+              </li>
+              <li class="flex items-start">
+                <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
+                <span>
+                  Read-only by default. Assistant control and host shell stay off until you opt in
+                  per host from <span class="font-medium">Settings → Infrastructure</span>.
+                </span>
+              </li>
+              <li class="flex items-start">
+                <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
+                <span>
+                  Revoke the token any time from{' '}
+                  <span class="font-medium">Settings → Infrastructure → Tokens</span>; the agent
+                  stops reporting immediately.
+                </span>
+              </li>
+            </ul>
+          </div>
+
           <div class="flex gap-2">
             <input
               type="text"
@@ -301,7 +328,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   void state.handleGenerateToken();
                 }
               }}
-              placeholder="Token name (optional)"
+              placeholder="Token name (optional label for your audit log)"
               class="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
             />
             <button
