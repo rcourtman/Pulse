@@ -57,7 +57,7 @@ describe('alertOverviewPresentation', () => {
 
   it('returns canonical alert overview stat labels', () => {
     expect(ALERT_OVERVIEW_ACKNOWLEDGED_LABEL).toBe('Acknowledged');
-    expect(ALERT_OVERVIEW_LAST_24_HOURS_LABEL).toBe('Last 24 Hours');
+    expect(ALERT_OVERVIEW_LAST_24_HOURS_LABEL).toBe('Triggered (24h)');
     expect(ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL).toBe('Workload Overrides');
   });
 

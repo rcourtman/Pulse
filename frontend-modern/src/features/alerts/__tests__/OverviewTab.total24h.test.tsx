@@ -75,7 +75,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
-    const label = screen.getByText('Last 24 Hours');
+    const label = screen.getByText('Triggered (24h)');
     const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
     expect(statValue?.textContent).toBe('1');
   });
@@ -91,7 +91,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
-    const label = screen.getByText('Last 24 Hours');
+    const label = screen.getByText('Triggered (24h)');
     const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
     expect(statValue?.textContent).toBe('0');
   });
@@ -108,7 +108,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
-    const label = screen.getByText('Last 24 Hours');
+    const label = screen.getByText('Triggered (24h)');
     const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
     expect(statValue?.textContent).toBe('3');
   });
@@ -122,7 +122,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
-    const label = screen.getByText('Last 24 Hours');
+    const label = screen.getByText('Triggered (24h)');
     const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
     expect(statValue?.textContent).toBe('0');
   });
@@ -137,7 +137,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
-    const label = screen.getByText('Last 24 Hours');
+    const label = screen.getByText('Triggered (24h)');
     const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
     expect(statValue?.textContent).toBe('1');
 
