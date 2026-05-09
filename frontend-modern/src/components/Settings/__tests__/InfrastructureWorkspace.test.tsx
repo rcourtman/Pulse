@@ -289,7 +289,12 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Detect address$/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /^Install agent$/i })).toBeNull();
+    // Row-level 'Install agent' surfaces per system that has API coverage
+    // but no Pulse Agent yet. The fixture has one such system, so at least
+    // one of these buttons should exist.
+    expect(
+      screen.getAllByRole('button', { name: /^Install agent$/i }).length,
+    ).toBeGreaterThan(0);
     const readiness = screen.getByRole('region', {
       name: /Infrastructure setup summary/i,
     });
@@ -304,7 +309,12 @@ describe('InfrastructureWorkspace', () => {
     expect(within(readiness).getAllByText('1 system').length).toBeGreaterThan(0);
     expect(within(readiness).getAllByText('0 systems').length).toBeGreaterThan(0);
     expect(within(readiness).getByText('Discovery off')).toBeInTheDocument();
-    expect(within(readiness).getByRole('button', { name: /Install agents/i })).toBeInTheDocument();
+    // Global 'Install agents' recommendation button is hidden when
+    // row-level 'Install agent' chips already surface the apiOnly state
+    // per-system.
+    expect(
+      within(readiness).queryByRole('button', { name: /Install agents/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE').closest('tr')?.className).toContain('grouped-table-row');
     expect(screen.queryByText('VMware vCenter')).toBeNull();
@@ -322,13 +332,9 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
 
-    fireEvent.click(
-      within(
-        screen.getByRole('region', {
-          name: /Infrastructure setup summary/i,
-        }),
-      ).getByRole('button', { name: /Install agents/i }),
-    );
+    // Row-level 'Install agent' replaced the global 'Install agents'
+    // recommendation button; same routing target.
+    fireEvent.click(screen.getAllByRole('button', { name: /^Install agent$/i })[0]);
     expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=agent', {
       scroll: false,
     });

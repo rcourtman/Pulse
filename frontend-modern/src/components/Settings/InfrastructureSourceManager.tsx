@@ -610,7 +610,17 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             )}
           </For>
         </dl>
-        <Show when={!props.readOnly && Boolean(setupConfidenceAction().onClick)}>
+        {/* Recommendation button hides for the apiOnly install-agents case
+            because row-level install-agent chips now surface the same
+            attention per-system. Other recommendations (discovery scan,
+            coverage coherent, add infrastructure) still render here. */}
+        <Show
+          when={
+            !props.readOnly &&
+            Boolean(setupConfidenceAction().onClick) &&
+            setupConfidenceAction().kind !== 'agent'
+          }
+        >
           <button
             type="button"
             onClick={() => setupConfidenceAction().onClick?.()}
@@ -623,7 +633,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         </Show>
       </div>
 
-      <p class="mt-3 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
+      <Show when={setupConfidenceAction().kind !== 'agent'}>
+        <p class="mt-3 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
+      </Show>
     </section>
   );
 
@@ -849,13 +861,37 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                               <span class="text-xs text-muted">Read only</span>
                                             }
                                           >
-                                            <button
-                                              type="button"
-                                              onClick={() => props.onOpenConnection?.(row)}
-                                              class={inlineButtonClass}
-                                            >
-                                              Manage
-                                            </button>
+                                            <div class="flex flex-col items-end gap-1">
+                                              {/* Row-level install-agent shortcut: the
+                                                  apiOnly attention state lands directly on
+                                                  the affected system instead of the user
+                                                  reading a global callout and figuring out
+                                                  which row it referred to. */}
+                                              <Show
+                                                when={
+                                                  rowHasApiCoverage(row) &&
+                                                  !rowHasAgentCoverage(row) &&
+                                                  Boolean(props.onAddSource)
+                                                }
+                                              >
+                                                <button
+                                                  type="button"
+                                                  onClick={() => props.onAddSource?.('agent')}
+                                                  class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                                                  title="Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity)."
+                                                >
+                                                  <Plus class="h-3 w-3" />
+                                                  Install agent
+                                                </button>
+                                              </Show>
+                                              <button
+                                                type="button"
+                                                onClick={() => props.onOpenConnection?.(row)}
+                                                class={inlineButtonClass}
+                                              >
+                                                Manage
+                                              </button>
+                                            </div>
                                           </Show>
                                         </TableCell>
                                       </Show>
