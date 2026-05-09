@@ -60,13 +60,30 @@ describe('storage row presentation', () => {
       ...baseRecord(),
       issueLabel: 'Protection Reduced',
       issueSummary: 'Parity lost on array',
-      protectionLabel: 'Healthy',
+      protectionLabel: 'Unprotected',
+      protectionSummary: 'Parity lost on array',
       protectionReduced: true,
       incidentSeverity: 'critical',
     };
     expect(getCompactStoragePoolIssueLabel(record)).toBe('Protection Reduced');
     expect(getCompactStoragePoolIssueSummary(record)).toBe('Parity lost on array');
     expect(getCompactStoragePoolProtectionTitle(record)).toBe('Parity lost on array');
+  });
+
+  it('keeps protection title aligned with cell label and never reuses a mismatched issue summary', () => {
+    const record = {
+      ...baseRecord(),
+      issueLabel: 'No parity protection',
+      issueSummary: 'Unraid array is running without parity protection',
+      protectionLabel: 'Parity check',
+      protectionSummary: 'Unraid array is running check',
+      protectionReduced: true,
+      rebuildInProgress: true,
+      incidentSeverity: 'warning',
+    };
+    expect(getCompactStoragePoolProtectionLabel(record)).toBe('Parity check');
+    expect(getCompactStoragePoolProtectionTitle(record)).toBe('Unraid array is running check');
+    expect(getCompactStoragePoolProtectionTitle(record)).not.toContain('without parity');
   });
 
   it('derives zfs issue fallback from pool state and errors', () => {

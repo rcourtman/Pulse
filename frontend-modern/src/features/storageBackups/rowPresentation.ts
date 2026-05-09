@@ -36,9 +36,15 @@ export function getCompactStoragePoolProtectionLabel(record: StorageRecord): str
 export function getCompactStoragePoolProtectionTitle(record: StorageRecord): string {
   const label = getCompactStoragePoolProtectionLabel(record);
   if (label === '—') return '';
-  const summary = getStorageRecordIssueSummary(record).trim();
-  if (summary && summary.toLowerCase() !== 'healthy') {
-    return summary;
+  const protectionSummary = (record.protectionSummary || '').trim();
+  if (protectionSummary && protectionSummary.toLowerCase() !== label.toLowerCase()) {
+    return protectionSummary;
+  }
+  if (record.protectionReduced || record.rebuildInProgress) {
+    const issueSummary = getStorageRecordIssueSummary(record).trim();
+    if (issueSummary && issueSummary.toLowerCase() !== 'healthy') {
+      return issueSummary;
+    }
   }
   return label;
 }

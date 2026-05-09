@@ -12,6 +12,7 @@ import {
   getResourceStorageIssueSummary,
   getResourceStoragePlatformLabel,
   getResourceStorageProtectionLabel,
+  getResourceStorageProtectionSummary,
   getResourceStorageTopologyLabel,
 } from './resourceStoragePresentation';
 import {
@@ -120,6 +121,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const impactSummary = getResourceStorageImpactSummary(resource);
   const actionSummary = getResourceStorageActionSummary(resource);
   const protectionLabel = getResourceStorageProtectionLabel(resource);
+  const protectionSummary = getResourceStorageProtectionSummary(resource);
   const topologyLabel = getResourceStorageTopologyLabel(
     resource,
     storageType,
@@ -140,6 +142,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     platformKey: canonicalPlatform,
     topologyLabel,
     protectionLabel,
+    protectionSummary,
     protectionReduced: resource.storage?.protectionReduced,
     rebuildInProgress: resource.storage?.rebuildInProgress,
     incidentCategory: resource.incidentCategory,
@@ -233,6 +236,10 @@ const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): S
       preferred.protectionReduced || preferred.rebuildInProgress || preferred.incidentPriority
         ? preferred.protectionLabel || secondary.protectionLabel
         : secondary.protectionLabel || preferred.protectionLabel,
+    protectionSummary:
+      preferred.protectionReduced || preferred.rebuildInProgress || preferred.incidentPriority
+        ? preferred.protectionSummary || secondary.protectionSummary
+        : secondary.protectionSummary || preferred.protectionSummary,
     protectionReduced: preferred.protectionReduced || secondary.protectionReduced,
     rebuildInProgress: preferred.rebuildInProgress || secondary.rebuildInProgress,
     issueLabel:

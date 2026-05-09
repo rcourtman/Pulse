@@ -8,6 +8,7 @@ import {
   getResourceStorageIssueSummary,
   getResourceStoragePlatformLabel,
   getResourceStorageProtectionLabel,
+  getResourceStorageProtectionSummary,
   getResourceStorageTopologyLabel,
 } from '@/features/storageBackups/resourceStoragePresentation';
 
@@ -168,6 +169,104 @@ describe('resourceStoragePresentation', () => {
     expect(getResourceStorageImpactSummary(resource)).toBe(
       'Puts backups for 3 protected workloads at risk: app01, db01, media01',
     );
+  });
+
+  it('produces short Unraid protection labels and matching summaries when a parity check is running', () => {
+    const resource = makeResource({
+      type: 'storage',
+      name: 'Tower Array',
+      status: 'warning',
+      storage: {
+        protection: 'none',
+        protectionReduced: true,
+        protectionSummary: 'Unraid array is running without parity protection',
+        rebuildInProgress: true,
+        rebuildSummary: 'Unraid array is running check',
+        riskSummary: 'Unraid array is running without parity protection',
+        arrayState: 'STARTED',
+        syncAction: 'check',
+        syncProgress: 0,
+        risk: {
+          level: 'warning',
+          reasons: [
+            {
+              code: 'unraid_no_parity',
+              severity: 'warning',
+              summary: 'Unraid array is running without parity protection',
+            },
+            {
+              code: 'unraid_sync_active',
+              severity: 'warning',
+              summary: 'Unraid array is running check',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(getResourceStorageProtectionLabel(resource)).toBe('Parity check');
+    expect(getResourceStorageProtectionSummary(resource)).toBe('Unraid array is running check');
+    expect(getResourceStorageIssueLabel(resource)).toBe('No parity protection');
+    expect(getResourceStorageIssueSummary(resource)).toBe(
+      'Unraid array is running without parity protection',
+    );
+  });
+
+  it('marks an Unraid array without parity as Unprotected when no rebuild is running', () => {
+    const resource = makeResource({
+      type: 'storage',
+      name: 'Tower Array',
+      status: 'warning',
+      storage: {
+        protection: 'none',
+        protectionReduced: true,
+        protectionSummary: 'Unraid array is running without parity protection',
+        rebuildInProgress: false,
+        riskSummary: 'Unraid array is running without parity protection',
+        arrayState: 'STARTED',
+        risk: {
+          level: 'warning',
+          reasons: [
+            {
+              code: 'unraid_no_parity',
+              severity: 'warning',
+              summary: 'Unraid array is running without parity protection',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(getResourceStorageProtectionLabel(resource)).toBe('Unprotected');
+    expect(getResourceStorageIssueLabel(resource)).toBe('No parity protection');
+  });
+
+  it('appends sync progress to Unraid parity-rebuild labels when known', () => {
+    const resource = makeResource({
+      type: 'storage',
+      name: 'Tower Array',
+      status: 'warning',
+      storage: {
+        protectionReduced: false,
+        rebuildInProgress: true,
+        rebuildSummary: 'Unraid array is running recon (47%)',
+        arrayState: 'STARTED',
+        syncAction: 'recon',
+        syncProgress: 47,
+        risk: {
+          level: 'warning',
+          reasons: [
+            {
+              code: 'unraid_sync_active',
+              severity: 'warning',
+              summary: 'Unraid array is running recon (47%)',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(getResourceStorageProtectionLabel(resource)).toBe('Parity rebuild (47%)');
   });
 
   it('keeps VMware datastore protection copy neutral on the shared storage path', () => {
