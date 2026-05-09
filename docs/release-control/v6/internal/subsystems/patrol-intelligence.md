@@ -1163,3 +1163,15 @@ temporal recency and coverage in one line. The field stays optional
 (omitted when zero) so a degenerate run that completed without
 checking any resources does not render a misleading "verified 0
 resources" line.
+The expanded finding card must also expose a "Copy summary" action
+that produces a paste-ready Markdown summary of the finding (severity,
+title, resource header, description, impact, recommendation,
+confidence, regression count). The formatter is the canonical
+`formatFindingForClipboard` helper in
+`frontend-modern/src/utils/aiFindingPresentation.ts`; the render must
+route through `copyToClipboard` from `@/utils/clipboard` so the
+delegate-to-teammate workflow is uniform with the existing Discuss
+and Explain entry points. Investigation evidence and rollback plans
+are intentionally omitted from the clipboard shape — those are
+conversation context for the Assistant flow, not "share this
+finding" context for chat or tickets.

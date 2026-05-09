@@ -45,6 +45,7 @@ import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import {
   buildFindingFilterOptions,
+  formatFindingForClipboard,
   formatFindingLifecycleType,
   formatFindingLoopState,
   getFindingActiveRuntimeSortOrder,
@@ -70,6 +71,7 @@ import {
   getInvestigationOutcomeSortOrder,
   getInvestigationStatusBadgeClasses,
 } from '@/utils/aiFindingPresentation';
+import { copyToClipboard } from '@/utils/clipboard';
 
 interface FindingsPanelProps {
   resourceId?: string;
@@ -566,6 +568,24 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const handleExplainFinding = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
     await openFindingInAssistant(finding, 'explain');
+  };
+
+  // Copy a Markdown summary of the finding to the clipboard so the operator
+  // can paste it into a chat, ticket, or incident channel. The shape mirrors
+  // the seven-question schema (title + impact + recommendation + trust
+  // signals) so a teammate seeing the finding cold has the operator-facing
+  // context they need without opening Pulse. Investigation evidence and
+  // rollback plans are deferred to Discuss with Assistant — they're
+  // conversation context, not "share this finding" context.
+  const handleCopyFindingSummary = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    const text = formatFindingForClipboard(finding);
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      notificationStore.success('Finding summary copied');
+    } else {
+      notificationStore.error('Could not copy finding summary');
+    }
   };
 
   const handleOpenPlanInAssistant = (finding: UnifiedFinding, plan: RemediationPlan, e: Event) => {
@@ -1107,6 +1127,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               />
             </svg>
             Explain
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleCopyFindingSummary(finding, e)}
+            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+            title="Copy a Markdown summary of this finding for sharing with a teammate"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+              />
+            </svg>
+            Copy summary
           </button>
           <button
             type="button"

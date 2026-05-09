@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   buildFindingFilterOptions,
+  formatFindingForClipboard,
   formatFindingLifecycleType,
   formatFindingLoopState,
   getFindingActiveRuntimeSortOrder,
@@ -122,6 +123,20 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain("dismissReason() === 'not_an_issue'");
     expect(findingsPanelSource).toContain('Pulse will keep this finding visible as acknowledged');
     expect(findingsPanelSource).toContain('Pulse will permanently suppress');
+  });
+
+  it('exposes a Copy summary action wired to formatFindingForClipboard and the shared clipboard helper', () => {
+    // Operators frequently need to delegate a finding by pasting a summary
+    // into Slack, email, or a ticket. Pin the wiring so the Copy summary
+    // button routes through the canonical formatter (same shape as the
+    // helper test below) and the shared copyToClipboard helper, with
+    // success/error notifications routed through notificationStore.
+    expect(findingsPanelSource).toContain('handleCopyFindingSummary');
+    expect(findingsPanelSource).toContain('formatFindingForClipboard(finding)');
+    expect(findingsPanelSource).toContain('copyToClipboard(text)');
+    expect(findingsPanelSource).toContain('Finding summary copied');
+    expect(findingsPanelSource).toContain('Could not copy finding summary');
+    expect(findingsPanelSource).toMatch(/>\s*Copy summary\s*</);
   });
 
   it('exposes a manual Mark resolved action that goes through the patrol resolve store action', () => {
@@ -974,6 +989,55 @@ describe('aiFindingPresentation', () => {
           '2m ago',
         ),
       ).toBe('CPU returned to normal 2m ago');
+    });
+
+    it('formats findings as a Markdown summary mirroring the seven-question schema for paste-into-chat sharing', () => {
+      // The Copy summary action must produce paste-ready Markdown that
+      // mirrors render order: severity + title + resource header, then
+      // description, impact, recommendation, plus trust signals
+      // (confidence, regression count). Anything beyond that — evidence,
+      // rollback plans, internal IDs — is deferred to the Discuss flow
+      // because that's conversation context, not "share this finding"
+      // context. Pin the exact shape so the operator-facing output
+      // doesn't drift between releases.
+      const formatted = formatFindingForClipboard({
+        severity: 'warning',
+        title: 'Disk pressure',
+        resourceName: 'db-01',
+        resourceType: 'vm',
+        description: 'Datastore is at 92% capacity.',
+        impact: 'Backups will be skipped if free space drops below 5%.',
+        recommendation: 'Free 200GB before the next backup window.',
+        investigationRecord: { confidence: 'medium' } as never,
+        regressionCount: 2,
+      } as never);
+      expect(formatted).toContain('**[WARNING] Disk pressure**');
+      expect(formatted).toContain('Resource: db-01 (vm)');
+      expect(formatted).toContain('Description: Datastore is at 92% capacity.');
+      expect(formatted).toContain('Impact: Backups will be skipped if free space drops below 5%.');
+      expect(formatted).toContain('Recommendation: Free 200GB before the next backup window.');
+      expect(formatted).toContain('Confidence: medium');
+      expect(formatted).toContain('Regressed: 2×');
+    });
+
+    it('omits empty fields cleanly when the finding has not been investigated yet', () => {
+      // A threshold-only finding (no InvestigationRecord, no Impact) must
+      // still produce useful Markdown — the formatter must not include
+      // empty "Impact:" or "Confidence:" lines that read as alarm signals.
+      const formatted = formatFindingForClipboard({
+        severity: 'critical',
+        title: 'Host offline',
+        resourceName: 'pve-01',
+        resourceType: 'node',
+        description: 'Host is not responding.',
+      } as never);
+      expect(formatted).toContain('**[CRITICAL] Host offline**');
+      expect(formatted).toContain('Resource: pve-01 (node)');
+      expect(formatted).toContain('Description: Host is not responding.');
+      expect(formatted).not.toContain('Impact:');
+      expect(formatted).not.toContain('Recommendation:');
+      expect(formatted).not.toContain('Confidence:');
+      expect(formatted).not.toContain('Regressed:');
     });
 
     it('returns canonical patrol resolution reasons', () => {

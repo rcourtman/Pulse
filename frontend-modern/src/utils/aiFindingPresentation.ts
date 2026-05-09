@@ -748,3 +748,66 @@ export const getFindingEmptyStateCopy = (filter: FindingsFilter): FindingEmptySt
       };
   }
 };
+
+/**
+ * Format a finding as a Markdown summary the operator can paste into a chat
+ * message, ticket, or incident channel. The output mirrors the seven-question
+ * schema in render order — title + resource header, then description, impact,
+ * recommendation, plus the trust signals (confidence, regression count) that
+ * matter most to a teammate seeing the finding cold.
+ *
+ * Intentionally lean: only fields the operator can paste verbatim, no internal
+ * IDs or timestamps in epoch form. Investigation evidence and rollback plans
+ * are deferred to the Discuss with Assistant flow because those are
+ * conversation context, not "share this finding" context.
+ */
+export const formatFindingForClipboard = (
+  finding: Pick<
+    UnifiedFinding,
+    | 'severity'
+    | 'title'
+    | 'resourceName'
+    | 'resourceType'
+    | 'description'
+    | 'impact'
+    | 'recommendation'
+    | 'investigationRecord'
+    | 'regressionCount'
+  >,
+): string => {
+  const lines: string[] = [];
+  const severity = finding.severity ? finding.severity.toUpperCase() : 'FINDING';
+  const resource = [finding.resourceName, finding.resourceType ? `(${finding.resourceType})` : '']
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  lines.push(`**[${severity}] ${finding.title || 'Untitled finding'}**`);
+  if (resource) {
+    lines.push(`Resource: ${resource}`);
+  }
+  if (finding.description) {
+    lines.push('');
+    lines.push(`Description: ${finding.description}`);
+  }
+  if (finding.impact) {
+    lines.push('');
+    lines.push(`Impact: ${finding.impact}`);
+  }
+  if (finding.recommendation) {
+    lines.push('');
+    lines.push(`Recommendation: ${finding.recommendation}`);
+  }
+  const trustParts: string[] = [];
+  const confidence = finding.investigationRecord?.confidence;
+  if (confidence) {
+    trustParts.push(`Confidence: ${confidence}`);
+  }
+  if ((finding.regressionCount || 0) > 0) {
+    trustParts.push(`Regressed: ${finding.regressionCount}×`);
+  }
+  if (trustParts.length > 0) {
+    lines.push('');
+    lines.push(trustParts.join(' · '));
+  }
+  return lines.join('\n');
+};
