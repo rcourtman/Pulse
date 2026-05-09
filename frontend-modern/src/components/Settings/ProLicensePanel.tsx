@@ -52,7 +52,6 @@ const ProLicensePanelContent: Component = () => {
     <div class="space-y-6">
       <CommercialBillingShell
         title={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle}
-        description={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription}
         action={
           <button
             class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60"

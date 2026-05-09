@@ -32,7 +32,7 @@ interface CommercialUsageMetersProps {
 
 interface CommercialBillingShellProps {
   title: string;
-  description: string;
+  description?: string;
   action?: JSX.Element;
   loading?: boolean;
   loadingFallback?: JSX.Element;

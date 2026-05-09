@@ -31,7 +31,6 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
       <div class="space-y-6">
         <CommercialBillingShell
           title="Billing & Usage"
-          description="Review your organization plan, current usage, and available upgrade paths."
           loading={loading()}
           loadingFallback={<OrganizationBillingLoadingState />}
         >

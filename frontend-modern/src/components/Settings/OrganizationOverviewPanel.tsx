@@ -32,7 +32,6 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
       <div class="space-y-6">
         <SettingsPanel
           title="Organization Overview"
-          description="Review organization metadata, membership footprint, and edit the display name."
           noPadding
           bodyClass="divide-y divide-border"
         >

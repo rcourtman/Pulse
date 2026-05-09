@@ -21,7 +21,6 @@ export const BillingAdminPanel: Component = () => {
     >
       <SettingsPanel
         title="Billing Admin"
-        description="View and manage billing state across all tenants (hosted mode only)."
         action={
           <button
             type="button"
