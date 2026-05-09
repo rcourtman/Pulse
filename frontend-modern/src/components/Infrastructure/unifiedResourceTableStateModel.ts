@@ -342,7 +342,7 @@ export const getUnifiedResourceTableHeaderLabels = (
     diskIo: 'I/O',
     source: 'Sys',
     uptime: 'Up',
-    temp: 'C',
+    temp: 'Temp',
     datastores: 'Store',
     activity: 'Jobs',
     queue: 'Queue',
