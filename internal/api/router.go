@@ -3727,6 +3727,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/install.sh",                     // Unified agent installer
 				"/install.ps1",                    // Unified agent Windows installer
 				"/download/pulse-agent",           // Unified agent binary
+				"/api/agent/capabilities",         // Agent-paradigm discovery manifest; underlying capabilities keep their own auth scopes
 				"/api/agent/version",              // Agent update checks need to work before auth
 				"/api/agent/ws",                   // Agent WebSocket has its own auth via registration
 				"/api/server/info",                // Server info for installer script

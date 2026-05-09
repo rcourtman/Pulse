@@ -991,6 +991,15 @@ the unified-resources store and the approval store rehydrate on
 startup, the fleet view recovers the same situated picture without
 any fleet-specific rehydration step.
 
+The agent capabilities manifest at `/api/agent/capabilities` is
+hand-authored static data. There is no persistence to recover —
+the manifest is a constant compiled into the binary; on every
+restart it serves identical content as soon as the HTTP listener
+is up. The endpoint sits in the router's `publicPaths` list so
+the global auth middleware does not gate it, which makes
+discovery available before any bootstrap-token / first-run flow
+completes.
+
 The findings runtime reads operator-set state through the same
 durable `resource_operator_state` SQLite table on every
 new-finding-add. Both the time-bounded maintenance window and the

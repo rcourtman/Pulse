@@ -260,6 +260,7 @@ var dynamicRouteAllowlist = []string{}
 var publicRouteAllowlist = []string{
 	"/api/health",
 	"/api/version",
+	"/api/agent/capabilities",
 	"/api/agent/version",
 	"/api/agent/ws",
 	"/api/server/info",

@@ -975,6 +975,14 @@ the bounded approval-store scan, and a per-resource operator-state
 SQLite point lookup. Agents pick "where do I focus?" from the
 fleet view and then drill into the per-resource bundle for depth.
 
+`/api/agent/capabilities` is registered in the router's
+`publicPaths` list so the global auth middleware does not gate
+the discovery manifest. The manifest is unauthenticated by
+design: an agent that does not yet have a token must still be
+able to introspect Pulse to learn how to ask for one. The
+underlying capabilities the manifest declares keep their own auth
+scopes — the public posture applies only to discovery itself.
+
 The findings runtime now consumes operator-set per-resource state
 through a provider adapter wired in `internal/api/router.go` at
 startup. The adapter returns a `ResourceOperatorStateProjection`

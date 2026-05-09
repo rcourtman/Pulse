@@ -13623,6 +13623,25 @@ func TestContract_AgentFleetContextEndpointSurfacesStableShape(t *testing.T) {
 	}
 }
 
+// TestContract_AgentCapabilitiesManifestIsPublic pins the auth
+// contract for the discovery surface: the manifest must be in the
+// router's publicPaths list so it serves without a token. The
+// manifest's purpose is "let an agent introspect Pulse before it
+// has credentials" — gating the manifest behind the same
+// monitoring:read scope that gates everything else makes
+// discovery a chicken-and-egg problem. Slice 40 had this wrong;
+// slice 47 fixed it. Pin so it cannot regress silently.
+func TestContract_AgentCapabilitiesManifestIsPublic(t *testing.T) {
+	source, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "\"/api/agent/capabilities\",         // Agent-paradigm discovery manifest") {
+		t.Error("router.go publicPaths must include /api/agent/capabilities so the discovery manifest serves without a token — agents need to introspect Pulse before they have credentials")
+	}
+}
+
 // TestContract_GetFleetContextCapabilityListed pins the discovery
 // contract: the capabilities manifest must declare get_fleet_context
 // so an agent reading the manifest learns the fleet view exists and

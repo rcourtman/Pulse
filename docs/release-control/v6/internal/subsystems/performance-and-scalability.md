@@ -555,6 +555,14 @@ canonical Pulse fleet scale; agents that need to scan tens of
 thousands of resources should narrow the registry first via the
 existing filtered list endpoints, not the fleet rollup.
 
+`/api/agent/capabilities` is unauthenticated and cacheable
+(`Cache-Control: public, max-age=300`); the manifest is a small,
+hand-authored static structure serialized once per request with
+no I/O, so even unbounded discovery traffic costs nothing per
+request beyond JSON encoding. Agents are expected to fetch the
+manifest once at startup and rely on the 5-minute cache header,
+not poll on every operation.
+
 The new-finding hot path now consults a per-resource operator-state
 provider when one is wired. The provider call is gated on
 `f.ResourceID != ""` and a non-nil provider so deployments without

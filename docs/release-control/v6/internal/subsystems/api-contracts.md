@@ -1425,12 +1425,27 @@ the closed set of stable error codes the response may carry. Agents
 fetch this once at startup to learn what's available; future
 MCP-server slices read the manifest to register tools. The manifest
 itself is unauthenticated and cacheable (`Cache-Control: public,
-max-age=300`); the underlying capabilities keep their own auth
-scopes. Adding a capability is a deliberate "this is part of the
-agent surface" commitment — the manifest is hand-authored rather
-than auto-generated so contract decisions (which capabilities are
-agent-stable, what the stable error codes are, what category each
-belongs to) cannot drift behind code changes.
+max-age=300`) — declared in the router's `publicPaths` list so
+the global auth middleware does not gate it; the underlying
+capabilities keep their own auth scopes. The manifest's
+`unauthenticated` posture is the chicken-and-egg fix: an agent
+that does not yet have a token must still be able to introspect
+Pulse to learn how to ask for one. Adding a capability is a
+deliberate "this is part of the agent surface" commitment — the
+manifest is hand-authored rather than auto-generated so contract
+decisions (which capabilities are agent-stable, what the stable
+error codes are, what category each belongs to) cannot drift
+behind code changes.
+
+The agent surface uses one error-envelope shape across every
+endpoint — `{"error": "<stable_code>", "message": "<human>"}` —
+written via `writeJSONError`. Agents branch on the `error` field
+(snake_case stable codes, e.g. `resource_not_found`,
+`operator_state_not_set`, `operator_state_invalid`); the `message`
+field carries human-readable text agents can surface to operators
+without losing the code. The capabilities manifest's `errorCodes`
+list per capability is the closed set of values the `error` field
+may carry on failure; an unmatched value is a contract regression.
 
 `/api/agent/resource-context/{id}` is the agent-consumable bundled
 context endpoint. One read returns the full situated picture of a
