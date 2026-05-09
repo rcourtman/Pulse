@@ -1075,3 +1075,15 @@ on shared helpers. Findings shells may link or format from feature-owned
 presentation helpers, but Patrol runtime severity, title cleanup, and primary
 settings actions must stay keyed to the canonical Patrol service identity
 instead of reimplementing those branches in links-only or leaf badge surfaces.
+Finding dismissal reasons now carry distinct operational semantics, not just
+copy variants. `not_an_issue` permanently suppresses (Suppressed=true);
+`expected_behavior` acknowledges the finding forever without escalation;
+`will_fix_later` is a real operational commitment — `FindingsStore.Dismiss`
+populates `Finding.RemindAt` (default `DefaultWillFixLaterRemindAfter`, 7
+days), and the next re-detection after `RemindAt` clears the dismissal and
+records a `reminded` lifecycle event so the operator sees their commitment
+lapsed instead of the finding being silently swallowed forever. Severity
+escalation still wakes any dismissed finding regardless of reason. The
+`dismiss_finding` LLM tool response surfaces the remind-at date in plain
+language so Patrol's own conversational explanations stay aligned with this
+contract.

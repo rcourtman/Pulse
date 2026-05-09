@@ -45,6 +45,17 @@ const (
 	FindingCategoryGeneral     FindingCategory = "general"
 )
 
+// DismissReasonWillFixLater marks a finding as "I will fix this later" — an
+// operational commitment with an implicit deadline. See Finding.RemindAt.
+const DismissReasonWillFixLater = "will_fix_later"
+
+// DefaultWillFixLaterRemindAfter is how long Pulse waits before nagging the
+// operator about an open will_fix_later finding. This makes the dismissal a
+// real commitment rather than a silent shut-up: if the finding still trips
+// after this window, it surfaces again with a "reminded" lifecycle event
+// instead of being swallowed forever.
+const DefaultWillFixLaterRemindAfter = 7 * 24 * time.Hour
+
 // FindingLoopState represents the current stage of the patrol detect/remediate loop.
 type FindingLoopState string
 
@@ -140,6 +151,13 @@ type Finding struct {
 	UserNote        string `json:"user_note,omitempty"`        // Freeform user explanation, included in LLM context
 	TimesRaised     int    `json:"times_raised"`               // How many times this finding has been detected
 	Suppressed      bool   `json:"suppressed"`                 // Permanently suppress similar findings for this resource
+	// RemindAt turns "will_fix_later" into a real operational commitment.
+	// When set, the dismissal stays quiet until this timestamp passes; after
+	// it passes, the next re-detection clears the dismissal and surfaces the
+	// finding again with a "reminded" lifecycle event so the operator sees
+	// "you said you'd fix this on <date>, it's still happening." Only
+	// populated for reason == "will_fix_later".
+	RemindAt *time.Time `json:"remind_at,omitempty"`
 
 	// Investigation fields - tracks autonomous AI investigation of findings
 	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"` // Chat session ID if being investigated
@@ -183,6 +201,7 @@ type findingJSON struct {
 	UserNote                   string                           `json:"user_note,omitempty"`
 	TimesRaised                int                              `json:"times_raised"`
 	Suppressed                 bool                             `json:"suppressed"`
+	RemindAt                   *time.Time                       `json:"remind_at,omitempty"`
 	InvestigationSessionID     string                           `json:"investigation_session_id,omitempty"`
 	InvestigationStatus        string                           `json:"investigation_status,omitempty"`
 	InvestigationOutcome       string                           `json:"investigation_outcome,omitempty"`
@@ -226,6 +245,7 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		UserNote:                   f.UserNote,
 		TimesRaised:                f.TimesRaised,
 		Suppressed:                 f.Suppressed,
+		RemindAt:                   f.RemindAt,
 		InvestigationSessionID:     f.InvestigationSessionID,
 		InvestigationStatus:        f.InvestigationStatus,
 		InvestigationOutcome:       f.InvestigationOutcome,
@@ -274,6 +294,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		UserNote:                   payload.UserNote,
 		TimesRaised:                payload.TimesRaised,
 		Suppressed:                 payload.Suppressed,
+		RemindAt:                   payload.RemindAt,
 		InvestigationSessionID:     payload.InvestigationSessionID,
 		InvestigationStatus:        payload.InvestigationStatus,
 		InvestigationOutcome:       payload.InvestigationOutcome,
@@ -967,7 +988,8 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			}
 		}
 
-		// Check if dismissed or suppressed - only update if severity has escalated
+		// Check if dismissed or suppressed - only update if severity has escalated,
+		// or if a "will_fix_later" remind-at deadline has passed.
 		if existing.DismissedReason != "" || existing.Suppressed {
 			severityOrder := map[FindingSeverity]int{
 				FindingSeverityInfo:     0,
@@ -975,8 +997,17 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				FindingSeverityWarning:  2,
 				FindingSeverityCritical: 3,
 			}
-			// If new severity is same or lower, don't reactivate
-			if severityOrder[f.Severity] <= severityOrder[existing.Severity] {
+			// "will_fix_later" with a passed RemindAt is a real operator
+			// commitment that has expired — surface the finding again. This
+			// is the only case where a same-or-lower-severity re-detection
+			// reactivates a dismissed finding; "expected_behavior" stays
+			// quiet, "not_an_issue" stays suppressed.
+			willFixReminderDue := existing.DismissedReason == DismissReasonWillFixLater &&
+				existing.RemindAt != nil &&
+				time.Now().After(*existing.RemindAt) &&
+				!existing.Suppressed
+			if !willFixReminderDue && severityOrder[f.Severity] <= severityOrder[existing.Severity] {
+				// New severity is same or lower and there's no reminder due — don't reactivate.
 				existing.LastSeenAt = time.Now()
 				existing.TimesRaised++
 				s.appendLifecycleLocked(existing, "seen_while_suppressed", "Re-detected while dismissed/suppressed with non-escalated severity", existing.LoopState, existing.LoopState, nil)
@@ -984,10 +1015,23 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				s.scheduleSave()
 				return false
 			}
-			// Severity escalated - clear dismissal/suppression and reactivate
+			if willFixReminderDue {
+				prevRemindAt := existing.RemindAt
+				meta := map[string]string{"reason_was": existing.DismissedReason}
+				if prevRemindAt != nil {
+					meta["remind_at"] = prevRemindAt.Format(time.RFC3339)
+				}
+				s.appendLifecycleLocked(existing, "reminded", "will_fix_later remind-at deadline passed; re-surfacing finding", string(FindingLoopStateDismissed), string(FindingLoopStateDetected), meta)
+			}
+			// Severity escalated or remind-at fired - clear dismissal/suppression and reactivate.
 			existing.DismissedReason = ""
 			existing.Suppressed = false
-			existing.UserNote = "" // Clear note since situation changed
+			existing.RemindAt = nil
+			if !willFixReminderDue {
+				// On severity escalation we drop the operator's note (situation changed);
+				// on a remind-at wake we keep it because the operator's promise is still relevant context.
+				existing.UserNote = ""
+			}
 			existing.AcknowledgedAt = nil
 		}
 
@@ -1236,20 +1280,35 @@ func (s *FindingsStore) Dismiss(id, reason, note string) bool {
 	// Mark as acknowledged for all dismiss reasons
 	now := time.Now()
 	f.AcknowledgedAt = &now
-	s.appendLifecycleLocked(f, "dismissed", "", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
-		"reason": reason,
-	})
+	dismissMeta := map[string]string{"reason": reason}
 
 	// Only "not_an_issue" creates permanent suppression
 	// This is for true false positives where the detection logic is wrong
 	if reason == "not_an_issue" {
 		f.Suppressed = true
+		f.RemindAt = nil
 	}
+	// "will_fix_later" is an operational commitment, not a permanent silence.
+	// Default a 7-day remind-at so the next re-detection after the window
+	// surfaces the finding with a "reminded" lifecycle event instead of being
+	// swallowed forever like "expected_behavior".
+	if reason == DismissReasonWillFixLater {
+		remindAt := now.Add(DefaultWillFixLaterRemindAfter)
+		f.RemindAt = &remindAt
+		dismissMeta["remind_at"] = remindAt.Format(time.RFC3339)
+	} else if reason != "" {
+		f.RemindAt = nil
+	}
+	s.appendLifecycleLocked(f, "dismissed", "", f.LoopState, string(FindingLoopStateDismissed), dismissMeta)
 	s.syncLoopStateLocked(f)
-	// For "expected_behavior" and "will_fix_later":
+	// For "expected_behavior":
 	// - Finding stays visible (not suppressed, not snoozed)
 	// - But is marked as dismissed/acknowledged so user knows they've reviewed it
 	// - Severity escalation will clear DismissedReason and reactivate
+	// For "will_fix_later":
+	// - Same as expected_behavior, plus RemindAt is set; the next re-detection
+	//   after RemindAt clears the dismissal and the finding surfaces again
+	//   with a "reminded" lifecycle event.
 
 	s.mu.Unlock()
 	s.scheduleSave()
@@ -1278,6 +1337,7 @@ func (s *FindingsStore) Undismiss(id string) bool {
 	f.DismissedReason = ""
 	f.Suppressed = false
 	f.AcknowledgedAt = nil
+	f.RemindAt = nil
 	s.appendLifecycleLocked(f, "undismissed", "", string(FindingLoopStateDismissed), string(FindingLoopStateDetected), nil)
 	// Keep UserNote in case user wants to see their notes
 

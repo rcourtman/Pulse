@@ -3383,7 +3383,8 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		// Format a helpful response based on reason
 		var resultMsg string
 		if reason == "will_fix_later" {
-			resultMsg = fmt.Sprintf("Finding dismissed as '%s'. Pulse Patrol will continue to monitor this issue.\nID: %s\nNote: %s", reason, findingID, note)
+			remindAt := time.Now().Add(DefaultWillFixLaterRemindAfter).Format("2006-01-02")
+			resultMsg = fmt.Sprintf("Finding dismissed as '%s'. Pulse Patrol will stay quiet on this until %s; if the finding is still tripping after that date, it will surface again with a 'reminded' lifecycle event.\nID: %s\nNote: %s", reason, remindAt, findingID, note)
 		} else {
 			resultMsg = fmt.Sprintf("Finding dismissed as '%s' and suppression rule created. Similar findings for this resource will not be raised again.\nID: %s\nNote: %s", reason, findingID, note)
 		}

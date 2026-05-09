@@ -1426,3 +1426,186 @@ func TestFindingsStore_Dismiss_DifferentReasons(t *testing.T) {
 		}
 	})
 }
+
+func TestFindingsStore_Dismiss_WillFixLater_DefaultsRemindAt(t *testing.T) {
+	// will_fix_later is meant to be an operational commitment, not a silent
+	// shut-up. Dismiss must populate RemindAt so the finding can wake itself
+	// after the deadline; expected_behavior must NOT populate it (that's
+	// the "acknowledged forever" semantic), and not_an_issue must clear it
+	// (that's the "permanent suppression" semantic).
+	t.Run("will_fix_later sets RemindAt ~7 days out", func(t *testing.T) {
+		store := NewFindingsStore()
+		f := &Finding{
+			ID:         "f-wfl",
+			ResourceID: "res-1",
+			Severity:   FindingSeverityWarning,
+			Title:      "Disk pressure",
+		}
+		store.Add(f)
+
+		before := time.Now()
+		store.Dismiss("f-wfl", DismissReasonWillFixLater, "Plan to upgrade Q3")
+		after := time.Now()
+
+		got := store.Get("f-wfl")
+		if got.RemindAt == nil {
+			t.Fatal("Expected RemindAt to be set for will_fix_later")
+		}
+		expectedMin := before.Add(DefaultWillFixLaterRemindAfter)
+		expectedMax := after.Add(DefaultWillFixLaterRemindAfter)
+		if got.RemindAt.Before(expectedMin) || got.RemindAt.After(expectedMax) {
+			t.Errorf("RemindAt should be ~7 days out, got %v (expected window %v..%v)", got.RemindAt, expectedMin, expectedMax)
+		}
+	})
+
+	t.Run("expected_behavior does not set RemindAt", func(t *testing.T) {
+		store := NewFindingsStore()
+		store.Add(&Finding{ID: "f-eb", ResourceID: "res-2", Severity: FindingSeverityWarning})
+		store.Dismiss("f-eb", "expected_behavior", "Known")
+		if got := store.Get("f-eb"); got.RemindAt != nil {
+			t.Errorf("expected_behavior must not set RemindAt; got %v", got.RemindAt)
+		}
+	})
+
+	t.Run("not_an_issue clears RemindAt", func(t *testing.T) {
+		store := NewFindingsStore()
+		store.Add(&Finding{ID: "f-nai", ResourceID: "res-3", Severity: FindingSeverityWarning})
+		// Pre-stage a stale RemindAt to confirm not_an_issue clears it.
+		store.Dismiss("f-nai", DismissReasonWillFixLater, "later")
+		if store.Get("f-nai").RemindAt == nil {
+			t.Fatal("setup: RemindAt should have been set by will_fix_later")
+		}
+		store.Undismiss("f-nai")
+		store.Dismiss("f-nai", "not_an_issue", "false positive")
+		if got := store.Get("f-nai"); got.RemindAt != nil {
+			t.Errorf("not_an_issue must clear RemindAt; got %v", got.RemindAt)
+		}
+	})
+
+	t.Run("Undismiss clears RemindAt", func(t *testing.T) {
+		store := NewFindingsStore()
+		store.Add(&Finding{ID: "f-un", ResourceID: "res-4", Severity: FindingSeverityWarning})
+		store.Dismiss("f-un", DismissReasonWillFixLater, "later")
+		store.Undismiss("f-un")
+		if got := store.Get("f-un"); got.RemindAt != nil {
+			t.Errorf("Undismiss must clear RemindAt; got %v", got.RemindAt)
+		}
+	})
+}
+
+func TestFindingsStore_Add_WillFixLater_StaysQuietBeforeRemindAt(t *testing.T) {
+	// While the will_fix_later remind-at is still in the future, re-detection
+	// at same severity must NOT reactivate the finding — the operator's
+	// commitment is still "honored" and Pulse stays quiet.
+	store := NewFindingsStore()
+	store.Add(&Finding{
+		ID:         "f-quiet",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Disk pressure",
+	})
+	store.Dismiss("f-quiet", DismissReasonWillFixLater, "Q3 upgrade")
+
+	// Re-detect at same severity while RemindAt is still in the future.
+	store.Add(&Finding{
+		ID:         "f-quiet",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Disk pressure (again)",
+	})
+
+	got := store.Get("f-quiet")
+	if !got.IsDismissed() {
+		t.Error("Finding must stay dismissed before RemindAt fires")
+	}
+	if got.DismissedReason != DismissReasonWillFixLater {
+		t.Errorf("DismissedReason should still be will_fix_later, got %s", got.DismissedReason)
+	}
+	if got.TimesRaised < 1 {
+		t.Error("TimesRaised must still increment to track recurrences while quiet")
+	}
+}
+
+func TestFindingsStore_Add_WillFixLater_WakesAfterRemindAt(t *testing.T) {
+	// Once the will_fix_later remind-at has passed, the next re-detection
+	// must clear the dismissal and surface the finding again with a
+	// "reminded" lifecycle event so the operator sees their commitment lapsed.
+	store := NewFindingsStore()
+	store.Add(&Finding{
+		ID:         "f-wake",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Disk pressure",
+	})
+	store.Dismiss("f-wake", DismissReasonWillFixLater, "Q3 upgrade")
+
+	// Backdate RemindAt so it has already passed.
+	store.mu.Lock()
+	past := time.Now().Add(-1 * time.Hour)
+	store.findings["f-wake"].RemindAt = &past
+	store.mu.Unlock()
+
+	// Re-detect at same severity — should now wake.
+	store.Add(&Finding{
+		ID:         "f-wake",
+		ResourceID: "res-1",
+		Severity:   FindingSeverityWarning,
+		Title:      "Disk pressure (still)",
+	})
+
+	got := store.Get("f-wake")
+	if got.IsDismissed() {
+		t.Error("Finding must be un-dismissed once RemindAt has passed")
+	}
+	if got.DismissedReason != "" {
+		t.Errorf("DismissedReason must be cleared after wake, got %s", got.DismissedReason)
+	}
+	if got.RemindAt != nil {
+		t.Errorf("RemindAt must be cleared after wake, got %v", got.RemindAt)
+	}
+	// UserNote should be preserved on remind-at wake (operator's promise is still relevant context).
+	if got.UserNote != "Q3 upgrade" {
+		t.Errorf("UserNote must be preserved across remind-at wake; got %q", got.UserNote)
+	}
+	// Lifecycle must record the "reminded" event so the operator sees their commitment lapsed.
+	foundReminded := false
+	for _, ev := range got.Lifecycle {
+		if ev.Type == "reminded" {
+			foundReminded = true
+			break
+		}
+	}
+	if !foundReminded {
+		t.Error("Lifecycle must contain a 'reminded' event after will_fix_later wake")
+	}
+}
+
+func TestFinding_RemindAt_RoundTripsThroughJSON(t *testing.T) {
+	// RemindAt must persist across save/load so the operator's commitment
+	// survives a process restart.
+	when := time.Now().Add(48 * time.Hour).UTC().Truncate(time.Second)
+	original := Finding{
+		ID:              "f-json",
+		ResourceID:      "res-1",
+		Severity:        FindingSeverityWarning,
+		DismissedReason: DismissReasonWillFixLater,
+		RemindAt:        &when,
+	}
+	bytes, err := original.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+	if !strings.Contains(string(bytes), "\"remind_at\"") {
+		t.Errorf("MarshalJSON output should contain remind_at field, got %s", string(bytes))
+	}
+	var roundTripped Finding
+	if err := roundTripped.UnmarshalJSON(bytes); err != nil {
+		t.Fatalf("UnmarshalJSON: %v", err)
+	}
+	if roundTripped.RemindAt == nil {
+		t.Fatal("RemindAt must round-trip through JSON")
+	}
+	if !roundTripped.RemindAt.Equal(when) {
+		t.Errorf("RemindAt round-trip mismatch: got %v want %v", roundTripped.RemindAt, when)
+	}
+}

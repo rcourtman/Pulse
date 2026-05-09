@@ -1534,3 +1534,14 @@ The open-source/free `PUT /api/ai/patrol/autonomy` adapter may persist
 findings-only `monitor` configuration and the governed investigation budget /
 timeout clamps, but it must continue to reject `approval`, `assisted`, and
 `full` autonomy with the canonical safe-remediation license response.
+The same canonical findings store owns dismissal-reason semantics. The three
+`dismissed_reason` values must remain behaviorally distinct, not copy-only
+variants: `not_an_issue` flips `Suppressed=true`, `expected_behavior`
+acknowledges without escalation, and `will_fix_later` is an operator
+commitment that populates `Finding.RemindAt` (default
+`DefaultWillFixLaterRemindAfter`, 7 days). On re-detection, the canonical
+store wakes a `will_fix_later` finding once `RemindAt` has passed by
+clearing the dismissal and emitting a `reminded` lifecycle event, and the
+`dismiss_finding` LLM tool response must communicate the remind-at date so
+Patrol's conversational explanations stay aligned with the persisted
+behavior.
