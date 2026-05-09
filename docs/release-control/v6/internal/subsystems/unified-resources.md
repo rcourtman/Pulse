@@ -584,9 +584,15 @@ in `internal/api/resources_operator_state.go` is the operator-facing
 consumer of this contract; the URL canonical_id always wins over the
 body, server-side `setAt` / `setBy` populate from request time and
 authenticated identity, and validation rejections surface a stable
-`operator_state_invalid` error code. Finding-suppression and
-action-broker integrations land in subsequent slices that consume the
-same `ResourceOperatorState` shape.
+`operator_state_invalid` error code. The action broker
+(`executeCommandWithAudit`) consults the same store on every dispatch
+and refuses with `ErrResourceRemediationLocked` when the operator has
+set `NeverAutoRemediate=true`; the refusal is persisted as a Failed
+audit record with `resource_remediation_locked:` prefix on the
+`ErrorMessage` so audit-UI filters and alert rules can branch on the
+stable token. Finding-suppression integrations consume the same
+`ResourceOperatorState` shape via the
+`ResourceOperatorStateProvider` interface in `internal/ai`.
 
 `actions.go` now owns the canonical action preflight and audit-normalization
 contract. Action plans must carry dry-run availability, safety checks, and

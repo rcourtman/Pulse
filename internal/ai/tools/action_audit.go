@@ -135,6 +135,35 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 		}
 	}
 
+	// Operator-set NeverAutoRemediate refusal: when the operator has
+	// flagged the target resource as never-auto-remediate, the broker
+	// must refuse the dispatch even with a valid approval and matching
+	// plan hash. The operator's per-resource intent outranks the
+	// per-action approval — this is the safety mechanism for "do not
+	// touch this resource even if you think you should." Persists a
+	// Failed audit record with `resource_remediation_locked:` prefix
+	// so the audit history shows every refused dispatch.
+	if locked, lockErr := e.isResourceRemediationLocked(resourceID); lockErr != nil {
+		log.Warn().Str("action_id", plan.ActionID).Err(lockErr).Msg("Operator-state lookup failed; allowing dispatch (fail-open) but logging")
+	} else if locked {
+		log.Warn().
+			Str("action_id", plan.ActionID).
+			Str("resource_id", resourceID).
+			Str("capability", capabilityName).
+			Msg("Refusing action execution: resource is operator-locked against automated remediation")
+		now := time.Now().UTC()
+		record.State = unifiedresources.ActionStateFailed
+		record.UpdatedAt = now
+		errMessage := fmt.Sprintf("resource_remediation_locked: %s", unifiedresources.ErrResourceRemediationLocked.Error())
+		record.Result = &unifiedresources.ExecutionResult{
+			Success:      false,
+			ErrorMessage: errMessage,
+		}
+		e.recordActionAudit(record)
+		e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "resource remediation lock refused")
+		return nil, unifiedresources.ErrResourceRemediationLocked
+	}
+
 	record, err := e.recordActionExecutionStart(record, approvalID, requestedBy, fmt.Sprintf("dispatching command to agent %s", agentID), planFromApproval)
 	if err != nil {
 		return nil, err
@@ -925,4 +954,30 @@ func approvalTimestamp(req *approval.ApprovalRequest) time.Time {
 		return time.Now().UTC()
 	}
 	return req.DecidedAt.UTC()
+}
+
+// isResourceRemediationLocked returns whether the operator has set
+// NeverAutoRemediate=true on the resource the dispatch targets.
+// Returns (false, nil) when no audit store is wired (degraded mode —
+// the fail-open posture is consistent with the rest of audit-store
+// callers in this file), when the resource has no operator state, or
+// when only IntentionallyOffline (without NeverAutoRemediate) is set.
+// Returns the error from the store on lookup failure so the caller can
+// log it; caller policy is fail-open on lookup error.
+func (e *PulseToolExecutor) isResourceRemediationLocked(resourceID string) (bool, error) {
+	if e == nil || e.actionAuditStore == nil {
+		return false, nil
+	}
+	canonical := strings.TrimSpace(resourceID)
+	if canonical == "" {
+		return false, nil
+	}
+	state, found, err := e.actionAuditStore.GetResourceOperatorState(canonical)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return false, nil
+	}
+	return state.NeverAutoRemediate, nil
 }

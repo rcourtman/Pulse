@@ -153,13 +153,21 @@ var (
 	// is the contract for "the operator approved exactly this action"; if
 	// it does not match, the broker must refuse execution rather than run a
 	// drifted plan under a stale approval.
-	ErrActionPlanDrift        = errors.New("approved plan hash does not match execution payload; refusing to run drifted plan")
-	ErrActionNotExecuting     = errors.New("action is not executing")
-	ErrActionAlreadyExecuting = errors.New("action is already executing")
-	ErrActionExecutionFinal   = errors.New("action execution is already final")
-	ErrActionPlanExpired      = errors.New("action plan expired")
-	ErrActionDryRunOnly       = errors.New("action plan is dry-run only")
-	ErrInvalidApprovalOutcome = errors.New("invalid approval outcome")
+	ErrActionPlanDrift = errors.New("approved plan hash does not match execution payload; refusing to run drifted plan")
+	// ErrResourceRemediationLocked is returned when the operator has set
+	// NeverAutoRemediate=true on the target resource. The action broker
+	// must refuse the dispatch even when the approval ID resolves and
+	// the plan hash matches; the operator's per-resource intent
+	// outranks the per-action approval. Persists a Failed audit
+	// record with `resource_remediation_locked:` prefix on the
+	// ErrorMessage so the audit timeline shows every refused dispatch.
+	ErrResourceRemediationLocked = errors.New("resource is operator-locked against automated remediation")
+	ErrActionNotExecuting        = errors.New("action is not executing")
+	ErrActionAlreadyExecuting    = errors.New("action is already executing")
+	ErrActionExecutionFinal      = errors.New("action execution is already final")
+	ErrActionPlanExpired         = errors.New("action plan expired")
+	ErrActionDryRunOnly          = errors.New("action plan is dry-run only")
+	ErrInvalidApprovalOutcome    = errors.New("invalid approval outcome")
 )
 
 // ApplyActionDecision records an explicit approval or rejection against a

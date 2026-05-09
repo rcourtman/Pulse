@@ -359,6 +359,12 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// honest: drift refusal cannot silently turn into another error
 			// kind that callers fail to detect.
 			"ErrActionPlanDrift        = errors.New(",
+			// ErrResourceRemediationLocked is the canonical error returned
+			// when the operator has set NeverAutoRemediate=true on the
+			// target resource. Pin it here so the broker contract stays
+			// honest: per-resource lock refusal cannot silently turn into
+			// another error kind that callers fail to detect.
+			"ErrResourceRemediationLocked = errors.New(",
 		},
 		filepath.Join(".", "store.go"): {
 			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",

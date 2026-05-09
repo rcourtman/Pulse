@@ -960,3 +960,180 @@ func TestExecuteCommandWithDeniedApprovalDoesNotDispatch(t *testing.T) {
 		}
 	}
 }
+
+// TestExecuteCommandWithAuditRefusesWhenResourceIsRemediationLocked covers
+// the operator-set NeverAutoRemediate safety. When the operator has flagged
+// the target resource as never-auto-remediate (via the
+// /api/resources/{id}/operator-state surface), the broker must refuse the
+// dispatch even with a valid approval and matching plan hash. The
+// per-resource intent outranks the per-action approval — this is the
+// safety mechanism for "do not touch this resource even if you think you
+// should." The refusal must be visible on the audit timeline as a Failed
+// record with a `resource_remediation_locked:` ErrorMessage prefix.
+func TestExecuteCommandWithAuditRefusesWhenResourceIsRemediationLocked(t *testing.T) {
+	actionStore := unifiedresources.NewMemoryStore()
+
+	// Operator has marked the target resource as never-auto-remediate.
+	if err := actionStore.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID:        "agent-locked",
+		NeverAutoRemediate: true,
+		Note:               "manual-only — Pulse must not touch this host",
+		SetAt:              time.Now().UTC(),
+		SetBy:              "operator:richard",
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+
+	approvalStore, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DisablePersistence: true,
+	})
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	previousApprovalStore := approval.GetStore()
+	approval.SetStore(approvalStore)
+	t.Cleanup(func() { approval.SetStore(previousApprovalStore) })
+
+	now := time.Now().UTC()
+	approvedHash := approvalPlanHash(
+		"act-locked",
+		"approval-locked",
+		"pulse_control",
+		"agent-locked",
+		"systemctl restart workload",
+		"agent",
+		"agent-locked",
+		"restart workload service",
+	)
+	plan := unifiedresources.ActionPlan{
+		ActionID:         "act-locked",
+		RequestID:        "approval-locked",
+		Allowed:          true,
+		RequiresApproval: true,
+		ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+		PlannedAt:        now,
+		ExpiresAt:        now.Add(5 * time.Minute),
+		PlanHash:         approvedHash,
+	}
+	req := &approval.ApprovalRequest{
+		ID:         "approval-locked",
+		Command:    "systemctl restart workload",
+		TargetType: "agent",
+		TargetID:   "agent-locked",
+		TargetName: "agent-locked",
+		Context:    "restart workload service",
+		Plan:       &plan,
+	}
+	if err := approvalStore.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval: %v", err)
+	}
+	if _, err := approvalStore.Approve("approval-locked", "operator@example.com"); err != nil {
+		t.Fatalf("Approve: %v", err)
+	}
+
+	agentServer := &mockAgentServer{}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: actionStore,
+	})
+	executor.recordPendingApprovalAction(req)
+
+	// Payload matches the approval (no drift); only the operator-set lock
+	// should refuse this. If the broker dispatches anyway, the operator's
+	// per-resource intent has been overridden by the approval, which is
+	// the failure we're guarding against.
+	result, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"agent-locked",
+		"approval-locked",
+		true,
+		"agent-locked",
+		agentexec.ExecuteCommandPayload{
+			Command:    "systemctl restart workload",
+			TargetType: "agent",
+			TargetID:   "agent-locked",
+		},
+		"pulse_control",
+		"restart workload service",
+	)
+	if !errors.Is(err, unifiedresources.ErrResourceRemediationLocked) {
+		t.Fatalf("executeCommandWithAudit error = %v, want ErrResourceRemediationLocked", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on remediation-locked refusal, got %#v", result)
+	}
+	agentServer.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+
+	// Refusal must be observable in the audit history with the canonical
+	// `resource_remediation_locked:` ErrorMessage prefix so audit-UI
+	// filters and alert rules can branch on the stable token.
+	audits, err := actionStore.GetActionAudits("agent-locked", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(audits) != 1 {
+		t.Fatalf("expected 1 refused audit record, got %d", len(audits))
+	}
+	refused := audits[0]
+	if refused.State != unifiedresources.ActionStateFailed {
+		t.Fatalf("audit state = %q, want %q", refused.State, unifiedresources.ActionStateFailed)
+	}
+	if refused.Result == nil || refused.Result.Success {
+		t.Fatalf("expected Result.Success=false, got %#v", refused.Result)
+	}
+	if !strings.HasPrefix(refused.Result.ErrorMessage, "resource_remediation_locked:") {
+		t.Fatalf("expected ErrorMessage to start with resource_remediation_locked:, got %q", refused.Result.ErrorMessage)
+	}
+}
+
+// TestExecuteCommandWithAuditAllowsDispatchWhenResourceUnlocked covers
+// the negative case: a resource that has operator state recorded but
+// without NeverAutoRemediate set must NOT block the dispatch. Pin this
+// so the refusal branch can't drift into "always refuse when state
+// exists".
+func TestExecuteCommandWithAuditAllowsDispatchWhenResourceUnlocked(t *testing.T) {
+	actionStore := unifiedresources.NewMemoryStore()
+	// State recorded but with NeverAutoRemediate=false — should not refuse.
+	if err := actionStore.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID:          "agent-allowed",
+		IntentionallyOffline: true,
+		NeverAutoRemediate:   false,
+		SetAt:                time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+
+	agentServer := &mockAgentServer{}
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-allowed", mock.Anything).
+		Return(&agentexec.CommandResultPayload{Stdout: "OK", ExitCode: 0}, nil)
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: actionStore,
+	})
+
+	result, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"agent-allowed",
+		"",    // no approval (not testing approval flow here)
+		false, // requiresApproval=false
+		"agent-allowed",
+		agentexec.ExecuteCommandPayload{
+			Command:    "systemctl status workload",
+			TargetType: "agent",
+			TargetID:   "agent-allowed",
+		},
+		"pulse_control",
+		"check status",
+	)
+	if err != nil {
+		t.Fatalf("executeCommandWithAudit unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected dispatch to proceed; got nil result")
+	}
+	agentServer.AssertCalled(t, "ExecuteCommand", mock.Anything, "agent-allowed", mock.Anything)
+}
