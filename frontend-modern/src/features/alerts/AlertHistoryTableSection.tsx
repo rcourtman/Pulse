@@ -31,7 +31,7 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
           }
         >
           <TableCard class="mb-2">
-            <Table class="w-full min-w-[max-content] text-[11px] sm:text-sm">
+            <Table class="w-full text-[11px] sm:text-sm">
               <TableHeader>
                 <TableRow class="border-b border-border bg-surface-hover text-muted">
                   <TableHead class="p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
@@ -52,13 +52,13 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
                   <TableHead class="p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
                     Message
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead class="hidden p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:p-1.5 sm:px-2 sm:text-xs">
                     Duration
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead class="hidden p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:p-1.5 sm:px-2 sm:text-xs">
                     Status
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead class="hidden p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:p-1.5 sm:px-2 sm:text-xs">
                     Node
                   </TableHead>
                   <TableHead class="p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">

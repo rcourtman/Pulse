@@ -66,17 +66,17 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
           {props.alert.description}
         </TableCell>
 
-        <TableCell class="p-1 px-1 text-center text-muted sm:p-1.5 sm:px-2">
+        <TableCell class="hidden p-1 px-1 text-center text-muted lg:table-cell sm:p-1.5 sm:px-2">
           {props.alert.duration}
         </TableCell>
 
-        <TableCell class="p-1 px-1 text-center sm:p-1.5 sm:px-2">
+        <TableCell class="hidden p-1 px-1 text-center lg:table-cell sm:p-1.5 sm:px-2">
           <span class={historyStatusPresentation().className}>
             {historyStatusPresentation().label}
           </span>
         </TableCell>
 
-        <TableCell class="truncate p-1 px-1 text-muted sm:p-1.5 sm:px-2">
+        <TableCell class="hidden truncate p-1 px-1 text-muted lg:table-cell sm:p-1.5 sm:px-2">
           {props.alert.nodeDisplayName || props.alert.node || '—'}
         </TableCell>
 
