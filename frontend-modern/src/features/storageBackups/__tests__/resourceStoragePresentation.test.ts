@@ -175,7 +175,7 @@ describe('resourceStoragePresentation', () => {
     const resource = makeResource({
       type: 'storage',
       name: 'Tower Array',
-      status: 'warning',
+      status: 'degraded',
       storage: {
         protection: 'none',
         protectionReduced: true,
@@ -216,7 +216,7 @@ describe('resourceStoragePresentation', () => {
     const resource = makeResource({
       type: 'storage',
       name: 'Tower Array',
-      status: 'warning',
+      status: 'degraded',
       storage: {
         protection: 'none',
         protectionReduced: true,
@@ -245,7 +245,7 @@ describe('resourceStoragePresentation', () => {
     const resource = makeResource({
       type: 'storage',
       name: 'Tower Array',
-      status: 'warning',
+      status: 'degraded',
       storage: {
         protectionReduced: false,
         rebuildInProgress: true,
