@@ -1875,3 +1875,88 @@ func seedLegacyLinksTable(t *testing.T, legacyPath string) {
 		t.Fatalf("failed to seed legacy link row: %v", err)
 	}
 }
+
+func TestSQLiteResourceStore_ResourceOperatorState_RoundTrips(t *testing.T) {
+	// Smoke test the SQLite implementation of ResourceOperatorState
+	// upsert + get + clear. The Memory store has a deeper test suite in
+	// resource_operator_state_test.go; this run pins that the SQLite
+	// schema migration succeeds and the column round-trips work end-to-end.
+	dataDir := t.TempDir()
+	store, err := NewSQLiteResourceStore(dataDir, defaultOrgID)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	if _, found, err := store.GetResourceOperatorState("vm:101"); err != nil {
+		t.Fatalf("initial get: %v", err)
+	} else if found {
+		t.Fatal("fresh store must not return an entry")
+	}
+
+	start := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 9, 14, 0, 0, 0, time.UTC)
+	want := ResourceOperatorState{
+		CanonicalID:          "vm:101",
+		IntentionallyOffline: true,
+		NeverAutoRemediate:   true,
+		MaintenanceStartAt:   &start,
+		MaintenanceEndAt:     &end,
+		MaintenanceReason:    "Q3 storage upgrade",
+		Criticality:          CriticalityHigh,
+		Note:                 "do not auto-fix",
+		SetAt:                time.Date(2026, 5, 9, 11, 59, 0, 0, time.UTC),
+		SetBy:                "operator:richard",
+	}
+	if err := store.SetResourceOperatorState(want); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	got, found, err := store.GetResourceOperatorState("vm:101")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !found {
+		t.Fatal("expected entry after set")
+	}
+	if !got.IntentionallyOffline || !got.NeverAutoRemediate {
+		t.Errorf("boolean flags must round-trip: %+v", got)
+	}
+	if got.Criticality != CriticalityHigh {
+		t.Errorf("criticality: got %q want %q", got.Criticality, CriticalityHigh)
+	}
+	if got.MaintenanceReason != "Q3 storage upgrade" || got.Note != "do not auto-fix" {
+		t.Errorf("string columns must round-trip: %+v", got)
+	}
+	if got.MaintenanceStartAt == nil || !got.MaintenanceStartAt.Equal(start) {
+		t.Errorf("maintenance_start_at: got %v want %v", got.MaintenanceStartAt, start)
+	}
+	if got.MaintenanceEndAt == nil || !got.MaintenanceEndAt.Equal(end) {
+		t.Errorf("maintenance_end_at: got %v want %v", got.MaintenanceEndAt, end)
+	}
+
+	// Upsert: Set again with different values should overwrite, not error.
+	want.IntentionallyOffline = false
+	want.Criticality = CriticalityLow
+	if err := store.SetResourceOperatorState(want); err != nil {
+		t.Fatalf("re-set: %v", err)
+	}
+	got, _, _ = store.GetResourceOperatorState("vm:101")
+	if got.IntentionallyOffline {
+		t.Error("upsert must overwrite IntentionallyOffline")
+	}
+	if got.Criticality != CriticalityLow {
+		t.Errorf("upsert must overwrite criticality; got %q", got.Criticality)
+	}
+
+	// Clear: idempotent removal.
+	if err := store.ClearResourceOperatorState("vm:101"); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if _, found, _ := store.GetResourceOperatorState("vm:101"); found {
+		t.Error("entry must be gone after clear")
+	}
+	if err := store.ClearResourceOperatorState("vm:101"); err != nil {
+		t.Errorf("clear must be idempotent; got %v", err)
+	}
+}

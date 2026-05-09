@@ -45,6 +45,10 @@ type ResourceStore interface {
 	GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]ActionLifecycleEvent, error)
 	RecordExportAudit(record ExportAuditRecord) error
 	GetExportAudits(since time.Time, limit int) ([]ExportAuditRecord, error)
+	// Operator-set per-resource state. See ResourceOperatorState.
+	GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error)
+	SetResourceOperatorState(state ResourceOperatorState) error
+	ClearResourceOperatorState(canonicalID string) error
 	Close() error
 }
 
@@ -351,6 +355,20 @@ func (s *SQLiteResourceStore) initSchema() error {
 		redactions_json TEXT
 	);
 	CREATE INDEX IF NOT EXISTS idx_export_audits_timestamp ON export_audits(timestamp DESC);
+
+	CREATE TABLE IF NOT EXISTS resource_operator_state (
+		canonical_id TEXT PRIMARY KEY,
+		intentionally_offline INTEGER NOT NULL DEFAULT 0,
+		never_auto_remediate INTEGER NOT NULL DEFAULT 0,
+		maintenance_start_at DATETIME,
+		maintenance_end_at DATETIME,
+		maintenance_reason TEXT,
+		criticality TEXT,
+		note TEXT,
+		set_at DATETIME NOT NULL,
+		set_by TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_resource_operator_state_maintenance ON resource_operator_state(maintenance_end_at);
 	`
 
 	_, err := s.db.Exec(schema)
@@ -1373,6 +1391,170 @@ func (s *SQLiteResourceStore) GetExportAudits(since time.Time, limit int) ([]Exp
 	return records, nil
 }
 
+// GetResourceOperatorState reads the operator-set state for the given
+// canonical ID. Returns (zero, false, nil) on no entry; (state, true,
+// nil) on a hit; (zero, false, error) on a query failure. The found
+// signal is meaningful for the API GET path which returns 404 vs
+// returning the default no-state record.
+func (s *SQLiteResourceStore) GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
+	canonicalID = strings.TrimSpace(canonicalID)
+	if canonicalID == "" {
+		return ResourceOperatorState{}, false, nil
+	}
+	row := s.db.QueryRow(`
+		SELECT canonical_id, intentionally_offline, never_auto_remediate,
+		       maintenance_start_at, maintenance_end_at, maintenance_reason,
+		       criticality, note, set_at, set_by
+		FROM resource_operator_state WHERE canonical_id = ?`, canonicalID)
+
+	var state ResourceOperatorState
+	var (
+		intentional    int
+		neverRemediate int
+		startAt, endAt sql.NullTime
+		reason         sql.NullString
+		criticality    sql.NullString
+		note           sql.NullString
+		setBy          sql.NullString
+	)
+	if err := row.Scan(
+		&state.CanonicalID,
+		&intentional,
+		&neverRemediate,
+		&startAt,
+		&endAt,
+		&reason,
+		&criticality,
+		&note,
+		&state.SetAt,
+		&setBy,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ResourceOperatorState{}, false, nil
+		}
+		return ResourceOperatorState{}, false, fmt.Errorf("query resource operator state: %w", err)
+	}
+	state.IntentionallyOffline = intentional != 0
+	state.NeverAutoRemediate = neverRemediate != 0
+	if startAt.Valid {
+		t := startAt.Time
+		state.MaintenanceStartAt = &t
+	}
+	if endAt.Valid {
+		t := endAt.Time
+		state.MaintenanceEndAt = &t
+	}
+	if reason.Valid {
+		state.MaintenanceReason = reason.String
+	}
+	if criticality.Valid {
+		state.Criticality = ResourceCriticality(criticality.String)
+	}
+	if note.Valid {
+		state.Note = note.String
+	}
+	if setBy.Valid {
+		state.SetBy = setBy.String
+	}
+	return state, true, nil
+}
+
+// SetResourceOperatorState upserts the state row. Validates and
+// normalizes before persistence; rejects malformed records (empty
+// canonical ID, mismatched maintenance window, unknown criticality)
+// with ErrResourceOperatorStateInvalid so the API boundary can return
+// 400 with a stable error code.
+func (s *SQLiteResourceStore) SetResourceOperatorState(state ResourceOperatorState) error {
+	state = NormalizeResourceOperatorState(state)
+	if err := ValidateResourceOperatorState(state); err != nil {
+		return err
+	}
+	intentional := 0
+	if state.IntentionallyOffline {
+		intentional = 1
+	}
+	neverRemediate := 0
+	if state.NeverAutoRemediate {
+		neverRemediate = 1
+	}
+	var (
+		startAt, endAt sql.NullTime
+		reason         sql.NullString
+		criticality    sql.NullString
+		note           sql.NullString
+		setBy          sql.NullString
+	)
+	if state.MaintenanceStartAt != nil {
+		startAt.Time = *state.MaintenanceStartAt
+		startAt.Valid = true
+	}
+	if state.MaintenanceEndAt != nil {
+		endAt.Time = *state.MaintenanceEndAt
+		endAt.Valid = true
+	}
+	if state.MaintenanceReason != "" {
+		reason.String = state.MaintenanceReason
+		reason.Valid = true
+	}
+	if state.Criticality != "" {
+		criticality.String = string(state.Criticality)
+		criticality.Valid = true
+	}
+	if state.Note != "" {
+		note.String = state.Note
+		note.Valid = true
+	}
+	if state.SetBy != "" {
+		setBy.String = state.SetBy
+		setBy.Valid = true
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO resource_operator_state (
+			canonical_id, intentionally_offline, never_auto_remediate,
+			maintenance_start_at, maintenance_end_at, maintenance_reason,
+			criticality, note, set_at, set_by
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(canonical_id) DO UPDATE SET
+			intentionally_offline = excluded.intentionally_offline,
+			never_auto_remediate = excluded.never_auto_remediate,
+			maintenance_start_at = excluded.maintenance_start_at,
+			maintenance_end_at = excluded.maintenance_end_at,
+			maintenance_reason = excluded.maintenance_reason,
+			criticality = excluded.criticality,
+			note = excluded.note,
+			set_at = excluded.set_at,
+			set_by = excluded.set_by`,
+		state.CanonicalID,
+		intentional,
+		neverRemediate,
+		startAt,
+		endAt,
+		reason,
+		criticality,
+		note,
+		state.SetAt,
+		setBy,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert resource operator state: %w", err)
+	}
+	return nil
+}
+
+// ClearResourceOperatorState removes the row for the given canonical
+// ID. Idempotent — returns nil whether or not a row existed.
+func (s *SQLiteResourceStore) ClearResourceOperatorState(canonicalID string) error {
+	canonicalID = strings.TrimSpace(canonicalID)
+	if canonicalID == "" {
+		return nil
+	}
+	_, err := s.db.Exec(`DELETE FROM resource_operator_state WHERE canonical_id = ?`, canonicalID)
+	if err != nil {
+		return fmt.Errorf("delete resource operator state: %w", err)
+	}
+	return nil
+}
+
 // MemoryStore is an in-memory implementation for tests.
 type MemoryStore struct {
 	mu                    sync.RWMutex
@@ -1382,10 +1564,13 @@ type MemoryStore struct {
 	actionAudits          []ActionAuditRecord
 	actionLifecycleEvents []ActionLifecycleEvent
 	exportAudits          []ExportAuditRecord
+	resourceOperatorState map[string]ResourceOperatorState
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{}
+	return &MemoryStore{
+		resourceOperatorState: make(map[string]ResourceOperatorState),
+	}
 }
 
 func (m *MemoryStore) AddLink(link ResourceLink) error {
@@ -1864,6 +2049,58 @@ func (m *MemoryStore) GetExportAudits(since time.Time, limit int) ([]ExportAudit
 		}
 	}
 	return out, nil
+}
+
+// GetResourceOperatorState returns the operator-set state for the given
+// canonical resource ID. The found bool distinguishes "no entry" (the
+// default no-state posture) from "explicit empty entry the operator
+// cleared" — both have the same effective behavior but the latter may
+// be surfaced differently on the audit timeline.
+func (m *MemoryStore) GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
+	canonicalID = strings.TrimSpace(canonicalID)
+	if canonicalID == "" {
+		return ResourceOperatorState{}, false, nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	state, ok := m.resourceOperatorState[canonicalID]
+	if !ok {
+		return ResourceOperatorState{}, false, nil
+	}
+	return state, true, nil
+}
+
+// SetResourceOperatorState upserts the supplied state, validating it
+// before persistence. Callers should pass a fully-populated record;
+// per-field merge is not supported, so reading the existing state and
+// modifying it is the operator's responsibility.
+func (m *MemoryStore) SetResourceOperatorState(state ResourceOperatorState) error {
+	state = NormalizeResourceOperatorState(state)
+	if err := ValidateResourceOperatorState(state); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.resourceOperatorState == nil {
+		m.resourceOperatorState = make(map[string]ResourceOperatorState)
+	}
+	m.resourceOperatorState[state.CanonicalID] = state
+	return nil
+}
+
+// ClearResourceOperatorState removes any operator-set state for the
+// given canonical ID. Returns nil whether or not an entry was present —
+// the operation is idempotent so the API surface can issue
+// fire-and-forget DELETE without round-tripping the existence check.
+func (m *MemoryStore) ClearResourceOperatorState(canonicalID string) error {
+	canonicalID = strings.TrimSpace(canonicalID)
+	if canonicalID == "" {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.resourceOperatorState, canonicalID)
+	return nil
 }
 
 func normalizePair(a, b string) (string, string) {

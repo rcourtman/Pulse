@@ -561,6 +561,28 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+`resource_operator_state.go` owns the operator-set per-resource intent
+schema. `ResourceOperatorState` carries four narrow operator-intent
+fields (`IntentionallyOffline`, `NeverAutoRemediate`, maintenance
+window via `MaintenanceStartAt` / `MaintenanceEndAt` / `MaintenanceReason`,
+and a canonical `Criticality` hint of `high|medium|low|""`) plus
+operator-attribution metadata (`Note`, `SetAt`, `SetBy`). The shape is
+intentionally fixed-field rather than a freeform metadata bag so
+downstream finding-suppression and severity-weighting logic has a stable
+contract to honor. `ValidateResourceOperatorState` rejects malformed
+records with a stable `ErrResourceOperatorStateInvalid` sentinel
+(empty canonical id, partial maintenance window, end ≤ start, unknown
+criticality), and `NormalizeResourceOperatorState` trims whitespace
+and lower-cases the criticality value before persistence. The
+`ResourceStore` interface now exposes
+`GetResourceOperatorState`, `SetResourceOperatorState`, and
+`ClearResourceOperatorState`; both the SQLite (table
+`resource_operator_state` keyed on `canonical_id`) and Memory stores
+implement the same upsert + idempotent-clear contract. This slice is
+the foundational shape only — the API surface (GET/PUT/DELETE) and the
+finding-suppression / action-broker integrations land in subsequent
+slices that consume this contract.
+
 `actions.go` now owns the canonical action preflight and audit-normalization
 contract. Action plans must carry dry-run availability, safety checks, and
 verification steps through `preflight`, and `RecordActionAudit` plus
