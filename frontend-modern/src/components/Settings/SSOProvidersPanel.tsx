@@ -132,14 +132,16 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       </div>
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                          <span class="font-medium text-base-content truncate">
+                          <span class="font-medium text-base-content truncate" title={provider.name}>
                             {provider.name}
                           </span>
                           <span class={getSSOProviderTypeBadgeClass()}>
                             {getSSOProviderTypeLabel(provider.type)}
                           </span>
                         </div>
-                        <p class="text-xs text-muted truncate">{getSSOProviderSummary(provider)}</p>
+                        <p class="text-xs text-muted truncate" title={getSSOProviderSummary(provider)}>
+                          {getSSOProviderSummary(provider)}
+                        </p>
                       </div>
                     </div>
                     <div class="flex items-center gap-2 self-end sm:self-auto">

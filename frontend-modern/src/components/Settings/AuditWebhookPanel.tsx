@@ -109,7 +109,9 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                       <div class={AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS}>
                         <ExternalLink size={16} />
                       </div>
-                      <span class="text-sm font-medium text-base-content truncate">{url}</span>
+                      <span class="text-sm font-medium text-base-content truncate" title={url}>
+                        {url}
+                      </span>
                     </div>
                     <button
                       onClick={() => handleRemoveWebhook(url)}
