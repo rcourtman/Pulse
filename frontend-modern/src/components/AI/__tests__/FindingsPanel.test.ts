@@ -124,6 +124,21 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('Pulse will permanently suppress');
   });
 
+  it('warns the operator before dismissing a recurrent finding as not_an_issue or expected_behavior', () => {
+    // not_an_issue and expected_behavior both stay quiet forever after dismiss.
+    // If the finding has already regressed before, the operator may be
+    // silently dismissing a recurring issue. The dismiss confirmation panel
+    // must surface that recurrence as a non-blocking hint and nudge them
+    // toward the reminder-bearing 'will_fix_later' path. The hint must NOT
+    // appear for will_fix_later itself (already commitment-tracking) or for
+    // findings with no prior regression.
+    expect(findingsPanelSource).toContain('(finding.regressionCount || 0) > 1');
+    expect(findingsPanelSource).toContain("dismissReason() === 'not_an_issue'");
+    expect(findingsPanelSource).toContain("dismissReason() === 'expected_behavior'");
+    expect(findingsPanelSource).toContain('this finding has regressed');
+    expect(findingsPanelSource).toContain('"Later" sets a');
+  });
+
   it("badges dismissed-as-will_fix_later rows with their pending remind-at deadline", () => {
     // Once a finding is dismissed as will_fix_later, the row must surface the
     // pending reminder so the operator knows the commitment exists; otherwise

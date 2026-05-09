@@ -1192,6 +1192,24 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 Use "Expected" or "Later" if the detection itself is correct.
               </p>
             </Show>
+            {/* Recurrence hint: if a finding has regressed multiple times, the
+                operator may be silently dismissing something that keeps coming
+                back. Surface that fact for not_an_issue and expected_behavior
+                (the two "stay quiet forever" paths) so they can reconsider
+                'will_fix_later' as a reminder-bearing alternative. */}
+            <Show
+              when={
+                (finding.regressionCount || 0) > 1 &&
+                (dismissReason() === 'not_an_issue' ||
+                  dismissReason() === 'expected_behavior')
+              }
+            >
+              <p class="text-[11px] text-amber-700 dark:text-amber-300 mb-1.5 italic">
+                Heads up: this finding has regressed {finding.regressionCount} times
+                before. If you intend to fix it eventually, "Later" sets a
+                7-day reminder instead of going silent permanently.
+              </p>
+            </Show>
             <textarea
               class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
               rows={2}

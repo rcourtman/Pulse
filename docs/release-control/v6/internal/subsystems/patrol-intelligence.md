@@ -1099,3 +1099,12 @@ own commitment without expanding the row. The store-level
 surfaces; render code reads it from the store, the store normalizer
 promotes it from `remind_at` on both the unified and patrol-direct
 fetch paths.
+That same dismiss confirmation must also surface a non-blocking
+recurrence hint when the operator is about to dismiss a finding with
+`regressionCount > 1` as `not_an_issue` or `expected_behavior` (the two
+"stay quiet forever" reasons). The hint must nudge the operator toward
+the reminder-bearing `will_fix_later` path without blocking the dismiss,
+and must NOT appear for `will_fix_later` itself or for findings with no
+prior regression. This is the operator-facing half of "Pulse learns from
+operator dismissal patterns" — a recurring issue should not be silently
+buried just because the operator is moving fast on triage.
