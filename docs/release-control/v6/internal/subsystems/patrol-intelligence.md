@@ -1186,13 +1186,17 @@ The two boolean toggles (`IntentionallyOffline`,
 Save/Discard actions; flipping `NeverAutoRemediate` true requires an
 explicit confirmation prompt because it's a safety override that
 locks the resource against all automated remediation, while flipping
-it false (releasing the lock) is permissive. Maintenance windows are
-displayed read-only this slice — when an active window covers `now`,
-the section badges it; scheduling lives in a separate slice that
-owns the date-picker UX. The section uses `createNonSuspendingQuery`
-rather than `createResource` so the drawer's parent Suspense
-boundary does not flicker the page-level fallback while operator
-state is in flight.
+it false (releasing the lock) is permissive. Maintenance windows have
+their own scheduler (HTML5 datetime-local inputs with 1h / 4h / 24h
+quick presets and a free-form reason field); the section
+distinguishes a future-scheduled window from one that currently covers
+`now` so the operator sees "scheduled" before the window opens,
+"active" while it covers now, and clean state once it ends. Scheduler
+saves preserve the toggle state and toggle saves preserve the window,
+so the two facets stay decoupled — editing one does not lose work on
+the other. The section uses `createNonSuspendingQuery` rather than
+`createResource` so the drawer's parent Suspense boundary does not
+flicker the page-level fallback while operator state is in flight.
 
 The findings store also consumes per-resource operator-set state via
 the narrow `ResourceOperatorStateProvider` interface installed by

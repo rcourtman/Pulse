@@ -49,12 +49,11 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('if (next && !neverAutoRemediate())');
   });
 
-  it('preserves persisted maintenance-window data on save so the toggle slice does not clobber the window slice', () => {
-    // This slice owns toggles only; the maintenance-window scheduler
-    // lands separately. If save sent only the toggle fields the server
-    // would null out the window data on every save (PUT replaces). Pin
-    // that the input passed to setResourceOperatorState carries the
-    // current window fields through.
+  it('preserves persisted maintenance-window data on toggle save so the two facets stay decoupled', () => {
+    // Toggling intentionallyOffline or neverAutoRemediate must not
+    // clobber a persisted maintenance window. The toggle save path
+    // reads the current persisted window fields and forwards them
+    // through the PUT body (which replaces the whole record).
     expect(sectionSource).toContain('maintenanceStartAt: current?.maintenanceStartAt');
     expect(sectionSource).toContain('maintenanceEndAt: current?.maintenanceEndAt');
     expect(sectionSource).toContain('maintenanceReason: current?.maintenanceReason');
@@ -62,13 +61,67 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('note: current?.note');
   });
 
+  it('exposes a maintenance-window scheduler with HTML5 datetime-local inputs and quick presets', () => {
+    // The scheduler is the operator's path to setting a maintenance
+    // window without curling the API. Pin the wiring: datetime-local
+    // inputs, validation that end > start, optional reason field, and
+    // 1h/4h/24h quick presets.
+    expect(sectionSource).toContain('schedulerOpen');
+    expect(sectionSource).toContain('handleScheduleSave');
+    expect(sectionSource).toContain('handleClearMaintenanceWindow');
+    expect(sectionSource).toContain('applyPresetDuration');
+    expect(sectionSource).toContain('type="datetime-local"');
+    expect(sectionSource).toContain('scheduleValidationError');
+    // Quick presets — the three most common operator durations.
+    expect(sectionSource).toContain('applyPresetDuration(1)');
+    expect(sectionSource).toContain('applyPresetDuration(4)');
+    expect(sectionSource).toContain('applyPresetDuration(24)');
+    // Both directions of the datetime conversion live in helpers so the
+    // scheduler stays free of inline date arithmetic.
+    expect(sectionSource).toContain('formatLocalForInput');
+    expect(sectionSource).toContain('parseLocalFromInput');
+  });
+
+  it('validates client-side that the scheduled end is strictly after start', () => {
+    // The server validates the same constraint and returns 400 with
+    // operator_state_invalid; pinning client-side validation keeps the
+    // operator out of an avoidable round-trip. The Save button is gated
+    // on the validation memo so a stale form state cannot be submitted.
+    expect(sectionSource).toContain('End must be after start.');
+    expect(sectionSource).toContain('disabled={saving() || Boolean(scheduleValidationError())}');
+  });
+
+  it('distinguishes a future-scheduled window from an active one in the badge surface', () => {
+    // Active: now is within [start, end). Future-scheduled: start > now.
+    // Each surfaces a distinct badge so operators see "scheduled"
+    // before the window opens, "active" while it covers now, and
+    // nothing once it ends.
+    expect(sectionSource).toContain('scheduledMaintenanceWindow');
+    expect(sectionSource).toContain('Maintenance window scheduled.');
+    expect(sectionSource).toContain('Auto-acknowledgement will start');
+  });
+
+  it('exposes Edit window and Cancel window controls when a window exists', () => {
+    // The compact view (form closed) must offer both editing the
+    // window and clearing it without reopening the form. Cancel
+    // window must clear ONLY the window fields, preserving the
+    // toggles.
+    expect(sectionSource).toContain('Schedule window');
+    expect(sectionSource).toContain('Edit window');
+    expect(sectionSource).toContain('Cancel window');
+    // handleClearMaintenanceWindow must preserve toggles by reading
+    // the current edit-state signals rather than nulling everything.
+    expect(sectionSource).toContain('intentionallyOffline: intentionallyOffline()');
+    expect(sectionSource).toContain('neverAutoRemediate: neverAutoRemediate()');
+    expect(sectionSource).toContain('maintenanceStartAt: undefined,');
+    expect(sectionSource).toContain('maintenanceEndAt: undefined,');
+  });
+
   it('renders a maintenance-window-active badge when the persisted window covers now', () => {
-    // Read-only display of the active window so operators see "this is
-    // why findings are quiet right now" without being able to schedule
-    // one yet (scheduler is a follow-up slice). The section must gate
-    // the badge on the now-falls-within-window check, not just on the
-    // presence of a window — a future-scheduled window should not show
-    // as active.
+    // The section must gate the active badge on the
+    // now-falls-within-window check, not just on the presence of a
+    // window — a future-scheduled window surfaces under a separate
+    // "scheduled" badge instead.
     expect(sectionSource).toContain('activeMaintenanceWindow');
     expect(sectionSource).toContain('Maintenance window active.');
     expect(sectionSource).toContain('if (now < start || now >= end) return null;');
