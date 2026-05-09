@@ -1137,3 +1137,153 @@ func TestExecuteCommandWithAuditAllowsDispatchWhenResourceUnlocked(t *testing.T)
 	}
 	agentServer.AssertCalled(t, "ExecuteCommand", mock.Anything, "agent-allowed", mock.Anything)
 }
+
+func TestSetOnActionCompleted_FiresOnSuccessfulDispatch(t *testing.T) {
+	// The post-completion callback is the seam the API layer uses to
+	// bridge action audits into the agent SSE stream
+	// (action.completed events). Pin the contract: the callback
+	// fires once per terminal-state record, sees the persisted
+	// audit, and runs without blocking the dispatch caller —
+	// fire-and-forget on its own goroutine.
+	store := unifiedresources.NewMemoryStore()
+	agentServer := &mockAgentServer{}
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-cb", mock.Anything).
+		Return(&agentexec.CommandResultPayload{Success: true, Stdout: "ok", ExitCode: 0}, nil).Once()
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: store,
+	})
+
+	got := make(chan unifiedresources.ActionAuditRecord, 1)
+	executor.SetOnActionCompleted(func(rec unifiedresources.ActionAuditRecord) {
+		got <- rec
+	})
+
+	if _, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"agent-cb",
+		"",
+		false,
+		"agent-cb",
+		agentexec.ExecuteCommandPayload{
+			Command:    "uptime",
+			TargetType: "agent",
+			TargetID:   "agent-cb",
+		},
+		"pulse_control",
+		"run uptime",
+	); err != nil {
+		t.Fatalf("executeCommandWithAudit: %v", err)
+	}
+
+	select {
+	case received := <-got:
+		if received.State != unifiedresources.ActionStateCompleted {
+			t.Errorf("callback record state = %q, want %q", received.State, unifiedresources.ActionStateCompleted)
+		}
+		if received.ID == "" {
+			t.Error("callback record must carry the canonical action id")
+		}
+		if received.Request.ResourceID != "agent-cb" {
+			t.Errorf("callback resource id = %q, want %q", received.Request.ResourceID, "agent-cb")
+		}
+		if received.Result == nil || !received.Result.Success {
+			t.Errorf("callback result must surface success: %#v", received.Result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("post-completion callback did not fire within 2s")
+	}
+}
+
+func TestSetOnActionCompleted_FiresOnPlanDriftRefusal(t *testing.T) {
+	// Plan-drift refusal lands in the audit store as Failed with the
+	// stable `plan_drift:` prefix; the callback must surface that
+	// terminal state so agents can branch on the refusal token
+	// without polling.
+	now := time.Date(2026, 5, 9, 9, 30, 0, 0, time.UTC)
+	approvedPlan := unifiedresources.ActionPlan{
+		ActionID:         "drift-action",
+		RequestID:        "appr-drift",
+		Allowed:          true,
+		RequiresApproval: true,
+		ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+		PlannedAt:        now,
+		ExpiresAt:        now.Add(5 * time.Minute),
+		PlanHash:         "approved-but-drifted",
+		Message:          "approved reason",
+	}
+	approvedReq := &approval.ApprovalRequest{
+		ID:          "appr-drift",
+		Command:     "approved-cmd",
+		TargetType:  "agent",
+		TargetID:    "agent-drift",
+		TargetName:  "agent-drift",
+		Status:      approval.StatusApproved,
+		Plan:        &approvedPlan,
+		RequestedAt: now,
+		ExpiresAt:   now.Add(5 * time.Minute),
+	}
+	approvalStoreOriginal := approval.GetStore()
+	defer approval.SetStore(approvalStoreOriginal)
+	memStore := unifiedresources.NewMemoryStore()
+	approvalStoreLocal, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DefaultTimeout:     5 * time.Minute,
+		DisablePersistence: true,
+	})
+	if err != nil {
+		t.Fatalf("approval.NewStore: %v", err)
+	}
+	if err := approvalStoreLocal.CreateApproval(approvedReq); err != nil {
+		t.Fatalf("CreateApproval: %v", err)
+	}
+	approval.SetStore(approvalStoreLocal)
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      &mockAgentServer{},
+		ActionAuditStore: memStore,
+	})
+
+	got := make(chan unifiedresources.ActionAuditRecord, 1)
+	executor.SetOnActionCompleted(func(rec unifiedresources.ActionAuditRecord) {
+		got <- rec
+	})
+
+	// Submit a payload whose hash will not match the approved plan.
+	if _, dispatchErr := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"agent-drift",
+		"appr-drift",
+		true,
+		"agent-drift",
+		agentexec.ExecuteCommandPayload{
+			Command:    "different-cmd",
+			TargetType: "agent",
+			TargetID:   "agent-drift",
+		},
+		"pulse_control",
+		"different reason",
+	); dispatchErr == nil {
+		t.Fatal("expected plan-drift refusal; got nil error")
+	} else if !strings.Contains(dispatchErr.Error(), "plan") {
+		// Defensive: the validator's exact error wording can evolve;
+		// just confirm we got an error from the drift path rather
+		// than from somewhere else.
+		t.Logf("drift error: %v", dispatchErr)
+	}
+
+	select {
+	case received := <-got:
+		if received.State != unifiedresources.ActionStateFailed {
+			t.Errorf("refusal state = %q, want %q", received.State, unifiedresources.ActionStateFailed)
+		}
+		if received.Result == nil || !strings.HasPrefix(received.Result.ErrorMessage, "plan_drift:") {
+			t.Errorf("refusal must carry plan_drift: prefix on ErrorMessage; got %#v", received.Result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("plan-drift callback did not fire within 2s")
+	}
+}

@@ -1363,17 +1363,22 @@ notifications: `finding.created` when a new finding is raised
 `StatusPending` and is waiting on operator decision (carries
 `approvalId`, `resourceId`, target tuple, `command`, `riskLevel`,
 `requestedBy`, `requestedAt`, `expiresAt` — full detail stays
-behind `/api/approvals/{id}`, the event is a doorbell), and
+behind `/api/approvals/{id}`, the event is a doorbell),
+`action.completed` when an action audit reaches a terminal state —
+Completed, runtime-Failed, or refused-before-dispatch (refusals
+carry the stable error-token prefix `plan_drift:` or
+`resource_remediation_locked:` verbatim on `errorMessage` so agents
+branch on the prefix rather than parsing human text) — and
 `heartbeat` every 15 seconds so an idle connection can confirm
 the stream is alive. Each event carries a monotonic ID so agents
 can dedupe and reason about ordering. The broadcaster drops events
 for slow subscribers rather than blocking the publish path —
 publishers (the patrol findings runtime, the approval store's
-post-create callback, future action-completion hooks) cannot stall
-on consumer slowness. The stream sits behind `monitoring:read` and
-runs through the same auth path as the rest of the agent surface;
-the capabilities manifest declares the stream under
-`subscribe_events` so external agents discover it without
+post-create callback, the executor's post-completion callback)
+cannot stall on consumer slowness. The stream sits behind
+`monitoring:read` and runs through the same auth path as the rest
+of the agent surface; the capabilities manifest declares the stream
+under `subscribe_events` so external agents discover it without
 out-of-band documentation.
 
 The approval store exposes `SetOnApprovalCreated(cb)` so the API
@@ -1391,6 +1396,25 @@ canonical `type:id` form the agent SSE bridge stamps on
 TargetName)` via the same rule the store uses internally — agents
 match the result against canonical resource ids elsewhere in Pulse
 without depending on a `Plan` being populated.
+
+`PulseToolExecutor` exposes `SetOnActionCompleted(cb)` as the
+parallel seam for action-audit terminal states. Every dispatch
+that reaches `ActionStateCompleted` or `ActionStateFailed` —
+including refused-before-dispatch refusals routed through the
+plan-drift and operator-lock guards in `executeCommandWithAudit`,
+the per-execution result lane shared by `executeCommandWithAudit`
+and `executeNativeActionWithAudit`, and the recovery branch when
+state-machine normalization fails — calls
+`publishActionCompleted(record)`, which dispatches the callback on
+its own goroutine after the audit record has already been
+persisted. The callback is installed once per chat-service per
+org through `wireAIChatDependenciesForService` against
+`chatService.GetExecutor()`, so multi-tenant chat-service rebuilds
+re-wire the bridge without coupling the tools package to the api
+package. `action.completed` payloads preserve the canonical
+refusal-token prefixes (`plan_drift:`, `resource_remediation_locked:`)
+on `errorMessage` verbatim so agents branch on the stable code
+without parsing human messages.
 
 `/api/agent/capabilities` is the discovery document for Pulse's
 agent surface. The manifest declares each agent-consumable

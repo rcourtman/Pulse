@@ -13357,6 +13357,110 @@ func TestContract_SubscribeEventsCapabilityListsApprovalPending(t *testing.T) {
 	}
 }
 
+// TestContract_AgentEventsStreamPublishesOnActionCompleted pins the
+// agent SSE stream's third producer hook: the executor's
+// post-completion callback must publish action.completed events for
+// every terminal-state audit so an agent holding /api/agent/events
+// open closes the dispatch loop without polling. The bridge lives in
+// wireAIChatDependenciesForService so the callback is re-installed
+// on every per-org chat-service init. Drift here means agents lose
+// the push-notification path for dispatch outcomes — including the
+// refused-before-dispatch failures that carry stable error tokens.
+func TestContract_AgentEventsStreamPublishesOnActionCompleted(t *testing.T) {
+	source, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord)") {
+		t.Error("router.go must install the post-completion callback on the executor returned from chatService.GetExecutor() so the agent SSE stream is wired per-org")
+	}
+	if !strings.Contains(src, "broadcaster.PublishActionCompleted(payload)") {
+		t.Error("router.go must bridge action completion into PublishActionCompleted — drift means agents lose the push-notification path for dispatch outcomes")
+	}
+	if !strings.Contains(src, "ActionID:       record.ID") {
+		t.Error("action.completed payload must carry the canonical action id so agents can correlate the event with /api/actions/{id}")
+	}
+	if !strings.Contains(src, "ResourceID:     record.Request.ResourceID") {
+		t.Error("action.completed payload must carry the canonical resource id so agents can match it against the rest of Pulse")
+	}
+}
+
+// TestContract_ExecutorPostCompletionCallback pins the seam the SSE
+// bridge depends on. The executor must expose SetOnActionCompleted
+// and the action_audit hot path must dispatch the callback for every
+// terminal-state record (success, runtime fail, plan-drift refusal,
+// remediation-lock refusal). Removing or in-lining the callback
+// breaks the bridge silently.
+func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
+	executor, err := os.ReadFile("../ai/tools/executor.go")
+	if err != nil {
+		t.Fatalf("read executor.go: %v", err)
+	}
+	executorSrc := string(executor)
+	if !strings.Contains(executorSrc, "func (e *PulseToolExecutor) SetOnActionCompleted(cb func(unifiedresources.ActionAuditRecord))") {
+		t.Error("executor must expose SetOnActionCompleted so the API layer can bridge action completion into the agent SSE stream")
+	}
+
+	audit, err := os.ReadFile("../ai/tools/action_audit.go")
+	if err != nil {
+		t.Fatalf("read action_audit.go: %v", err)
+	}
+	auditSrc := string(audit)
+	if !strings.Contains(auditSrc, "func (e *PulseToolExecutor) publishActionCompleted(record unifiedresources.ActionAuditRecord)") {
+		t.Error("action_audit.go must define publishActionCompleted helper so terminal-state writers route through one bridge point")
+	}
+	if !strings.Contains(auditSrc, "go cb(record)") {
+		t.Error("post-completion callback must run on its own goroutine to keep the dispatch hot path off any consumer's slowness")
+	}
+	// Pin that all four terminal sites call publishActionCompleted.
+	terminalSites := []string{
+		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "plan drift refused")
+			e.publishActionCompleted(record)`,
+		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "resource remediation lock refused")
+		e.publishActionCompleted(record)`,
+		`e.recordActionLifecycle(record.ID, record.State, actor, message)
+		e.publishActionCompleted(record)`,
+	}
+	for _, site := range terminalSites {
+		if !strings.Contains(auditSrc, site) {
+			t.Errorf("action_audit.go must call publishActionCompleted at every terminal-state site; missing block:\n%s", site)
+		}
+	}
+}
+
+// TestContract_AgentEventActionCompletedKindIsStable pins the
+// wire-stable event kind string. Renaming AgentEventActionCompleted
+// breaks every agent that branches on the SSE event-type field; the
+// constant is part of the contract, not an implementation detail.
+func TestContract_AgentEventActionCompletedKindIsStable(t *testing.T) {
+	source, err := os.ReadFile("agent_events.go")
+	if err != nil {
+		t.Fatalf("read agent_events.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, `AgentEventActionCompleted AgentEventKind = "action.completed"`) {
+		t.Error("AgentEventActionCompleted must remain bound to the wire-stable string \"action.completed\" — renaming it breaks every agent that branches on the SSE event type")
+	}
+}
+
+// TestContract_SubscribeEventsCapabilityListsActionCompleted pins
+// the discovery contract: the capabilities manifest must mention
+// action.completed under subscribe_events so an agent reading the
+// manifest learns the kind exists without out-of-band documentation.
+// Drift here means external agents miss the event entirely because
+// they didn't know to listen for it.
+func TestContract_SubscribeEventsCapabilityListsActionCompleted(t *testing.T) {
+	source, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "action.completed when an action audit reaches a terminal state") {
+		t.Error("subscribe_events description must mention action.completed so agents discover the kind through the manifest")
+	}
+}
+
 // TestContract_AgentCapabilitiesManifestVersionIsPinned pins the
 // manifest's version contract: bumping it is reserved for breaking
 // shape changes, additive capabilities ship under the same version.

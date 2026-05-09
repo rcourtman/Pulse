@@ -329,3 +329,106 @@ func TestAgentEventApprovalPendingKindIsStable(t *testing.T) {
 			AgentEventApprovalPending, "approval.pending")
 	}
 }
+
+func TestAgentEventBroadcaster_PublishActionCompletedDelivers(t *testing.T) {
+	// action.completed is the third event kind the broadcaster
+	// publishes (alongside finding.created and approval.pending).
+	// Pin the contract: kind name, full payload round-trip with
+	// dispatch-outcome fields agents branch on, monotonic id
+	// assignment shared across kinds.
+	b := NewAgentEventBroadcaster()
+	events, unsub := b.Subscribe()
+	defer unsub()
+
+	completed := time.Now().UTC()
+	b.PublishActionCompleted(AgentEventActionCompletedPayload{
+		ActionID:       "action-1",
+		ResourceID:     "container:web-1",
+		CapabilityName: "pulse_docker",
+		Command:        "docker restart web-1",
+		State:          "completed",
+		Success:        true,
+		RequestedBy:    "ai:patrol",
+		CompletedAt:    completed,
+	})
+
+	select {
+	case event := <-events:
+		if event.Kind != AgentEventActionCompleted {
+			t.Fatalf("kind: got %q want %q", event.Kind, AgentEventActionCompleted)
+		}
+		if event.ID == 0 {
+			t.Error("event id must be assigned")
+		}
+		if event.At.IsZero() {
+			t.Error("event timestamp must be populated")
+		}
+		payload, ok := event.Payload.(AgentEventActionCompletedPayload)
+		if !ok {
+			t.Fatalf("payload type: got %T want AgentEventActionCompletedPayload", event.Payload)
+		}
+		if payload.ActionID != "action-1" {
+			t.Errorf("ActionID: got %q want %q", payload.ActionID, "action-1")
+		}
+		if payload.ResourceID != "container:web-1" {
+			t.Errorf("ResourceID: got %q want %q", payload.ResourceID, "container:web-1")
+		}
+		if payload.State != "completed" {
+			t.Errorf("State: got %q want %q", payload.State, "completed")
+		}
+		if !payload.Success {
+			t.Error("Success did not round-trip")
+		}
+		if !payload.CompletedAt.Equal(completed) {
+			t.Errorf("CompletedAt did not round-trip: got %v want %v", payload.CompletedAt, completed)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for action.completed event")
+	}
+}
+
+func TestAgentEventBroadcaster_PublishActionCompletedPreservesRefusalToken(t *testing.T) {
+	// Refused-before-dispatch failures carry a stable error-token
+	// prefix in ErrorMessage (`plan_drift:` /
+	// `resource_remediation_locked:`) that agents branch on. The
+	// broadcaster must round-trip it verbatim — drift here breaks
+	// the contract that lets agents distinguish "the action was
+	// refused due to operator state" from "the action errored".
+	b := NewAgentEventBroadcaster()
+	events, unsub := b.Subscribe()
+	defer unsub()
+
+	b.PublishActionCompleted(AgentEventActionCompletedPayload{
+		ActionID:     "action-refused",
+		ResourceID:   "vm:db-1",
+		State:        "failed",
+		Success:      false,
+		ErrorMessage: "resource_remediation_locked: resource has been locked by the operator",
+		CompletedAt:  time.Now().UTC(),
+	})
+
+	select {
+	case event := <-events:
+		payload, ok := event.Payload.(AgentEventActionCompletedPayload)
+		if !ok {
+			t.Fatalf("payload type: got %T", event.Payload)
+		}
+		if payload.Success {
+			t.Error("refused dispatches must not surface as Success=true")
+		}
+		if !strings.HasPrefix(payload.ErrorMessage, "resource_remediation_locked:") {
+			t.Errorf("ErrorMessage prefix lost: got %q", payload.ErrorMessage)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for action.completed event")
+	}
+}
+
+func TestAgentEventActionCompletedKindIsStable(t *testing.T) {
+	// Pin the wire-stable kind string. Renaming it breaks every
+	// agent that branches on the event type.
+	if AgentEventActionCompleted != "action.completed" {
+		t.Fatalf("AgentEventActionCompleted changed: got %q want %q",
+			AgentEventActionCompleted, "action.completed")
+	}
+}

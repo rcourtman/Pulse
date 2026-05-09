@@ -608,6 +608,20 @@ approvals (the common shape on the approval hot path) still carry
 a canonical resource id agents can match against the rest of
 Pulse.
 
+`PulseToolExecutor` exposes `SetOnActionCompleted(cb)` as the
+parallel seam for action-audit terminal states. The action-audit
+hot path in `internal/ai/tools/action_audit.go` routes every
+terminal-state record (Completed, runtime-Failed, plan-drift
+refusal, operator-lock refusal, recovery-branch fail) through a
+single helper `publishActionCompleted(record)` which guards on
+nil callback, defensively filters non-terminal states, and fires
+the callback on its own goroutine after the audit record has
+been persisted. Refused-before-dispatch failures preserve the
+canonical `plan_drift:` and `resource_remediation_locked:`
+error-token prefixes on `record.Result.ErrorMessage` so the agent
+SSE stream's `action.completed` payload carries them verbatim —
+agents branch on the prefix rather than parsing human text.
+
 The investigation runtime now hands the orchestrator a Finding
 pre-enriched with operator-set state and operational memory.
 `MaybeInvestigateFinding` (in `internal/ai/patrol_findings.go`)

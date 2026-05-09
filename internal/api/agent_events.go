@@ -34,6 +34,16 @@ const (
 	// fetch full context via the approval endpoints, or escalate.
 	AgentEventApprovalPending AgentEventKind = "approval.pending"
 
+	// AgentEventActionCompleted fires when an action audit reaches a
+	// terminal state — Completed (executed and verified) or Failed
+	// (refused before dispatch with a stable error-token prefix, or
+	// errored during execution). Payload carries the canonical action
+	// id, the resource it targeted, the capability and command, the
+	// outcome (success bool + optional error message), who acted,
+	// and the completion timestamp — enough for an agent to close
+	// the dispatch loop without polling the audit endpoint.
+	AgentEventActionCompleted AgentEventKind = "action.completed"
+
 	// AgentEventHeartbeat is a keepalive that fires at a fixed
 	// interval. Agents that hold an open SSE connection use it to
 	// confirm the stream is healthy without waiting for a real
@@ -83,6 +93,28 @@ type AgentEventApprovalPendingPayload struct {
 	RequestedBy string    `json:"requestedBy,omitempty"`
 	RequestedAt time.Time `json:"requestedAt"`
 	ExpiresAt   time.Time `json:"expiresAt"`
+}
+
+// AgentEventActionCompletedPayload is the payload shape for
+// action.completed events. Carries the dispatch outcome agents
+// branch on: success/failure, the resource the action ran against,
+// the canonical capability + command, who acted, and any error
+// message. Refused-before-dispatch failures carry the stable
+// error-token prefix (`plan_drift:`, `resource_remediation_locked:`)
+// in ErrorMessage so agents branch on the prefix rather than
+// parsing human text. Full audit detail (lifecycle events,
+// preflight, verification result) stays behind the existing
+// /api/actions/{id} endpoint.
+type AgentEventActionCompletedPayload struct {
+	ActionID       string    `json:"actionId"`
+	ResourceID     string    `json:"resourceId,omitempty"`
+	CapabilityName string    `json:"capabilityName,omitempty"`
+	Command        string    `json:"command,omitempty"`
+	State          string    `json:"state"`
+	Success        bool      `json:"success"`
+	ErrorMessage   string    `json:"errorMessage,omitempty"`
+	RequestedBy    string    `json:"requestedBy,omitempty"`
+	CompletedAt    time.Time `json:"completedAt"`
 }
 
 // AgentEventBroadcaster is a thread-safe pub/sub for AgentEvents. A
@@ -273,6 +305,17 @@ func (b *AgentEventBroadcaster) PublishFindingCreated(payload AgentEventFindingC
 func (b *AgentEventBroadcaster) PublishApprovalPending(payload AgentEventApprovalPendingPayload) {
 	b.Publish(AgentEvent{
 		Kind:    AgentEventApprovalPending,
+		Payload: payload,
+	})
+}
+
+// PublishActionCompleted is the convenience publisher the executor's
+// post-completion hook routes through. Wraps the payload in the
+// canonical envelope and forwards to Publish — the broadcaster
+// stamps the timestamp and event id.
+func (b *AgentEventBroadcaster) PublishActionCompleted(payload AgentEventActionCompletedPayload) {
+	b.Publish(AgentEvent{
+		Kind:    AgentEventActionCompleted,
 		Payload: payload,
 	})
 }

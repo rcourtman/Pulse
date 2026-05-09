@@ -2466,6 +2466,39 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		log.Info().Str("org_id", orgID).Msg("Chat service wired to AI service for patrol and investigation")
 	}
 
+	// Bridge action-audit completion into the agent SSE stream so an
+	// agent holding /api/agent/events open hears about every dispatch
+	// outcome — Completed, Failed, or refused-before-dispatch with the
+	// stable `plan_drift:` / `resource_remediation_locked:` token —
+	// without polling the audit endpoint. Independent of aiService
+	// availability: the executor exists per-org regardless of whether
+	// the patrol/investigation surface is wired up. The callback is
+	// fire-and-forget on the dispatch hot path; PublishActionCompleted
+	// drops events for slow subscribers rather than blocking.
+	if chatService != nil && r.agentEventBroadcaster != nil {
+		if executor := chatService.GetExecutor(); executor != nil {
+			broadcaster := r.agentEventBroadcaster
+			executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord) {
+				payload := AgentEventActionCompletedPayload{
+					ActionID:       record.ID,
+					ResourceID:     record.Request.ResourceID,
+					CapabilityName: record.Request.CapabilityName,
+					State:          string(record.State),
+					RequestedBy:    record.Request.RequestedBy,
+					CompletedAt:    record.UpdatedAt,
+				}
+				if cmd, ok := record.Request.Params["command"].(string); ok {
+					payload.Command = cmd
+				}
+				if record.Result != nil {
+					payload.Success = record.Result.Success
+					payload.ErrorMessage = record.Result.ErrorMessage
+				}
+				broadcaster.PublishActionCompleted(payload)
+			})
+		}
+	}
+
 	// Wire alert provider
 	if monitor != nil {
 		if alertManager := monitor.GetAlertManager(); alertManager != nil {

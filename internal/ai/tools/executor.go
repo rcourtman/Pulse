@@ -532,6 +532,14 @@ type PulseToolExecutor struct {
 	appContainerActionProvider AppContainerActionProvider
 	appContainerReadProvider   AppContainerReadProvider
 	actionAuditStore           unifiedresources.ResourceStore
+	// onActionCompleted fires after a terminal-state action audit
+	// (Completed or Failed, including refused-before-dispatch
+	// failures) is persisted. Wired by the API layer through the
+	// per-org chat-service init so the agent SSE stream can publish
+	// action.completed events. nil is safe — the callback is
+	// fire-and-forget on its own goroutine to keep the dispatch hot
+	// path off any consumer's slowness.
+	onActionCompleted func(unifiedresources.ActionAuditRecord)
 	// Typed state reader. Nil means "legacy-only": tools must fall back to StateSnapshot access.
 	readState unifiedresources.ReadState
 
@@ -887,6 +895,22 @@ func (e *PulseToolExecutor) SetAppContainerReadProvider(provider AppContainerRea
 // SetActionAuditStore sets the durable store used to persist action audit and lifecycle events.
 func (e *PulseToolExecutor) SetActionAuditStore(store unifiedresources.ResourceStore) {
 	e.actionAuditStore = store
+}
+
+// SetOnActionCompleted installs a fire-and-forget callback that runs
+// after every terminal-state action audit is persisted (Completed or
+// Failed, including refused-before-dispatch failures with stable
+// `plan_drift:` / `resource_remediation_locked:` error prefixes).
+// Pass nil to disable. Used by the API layer to bridge action
+// completion into the agent SSE stream without coupling the tools
+// package to the api package. The callback runs on its own
+// goroutine; consumers must not assume immediate or in-order
+// delivery relative to subsequent dispatches.
+func (e *PulseToolExecutor) SetOnActionCompleted(cb func(unifiedresources.ActionAuditRecord)) {
+	if e == nil {
+		return
+	}
+	e.onActionCompleted = cb
 }
 
 // GetActionAuditStore returns the durable store used to persist action audit and lifecycle events.

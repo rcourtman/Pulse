@@ -927,13 +927,20 @@ enforces downstream — no possible drift between "what Patrol
 proposes" and "what the broker accepts."
 
 `/api/agent/events` is the SSE stream agents subscribe to for
-real-time notifications (`finding.created` events plus a 15-second
-heartbeat keepalive). The broadcaster drops events for slow
-subscribers rather than blocking publishers, so the patrol-finding
-runtime can publish without ever stalling on consumer slowness. The
-agent runtime keeps the broadcaster wired across restarts, and the
-capabilities manifest declares the stream under `subscribe_events`
-so the surface stays self-describing.
+real-time notifications: `finding.created` when a new finding is
+raised, `approval.pending` when a remediation request enters
+StatusPending and waits on operator decision, `action.completed`
+when an action audit reaches a terminal state (Completed,
+runtime-Failed, or refused-before-dispatch with stable
+`plan_drift:` / `resource_remediation_locked:` error-token
+prefixes preserved verbatim), and a 15-second heartbeat keepalive.
+The broadcaster drops events for slow subscribers rather than
+blocking publishers, so the patrol-finding runtime, the approval
+store's post-create callback, and the executor's post-completion
+callback can publish without ever stalling on consumer slowness.
+The agent runtime keeps the broadcaster wired across restarts, and
+the capabilities manifest declares the stream under
+`subscribe_events` so the surface stays self-describing.
 
 `/api/agent/capabilities` is the discovery document any external
 agent reads to learn what Pulse exposes. The manifest is

@@ -957,8 +957,13 @@ through the same provider over the same durable table.
 The agent SSE stream at `/api/agent/events` is in-memory and
 stateless. No persistence; each connection starts fresh from the
 moment of subscribe. Agents that need to catch up across reconnects
-fetch the read endpoints (findings list, audit list) for replay —
-those are the durable surfaces.
+fetch the read endpoints (findings list, approvals list, audit
+list) for replay — those are the durable surfaces. The
+`approval.pending` and `action.completed` events fire after the
+canonical record (approval row or action-audit row) has already
+been persisted, so a missed event is recoverable by reading the
+backing endpoint; the stream is a doorbell for recent activity,
+not the source of truth.
 
 The agent capabilities manifest at `/api/agent/capabilities` is
 read-only and stateless — no persistence is involved. The manifest

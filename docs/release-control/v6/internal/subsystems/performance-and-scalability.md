@@ -521,7 +521,15 @@ bounded (64 events) and a full buffer drops the event for that
 subscriber rather than stalling the publish path. A slow agent does
 not pin the patrol-finding hot path; many concurrent agents do not
 multiply per-finding work because each subscriber gets its own
-non-blocking send.
+non-blocking send. The same guarantee extends to the governance and
+action-audit producers wired through the same broadcaster:
+`approval.pending` events fire from the approval store's post-create
+callback on its own goroutine after the approval is persisted, and
+`action.completed` events fire from `PulseToolExecutor`'s
+post-completion callback on its own goroutine after the audit
+record is persisted. Goroutine dispatch keeps the approval and
+dispatch hot paths independent of consumer drain rate; per-event
+cost is one channel send per subscriber.
 
 `/api/agent/resource-context/{id}` does at most three reads per
 request: one operator-state SQLite point lookup (already covered by

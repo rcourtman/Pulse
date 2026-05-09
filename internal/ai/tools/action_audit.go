@@ -131,6 +131,7 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 			}
 			e.recordActionAudit(record)
 			e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "plan drift refused")
+			e.publishActionCompleted(record)
 			return nil, driftErr
 		}
 	}
@@ -161,6 +162,7 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 		}
 		e.recordActionAudit(record)
 		e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "resource remediation lock refused")
+		e.publishActionCompleted(record)
 		return nil, unifiedresources.ErrResourceRemediationLocked
 	}
 
@@ -495,12 +497,14 @@ func (e *PulseToolExecutor) recordActionExecutionResult(record unifiedresources.
 		}
 		e.recordActionAudit(record)
 		e.recordActionLifecycle(record.ID, record.State, actor, message)
+		e.publishActionCompleted(record)
 		return record
 	}
 	if strings.TrimSpace(message) != "" {
 		event.Message = strings.TrimSpace(message)
 	}
 	if e == nil || e.actionAuditStore == nil {
+		e.publishActionCompleted(completed)
 		return completed
 	}
 	if err := e.actionAuditStore.RecordActionExecutionResult(completed, event); err != nil {
@@ -510,6 +514,7 @@ func (e *PulseToolExecutor) recordActionExecutionResult(record unifiedresources.
 			Str("state", string(completed.State)).
 			Msg("failed to persist action execution result")
 	}
+	e.publishActionCompleted(completed)
 	return completed
 }
 
@@ -524,6 +529,30 @@ func (e *PulseToolExecutor) recordActionAudit(record unifiedresources.ActionAudi
 			Str("resource_id", record.Request.ResourceID).
 			Msg("failed to persist action audit")
 	}
+}
+
+// publishActionCompleted dispatches the executor's post-completion
+// callback, if installed. Fire-and-forget on its own goroutine: the
+// callback runs after the audit record has already been persisted,
+// so a panic or stall on the consumer side must not back up the
+// dispatch hot path. Snapshots the record by value so the consumer
+// reads a stable view independent of any subsequent record
+// mutations on the originating goroutine.
+func (e *PulseToolExecutor) publishActionCompleted(record unifiedresources.ActionAuditRecord) {
+	if e == nil {
+		return
+	}
+	cb := e.onActionCompleted
+	if cb == nil {
+		return
+	}
+	if record.State != unifiedresources.ActionStateCompleted && record.State != unifiedresources.ActionStateFailed {
+		// Defensive — only Completed/Failed are terminal states the
+		// agent SSE stream surfaces. Any other state would confuse
+		// agents that branch on "this action is done."
+		return
+	}
+	go cb(record)
 }
 
 func (e *PulseToolExecutor) recordActionLifecycle(actionID string, state unifiedresources.ActionState, actor, message string) {
