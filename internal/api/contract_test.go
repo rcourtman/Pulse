@@ -13623,6 +13623,52 @@ func TestContract_AgentFleetContextEndpointSurfacesStableShape(t *testing.T) {
 	}
 }
 
+// TestContract_OperatorStateWriteServerPopulatesAttribution pins the
+// audit-honesty contract for the agent surface's only write loop:
+// the PUT handler must populate SetAt and SetBy from the server,
+// ignoring any client-supplied values. Drift here would let an
+// agent (or a misconfigured client) spoof attribution timestamps,
+// breaking the audit trail's trust model.
+func TestContract_OperatorStateWriteServerPopulatesAttribution(t *testing.T) {
+	source, err := os.ReadFile("resources_operator_state.go")
+	if err != nil {
+		t.Fatalf("read resources_operator_state.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "SetAt: time.Now().UTC(),") {
+		t.Error("operator-state PUT must populate SetAt with the server clock — client cannot spoof attribution")
+	}
+	if !strings.Contains(src, "SetBy: getUserID(r),") {
+		t.Error("operator-state PUT must populate SetBy from the authenticated identity — client cannot spoof who-did-it")
+	}
+	if !strings.Contains(src, "// canonical_id from URL wins over body") {
+		t.Error("operator-state PUT must take the canonical id from the URL, not the body — drift would let scope-confusion writes succeed")
+	}
+}
+
+// TestContract_OperatorStateWriteEmitsStableErrorTokens pins that
+// the only two error codes the manifest declares for set/get
+// operator-state actually reach the wire from the handler. Drift
+// here means external agents branching on operator_state_not_set
+// or operator_state_invalid would silently miss the relevant
+// failures — manifest claims a code that the handler never emits.
+func TestContract_OperatorStateWriteEmitsStableErrorTokens(t *testing.T) {
+	source, err := os.ReadFile("resources_operator_state.go")
+	if err != nil {
+		t.Fatalf("read resources_operator_state.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, `"operator_state_not_set"`) {
+		t.Error("GET handler must emit operator_state_not_set when no entry exists — manifest declares this code")
+	}
+	if !strings.Contains(src, `"operator_state_invalid"`) {
+		t.Error("PUT handler must emit operator_state_invalid on validation failure — manifest declares this code")
+	}
+	if !strings.Contains(src, "errors.Is(err, unified.ErrResourceOperatorStateInvalid)") {
+		t.Error("PUT handler must branch on ErrResourceOperatorStateInvalid so domain validation errors map to the stable wire token — string-matching the error message would drift")
+	}
+}
+
 // TestContract_AgentCapabilitiesManifestIsPublic pins the auth
 // contract for the discovery surface: the manifest must be in the
 // router's publicPaths list so it serves without a token. The

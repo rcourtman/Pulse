@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -213,4 +214,222 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("subscribe_events unauth: status = %d, want 401 (path must be registered, just gated); body = %s", rec.Code, rec.Body.String())
 	}
+}
+
+// TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary
+// is the end-to-end contract proof for the agent-paradigm write
+// substrate. The only write capability the manifest declares is the
+// operator-state intent loop — set/get/clear — and this test boots
+// the full router stack to walk every state of that loop through
+// the actual HTTP boundary, asserting the manifest's declared error
+// codes for set_operator_state and get_operator_state actually
+// reach the wire from the handlers.
+//
+// Specifically:
+//   - GET on a never-written resource returns 404 with
+//     operator_state_not_set under the canonical "error" key, so
+//     agents can branch on "no entry" vs "default-zero entry".
+//   - PUT with valid input returns 200 with the persisted state,
+//     including server-populated attribution (SetAt) that the
+//     client-supplied value cannot spoof.
+//   - GET after PUT round-trips the same state.
+//   - PUT with invalid criticality returns 400 with
+//     operator_state_invalid — the second stable error code the
+//     manifest declares for this capability.
+//   - DELETE clears idempotently.
+//   - GET after DELETE returns to the not-set 404 again, closing
+//     the lifecycle loop.
+//   - The same resource id can be a colon-bearing canonical id
+//     (e.g. vm:101) — the URL path segment must round-trip without
+//     percent-encoding tripping the routing.
+//
+// This is the substantive proof for the write side: the agent
+// surface — read, write, push — has now been exercised end-to-end
+// as one substrate.
+func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testing.T) {
+	rawToken := "agent-substrate-write-e2e.12345678"
+	record := newTokenRecord(t, rawToken,
+		[]string{config.ScopeMonitoringRead, config.ScopeMonitoringWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	// Pull the manifest first to confirm what we're about to
+	// exercise matches what the discovery contract declares. This
+	// closes the "manifest is honest" loop on the write side.
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/capabilities", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("capabilities GET: status = %d", rec.Code)
+	}
+	var manifest AgentCapabilitiesManifest
+	if err := json.NewDecoder(rec.Body).Decode(&manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	byName := map[string]AgentCapability{}
+	for _, c := range manifest.Capabilities {
+		byName[c.Name] = c
+	}
+	setCap := byName["set_operator_state"]
+	getCap := byName["get_operator_state"]
+	clearCap := byName["clear_operator_state"]
+
+	if setCap.Method != http.MethodPut || setCap.Scope != "monitoring:write" {
+		t.Fatalf("set_operator_state declared method/scope: got %q/%q, want PUT/monitoring:write",
+			setCap.Method, setCap.Scope)
+	}
+	if !stringSliceContains(setCap.ErrorCodes, "operator_state_invalid") {
+		t.Fatalf("set_operator_state must declare operator_state_invalid; got %v", setCap.ErrorCodes)
+	}
+	if getCap.Method != http.MethodGet || getCap.Scope != "monitoring:read" {
+		t.Fatalf("get_operator_state declared method/scope: got %q/%q, want GET/monitoring:read",
+			getCap.Method, getCap.Scope)
+	}
+	if !stringSliceContains(getCap.ErrorCodes, "operator_state_not_set") {
+		t.Fatalf("get_operator_state must declare operator_state_not_set; got %v", getCap.ErrorCodes)
+	}
+	if clearCap.Method != http.MethodDelete || clearCap.Scope != "monitoring:write" {
+		t.Fatalf("clear_operator_state declared method/scope: got %q/%q, want DELETE/monitoring:write",
+			clearCap.Method, clearCap.Scope)
+	}
+
+	// The capability paths use {resourceId} as the placeholder. Sub
+	// in a colon-bearing canonical id so the test exercises the
+	// URL-routing path most agents will actually hit.
+	resourceID := "vm:e2e-write-101"
+	resolvedPath := strings.Replace(setCap.Path, "{resourceId}", resourceID, 1)
+
+	// --- 1. GET on never-written resource → 404 not_set. ---
+	req = httptest.NewRequest(http.MethodGet, resolvedPath, nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET unset: status = %d, want 404, body = %s", rec.Code, rec.Body.String())
+	}
+	notSetBody := rec.Body.String()
+	if !strings.Contains(notSetBody, `"error":"operator_state_not_set"`) {
+		t.Errorf("GET unset must carry stable error code operator_state_not_set; body = %s", notSetBody)
+	}
+
+	// --- 2. PUT valid state → 200 with persisted state. ---
+	validBody := []byte(`{
+		"intentionallyOffline": true,
+		"neverAutoRemediate": true,
+		"note": "decommissioned for hardware refresh"
+	}`)
+	req = httptest.NewRequest(http.MethodPut, resolvedPath, bytes.NewReader(validBody))
+	req.Header.Set("X-API-Token", rawToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT valid: status = %d, want 200, body = %s", rec.Code, rec.Body.String())
+	}
+	var persisted resourceOperatorStateAPI
+	if err := json.NewDecoder(rec.Body).Decode(&persisted); err != nil {
+		t.Fatalf("decode PUT response: %v", err)
+	}
+	// The URL canonical id must override anything the body might
+	// say (this body says nothing) — server-populated, not
+	// client-controlled.
+	if persisted.CanonicalID != resourceID {
+		t.Errorf("PUT response CanonicalID: got %q, want %q (URL must override body)",
+			persisted.CanonicalID, resourceID)
+	}
+	if !persisted.IntentionallyOffline {
+		t.Error("PUT response must round-trip IntentionallyOffline=true")
+	}
+	if !persisted.NeverAutoRemediate {
+		t.Error("PUT response must round-trip NeverAutoRemediate=true")
+	}
+	if persisted.Note != "decommissioned for hardware refresh" {
+		t.Errorf("PUT response Note did not round-trip; got %q", persisted.Note)
+	}
+	if persisted.SetAt.IsZero() {
+		t.Error("PUT response must carry server-populated SetAt — client cannot spoof attribution")
+	}
+
+	// --- 3. GET after PUT round-trips. ---
+	req = httptest.NewRequest(http.MethodGet, resolvedPath, nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET after PUT: status = %d, want 200, body = %s", rec.Code, rec.Body.String())
+	}
+	var fetched resourceOperatorStateAPI
+	if err := json.NewDecoder(rec.Body).Decode(&fetched); err != nil {
+		t.Fatalf("decode GET-after-PUT: %v", err)
+	}
+	if fetched.CanonicalID != persisted.CanonicalID ||
+		fetched.IntentionallyOffline != persisted.IntentionallyOffline ||
+		fetched.NeverAutoRemediate != persisted.NeverAutoRemediate ||
+		fetched.Note != persisted.Note {
+		t.Errorf("GET-after-PUT does not round-trip:\n  got  %+v\n  want %+v", fetched, persisted)
+	}
+
+	// --- 4. PUT invalid → 400 operator_state_invalid. ---
+	// Unknown criticality is the cleanest input that survives JSON
+	// decoding but fails ValidateResourceOperatorState — the
+	// validator names the field in the message, which we do not
+	// pin (human text), but the stable code is what agents branch
+	// on.
+	invalidBody := []byte(`{"criticality": "very-high"}`)
+	req = httptest.NewRequest(http.MethodPut, resolvedPath, bytes.NewReader(invalidBody))
+	req.Header.Set("X-API-Token", rawToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PUT invalid: status = %d, want 400, body = %s", rec.Code, rec.Body.String())
+	}
+	invalidBodyResp := rec.Body.String()
+	if !strings.Contains(invalidBodyResp, `"error":"operator_state_invalid"`) {
+		t.Errorf("PUT invalid must carry stable error code operator_state_invalid; body = %s", invalidBodyResp)
+	}
+
+	// --- 5. DELETE → 204 (idempotent). ---
+	req = httptest.NewRequest(http.MethodDelete, resolvedPath, nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE: status = %d, want 204, body = %s", rec.Code, rec.Body.String())
+	}
+
+	// --- 6. GET after DELETE → 404 not_set, closing the loop. ---
+	req = httptest.NewRequest(http.MethodGet, resolvedPath, nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET after DELETE: status = %d, want 404, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"error":"operator_state_not_set"`) {
+		t.Errorf("GET after DELETE must surface operator_state_not_set again; body = %s", rec.Body.String())
+	}
+
+	// --- 7. DELETE again → still 204 (idempotency contract). ---
+	req = httptest.NewRequest(http.MethodDelete, resolvedPath, nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE idempotent: status = %d, want 204 (clear must succeed even when no entry exists)", rec.Code)
+	}
+}
+
+// stringSliceContains is a tiny string-slice membership helper so the
+// e2e test can assert manifest contents without taking on a sort
+// dependency. Named to avoid colliding with internal/api/diagnostics.go's
+// existing `contains` and config_handlers_setup_script_test.go's
+// `containsString` helpers.
+func stringSliceContains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }

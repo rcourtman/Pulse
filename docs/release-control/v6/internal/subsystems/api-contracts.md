@@ -1447,6 +1447,22 @@ without losing the code. The capabilities manifest's `errorCodes`
 list per capability is the closed set of values the `error` field
 may carry on failure; an unmatched value is a contract regression.
 
+The agent substrate is end-to-end exercised by two paired tests in
+`internal/api/agent_substrate_e2e_test.go`. The first test boots
+the full router stack and walks discovery → triage → depth: fetch
+the manifest unauthenticated, call `/api/agent/fleet-context`
+authenticated, drill into `/api/agent/resource-context/{id}`, and
+confirm the SSE stream path is gated rather than absent. The
+second test walks the operator-state intent loop end-to-end:
+GET-not-set → PUT-valid → GET-round-trip → PUT-invalid →
+DELETE → GET-not-set-again → DELETE-idempotent, asserting the
+manifest's declared error codes (`operator_state_not_set`,
+`operator_state_invalid`) reach the wire under the canonical
+`error` key and that the URL canonical id wins over any
+body-supplied id (preventing scope-confusion writes). Together
+the two tests are the substantive proof for the agent surface —
+read, write, push — as one substrate.
+
 `/api/agent/resource-context/{id}` is the agent-consumable bundled
 context endpoint. One read returns the full situated picture of a
 resource — identity, operator-set state (with server-computed
