@@ -1478,6 +1478,25 @@ top-to-bottom to see how the substrate fits together. The probe
 resolves paths from the manifest rather than hardcoding them, so
 discovery moves automatically follow.
 
+A second adapter lives at `cmd/pulse-mcp/main.go` — a minimal
+MCP (Model Context Protocol) server that exposes the agent
+substrate as MCP tools so Claude Desktop, Claude Code, and other
+MCP-speaking clients can drive Pulse natively. The adapter is
+the test for whether the substrate's contracts were really cheap
+to project: each MCP tool is one entry in the hand-authored
+manifest, and the input schema is auto-derived from the path
+placeholders and method (path `{name}` segments become required
+string properties; non-GET/DELETE tools accept a `body` object).
+Adding a capability to the manifest automatically extends the MCP
+tool surface without changes in the adapter. `subscribe_events` is
+intentionally excluded — SSE streaming doesn't fit the
+request/response tool shape; agents that need real-time push
+consume the SSE stream directly. The adapter speaks JSON-RPC 2.0
+over stdio with line-delimited framing, and preserves the
+substrate's stable error envelope (`{"error": "code", "message":
+"..."}`) verbatim through MCP's content-and-isError result so
+agents on the MCP side branch on the same stable codes.
+
 `/api/agent/resource-context/{id}` is the agent-consumable bundled
 context endpoint. One read returns the full situated picture of a
 resource — identity, operator-set state (with server-computed
