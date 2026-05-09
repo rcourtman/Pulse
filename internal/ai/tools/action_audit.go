@@ -165,6 +165,45 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 		}
 	}
 
+	// Read-after-write verification: if execution succeeded AND the command
+	// class has a derivable verification check, run it via the same agent
+	// path and record the outcome on the audit record. Verification is
+	// best-effort: if no check is derivable, or the check fails to run, we
+	// record that fact rather than fabricating a verified=true.
+	if executionResult.Success {
+		if vCmd, ok := VerificationCommandForCommand(payload.TargetType, payload.Command); ok {
+			vRanAt := time.Now().UTC()
+			vResult, vErr := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+				Command:    vCmd,
+				TargetType: payload.TargetType,
+				TargetID:   payload.TargetID,
+			})
+			verification := &unifiedresources.ActionVerificationResult{
+				Ran:     true,
+				Command: vCmd,
+				RanAt:   vRanAt,
+			}
+			if vErr != nil {
+				verification.Success = false
+				verification.Note = fmt.Sprintf("verification check failed to dispatch: %s", vErr.Error())
+			} else {
+				output := strings.TrimSpace(vResult.Stdout)
+				if vResult.Stderr != "" {
+					if output != "" {
+						output += "\n"
+					}
+					output += strings.TrimSpace(vResult.Stderr)
+				}
+				verification.Output = output
+				verification.Success = vResult.ExitCode == 0
+				if !verification.Success {
+					verification.Note = fmt.Sprintf("verification check exit code %d", vResult.ExitCode)
+				}
+			}
+			executionResult.Verification = verification
+		}
+	}
+
 	e.recordActionExecutionResult(record, executionResult, requestedBy, finalMessage)
 
 	return result, err

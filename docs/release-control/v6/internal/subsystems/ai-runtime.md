@@ -303,6 +303,18 @@ runtime cost control, and shared AI transport surfaces.
     action path uses a different hash function (`actionPlanHashForParams`)
     so a coherent canonical-hash refactor must precede adding the same
     check there.
+    The broker runs a class-derived read-after-write verification check
+    immediately after a successful dispatch. `VerificationCommandForCommand`
+    in `internal/ai/tools/tools_control.go` returns the executable check
+    keyed on the same command class as the preflight authoring (e.g.
+    `systemctl is-active <unit>` after a service-restart). The check
+    runs through the same agent path as the dispatch and the outcome is
+    persisted on `ExecutionResult.Verification` so the audit history
+    shows not only what the action did but whether the read-back
+    confirmed the intended state. Container-class verification is
+    deferred to pulse_docker's existing tool-level `docker inspect`
+    check; classes without a derivable verification command leave
+    `Verification` nil rather than fabricating a verified=true entry.
     The approval preflight presented to operators authors per-command-class
     safety and verification context on top of the default broker-level
     posture. `classifyApprovalCommand` and

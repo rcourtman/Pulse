@@ -581,6 +581,192 @@ func TestExecuteCommandWithAuditRefusesPayloadDriftAgainstApprovedPlan(t *testin
 	}
 }
 
+// TestExecuteCommandWithAuditRunsClassDerivedVerificationAfterDispatch
+// covers the read-after-write loop: when a successful dispatch matches a
+// known command class, the broker derives the verification command and
+// runs it via the same agent path. The result is persisted on the audit
+// record's ExecutionResult.Verification so the audit history shows not
+// only what the action did but whether the read-back confirmed it.
+func TestExecuteCommandWithAuditRunsClassDerivedVerificationAfterDispatch(t *testing.T) {
+	actionStore := unifiedresources.NewMemoryStore()
+
+	agentServer := &mockAgentServer{}
+	// Dispatch: systemctl restart nginx — succeeds.
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return payload.Command == "systemctl restart nginx"
+	})).Return(&agentexec.CommandResultPayload{
+		Success:  true,
+		Stdout:   "",
+		ExitCode: 0,
+	}, nil).Once()
+	// Verification: systemctl is-active nginx — succeeds with "active".
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return payload.Command == "systemctl is-active 'nginx'"
+	})).Return(&agentexec.CommandResultPayload{
+		Success:  true,
+		Stdout:   "active",
+		ExitCode: 0,
+	}, nil).Once()
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: actionStore,
+	})
+	_, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"node-1",
+		"",
+		false,
+		"agent-1",
+		agentexec.ExecuteCommandPayload{
+			Command:    "systemctl restart nginx",
+			TargetType: "agent",
+			TargetID:   "agent-1",
+		},
+		"pulse_control",
+		"restart nginx after Patrol detected stale config",
+	)
+	if err != nil {
+		t.Fatalf("executeCommandWithAudit: %v", err)
+	}
+
+	audits, err := actionStore.GetActionAudits("node-1", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(audits) != 1 {
+		t.Fatalf("audits len = %d, want 1", len(audits))
+	}
+	verification := audits[0].Result.Verification
+	if verification == nil {
+		t.Fatalf("expected ExecutionResult.Verification to be populated, got nil")
+	}
+	if !verification.Ran {
+		t.Fatalf("expected Verification.Ran=true")
+	}
+	if verification.Command != "systemctl is-active 'nginx'" {
+		t.Fatalf("Verification.Command = %q, want %q", verification.Command, "systemctl is-active 'nginx'")
+	}
+	if !verification.Success {
+		t.Fatalf("expected Verification.Success=true after exit code 0")
+	}
+	if verification.Output != "active" {
+		t.Fatalf("Verification.Output = %q, want %q", verification.Output, "active")
+	}
+	agentServer.AssertExpectations(t)
+}
+
+// TestExecuteCommandWithAuditMarksVerificationFailedWhenReadbackDoesNotConfirm
+// covers the negative case: dispatch succeeded, but the read-after-write
+// check returned a non-zero exit code (e.g. service is "failed" not
+// "active"). Verification.Success must reflect the read-back outcome
+// rather than the dispatch outcome so the audit row honestly shows that
+// Pulse ran the action but couldn't confirm it took.
+func TestExecuteCommandWithAuditMarksVerificationFailedWhenReadbackDoesNotConfirm(t *testing.T) {
+	actionStore := unifiedresources.NewMemoryStore()
+
+	agentServer := &mockAgentServer{}
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return payload.Command == "systemctl restart workload"
+	})).Return(&agentexec.CommandResultPayload{
+		Success:  true,
+		ExitCode: 0,
+	}, nil).Once()
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return payload.Command == "systemctl is-active 'workload'"
+	})).Return(&agentexec.CommandResultPayload{
+		Success:  false,
+		Stdout:   "failed",
+		ExitCode: 3,
+	}, nil).Once()
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: actionStore,
+	})
+	_, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"node-1",
+		"",
+		false,
+		"agent-1",
+		agentexec.ExecuteCommandPayload{
+			Command:    "systemctl restart workload",
+			TargetType: "agent",
+			TargetID:   "agent-1",
+		},
+		"pulse_control",
+		"restart workload after backup window",
+	)
+	if err != nil {
+		t.Fatalf("executeCommandWithAudit: %v", err)
+	}
+
+	audits, _ := actionStore.GetActionAudits("node-1", time.Time{}, 10)
+	verification := audits[0].Result.Verification
+	if verification == nil || !verification.Ran {
+		t.Fatalf("expected verification ran, got %#v", verification)
+	}
+	if verification.Success {
+		t.Fatalf("expected Verification.Success=false after exit code 3")
+	}
+	if verification.Output != "failed" {
+		t.Fatalf("Verification.Output = %q, want %q", verification.Output, "failed")
+	}
+	if !strings.Contains(verification.Note, "exit code 3") {
+		t.Fatalf("Verification.Note missing exit code, got: %q", verification.Note)
+	}
+}
+
+// TestExecuteCommandWithAuditSkipsVerificationForUnclassifiedCommands
+// covers the no-fabrication boundary: when no verification command is
+// derivable for the action class, the broker leaves Verification nil
+// rather than recording a fake "verified" entry.
+func TestExecuteCommandWithAuditSkipsVerificationForUnclassifiedCommands(t *testing.T) {
+	actionStore := unifiedresources.NewMemoryStore()
+
+	agentServer := &mockAgentServer{}
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return payload.Command == "echo hello"
+	})).Return(&agentexec.CommandResultPayload{
+		Success:  true,
+		Stdout:   "hello",
+		ExitCode: 0,
+	}, nil).Once()
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: actionStore,
+	})
+	_, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"node-1",
+		"",
+		false,
+		"agent-1",
+		agentexec.ExecuteCommandPayload{
+			Command:    "echo hello",
+			TargetType: "agent",
+			TargetID:   "agent-1",
+		},
+		"pulse_control",
+		"echo greeting",
+	)
+	if err != nil {
+		t.Fatalf("executeCommandWithAudit: %v", err)
+	}
+
+	audits, _ := actionStore.GetActionAudits("node-1", time.Time{}, 10)
+	if audits[0].Result.Verification != nil {
+		t.Fatalf("expected nil Verification for unclassified command, got %#v", audits[0].Result.Verification)
+	}
+	// Exactly one ExecuteCommand call expected (no verification dispatch).
+	agentServer.AssertExpectations(t)
+}
+
 // TestExecuteCommandWithAuditAllowsMatchingPlanHash covers the positive case:
 // when the payload at execute time hashes identically to the approved plan,
 // dispatch proceeds normally.

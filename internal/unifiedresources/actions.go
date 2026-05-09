@@ -93,9 +93,28 @@ type ActionPlan struct {
 
 // ExecutionResult captures the output of the native capability driver.
 type ExecutionResult struct {
-	Success      bool   `json:"success"`
-	Output       string `json:"output,omitempty"`
-	ErrorMessage string `json:"errorMessage,omitempty"`
+	Success      bool                      `json:"success"`
+	Output       string                    `json:"output,omitempty"`
+	ErrorMessage string                    `json:"errorMessage,omitempty"`
+	Verification *ActionVerificationResult `json:"verification,omitempty"`
+}
+
+// ActionVerificationResult records the outcome of a post-execution
+// read-after-write check. The broker derives a class-specific verification
+// command (e.g. `systemctl is-active <unit>` after a service-restart action)
+// and runs it via the same agent path used for the original dispatch. The
+// result is persisted alongside ExecutionResult so the audit history shows
+// not only what the action did but whether the read-back confirmed the
+// intended state. Verification is best-effort: if the agent is unreachable
+// or no verification command is derivable for the action class, Ran is
+// false and the rest of the fields are empty rather than fabricated.
+type ActionVerificationResult struct {
+	Ran     bool      `json:"ran"`
+	Command string    `json:"command,omitempty"`
+	Output  string    `json:"output,omitempty"`
+	Success bool      `json:"success"`
+	RanAt   time.Time `json:"ranAt,omitempty"`
+	Note    string    `json:"note,omitempty"`
 }
 
 // ActionAuditRecord tracks the full end-to-end lifecycle of a tool invocation.

@@ -1517,6 +1517,92 @@ func approvalPreflight(req *approval.ApprovalRequest) *approval.ActionPreflight 
 	}
 }
 
+// VerificationCommandForCommand derives the read-after-write check Pulse
+// will run after a successful dispatch. The check is keyed on the same
+// command class as approvalCommandClassPreflightAdditions, so the
+// verification narrative the operator saw at approval time and the
+// verification actually executed stay coherent. Returns "", false for
+// classes without a derivable check; the broker must skip verification
+// rather than fabricate one.
+//
+// Container classes (container-restart, container-stop) are intentionally
+// excluded here: pulse_docker already runs its own per-container
+// `docker inspect` verification at the tool layer, and adding a parallel
+// broker-level dispatch would double-run the same check. If the tool layer
+// stops doing its own verification, this function should grow a docker
+// branch using `extractContainerName`.
+func VerificationCommandForCommand(targetType, command string) (string, bool) {
+	class := classifyApprovalCommand(targetType, command)
+	switch class {
+	case "service-restart", "service-start", "service-reload", "service-stop":
+		unit := extractServiceUnitName(command)
+		if unit == "" {
+			return "", false
+		}
+		return "systemctl is-active " + shellQuoteSingle(unit), true
+	}
+	return "", false
+}
+
+// extractServiceUnitName parses the unit name out of a systemctl/service
+// command. Supports the common shapes:
+//
+//	"systemctl restart nginx"   -> "nginx"
+//	"systemctl reload my.service" -> "my.service"
+//	"service restart redis"     -> "redis"
+//
+// Returns empty string when the command does not parse cleanly so the
+// caller can decline to verify rather than guess at the unit.
+func extractServiceUnitName(command string) string {
+	fields := strings.Fields(strings.TrimSpace(command))
+	if len(fields) < 3 {
+		return ""
+	}
+	first := strings.ToLower(fields[0])
+	if first != "systemctl" && first != "service" {
+		return ""
+	}
+	// Service action verbs (restart/start/stop/reload) live at index 1 for
+	// "systemctl restart nginx" and at index 2 for "service restart nginx";
+	// the canonical form we recognize puts the action at index 1 and the
+	// unit at index 2.
+	verb := strings.ToLower(fields[1])
+	switch verb {
+	case "restart", "start", "stop", "reload":
+		return fields[2]
+	}
+	return ""
+}
+
+// extractContainerName parses the container name out of a docker/podman
+// command of the form "docker restart <name>" or "podman stop <name>".
+func extractContainerName(command string) string {
+	fields := strings.Fields(strings.TrimSpace(command))
+	if len(fields) < 3 {
+		return ""
+	}
+	first := strings.ToLower(fields[0])
+	if first != "docker" && first != "podman" {
+		return ""
+	}
+	verb := strings.ToLower(fields[1])
+	if verb != "restart" && verb != "stop" && verb != "start" {
+		return ""
+	}
+	return fields[2]
+}
+
+// shellQuoteSingle wraps the value in single quotes and escapes any
+// embedded single quotes for shell-safe inclusion in the verification
+// command. The verification path runs through the same agent dispatch as
+// the original command, so the same shell-escape contract applies.
+func shellQuoteSingle(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+}
+
 // classifyApprovalCommand maps a (targetType, command) pair to a stable
 // class string used by approvalCommandClassPreflightAdditions. Returns
 // empty string for commands that do not match a known class — those keep

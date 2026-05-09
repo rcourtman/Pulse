@@ -377,6 +377,15 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func RedactAuditText(s string) string",
 			"func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord",
 		},
+		// ActionVerificationResult is the canonical post-execution
+		// read-after-write outcome carrier. The broker writes it onto
+		// ExecutionResult.Verification; pinning the type here keeps the
+		// shape stable across refactors so frontend audit surfaces and
+		// any other consumers can rely on it.
+		filepath.Join(".", "actions.go"): {
+			"type ActionVerificationResult struct",
+			"Verification *ActionVerificationResult `json:\"verification,omitempty\"`",
+		},
 		filepath.Join("..", "api", "actions.go"): {
 			"type ActionExecutor interface",
 			"func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request)",

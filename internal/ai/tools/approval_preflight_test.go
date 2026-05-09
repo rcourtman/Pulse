@@ -76,6 +76,38 @@ func TestApprovalCommandClassPreflightAdditions_ReturnsEmptyForUnknownClass(t *t
 	}
 }
 
+func TestVerificationCommandForCommand_DerivesPerClassReadAfterWriteCheck(t *testing.T) {
+	cases := []struct {
+		name    string
+		target  string
+		command string
+		wantCmd string
+		wantOk  bool
+	}{
+		{"systemctl restart", "agent", "systemctl restart nginx", "systemctl is-active 'nginx'", true},
+		{"systemctl reload with .service suffix", "agent", "systemctl reload my.service", "systemctl is-active 'my.service'", true},
+		{"systemctl stop", "agent", "systemctl stop postgres", "systemctl is-active 'postgres'", true},
+		// Docker/podman classes are intentionally excluded from broker-level
+		// verification — pulse_docker runs its own docker inspect check at
+		// the tool layer, so adding a broker-level dispatch would double-run.
+		{"docker restart deferred to tool layer", "docker", "docker restart homepage", "", false},
+		{"podman restart deferred to tool layer", "agent", "podman restart pihole", "", false},
+		{"unknown command", "agent", "echo hello", "", false},
+		{"systemctl with single-quote in unit", "agent", `systemctl restart nasty'name`, "systemctl is-active 'nasty'\\''name'", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd, ok := VerificationCommandForCommand(tc.target, tc.command)
+			if ok != tc.wantOk {
+				t.Fatalf("VerificationCommandForCommand(%q, %q) ok = %v, want %v", tc.target, tc.command, ok, tc.wantOk)
+			}
+			if cmd != tc.wantCmd {
+				t.Fatalf("VerificationCommandForCommand(%q, %q) cmd = %q, want %q", tc.target, tc.command, cmd, tc.wantCmd)
+			}
+		})
+	}
+}
+
 func TestApprovalPreflight_MergesClassAdditionsIntoSafetyAndVerification(t *testing.T) {
 	// End-to-end check that approvalPreflight surfaces the per-class
 	// additions to the operator without losing the default safety /

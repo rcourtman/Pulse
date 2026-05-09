@@ -511,7 +511,20 @@ AI-only summary payloads, or page-local heuristics.
     intentionally narrower than the patrol-failure redactor: arbitrary
     URLs are preserved so operators can reference runbooks, ticket
     links, and GitHub issues in audit reasons.
-21. Keep governed-action drift refusal canonical in
+21. Keep post-execution verification outcome on the canonical execution
+    result. `ExecutionResult.Verification` carries
+    `ActionVerificationResult` with `Ran`, `Command`, `Output`,
+    `Success`, `RanAt`, and `Note`. The broker runs the
+    class-derived read-after-write check after a successful dispatch
+    and persists the outcome through the existing `result_json`
+    column; no schema migration is required. Verification is
+    best-effort: classes without a derivable check leave
+    `Verification` nil rather than fabricating a verified=true entry,
+    matching the no-fabrication rule used elsewhere in the trust
+    arc. Frontend audit surfaces must surface verification when
+    present (so operators see "Pulse confirmed the action took") and
+    omit it cleanly when nil rather than inventing placeholder copy.
+22. Keep governed-action drift refusal canonical in
     `internal/unifiedresources/actions.go`. `ErrActionPlanDrift` is the
     error any broker must return when the payload presented at execute
     time hashes to anything different than the approval-recorded
