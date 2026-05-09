@@ -917,6 +917,13 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+`/api/agent/capabilities` is the discovery document any external
+agent reads to learn what Pulse exposes. The manifest is
+unauthenticated and cacheable; the underlying capabilities keep
+their own auth scopes. Adding a capability is a deliberate "this
+is part of the agent surface" commitment so the agent contract
+stays curated, not auto-derived from every internal endpoint.
+
 `/api/agent/resource-context/{id}` is the agent-paradigm substrate
 endpoint: any agent (in-process Patrol/Assistant or external) reads
 the full situated picture of a resource — identity, operator state,

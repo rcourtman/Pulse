@@ -947,6 +947,11 @@ bypass the API fail-closed execution gate.
 
 ## Current State
 
+The agent capabilities manifest at `/api/agent/capabilities` is
+read-only and stateless — no persistence is involved. The manifest
+is hand-authored in `internal/api/agent_capabilities.go`; storage
+flows are not affected.
+
 The agent-consumable bundled context endpoint
 `/api/agent/resource-context/{id}` reads the same durable
 `resource_operator_state` table and `action_audits` table through the

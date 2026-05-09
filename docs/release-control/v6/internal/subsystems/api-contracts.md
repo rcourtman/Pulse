@@ -1343,6 +1343,22 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+`/api/agent/capabilities` is the discovery document for Pulse's
+agent surface. The manifest declares each agent-consumable
+capability with stable name (snake_case agent identifier),
+description, category (`context` / `operator-state` / `finding`),
+HTTP method + path, required auth scope, response shape name, and
+the closed set of stable error codes the response may carry. Agents
+fetch this once at startup to learn what's available; future
+MCP-server slices read the manifest to register tools. The manifest
+itself is unauthenticated and cacheable (`Cache-Control: public,
+max-age=300`); the underlying capabilities keep their own auth
+scopes. Adding a capability is a deliberate "this is part of the
+agent surface" commitment — the manifest is hand-authored rather
+than auto-generated so contract decisions (which capabilities are
+agent-stable, what the stable error codes are, what category each
+belongs to) cannot drift behind code changes.
+
 `/api/agent/resource-context/{id}` is the agent-consumable bundled
 context endpoint. One read returns the full situated picture of a
 resource — identity, operator-set state (with server-computed

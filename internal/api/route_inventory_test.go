@@ -411,6 +411,7 @@ var allRouteAllowlist = []string{
 	"/api/resources/{id}/timeline",
 	"/api/resources/{id}/operator-state",
 	"/api/agent/resource-context/{id}",
+	"/api/agent/capabilities",
 	"POST /api/actions/plan",
 	"POST /api/actions/{id}/decision",
 	"POST /api/actions/{id}/execute",

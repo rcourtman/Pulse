@@ -13233,6 +13233,38 @@ func assertJSONSnapshot(t *testing.T, got []byte, want string) {
 	}
 }
 
+// TestContract_AgentCapabilitiesManifestVersionIsPinned pins the
+// manifest's version contract: bumping it is reserved for breaking
+// shape changes, additive capabilities ship under the same version.
+// Pinning the version string here means a refactor that accidentally
+// bumps it shows up as a test failure rather than silently breaking
+// every external agent that validates compatibility on startup.
+func TestContract_AgentCapabilitiesManifestVersionIsPinned(t *testing.T) {
+	source, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, `Version: "v1"`) {
+		t.Error("agent capabilities manifest must pin Version to v1; bumping is a breaking-change decision and should not happen silently")
+	}
+	// Capability surface anchors — these names are agent-stable
+	// identifiers and renaming any of them breaks every external
+	// integration. Pin them here so renames must be deliberate.
+	required := []string{
+		"\"get_resource_context\"",
+		"\"get_operator_state\"",
+		"\"set_operator_state\"",
+		"\"clear_operator_state\"",
+		"\"list_findings\"",
+	}
+	for _, name := range required {
+		if !strings.Contains(src, name) {
+			t.Errorf("agent capabilities manifest must declare canonical capability %s", name)
+		}
+	}
+}
+
 // TestContract_AgentResourceContextEndpointSurfacesStableShape pins
 // the agent-paradigm substrate contract: the bundled endpoint must
 // return arrays (never null) for activeFindings and recentActions so

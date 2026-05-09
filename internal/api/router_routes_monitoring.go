@@ -63,6 +63,11 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// situated picture of a resource in one read instead of chaining
 	// resource + operator-state + findings + audit calls.
 	r.mux.HandleFunc("/api/agent/resource-context/{id}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.agentContextHandler.HandleResourceContext)))
+	// Agent capabilities manifest — discovery document. Unauthenticated
+	// because it only describes the agent surface; the capabilities
+	// themselves keep their own auth scopes. Agents fetch this once at
+	// startup to learn what's available.
+	r.mux.HandleFunc("/api/agent/capabilities", HandleAgentCapabilitiesManifest)
 	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandlePlanAction)))
 	r.mux.HandleFunc("POST /api/actions/{id}/decision", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleDecideAction)))
 	r.mux.HandleFunc("POST /api/actions/{id}/execute", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleExecuteAction)))
