@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createResource, onCleanup } from 'solid-js';
+import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentation';
 import {
   ConnectionsAPI,
   type Connection,
@@ -241,9 +242,13 @@ const buildRow = (
   const attachedConnections = componentConnections.filter(
     (connection) => connection.id !== primaryConnection.id,
   );
-  const lastErrorMessage =
+  // Run raw backend error chains through the user-facing presenter so the
+  // connection table doesn't surface implementation strings like 'context
+  // deadline exceeded' or 'Client.Timeout exceeded while awaiting headers'.
+  const rawLastErrorMessage =
     primaryConnection.lastError?.message ??
     attachedConnections.find((connection) => connection.lastError?.message)?.lastError?.message;
+  const lastErrorMessage = formatConnectionErrorMessage(rawLastErrorMessage) ?? undefined;
   const hostTelemetryLabel = surfaceLabel('host');
   const coverageLabels = isCluster
     ? coverageLabelsFor(componentConnections).filter((label) => label !== hostTelemetryLabel)
