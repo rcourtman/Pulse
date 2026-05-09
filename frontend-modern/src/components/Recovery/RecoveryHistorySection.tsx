@@ -334,7 +334,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
             <span class="text-muted">/</span>
             <span
               class="min-w-0 truncate font-medium text-base-content"
-              title={props.selectedHistoryItemLabel()}
+              title={props.selectedHistoryItemLabel() ?? ''}
             >
               {props.selectedHistoryItemLabel()}
             </span>
