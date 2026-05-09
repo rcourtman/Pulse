@@ -1343,6 +1343,26 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+`/api/agent/resource-context/{id}` is the agent-consumable bundled
+context endpoint. One read returns the full situated picture of a
+resource — identity, operator-set state (with server-computed
+`maintenanceWindowActive` flag), active findings as the
+`AgentResourceFindingSnapshot` projection (lightweight subset of
+the seven-question schema fields agents need), and recent action
+audits including refused dispatches with their stable token
+prefixes (`resource_remediation_locked:`, `plan_drift:`) preserved
+verbatim. The shape is intentionally narrower than the full
+internal types so agents see a stable agent-paradigm contract,
+decoupled from internal type evolution. Active findings come
+through the `AgentFindingsProvider` adapter wired at startup so the
+api package stays free of an `internal/ai` import; the patrol
+service holds the canonical findings store and projects each
+`Finding` into the snapshot shape. Active findings and recent
+actions are always arrays (never null) so agents can iterate
+without nil-checking; absent operator state surfaces as a missing
+`operatorState` field (omitempty), distinguishing "no operator
+overrides" from "all-zero overrides recorded."
+
 The TS client `frontend-modern/src/api/resourceOperatorState.ts`
 mirrors the canonical Go shape from
 `internal/unifiedresources/resource_operator_state.go` and exposes

@@ -578,8 +578,17 @@ and lower-cases the criticality value before persistence. The
 `GetResourceOperatorState`, `SetResourceOperatorState`, and
 `ClearResourceOperatorState`; both the SQLite (table
 `resource_operator_state` keyed on `canonical_id`) and Memory stores
-implement the same upsert + idempotent-clear contract. The
-operator-facing surface for this contract is
+implement the same upsert + idempotent-clear contract. The same
+store powers the agent-consumable bundled context endpoint at
+`/api/agent/resource-context/{id}` (handler in
+`internal/api/agent_resource_context.go`) — that endpoint reads
+operator state and recent action audits through the canonical
+`ResourceStore` accessors plus active findings via an
+`AgentFindingsProvider` adapter wired from the patrol service, and
+projects each shape into agent-stable `AgentResource*` types so the
+wire contract stays decoupled from the storage type's evolution.
+
+The operator-facing surface for this contract is
 `ResourceOperatorStateSection.tsx` on the resource detail drawer
 overview tab, which routes through the canonical TS client at
 `frontend-modern/src/api/resourceOperatorState.ts` to

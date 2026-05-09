@@ -947,6 +947,14 @@ bypass the API fail-closed execution gate.
 
 ## Current State
 
+The agent-consumable bundled context endpoint
+`/api/agent/resource-context/{id}` reads the same durable
+`resource_operator_state` table and `action_audits` table through the
+canonical `unified.ResourceStore` accessors. No new persistence is
+introduced; the endpoint is a read-only bundle over existing storage,
+so storage/recovery flows that rehydrate the unified-resources store
+already cover everything the agent endpoint surfaces.
+
 The findings runtime reads operator-set state through the same
 durable `resource_operator_state` SQLite table on every
 new-finding-add. Both the time-bounded maintenance window and the

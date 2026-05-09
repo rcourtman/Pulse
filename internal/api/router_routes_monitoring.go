@@ -58,6 +58,11 @@ func (r *Router) registerMonitoringResourceRoutes(
 		r.resourceHandlers.HandleResourceOperatorState(w, req)
 	}))
 	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
+	// Agent-consumable bundled context — substrate for any LLM agent
+	// (in-process Patrol/Assistant or external) that needs the full
+	// situated picture of a resource in one read instead of chaining
+	// resource + operator-state + findings + audit calls.
+	r.mux.HandleFunc("/api/agent/resource-context/{id}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.agentContextHandler.HandleResourceContext)))
 	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandlePlanAction)))
 	r.mux.HandleFunc("POST /api/actions/{id}/decision", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleDecideAction)))
 	r.mux.HandleFunc("POST /api/actions/{id}/execute", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleExecuteAction)))

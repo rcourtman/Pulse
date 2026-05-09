@@ -506,6 +506,15 @@ shell clickable behind another overlay.
 
 ## Current State
 
+`/api/agent/resource-context/{id}` does at most three reads per
+request: one operator-state SQLite point lookup (already covered by
+the `resource_operator_state` index), one in-memory findings lookup
+via the patrol findings store's `byResource` index, and one bounded
+action-audit query (limit 10, since-1-week filter). No fan-out, no
+cross-resource scan — the bundle is leveraged for substrate use
+without becoming a per-request hot path that scales with global
+finding volume.
+
 The new-finding hot path now consults a per-resource operator-state
 provider when one is wired. The provider call is gated on
 `f.ResourceID != ""` and a non-nil provider so deployments without

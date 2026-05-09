@@ -13233,6 +13233,44 @@ func assertJSONSnapshot(t *testing.T, got []byte, want string) {
 	}
 }
 
+// TestContract_AgentResourceContextEndpointSurfacesStableShape pins
+// the agent-paradigm substrate contract: the bundled endpoint must
+// return arrays (never null) for activeFindings and recentActions so
+// agents can iterate without nil-checking, must omit operatorState
+// when no entry exists so agents can branch on field presence, and
+// must preserve refusal-token prefixes verbatim so agents can branch
+// on the stable code without parsing human messages. Without this
+// pin, future refactors of the projection helpers could silently
+// drift the wire shape and break external agent consumers.
+func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) {
+	source, err := os.ReadFile("agent_resource_context.go")
+	if err != nil {
+		t.Fatalf("read agent_resource_context.go: %v", err)
+	}
+	src := string(source)
+	// Always-array initialization for the iteration-safe contract.
+	if !strings.Contains(src, "ActiveFindings: []AgentResourceFindingSnapshot{}") {
+		t.Error("activeFindings must default to an empty slice, not nil — agents iterate without nil-checks")
+	}
+	if !strings.Contains(src, "RecentActions:  []AgentResourceActionSummary{}") {
+		t.Error("recentActions must default to an empty slice, not nil")
+	}
+	// Field-presence branching contract for operatorState.
+	if !strings.Contains(src, "OperatorState  *AgentResourceOperatorState    `json:\"operatorState,omitempty\"`") {
+		t.Error("operatorState must be omitempty so absent entries surface as missing field")
+	}
+	// Server-computed maintenance-active flag — server pre-computes so
+	// agents don't re-evaluate timestamps client-side.
+	if !strings.Contains(src, "MaintenanceWindowActive: state.IsInMaintenanceAt(now)") {
+		t.Error("MaintenanceWindowActive must be computed server-side via state.IsInMaintenanceAt(now)")
+	}
+	// Refusal-token preservation: ErrorMessage flows through verbatim
+	// from the audit record's ExecutionResult, no rewriting.
+	if !strings.Contains(src, "summary.ErrorMessage = audit.Result.ErrorMessage") {
+		t.Error("audit ErrorMessage must round-trip verbatim so refusal tokens (resource_remediation_locked:, plan_drift:) reach agents")
+	}
+}
+
 // TestContract_FindingsResourceOperatorStateProviderIsWired pins the
 // startup wiring that gives the findings runtime access to
 // per-resource operator-set state via the API layer's adapter. The

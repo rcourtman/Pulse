@@ -85,6 +85,7 @@ type Router struct {
 	aiHandler                       *AIHandler // AI chat handler
 	discoveryHandlers               *DiscoveryHandlers
 	resourceHandlers                *ResourceHandlers
+	agentContextHandler             *AgentContextHandler
 	resourceRegistry                *unifiedresources.ResourceRegistry
 	trueNASPoller                   *monitoring.TrueNASPoller
 	vmwarePoller                    *monitoring.VMwarePoller
@@ -407,6 +408,7 @@ func (r *Router) setupRoutes() {
 	r.unifiedAgentHandlers = NewUnifiedAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
+	r.agentContextHandler = NewAgentContextHandler(r.resourceHandlers)
 	if r.resourceHandlers != nil {
 		if store, err := r.resourceHandlers.getStore("default"); err == nil && store != nil {
 			r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
@@ -1750,6 +1752,54 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 			patrol.SetUnifiedFindingResolver(func(findingID string) {
 				unifiedStore.Resolve(findingID)
 			})
+			// Wire the agent-consumable findings adapter so the bundled
+			// context endpoint can return active findings without the
+			// api package importing internal/ai. The closure captures
+			// the patrol service and projects each Finding into the
+			// agent-stable snapshot shape; agents see the situated
+			// picture without any internal type leakage.
+			if r.agentContextHandler != nil {
+				r.agentContextHandler.SetFindingsProvider(
+					agentFindingsProviderFunc(func(resourceID string) []AgentResourceFindingSnapshot {
+						if patrol == nil {
+							return nil
+						}
+						findings := patrol.GetFindings()
+						if findings == nil {
+							return nil
+						}
+						active := findings.GetByResource(resourceID)
+						if len(active) == 0 {
+							return []AgentResourceFindingSnapshot{}
+						}
+						out := make([]AgentResourceFindingSnapshot, 0, len(active))
+						for _, f := range active {
+							snapshot := AgentResourceFindingSnapshot{
+								ID:                         f.ID,
+								Title:                      f.Title,
+								Severity:                   string(f.Severity),
+								Category:                   string(f.Category),
+								Description:                f.Description,
+								Impact:                     f.Impact,
+								Recommendation:             f.Recommendation,
+								RegressionCount:            f.RegressionCount,
+								PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
+							}
+							if !f.DetectedAt.IsZero() {
+								snapshot.DetectedAt = f.DetectedAt.Format(time.RFC3339)
+							}
+							if !f.LastSeenAt.IsZero() {
+								snapshot.LastSeenAt = f.LastSeenAt.Format(time.RFC3339)
+							}
+							if f.InvestigationRecord != nil && f.InvestigationRecord.Confidence != "" {
+								snapshot.Confidence = string(f.InvestigationRecord.Confidence)
+							}
+							out = append(out, snapshot)
+						}
+						return out
+					}),
+				)
+			}
 			// Wire per-resource operator-state into the findings runtime so
 			// new findings raised against a resource the operator has
 			// flagged (maintenance window or intentionally offline) get
