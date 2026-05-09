@@ -11,7 +11,11 @@ describe('InfrastructureSourcePicker', () => {
     render(() => <InfrastructureSourcePicker onSelectStep={vi.fn()} />);
 
     expect(screen.getByPlaceholderText('Search platforms, hosts, services...')).toBeInTheDocument();
-    expect(screen.getByText('Common choices')).toBeInTheDocument();
+    // Picker now leads with the two primary paths (API detect / agent
+    // install); the per-platform card grid below is framed as the
+    // alternative.
+    expect(screen.getByText('Choose how Pulse should connect')).toBeInTheDocument();
+    expect(screen.getByText('Or pick a specific platform')).toBeInTheDocument();
     expect(screen.getByText('Early support')).toBeInTheDocument();
     expect(screen.queryByText('Available now')).toBeNull();
     expect(screen.getByText('Unraid')).toBeInTheDocument();

@@ -1,5 +1,15 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
-import { Activity, Archive, Cpu, Database, Mail, Search, Server, ServerCog } from 'lucide-solid';
+import {
+  Activity,
+  Archive,
+  Cpu,
+  Database,
+  Download,
+  Mail,
+  Search,
+  Server,
+  ServerCog,
+} from 'lucide-solid';
 import type {
   InfrastructureSourcePickerItemId,
   InfrastructureSourcePickerItemPresentation,
@@ -15,14 +25,18 @@ interface InfrastructureSourcePickerProps {
   onDetectApiPlatform?: () => void;
 }
 
-const detectButtonClass =
-  'inline-flex items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover';
-
 const readinessBadgeClass =
   'inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200';
 
 const searchInputClass =
   'h-10 w-full rounded-md border border-border bg-surface py-2 pl-9 pr-3 text-sm text-base-content outline-none transition-colors placeholder:text-muted focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20';
+
+// Primary-path cards present the two onboarding journeys (API connection vs
+// agent install) up front so users pick a path before scanning the per-
+// platform card grid. The grid below stays as a direct alternative for users
+// who already know which platform they want.
+const primaryPathCardClass =
+  'group flex h-full items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-900';
 
 const CARD_ICON: Record<InfrastructureSourcePickerItemId, Component<{ class?: string }>> = {
   vmware: ServerCog,
@@ -63,12 +77,58 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
   const visibleItems = createMemo(() =>
     items().filter((item) => itemMatchesQuery(item, normalizedQuery())),
   );
-  const heading = createMemo(() => (normalizedQuery() ? 'Matching choices' : 'Common choices'));
+  const heading = createMemo(() =>
+    normalizedQuery() ? 'Matching choices' : 'Or pick a specific platform',
+  );
 
   return (
     <div class="space-y-4 p-4">
-      <div class="flex flex-col gap-2 border-b border-border pb-4 sm:flex-row">
-        <label class="relative flex-1">
+      <Show when={!normalizedQuery()}>
+        <section class="space-y-2">
+          <h3 class="text-sm font-semibold text-base-content">Choose how Pulse should connect</h3>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Show when={props.onDetectApiPlatform}>
+              <button type="button" onClick={props.onDetectApiPlatform} class={primaryPathCardClass}>
+                <div
+                  aria-hidden="true"
+                  class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                >
+                  <Search class="h-5 w-5" />
+                </div>
+                <div class="min-w-0 flex-1 space-y-1">
+                  <div class="text-sm font-semibold text-base-content">Detect API platform</div>
+                  <p class="text-xs leading-5 text-muted">
+                    Paste a hostname, IP, or URL. Pulse identifies the platform (Proxmox, TrueNAS,
+                    VMware, PBS, PMG) and opens the right credential form.
+                  </p>
+                </div>
+              </button>
+            </Show>
+            <button
+              type="button"
+              onClick={() => props.onSelectStep('linux-host')}
+              class={primaryPathCardClass}
+            >
+              <div
+                aria-hidden="true"
+                class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200"
+              >
+                <Download class="h-5 w-5" />
+              </div>
+              <div class="min-w-0 flex-1 space-y-1">
+                <div class="text-sm font-semibold text-base-content">Install Pulse Agent</div>
+                <p class="text-xs leading-5 text-muted">
+                  Run an installer on a host (Linux, macOS, Windows, Unraid). Pulse classifies the
+                  host profile from its OS and starts collecting telemetry.
+                </p>
+              </div>
+            </button>
+          </div>
+        </section>
+      </Show>
+
+      <div class="border-b border-border pb-4">
+        <label class="relative block">
           <span class="sr-only">Search infrastructure type</span>
           <Search
             aria-hidden="true"
@@ -82,16 +142,6 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             placeholder="Search platforms, hosts, services..."
           />
         </label>
-        <Show when={props.onDetectApiPlatform}>
-          <button
-            type="button"
-            onClick={props.onDetectApiPlatform}
-            class={`${detectButtonClass} sm:w-auto`}
-          >
-            <Search class="mr-2 h-4 w-4" />
-            Detect API platform
-          </button>
-        </Show>
       </div>
 
       <section class="space-y-2">

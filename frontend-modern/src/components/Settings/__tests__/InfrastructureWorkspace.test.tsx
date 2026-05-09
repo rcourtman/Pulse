@@ -626,8 +626,9 @@ describe('InfrastructureWorkspace', () => {
     expect(
       within(dialog).getByPlaceholderText('Search platforms, hosts, services...'),
     ).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Detect API platform' })).toBeInTheDocument();
-    expect(within(dialog).getByText('Common choices')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /Detect API platform/i })).toBeInTheDocument();
+    expect(within(dialog).getByText('Choose how Pulse should connect')).toBeInTheDocument();
+    expect(within(dialog).getByText('Or pick a specific platform')).toBeInTheDocument();
     expect(within(dialog).queryByText('Agent telemetry')).toBeNull();
     expect(within(dialog).queryByText('API inventory')).toBeNull();
     expect(within(dialog).getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
@@ -639,8 +640,10 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    // Primary path button now contains description text, so match by
+    // accessible-name prefix.
     fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Detect API platform' }),
+      within(screen.getByRole('dialog')).getByRole('button', { name: /Detect API platform/i }),
     );
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=detect', {
