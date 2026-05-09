@@ -1254,6 +1254,14 @@ tooltip on `PatrolIntelligenceHeader.tsx` must read from
 than carrying an inline copy, so hover and inline never drift apart on
 what Patrol actually does (proactive investigation, evidence capture,
 governed action under operator approval).
+The same `PatrolIntelligenceHeader.tsx` shell also renders a compact
+trust-at-a-glance summary directly under the page title (a
+render-only consumer of `state.patrolStatus()?.trust`), gated on at
+least one non-zero trust signal so fresh installs render no header
+strip. The detailed breakdown stays in
+`PatrolIntelligenceWorkspace.tsx` for the canonical view; the header
+line is the entry-point summary so operators see active, regressed,
+and verified-fix counts before scrolling into the workspace tabs.
 
 `frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
 command guidance targets. Discovery surfaces that need to tell operators where

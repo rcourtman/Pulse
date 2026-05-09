@@ -1144,3 +1144,12 @@ explanation + governed action). The tooltip on the page-header title
 must read the same string from the canonical helper rather than
 maintaining a parallel copy, so hover and inline never tell different
 stories about what Patrol does.
+The same Patrol page header must also surface a compact trust summary
+("N active · M regressed · K fixes verified") read from
+`state.patrolStatus()?.trust` immediately under the page title, gated
+on at least one non-zero signal so a fresh install doesn't render an
+empty header strip. The detailed Trust strip in
+`PatrolIntelligenceWorkspace.tsx` stays as the canonical breakdown for
+operators reviewing findings; the header line is the
+trust-at-a-glance entry point that names what Patrol's loop has
+produced before the operator scrolls into the workspace tabs.

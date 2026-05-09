@@ -1058,7 +1058,14 @@ the canonical monitored-system blocked payload.
    `getPatrolPageHeaderMeta()` rather than carrying inline copy, so the
    operator-facing framing of what Patrol does (proactive
    investigation, evidence capture, governed action) stays tied to the
-   contract instead of drifting between hover and inline
+   contract instead of drifting between hover and inline.
+   The same Patrol page header also surfaces a compact trust summary
+   above the runtime status row, reading
+   `state.patrolStatus()?.trust` (the `FindingsTrustSummary` block
+   already plumbed through the patrol status payload). It must not
+   introduce a new fetch path or duplicate data plumbing — the strip is
+   a render-only consumer of the existing canonical signal so the
+   header line and the workspace's detailed Trust strip stay aligned
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

@@ -133,6 +133,55 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         }
       />
 
+      {/* Page-header trust summary — a compact one-liner of FindingsTrustSummary
+          shown directly under the page title so the operator sees the trust
+          loop's own state ("3 active, 1 regressed, 5 fixes verified")
+          before they ever scroll into the workspace. The detailed Trust
+          strip in PatrolIntelligenceWorkspace stays as the canonical
+          breakdown for when the operator is reviewing findings. Visibility
+          is gated on at least one non-zero signal so a fresh install
+          doesn't render an empty header line. */}
+      <Show
+        when={(() => {
+          const trust = state.patrolStatus()?.trust;
+          if (!trust) return false;
+          return (
+            trust.currently_active > 0 ||
+            trust.fix_verified > 0 ||
+            trust.regressed_at_least_once > 0
+          );
+        })()}
+      >
+        {(() => {
+          const trust = state.patrolStatus()!.trust!;
+          return (
+            <div
+              class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
+              aria-label="Patrol trust summary header"
+            >
+              <Show when={trust.currently_active > 0}>
+                <span class="inline-flex items-center gap-1">
+                  <span class="font-semibold text-base-content">{trust.currently_active}</span>
+                  <span>active</span>
+                </span>
+              </Show>
+              <Show when={trust.regressed_at_least_once > 0}>
+                <span class="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                  <span class="font-semibold">{trust.regressed_at_least_once}</span>
+                  <span>regressed</span>
+                </span>
+              </Show>
+              <Show when={trust.fix_verified > 0}>
+                <span class="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+                  <span class="font-semibold">{trust.fix_verified}</span>
+                  <span>fix{trust.fix_verified === 1 ? '' : 'es'} verified</span>
+                </span>
+              </Show>
+            </div>
+          );
+        })()}
+      </Show>
+
       <div class="rounded-md border border-border bg-surface px-4 py-3">
         <div class="flex flex-wrap items-center gap-3">
           <div class="flex items-center gap-2 bg-surface-hover px-3 py-1.5 rounded-md border border-border">

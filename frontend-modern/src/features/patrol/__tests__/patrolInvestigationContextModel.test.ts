@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RemediationPlan } from '@/api/ai';
 import type { PatrolRunRecord } from '@/api/patrol';
@@ -1627,6 +1629,26 @@ describe('patrolInvestigationContextModel', () => {
 });
 
 describe('Patrol page header IA framing', () => {
+  it('hoists a trust-at-a-glance summary into the page header above the runtime row', () => {
+    // The compact trust summary on the Patrol page header is the second
+    // wedge of the IA reframe (the first being PATROL_PAGE_DESCRIPTION).
+    // It must read from the same FindingsTrustSummary block plumbed
+    // through state.patrolStatus()?.trust as the workspace strip — no
+    // duplicate data path — and surface the three highest-signal
+    // counts (active, regressed, fixes verified) so operators see the
+    // trust loop's own state before scrolling into the workspace tabs.
+    const headerSource = readFileSync(
+      resolve(__dirname, '..', 'PatrolIntelligenceHeader.tsx'),
+      'utf-8',
+    );
+    expect(headerSource).toContain('aria-label="Patrol trust summary header"');
+    expect(headerSource).toContain('state.patrolStatus()?.trust');
+    expect(headerSource).toContain('trust.currently_active');
+    expect(headerSource).toContain('trust.regressed_at_least_once');
+    expect(headerSource).toContain('trust.fix_verified');
+    expect(headerSource).toContain('trust.currently_active > 0');
+  });
+
   it('names the proactive trust loop on the canonical Patrol surface', async () => {
     // The Patrol page header is the most visible piece of operator-facing
     // copy on the canonical Patrol surface. The IA reframe replaces the
