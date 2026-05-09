@@ -55,15 +55,21 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
         </div>
       </div>
 
-      <div>
-        <SectionHeader
-          title="Monitoring coverage"
-          size="sm"
-          class="mb-2"
-          titleClass="text-base-content"
-        />
-        <p class="text-sm text-muted">{getNodeMonitoringCoverageCopy(modalProps.nodeType)}</p>
-      </div>
+      {/* For PVE the Collection scope section below carries both the
+          coverage description and the per-collector toggles, so the
+          standalone Monitoring coverage paragraph would be redundant. PBS
+          and PMG keep the standalone paragraph because they have no toggles. */}
+      <Show when={modalProps.nodeType !== 'pve'}>
+        <div>
+          <SectionHeader
+            title="Monitoring coverage"
+            size="sm"
+            class="mb-2"
+            titleClass="text-base-content"
+          />
+          <p class="text-sm text-muted">{getNodeMonitoringCoverageCopy(modalProps.nodeType)}</p>
+        </div>
+      </Show>
 
       <Show when={modalProps.nodeType === 'pve'}>
         <div class="space-y-3">
@@ -73,9 +79,10 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             class="mb-1"
             titleClass="text-base-content"
           />
-          <p class="text-xs text-muted">
-            Control which Proxmox VE resources Pulse ingests. Disable individual collectors to
-            reduce API load or trim workload noise.
+          <p class="text-sm text-muted">
+            Pulse tracks all supported Proxmox VE resources by default — virtual machines,
+            containers, storage, and backups — so you always get full visibility without extra
+            configuration. Disable individual collectors below to reduce API load or trim workload noise.
           </p>
 
           <label class="flex items-start gap-2 text-sm text-base-content">

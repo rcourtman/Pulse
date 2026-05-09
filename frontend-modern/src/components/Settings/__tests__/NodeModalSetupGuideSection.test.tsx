@@ -47,7 +47,8 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getByText('API inventory')).toBeInTheDocument();
     expect(screen.getByText(/Recommended least-privilege path/i)).toBeInTheDocument();
     expect(screen.getByText(/Recommended API inventory path/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /API Inventory/i })).toBeInTheDocument();
+    // Tab renamed from 'API Inventory' (internal term) to 'Connect via API'.
+    expect(screen.getByRole('button', { name: /Connect via API/i })).toBeInTheDocument();
     expect(screen.queryByText('Manual API token')).not.toBeInTheDocument();
   });
 

@@ -850,13 +850,17 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const catalogItem = activeCatalogItem();
     if (catalogItem) {
       const strategy = getInfrastructureSourceStrategyPresentation(catalogItem.sourceStrategy);
-      return `${strategy.label}. ${trimSentenceTerminal(catalogItem.bestFor)}. ${trimSentenceTerminal(catalogItem.coverage)}.`;
+      // Subtitle is just strategy + bestFor. The detailed coverage (telemetry
+      // breakdown) is repeated by the green install-path explanation card
+      // inside the dialog body, so dropping it here removes a redundant
+      // sentence from a header the user reads first.
+      return `${strategy.label}. ${trimSentenceTerminal(catalogItem.bestFor)}.`;
     }
     const presentation = getInfrastructureOnboardingProductPresentation(
       activeAddType() as InfrastructureOnboardingConnectionType,
     );
     const strategy = getInfrastructureSourceStrategyPresentation(presentation.sourceStrategy);
-    return `${strategy.label}. ${trimSentenceTerminal(presentation.bestFor)}. ${trimSentenceTerminal(presentation.coverage)}.`;
+    return `${strategy.label}. ${trimSentenceTerminal(presentation.bestFor)}.`;
   });
 
   const editDialogTitle = createMemo(() => {

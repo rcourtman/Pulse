@@ -51,6 +51,18 @@ const CARD_ICON: Record<InfrastructureSourcePickerItemId, Component<{ class?: st
   availability: Activity,
 };
 
+// Popular platforms shown by default. The rest are hidden behind 'Show more
+// platforms' to keep the picker scannable at a glance and let users scroll
+// to fewer cards before deciding. Search bypasses this split — searching
+// for any platform surfaces it regardless of popular status.
+const POPULAR_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = new Set([
+  'pve',
+  'truenas',
+  'unraid',
+  'linux-host',
+  'availability',
+]);
+
 const itemMatchesQuery = (item: InfrastructureSourcePickerItemPresentation, query: string) => {
   if (!query) return true;
   const searchableText = [
@@ -72,10 +84,23 @@ const itemMatchesQuery = (item: InfrastructureSourcePickerItemPresentation, quer
 
 export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerProps> = (props) => {
   const [query, setQuery] = createSignal('');
+  const [showAllPlatforms, setShowAllPlatforms] = createSignal(false);
   const items = () => getInfrastructureSourcePickerItems();
   const normalizedQuery = createMemo(() => query().trim().toLowerCase());
-  const visibleItems = createMemo(() =>
+  const matchedItems = createMemo(() =>
     items().filter((item) => itemMatchesQuery(item, normalizedQuery())),
+  );
+  // When the user is searching, show every match regardless of popular
+  // status. Otherwise gate the long tail behind a 'Show more platforms'
+  // disclosure so the default scan is short.
+  const visibleItems = createMemo(() => {
+    if (normalizedQuery() || showAllPlatforms()) return matchedItems();
+    return matchedItems().filter((item) => POPULAR_PICKER_ITEM_IDS.has(item.id));
+  });
+  const hiddenCount = createMemo(() =>
+    normalizedQuery() || showAllPlatforms()
+      ? 0
+      : matchedItems().filter((item) => !POPULAR_PICKER_ITEM_IDS.has(item.id)).length,
   );
   const heading = createMemo(() =>
     normalizedQuery() ? 'Matching choices' : 'Or pick a specific platform',
@@ -196,6 +221,15 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
               }}
             </For>
           </div>
+          <Show when={hiddenCount() > 0}>
+            <button
+              type="button"
+              onClick={() => setShowAllPlatforms(true)}
+              class="mt-1 inline-flex items-center text-xs font-medium text-blue-700 hover:text-blue-900 hover:underline dark:text-blue-300 dark:hover:text-blue-100"
+            >
+              Show {hiddenCount()} more platform{hiddenCount() === 1 ? '' : 's'}
+            </button>
+          </Show>
         </Show>
       </section>
     </div>

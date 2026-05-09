@@ -65,7 +65,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
         onClick={() => state.updateField('setupMode', 'auto')}
         class={setupModeButtonClass(state.formData().setupMode === 'auto')}
       >
-        API Inventory
+        Connect via API
         <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
           Recommended
         </span>

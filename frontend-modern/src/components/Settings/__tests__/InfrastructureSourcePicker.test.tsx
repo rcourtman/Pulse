@@ -16,6 +16,10 @@ describe('InfrastructureSourcePicker', () => {
     // alternative.
     expect(screen.getByText('Choose how Pulse should connect')).toBeInTheDocument();
     expect(screen.getByText('Or pick a specific platform')).toBeInTheDocument();
+    // VMware lives behind 'Show more platforms' since it is a less common
+    // homelab choice; expand the long tail to verify the Early support
+    // badge still renders for it.
+    fireEvent.click(screen.getByRole('button', { name: /Show \d+ more platforms?/i }));
     expect(screen.getByText('Early support')).toBeInTheDocument();
     expect(screen.queryByText('Available now')).toBeNull();
     expect(screen.getByText('Unraid')).toBeInTheDocument();
