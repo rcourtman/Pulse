@@ -111,7 +111,10 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     <p class="text-xs font-medium uppercase tracking-wide text-muted">
                       {UPDATES_PANEL_COPY.currentVersionLabel}
                     </p>
-                    <p class="mt-1 text-lg font-bold text-base-content truncate">
+                    <p
+                      class="mt-1 text-lg font-bold text-base-content truncate"
+                      title={props.versionInfo()?.version}
+                    >
                       {props.versionInfo()?.version || 'Loading...'}
                     </p>
                     <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
