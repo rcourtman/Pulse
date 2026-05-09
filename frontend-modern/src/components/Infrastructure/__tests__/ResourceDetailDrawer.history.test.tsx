@@ -184,6 +184,13 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDerivedStateSource).toContain('resource.relationships ?? []');
     expect(resourceActionHistorySource).toContain('getActionAuditStatePresentation');
     expect(resourceActionHistorySource).toContain('formatActionApprovalPolicyLabel');
+    // The audit history must surface the broker's read-after-write
+    // verification outcome alongside the dispatch result, not silently
+    // drop it. Pin the wiring so future refactors cannot regress to an
+    // output-only render.
+    expect(resourceActionHistorySource).toContain('result()?.verification?.ran');
+    expect(resourceActionHistorySource).toContain('Verified');
+    expect(resourceActionHistorySource).toContain('Verification failed');
     expect(actionAuditApiSource).toContain('/api/audit/actions');
     expect(actionAuditApiSource).toContain('ACTION_AUDIT_UNAVAILABLE_STATUSES');
     expect(actionAuditPresentationSource).toContain('pending_approval');

@@ -541,6 +541,23 @@ AI-only summary payloads, or page-local heuristics.
     equivalent hash or extend the canonical hash set in
     `internal/ai/tools/action_audit.go` rather than adding ad-hoc
     comparison logic.
+23. Keep the `ActionVerificationResult` frontend mirror canonical and
+    pin the operator-facing render location.
+    `frontend-modern/src/types/actionAudit.ts` defines the TS
+    `ActionVerificationResult` interface (`ran`, `command`, `output`,
+    `success`, `ranAt`, `note`) that mirrors the Go type field-for-
+    field, and `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`
+    is the canonical operator-facing render location: each audit row
+    surfaces verification as a distinct outcome row alongside the
+    dispatch result, with emerald tone for verified and amber for
+    failed (matching the trust palette already used on the findings
+    panel). The render must show the verification command verbatim,
+    the captured output, and the optional broker note, so the
+    operator sees exactly what Pulse read back rather than a yes/no
+    summary. When `verification.ran` is false (no derivable check, or
+    feature disabled for the action class) nothing is rendered —
+    operators must not see fabricated "verified" claims for actions
+    where Pulse cannot read back.
 
 ## Current State
 

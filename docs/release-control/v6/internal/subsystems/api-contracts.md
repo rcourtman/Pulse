@@ -966,6 +966,17 @@ the canonical monitored-system blocked payload.
    persisted findings created by older binaries must adopt the
    freshly-classified impact text on next re-detection rather than
    preserving the empty value.
+   The action audit `result` field carries an optional `verification`
+   block (TS `ActionVerificationResult` mirroring the Go type) with
+   `ran`, `command`, `output`, `success`, `ranAt`, and `note`. API
+   consumers (specifically the Resource Action History on the
+   infrastructure detail drawer) must round-trip the verification
+   block verbatim and render it as a distinct outcome row alongside
+   the dispatch `result`. Operators see what command Pulse ran as the
+   read-after-write check, what it returned, and whether it confirmed
+   the intended state — not just "command exit 0." When `ran=false`
+   (no derivable check, or feature disabled for the action class)
+   nothing must be rendered, matching the no-fabrication rule.
    The patrol-status response (`PatrolStatusResponse`) carries an
    optional `trust` block of type `ai.FindingsTrustSummary` that
    surfaces the trust-metrics snapshot for the Patrol page. The block
