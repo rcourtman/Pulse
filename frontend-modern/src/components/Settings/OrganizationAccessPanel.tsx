@@ -31,11 +31,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
       }
     >
       <div class="space-y-6">
-        <SettingsPanel
-          title="Organization Access"
-          description="Manage organization invitations, member roles, and ownership transfers."
-          bodyClass="space-y-5"
-        >
+        <SettingsPanel title="Organization Access" bodyClass="space-y-5">
           <Show when={!state.loading()} fallback={<OrganizationAccessLoadingState />}>
             <Show when={state.org()}>
               <OrganizationAccessInvitationsSection state={state} />

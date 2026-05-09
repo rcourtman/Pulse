@@ -74,7 +74,6 @@ export const DataHandlingPanel: Component = () => {
   return (
     <SettingsPanel
       title="Data Handling"
-      description="Review resource classifications, handling boundaries, and redaction coverage."
       bodyClass="space-y-5"
       action={
         <Button

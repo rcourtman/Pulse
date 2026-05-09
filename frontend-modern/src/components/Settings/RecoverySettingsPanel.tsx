@@ -32,12 +32,7 @@ export interface RecoverySettingsPanelProps {
 
 export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (props) => {
   return (
-    <SettingsPanel
-      title="Recovery"
-      description="Manage backup/snapshot polling and configuration export/import."
-      noPadding
-      bodyClass="divide-y divide-border"
-    >
+    <SettingsPanel title="Recovery" noPadding bodyClass="divide-y divide-border">
       {/* Backup Polling Section */}
       <div class="p-4 sm:p-6">
         <section class="space-y-3">
