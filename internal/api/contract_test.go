@@ -13260,6 +13260,9 @@ func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
 	if !strings.Contains(src, "GetResourceOperatorState(canonicalID)") {
 		t.Error("router.go must read state from the unified store's canonical accessor")
 	}
+	if !strings.Contains(src, "IntentionallyOffline: state.IntentionallyOffline") {
+		t.Error("router.go must propagate state.IntentionallyOffline through the projection so the findings runtime sees it")
+	}
 }
 
 // TestContract_ResourceOperatorStateUrlCanonicalIDWinsOverBody pins the

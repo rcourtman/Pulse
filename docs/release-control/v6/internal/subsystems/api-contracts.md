@@ -1347,11 +1347,13 @@ The router wires the operator-state adapter into the findings runtime
 at startup: `internal/api/router.go` calls
 `patrol.GetFindings().SetResourceOperatorStateProvider(...)` with a
 `ResourceOperatorStateProviderFunc` closure that reads the unified
-store and projects `state.IsInMaintenanceAt` into the
-`ActiveMaintenanceWindow` shape `internal/ai` consumes. This keeps
-`internal/ai` free of an `internal/unifiedresources` import while
-giving the findings runtime per-resource maintenance suppression
-without each org needing a separate adapter declaration.
+store and returns a `ResourceOperatorStateProjection` carrying every
+operator-set signal in one call (maintenance window via
+`state.IsInMaintenanceAt` plus the `IntentionallyOffline` flag).
+This keeps `internal/ai` free of an `internal/unifiedresources`
+import while giving the findings runtime full per-resource
+suppression without each org needing a separate adapter declaration
+and without growing per-finding lookups as new signals land.
 
 `/api/resources/{id}/operator-state` is the canonical surface for
 operator-set per-resource intent (intentionally offline, never

@@ -1178,14 +1178,18 @@ finding" context for chat or tickets.
 The findings store also consumes per-resource operator-set state via
 the narrow `ResourceOperatorStateProvider` interface installed by
 `SetResourceOperatorStateProvider`. The API layer wires an adapter
-that projects `unified.ResourceOperatorState` into the
-`ActiveMaintenanceWindow` projection so `internal/ai` does not need
-to import `internal/unifiedresources`. When a new finding is raised
-against a resource currently in an operator-set maintenance window,
-the new-finding path auto-dismisses it as `expected_behavior`,
-populates `AcknowledgedAt`, writes a `UserNote` naming the window
-and reason, and emits a `dismissed` lifecycle event with the
-`operator_state_cause: maintenance_window` metadata so the timeline
-can attribute the suppression to its source. Default deployments
-without a provider behave identically to before — operator-state
-suppression is opt-in.
+that projects `unified.ResourceOperatorState` into a
+`ResourceOperatorStateProjection` so `internal/ai` does not need to
+import `internal/unifiedresources`. The projection returns every
+operator-set signal in one call (maintenance window + the
+`IntentionallyOffline` flag), and the new-finding path branches on
+both: maintenance window suppression takes priority and emits
+`operator_state_cause: maintenance_window` plus the
+`maintenance_end_at` metadata; the `IntentionallyOffline` branch is
+the indefinite fallback that emits `operator_state_cause:
+intentionally_offline` with no end-at field because the suppression
+has no scheduled end. Both branches set `DismissedReason =
+expected_behavior` and write a `UserNote` naming the cause so the
+operator can audit why future findings stayed quiet without
+expanding each row. Default deployments without a provider behave
+identically to before — operator-state suppression is opt-in.

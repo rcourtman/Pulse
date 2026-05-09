@@ -1751,32 +1751,35 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 				unifiedStore.Resolve(findingID)
 			})
 			// Wire per-resource operator-state into the findings runtime so
-			// new findings raised against a resource currently in a
-			// maintenance window get auto-acknowledged with reason
-			// "expected_behavior". The adapter projects
-			// `unified.ResourceOperatorState` into the narrow
-			// `ResourceOperatorStateProvider` shape the findings store
-			// consumes — keeps `internal/ai` clear of an
+			// new findings raised against a resource the operator has
+			// flagged (maintenance window or intentionally offline) get
+			// auto-acknowledged with reason "expected_behavior". One
+			// adapter call returns the full projection so adding new
+			// signals later does not multiply round-trips per finding.
+			// Keeps `internal/ai` clear of an
 			// `internal/unifiedresources` import.
 			patrol.GetFindings().SetResourceOperatorStateProvider(
 				ai.ResourceOperatorStateProviderFunc(
-					func(canonicalID string, now time.Time) (ai.ResourceOperatorStateMaintenanceWindow, bool) {
+					func(canonicalID string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
 						orgStore, lookupErr := r.resourceHandlers.getStore(orgID)
 						if lookupErr != nil {
-							return ai.ResourceOperatorStateMaintenanceWindow{}, false
+							return ai.ResourceOperatorStateProjection{}, false
 						}
 						state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
 						if fetchErr != nil || !found {
-							return ai.ResourceOperatorStateMaintenanceWindow{}, false
+							return ai.ResourceOperatorStateProjection{}, false
 						}
-						if !state.IsInMaintenanceAt(now) {
-							return ai.ResourceOperatorStateMaintenanceWindow{}, false
+						projection := ai.ResourceOperatorStateProjection{
+							IntentionallyOffline: state.IntentionallyOffline,
 						}
-						return ai.ResourceOperatorStateMaintenanceWindow{
-							StartAt: *state.MaintenanceStartAt,
-							EndAt:   *state.MaintenanceEndAt,
-							Reason:  state.MaintenanceReason,
-						}, true
+						if state.IsInMaintenanceAt(now) {
+							projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
+								StartAt: *state.MaintenanceStartAt,
+								EndAt:   *state.MaintenanceEndAt,
+								Reason:  state.MaintenanceReason,
+							}
+						}
+						return projection, true
 					},
 				),
 			)

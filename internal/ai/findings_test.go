@@ -1619,14 +1619,16 @@ func TestFindingsStore_Add_AutoAcknowledgesDuringMaintenanceWindow(t *testing.T)
 	// the window) but does not surface as active.
 	store := NewFindingsStore()
 	now := time.Now()
-	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, queriedAt time.Time) (ResourceOperatorStateMaintenanceWindow, bool) {
+	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, queriedAt time.Time) (ResourceOperatorStateProjection, bool) {
 		if canonicalID != "vm:101" {
-			return ResourceOperatorStateMaintenanceWindow{}, false
+			return ResourceOperatorStateProjection{}, false
 		}
-		return ResourceOperatorStateMaintenanceWindow{
-			StartAt: now.Add(-time.Hour),
-			EndAt:   now.Add(time.Hour),
-			Reason:  "Q3 storage upgrade",
+		return ResourceOperatorStateProjection{
+			MaintenanceWindow: &ResourceOperatorStateMaintenanceWindow{
+				StartAt: now.Add(-time.Hour),
+				EndAt:   now.Add(time.Hour),
+				Reason:  "Q3 storage upgrade",
+			},
 		}, true
 	})
 	store.SetResourceOperatorStateProvider(provider)
@@ -1675,8 +1677,8 @@ func TestFindingsStore_Add_DoesNotAutoAcknowledgeOutsideMaintenanceWindow(t *tes
 	// so the suppression branch can't drift into "always suppress when
 	// provider is set".
 	store := NewFindingsStore()
-	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, now time.Time) (ResourceOperatorStateMaintenanceWindow, bool) {
-		return ResourceOperatorStateMaintenanceWindow{}, false
+	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, now time.Time) (ResourceOperatorStateProjection, bool) {
+		return ResourceOperatorStateProjection{}, false
 	})
 	store.SetResourceOperatorStateProvider(provider)
 
@@ -1699,11 +1701,106 @@ func TestFindingsStore_Add_DoesNotAutoAcknowledgeOutsideMaintenanceWindow(t *tes
 	}
 }
 
+func TestFindingsStore_Add_AutoAcknowledgesOnIntentionallyOfflineResource(t *testing.T) {
+	// When the operator has marked a resource as intentionally offline,
+	// any new finding raised against it must be auto-dismissed as
+	// expected_behavior with operator_state_cause=intentionally_offline.
+	// The intent is an indefinite "shut up about this resource" — no
+	// time window — so the lifecycle event must not include a
+	// maintenance_end_at field.
+	store := NewFindingsStore()
+	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, now time.Time) (ResourceOperatorStateProjection, bool) {
+		if canonicalID != "vm:archived" {
+			return ResourceOperatorStateProjection{}, false
+		}
+		return ResourceOperatorStateProjection{
+			IntentionallyOffline: true,
+		}, true
+	})
+	store.SetResourceOperatorStateProvider(provider)
+
+	store.Add(&Finding{
+		ID:         "f-archived",
+		ResourceID: "vm:archived",
+		Severity:   FindingSeverityWarning,
+		Title:      "Resource is offline",
+	})
+
+	got := store.Get("f-archived")
+	if got == nil {
+		t.Fatal("finding must be persisted even when auto-dismissed")
+	}
+	if got.DismissedReason != "expected_behavior" {
+		t.Errorf("expected DismissedReason=expected_behavior; got %q", got.DismissedReason)
+	}
+	if got.AcknowledgedAt == nil {
+		t.Error("AcknowledgedAt must be populated for auto-dismissed findings")
+	}
+	if !strings.Contains(got.UserNote, "intentionally offline") {
+		t.Errorf("UserNote should explain the intentionally-offline suppression; got %q", got.UserNote)
+	}
+	foundEvent := false
+	for _, ev := range got.Lifecycle {
+		if ev.Type == "dismissed" && ev.Metadata["operator_state_cause"] == "intentionally_offline" {
+			foundEvent = true
+			if _, hasEnd := ev.Metadata["maintenance_end_at"]; hasEnd {
+				t.Error("intentionally_offline event must not carry maintenance_end_at metadata; the suppression is indefinite")
+			}
+			break
+		}
+	}
+	if !foundEvent {
+		t.Error("expected a 'dismissed' lifecycle event with operator_state_cause=intentionally_offline")
+	}
+}
+
+func TestFindingsStore_Add_MaintenanceWindowTakesPriorityOverIntentionallyOffline(t *testing.T) {
+	// When both signals are active for the same resource, the
+	// maintenance window must win because it's time-bounded — operators
+	// will see the suppression auto-clear when the window ends, which
+	// is more honest than the indefinite intentionally-offline branch.
+	store := NewFindingsStore()
+	now := time.Now()
+	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, queriedAt time.Time) (ResourceOperatorStateProjection, bool) {
+		return ResourceOperatorStateProjection{
+			IntentionallyOffline: true,
+			MaintenanceWindow: &ResourceOperatorStateMaintenanceWindow{
+				StartAt: now.Add(-time.Hour),
+				EndAt:   now.Add(time.Hour),
+				Reason:  "active maintenance",
+			},
+		}, true
+	})
+	store.SetResourceOperatorStateProvider(provider)
+
+	store.Add(&Finding{
+		ID:         "f-both",
+		ResourceID: "vm:101",
+		Severity:   FindingSeverityWarning,
+		Title:      "CPU saturated",
+	})
+
+	got := store.Get("f-both")
+	if got == nil {
+		t.Fatal("finding must be persisted")
+	}
+	foundMaintenance := false
+	for _, ev := range got.Lifecycle {
+		if ev.Type == "dismissed" && ev.Metadata["operator_state_cause"] == "maintenance_window" {
+			foundMaintenance = true
+			break
+		}
+	}
+	if !foundMaintenance {
+		t.Error("maintenance window must take priority over intentionally_offline when both are active")
+	}
+}
+
 func TestFindingsStore_Add_OperatorStateSuppressionIsOptIn(t *testing.T) {
 	// The default store (no provider wired) must behave exactly as
-	// before — slice 31 must not regress the existing new-finding
-	// path for any deployment that hasn't opted in to the
-	// operator-state feature yet.
+	// before — the operator-state feature must not regress the
+	// existing new-finding path for any deployment that hasn't opted
+	// in yet.
 	store := NewFindingsStore()
 	store.Add(&Finding{
 		ID:         "f-default",

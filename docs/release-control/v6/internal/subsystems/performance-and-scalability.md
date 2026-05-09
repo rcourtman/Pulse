@@ -507,12 +507,16 @@ shell clickable behind another overlay.
 ## Current State
 
 The new-finding hot path now consults a per-resource operator-state
-provider when one is wired (slice 31). The provider call is gated on
+provider when one is wired. The provider call is gated on
 `f.ResourceID != ""` and a non-nil provider so deployments without
 the feature wired pay no extra work; the provider implementation
 itself is a single SQLite point lookup keyed on `canonical_id`, no
-join, no scan. Maintenance-window suppression therefore adds at most
-one read per new finding, not per existing-finding update.
+join, no scan. The projection returns every operator-set signal in
+one call, so adding new signals (intentionally offline, never
+auto-remediate, criticality) does not multiply per-finding lookups.
+Operator-state suppression therefore adds at most one read per new
+finding, not per existing-finding update, and not per operator-set
+flag.
 
 Summary cards for Infrastructure, Storage, Workloads, and Recovery now surface
 health-state counts (offline, degraded, alerting) instead of raw online/offline

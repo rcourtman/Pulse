@@ -949,9 +949,12 @@ bypass the API fail-closed execution gate.
 
 The findings runtime reads operator-set state through the same
 durable `resource_operator_state` SQLite table on every
-new-finding-add. A maintenance window persisted before a process
-restart still suppresses new findings after the agent reloads — the
-operator commitment survives without needing a re-entry on startup.
+new-finding-add. Both the time-bounded maintenance window and the
+indefinite `IntentionallyOffline` flag persist across restarts; the
+operator commitment in either form survives without needing a
+re-entry on startup. The provider adapter returns one projection
+covering all signals so the storage path is touched once per
+finding regardless of which signal is active.
 
 The `resource_operator_state` SQLite table introduced by the
 unified-resources store keeps operator-set per-resource intent

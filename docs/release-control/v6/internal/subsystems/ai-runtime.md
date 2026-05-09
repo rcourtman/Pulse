@@ -584,14 +584,27 @@ The findings store now consults a `ResourceOperatorStateProvider`
 during the new-finding path. The interface lives in `internal/ai` to
 avoid an import cycle with `internal/unifiedresources`; the API layer
 wires the adapter at startup, projecting
-`unified.ResourceOperatorState` into the narrow
-`ActiveMaintenanceWindow` shape the findings runtime needs. When the
-provider reports an active maintenance window, the new-finding path
-auto-dismisses with reason `expected_behavior`, attributes the
-suppression on the lifecycle timeline (`operator_state_cause:
-maintenance_window`), and persists the finding for audit history.
-Deployments without a provider keep the original new-finding behavior
-— suppression is opt-in.
+`unified.ResourceOperatorState` into the
+`ResourceOperatorStateProjection` shape the findings runtime
+consumes. The projection carries every operator-set signal in one
+call (active maintenance window plus the `IntentionallyOffline`
+flag) so adding new signals later does not multiply round-trips per
+finding.
+
+When the projection carries an active maintenance window, the
+new-finding path auto-dismisses with reason `expected_behavior`,
+attributes the suppression on the lifecycle timeline
+(`operator_state_cause: maintenance_window`, with
+`maintenance_end_at` metadata), and persists the finding for audit
+history. The `IntentionallyOffline` branch is the indefinite
+counterpart — same auto-dismiss but with
+`operator_state_cause: intentionally_offline` and no
+`maintenance_end_at` field because the suppression has no scheduled
+end. Maintenance windows take priority over intentionally-offline
+when both are active, because the time-bounded suppression is the
+more honest one to surface to the operator. Deployments without a
+provider keep the original new-finding behavior — suppression is
+opt-in.
 
 This subsystem now makes Pulse Assistant and Patrol backend runtime ownership
 explicit inside the current architecture lane instead of leaving those

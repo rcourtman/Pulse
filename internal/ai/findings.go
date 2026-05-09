@@ -683,25 +683,37 @@ type ResourceOperatorStateMaintenanceWindow struct {
 	Reason  string
 }
 
+// ResourceOperatorStateProjection is the per-resource view the
+// findings runtime consumes during the new-finding path. One provider
+// call returns every signal the runtime needs, so adding new signals
+// does not multiply round-trips per finding. MaintenanceWindow is nil
+// when no window is currently active; IntentionallyOffline reflects
+// the operator's "this resource is expected to be offline" flag.
+type ResourceOperatorStateProjection struct {
+	MaintenanceWindow    *ResourceOperatorStateMaintenanceWindow
+	IntentionallyOffline bool
+}
+
 // ResourceOperatorStateProvider is the narrow interface the findings
 // store consumes for per-resource operator intent. Implementations
 // adapt the unified-resources `ResourceOperatorState` shape into the
-// projection that the findings runtime needs (currently just the
-// active maintenance window). Returning ok=false means "no active
-// operator state for this resource" and the store falls through to
-// the default new-finding path.
+// projection that the findings runtime needs. Returning ok=false
+// means "no operator state recorded for this resource" and the store
+// falls through to the default new-finding path; ok=true with all
+// projection fields zero means "operator state exists but no signal
+// is currently active" (e.g. window scheduled for the future).
 type ResourceOperatorStateProvider interface {
-	ActiveMaintenanceWindow(canonicalID string, now time.Time) (ResourceOperatorStateMaintenanceWindow, bool)
+	OperatorStateProjection(canonicalID string, now time.Time) (ResourceOperatorStateProjection, bool)
 }
 
 // ResourceOperatorStateProviderFunc is a function adapter so wire-up
 // code in the API layer can pass a closure without declaring a struct.
-type ResourceOperatorStateProviderFunc func(canonicalID string, now time.Time) (ResourceOperatorStateMaintenanceWindow, bool)
+type ResourceOperatorStateProviderFunc func(canonicalID string, now time.Time) (ResourceOperatorStateProjection, bool)
 
-// ActiveMaintenanceWindow implements ResourceOperatorStateProvider.
-func (f ResourceOperatorStateProviderFunc) ActiveMaintenanceWindow(canonicalID string, now time.Time) (ResourceOperatorStateMaintenanceWindow, bool) {
+// OperatorStateProjection implements ResourceOperatorStateProvider.
+func (f ResourceOperatorStateProviderFunc) OperatorStateProjection(canonicalID string, now time.Time) (ResourceOperatorStateProjection, bool) {
 	if f == nil {
-		return ResourceOperatorStateMaintenanceWindow{}, false
+		return ResourceOperatorStateProjection{}, false
 	}
 	return f(canonicalID, now)
 }
@@ -1166,29 +1178,50 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	s.syncLoopStateLocked(f)
 	s.appendLifecycleLocked(f, "detected", "Detected by Pulse Patrol", "", f.LoopState, nil)
 
-	// Operator-state suppression: when the resource is currently in a
-	// maintenance window the operator set, auto-dismiss the finding as
-	// expected_behavior with a reason that names the window. The
-	// finding still lands in durable history (so the operator can
-	// audit what tripped during the window) but does not surface as
-	// active. Severity escalation paths still wake it later if the
-	// underlying condition stays after the window closes.
+	// Operator-state suppression: when the operator has set per-resource
+	// intent that suppresses findings, auto-dismiss the finding as
+	// expected_behavior with a reason that names the cause. Maintenance
+	// windows take priority because they're time-bounded ("expect this
+	// noise until the window closes"); IntentionallyOffline is the
+	// fallback branch ("expect this resource to stay quiet
+	// indefinitely"). The finding still lands in durable history so
+	// the operator can audit what tripped during the suppression;
+	// severity escalation paths still wake it later if the underlying
+	// condition stays after the operator clears the state.
 	if provider := s.resourceOperatorStateProvider; provider != nil && f.ResourceID != "" {
-		if window, ok := provider.ActiveMaintenanceWindow(f.ResourceID, time.Now()); ok {
+		if projection, ok := provider.OperatorStateProjection(f.ResourceID, time.Now()); ok {
 			now := time.Now()
-			f.DismissedReason = "expected_behavior"
-			f.AcknowledgedAt = &now
-			noteParts := []string{fmt.Sprintf("Resource is in operator-set maintenance window until %s.", window.EndAt.Format(time.RFC3339))}
-			if reason := strings.TrimSpace(window.Reason); reason != "" {
-				noteParts = append(noteParts, "Reason: "+reason)
+			switch {
+			case projection.MaintenanceWindow != nil:
+				window := projection.MaintenanceWindow
+				f.DismissedReason = "expected_behavior"
+				f.AcknowledgedAt = &now
+				noteParts := []string{fmt.Sprintf("Resource is in operator-set maintenance window until %s.", window.EndAt.Format(time.RFC3339))}
+				if reason := strings.TrimSpace(window.Reason); reason != "" {
+					noteParts = append(noteParts, "Reason: "+reason)
+				}
+				f.UserNote = strings.Join(noteParts, " ")
+				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource in maintenance window", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
+					"reason":               "expected_behavior",
+					"operator_state_cause": "maintenance_window",
+					"maintenance_end_at":   window.EndAt.Format(time.RFC3339),
+				})
+				s.syncLoopStateLocked(f)
+			case projection.IntentionallyOffline:
+				// Operator has marked this resource as expected-to-be-offline,
+				// so any finding raised against it is by definition expected
+				// noise. Auto-dismiss with a clear note so the operator
+				// understands why future findings stayed quiet without
+				// expanding each row.
+				f.DismissedReason = "expected_behavior"
+				f.AcknowledgedAt = &now
+				f.UserNote = "Resource is marked intentionally offline by the operator. Clear the flag on the resource detail surface to resume notifications."
+				s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource is intentionally offline", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
+					"reason":               "expected_behavior",
+					"operator_state_cause": "intentionally_offline",
+				})
+				s.syncLoopStateLocked(f)
 			}
-			f.UserNote = strings.Join(noteParts, " ")
-			s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource in maintenance window", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
-				"reason":               "expected_behavior",
-				"operator_state_cause": "maintenance_window",
-				"maintenance_end_at":   window.EndAt.Format(time.RFC3339),
-			})
-			s.syncLoopStateLocked(f)
 		}
 	}
 

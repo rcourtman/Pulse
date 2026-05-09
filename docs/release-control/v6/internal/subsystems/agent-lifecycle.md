@@ -919,10 +919,14 @@ profile and assignment columns, but embedded table framing must route through
 
 The findings runtime now consumes operator-set per-resource state
 through a provider adapter wired in `internal/api/router.go` at
-startup: when a resource is in an operator-set maintenance window,
-new findings against it are auto-acknowledged at creation time so a
-scheduled-maintenance window does not flood notifications during the
-window. The agent runtime keeps the operator commitment honored across
+startup. The adapter returns a `ResourceOperatorStateProjection`
+covering every signal in one call (active maintenance window plus
+the indefinite `IntentionallyOffline` flag), so adding new signals
+later does not multiply round-trips per finding. When a resource is
+in an operator-set maintenance window OR is marked intentionally
+offline, new findings against it are auto-acknowledged at creation
+time so the operator's commitment is honored without flooding
+notifications. The agent runtime keeps the operator commitment honored across
 restarts because the underlying state lives in the durable
 `resource_operator_state` SQLite table.
 
