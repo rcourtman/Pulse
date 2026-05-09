@@ -93,7 +93,7 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 	Capabilities: []AgentCapability{
 		{
 			Name:          "get_resource_context",
-			Description:   "Return the situated picture of a resource — identity, operator-set state with maintenance-window-active flag, active findings, recent actions including refused dispatches.",
+			Description:   "Return the situated picture of a resource — identity, operator-set state with maintenance-window-active flag, active findings, pending approvals scoped to this resource, recent actions including refused dispatches.",
 			Category:      "context",
 			Method:        http.MethodGet,
 			Path:          "/api/agent/resource-context/{resourceId}",

@@ -411,6 +411,46 @@ func (r *Router) setupRoutes() {
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
 	r.agentContextHandler = NewAgentContextHandler(r.resourceHandlers)
+	// Wire pending-approvals into the bundle. The closure resolves
+	// the approval store at request time so multi-tenant rebuilds
+	// (which install a new global store via approval.SetStore) stay
+	// honored without a re-wire — the bundle just reads whatever is
+	// currently global. Org scoping uses BelongsToOrg so cross-tenant
+	// pending requests don't leak into a resource-context read for
+	// the wrong org.
+	r.agentContextHandler.SetApprovalsProvider(agentApprovalsProviderFunc(
+		func(resourceID, orgID string) []AgentResourceApprovalSummary {
+			store := approval.GetStore()
+			if store == nil || strings.TrimSpace(resourceID) == "" {
+				return nil
+			}
+			pending := store.GetPendingApprovals()
+			if len(pending) == 0 {
+				return nil
+			}
+			out := make([]AgentResourceApprovalSummary, 0, len(pending))
+			for _, req := range pending {
+				if req == nil {
+					continue
+				}
+				if !approval.BelongsToOrg(req, orgID) {
+					continue
+				}
+				if req.CanonicalResourceID() != resourceID {
+					continue
+				}
+				out = append(out, AgentResourceApprovalSummary{
+					ID:          req.ID,
+					Command:     req.Command,
+					RiskLevel:   string(req.RiskLevel),
+					RequestedBy: req.RequestedBy,
+					RequestedAt: req.RequestedAt,
+					ExpiresAt:   req.ExpiresAt,
+				})
+			}
+			return out
+		},
+	))
 	r.agentEventBroadcaster = NewAgentEventBroadcaster()
 	if r.resourceHandlers != nil {
 		if store, err := r.resourceHandlers.getStore("default"); err == nil && store != nil {

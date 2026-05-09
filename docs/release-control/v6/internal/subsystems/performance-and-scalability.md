@@ -531,11 +531,14 @@ record is persisted. Goroutine dispatch keeps the approval and
 dispatch hot paths independent of consumer drain rate; per-event
 cost is one channel send per subscriber.
 
-`/api/agent/resource-context/{id}` does at most three reads per
+`/api/agent/resource-context/{id}` does at most four reads per
 request: one operator-state SQLite point lookup (already covered by
 the `resource_operator_state` index), one in-memory findings lookup
-via the patrol findings store's `byResource` index, and one bounded
-action-audit query (limit 10, since-1-week filter). No fan-out, no
+via the patrol findings store's `byResource` index, one in-memory
+filter against `approval.GetStore().GetPendingApprovals()` (bounded
+by the store's `MaxApprovals=100` ceiling — a fixed-cost scan
+independent of resource cardinality), and one bounded action-audit
+query (limit 10, since-1-week filter). No fan-out, no
 cross-resource scan — the bundle is leveraged for substrate use
 without becoming a per-request hot path that scales with global
 finding volume.

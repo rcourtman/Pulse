@@ -973,9 +973,13 @@ flows are not affected.
 The agent-consumable bundled context endpoint
 `/api/agent/resource-context/{id}` reads the same durable
 `resource_operator_state` table and `action_audits` table through the
-canonical `unified.ResourceStore` accessors. No new persistence is
-introduced; the endpoint is a read-only bundle over existing storage,
-so storage/recovery flows that rehydrate the unified-resources store
+canonical `unified.ResourceStore` accessors, and additionally
+filters the in-memory approval store (durably persisted to the
+`approvals.json` file the approval store already manages, hydrated
+on startup). No new persistence is introduced for the
+pending-approvals section either; the bundle is still a read-only
+bundle over existing storage, so storage/recovery flows that
+rehydrate the unified-resources store and the approval store
 already cover everything the agent endpoint surfaces.
 
 The findings runtime reads operator-set state through the same

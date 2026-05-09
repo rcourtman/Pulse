@@ -952,13 +952,16 @@ stays curated, not auto-derived from every internal endpoint.
 `/api/agent/resource-context/{id}` is the agent-paradigm substrate
 endpoint: any agent (in-process Patrol/Assistant or external) reads
 the full situated picture of a resource — identity, operator state,
-active findings, recent actions including refused dispatches with
-their stable token prefixes preserved — in one call. The endpoint is
-read-only under `monitoring:read`. The active-findings section
-flows through an `AgentFindingsProvider` adapter wired in
-`router.go` from the patrol service so the api package stays free
-of an `internal/ai` import; the agent runtime keeps this provider
-wired across restarts.
+active findings, pending approvals scoped to the resource, recent
+actions including refused dispatches with their stable token
+prefixes preserved — in one call. The endpoint is read-only under
+`monitoring:read`. The active-findings section flows through an
+`AgentFindingsProvider` adapter wired in `router.go` from the
+patrol service so the api package stays free of an `internal/ai`
+import; the parallel `AgentApprovalsProvider` adapter resolves the
+canonical approval store at request time and filters by
+canonical resource id and org. The agent runtime keeps both
+providers wired across restarts.
 
 The findings runtime now consumes operator-set per-resource state
 through a provider adapter wired in `internal/api/router.go` at

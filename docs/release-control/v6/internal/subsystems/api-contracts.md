@@ -1437,20 +1437,32 @@ context endpoint. One read returns the full situated picture of a
 resource — identity, operator-set state (with server-computed
 `maintenanceWindowActive` flag), active findings as the
 `AgentResourceFindingSnapshot` projection (lightweight subset of
-the seven-question schema fields agents need), and recent action
-audits including refused dispatches with their stable token
-prefixes (`resource_remediation_locked:`, `plan_drift:`) preserved
-verbatim. The shape is intentionally narrower than the full
-internal types so agents see a stable agent-paradigm contract,
-decoupled from internal type evolution. Active findings come
-through the `AgentFindingsProvider` adapter wired at startup so the
-api package stays free of an `internal/ai` import; the patrol
-service holds the canonical findings store and projects each
-`Finding` into the snapshot shape. Active findings and recent
-actions are always arrays (never null) so agents can iterate
-without nil-checking; absent operator state surfaces as a missing
-`operatorState` field (omitempty), distinguishing "no operator
-overrides" from "all-zero overrides recorded."
+the seven-question schema fields agents need), pending approvals
+scoped to this resource as the `AgentResourceApprovalSummary`
+projection (id, command, riskLevel, requestedBy, requestedAt,
+expiresAt — same vocabulary as `approval.pending` SSE events so
+"what's pending right now" and "what just became pending" agree
+on shape), and recent action audits including refused dispatches
+with their stable token prefixes (`resource_remediation_locked:`,
+`plan_drift:`) preserved verbatim. The shape is intentionally
+narrower than the full internal types so agents see a stable
+agent-paradigm contract, decoupled from internal type evolution.
+Active findings come through the `AgentFindingsProvider` adapter
+wired at startup so the api package stays free of an
+`internal/ai` import; the patrol service holds the canonical
+findings store and projects each `Finding` into the snapshot
+shape. Pending approvals come through the parallel
+`AgentApprovalsProvider` adapter — the router wires a closure
+that resolves `approval.GetStore()` at request time (so
+multi-tenant store rebuilds stay honored), filters via
+`approval.BelongsToOrg` for tenant scope, and matches
+`req.CanonicalResourceID()` against the requested resource so
+cross-resource approvals don't leak into the bundle. Active
+findings, pending approvals, and recent actions are always arrays
+(never null) so agents can iterate without nil-checking; absent
+operator state surfaces as a missing `operatorState` field
+(omitempty), distinguishing "no operator overrides" from
+"all-zero overrides recorded."
 
 The TS client `frontend-modern/src/api/resourceOperatorState.ts`
 mirrors the canonical Go shape from

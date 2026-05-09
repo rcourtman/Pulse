@@ -13509,14 +13509,14 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 	}
 	src := string(source)
 	// Always-array initialization for the iteration-safe contract.
-	if !strings.Contains(src, "ActiveFindings: []AgentResourceFindingSnapshot{}") {
+	if !strings.Contains(src, "ActiveFindings:   []AgentResourceFindingSnapshot{},") {
 		t.Error("activeFindings must default to an empty slice, not nil — agents iterate without nil-checks")
 	}
-	if !strings.Contains(src, "RecentActions:  []AgentResourceActionSummary{}") {
+	if !strings.Contains(src, "RecentActions:    []AgentResourceActionSummary{},") {
 		t.Error("recentActions must default to an empty slice, not nil")
 	}
 	// Field-presence branching contract for operatorState.
-	if !strings.Contains(src, "OperatorState  *AgentResourceOperatorState    `json:\"operatorState,omitempty\"`") {
+	if !strings.Contains(src, "OperatorState    *AgentResourceOperatorState    `json:\"operatorState,omitempty\"`") {
 		t.Error("operatorState must be omitempty so absent entries surface as missing field")
 	}
 	// Server-computed maintenance-active flag — server pre-computes so
@@ -13528,6 +13528,61 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 	// from the audit record's ExecutionResult, no rewriting.
 	if !strings.Contains(src, "summary.ErrorMessage = audit.Result.ErrorMessage") {
 		t.Error("audit ErrorMessage must round-trip verbatim so refusal tokens (resource_remediation_locked:, plan_drift:) reach agents")
+	}
+	// pendingApprovals must initialize as an empty slice so agents
+	// iterate without nil-checking — same iteration-safe contract
+	// as activeFindings and recentActions.
+	if !strings.Contains(src, "PendingApprovals: []AgentResourceApprovalSummary{}") {
+		t.Error("pendingApprovals must default to an empty slice, not nil — agents iterate without nil-checks")
+	}
+	// Pending approvals must reuse the AgentResourceApprovalSummary
+	// shape so the bundle and approval.pending SSE events stay in
+	// the same vocabulary.
+	if !strings.Contains(src, "PendingApprovals []AgentResourceApprovalSummary `json:\"pendingApprovals\"`") {
+		t.Error("AgentResourceContext must carry PendingApprovals as a stable []AgentResourceApprovalSummary field")
+	}
+}
+
+// TestContract_AgentResourceContextWiresApprovalsProvider pins the
+// startup-time wire-up that lets the bundle endpoint surface pending
+// approvals scoped to a resource. Drift here means the field always
+// shows up as an empty array even when there ARE pending approvals,
+// silently breaking the substrate's "everything an agent needs in
+// one read" contract for the governance dimension.
+func TestContract_AgentResourceContextWiresApprovalsProvider(t *testing.T) {
+	source, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "r.agentContextHandler.SetApprovalsProvider(agentApprovalsProviderFunc(") {
+		t.Error("router.go must wire the approvals provider on the agent context handler so the bundle's pendingApprovals section is populated")
+	}
+	if !strings.Contains(src, "store := approval.GetStore()") {
+		t.Error("router.go must resolve the approval store at request time so multi-tenant store rebuilds stay honored")
+	}
+	if !strings.Contains(src, "if !approval.BelongsToOrg(req, orgID)") {
+		t.Error("router.go must scope pending approvals via BelongsToOrg so cross-tenant requests don't leak into a resource-context bundle")
+	}
+	if !strings.Contains(src, "if req.CanonicalResourceID() != resourceID") {
+		t.Error("router.go must filter pending approvals by CanonicalResourceID so the bundle only carries approvals targeting the requested resource")
+	}
+}
+
+// TestContract_GetResourceContextCapabilityListsPendingApprovals pins
+// the discovery contract: the capabilities manifest must mention
+// pendingApprovals under get_resource_context so an agent reading
+// the manifest learns the bundle now carries the governance
+// dimension. Drift here means external agents still expect the
+// pre-slice-45 shape.
+func TestContract_GetResourceContextCapabilityListsPendingApprovals(t *testing.T) {
+	source, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "pending approvals scoped to this resource") {
+		t.Error("get_resource_context description must mention pending approvals so agents discover the bundle's new governance section through the manifest")
 	}
 }
 

@@ -47,6 +47,22 @@ type AgentResourceActionSummary struct {
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
+// AgentResourceApprovalSummary is the agent-consumable projection of
+// a pending approval request scoped to a specific resource. Carries
+// just enough for an agent that holds approval authority to decide
+// whether to act, fetch full context via /api/approvals/{id}, or
+// escalate. Mirrors the shape of approval.pending SSE events so
+// "what's pending right now" (this bundle) and "what just became
+// pending" (the SSE stream) speak the same vocabulary.
+type AgentResourceApprovalSummary struct {
+	ID          string    `json:"id"`
+	Command     string    `json:"command"`
+	RiskLevel   string    `json:"riskLevel"`
+	RequestedBy string    `json:"requestedBy,omitempty"`
+	RequestedAt time.Time `json:"requestedAt"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+}
+
 // AgentResourceOperatorState mirrors the canonical
 // `unified.ResourceOperatorState` but with the same JSON shape the
 // `/api/resources/{id}/operator-state` endpoint already returns. Kept
@@ -81,14 +97,15 @@ type AgentResourceOperatorState struct {
 // detail (full finding records, full audit history) remains available
 // via the existing per-finding / per-audit endpoints.
 type AgentResourceContext struct {
-	CanonicalID    string                         `json:"canonicalId"`
-	ResourceType   string                         `json:"resourceType"`
-	ResourceName   string                         `json:"resourceName"`
-	Technology     string                         `json:"technology,omitempty"`
-	OperatorState  *AgentResourceOperatorState    `json:"operatorState,omitempty"`
-	ActiveFindings []AgentResourceFindingSnapshot `json:"activeFindings"`
-	RecentActions  []AgentResourceActionSummary   `json:"recentActions"`
-	GeneratedAt    time.Time                      `json:"generatedAt"`
+	CanonicalID      string                         `json:"canonicalId"`
+	ResourceType     string                         `json:"resourceType"`
+	ResourceName     string                         `json:"resourceName"`
+	Technology       string                         `json:"technology,omitempty"`
+	OperatorState    *AgentResourceOperatorState    `json:"operatorState,omitempty"`
+	ActiveFindings   []AgentResourceFindingSnapshot `json:"activeFindings"`
+	PendingApprovals []AgentResourceApprovalSummary `json:"pendingApprovals"`
+	RecentActions    []AgentResourceActionSummary   `json:"recentActions"`
+	GeneratedAt      time.Time                      `json:"generatedAt"`
 }
 
 // AgentFindingsProvider returns the active findings for a resource as
@@ -111,6 +128,27 @@ func (f agentFindingsProviderFunc) ActiveFindingsForResource(resourceID string) 
 	return f(resourceID)
 }
 
+// AgentApprovalsProvider returns the still-pending approvals scoped
+// to a single resource as agent-stable summaries. The implementation
+// lives outside this package (the approval store is owned by the
+// AIHandler); this interface keeps the bundle handler decoupled
+// from the global approval store and lets tests pass a fake.
+type AgentApprovalsProvider interface {
+	PendingApprovalsForResource(resourceID, orgID string) []AgentResourceApprovalSummary
+}
+
+// agentApprovalsProviderFunc is a function adapter so wire-up code
+// can pass a closure without declaring a struct.
+type agentApprovalsProviderFunc func(resourceID, orgID string) []AgentResourceApprovalSummary
+
+// PendingApprovalsForResource implements AgentApprovalsProvider.
+func (f agentApprovalsProviderFunc) PendingApprovalsForResource(resourceID, orgID string) []AgentResourceApprovalSummary {
+	if f == nil {
+		return nil
+	}
+	return f(resourceID, orgID)
+}
+
 // AgentContextHandler owns the agent-paradigm bundled context
 // endpoint. Kept as a separate type from `ResourceHandlers` so the
 // agent surface evolves independently of the resource CRUD surface
@@ -119,8 +157,9 @@ func (f agentFindingsProviderFunc) ActiveFindingsForResource(resourceID string) 
 // access (those are the canonical accessors); the
 // agent-findings adapter is held here.
 type AgentContextHandler struct {
-	resources        *ResourceHandlers
-	findingsProvider AgentFindingsProvider
+	resources         *ResourceHandlers
+	findingsProvider  AgentFindingsProvider
+	approvalsProvider AgentApprovalsProvider
 }
 
 // NewAgentContextHandler creates a new agent context handler. The
@@ -134,6 +173,14 @@ func NewAgentContextHandler(resources *ResourceHandlers) *AgentContextHandler {
 // disable the active-findings section of the bundle.
 func (h *AgentContextHandler) SetFindingsProvider(p AgentFindingsProvider) {
 	h.findingsProvider = p
+}
+
+// SetApprovalsProvider wires the pending-approvals adapter. Pass nil
+// to disable the pending-approvals section of the bundle (callers
+// will always see `pendingApprovals: []` rather than a missing field
+// so agents can iterate without nil-checking).
+func (h *AgentContextHandler) SetApprovalsProvider(p AgentApprovalsProvider) {
+	h.approvalsProvider = p
 }
 
 // HandleResourceContext serves
@@ -177,13 +224,14 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 	}
 
 	bundle := AgentResourceContext{
-		CanonicalID:    resourceID,
-		ResourceType:   string(resource.Type),
-		ResourceName:   resource.Name,
-		Technology:     resource.Technology,
-		ActiveFindings: []AgentResourceFindingSnapshot{},
-		RecentActions:  []AgentResourceActionSummary{},
-		GeneratedAt:    time.Now().UTC(),
+		CanonicalID:      resourceID,
+		ResourceType:     string(resource.Type),
+		ResourceName:     resource.Name,
+		Technology:       resource.Technology,
+		ActiveFindings:   []AgentResourceFindingSnapshot{},
+		PendingApprovals: []AgentResourceApprovalSummary{},
+		RecentActions:    []AgentResourceActionSummary{},
+		GeneratedAt:      time.Now().UTC(),
 	}
 
 	// Operator-set state — single point lookup.
@@ -201,6 +249,18 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 		bundle.ActiveFindings = h.findingsProvider.ActiveFindingsForResource(resourceID)
 		if bundle.ActiveFindings == nil {
 			bundle.ActiveFindings = []AgentResourceFindingSnapshot{}
+		}
+	}
+
+	// Pending approvals — in-memory filter against the approval
+	// store, scoped to this org. Same pattern as findings: the
+	// provider adapter keeps the api package free of approval-store
+	// internals at the bundle layer; the wire-up step in router.go
+	// does the global lookup and resource-id filter.
+	if h.approvalsProvider != nil {
+		bundle.PendingApprovals = h.approvalsProvider.PendingApprovalsForResource(resourceID, orgID)
+		if bundle.PendingApprovals == nil {
+			bundle.PendingApprovals = []AgentResourceApprovalSummary{}
 		}
 	}
 

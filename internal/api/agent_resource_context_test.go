@@ -28,6 +28,21 @@ func (s staticFindingsProvider) ActiveFindingsForResource(resourceID string) []A
 	return s.byResource[resourceID]
 }
 
+// staticApprovalsProvider is a tiny test double for
+// AgentApprovalsProvider — keyed by (resource id, org id) so each
+// test can stage the pending approvals it expects to see in the
+// bundle without setting up a global approval store.
+type staticApprovalsProvider struct {
+	byResource map[string][]AgentResourceApprovalSummary
+}
+
+func (s staticApprovalsProvider) PendingApprovalsForResource(resourceID, _ string) []AgentResourceApprovalSummary {
+	if s.byResource == nil {
+		return nil
+	}
+	return s.byResource[resourceID]
+}
+
 // agentContextFixtureHandlers wires a ResourceHandlers around a
 // pre-built unified-resource seed (using the same
 // `resourceUnifiedSeedProvider` pattern from resources_test.go) plus
@@ -281,6 +296,81 @@ func TestHandleAgentResourceContext_RecentActionsCarryRefusalTokens(t *testing.T
 	// Stable token preservation — agents branch on the prefix.
 	if !strings.Contains(action.ErrorMessage, "resource_remediation_locked:") {
 		t.Errorf("ErrorMessage must preserve the stable refusal token; got %q", action.ErrorMessage)
+	}
+}
+
+func TestHandleAgentResourceContext_PendingApprovalsAreScopedToResource(t *testing.T) {
+	// pendingApprovals must list every still-pending approval
+	// targeting the bundle's resource. The provider is the seam that
+	// scopes by (resource id, org id) — the bundle handler trusts
+	// the provider's filtering. Pin the contract: if the provider
+	// returns N entries, the bundle returns N entries with the same
+	// agent-stable shape (id, command, riskLevel, requestedBy,
+	// requestedAt, expiresAt) and an empty array (never null) when
+	// the provider returns nothing.
+	h, _ := agentContextFixtureHandlers(t, "vm:101")
+	now := time.Now().UTC()
+	expires := now.Add(5 * time.Minute)
+	h.SetApprovalsProvider(staticApprovalsProvider{
+		byResource: map[string][]AgentResourceApprovalSummary{
+			"vm:101": {
+				{
+					ID:          "appr-1",
+					Command:     "systemctl restart nginx",
+					RiskLevel:   "medium",
+					RequestedBy: "ai:patrol",
+					RequestedAt: now,
+					ExpiresAt:   expires,
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/vm:101", nil)
+	h.HandleResourceContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceContext
+	if err := json.NewDecoder(rec.Body).Decode(&bundle); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(bundle.PendingApprovals) != 1 {
+		t.Fatalf("PendingApprovals len = %d; want 1; body=%s", len(bundle.PendingApprovals), rec.Body.String())
+	}
+	got := bundle.PendingApprovals[0]
+	if got.ID != "appr-1" {
+		t.Errorf("ID: got %q, want %q", got.ID, "appr-1")
+	}
+	if got.Command != "systemctl restart nginx" {
+		t.Errorf("Command did not round-trip: got %q", got.Command)
+	}
+	if got.RiskLevel != "medium" {
+		t.Errorf("RiskLevel did not round-trip: got %q", got.RiskLevel)
+	}
+	if !got.ExpiresAt.Equal(expires) {
+		t.Errorf("ExpiresAt did not round-trip: got %v, want %v", got.ExpiresAt, expires)
+	}
+}
+
+func TestHandleAgentResourceContext_PendingApprovalsEmptyArrayWhenNone(t *testing.T) {
+	// Absent or empty must surface as an empty array, not as a
+	// missing field — agents iterate without nil-checking. This
+	// mirrors the contract for ActiveFindings and RecentActions.
+	h, _ := agentContextFixtureHandlers(t, "vm:404")
+	// No approvals provider wired — same observable shape as a
+	// provider that returns nil for this resource.
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/vm:404", nil)
+	h.HandleResourceContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"pendingApprovals":[]`) {
+		t.Errorf("expected pendingApprovals to surface as empty array; body=%s", body)
 	}
 }
 
