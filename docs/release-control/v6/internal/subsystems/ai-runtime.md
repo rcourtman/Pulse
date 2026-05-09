@@ -604,6 +604,18 @@ rather than a separate runtime check; the contract test in
 either branch cannot silently waste investigation budget on
 operator-suppressed findings.
 
+The operator-state suppression is also reversible. When a finding
+auto-dismissed under `operator_state_cause` re-detects after the
+underlying suppression has lifted (maintenance window passed,
+`IntentionallyOffline` cleared), `FindingsStore.Add` wakes it with
+a `suppression_lifted` lifecycle event. The wake gates on the most
+recent lifecycle dismiss event carrying `operator_state_cause`
+metadata via `findOperatorStateDismissCause`, so a manual operator
+dismissal that supersedes an earlier auto-dismiss is not
+falsely re-awakened — the helper stops at the first `dismissed`
+event when scanning from newest backwards, treating that as the
+authoritative state.
+
 When the projection carries an active maintenance window, the
 new-finding path auto-dismisses with reason `expected_behavior`,
 attributes the suppression on the lifecycle timeline

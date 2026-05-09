@@ -1216,3 +1216,15 @@ expected_behavior` and write a `UserNote` naming the cause so the
 operator can audit why future findings stayed quiet without
 expanding each row. Default deployments without a provider behave
 identically to before — operator-state suppression is opt-in.
+
+The auto-dismiss is reversible. When a finding previously
+auto-dismissed under `operator_state_cause` re-detects after the
+suppression has lifted (maintenance window passed,
+`IntentionallyOffline` cleared, or provider unwired), the
+new-finding path wakes it with a `suppression_lifted` lifecycle
+event carrying the previous cause. Time-bounded operator
+commitments do not silently turn into permanent dismissals; manual
+operator dismissals (no `operator_state_cause` metadata) are
+unaffected by this wake path because the helper that detects the
+cause stops at the first `dismissed` event when scanning newest
+first, treating that as the authoritative state.

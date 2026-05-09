@@ -994,6 +994,34 @@ func normalizeLoadedFinding(f *Finding) bool {
 	return false
 }
 
+// findOperatorStateDismissCause returns the most recent
+// `operator_state_cause` metadata value from the finding's lifecycle, or
+// "" if the finding has not been auto-dismissed by operator-state
+// suppression. Used by the dismissed-branch wake logic in Add to
+// distinguish operator-state-driven dismissals (which should wake when
+// suppression lifts) from manual operator dismissals (which stay quiet
+// until severity escalates).
+func findOperatorStateDismissCause(f *Finding) string {
+	if f == nil {
+		return ""
+	}
+	for i := len(f.Lifecycle) - 1; i >= 0; i-- {
+		ev := f.Lifecycle[i]
+		if ev.Type != "dismissed" {
+			continue
+		}
+		if cause, ok := ev.Metadata["operator_state_cause"]; ok && cause != "" {
+			return cause
+		}
+		// First "dismissed" event without operator_state_cause is a
+		// manual operator dismissal that supersedes any earlier
+		// auto-dismiss; stop scanning so a stale earlier cause does
+		// not falsely trigger a wake.
+		return ""
+	}
+	return ""
+}
+
 // syncLoopStateLocked recomputes loop state and records a lifecycle event if it changed.
 // Caller must hold s.mu.
 func (s *FindingsStore) syncLoopStateLocked(f *Finding) {
@@ -1052,7 +1080,9 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		}
 
 		// Check if dismissed or suppressed - only update if severity has escalated,
-		// or if a "will_fix_later" remind-at deadline has passed.
+		// or if a "will_fix_later" remind-at deadline has passed, or if the
+		// operator-state suppression that auto-dismissed the finding is no
+		// longer active.
 		if existing.DismissedReason != "" || existing.Suppressed {
 			severityOrder := map[FindingSeverity]int{
 				FindingSeverityInfo:     0,
@@ -1069,8 +1099,33 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				existing.RemindAt != nil &&
 				time.Now().After(*existing.RemindAt) &&
 				!existing.Suppressed
-			if !willFixReminderDue && severityOrder[f.Severity] <= severityOrder[existing.Severity] {
-				// New severity is same or lower and there's no reminder due — don't reactivate.
+
+			// Operator-state-driven auto-dismiss should be reversible when the
+			// underlying suppression ends. A maintenance window has a defined
+			// end; an IntentionallyOffline flag can be cleared. Findings
+			// auto-dismissed under either signal must wake at re-detection
+			// once the suppression no longer applies, otherwise the
+			// time-bounded suppression silently becomes permanent.
+			operatorStateLifted := false
+			if !willFixReminderDue && existing.DismissedReason == "expected_behavior" && !existing.Suppressed {
+				if cause := findOperatorStateDismissCause(existing); cause != "" {
+					if provider := s.resourceOperatorStateProvider; provider != nil && existing.ResourceID != "" {
+						projection, ok := provider.OperatorStateProjection(existing.ResourceID, time.Now())
+						currentlySuppressing := ok &&
+							(projection.MaintenanceWindow != nil || projection.IntentionallyOffline)
+						operatorStateLifted = !currentlySuppressing
+					} else {
+						// No provider currently wired but the finding was
+						// previously auto-dismissed by one — treat as lifted
+						// rather than keeping the suppression alive forever.
+						operatorStateLifted = true
+					}
+				}
+			}
+
+			if !willFixReminderDue && !operatorStateLifted &&
+				severityOrder[f.Severity] <= severityOrder[existing.Severity] {
+				// New severity is same or lower and no wake condition fired — don't reactivate.
 				existing.LastSeenAt = time.Now()
 				existing.TimesRaised++
 				s.appendLifecycleLocked(existing, "seen_while_suppressed", "Re-detected while dismissed/suppressed with non-escalated severity", existing.LoopState, existing.LoopState, nil)
@@ -1086,13 +1141,22 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				}
 				s.appendLifecycleLocked(existing, "reminded", "will_fix_later remind-at deadline passed; re-surfacing finding", string(FindingLoopStateDismissed), string(FindingLoopStateDetected), meta)
 			}
-			// Severity escalated or remind-at fired - clear dismissal/suppression and reactivate.
+			if operatorStateLifted {
+				meta := map[string]string{}
+				if cause := findOperatorStateDismissCause(existing); cause != "" {
+					meta["previous_cause"] = cause
+				}
+				s.appendLifecycleLocked(existing, "suppression_lifted", "Operator-state suppression no longer applies; re-surfacing finding", string(FindingLoopStateDismissed), string(FindingLoopStateDetected), meta)
+			}
+			// Severity escalated, remind-at fired, or operator-state lifted — clear dismissal and reactivate.
 			existing.DismissedReason = ""
 			existing.Suppressed = false
 			existing.RemindAt = nil
 			if !willFixReminderDue {
-				// On severity escalation we drop the operator's note (situation changed);
-				// on a remind-at wake we keep it because the operator's promise is still relevant context.
+				// On severity escalation or operator-state-lift we drop the
+				// operator's note (the suppression that justified it is gone);
+				// on a remind-at wake we keep it because the operator's
+				// promise is still relevant context.
 				existing.UserNote = ""
 			}
 			existing.AcknowledgedAt = nil

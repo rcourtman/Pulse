@@ -1818,6 +1818,208 @@ func TestFindingsStore_Add_OperatorStateSuppressionIsOptIn(t *testing.T) {
 	}
 }
 
+func TestFindingsStore_Add_WakesAfterMaintenanceWindowExpires(t *testing.T) {
+	// Maintenance windows are time-bounded. A finding auto-dismissed
+	// while a window covered `now` must wake at re-detection once the
+	// window has passed and the underlying condition still trips —
+	// otherwise the time-bounded suppression silently becomes
+	// permanent. Pin the wake path with a "suppression_lifted"
+	// lifecycle event so the timeline shows why it came back.
+	store := NewFindingsStore()
+
+	// Phase 1: window covers now, finding auto-dismisses.
+	startInWindow := time.Now().Add(-time.Hour)
+	endInWindow := time.Now().Add(time.Hour)
+	store.SetResourceOperatorStateProvider(
+		ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+			return ResourceOperatorStateProjection{
+				MaintenanceWindow: &ResourceOperatorStateMaintenanceWindow{
+					StartAt: startInWindow,
+					EndAt:   endInWindow,
+				},
+			}, true
+		}),
+	)
+	store.Add(&Finding{
+		ID:         "f-window-wake",
+		ResourceID: "vm:101",
+		Severity:   FindingSeverityWarning,
+		Title:      "CPU saturated",
+	})
+	if got := store.Get("f-window-wake"); got == nil || got.DismissedReason != "expected_behavior" {
+		t.Fatalf("setup: expected auto-dismiss; got %+v", got)
+	}
+
+	// Phase 2: window has now passed (provider reports no suppression).
+	// Re-detect at same severity. Existing logic would keep it dismissed
+	// forever; the new wake condition should clear the dismissal.
+	store.SetResourceOperatorStateProvider(
+		ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+			return ResourceOperatorStateProjection{}, false
+		}),
+	)
+	store.Add(&Finding{
+		ID:         "f-window-wake",
+		ResourceID: "vm:101",
+		Severity:   FindingSeverityWarning,
+		Title:      "CPU saturated",
+	})
+
+	got := store.Get("f-window-wake")
+	if got == nil {
+		t.Fatal("finding must still exist after wake")
+	}
+	if got.DismissedReason != "" {
+		t.Errorf("expected dismissal cleared after window expired; got DismissedReason=%q", got.DismissedReason)
+	}
+	if got.AcknowledgedAt != nil {
+		t.Errorf("AcknowledgedAt must be cleared on wake; got %v", got.AcknowledgedAt)
+	}
+	foundWake := false
+	for _, ev := range got.Lifecycle {
+		if ev.Type == "suppression_lifted" && ev.Metadata["previous_cause"] == "maintenance_window" {
+			foundWake = true
+			break
+		}
+	}
+	if !foundWake {
+		t.Error("expected a 'suppression_lifted' lifecycle event with previous_cause=maintenance_window")
+	}
+}
+
+func TestFindingsStore_Add_WakesAfterIntentionallyOfflineCleared(t *testing.T) {
+	// Same shape as the maintenance-window wake, but for the
+	// IntentionallyOffline flag. When the operator clears that flag
+	// (or the provider stops returning it as active), an
+	// auto-dismissed finding must wake at next re-detection.
+	store := NewFindingsStore()
+
+	// Phase 1: IntentionallyOffline=true → auto-dismiss.
+	store.SetResourceOperatorStateProvider(
+		ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+			return ResourceOperatorStateProjection{IntentionallyOffline: true}, true
+		}),
+	)
+	store.Add(&Finding{
+		ID:         "f-offline-wake",
+		ResourceID: "vm:archived",
+		Severity:   FindingSeverityWarning,
+		Title:      "Resource is offline",
+	})
+	if got := store.Get("f-offline-wake"); got == nil || got.DismissedReason != "expected_behavior" {
+		t.Fatalf("setup: expected auto-dismiss; got %+v", got)
+	}
+
+	// Phase 2: operator cleared the flag.
+	store.SetResourceOperatorStateProvider(
+		ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+			return ResourceOperatorStateProjection{IntentionallyOffline: false}, true
+		}),
+	)
+	store.Add(&Finding{
+		ID:         "f-offline-wake",
+		ResourceID: "vm:archived",
+		Severity:   FindingSeverityWarning,
+		Title:      "Resource is offline",
+	})
+	got := store.Get("f-offline-wake")
+	if got == nil {
+		t.Fatal("finding must still exist after wake")
+	}
+	if got.DismissedReason != "" {
+		t.Errorf("expected dismissal cleared after IntentionallyOffline cleared; got DismissedReason=%q", got.DismissedReason)
+	}
+	foundWake := false
+	for _, ev := range got.Lifecycle {
+		if ev.Type == "suppression_lifted" && ev.Metadata["previous_cause"] == "intentionally_offline" {
+			foundWake = true
+			break
+		}
+	}
+	if !foundWake {
+		t.Error("expected a 'suppression_lifted' lifecycle event with previous_cause=intentionally_offline")
+	}
+}
+
+func TestFindingsStore_Add_DoesNotWakeManualOperatorDismissalWhenStateClears(t *testing.T) {
+	// A finding the operator manually dismissed (clicked "Dismiss:
+	// Expected") must NOT wake just because operator-state happens to
+	// have changed for the resource. The manual dismiss is its own
+	// commitment and should not be undone by a parallel state change.
+	// This isolates the wake path to operator-state-driven dismissals
+	// only.
+	store := NewFindingsStore()
+
+	// Operator manually dismisses — no operator_state_cause metadata.
+	store.Add(&Finding{
+		ID:         "f-manual",
+		ResourceID: "vm:101",
+		Severity:   FindingSeverityWarning,
+		Title:      "Disk pressure",
+	})
+	store.Dismiss("f-manual", "expected_behavior", "team flagged this")
+
+	// Provider reports no current suppression — but this dismissal
+	// was never operator-state-driven.
+	store.SetResourceOperatorStateProvider(
+		ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+			return ResourceOperatorStateProjection{}, false
+		}),
+	)
+
+	store.Add(&Finding{
+		ID:         "f-manual",
+		ResourceID: "vm:101",
+		Severity:   FindingSeverityWarning,
+		Title:      "Disk pressure",
+	})
+
+	got := store.Get("f-manual")
+	if got == nil {
+		t.Fatal("finding must still exist")
+	}
+	if got.DismissedReason != "expected_behavior" {
+		t.Errorf("manual dismissal must persist; got DismissedReason=%q", got.DismissedReason)
+	}
+	for _, ev := range got.Lifecycle {
+		if ev.Type == "suppression_lifted" {
+			t.Error("manual dismissal must not emit suppression_lifted")
+		}
+	}
+}
+
+func TestFindOperatorStateDismissCause_PrefersMostRecentDismissEvent(t *testing.T) {
+	// The helper must scan the lifecycle from newest backwards and
+	// stop at the first "dismissed" event. A manual dismiss that
+	// supersedes an earlier auto-dismiss must NOT report the stale
+	// auto-dismiss cause — that would falsely trigger a wake on the
+	// manual dismissal.
+	f := &Finding{
+		Lifecycle: []FindingLifecycleEvent{
+			// Older auto-dismiss with operator_state_cause.
+			{Type: "dismissed", Metadata: map[string]string{"operator_state_cause": "maintenance_window"}},
+			// Operator clears it, then manually dismisses.
+			{Type: "undismissed"},
+			{Type: "dismissed", Metadata: map[string]string{"reason": "expected_behavior"}},
+		},
+	}
+	if got := findOperatorStateDismissCause(f); got != "" {
+		t.Errorf("most recent dismiss is manual; got cause %q want empty", got)
+	}
+
+	// And the opposite: operator-state cause is the most recent → return it.
+	g := &Finding{
+		Lifecycle: []FindingLifecycleEvent{
+			{Type: "dismissed", Metadata: map[string]string{"reason": "expected_behavior"}},
+			{Type: "undismissed"},
+			{Type: "dismissed", Metadata: map[string]string{"operator_state_cause": "intentionally_offline"}},
+		},
+	}
+	if got := findOperatorStateDismissCause(g); got != "intentionally_offline" {
+		t.Errorf("expected most recent operator_state_cause; got %q", got)
+	}
+}
+
 func TestFindingsStore_OperatorStateSuppressedFindingsDoNotTriggerInvestigation(t *testing.T) {
 	// Cross-slice contract: when slice 31/32's operator-state suppression
 	// fires (maintenance window or intentionally offline), the resulting
