@@ -43,7 +43,10 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
           <span class={sourcePresentation().className}>{sourcePresentation().label}</span>
         </TableCell>
 
-        <TableCell class="max-w-[150px] truncate p-1 px-1 font-medium text-base-content sm:p-1.5 sm:px-2">
+        <TableCell
+          class="max-w-[150px] truncate p-1 px-1 font-medium text-base-content sm:p-1.5 sm:px-2"
+          title={props.alert.resourceName}
+        >
           {props.alert.resourceName}
         </TableCell>
 
@@ -76,7 +79,10 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
           </span>
         </TableCell>
 
-        <TableCell class="hidden truncate p-1 px-1 text-muted lg:table-cell sm:p-1.5 sm:px-2">
+        <TableCell
+          class="hidden truncate p-1 px-1 text-muted lg:table-cell sm:p-1.5 sm:px-2"
+          title={props.alert.nodeDisplayName || props.alert.node || ''}
+        >
           {props.alert.nodeDisplayName || props.alert.node || '—'}
         </TableCell>
 

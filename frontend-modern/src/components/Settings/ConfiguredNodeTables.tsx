@@ -87,8 +87,8 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                           class="mt-1.5"
                         />
                         <div class="min-w-0 flex-1">
-                          <p class="font-medium text-base-content truncate">{node.name}</p>
-                          <p class="text-xs text-muted truncate">{node.host}</p>
+                          <p class="font-medium text-base-content truncate" title={node.name}>{node.name}</p>
+                          <p class="text-xs text-muted truncate" title={node.host}>{node.host}</p>
                         </div>
                       </div>
                       <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
@@ -338,8 +338,8 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                           class="mt-1.5"
                         />
                         <div class="min-w-0 flex-1">
-                          <p class="font-medium text-base-content truncate">{node.name}</p>
-                          <p class="text-xs text-muted truncate">{node.host}</p>
+                          <p class="font-medium text-base-content truncate" title={node.name}>{node.name}</p>
+                          <p class="text-xs text-muted truncate" title={node.host}>{node.host}</p>
                         </div>
                       </div>
                     </div>
@@ -500,8 +500,8 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                           class="mt-1.5"
                         />
                         <div class="min-w-0 flex-1">
-                          <p class="font-medium text-base-content truncate">{node.name}</p>
-                          <p class="text-xs text-muted truncate">{node.host}</p>
+                          <p class="font-medium text-base-content truncate" title={node.name}>{node.name}</p>
+                          <p class="text-xs text-muted truncate" title={node.host}>{node.host}</p>
                         </div>
                       </div>
                     </div>
