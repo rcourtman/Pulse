@@ -583,18 +583,22 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     >
       <h3 class="sr-only">Setup status</h3>
       <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <dl class="grid min-w-0 flex-1 grid-cols-2 overflow-hidden rounded-md border border-border-subtle bg-border-subtle sm:grid-cols-3 xl:grid-cols-5">
+        {/* Compact summary line replaces the previous 5-cell stats grid.
+            The same metrics are surfaced inline so a glance reads the
+            shape of the infrastructure ('4 systems, 4 live, 1 needs agent')
+            without giving up significant vertical real estate above the
+            table that the page is actually about. */}
+        <dl class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
           <For each={setupSummaryMetrics()}>
             {(metric, index) => (
-              <div
-                class={`bg-surface px-3 py-3 ${
-                  index() === setupSummaryMetrics().length - 1 ? 'col-span-2 sm:col-span-1' : ''
-                }`}
-              >
-                <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+              <div class="flex items-baseline gap-1.5">
+                <Show when={index() > 0}>
+                  <span aria-hidden="true" class="text-muted">·</span>
+                </Show>
+                <dt class="text-[11px] font-medium uppercase tracking-[0.06em] text-muted">
                   {metric.label}
                 </dt>
-                <dd class="mt-1 text-sm font-semibold text-base-content">{metric.value}</dd>
+                <dd class="font-semibold text-base-content">{metric.value}</dd>
               </div>
             )}
           </For>
