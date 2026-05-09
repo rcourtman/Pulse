@@ -1463,6 +1463,16 @@ body-supplied id (preventing scope-confusion writes). Together
 the two tests are the substantive proof for the agent surface —
 read, write, push — as one substrate.
 
+The companion worked example lives at `cmd/agent-probe/main.go` —
+a small standalone Go program that walks the same discovery →
+triage → depth → push flow against a running Pulse instance.
+The probe depends only on the standard library so it doubles as
+a reference implementation: anyone building MCP servers, Claude
+Code integrations, or custom agents on top of Pulse can read it
+top-to-bottom to see how the substrate fits together. The probe
+resolves paths from the manifest rather than hardcoding them, so
+discovery moves automatically follow.
+
 `/api/agent/resource-context/{id}` is the agent-consumable bundled
 context endpoint. One read returns the full situated picture of a
 resource — identity, operator-set state (with server-computed
