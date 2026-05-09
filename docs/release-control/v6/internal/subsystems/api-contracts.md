@@ -1028,7 +1028,16 @@ the canonical monitored-system blocked payload.
    Findings panel must visibly preview the deadline at dismiss-confirm
    time and badge dismissed-as-will_fix_later rows with the pending
    remind-at, otherwise the new behavior is invisible until the
-   reminder fires
+   reminder fires.
+   The Patrol operator-feedback endpoint surface also includes
+   `POST /api/ai/patrol/resolve` (handled by `HandleResolveFinding` in
+   `internal/api/ai_handlers.go`) for operator-driven manual resolution
+   when the operator has fixed an issue out-of-band. The TS client
+   `resolveFinding(findingId)` in `frontend-modern/src/api/patrol.ts`
+   must post `{finding_id}` to that endpoint and surface the boolean
+   result through `aiIntelligenceStore.resolveFinding` so the operator
+   surface gets uniform refresh and error UX with acknowledge / snooze
+   / dismiss
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

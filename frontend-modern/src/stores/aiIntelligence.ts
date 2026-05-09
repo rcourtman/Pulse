@@ -12,6 +12,7 @@ import { createSignal } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import {
   acknowledgeFinding,
+  resolveFinding,
   snoozeFinding,
   dismissFinding,
   setFindingNote,
@@ -521,6 +522,21 @@ export const aiIntelligenceStore = {
       return true;
     } catch (e) {
       logger.error('Failed to acknowledge finding:', e);
+      return false;
+    }
+  },
+
+  // Manually mark a finding as resolved when the operator has fixed it
+  // out-of-band. Mirrors the existing acknowledge/snooze/dismiss store
+  // pattern: call the server, refresh both finding sources, swallow errors
+  // into a boolean for the caller's UX feedback.
+  async resolveFinding(findingId: string) {
+    try {
+      await resolveFinding(findingId);
+      await Promise.all([this.loadFindings(), this.loadPatrolFindings()]);
+      return true;
+    } catch (e) {
+      logger.error('Failed to resolve finding:', e);
       return false;
     }
   },

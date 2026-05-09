@@ -15,6 +15,7 @@ vi.mock('@/api/patrol', () => ({
   acknowledgeFinding: vi.fn(),
   snoozeFinding: vi.fn(),
   dismissFinding: vi.fn(),
+  resolveFinding: vi.fn(),
   setFindingNote: vi.fn(),
 }));
 
@@ -32,7 +33,7 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 }));
 
 import { AIAPI } from '@/api/ai';
-import { getPatrolFindings } from '@/api/patrol';
+import { getPatrolFindings, resolveFinding } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { presentationPolicyIsDemoMode } from '@/stores/sessionPresentationPolicy';
 
@@ -140,6 +141,26 @@ describe('aiIntelligenceStore', () => {
       alertIdentifier: 'instance:node:100::patrol/provider',
       lastSeenAt: '2026-03-01T00:05:00Z',
     });
+  });
+
+  it('routes Mark resolved through the canonical patrol resolve client and refreshes both finding sources', async () => {
+    // The Patrol surface's manual Mark resolved button must go through
+    // aiIntelligenceStore.resolveFinding so the refresh and error UX stays
+    // uniform with the existing acknowledge/snooze/dismiss store actions.
+    // After a successful resolve the store must reload BOTH the unified
+    // findings (for the unified workspace) and the patrol-direct findings
+    // (for the Patrol page) — otherwise the operator sees a stale row on
+    // whichever surface it didn't refresh.
+    vi.mocked(resolveFinding).mockResolvedValueOnce({ success: true, message: 'ok' } as never);
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({ findings: [] } as never);
+    vi.mocked(getPatrolFindings).mockResolvedValueOnce([]);
+
+    const ok = await aiIntelligenceStore.resolveFinding('finding-resolve');
+
+    expect(ok).toBe(true);
+    expect(resolveFinding).toHaveBeenCalledWith('finding-resolve');
+    expect(AIAPI.getUnifiedFindings).toHaveBeenCalledTimes(1);
+    expect(getPatrolFindings).toHaveBeenCalledTimes(1);
   });
 
   it('promotes remind_at on dismissed-as-will_fix_later patrol findings to camelCase remindAt', async () => {

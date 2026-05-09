@@ -11,6 +11,7 @@ import {
   getPatrolRunHistory,
   getPatrolRunHistoryWithToolCalls,
   getPatrolRunWithToolCalls,
+  resolveFinding,
   type Finding as PatrolFinding,
 } from '@/api/patrol';
 import { apiFetchJSON } from '@/utils/apiClient';
@@ -309,6 +310,21 @@ describe('patrol api', () => {
         dismissed_as_noise: 1,
         regressed_at_least_once: 1,
       },
+    });
+  });
+
+  it('posts the canonical manual-resolve payload for /api/ai/patrol/resolve', async () => {
+    // /api/ai/patrol/resolve was already wired server-side but had no TS
+    // client. Pin the canonical request shape so future refactors can't
+    // silently drift the body or method — the server returns 405 for GET
+    // and 400 for missing finding_id, so the contract is strict.
+    apiFetchJSONMock.mockResolvedValueOnce({ success: true, message: 'ok' } as any);
+
+    await resolveFinding('finding-resolve-123');
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ finding_id: 'finding-resolve-123' }),
     });
   });
 

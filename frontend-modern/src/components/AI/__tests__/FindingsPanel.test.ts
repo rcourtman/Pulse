@@ -124,6 +124,21 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('Pulse will permanently suppress');
   });
 
+  it('exposes a manual Mark resolved action that goes through the patrol resolve store action', () => {
+    // The /api/ai/patrol/resolve endpoint exists server-side but had no
+    // operator path on the canonical Patrol surface. An operator fixing
+    // an issue out-of-band must be able to close the loop without waiting
+    // for auto-resolution. The button is gated to active findings (the
+    // server rejects double-resolves with 404) and routes through
+    // aiIntelligenceStore.resolveFinding so refresh/error UX stays
+    // uniform with the existing acknowledge/snooze/dismiss patterns.
+    expect(findingsPanelSource).toContain('handleResolve');
+    expect(findingsPanelSource).toContain('aiIntelligenceStore.resolveFinding(finding.id)');
+    expect(findingsPanelSource).toContain('Mark resolved');
+    expect(findingsPanelSource).toContain("manualControls.acknowledge && finding.status === 'active'");
+    expect(findingsPanelSource).toContain('Finding marked resolved');
+  });
+
   it('surfaces regressionCount as a pill on the collapsed finding row', () => {
     // regressionCount is the strongest "this is not a one-off" signal Pulse
     // can give an operator scanning a list. The pill must appear in the

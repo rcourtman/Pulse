@@ -257,6 +257,25 @@ export async function acknowledgeFinding(
 }
 
 /**
+ * Manually mark a finding as resolved.
+ *
+ * Use this when the operator has fixed the issue out-of-band and wants Pulse
+ * to close the loop without waiting for auto-resolution. The server records
+ * `auto=false` so analytics can distinguish operator-driven resolution from
+ * Pulse's own auto-resolution; subsequent re-detection of the same finding
+ * still flows through the regression path and captures
+ * `previous_resolved_fix_summary` in operational memory.
+ */
+export async function resolveFinding(
+  findingId: string,
+): Promise<{ success: boolean; message: string }> {
+  return apiFetchJSON('/api/ai/patrol/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ finding_id: findingId }),
+  });
+}
+
+/**
  * Snooze a finding for a specified duration
  * @param findingId The ID of the finding to snooze
  * @param durationHours Duration in hours (e.g., 1, 24, 168 for 7 days)

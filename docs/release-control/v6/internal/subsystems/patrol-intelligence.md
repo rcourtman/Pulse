@@ -1115,3 +1115,12 @@ pill next to the investigation-confidence badge whenever
 absent on fresh detections (count == 0) so the row stays clean for
 ordinary findings, and the styling (amber tone) reads as a recurrence
 signal rather than a generic muted note.
+The Patrol surface must also expose a manual "Mark resolved" action on
+active findings, calling the canonical `/api/ai/patrol/resolve` endpoint
+through `aiIntelligenceStore.resolveFinding`. This closes the loop when
+the operator has fixed the underlying issue out-of-band and shouldn't
+have to wait for Pulse's auto-detection to clear it. The action is gated
+to `status === 'active'` (the server rejects double-resolves) and is
+visually distinct (emerald accent) from the destructive dismiss
+controls; it must route through the shared store action so the refresh
+and error UX stays uniform with acknowledge, snooze, and dismiss.

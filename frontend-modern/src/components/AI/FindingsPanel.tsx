@@ -384,6 +384,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   };
 
+  // Operator-driven manual resolve. Use case: the operator fixed the
+  // underlying issue out-of-band and wants to close the loop without
+  // waiting for Pulse's auto-detection to clear it. The server records
+  // auto=false so analytics can distinguish operator vs Pulse resolution;
+  // re-detection still flows through the regression path.
+  const handleResolve = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    setActionLoading(finding.id);
+    const ok = await aiIntelligenceStore.resolveFinding(finding.id);
+    setActionLoading(null);
+    if (ok) {
+      notificationStore.success('Finding marked resolved');
+    } else {
+      notificationStore.error('Failed to mark finding resolved');
+    }
+  };
+
   const handleStartDismiss = (
     finding: UnifiedFinding,
     reason: 'not_an_issue' | 'expected_behavior' | 'will_fix_later',
@@ -1118,6 +1135,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 disabled={actionLoading() === finding.id}
               >
                 Acknowledge
+              </button>
+            </Show>
+            <Show when={manualControls.acknowledge && finding.status === 'active'}>
+              <button
+                type="button"
+                onClick={(e) => handleResolve(finding, e)}
+                class="px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-900"
+                title="Mark this finding as resolved. Use when you have fixed the issue out-of-band."
+                disabled={actionLoading() === finding.id}
+              >
+                Mark resolved
               </button>
             </Show>
             <Show when={manualControls.snooze}>

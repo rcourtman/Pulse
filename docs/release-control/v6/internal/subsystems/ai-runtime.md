@@ -1554,3 +1554,10 @@ already cleared the dismissal in the canonical store), and the TS API
 clients in `frontend-modern/src/api/patrol.ts` and
 `frontend-modern/src/api/ai.ts` must round-trip the `remind_at` field
 verbatim so the operator surface can preview and badge the deadline.
+The same Patrol API client also exposes the operator-driven manual
+resolve path. `resolveFinding(findingId)` in
+`frontend-modern/src/api/patrol.ts` must POST `{finding_id}` to the
+canonical `/api/ai/patrol/resolve` endpoint owned by
+`HandleResolveFinding` in `internal/api/ai_handlers.go`, mirroring the
+acknowledge / snooze / dismiss client surface so the same Patrol service
+contract drives every operator-feedback action.
