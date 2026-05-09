@@ -98,8 +98,11 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   const commandSettingsTarget = getDiscoveryCommandSettingsTarget();
   const apiAccessSettingsTarget = getDiscoveryApiAccessSettingsTarget();
 
+  // `whitespace-normal` on the wrapper neutralises the `.table-fixed td/th`
+  // global rule (white-space: nowrap) that bleeds into expanded-row content
+  // via CSS inheritance, so explanatory copy and command descriptions wrap.
   return (
-    <div class="space-y-4">
+    <div class="space-y-4 whitespace-normal">
       {/* Analysis provider badge - shown when a provider is configured */}
       <Show when={!discoveryInfo.loading && discoveryInfo()?.ai_provider}>
         <div class="flex items-center gap-2">
@@ -154,7 +157,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <div class="whitespace-normal text-xs text-amber-800 dark:text-amber-200">
+              <div class="text-xs text-amber-800 dark:text-amber-200">
                 <p class="font-medium mb-1">What Discovery Does</p>
                 <p class="text-amber-700 dark:text-amber-300">
                   {DISCOVERY_ANALYSIS_EXPLANATION}
