@@ -285,9 +285,9 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
           <div class="relative">
             <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5">
               <div class="flex h-16 flex-col justify-between text-[10px] text-muted">
-                <For each={[0, 1, 2, 3, 4]}>
+                <For each={[0, 1, 2]}>
                   {(step) => {
-                    const value = Math.round((props.timeline().axisMax * (4 - step)) / 4);
+                    const value = Math.round((props.timeline().axisMax * (2 - step)) / 2);
                     return <span>{value}</span>;
                   }}
                 </For>
