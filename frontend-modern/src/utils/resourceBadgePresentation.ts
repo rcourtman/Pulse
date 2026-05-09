@@ -109,11 +109,18 @@ const titleFromParts = (...parts: Array<string | undefined>): string | undefined
 
 const UNKNOWN_VERSION_VALUES = new Set(['unknown', 'n/a', 'na', 'none', '-']);
 
+// Proxmox APIs return versions in the form 'pve-manager/9.1.9/ee7bad0a3d1546c9'
+// (package-name/version/git-hash). Without stripping the wrapper, badges
+// rendered as 'PVE pve-manager/9.1.9/ee7bad0a3d1546c9' which is unreadable
+// noise. Extract the dotted version segment so the badge reads 'PVE 9.1.9'.
+const PROXMOX_VERSION_WRAPPER = /^[a-z][a-z-]*\/(\d+(?:\.\d+)+(?:[-+][\w.]+)?)(?:\/|$)/i;
+
 const normalizeVersion = (value: unknown): string => {
   if (typeof value !== 'string' && typeof value !== 'number') return '';
-  const version = `${value}`.trim();
-  if (!version || UNKNOWN_VERSION_VALUES.has(version.toLowerCase())) return '';
-  return version;
+  const trimmed = `${value}`.trim();
+  if (!trimmed || UNKNOWN_VERSION_VALUES.has(trimmed.toLowerCase())) return '';
+  const wrapped = trimmed.match(PROXMOX_VERSION_WRAPPER);
+  return wrapped ? wrapped[1] : trimmed;
 };
 
 const getRecordVersion = (
