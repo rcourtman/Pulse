@@ -601,10 +601,17 @@ export function AppLayout(props: AppLayoutProps) {
                   <div
                     class={className()}
                     role="tab"
+                    tabIndex={0}
                     aria-label={platform.label}
                     aria-disabled={disabled()}
                     onMouseEnter={() => warmNavigationTarget(getPlatformTargetRoute(platform))}
                     onClick={() => handlePlatformClick(platform)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handlePlatformClick(platform);
+                      }
+                    }}
                     title={title()}
                   >
                     <span aria-hidden="true" class="inline-flex items-center justify-center">
@@ -644,10 +651,17 @@ export function AppLayout(props: AppLayoutProps) {
                     <div
                       class={className()}
                       role="tab"
+                      tabIndex={0}
                       aria-label={getDesktopUtilityTabAriaLabel(tab)}
                       aria-disabled={false}
                       onMouseEnter={() => warmNavigationTarget(tab.route)}
                       onClick={() => handleUtilityClick(tab)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleUtilityClick(tab);
+                        }
+                      }}
                       title={tab.tooltip}
                     >
                       <span aria-hidden="true" class="inline-flex items-center justify-center">
