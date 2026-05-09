@@ -400,17 +400,16 @@ func TestOpenAIClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
 	assert.True(t, doneCalled)
 }
 
-func TestOpenAIClient_Chat_DeepSeekV4PreservesForcedToolChoice(t *testing.T) {
+func TestOpenAIClient_Chat_DeepSeekCoercesForcedToolChoiceToAuto(t *testing.T) {
+	// DeepSeek's API server-side aliases v4-flash/v4-pro to deepseek-reasoner,
+	// which rejects forced tool_choice with HTTP 400. Pulse coerces any DeepSeek
+	// forced tool_choice to "auto" so Patrol stays functional regardless of how
+	// DeepSeek routes the requested id.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
 		assert.Equal(t, "deepseek-v4-flash", got["model"])
-		assert.Equal(t, map[string]interface{}{
-			"type": "function",
-			"function": map[string]interface{}{
-				"name": "ping",
-			},
-		}, got["tool_choice"])
+		assert.Equal(t, "auto", got["tool_choice"])
 		require.Len(t, got["tools"], 1)
 
 		_ = json.NewEncoder(w).Encode(openaiResponse{
@@ -439,12 +438,15 @@ func TestOpenAIClient_Chat_DeepSeekV4PreservesForcedToolChoice(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestOpenAIClient_ChatStream_DeepSeekV4PreservesRequiredToolChoice(t *testing.T) {
+func TestOpenAIClient_ChatStream_DeepSeekCoercesAnyToolChoiceToAuto(t *testing.T) {
+	// DeepSeek's API server-side aliases v4-flash/v4-pro to deepseek-reasoner,
+	// which rejects forced tool_choice with HTTP 400. Pulse coerces any DeepSeek
+	// forced tool_choice to "auto" on streaming requests as well.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
 		assert.Equal(t, "deepseek-v4-flash", got["model"])
-		assert.Equal(t, "required", got["tool_choice"])
+		assert.Equal(t, "auto", got["tool_choice"])
 		require.Len(t, got["tools"], 1)
 
 		w.Header().Set("Content-Type", "text/event-stream")

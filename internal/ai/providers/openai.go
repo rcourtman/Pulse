@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -182,16 +181,11 @@ func (c *OpenAIClient) shouldSendReasoningContent() bool {
 }
 
 func (c *OpenAIClient) supportsForcedToolChoice(model string) bool {
-	if !c.isDeepSeek() {
-		return true
-	}
-	normalized := normalizeOpenAICompatibleModelName(model)
-	switch {
-	case config.IsDeepSeekV4Model(normalized), config.IsDeepSeekLegacyAliasModel(normalized):
-		return true
-	default:
-		return false
-	}
+	// DeepSeek's API server-side aliases v4-flash/v4-pro to deepseek-reasoner,
+	// which rejects forced tool_choice with HTTP 400. Always coerce to "auto"
+	// for any DeepSeek model so Patrol stays functional regardless of how
+	// DeepSeek routes the requested id.
+	return !c.isDeepSeek()
 }
 
 func (c *OpenAIClient) toolChoiceForModel(model string, choice *ToolChoice) interface{} {

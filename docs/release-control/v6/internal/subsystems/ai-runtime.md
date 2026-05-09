@@ -108,7 +108,7 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Completion Obligations
 
-1. Update this contract when canonical AI runtime or transport entry points move
+1. Update this contract when canonical AI runtime or transport entry points move, including transport-level provider request-shape changes such as DeepSeek `tool_choice` coercion
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes
    Patrol runtime failures are part of that runtime contract: provider, model,
@@ -1625,11 +1625,14 @@ event emission through the same canonical finalizer used for `[DONE]` instead
 of dropping the last chunk or leaving tool calls unfinalized on clean close.
 That same provider-transport boundary owns OpenAI-compatible tool protocol
 adaptation. For direct DeepSeek provider paths, the shared OpenAI-compatible
-client must preserve specific or required `tool_choice` values for current
-DeepSeek V4 tool-capable models and the legacy aliases that currently route to
-that V4 contract. Unknown direct DeepSeek model IDs must still degrade offered
-tool requests to provider-supported auto tool selection so provider errors
-remain model/readiness diagnostics instead of forced-tool protocol noise.
+client must coerce specific or required `tool_choice` values to provider-
+supported auto tool selection for every DeepSeek model ID, including current
+V4 tool-capable models, legacy aliases, and unknown direct DeepSeek IDs.
+DeepSeek's API server-side aliases V4 IDs to `deepseek-reasoner`, which
+rejects forced `tool_choice` with HTTP 400, so coercing to auto for all
+direct DeepSeek paths keeps Patrol functional regardless of how DeepSeek
+routes the requested ID and keeps any provider errors as model or readiness
+diagnostics instead of forced-tool protocol noise.
 Reasoning-backed provider turns that return tool calls with `reasoning_content`
 must preserve that reasoning state on the following tool-result turn when the
 provider requires it, so Assistant and Patrol can complete multi-turn tool use
