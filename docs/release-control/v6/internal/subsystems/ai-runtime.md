@@ -580,6 +580,19 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
+The findings store now consults a `ResourceOperatorStateProvider`
+during the new-finding path. The interface lives in `internal/ai` to
+avoid an import cycle with `internal/unifiedresources`; the API layer
+wires the adapter at startup, projecting
+`unified.ResourceOperatorState` into the narrow
+`ActiveMaintenanceWindow` shape the findings runtime needs. When the
+provider reports an active maintenance window, the new-finding path
+auto-dismisses with reason `expected_behavior`, attributes the
+suppression on the lifecycle timeline (`operator_state_cause:
+maintenance_window`), and persists the finding for audit history.
+Deployments without a provider keep the original new-finding behavior
+— suppression is opt-in.
+
 This subsystem now makes Pulse Assistant and Patrol backend runtime ownership
 explicit inside the current architecture lane instead of leaving those
 surfaces implicit inside broad architecture or generic API ownership. A later

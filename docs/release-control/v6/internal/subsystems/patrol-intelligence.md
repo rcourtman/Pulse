@@ -1175,3 +1175,17 @@ and Explain entry points. Investigation evidence and rollback plans
 are intentionally omitted from the clipboard shape — those are
 conversation context for the Assistant flow, not "share this
 finding" context for chat or tickets.
+The findings store also consumes per-resource operator-set state via
+the narrow `ResourceOperatorStateProvider` interface installed by
+`SetResourceOperatorStateProvider`. The API layer wires an adapter
+that projects `unified.ResourceOperatorState` into the
+`ActiveMaintenanceWindow` projection so `internal/ai` does not need
+to import `internal/unifiedresources`. When a new finding is raised
+against a resource currently in an operator-set maintenance window,
+the new-finding path auto-dismisses it as `expected_behavior`,
+populates `AcknowledgedAt`, writes a `UserNote` naming the window
+and reason, and emits a `dismissed` lifecycle event with the
+`operator_state_cause: maintenance_window` metadata so the timeline
+can attribute the suppression to its source. Default deployments
+without a provider behave identically to before — operator-state
+suppression is opt-in.

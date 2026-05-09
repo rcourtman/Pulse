@@ -664,6 +664,46 @@ type FindingsStore struct {
 	lastSaveError error           // Last error from save operation
 	onSaveError   func(err error) // Optional callback for save errors
 	lastSaveTime  time.Time       // Last successful save time
+	// Optional resource-operator-state provider — when set, the store
+	// consults it during Add for per-resource maintenance windows and
+	// other operator-set intent, auto-acknowledging new findings whose
+	// resource is in a maintenance window. Nil-safe; an unset provider
+	// disables operator-state-driven suppression.
+	resourceOperatorStateProvider ResourceOperatorStateProvider
+}
+
+// ResourceOperatorStateMaintenanceWindow describes the maintenance
+// window an operator set on a resource. The findings store consults
+// this through ResourceOperatorStateProvider; the package layout puts
+// the canonical type in `internal/unifiedresources` to avoid an import
+// cycle, so this is the projected shape the findings runtime needs.
+type ResourceOperatorStateMaintenanceWindow struct {
+	StartAt time.Time
+	EndAt   time.Time
+	Reason  string
+}
+
+// ResourceOperatorStateProvider is the narrow interface the findings
+// store consumes for per-resource operator intent. Implementations
+// adapt the unified-resources `ResourceOperatorState` shape into the
+// projection that the findings runtime needs (currently just the
+// active maintenance window). Returning ok=false means "no active
+// operator state for this resource" and the store falls through to
+// the default new-finding path.
+type ResourceOperatorStateProvider interface {
+	ActiveMaintenanceWindow(canonicalID string, now time.Time) (ResourceOperatorStateMaintenanceWindow, bool)
+}
+
+// ResourceOperatorStateProviderFunc is a function adapter so wire-up
+// code in the API layer can pass a closure without declaring a struct.
+type ResourceOperatorStateProviderFunc func(canonicalID string, now time.Time) (ResourceOperatorStateMaintenanceWindow, bool)
+
+// ActiveMaintenanceWindow implements ResourceOperatorStateProvider.
+func (f ResourceOperatorStateProviderFunc) ActiveMaintenanceWindow(canonicalID string, now time.Time) (ResourceOperatorStateMaintenanceWindow, bool) {
+	if f == nil {
+		return ResourceOperatorStateMaintenanceWindow{}, false
+	}
+	return f(canonicalID, now)
 }
 
 // NewFindingsStore creates a new findings store
@@ -675,6 +715,17 @@ func NewFindingsStore() *FindingsStore {
 		suppressionRules: make(map[string]*SuppressionRule),
 		saveDebounce:     5 * time.Second, // Debounce saves by 5 seconds
 	}
+}
+
+// SetResourceOperatorStateProvider installs the per-resource
+// operator-state provider that the findings store consults during Add.
+// Wired by the API layer at startup so the store can stay in
+// `internal/ai` without importing `internal/unifiedresources`. Pass
+// nil to disable operator-state-driven suppression (the default).
+func (s *FindingsStore) SetResourceOperatorStateProvider(p ResourceOperatorStateProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resourceOperatorStateProvider = p
 }
 
 // SetPersistence sets the persistence layer and loads existing findings
@@ -1114,6 +1165,32 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	}
 	s.syncLoopStateLocked(f)
 	s.appendLifecycleLocked(f, "detected", "Detected by Pulse Patrol", "", f.LoopState, nil)
+
+	// Operator-state suppression: when the resource is currently in a
+	// maintenance window the operator set, auto-dismiss the finding as
+	// expected_behavior with a reason that names the window. The
+	// finding still lands in durable history (so the operator can
+	// audit what tripped during the window) but does not surface as
+	// active. Severity escalation paths still wake it later if the
+	// underlying condition stays after the window closes.
+	if provider := s.resourceOperatorStateProvider; provider != nil && f.ResourceID != "" {
+		if window, ok := provider.ActiveMaintenanceWindow(f.ResourceID, time.Now()); ok {
+			now := time.Now()
+			f.DismissedReason = "expected_behavior"
+			f.AcknowledgedAt = &now
+			noteParts := []string{fmt.Sprintf("Resource is in operator-set maintenance window until %s.", window.EndAt.Format(time.RFC3339))}
+			if reason := strings.TrimSpace(window.Reason); reason != "" {
+				noteParts = append(noteParts, "Reason: "+reason)
+			}
+			f.UserNote = strings.Join(noteParts, " ")
+			s.appendLifecycleLocked(f, "dismissed", "Auto-acknowledged: resource in maintenance window", f.LoopState, string(FindingLoopStateDismissed), map[string]string{
+				"reason":               "expected_behavior",
+				"operator_state_cause": "maintenance_window",
+				"maintenance_end_at":   window.EndAt.Format(time.RFC3339),
+			})
+			s.syncLoopStateLocked(f)
+		}
+	}
 
 	s.findings[f.ID] = f
 	s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], f.ID)

@@ -1343,6 +1343,16 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+The router wires the operator-state adapter into the findings runtime
+at startup: `internal/api/router.go` calls
+`patrol.GetFindings().SetResourceOperatorStateProvider(...)` with a
+`ResourceOperatorStateProviderFunc` closure that reads the unified
+store and projects `state.IsInMaintenanceAt` into the
+`ActiveMaintenanceWindow` shape `internal/ai` consumes. This keeps
+`internal/ai` free of an `internal/unifiedresources` import while
+giving the findings runtime per-resource maintenance suppression
+without each org needing a separate adapter declaration.
+
 `/api/resources/{id}/operator-state` is the canonical surface for
 operator-set per-resource intent (intentionally offline, never
 auto-remediate, maintenance window, criticality hint). GET requires

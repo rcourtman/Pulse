@@ -1609,3 +1609,114 @@ func TestFinding_RemindAt_RoundTripsThroughJSON(t *testing.T) {
 		t.Errorf("RemindAt round-trip mismatch: got %v want %v", roundTripped.RemindAt, when)
 	}
 }
+
+func TestFindingsStore_Add_AutoAcknowledgesDuringMaintenanceWindow(t *testing.T) {
+	// When the operator has set a maintenance window covering the
+	// finding's resource, the new-finding path must auto-dismiss the
+	// finding with reason "expected_behavior" and record a lifecycle
+	// event naming the maintenance window. The finding still lands in
+	// durable history (so the operator can audit what tripped during
+	// the window) but does not surface as active.
+	store := NewFindingsStore()
+	now := time.Now()
+	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, queriedAt time.Time) (ResourceOperatorStateMaintenanceWindow, bool) {
+		if canonicalID != "vm:101" {
+			return ResourceOperatorStateMaintenanceWindow{}, false
+		}
+		return ResourceOperatorStateMaintenanceWindow{
+			StartAt: now.Add(-time.Hour),
+			EndAt:   now.Add(time.Hour),
+			Reason:  "Q3 storage upgrade",
+		}, true
+	})
+	store.SetResourceOperatorStateProvider(provider)
+
+	store.Add(&Finding{
+		ID:         "f1",
+		ResourceID: "vm:101",
+		Severity:   FindingSeverityWarning,
+		Title:      "CPU saturated",
+	})
+
+	got := store.Get("f1")
+	if got == nil {
+		t.Fatal("finding must be persisted even when auto-dismissed; durable history matters")
+	}
+	if got.DismissedReason != "expected_behavior" {
+		t.Errorf("expected DismissedReason=expected_behavior; got %q", got.DismissedReason)
+	}
+	if got.AcknowledgedAt == nil {
+		t.Error("AcknowledgedAt must be populated for auto-dismissed findings")
+	}
+	if !strings.Contains(got.UserNote, "operator-set maintenance window") {
+		t.Errorf("UserNote should explain the maintenance suppression; got %q", got.UserNote)
+	}
+	if !strings.Contains(got.UserNote, "Q3 storage upgrade") {
+		t.Errorf("UserNote should include the operator's reason; got %q", got.UserNote)
+	}
+	// Lifecycle must record the auto-dismiss with the canonical
+	// operator_state_cause metadata so the timeline can attribute the
+	// suppression to its source.
+	foundMaintenanceEvent := false
+	for _, ev := range got.Lifecycle {
+		if ev.Type == "dismissed" && ev.Metadata["operator_state_cause"] == "maintenance_window" {
+			foundMaintenanceEvent = true
+			break
+		}
+	}
+	if !foundMaintenanceEvent {
+		t.Error("expected a 'dismissed' lifecycle event with operator_state_cause=maintenance_window")
+	}
+}
+
+func TestFindingsStore_Add_DoesNotAutoAcknowledgeOutsideMaintenanceWindow(t *testing.T) {
+	// A provider that reports no active window must not affect the
+	// new-finding default path — the finding lands as active. Pin this
+	// so the suppression branch can't drift into "always suppress when
+	// provider is set".
+	store := NewFindingsStore()
+	provider := ResourceOperatorStateProviderFunc(func(canonicalID string, now time.Time) (ResourceOperatorStateMaintenanceWindow, bool) {
+		return ResourceOperatorStateMaintenanceWindow{}, false
+	})
+	store.SetResourceOperatorStateProvider(provider)
+
+	store.Add(&Finding{
+		ID:         "f-active",
+		ResourceID: "vm:101",
+		Severity:   FindingSeverityWarning,
+		Title:      "CPU saturated",
+	})
+
+	got := store.Get("f-active")
+	if got == nil {
+		t.Fatal("expected finding to be persisted")
+	}
+	if got.DismissedReason != "" {
+		t.Errorf("finding must remain active when provider reports no window; got DismissedReason=%q", got.DismissedReason)
+	}
+	if !got.IsActive() {
+		t.Error("finding must report IsActive=true outside maintenance windows")
+	}
+}
+
+func TestFindingsStore_Add_OperatorStateSuppressionIsOptIn(t *testing.T) {
+	// The default store (no provider wired) must behave exactly as
+	// before — slice 31 must not regress the existing new-finding
+	// path for any deployment that hasn't opted in to the
+	// operator-state feature yet.
+	store := NewFindingsStore()
+	store.Add(&Finding{
+		ID:         "f-default",
+		ResourceID: "vm:101",
+		Severity:   FindingSeverityWarning,
+		Title:      "CPU saturated",
+	})
+
+	got := store.Get("f-default")
+	if got == nil {
+		t.Fatal("expected finding to be persisted on default store")
+	}
+	if got.DismissedReason != "" {
+		t.Errorf("default-store finding must remain active; got DismissedReason=%q", got.DismissedReason)
+	}
+}

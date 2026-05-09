@@ -1750,6 +1750,36 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 			patrol.SetUnifiedFindingResolver(func(findingID string) {
 				unifiedStore.Resolve(findingID)
 			})
+			// Wire per-resource operator-state into the findings runtime so
+			// new findings raised against a resource currently in a
+			// maintenance window get auto-acknowledged with reason
+			// "expected_behavior". The adapter projects
+			// `unified.ResourceOperatorState` into the narrow
+			// `ResourceOperatorStateProvider` shape the findings store
+			// consumes — keeps `internal/ai` clear of an
+			// `internal/unifiedresources` import.
+			patrol.GetFindings().SetResourceOperatorStateProvider(
+				ai.ResourceOperatorStateProviderFunc(
+					func(canonicalID string, now time.Time) (ai.ResourceOperatorStateMaintenanceWindow, bool) {
+						orgStore, lookupErr := r.resourceHandlers.getStore(orgID)
+						if lookupErr != nil {
+							return ai.ResourceOperatorStateMaintenanceWindow{}, false
+						}
+						state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
+						if fetchErr != nil || !found {
+							return ai.ResourceOperatorStateMaintenanceWindow{}, false
+						}
+						if !state.IsInMaintenanceAt(now) {
+							return ai.ResourceOperatorStateMaintenanceWindow{}, false
+						}
+						return ai.ResourceOperatorStateMaintenanceWindow{
+							StartAt: *state.MaintenanceStartAt,
+							EndAt:   *state.MaintenanceEndAt,
+							Reason:  state.MaintenanceReason,
+						}, true
+					},
+				),
+			)
 
 			// Wire push notifications: patrol findings → relay client (best-effort)
 			patrol.SetPushNotifyCallback(func(n relay.PushNotificationPayload) {

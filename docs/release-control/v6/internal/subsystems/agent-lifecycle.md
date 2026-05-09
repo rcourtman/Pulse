@@ -917,6 +917,15 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+The findings runtime now consumes operator-set per-resource state
+through a provider adapter wired in `internal/api/router.go` at
+startup: when a resource is in an operator-set maintenance window,
+new findings against it are auto-acknowledged at creation time so a
+scheduled-maintenance window does not flood notifications during the
+window. The agent runtime keeps the operator commitment honored across
+restarts because the underlying state lives in the durable
+`resource_operator_state` SQLite table.
+
 The `/api/resources/{id}/operator-state` GET / PUT / DELETE handlers in
 `internal/api/resources_operator_state.go` are the canonical operator
 surface for setting per-resource intent (intentionally offline, never

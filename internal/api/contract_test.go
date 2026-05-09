@@ -13233,6 +13233,35 @@ func assertJSONSnapshot(t *testing.T, got []byte, want string) {
 	}
 }
 
+// TestContract_FindingsResourceOperatorStateProviderIsWired pins the
+// startup wiring that gives the findings runtime access to
+// per-resource operator-set state via the API layer's adapter. The
+// router must call SetResourceOperatorStateProvider with a closure
+// that reads the unified store's GetResourceOperatorState and
+// projects IsInMaintenanceAt into the ActiveMaintenanceWindow shape;
+// regressions here would silently disable maintenance-window
+// auto-acknowledgement without breaking any unit tests because the
+// behavior is opt-in.
+func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
+	source, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "SetResourceOperatorStateProvider(") {
+		t.Error("router.go must call SetResourceOperatorStateProvider on the findings store at startup")
+	}
+	if !strings.Contains(src, "ResourceOperatorStateProviderFunc(") {
+		t.Error("router.go must use the ai.ResourceOperatorStateProviderFunc adapter so the closure satisfies the provider interface")
+	}
+	if !strings.Contains(src, "IsInMaintenanceAt(now)") {
+		t.Error("router.go must gate the projection on state.IsInMaintenanceAt so a stale window does not return as active")
+	}
+	if !strings.Contains(src, "GetResourceOperatorState(canonicalID)") {
+		t.Error("router.go must read state from the unified store's canonical accessor")
+	}
+}
+
 // TestContract_ResourceOperatorStateUrlCanonicalIDWinsOverBody pins the
 // security-relevant decision that the URL path's canonical_id always
 // wins over any body-supplied value on PUT

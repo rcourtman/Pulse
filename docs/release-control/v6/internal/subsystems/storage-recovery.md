@@ -947,6 +947,12 @@ bypass the API fail-closed execution gate.
 
 ## Current State
 
+The findings runtime reads operator-set state through the same
+durable `resource_operator_state` SQLite table on every
+new-finding-add. A maintenance window persisted before a process
+restart still suppresses new findings after the agent reloads — the
+operator commitment survives without needing a re-entry on startup.
+
 The `resource_operator_state` SQLite table introduced by the
 unified-resources store keeps operator-set per-resource intent
 (intentionally offline, never auto-remediate, maintenance window,
