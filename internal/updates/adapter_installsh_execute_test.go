@@ -85,6 +85,7 @@ func setupBashArgCaptureStub(t *testing.T, argsFile string) string {
 }
 
 func TestInstallShAdapterExecuteSuccess(t *testing.T) {
+	stubReleaseSignatureVerification(t)
 	scriptContent := "echo ok"
 	curlDir := setupInstallShCurlStub(t, scriptContent)
 	bashDir := setupBashStub(t)
@@ -121,6 +122,7 @@ func TestInstallShAdapterExecuteSuccess(t *testing.T) {
 }
 
 func TestInstallShAdapterExecuteInvalidVersion(t *testing.T) {
+	stubReleaseSignatureVerification(t)
 	scriptContent := "echo ok"
 	curlDir := setupInstallShCurlStub(t, scriptContent)
 	t.Setenv("PATH", curlDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -140,6 +142,7 @@ func TestInstallShAdapterExecuteInvalidVersion(t *testing.T) {
 }
 
 func TestInstallShAdapterExecuteForceDoesNotPassUnsupportedFlag(t *testing.T) {
+	stubReleaseSignatureVerification(t)
 	scriptContent := "echo ok"
 	curlDir := setupInstallShCurlStub(t, scriptContent)
 	argsFile := filepath.Join(t.TempDir(), "bash-args.txt")

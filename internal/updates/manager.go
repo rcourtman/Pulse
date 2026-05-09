@@ -597,6 +597,18 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 		})
 	}
 
+	// Verify SSHSIG signature against the pinned pulse-installer key. This is
+	// the same trust root scripts/pulse-auto-update.sh and scripts/install.sh
+	// already enforce; the in-app updater must not run at a lower bar.
+	m.updateStatus("verifying", 25, "Verifying signature...")
+	if err := m.downloadAndVerifyReleaseSignature(ctx, validatedDownloadURL, tarballPath); err != nil {
+		sigErr := fmt.Errorf("signature verification failed: %w", err)
+		m.updateStatus("error", 25, "Failed to verify update signature", sigErr)
+		runErr = sigErr
+		return runErr
+	}
+	log.Info().Msg("Signature verification passed")
+
 	// Verify checksum if available
 	m.updateStatus("verifying", 30, "Verifying download...")
 	if err := m.verifyChecksum(ctx, req.DownloadURL, tarballPath); err != nil {

@@ -526,6 +526,13 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 		log.Debug().Err(removeErr).Str("path", checksumPath).Msg("Failed to remove checksum file")
 	}
 
+	// Verify the SSHSIG sidecar against the pinned pulse-installer key — same
+	// trust root the unattended timer and public install.sh enforce.
+	if err := fetchAndVerifyReleaseSignature(ctx, url, tarballPath); err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("signature verification failed for %s: %w", tarballName, err)
+	}
+
 	// Extract tarball to get the binary
 	extractDir := filepath.Join(tmpDir, "extracted")
 	if err := os.MkdirAll(extractDir, 0755); err != nil {
@@ -697,6 +704,13 @@ func (a *InstallShAdapter) downloadInstallScript(ctx context.Context, version st
 	actualHash := hex.EncodeToString(hasher.Sum(nil))
 	if !strings.EqualFold(actualHash, expectedParts[0]) {
 		return "", fmt.Errorf("install.sh checksum verification failed")
+	}
+
+	// Verify the SSHSIG sidecar before we pipe install.sh into bash as root.
+	// scripts/pulse-auto-update.sh and the public scripts/install.sh both
+	// require this; the in-app updater must too.
+	if err := fetchAndVerifyReleaseSignature(ctx, installScriptURL, scriptPath); err != nil {
+		return "", fmt.Errorf("install.sh signature verification failed: %w", err)
 	}
 
 	content, err := os.ReadFile(scriptPath)

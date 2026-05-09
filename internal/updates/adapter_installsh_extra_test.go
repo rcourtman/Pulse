@@ -76,6 +76,7 @@ exit 0
 }
 
 func TestInstallShAdapterDownloadInstallScript(t *testing.T) {
+	stubReleaseSignatureVerification(t)
 	content := []byte("#!/bin/sh\necho ok\n")
 	sum := sha256.Sum256(content)
 
@@ -113,6 +114,7 @@ func TestInstallShAdapterDownloadInstallScript(t *testing.T) {
 }
 
 func TestInstallShAdapterDownloadBinary(t *testing.T) {
+	stubReleaseSignatureVerification(t)
 	extractDir := t.TempDir()
 	tarball := filepath.Join(extractDir, "pulse-v1.2.3-linux-amd64.tar.gz")
 	writeTarGz(t, tarball, map[string]string{

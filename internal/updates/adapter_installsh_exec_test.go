@@ -12,6 +12,7 @@ import (
 )
 
 func TestInstallShAdapter_DownloadBinary(t *testing.T) {
+	stubReleaseSignatureVerification(t)
 	tarball := filepath.Join(t.TempDir(), "pulse.tar.gz")
 	writeTarGz(t, tarball, map[string]string{
 		"bin/pulse": "binary",

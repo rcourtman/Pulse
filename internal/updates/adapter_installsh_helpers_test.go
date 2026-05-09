@@ -38,6 +38,7 @@ exit 0
 }
 
 func TestInstallShAdapter_DownloadInstallScript(t *testing.T) {
+	stubReleaseSignatureVerification(t)
 	content := "echo hi"
 	sum := sha256.Sum256([]byte(content))
 	checksum := hex.EncodeToString(sum[:])

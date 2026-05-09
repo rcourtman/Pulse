@@ -743,7 +743,17 @@ root `install.sh`, its generated update helper, and
 `scripts/pulse-auto-update.sh` must verify downloaded release tarballs and
 installer scripts against the pinned release `.sshsig` sidecars before
 execution, rather than treating same-origin checksum files as a sufficient
-trust anchor.
+trust anchor. The in-app updater binds to the same invariant: every
+release artifact the Go updater fetches before applying or rolling back —
+the update tarball in `internal/updates/manager.go::ApplyUpdate`, the
+`install.sh` piped into bash by `internal/updates/adapter_installsh.go::downloadInstallScript`,
+and the rollback binary tarball in
+`internal/updates/adapter_installsh.go::downloadBinary` — must verify
+its `.sshsig` sidecar against the pinned `pulse-installer` ed25519 key
+(identity `pulse-installer`, namespace `pulse-install`) and refuse to
+proceed if the sidecar is missing, malformed, or fails verification. The
+in-app and unattended paths must share the same trust root so the UI's
+"Update now" button cannot run at a lower bar than the systemd timer.
 The unattended auto-update path is also fail-closed on prerelease channel
 crossing: `scripts/pulse-auto-update.sh` must refuse to act on any tag that
 carries a semver prerelease suffix (`-rc.N`, `-beta.N`, `-alpha.N`,
