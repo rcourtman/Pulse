@@ -321,15 +321,23 @@ runtime cost control, and shared AI transport surfaces.
     `approvalCommandClassPreflightAdditions` in
     `internal/ai/tools/tools_control.go` bucket common Pulse remediation
     actions (service-restart, service-stop, service-start, service-reload,
-    container-restart, container-stop, k8s-rollout-restart) and return
-    hand-authored operational copy: what the command actually touches,
-    how Pulse will read back success. The additions append onto the
-    default safety/verification arrays rather than replacing them, so
-    the broker's structural posture (org scope, hash match, single-use
+    container-restart, container-stop, k8s-rollout-restart, plus the
+    Proxmox VM lifecycle classes proxmox-vm-reboot, proxmox-vm-stop,
+    proxmox-vm-start, proxmox-vm-shutdown and the matching pct-driven
+    proxmox-ct-* container lifecycle classes) and return hand-authored
+    operational copy: what the command actually touches, how Pulse will
+    read back success. The additions append onto the default
+    safety/verification arrays rather than replacing them, so the
+    broker's structural posture (org scope, hash match, single-use
     approval) remains visible alongside the class-specific copy.
     Unknown command classes must return empty additions rather than
     fabricated padding — operators see only the default content, not
     invented assertions about what an unrecognized command will do.
+    The Proxmox classes intentionally do not derive a broker-level
+    `VerificationCommandForCommand` check because pulse_control's
+    `verifyGuestAction` already runs `qm status` / `pct status` at the
+    tool layer; adding a parallel broker dispatch would double-run the
+    same read-after-write check.
     Drift refusal must also persist a Failed audit record with the
     Request, Plan, and Approvals snapshots intact and a Result whose
     ErrorMessage is prefixed `plan_drift:` so the audit trail shows

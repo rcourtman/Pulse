@@ -24,6 +24,23 @@ func TestClassifyApprovalCommand_BucketsKnownCommandShapes(t *testing.T) {
 		{"podman restart", "agent", "podman restart pihole", "container-restart"},
 		{"docker stop", "docker", "docker stop oldcontainer", "container-stop"},
 		{"kubectl rollout restart", "kubernetes", "kubectl rollout restart deployment/api", "k8s-rollout-restart"},
+		// Proxmox VM lifecycle classes — Pulse's primary monitored platform.
+		// Each verb has distinct semantics so they map to distinct classes.
+		{"qm reboot", "agent", "qm reboot 101", "proxmox-vm-reboot"},
+		{"qm restart alias", "agent", "qm restart 101", "proxmox-vm-reboot"},
+		{"qm stop hard halt", "agent", "qm stop 101", "proxmox-vm-stop"},
+		{"qm start", "agent", "qm start 101", "proxmox-vm-start"},
+		{"qm shutdown graceful", "agent", "qm shutdown 101", "proxmox-vm-shutdown"},
+		// Proxmox LXC container lifecycle classes.
+		{"pct reboot", "agent", "pct reboot 200", "proxmox-ct-reboot"},
+		{"pct restart alias", "agent", "pct restart 200", "proxmox-ct-reboot"},
+		{"pct stop hard halt", "agent", "pct stop 200", "proxmox-ct-stop"},
+		{"pct start", "agent", "pct start 200", "proxmox-ct-start"},
+		{"pct shutdown graceful", "agent", "pct shutdown 200", "proxmox-ct-shutdown"},
+		// Negative cases: tool prefix without a recognized verb must NOT
+		// classify (defends against `qm migrate`, `pct destroy`, etc.).
+		{"qm migrate not a lifecycle verb", "agent", "qm migrate 101 pve-2", ""},
+		{"pct destroy not a lifecycle verb", "agent", "pct destroy 200", ""},
 		{"unknown free-form command", "agent", "echo hello world", ""},
 		{"empty command", "agent", "", ""},
 	}
@@ -48,6 +65,15 @@ func TestApprovalCommandClassPreflightAdditions_AuthorsConcreteContextForKnownCl
 		{"service-stop warns dependent services", "systemctl stop postgres", "dependent services", "inactive"},
 		{"container-restart names docker inspect", "docker restart homepage", "briefly unavailable", "docker inspect"},
 		{"k8s rollout names rollout status", "kubectl rollout restart deployment/api", "PodDisruptionBudget", "rollout status"},
+		// Proxmox classes must concretely warn about the destructive vs
+		// graceful split (qm stop = hard halt, qm shutdown = graceful) and
+		// name the canonical `qm status` / `pct status` read-after-write
+		// check the operator should see post-dispatch.
+		{"qm reboot names qm status", "qm reboot 101", "ACPI shutdown", "qm status"},
+		{"qm stop warns it is hard not graceful", "qm stop 101", "hard stop", "stopped"},
+		{"qm shutdown names timeout fallback", "qm shutdown 101", "ACPI shutdown", "qm status"},
+		{"pct stop warns it is hard not graceful", "pct stop 200", "hard stop", "stopped"},
+		{"pct shutdown names lxc-attach", "pct shutdown 200", "lxc-attach", "pct status"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -92,6 +118,17 @@ func TestVerificationCommandForCommand_DerivesPerClassReadAfterWriteCheck(t *tes
 		// the tool layer, so adding a broker-level dispatch would double-run.
 		{"docker restart deferred to tool layer", "docker", "docker restart homepage", "", false},
 		{"podman restart deferred to tool layer", "agent", "podman restart pihole", "", false},
+		// Proxmox classes are intentionally excluded from broker-level
+		// verification — pulse_control's verifyGuestAction already runs
+		// `qm status` and `pct status` at the tool layer, so adding a
+		// parallel broker-level dispatch would double-run the same check.
+		// The preflight copy still names the verification narrative; only
+		// the broker-side derivation is suppressed.
+		{"qm reboot deferred to pulse_control", "agent", "qm reboot 101", "", false},
+		{"qm stop deferred to pulse_control", "agent", "qm stop 101", "", false},
+		{"qm shutdown deferred to pulse_control", "agent", "qm shutdown 101", "", false},
+		{"pct stop deferred to pulse_control", "agent", "pct stop 200", "", false},
+		{"pct shutdown deferred to pulse_control", "agent", "pct shutdown 200", "", false},
 		{"unknown command", "agent", "echo hello", "", false},
 		{"systemctl with single-quote in unit", "agent", `systemctl restart nasty'name`, "systemctl is-active 'nasty'\\''name'", true},
 	}

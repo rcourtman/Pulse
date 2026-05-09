@@ -1525,12 +1525,19 @@ func approvalPreflight(req *approval.ApprovalRequest) *approval.ActionPreflight 
 // classes without a derivable check; the broker must skip verification
 // rather than fabricate one.
 //
-// Container classes (container-restart, container-stop) are intentionally
-// excluded here: pulse_docker already runs its own per-container
-// `docker inspect` verification at the tool layer, and adding a parallel
-// broker-level dispatch would double-run the same check. If the tool layer
-// stops doing its own verification, this function should grow a docker
-// branch using `extractContainerName`.
+// Tool-layer-verified classes are intentionally excluded here:
+//   - Container classes (container-restart, container-stop) are verified
+//     by pulse_docker via per-container `docker inspect` at the tool
+//     layer.
+//   - Proxmox VM/CT classes (proxmox-vm-*, proxmox-ct-*) are verified by
+//     pulse_control via `verifyGuestAction` (which dispatches `qm status`
+//     or `pct status` already) at the tool layer.
+//
+// Adding a parallel broker-level dispatch for these would double-run the
+// same check. The preflight copy authored by
+// approvalCommandClassPreflightAdditions still names what the
+// tool-layer verification will read so the operator-facing narrative
+// stays accurate.
 func VerificationCommandForCommand(targetType, command string) (string, bool) {
 	class := classifyApprovalCommand(targetType, command)
 	switch class {
@@ -1627,6 +1634,29 @@ func classifyApprovalCommand(targetType, command string) string {
 		return "container-stop"
 	case strings.HasPrefix(cmd, "kubectl rollout restart"):
 		return "k8s-rollout-restart"
+	// Proxmox VM lifecycle (qm) — Pulse's primary monitored platform. Each
+	// verb has distinct operational semantics (graceful shutdown vs hard
+	// stop vs reboot) so they map to distinct classes rather than being
+	// folded into the generic service-* buckets.
+	case strings.HasPrefix(cmd, "qm reboot ") || strings.HasPrefix(cmd, "qm restart "):
+		return "proxmox-vm-reboot"
+	case strings.HasPrefix(cmd, "qm stop "):
+		return "proxmox-vm-stop"
+	case strings.HasPrefix(cmd, "qm start "):
+		return "proxmox-vm-start"
+	case strings.HasPrefix(cmd, "qm shutdown "):
+		return "proxmox-vm-shutdown"
+	// Proxmox LXC container lifecycle (pct). Same per-verb split as qm
+	// because pct shutdown initiates an in-guest shutdown via lxc-attach
+	// while pct stop is an immediate halt.
+	case strings.HasPrefix(cmd, "pct reboot ") || strings.HasPrefix(cmd, "pct restart "):
+		return "proxmox-ct-reboot"
+	case strings.HasPrefix(cmd, "pct stop "):
+		return "proxmox-ct-stop"
+	case strings.HasPrefix(cmd, "pct start "):
+		return "proxmox-ct-start"
+	case strings.HasPrefix(cmd, "pct shutdown "):
+		return "proxmox-ct-shutdown"
 	}
 	return ""
 }
@@ -1694,6 +1724,70 @@ func approvalCommandClassPreflightAdditions(targetType, command string) (safetyC
 			}, []string{
 				"Watch `kubectl rollout status` until the deployment converges.",
 				"Verify pod readiness with `kubectl get pods -l <selector>` after rollout.",
+			}
+	case "proxmox-vm-reboot":
+		return []string{
+				"`qm reboot` performs an ACPI shutdown followed by a start; in-guest workloads see a clean OS reboot.",
+				"VM RAM state is not preserved (no live migration); guests with non-persistent state will lose it.",
+			}, []string{
+				"Read back `qm status <vmid>` and confirm `status: running`.",
+				"Verify the guest's monitoring agent reconnects (Pulse will detect and update the resource state).",
+			}
+	case "proxmox-vm-stop":
+		return []string{
+				"`qm stop` is an immediate hard stop, NOT a graceful shutdown — guest filesystems may be left dirty.",
+				"Use `qm shutdown` instead if the workload needs to flush state cleanly; only approve `qm stop` when the guest is unresponsive.",
+			}, []string{
+				"Read back `qm status <vmid>` and confirm `status: stopped`.",
+				"Verify no auto-start policy will immediately restart the VM.",
+			}
+	case "proxmox-vm-start":
+		return []string{
+				"VM will boot from disk with the configuration currently on the host; uncommitted config drift will take effect.",
+				"Boot order, attached disks, and network bridges all apply as currently defined — verify before approving.",
+			}, []string{
+				"Read back `qm status <vmid>` and confirm `status: running`.",
+				"Tail `journalctl -u qmeventd` for the start lifecycle event.",
+			}
+	case "proxmox-vm-shutdown":
+		return []string{
+				"`qm shutdown` issues an ACPI shutdown to the guest and waits for the VM to power off cleanly.",
+				"Default timeout is 60s; an unresponsive guest will force a stop after the timeout, leaving filesystems in the same state as `qm stop`.",
+			}, []string{
+				"Read back `qm status <vmid>` and confirm `status: stopped`.",
+				"Verify the shutdown was clean (exit code 0) rather than a forced stop after timeout.",
+			}
+	case "proxmox-ct-reboot":
+		return []string{
+				"`pct reboot` performs an in-guest reboot; container processes restart while the LXC instance stays managed by Proxmox.",
+				"Mounted bind-mounts and shared volumes persist through the reboot; only in-memory state is lost.",
+			}, []string{
+				"Read back `pct status <ctid>` and confirm `status: running`.",
+				"Verify the container's foreground service has come back up before treating the reboot as complete.",
+			}
+	case "proxmox-ct-stop":
+		return []string{
+				"`pct stop` is an immediate hard stop — in-guest processes do not get a chance to flush state cleanly.",
+				"Use `pct shutdown` instead for graceful in-guest shutdown; reserve `pct stop` for unresponsive containers.",
+			}, []string{
+				"Read back `pct status <ctid>` and confirm `status: stopped`.",
+				"Verify no on-boot auto-start policy will immediately restart the container.",
+			}
+	case "proxmox-ct-start":
+		return []string{
+				"Container will start with the configuration currently on the host; uncommitted config drift takes effect.",
+				"Mounted volumes, network bridges, and resource limits all apply as currently defined.",
+			}, []string{
+				"Read back `pct status <ctid>` and confirm `status: running`.",
+				"Verify the container's foreground service is reachable from the host network.",
+			}
+	case "proxmox-ct-shutdown":
+		return []string{
+				"`pct shutdown` issues a graceful in-guest shutdown via lxc-attach and waits for the container to halt.",
+				"Default timeout falls back to a hard stop on unresponsive containers, leaving processes in the same state as `pct stop`.",
+			}, []string{
+				"Read back `pct status <ctid>` and confirm `status: stopped`.",
+				"Verify the shutdown was clean rather than a forced stop after timeout.",
 			}
 	}
 	return nil, nil
