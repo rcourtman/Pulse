@@ -133,7 +133,10 @@ export const getInfrastructureGovernanceBadgeLabel = (
 ): string | null => {
   if (governanceState === 'supported') return null;
   if (governanceState === 'admitted') {
-    return readinessStage === 'first-lab-ready' ? 'First lab ready' : 'Admitted';
+    // "Early support" is friendlier than the internal "First lab ready"
+    // governance term: it tells a user the platform works but has had
+    // limited production exposure, without surfacing lane-stage jargon.
+    return readinessStage === 'first-lab-ready' ? 'Early support' : 'Admitted';
   }
   if (governanceState === 'presentation-only') return 'Presentation only';
   return null;
@@ -406,15 +409,21 @@ export const INFRASTRUCTURE_AGENT_DISCOVERY_LABELS = [
 export const INFRASTRUCTURE_AGENT_HOST_LABELS = getInfrastructureAgentHostProfileLabels();
 
 const SOURCE_PICKER_ITEM_ORDER: InfrastructureSourcePickerItemId[] = [
-  'unraid',
-  'truenas',
+  // Proxmox suite kept adjacent so a Proxmox-heavy lab finds PVE, PBS, and
+  // PMG without scanning past unrelated cards.
   'pve',
-  'docker',
-  'linux-host',
-  'vmware',
-  'kubernetes',
   'pbs',
   'pmg',
+  // Other platform-API integrations.
+  'truenas',
+  'vmware',
+  // Agent-install paths, named platforms first then the generic host card.
+  'unraid',
+  'docker',
+  'kubernetes',
+  'linux-host',
+  // Endpoint probe last; it is a fallback for hosts that expose neither an
+  // API nor an agent.
   'availability',
 ];
 

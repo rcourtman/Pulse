@@ -76,7 +76,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               class={formControl}
               value={props.state.form().name}
               onInput={(event) => props.state.updateForm({ name: event.currentTarget.value })}
-              placeholder="tower"
+              placeholder="truenas-1"
             />
           </label>
           <label class={formField}>

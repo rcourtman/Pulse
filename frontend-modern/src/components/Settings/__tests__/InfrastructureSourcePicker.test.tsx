@@ -7,12 +7,12 @@ describe('InfrastructureSourcePicker', () => {
     cleanup();
   });
 
-  it('labels admitted VMware as first-lab-ready and keeps Pulse Agent on the host profile path', () => {
+  it('labels admitted VMware as Early support and keeps Pulse Agent on the host profile path', () => {
     render(() => <InfrastructureSourcePicker onSelectStep={vi.fn()} />);
 
     expect(screen.getByPlaceholderText('Search platforms, hosts, services...')).toBeInTheDocument();
     expect(screen.getByText('Common choices')).toBeInTheDocument();
-    expect(screen.getByText('First lab ready')).toBeInTheDocument();
+    expect(screen.getByText('Early support')).toBeInTheDocument();
     expect(screen.queryByText('Available now')).toBeNull();
     expect(screen.getByText('Unraid')).toBeInTheDocument();
     expect(screen.getByText('Linux, macOS, Windows host')).toBeInTheDocument();

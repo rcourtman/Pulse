@@ -106,7 +106,7 @@ describe('infrastructureOnboardingPresentation', () => {
         getInfrastructureOnboardingProductPresentation('vmware').governanceState,
         getInfrastructureOnboardingProductPresentation('vmware').readinessStage,
       ),
-    ).toBe('First lab ready');
+    ).toBe('Early support');
     expect(getInfrastructureGovernanceBadgeLabel('supported', 'supported')).toBeNull();
   });
 
@@ -149,35 +149,12 @@ describe('infrastructureOnboardingPresentation', () => {
       }),
     ]);
 
+    // Picker order pins the canonical card layout. Proxmox suite is grouped
+    // first so PVE/PBS/PMG are scannable together, then other API platforms,
+    // then agent-install paths (named platforms before the generic host
+    // card), then the network probe fallback.
     expect(getInfrastructureSourcePickerItems()).toEqual([
-      expect.objectContaining({
-        id: 'unraid',
-        connectionType: 'agent',
-        label: 'Unraid',
-        catalogDescription: 'Array health, disks, Docker, host telemetry',
-      }),
-      expect.objectContaining({
-        id: 'truenas',
-        connectionType: 'truenas',
-        label: 'TrueNAS SCALE',
-      }),
       expect.objectContaining({ id: 'pve', connectionType: 'pve', label: 'Proxmox VE' }),
-      expect.objectContaining({ id: 'docker', connectionType: 'agent', label: 'Docker' }),
-      expect.objectContaining({
-        id: 'linux-host',
-        connectionType: 'agent',
-        label: 'Linux, macOS, Windows host',
-      }),
-      expect.objectContaining({
-        id: 'vmware',
-        connectionType: 'vmware',
-        label: 'VMware vCenter',
-      }),
-      expect.objectContaining({
-        id: 'kubernetes',
-        connectionType: 'agent',
-        label: 'Kubernetes',
-      }),
       expect.objectContaining({
         id: 'pbs',
         connectionType: 'pbs',
@@ -187,6 +164,33 @@ describe('infrastructureOnboardingPresentation', () => {
         id: 'pmg',
         connectionType: 'pmg',
         label: 'Proxmox Mail Gateway',
+      }),
+      expect.objectContaining({
+        id: 'truenas',
+        connectionType: 'truenas',
+        label: 'TrueNAS SCALE',
+      }),
+      expect.objectContaining({
+        id: 'vmware',
+        connectionType: 'vmware',
+        label: 'VMware vCenter',
+      }),
+      expect.objectContaining({
+        id: 'unraid',
+        connectionType: 'agent',
+        label: 'Unraid',
+        catalogDescription: 'Array health, disks, Docker, host telemetry',
+      }),
+      expect.objectContaining({ id: 'docker', connectionType: 'agent', label: 'Docker' }),
+      expect.objectContaining({
+        id: 'kubernetes',
+        connectionType: 'agent',
+        label: 'Kubernetes',
+      }),
+      expect.objectContaining({
+        id: 'linux-host',
+        connectionType: 'agent',
+        label: 'Linux, macOS, Windows host',
       }),
       expect.objectContaining({
         id: 'availability',
