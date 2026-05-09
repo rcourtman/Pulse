@@ -1484,26 +1484,133 @@ func approvalPreflight(req *approval.ApprovalRequest) *approval.ActionPreflight 
 		dryRunSummary = "Provider dry-run semantics are available for this action class before execution."
 	}
 
-	return &approval.ActionPreflight{
-		Target:          target,
-		CurrentState:    fmt.Sprintf("Resolved approval target: %s.", target),
-		IntendedChange:  intendedChange,
-		DryRunAvailable: dryRunAvailable,
-		DryRunSummary:   dryRunSummary,
-		SafetyChecks: []string{
-			"Approval is scoped to the current organization.",
-			"Command hash must match before execution.",
-			"Approval can be consumed only once.",
-			"Target type and identifier must match the planned action.",
-		},
-		VerificationSteps: []string{
-			"Persist unified action audit lifecycle.",
-			"Dispatch only after approval is granted.",
-			"Capture command result or execution error.",
-			"Require Assistant read-after-write verification before final response.",
-		},
-		GeneratedAt: time.Now().UTC(),
+	// Default safety / verification copy applies to every action. Per-command
+	// class additions enrich it with concrete operational context the
+	// operator needs before approving (what "restart this service" actually
+	// touches, how Pulse will read back success).
+	safetyChecks := []string{
+		"Approval is scoped to the current organization.",
+		"Command hash must match before execution.",
+		"Approval can be consumed only once.",
+		"Target type and identifier must match the planned action.",
 	}
+	verificationSteps := []string{
+		"Persist unified action audit lifecycle.",
+		"Dispatch only after approval is granted.",
+		"Capture command result or execution error.",
+		"Require Assistant read-after-write verification before final response.",
+	}
+	if extraSafety, extraVerify := approvalCommandClassPreflightAdditions(req.TargetType, req.Command); len(extraSafety) > 0 || len(extraVerify) > 0 {
+		safetyChecks = append(safetyChecks, extraSafety...)
+		verificationSteps = append(verificationSteps, extraVerify...)
+	}
+
+	return &approval.ActionPreflight{
+		Target:            target,
+		CurrentState:      fmt.Sprintf("Resolved approval target: %s.", target),
+		IntendedChange:    intendedChange,
+		DryRunAvailable:   dryRunAvailable,
+		DryRunSummary:     dryRunSummary,
+		SafetyChecks:      safetyChecks,
+		VerificationSteps: verificationSteps,
+		GeneratedAt:       time.Now().UTC(),
+	}
+}
+
+// classifyApprovalCommand maps a (targetType, command) pair to a stable
+// class string used by approvalCommandClassPreflightAdditions. Returns
+// empty string for commands that do not match a known class — those keep
+// the default preflight content rather than getting fabricated extras.
+func classifyApprovalCommand(targetType, command string) string {
+	cmd := strings.ToLower(strings.TrimSpace(command))
+	if cmd == "" {
+		return ""
+	}
+	switch {
+	case strings.Contains(cmd, "systemctl restart"), strings.Contains(cmd, "service restart"):
+		return "service-restart"
+	case strings.Contains(cmd, "systemctl stop"), strings.Contains(cmd, "service stop"):
+		return "service-stop"
+	case strings.Contains(cmd, "systemctl start"), strings.Contains(cmd, "service start"):
+		return "service-start"
+	case strings.Contains(cmd, "systemctl reload"):
+		return "service-reload"
+	case strings.Contains(cmd, "docker restart"), strings.Contains(cmd, "podman restart"):
+		return "container-restart"
+	case strings.Contains(cmd, "docker stop"), strings.Contains(cmd, "podman stop"):
+		return "container-stop"
+	case strings.HasPrefix(cmd, "kubectl rollout restart"):
+		return "k8s-rollout-restart"
+	}
+	return ""
+}
+
+// approvalCommandClassPreflightAdditions returns hand-authored safety and
+// verification additions for known command classes. The text is concrete
+// operational context the operator wants before approving — what the
+// command actually touches, how Pulse will read back success — rather
+// than generic boilerplate. Unknown classes return empty slices so the
+// default preflight is not padded with fabricated assertions.
+func approvalCommandClassPreflightAdditions(targetType, command string) (safetyChecks []string, verificationSteps []string) {
+	switch classifyApprovalCommand(targetType, command) {
+	case "service-restart":
+		return []string{
+				"Service will be briefly unavailable during the systemctl restart; no other unit dependencies are altered.",
+				"Restart applies only to the named unit on the named host; no fleet-wide propagation.",
+			}, []string{
+				"Read back `systemctl is-active <unit>` after dispatch.",
+				"Tail recent journal entries for the unit to confirm a clean restart and no crash loop.",
+			}
+	case "service-stop":
+		return []string{
+				"Service will remain stopped after dispatch; restart requires a follow-up approved action.",
+				"Stopping the unit may impact dependent services; verify the dependency tree before approving.",
+			}, []string{
+				"Read back `systemctl is-active <unit>` and confirm `inactive`.",
+				"Check journal for any auto-restart triggered by Restart=always policy.",
+			}
+	case "service-start":
+		return []string{
+				"Start applies only to the named unit; no other state changes.",
+				"Unit will run with the configuration currently on disk; uncommitted config drift will take effect.",
+			}, []string{
+				"Read back `systemctl is-active <unit>` and confirm `active`.",
+				"Tail journal for startup errors before the first request lands.",
+			}
+	case "service-reload":
+		return []string{
+				"Reload reads new configuration without dropping in-flight requests when supported by the unit.",
+				"Units without reload semantics fall back to restart; check unit type before approving.",
+			}, []string{
+				"Read back `systemctl status <unit>` and confirm `Active: active (running)` post-reload.",
+				"Tail recent journal entries for configuration parse errors.",
+			}
+	case "container-restart":
+		return []string{
+				"Container will be briefly unavailable during the restart; image and volume mounts are unchanged.",
+				"Restart applies only to the named container; no compose-stack-wide propagation.",
+			}, []string{
+				"Read back container state via `docker inspect` (or podman) and confirm `Status: running`.",
+				"Tail recent container logs for crash patterns or startup errors.",
+			}
+	case "container-stop":
+		return []string{
+				"Container will remain stopped after dispatch; image and volume mounts persist for next start.",
+				"Stopping a container may impact dependent containers in the same compose stack.",
+			}, []string{
+				"Read back container state and confirm `Status: exited`.",
+				"Check for any restart policy that may auto-restart the container.",
+			}
+	case "k8s-rollout-restart":
+		return []string{
+				"Pods are rolled in waves per the deployment strategy; service availability is preserved when readiness probes pass.",
+				"PodDisruptionBudget and HPA-driven scaling continue to apply during the rollout.",
+			}, []string{
+				"Watch `kubectl rollout status` until the deployment converges.",
+				"Verify pod readiness with `kubectl get pods -l <selector>` after rollout.",
+			}
+	}
+	return nil, nil
 }
 
 func approvalPreflightTarget(req *approval.ApprovalRequest) string {

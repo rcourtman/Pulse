@@ -303,6 +303,21 @@ runtime cost control, and shared AI transport surfaces.
     action path uses a different hash function (`actionPlanHashForParams`)
     so a coherent canonical-hash refactor must precede adding the same
     check there.
+    The approval preflight presented to operators authors per-command-class
+    safety and verification context on top of the default broker-level
+    posture. `classifyApprovalCommand` and
+    `approvalCommandClassPreflightAdditions` in
+    `internal/ai/tools/tools_control.go` bucket common Pulse remediation
+    actions (service-restart, service-stop, service-start, service-reload,
+    container-restart, container-stop, k8s-rollout-restart) and return
+    hand-authored operational copy: what the command actually touches,
+    how Pulse will read back success. The additions append onto the
+    default safety/verification arrays rather than replacing them, so
+    the broker's structural posture (org scope, hash match, single-use
+    approval) remains visible alongside the class-specific copy.
+    Unknown command classes must return empty additions rather than
+    fabricated padding — operators see only the default content, not
+    invented assertions about what an unrecognized command will do.
     Drift refusal must also persist a Failed audit record with the
     Request, Plan, and Approvals snapshots intact and a Result whose
     ErrorMessage is prefixed `plan_drift:` so the audit trail shows
