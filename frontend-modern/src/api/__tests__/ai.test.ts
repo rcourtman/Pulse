@@ -520,4 +520,51 @@ describe('AIAPI', () => {
       }),
     );
   });
+
+  it('preserves auto_resolved on UnifiedFinding payloads for operator-vs-Pulse closure attribution', async () => {
+    // The TS UnifiedFindingRecord must round-trip the auto_resolved boolean
+    // verbatim from the backend so the surface can attribute Mark resolved
+    // closures (auto_resolved=false) distinctly from Pulse's auto-detection
+    // (auto_resolved=true). Without this the operator timeline flattens
+    // "you closed this" into generic "condition cleared" copy.
+    apiFetchJSONMock.mockResolvedValueOnce({
+      findings: [
+        {
+          id: 'f-manual-close',
+          resource_id: 'vm-101',
+          resource_name: 'db-01',
+          resource_type: 'vm',
+          source: 'threshold',
+          severity: 'warning',
+          category: 'performance',
+          title: 'CPU high',
+          description: 'CPU usage was high',
+          detected_at: '2026-05-09T10:00:00Z',
+          last_seen_at: '2026-05-09T10:30:00Z',
+          resolved_at: '2026-05-09T11:00:00Z',
+          auto_resolved: false,
+        },
+        {
+          id: 'f-auto-close',
+          resource_id: 'vm-102',
+          resource_name: 'web-01',
+          resource_type: 'vm',
+          source: 'threshold',
+          severity: 'warning',
+          category: 'performance',
+          title: 'CPU high',
+          description: 'CPU usage was high',
+          detected_at: '2026-05-09T10:00:00Z',
+          last_seen_at: '2026-05-09T10:30:00Z',
+          resolved_at: '2026-05-09T11:00:00Z',
+          auto_resolved: true,
+        },
+      ],
+      count: 2,
+    } as never);
+
+    const result = await AIAPI.getUnifiedFindings();
+    expect(result.findings[0]?.auto_resolved).toBe(false);
+    expect(result.findings[1]?.auto_resolved).toBe(true);
+  });
 });

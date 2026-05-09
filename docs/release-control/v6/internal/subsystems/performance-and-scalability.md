@@ -1250,4 +1250,7 @@ will_fix_later remind-at deadline scoped to a single optional pointer
 (`*time.Time`) per finding on both API write paths, so adding the
 operational-commitment field does not regress the unified-findings hot
 path with a per-row allocation when the dismissal reason is anything
-other than `will_fix_later`.
+other than `will_fix_later`. The newer `AutoResolved` attribution flag
+on the same UnifiedFinding shape stays a fixed-size `bool` in the same
+struct, so the operator-vs-Pulse closure attribution adds no per-row
+allocation pressure on the same hot path.

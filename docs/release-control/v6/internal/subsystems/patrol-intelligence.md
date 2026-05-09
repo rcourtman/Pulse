@@ -1124,3 +1124,12 @@ to `status === 'active'` (the server rejects double-resolves) and is
 visually distinct (emerald accent) from the destructive dismiss
 controls; it must route through the shared store action so the refresh
 and error UX stays uniform with acknowledge, snooze, and dismiss.
+That same surface must also attribute closures honestly using the
+`autoResolved` flag now plumbed through `UnifiedFinding`. Resolution
+copy reads "Resolved by you <time>" when `autoResolved === false` and
+the finding is not a Patrol fix outcome (`fix_verified`, `fix_executed`,
+`resolved`), so the operator timeline reads as "you closed this" rather
+than "auto-resolved" when the operator clicked Mark resolved
+themselves. Patrol-driven fix outcomes keep their existing copy because
+those describe Pulse's actual remediation, which is more specific than
+mere auto-detection.

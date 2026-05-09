@@ -557,6 +557,70 @@ func TestCategoryMapping(t *testing.T) {
 	}
 }
 
+func TestUnifiedStore_AddFromAI_MirrorsAutoResolved(t *testing.T) {
+	// AutoResolved distinguishes Pulse's own auto-detection of the condition
+	// clearing from an operator-driven manual Mark resolved. The unified
+	// store mirror must propagate that flag onto the existing record so the
+	// API surface can attribute the closure honestly. This test pins the
+	// dedup-merge AutoResolved propagation.
+	store := NewUnifiedStore(DefaultAlertToFindingConfig())
+	store.AddFromAI(&UnifiedFinding{
+		ID:           "ai-auto",
+		Source:       SourceAIPatrol,
+		Severity:     SeverityWarning,
+		Category:     CategoryReliability,
+		ResourceID:   "vm-101",
+		ResourceName: "db-01",
+		ResourceType: "vm",
+		Title:        "CPU sustained high",
+	})
+	resolved := time.Date(2026, 5, 9, 11, 0, 0, 0, time.UTC)
+
+	// First resolution: Pulse's auto-detection cleared the condition.
+	store.AddFromAI(&UnifiedFinding{
+		ID:           "ai-auto",
+		Source:       SourceAIPatrol,
+		Severity:     SeverityWarning,
+		Category:     CategoryReliability,
+		ResourceID:   "vm-101",
+		ResourceName: "db-01",
+		ResourceType: "vm",
+		Title:        "CPU sustained high",
+		ResolvedAt:   &resolved,
+		AutoResolved: true,
+	})
+	got := store.Get("ai-auto")
+	if got == nil {
+		t.Fatal("expected finding to exist after merge")
+	}
+	if !got.AutoResolved {
+		t.Errorf("AutoResolved must mirror true through dedup-merge; got %v", got.AutoResolved)
+	}
+
+	// Second resolution: operator manually re-resolved (e.g. after a
+	// regression they fixed out-of-band). The flag must flip to false so
+	// the surface stops attributing closure to Pulse's auto-detection.
+	store.AddFromAI(&UnifiedFinding{
+		ID:           "ai-auto",
+		Source:       SourceAIPatrol,
+		Severity:     SeverityWarning,
+		Category:     CategoryReliability,
+		ResourceID:   "vm-101",
+		ResourceName: "db-01",
+		ResourceType: "vm",
+		Title:        "CPU sustained high",
+		ResolvedAt:   &resolved,
+		AutoResolved: false,
+	})
+	got = store.Get("ai-auto")
+	if got == nil {
+		t.Fatal("expected finding to still exist after manual close")
+	}
+	if got.AutoResolved {
+		t.Errorf("AutoResolved must mirror false on manual close; got %v", got.AutoResolved)
+	}
+}
+
 func TestUnifiedStore_AddFromAI_MirrorsRemindAt(t *testing.T) {
 	// RemindAt is the will_fix_later wake-up deadline persisted on the
 	// canonical findings store. The unified store mirrors finding state for

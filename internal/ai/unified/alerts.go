@@ -115,6 +115,12 @@ type UnifiedFinding struct {
 	DetectedAt time.Time  `json:"detected_at"`
 	LastSeenAt time.Time  `json:"last_seen_at"`
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	// AutoResolved distinguishes Pulse's auto-detection of the condition
+	// clearing from an operator-driven manual "Mark resolved" action. Used by
+	// the surface to attribute who closed the loop ("Resolved by you" vs
+	// "Pulse auto-resolved") so operational memory of operator actions is
+	// preserved instead of being flattened into a single "resolved" state.
+	AutoResolved bool `json:"auto_resolved"`
 
 	// User feedback
 	AcknowledgedAt  *time.Time `json:"acknowledged_at,omitempty"`
@@ -170,6 +176,7 @@ type unifiedFindingJSON struct {
 	DetectedAt                 time.Time                        `json:"detected_at"`
 	LastSeenAt                 time.Time                        `json:"last_seen_at"`
 	ResolvedAt                 *time.Time                       `json:"resolved_at,omitempty"`
+	AutoResolved               bool                             `json:"auto_resolved"`
 	AcknowledgedAt             *time.Time                       `json:"acknowledged_at,omitempty"`
 	SnoozedUntil               *time.Time                       `json:"snoozed_until,omitempty"`
 	DismissedReason            string                           `json:"dismissed_reason,omitempty"`
@@ -221,6 +228,7 @@ func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
 		DetectedAt:                 f.DetectedAt,
 		LastSeenAt:                 f.LastSeenAt,
 		ResolvedAt:                 f.ResolvedAt,
+		AutoResolved:               f.AutoResolved,
 		AcknowledgedAt:             f.AcknowledgedAt,
 		SnoozedUntil:               f.SnoozedUntil,
 		DismissedReason:            f.DismissedReason,
@@ -277,6 +285,7 @@ func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
 		DetectedAt:                 payload.DetectedAt,
 		LastSeenAt:                 payload.LastSeenAt,
 		ResolvedAt:                 payload.ResolvedAt,
+		AutoResolved:               payload.AutoResolved,
 		AcknowledgedAt:             payload.AcknowledgedAt,
 		SnoozedUntil:               payload.SnoozedUntil,
 		DismissedReason:            payload.DismissedReason,
@@ -656,6 +665,7 @@ func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool
 		}
 		// Allow reopening by clearing ResolvedAt if the incoming finding is active again.
 		existing.ResolvedAt = finding.ResolvedAt
+		existing.AutoResolved = finding.AutoResolved
 
 		// Investigation fields (allow clearing)
 		existing.InvestigationSessionID = finding.InvestigationSessionID

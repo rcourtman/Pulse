@@ -627,9 +627,26 @@ export const formatFindingLifecycleType = (value: string): string =>
   FINDING_LIFECYCLE_LABELS[value] || formatIdentifierLabel(value);
 
 export const getFindingResolutionReason = (
-  finding: Pick<UnifiedFinding, 'isThreshold' | 'source' | 'alertType' | 'investigationOutcome'>,
+  finding: Pick<
+    UnifiedFinding,
+    'isThreshold' | 'source' | 'alertType' | 'investigationOutcome' | 'autoResolved'
+  >,
   resolvedTime: string,
 ): string => {
+  // Operator-driven manual resolution takes priority over the
+  // category-specific copy: "Resolved by you" tells the operator (and any
+  // teammate revisiting the timeline) that this closure was their action,
+  // not Pulse's auto-detection. Patrol auto-resolution paths (fix_verified,
+  // fix_executed) keep their existing copy because they describe Pulse's own
+  // remediation outcome, which is more specific than "auto-resolved by Pulse".
+  if (
+    finding.autoResolved === false &&
+    finding.investigationOutcome !== 'fix_verified' &&
+    finding.investigationOutcome !== 'fix_executed' &&
+    finding.investigationOutcome !== 'resolved'
+  ) {
+    return `Resolved by you ${resolvedTime}`;
+  }
   if (finding.isThreshold || finding.source === 'threshold') {
     switch (finding.alertType || '') {
       case 'powered-off':

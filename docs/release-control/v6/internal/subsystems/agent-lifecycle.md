@@ -924,6 +924,13 @@ persistence-recovery resync must copy `f.RemindAt` onto the unified
 finding so the operator's commitment survives a reboot or process
 restart instead of silently lapsing into the canonical findings store
 without being mirrored on the API surface.
+The same router boundary now also threads `Finding.AutoResolved`
+through to `UnifiedFinding.AutoResolved` so an operator who manually
+clicked Mark resolved before a restart keeps that attribution after
+the agent reloads findings from disk. Without that mirror the
+recovery sync would flatten every prior closure into Pulse's
+auto-detection bucket and erase the operator-vs-Pulse distinction
+across process restarts.
 
 Linux agent privilege hardening is now part of the installer/runtime contract.
 The supported full-telemetry systemd agent may still run as `root`, but

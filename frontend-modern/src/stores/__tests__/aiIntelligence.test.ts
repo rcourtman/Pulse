@@ -143,6 +143,40 @@ describe('aiIntelligenceStore', () => {
     });
   });
 
+  it('promotes auto_resolved to camelCase autoResolved on the unified-finding store record', async () => {
+    // The store-level UnifiedFinding is what render code reads when it asks
+    // "who closed this loop?" If the normalizer drops auto_resolved, the
+    // resolution-reason copy can't differentiate operator-driven Mark
+    // resolved from Pulse's own auto-detection. Pin the field promotion so
+    // the attribution doesn't silently regress.
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
+      findings: [
+        {
+          id: 'unified-manual-close',
+          source: 'threshold',
+          severity: 'warning',
+          category: 'performance',
+          resource_id: 'vm-101',
+          resource_name: 'db-01',
+          resource_type: 'vm',
+          title: 'CPU high',
+          description: 'CPU high',
+          detected_at: '2026-05-09T10:00:00Z',
+          last_seen_at: '2026-05-09T10:30:00Z',
+          resolved_at: '2026-05-09T11:00:00Z',
+          auto_resolved: false,
+        },
+      ],
+    } as never);
+
+    await aiIntelligenceStore.loadFindings();
+    expect(aiIntelligenceStore.findings).toHaveLength(1);
+    expect(aiIntelligenceStore.findings[0]).toMatchObject({
+      id: 'unified-manual-close',
+      autoResolved: false,
+    });
+  });
+
   it('routes Mark resolved through the canonical patrol resolve client and refreshes both finding sources', async () => {
     // The Patrol surface's manual Mark resolved button must go through
     // aiIntelligenceStore.resolveFinding so the refresh and error UX stays

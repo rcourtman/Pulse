@@ -953,6 +953,12 @@ durable state when re-hydrating findings from disk into the unified
 store. Persisted `Finding.RemindAt` values must round-trip through that
 recovery path so an operator commitment recorded before a process
 restart is not silently dropped when findings reload.
+That same recovery path also preserves the operator-vs-Pulse
+attribution captured in `Finding.AutoResolved`. The router boundary
+must copy that flag onto `UnifiedFinding.AutoResolved` during both
+live wire-up and persistence resync so a finding the operator
+manually closed before a restart still reads as "Resolved by you"
+afterward, instead of being misattributed to Pulse's auto-detection.
 
 `StorageSummary.tsx`, `StoragePageSummary.tsx`, and `useStoragePageSummary.ts`
 now surface `poolsDegraded` and `disksFailing` health indicators alongside

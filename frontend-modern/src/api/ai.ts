@@ -457,6 +457,10 @@ export interface UnifiedFindingRecord {
   detected_at: string;
   last_seen_at?: string;
   resolved_at?: string;
+  // auto_resolved distinguishes Pulse's own auto-detection of the condition
+  // clearing (true) from an operator-driven manual "Mark resolved" (false),
+  // so the surface can attribute who closed the loop.
+  auto_resolved?: boolean;
   acknowledged_at?: string;
   snoozed_until?: string;
   dismissed_reason?: string;

@@ -156,6 +156,10 @@ export interface UnifiedFinding {
   // the deadline at dismiss time and (b) badge dismissed rows with "Reminding
   // <date>" so the operator sees their pending commitment.
   remindAt?: string;
+  // autoResolved is true when Pulse's own detection logic auto-cleared the
+  // condition; false when the operator manually clicked Mark resolved. The
+  // resolution-reason copy uses this to attribute who closed the loop.
+  autoResolved?: boolean;
   status: 'active' | 'resolved' | 'dismissed' | 'snoozed';
   correlatedFindingIds?: string[];
   remediationPlanId?: string;
@@ -222,6 +226,7 @@ function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number):
     dismissedReason: item.dismissed_reason,
     userNote: item.user_note,
     remindAt: item.remind_at,
+    autoResolved: item.auto_resolved,
     status: normalizeFindingStatus(item, now),
     correlatedFindingIds: item.correlated_ids,
     remediationPlanId: item.remediation_id,
@@ -263,6 +268,7 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     dismissedReason: item.dismissed_reason,
     userNote: item.user_note,
     remindAt: item.remind_at,
+    autoResolved: item.auto_resolved,
     status: normalizeFindingStatus(item, now),
     investigationSessionId: item.investigation_session_id || '',
     investigationStatus: validateInvestigationStatus(item.investigation_status),

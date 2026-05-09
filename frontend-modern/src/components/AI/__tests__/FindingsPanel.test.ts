@@ -989,5 +989,57 @@ describe('aiFindingPresentation', () => {
         ),
       ).toBe('Fixed by Patrol 1h ago');
     });
+
+    it('attributes operator-driven Mark resolved closures to "Resolved by you"', () => {
+      // Slice 22 added the manual Mark resolved button which sets
+      // auto_resolved=false. The resolution-reason copy must distinguish
+      // operator-driven closure from Pulse's auto-detection so the timeline
+      // reads honestly. This branch must take priority over the
+      // category-specific "Condition cleared" / "CPU returned to normal"
+      // copy (those describe Pulse's auto-detection).
+      expect(
+        getFindingResolutionReason(
+          {
+            isThreshold: true,
+            source: 'threshold',
+            alertType: 'cpu',
+            investigationOutcome: undefined,
+            autoResolved: false,
+          } as never,
+          '5m ago',
+        ),
+      ).toBe('Resolved by you 5m ago');
+
+      expect(
+        getFindingResolutionReason(
+          {
+            isThreshold: false,
+            source: 'ai-patrol',
+            alertType: undefined,
+            investigationOutcome: 'cannot_fix',
+            autoResolved: false,
+          } as never,
+          '20m ago',
+        ),
+      ).toBe('Resolved by you 20m ago');
+    });
+
+    it('keeps Patrol fix-applied copy when Pulse closed the loop autonomously', () => {
+      // Patrol's own fix outcomes (fix_verified, fix_executed, resolved) are
+      // more specific than "auto-resolved" — they describe Pulse's actual
+      // remediation. The autoResolved branch must NOT override those.
+      expect(
+        getFindingResolutionReason(
+          {
+            isThreshold: false,
+            source: 'ai-patrol',
+            alertType: undefined,
+            investigationOutcome: 'fix_verified',
+            autoResolved: true,
+          } as never,
+          '2h ago',
+        ),
+      ).toBe('Fixed by Patrol 2h ago');
+    });
   });
 });

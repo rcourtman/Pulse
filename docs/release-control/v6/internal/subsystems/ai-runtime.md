@@ -1561,3 +1561,13 @@ canonical `/api/ai/patrol/resolve` endpoint owned by
 `HandleResolveFinding` in `internal/api/ai_handlers.go`, mirroring the
 acknowledge / snooze / dismiss client surface so the same Patrol service
 contract drives every operator-feedback action.
+The `unified.UnifiedFinding` mirror also carries an explicit
+`AutoResolved` flag alongside `ResolvedAt`, set by the canonical
+`Finding.AutoResolved` field. The AddFromAI dedup-merge path must
+mirror that flag (allowing flips between auto-detected closure and
+operator-driven closure as the canonical store transitions), and the
+Finding to UnifiedFinding conversion in `internal/api/router.go` must
+copy `f.AutoResolved` on both the live wire-up callback and the
+persistence-recovery resync, so the frontend can honestly attribute who
+closed the loop instead of flattening every resolution into a generic
+"resolved" state.

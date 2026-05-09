@@ -1037,7 +1037,19 @@ the canonical monitored-system blocked payload.
    must post `{finding_id}` to that endpoint and surface the boolean
    result through `aiIntelligenceStore.resolveFinding` so the operator
    surface gets uniform refresh and error UX with acknowledge / snooze
-   / dismiss
+   / dismiss.
+   The same `UnifiedFindingRecord` shape also carries `auto_resolved`,
+   the operator-vs-Pulse attribution flag set by the canonical findings
+   store. The store normalizer must promote it to camelCase
+   `autoResolved` on `UnifiedFinding`, the Finding to UnifiedFinding
+   conversion in `internal/api/router.go` must copy `f.AutoResolved`,
+   and the AddFromAI dedup-merge path must mirror it onto the existing
+   record. The frontend resolution-reason helper must use that flag to
+   attribute operator-driven Mark resolved closures as "Resolved by
+   you" instead of generic auto-detection copy, while keeping Patrol's
+   own fix outcomes (`fix_verified`, `fix_executed`, `resolved`)
+   priority because those describe Pulse's actual remediation rather
+   than mere auto-detection
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay
