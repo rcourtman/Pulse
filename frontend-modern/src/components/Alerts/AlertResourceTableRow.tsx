@@ -352,7 +352,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             );
           }
 
-          const openMetricEditor = (e: MouseEvent) => {
+          const openMetricEditor = (e?: MouseEvent) => {
             startEditing(metric, e);
           };
 
@@ -366,9 +366,18 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                   when={isEditing()}
                   fallback={
                     <div
+                      role="button"
+                      tabIndex={0}
                       onClick={openMetricEditor}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openMetricEditor();
+                        }
+                      }}
                       class="cursor-pointer hover:bg-surface-hover rounded px-1 py-0.5 transition-colors"
                       title={getAlertResourceTableEditMetricTitle()}
+                      aria-label={getAlertResourceTableEditMetricTitle()}
                     >
                       <MetricValueWithHeat
                         resourceId={props.resource.id}
