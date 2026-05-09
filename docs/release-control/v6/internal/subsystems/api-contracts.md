@@ -1065,7 +1065,14 @@ the canonical monitored-system blocked payload.
    already plumbed through the patrol status payload). It must not
    introduce a new fetch path or duplicate data plumbing — the strip is
    a render-only consumer of the existing canonical signal so the
-   header line and the workspace's detailed Trust strip stay aligned
+   header line and the workspace's detailed Trust strip stay aligned.
+   The same page-header recency line also reads
+   `PatrolRecencyPresentation.resourcesChecked` — populated by
+   `getPatrolRecencyPresentation` from
+   `PatrolRunRecord.resources_checked` on the latest completed run —
+   so the operator sees coverage alongside recency without needing a
+   new API surface, and the field stays optional (omitted on zero) to
+   keep degenerate runs from rendering an alarm-shaped "verified 0"
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

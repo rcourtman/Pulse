@@ -1153,3 +1153,13 @@ empty header strip. The detailed Trust strip in
 operators reviewing findings; the header line is the
 trust-at-a-glance entry point that names what Patrol's loop has
 produced before the operator scrolls into the workspace tabs.
+The same page-header recency line must also surface the coverage
+signal from the most recent completed run via
+`PatrolRecencyPresentation.resourcesChecked`, populated by
+`getPatrolRecencyPresentation` from
+`PatrolRunRecord.resources_checked`. The render reads "Last full
+patrol: 3m ago — verified 47 resources" so operators see both
+temporal recency and coverage in one line. The field stays optional
+(omitted when zero) so a degenerate run that completed without
+checking any resources does not render a misleading "verified 0
+resources" line.

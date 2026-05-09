@@ -91,6 +91,13 @@ export interface PatrolVerificationPresentation {
 export interface PatrolRecencyPresentation {
   label: string;
   timestamp?: string;
+  // resourcesChecked is the coverage signal for the most recent completed
+  // run — populated from `PatrolRunRecord.resources_checked` when a run is
+  // available. Lets the page header read "Last full patrol: 3m ago —
+  // verified 47 resources", giving operators temporal AND coverage signal
+  // in one line. Stays optional because legacy fall-back paths
+  // (lastPatrolAt / lastActivityAt without a run record) carry no count.
+  resourcesChecked?: number;
 }
 
 type PatrolAssessmentFinding = Pick<
@@ -737,9 +744,11 @@ export function getPatrolRecencyPresentation(args: {
 }): PatrolRecencyPresentation {
   const latestCompletedRun = (args.runs ?? []).find((run) => isCompletedPatrolRun(run));
   if (latestCompletedRun?.completed_at) {
+    const resourcesChecked = latestCompletedRun.resources_checked || 0;
     return {
       label: isFullPatrolRun(latestCompletedRun) ? 'Last full patrol' : 'Last activity',
       timestamp: latestCompletedRun.completed_at,
+      resourcesChecked: resourcesChecked > 0 ? resourcesChecked : undefined,
     };
   }
 

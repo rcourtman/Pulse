@@ -1262,6 +1262,13 @@ strip. The detailed breakdown stays in
 `PatrolIntelligenceWorkspace.tsx` for the canonical view; the header
 line is the entry-point summary so operators see active, regressed,
 and verified-fix counts before scrolling into the workspace tabs.
+The recency line beside the header actions also renders coverage
+alongside time when the canonical `getPatrolRecencyPresentation` helper
+returns `resourcesChecked` from the latest completed run. Render code
+must gate on `<Show when={recency().resourcesChecked}>` (truthy) so
+zero-coverage runs don't surface a misleading "verified 0 resources"
+line; the truthy gate also means the absence of the helper field
+gracefully omits the coverage span without code changes.
 
 `frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
 command guidance targets. Discovery surfaces that need to tell operators where

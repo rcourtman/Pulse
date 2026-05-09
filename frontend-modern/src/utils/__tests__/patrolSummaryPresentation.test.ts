@@ -729,6 +729,7 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       label: 'Last activity',
       timestamp: '2026-03-12T09:59:00Z',
+      resourcesChecked: 1,
     });
   });
 
@@ -769,6 +770,7 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       label: 'Last full patrol',
       timestamp: '2026-03-12T09:57:00Z',
+      resourcesChecked: 58,
     });
   });
 
@@ -781,6 +783,52 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       label: 'Last activity',
       timestamp: '2026-03-12T09:59:00Z',
+    });
+  });
+
+  it('omits resourcesChecked when the most recent completed run reports zero coverage', () => {
+    // A run that completed without checking any resources (e.g. an early
+    // failure or a no-op trigger fire) should not surface a "verified 0
+    // resources" line on the page header — that reads as an alarm signal
+    // when it's just a degenerate run. The presentation must omit the
+    // field instead of returning resourcesChecked: 0 so render code's
+    // truthy <Show> gate cleanly hides the coverage span.
+    expect(
+      getPatrolRecencyPresentation({
+        runs: [
+          {
+            id: 'run-empty',
+            started_at: '2026-03-12T09:50:00Z',
+            completed_at: '2026-03-12T09:51:00Z',
+            duration_ms: 60000,
+            type: 'patrol',
+            resources_checked: 0,
+            nodes_checked: 0,
+            guests_checked: 0,
+            docker_checked: 0,
+            storage_checked: 0,
+            hosts_checked: 0,
+            truenas_checked: 0,
+            pbs_checked: 0,
+            pmg_checked: 0,
+            kubernetes_checked: 0,
+            new_findings: 0,
+            existing_findings: 0,
+            rejected_findings: 0,
+            resolved_findings: 0,
+            auto_fix_count: 0,
+            findings_summary: '',
+            finding_ids: [],
+            error_count: 0,
+            status: 'no_issues',
+            triage_flags: 0,
+            tool_call_count: 0,
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      label: 'Last full patrol',
+      timestamp: '2026-03-12T09:51:00Z',
     });
   });
 });

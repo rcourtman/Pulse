@@ -1629,6 +1629,22 @@ describe('patrolInvestigationContextModel', () => {
 });
 
 describe('Patrol page header IA framing', () => {
+  it('surfaces verified-resource coverage on the recency line in the page header', () => {
+    // Third wedge of the Patrol page IA reframe. The recency line tells the
+    // operator when Pulse last ran; the coverage signal tells them what it
+    // covered. Pin the wiring so the recency render reads
+    // resourcesChecked from getPatrolRecencyPresentation and gates on a
+    // truthy <Show> so zero-coverage runs don't render "verified 0
+    // resources" as an alarm.
+    const headerSource = readFileSync(
+      resolve(__dirname, '..', 'PatrolIntelligenceHeader.tsx'),
+      'utf-8',
+    );
+    expect(headerSource).toContain('recency().resourcesChecked');
+    expect(headerSource).toContain('Show when={recency().resourcesChecked}');
+    expect(headerSource).toContain('verified ');
+  });
+
   it('hoists a trust-at-a-glance summary into the page header above the runtime row', () => {
     // The compact trust summary on the Patrol page header is the second
     // wedge of the IA reframe (the first being PATROL_PAGE_DESCRIPTION).
