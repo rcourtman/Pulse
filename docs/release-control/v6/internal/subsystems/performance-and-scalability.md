@@ -506,6 +506,14 @@ shell clickable behind another overlay.
 
 ## Current State
 
+The agent SSE stream at `/api/agent/events` keeps publishers
+non-blocking by design: the broadcaster's per-subscriber buffer is
+bounded (64 events) and a full buffer drops the event for that
+subscriber rather than stalling the publish path. A slow agent does
+not pin the patrol-finding hot path; many concurrent agents do not
+multiply per-finding work because each subscriber gets its own
+non-blocking send.
+
 `/api/agent/resource-context/{id}` does at most three reads per
 request: one operator-state SQLite point lookup (already covered by
 the `resource_operator_state` index), one in-memory findings lookup

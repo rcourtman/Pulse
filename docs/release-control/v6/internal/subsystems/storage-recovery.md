@@ -947,6 +947,12 @@ bypass the API fail-closed execution gate.
 
 ## Current State
 
+The agent SSE stream at `/api/agent/events` is in-memory and
+stateless. No persistence; each connection starts fresh from the
+moment of subscribe. Agents that need to catch up across reconnects
+fetch the read endpoints (findings list, audit list) for replay —
+those are the durable surfaces.
+
 The agent capabilities manifest at `/api/agent/capabilities` is
 read-only and stateless — no persistence is involved. The manifest
 is hand-authored in `internal/api/agent_capabilities.go`; storage

@@ -86,6 +86,7 @@ type Router struct {
 	discoveryHandlers               *DiscoveryHandlers
 	resourceHandlers                *ResourceHandlers
 	agentContextHandler             *AgentContextHandler
+	agentEventBroadcaster           *AgentEventBroadcaster
 	resourceRegistry                *unifiedresources.ResourceRegistry
 	trueNASPoller                   *monitoring.TrueNASPoller
 	vmwarePoller                    *monitoring.VMwarePoller
@@ -409,6 +410,7 @@ func (r *Router) setupRoutes() {
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
 	r.agentContextHandler = NewAgentContextHandler(r.resourceHandlers)
+	r.agentEventBroadcaster = NewAgentEventBroadcaster()
 	if r.resourceHandlers != nil {
 		if store, err := r.resourceHandlers.getStore("default"); err == nil && store != nil {
 			r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
@@ -1747,6 +1749,25 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 					RemindAt:                   f.RemindAt,
 				}
 				_, isNew := unifiedStore.AddFromAI(uf)
+				// Publish a finding.created event to the agent SSE
+				// stream when the finding is new and not auto-dismissed
+				// by operator-state suppression. Skip on update
+				// (re-detection of an existing finding) so agents
+				// aren't notified about every patrol cycle's
+				// re-confirmation; skip when DismissedReason is
+				// populated because the operator already said to stay
+				// quiet about this resource. Fire-and-forget — slow
+				// subscribers don't block the patrol loop.
+				if isNew && r.agentEventBroadcaster != nil && f.DismissedReason == "" {
+					r.agentEventBroadcaster.PublishFindingCreated(AgentEventFindingCreatedPayload{
+						FindingID:    f.ID,
+						ResourceID:   f.ResourceID,
+						ResourceName: f.ResourceName,
+						Severity:     string(f.Severity),
+						Title:        f.Title,
+						Category:     string(f.Category),
+					})
+				}
 				return isNew
 			})
 			patrol.SetUnifiedFindingResolver(func(findingID string) {

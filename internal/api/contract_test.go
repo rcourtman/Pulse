@@ -13233,6 +13233,28 @@ func assertJSONSnapshot(t *testing.T, got []byte, want string) {
 	}
 }
 
+// TestContract_AgentEventsStreamPublishesOnFindingCreated pins the
+// agent SSE stream's most consequential producer hook: the
+// findings-runtime callback in router.go must publish a
+// finding.created event when a finding is new AND not auto-dismissed
+// by operator-state suppression. Without this guard, every
+// patrol-cycle re-detection would fire an event (noise) and findings
+// the operator already silenced would still notify (contradicting
+// slice 31/32 suppression semantics).
+func TestContract_AgentEventsStreamPublishesOnFindingCreated(t *testing.T) {
+	source, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "PublishFindingCreated(AgentEventFindingCreatedPayload{") {
+		t.Error("router.go must publish finding.created events to the agent stream when a new finding is added")
+	}
+	if !strings.Contains(src, "isNew && r.agentEventBroadcaster != nil && f.DismissedReason == \"\"") {
+		t.Error("publish gate must fire only when isNew, broadcaster wired, and finding not auto-dismissed by operator-state — otherwise the stream contradicts the suppression contract")
+	}
+}
+
 // TestContract_AgentCapabilitiesManifestVersionIsPinned pins the
 // manifest's version contract: bumping it is reserved for breaking
 // shape changes, additive capabilities ship under the same version.

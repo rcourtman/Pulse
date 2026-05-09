@@ -68,6 +68,13 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// themselves keep their own auth scopes. Agents fetch this once at
 	// startup to learn what's available.
 	r.mux.HandleFunc("/api/agent/capabilities", HandleAgentCapabilitiesManifest)
+	// Agent SSE event stream — agents subscribe once and receive
+	// real-time notifications instead of polling. Auth at
+	// monitoring:read because the stream surfaces the same
+	// information already available via the read endpoints.
+	if r.agentEventBroadcaster != nil {
+		r.mux.HandleFunc("/api/agent/events", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.agentEventBroadcaster.HandleAgentEvents)))
+	}
 	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandlePlanAction)))
 	r.mux.HandleFunc("POST /api/actions/{id}/decision", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleDecideAction)))
 	r.mux.HandleFunc("POST /api/actions/{id}/execute", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleExecuteAction)))

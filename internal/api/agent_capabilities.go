@@ -131,6 +131,15 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 			Scope:       "monitoring:write",
 		},
 		{
+			Name:          "subscribe_events",
+			Description:   "Subscribe to the SSE event stream for real-time notifications: finding.created when a new finding is raised, heartbeat every 15s. Long-lived connection; agents listen instead of polling.",
+			Category:      "context",
+			Method:        http.MethodGet,
+			Path:          "/api/agent/events",
+			Scope:         "monitoring:read",
+			ResponseShape: "text/event-stream of AgentEvent",
+		},
+		{
 			Name:          "list_findings",
 			Description:   "List all Patrol findings (active, dismissed, resolved). Filter client-side on returned shape.",
 			Category:      "finding",

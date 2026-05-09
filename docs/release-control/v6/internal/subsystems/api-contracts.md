@@ -1343,6 +1343,22 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+`/api/agent/events` is the agent SSE stream — the substrate piece
+that closes the agent-paradigm triangle (discovery + bundled reads +
+push notifications). Agents subscribe once and receive real-time
+notifications: `finding.created` when a new finding is raised
+(suppressed when the finding was auto-dismissed by operator-state),
+and `heartbeat` every 15 seconds so an idle connection can confirm
+the stream is alive. Each event carries a monotonic ID so agents
+can dedupe and reason about ordering. The broadcaster drops events
+for slow subscribers rather than blocking the publish path —
+publishers (the patrol findings runtime, future approval/action
+hooks) cannot stall on consumer slowness. The stream sits behind
+`monitoring:read` and runs through the same auth path as the rest
+of the agent surface; the capabilities manifest declares the stream
+under `subscribe_events` so external agents discover it without
+out-of-band documentation.
+
 `/api/agent/capabilities` is the discovery document for Pulse's
 agent surface. The manifest declares each agent-consumable
 capability with stable name (snake_case agent identifier),
