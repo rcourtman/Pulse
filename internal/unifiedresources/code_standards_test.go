@@ -349,6 +349,10 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 
 func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 	requiredSnippets := map[string][]string{
+		// Single map entry per file: Go map literals silently drop
+		// duplicate keys, so two entries for the same file would
+		// erase the first. Keeping all actions.go pins together
+		// guarantees every snippet actually runs.
 		filepath.Join(".", "actions.go"): {
 			"func BeginActionExecution(record ActionAuditRecord, actor string, now time.Time)",
 			"func CompleteActionExecution(record ActionAuditRecord, result *ExecutionResult, actor string, now time.Time)",
@@ -358,13 +362,20 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// at approval time. Pinning it here keeps the broker contract
 			// honest: drift refusal cannot silently turn into another error
 			// kind that callers fail to detect.
-			"ErrActionPlanDrift        = errors.New(",
+			"ErrActionPlanDrift = errors.New(",
 			// ErrResourceRemediationLocked is the canonical error returned
 			// when the operator has set NeverAutoRemediate=true on the
 			// target resource. Pin it here so the broker contract stays
 			// honest: per-resource lock refusal cannot silently turn into
 			// another error kind that callers fail to detect.
 			"ErrResourceRemediationLocked = errors.New(",
+			// ActionVerificationResult is the canonical post-execution
+			// read-after-write outcome carrier. The broker writes it onto
+			// ExecutionResult.Verification; pinning the type here keeps the
+			// shape stable across refactors so frontend audit surfaces and
+			// any other consumers can rely on it.
+			"type ActionVerificationResult struct",
+			"Verification *ActionVerificationResult `json:\"verification,omitempty\"`",
 		},
 		filepath.Join(".", "store.go"): {
 			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
@@ -382,15 +393,6 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		filepath.Join(".", "audit_redaction.go"): {
 			"func RedactAuditText(s string) string",
 			"func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord",
-		},
-		// ActionVerificationResult is the canonical post-execution
-		// read-after-write outcome carrier. The broker writes it onto
-		// ExecutionResult.Verification; pinning the type here keeps the
-		// shape stable across refactors so frontend audit surfaces and
-		// any other consumers can rely on it.
-		filepath.Join(".", "actions.go"): {
-			"type ActionVerificationResult struct",
-			"Verification *ActionVerificationResult `json:\"verification,omitempty\"`",
 		},
 		filepath.Join("..", "api", "actions.go"): {
 			"type ActionExecutor interface",
