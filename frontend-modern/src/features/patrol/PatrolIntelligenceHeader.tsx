@@ -408,7 +408,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
 
                       <div class="rounded-md border border-border-subtle bg-surface-alt/60 px-3 py-2.5">
                         <p class="text-[11px] font-medium text-base-content">
-                          Full patrols run on the {selectedScheduleLabel().toLowerCase()} schedule.
+                          {state.patrolInterval() === 0
+                            ? 'Full patrols are disabled.'
+                            : `Full patrols run every ${selectedScheduleLabel().toLowerCase()}.`}
                         </p>
                         <p class="mt-1 text-[11px] leading-tight text-muted">
                           Alert and anomaly triggers run targeted scoped checks that update{' '}
