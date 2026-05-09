@@ -10,7 +10,7 @@ import {
   type ResourceSurfaceLink,
 } from '@/routing/resourceLinks';
 import type { Resource } from '@/types/resource';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
   getAlertIncidentLevelBadgeClass,
   getAlertIncidentStatusPresentation,
@@ -52,7 +52,7 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
         const resourceDisplayName = () => {
           const current = resource();
           if (current) {
-            return getPreferredResourceDisplayName(current);
+            return getPreferredInfrastructureDisplayName(current);
           }
           return selection().resourceName;
         };

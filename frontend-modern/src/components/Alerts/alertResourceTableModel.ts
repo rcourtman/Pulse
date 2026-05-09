@@ -1,5 +1,5 @@
 import type { Resource as UnifiedResource, ResourcePolicy } from '@/types/resource';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 
 const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'cpu %': 'Percent CPU utilization allowed before an alert fires.',
@@ -249,7 +249,9 @@ export function alertResourceSupportsMetric(
 }
 
 export function getAlertResourceLabel(resource: AlertResourceTableResourceLike): string {
-  return getPreferredResourceDisplayName(resource as unknown as UnifiedResource);
+  // Operator-local /alerts table; redaction is a transmission-boundary policy
+  // (docs/PRIVACY.md). Use the raw infra display name to match /infrastructure.
+  return getPreferredInfrastructureDisplayName(resource as unknown as UnifiedResource);
 }
 
 function parseAlertMetricNumber(value: unknown): number | undefined {

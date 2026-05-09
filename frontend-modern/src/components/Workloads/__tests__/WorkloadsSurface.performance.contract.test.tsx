@@ -428,11 +428,13 @@ describe('Workloads performance contract', () => {
       expect(mockUnifiedResourcesQuery).toContain('type=agent');
     });
 
-    it('keeps governed resource search aligned with the preferred display label', () => {
+    it('searches policy-redacted resources by their raw display name in operator-local UI', () => {
+      // /workloads search; redaction is a transmission-boundary policy
+      // (docs/PRIVACY.md), so the haystack must use the raw infra name.
       const resources = [makeResource()];
 
-      const filtered = filterResources(resources, new Set(), new Set(), ['Production']);
-      const rawFiltered = filterResources(resources, new Set(), new Set(), ['secret-host']);
+      const filtered = filterResources(resources, new Set(), new Set(), ['secret-host']);
+      const rawFiltered = filterResources(resources, new Set(), new Set(), ['Production']);
 
       expect(filtered).toHaveLength(1);
       expect(rawFiltered).toHaveLength(0);

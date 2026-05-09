@@ -711,7 +711,8 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(filtered[0]?.platformData?.sources).toEqual(['proxmox']);
     });
 
-    it('keeps governed resource search aligned with the infrastructure display label', () => {
+    it('searches policy-redacted resources by their raw infrastructure display name', () => {
+      // Local search; redaction is a transmission-boundary policy (docs/PRIVACY.md).
       const governedResource = makeResource(9, {
         name: 'secret-host-9',
         displayName: 'secret-host-9',
@@ -722,8 +723,8 @@ describe('UnifiedResourceTable performance contract', () => {
         aiSafeSummary: 'Production Host',
       });
 
-      expect(matchesSearch(governedResource, 'Production')).toBe(true);
-      expect(matchesSearch(governedResource, 'secret-host-9')).toBe(false);
+      expect(matchesSearch(governedResource, 'secret-host-9')).toBe(true);
+      expect(matchesSearch(governedResource, 'Production')).toBe(false);
     });
 
     it('suppresses non-blocking policy posture in host-table rows while preserving blocking policy badges', async () => {

@@ -2,7 +2,7 @@ import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { getRecoveryArtifactModePresentation } from '@/utils/recoveryArtifactModePresentation';
 import { normalizeRecoveryOutcome } from '@/utils/recoveryOutcomePresentation';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export type RecoveryArtifactMode = 'snapshot' | 'local' | 'remote';
@@ -14,7 +14,7 @@ const getRecoveryLinkedResourceLabel = (
   if (!itemResourceId) return '';
   const resource = resourcesById.get(itemResourceId);
   if (!resource) return '';
-  const label = getPreferredResourceDisplayName(resource).trim();
+  const label = getPreferredInfrastructureDisplayName(resource).trim();
   if (!label) return '';
   if (label.toLowerCase() === itemResourceId.toLowerCase()) return '';
   return label;

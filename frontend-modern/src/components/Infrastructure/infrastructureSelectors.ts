@@ -1,9 +1,6 @@
 import type { Resource } from '@/types/resource';
 import { getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
-import {
-  getPreferredInfrastructureDisplayName,
-  getPreferredResourceDisplayName,
-} from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { getInfrastructureSystemIdentitySortLabel } from '@/utils/resourceBadgePresentation';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getCanonicalStatusLabel, STATUS_SORT_ORDER } from '@/utils/status';
@@ -140,7 +137,9 @@ export const matchesSearch = (resource: Resource, term: string): boolean => {
   if (!term) return true;
   const normalizedTerm = term.toLowerCase();
   const candidates: string[] = [
-    getPreferredResourceDisplayName(resource),
+    // Local search box; the operator types raw names. Haystack already includes
+    // raw hostname and ips, so the displayName must be raw too for consistency.
+    getPreferredInfrastructureDisplayName(resource),
     resource.id,
     resource.identity?.hostname ?? '',
     ...(resource.identity?.ips ?? []),

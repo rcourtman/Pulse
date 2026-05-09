@@ -100,7 +100,11 @@ describe('ResourcePicker', () => {
     expect(screen.getByText('TrueNAS')).toBeInTheDocument();
   });
 
-  it('renders governed resources with the safe display label', async () => {
+  it('renders policy-redacted resources with their raw display name (operator-local picker does not redact)', async () => {
+    // The Reporting Panel picker is the operator selecting their own resources.
+    // Per docs/PRIVACY.md, redaction is a transmission-boundary policy and must
+    // not be applied to local /settings UI; the operator needs the raw name to
+    // recognize the resource.
     mockResources = [
       makeResource({
         id: 'vm-2',
@@ -118,8 +122,8 @@ describe('ResourcePicker', () => {
 
     renderPicker();
 
-    expect(await screen.findByText('Production VM')).toBeInTheDocument();
-    expect(screen.queryByText('secret-vm-2')).not.toBeInTheDocument();
+    expect(await screen.findByText('secret-vm-2')).toBeInTheDocument();
+    expect(screen.queryByText('Production VM')).not.toBeInTheDocument();
   });
 
   it('applies type filter buttons', async () => {

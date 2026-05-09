@@ -38,7 +38,7 @@ import {
   getMemoryPercent,
   getDiskPercent,
 } from '@/types/resource';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 type ResourceStoreLike = Pick<ReturnType<typeof getGlobalWebSocketStore>, 'state'>;
 
 export interface UseResourcesReturn {
@@ -204,7 +204,8 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
     if (filter.search && filter.search.trim()) {
       const term = filter.search.toLowerCase().trim();
       result = result.filter((r) => {
-        const name = getPreferredResourceDisplayName(r).toLowerCase();
+        // Match the raw operator-facing name; redaction is a transmission policy.
+        const name = getPreferredInfrastructureDisplayName(r).toLowerCase();
         const id = r.id.toLowerCase();
         return name.includes(term) || id.includes(term);
       });

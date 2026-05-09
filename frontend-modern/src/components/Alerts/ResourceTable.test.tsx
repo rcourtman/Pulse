@@ -205,7 +205,10 @@ describe('ResourceTable', () => {
       expect(screen.getByText('my-vm-100')).toBeInTheDocument();
     });
 
-    it('uses the governed label for policy-aware resources', () => {
+    it('renders policy-redacted resources with their raw display name in operator-local UI', () => {
+      // The alert resource table is local UI for the operator. Per docs/PRIVACY.md
+      // resource-policy redaction is a transmission-boundary policy, not a
+      // local-rendering policy.
       const props = makeProps({
         resources: [
           makeResource({
@@ -222,9 +225,9 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      expect(screen.getByText('Production VM')).toBeInTheDocument();
-      expect(screen.getByLabelText('Edit thresholds for Production VM')).toBeInTheDocument();
-      expect(screen.queryByText('secret-vm-1')).not.toBeInTheDocument();
+      expect(screen.getByText('secret-vm-1')).toBeInTheDocument();
+      expect(screen.getByLabelText('Edit thresholds for secret-vm-1')).toBeInTheDocument();
+      expect(screen.queryByText('Production VM')).not.toBeInTheDocument();
     });
 
     it('renders multiple resources', () => {
