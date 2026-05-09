@@ -591,6 +591,19 @@ call (active maintenance window plus the `IntentionallyOffline`
 flag) so adding new signals later does not multiply round-trips per
 finding.
 
+A cross-slice consequence worth pinning: operator-state-suppressed
+findings (auto-dismissed with `DismissedReason="expected_behavior"`
+and `operator_state_cause` metadata) are also ineligible for
+autonomous investigation, because `Finding.ShouldInvestigate`
+already gates on `f.DismissedReason != ""`. Investigation budget is
+not spent on findings the operator has told Pulse to stay quiet
+about, regardless of autonomy level. This is delivered by the
+existing chain (Add → auto-dismiss → ShouldInvestigate-false)
+rather than a separate runtime check; the contract test in
+`findings_test.go` pins the relationship so a future refactor of
+either branch cannot silently waste investigation budget on
+operator-suppressed findings.
+
 When the projection carries an active maintenance window, the
 new-finding path auto-dismisses with reason `expected_behavior`,
 attributes the suppression on the lifecycle timeline

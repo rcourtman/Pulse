@@ -1817,3 +1817,93 @@ func TestFindingsStore_Add_OperatorStateSuppressionIsOptIn(t *testing.T) {
 		t.Errorf("default-store finding must remain active; got DismissedReason=%q", got.DismissedReason)
 	}
 }
+
+func TestFindingsStore_OperatorStateSuppressedFindingsDoNotTriggerInvestigation(t *testing.T) {
+	// Cross-slice contract: when slice 31/32's operator-state suppression
+	// fires (maintenance window or intentionally offline), the resulting
+	// auto-dismissed finding must also be ineligible for autonomous
+	// investigation. This is currently delivered by the chain
+	// findings.Add → DismissedReason="expected_behavior" → ShouldInvestigate
+	// returns false on the line `f.DismissedReason != ""` check, but the
+	// relationship is implicit. Pinning it here so a future refactor of
+	// either auto-dismiss or ShouldInvestigate cannot silently waste
+	// investigation budget on operator-suppressed findings.
+
+	cases := []struct {
+		name      string
+		signal    ResourceOperatorStateProjection
+		wantCause string
+	}{
+		{
+			name: "intentionally_offline",
+			signal: ResourceOperatorStateProjection{
+				IntentionallyOffline: true,
+			},
+			wantCause: "intentionally_offline",
+		},
+		{
+			name: "maintenance_window",
+			signal: ResourceOperatorStateProjection{
+				MaintenanceWindow: &ResourceOperatorStateMaintenanceWindow{
+					StartAt: time.Now().Add(-time.Hour),
+					EndAt:   time.Now().Add(time.Hour),
+				},
+			},
+			wantCause: "maintenance_window",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewFindingsStore()
+			signal := tc.signal // capture for closure
+			store.SetResourceOperatorStateProvider(
+				ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+					return signal, true
+				}),
+			)
+
+			store.Add(&Finding{
+				ID:         "f-suppressed",
+				ResourceID: "vm:101",
+				Severity:   FindingSeverityWarning,
+				Title:      "CPU saturated",
+			})
+
+			got := store.Get("f-suppressed")
+			if got == nil {
+				t.Fatal("finding must be persisted even when auto-dismissed")
+			}
+			if got.DismissedReason != "expected_behavior" {
+				t.Fatalf("auto-dismiss must run; got DismissedReason=%q", got.DismissedReason)
+			}
+
+			// The cross-slice contract: an auto-dismissed finding must
+			// not be investigated. The autonomy level is irrelevant
+			// here — even at "full" autonomy, investigation must skip
+			// operator-suppressed findings because the operator has
+			// already told Pulse to stay quiet.
+			for _, autonomy := range []string{"approval", "assisted", "full"} {
+				if got.ShouldInvestigate(autonomy) {
+					t.Errorf("ShouldInvestigate(%q) must be false on operator-suppressed finding (cause=%s)", autonomy, tc.wantCause)
+				}
+			}
+
+			// Sanity-check the lifecycle attribution still names the cause
+			// — protects against the auto-dismiss branch silently changing
+			// to a generic 'dismissed' that other tooling might
+			// mis-categorize as operator-driven rather than operator-state
+			// driven.
+			foundCause := false
+			for _, ev := range got.Lifecycle {
+				if ev.Type == "dismissed" && ev.Metadata["operator_state_cause"] == tc.wantCause {
+					foundCause = true
+					break
+				}
+			}
+			if !foundCause {
+				t.Errorf("lifecycle must carry operator_state_cause=%s metadata", tc.wantCause)
+			}
+		})
+	}
+}
