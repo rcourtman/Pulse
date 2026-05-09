@@ -1343,6 +1343,18 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+The TS client `frontend-modern/src/api/resourceOperatorState.ts`
+mirrors the canonical Go shape from
+`internal/unifiedresources/resource_operator_state.go` and exposes
+`getResourceOperatorState`, `setResourceOperatorState`, and
+`clearResourceOperatorState` against the
+`/api/resources/{id}/operator-state` endpoint. The GET path
+normalizes the server's `404 operator_state_not_set` response into
+`null` so callers see "no state recorded" as a clean default rather
+than a thrown error; non-404 errors propagate. The PUT path
+percent-encodes the canonical resource id segment so colon-bearing
+ids round-trip safely through URL routing.
+
 The router wires the operator-state adapter into the findings runtime
 at startup: `internal/api/router.go` calls
 `patrol.GetFindings().SetResourceOperatorStateProvider(...)` with a

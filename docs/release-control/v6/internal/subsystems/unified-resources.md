@@ -579,9 +579,20 @@ and lower-cases the criticality value before persistence. The
 `ClearResourceOperatorState`; both the SQLite (table
 `resource_operator_state` keyed on `canonical_id`) and Memory stores
 implement the same upsert + idempotent-clear contract. The
-`/api/resources/{id}/operator-state` API surface (GET / PUT / DELETE)
-in `internal/api/resources_operator_state.go` is the operator-facing
-consumer of this contract; the URL canonical_id always wins over the
+operator-facing surface for this contract is
+`ResourceOperatorStateSection.tsx` on the resource detail drawer
+overview tab, which routes through the canonical TS client at
+`frontend-modern/src/api/resourceOperatorState.ts` to
+`/api/resources/{id}/operator-state`. The drawer integration is
+read-only on maintenance windows (the section badges an active
+window when `now` falls within it but does not let the operator
+schedule one — that lives in a follow-up slice). The two boolean
+toggles (intentionally offline, never auto-remediate) are the
+operator-facing primitives this slice surfaces.
+
+The `/api/resources/{id}/operator-state` API surface (GET / PUT /
+DELETE) in `internal/api/resources_operator_state.go` is the
+operator-facing consumer of this contract; the URL canonical_id always wins over the
 body, server-side `setAt` / `setBy` populate from request time and
 authenticated identity, and validation rejections surface a stable
 `operator_state_invalid` error code. The action broker

@@ -1247,6 +1247,15 @@ prompt explain the same operator-facing priority.
 
 ## Current State
 
+`ResourceOperatorStateSection.tsx` on the resource detail drawer
+overview tab uses `createNonSuspendingQuery` to fetch
+`/api/resources/{id}/operator-state` so the drawer's parent
+Suspense boundary does not flicker the page-level "Loading view…"
+fallback while operator-set state is in flight. New self-fetching
+sections inside the drawer must follow the same pattern (or wrap in
+their own local Suspense) rather than relying on `createResource`,
+which propagates suspension to the closest ancestor.
+
 The Patrol page header copy lives in a single canonical helper at
 `frontend-modern/src/utils/patrolPagePresentation.ts`. The page-title
 tooltip on `PatrolIntelligenceHeader.tsx` must read from

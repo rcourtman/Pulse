@@ -100,6 +100,16 @@ vi.mock('@/api/actionAudit', () => ({
   },
 }));
 
+// Stub the operator-state client so the drawer's
+// ResourceOperatorStateSection does not fan out a real network call
+// during this test. Returns no-state (null) by default — the resource
+// has no operator overrides, which is the default posture.
+vi.mock('@/api/resourceOperatorState', () => ({
+  getResourceOperatorState: vi.fn().mockResolvedValue(null),
+  setResourceOperatorState: vi.fn(),
+  clearResourceOperatorState: vi.fn(),
+}));
+
 class ResizeObserverMock {
   constructor(_callback: ResizeObserverCallback) {}
   observe() {}

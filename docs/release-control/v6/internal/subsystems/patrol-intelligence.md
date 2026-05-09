@@ -1175,6 +1175,25 @@ and Explain entry points. Investigation evidence and rollback plans
 are intentionally omitted from the clipboard shape — those are
 conversation context for the Assistant flow, not "share this
 finding" context for chat or tickets.
+The resource detail drawer now exposes the operator-set state via the
+`ResourceOperatorStateSection` component on the Overview tab. The
+section sits alongside `ResourceActionHistory` so the "what overrides
+has the operator set" and "what actions has Pulse taken" stories read
+together, and routes through the canonical
+`@/api/resourceOperatorState` TS client with no parallel fetch path.
+The two boolean toggles (`IntentionallyOffline`,
+`NeverAutoRemediate`) are dirty-tracked locally with explicit
+Save/Discard actions; flipping `NeverAutoRemediate` true requires an
+explicit confirmation prompt because it's a safety override that
+locks the resource against all automated remediation, while flipping
+it false (releasing the lock) is permissive. Maintenance windows are
+displayed read-only this slice — when an active window covers `now`,
+the section badges it; scheduling lives in a separate slice that
+owns the date-picker UX. The section uses `createNonSuspendingQuery`
+rather than `createResource` so the drawer's parent Suspense
+boundary does not flicker the page-level fallback while operator
+state is in flight.
+
 The findings store also consumes per-resource operator-set state via
 the narrow `ResourceOperatorStateProvider` interface installed by
 `SetResourceOperatorStateProvider`. The API layer wires an adapter

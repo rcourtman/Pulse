@@ -28,6 +28,7 @@ import { ResourceCorrelationSummary } from './ResourceCorrelationSummary';
 import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourceActionHistory } from './ResourceActionHistory';
+import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -559,6 +560,15 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             resolveResourceLabel={drawer.resolveResourceLabel}
             showLastSeen
           />
+        </Show>
+
+        {/* Operator-set per-resource state (intentionally offline,
+            never auto-remediate) sits next to the action history so
+            the "what overrides has the operator set" and "what actions
+            has Pulse taken" stories read together. The section is
+            self-fetching keyed on the canonical resource id. */}
+        <Show when={resource.id}>
+          <ResourceOperatorStateSection resourceId={resource.id} />
         </Show>
 
         <Show when={drawer.actionAuditAvailable()}>
