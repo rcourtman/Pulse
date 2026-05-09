@@ -154,7 +154,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
               disabled={state.isTesting() || props.togglePending || props.deletePending}
               class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {state.isTesting() ? 'Testing...' : 'Test Connection'}
+              {state.isTesting() ? 'Testing…' : 'Test connection'}
             </button>
           </Show>
         </div>
@@ -213,7 +213,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
               disabled={props.togglePending || props.deletePending}
               class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {state.isEditingExistingNode() ? 'Update' : 'Add'} Node
+              {state.isEditingExistingNode() ? 'Save changes' : 'Add node'}
             </button>
           </Show>
         </div>

@@ -877,7 +877,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const row = editingRow();
     if (row?.isCluster) {
       const contact = connection.name || connection.address || 'contact node';
-      return `${label} cluster · Editing via contact node ${contact}${connection.address ? ` (${connection.address})` : ''}${methods}`;
+      // Drop the 'Editing via' phrasing that read awkwardly; just identify
+      // the contact node and address. The dialog body and the row the user
+      // came from already make the editing context clear.
+      return `${label} cluster · ${contact}${connection.address ? ` (${connection.address})` : ''}${methods}`;
     }
     return `${label}${connection.address ? ` · ${connection.address}` : ''}${methods}`;
   });
