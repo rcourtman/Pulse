@@ -50,6 +50,7 @@ export function AlertGroupingSection(props: AlertGroupingSectionProps) {
         />
       }
       class="space-y-4"
+      noPadding={!props.grouping.enabled}
     >
       <Show when={props.grouping.enabled}>
         <div class="space-y-4">

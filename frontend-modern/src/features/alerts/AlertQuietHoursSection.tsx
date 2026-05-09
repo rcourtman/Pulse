@@ -57,6 +57,7 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
         />
       }
       class="space-y-4"
+      noPadding={!props.quietHours.enabled}
     >
       <Show when={props.quietHours.enabled}>
         <div class="space-y-4">

@@ -46,6 +46,7 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
         />
       }
       class="space-y-4"
+      noPadding={!props.escalation.enabled}
     >
       <Show when={props.escalation.enabled}>
         <div class="space-y-3">

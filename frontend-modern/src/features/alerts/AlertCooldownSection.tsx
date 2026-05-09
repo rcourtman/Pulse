@@ -47,6 +47,7 @@ export function AlertCooldownSection(props: AlertCooldownSectionProps) {
         />
       }
       class="space-y-4"
+      noPadding={!props.cooldown.enabled}
     >
       <Show when={props.cooldown.enabled}>
         <div class="space-y-4">
