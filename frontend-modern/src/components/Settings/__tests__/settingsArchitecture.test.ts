@@ -465,7 +465,10 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('renderAgentConnectionDetails');
     expect(infrastructureWorkspaceSource).not.toContain('InfrastructureOperationsController');
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
-    expect(infrastructureSourceManagerSource).toContain('Infrastructure systems');
+    // Card title shifted from 'Infrastructure systems' (which duplicated
+    // the page header) to 'Connected systems' which describes the card
+    // content distinctly.
+    expect(infrastructureSourceManagerSource).toContain('Connected systems');
     // Discovery actions are now icon-only ghost buttons; the human copy
     // still lives in their title and aria-label attributes.
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
@@ -480,9 +483,8 @@ describe('settings architecture guardrails', () => {
       'reuses your current monitored-system allowance',
     );
     expect(monitoredSystemImpactPreviewSource).not.toContain('frees monitored-system allowance');
-    expect(infrastructureSourceManagerSource).toContain(
-      "Add, discover, and verify the platform APIs plus Pulse Agent telemetry that make up Pulse's infrastructure model.",
-    );
+    // Card-level description was dropped; the page-level subtitle from
+    // SETTINGS_HEADER_META carries the same intent without duplication.
     expect(infrastructureSourceManagerSource).toContain('onReviewDiscoveredSource');
     expect(infrastructureSourceManagerSource).toContain('Discovered');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureSourceManagerProducts');

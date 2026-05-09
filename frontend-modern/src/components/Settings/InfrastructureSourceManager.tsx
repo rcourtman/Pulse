@@ -650,8 +650,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   return (
     <div ref={layoutContainerRef} class="min-w-0">
       <SettingsPanel
-        title="Infrastructure systems"
-        description="Add, discover, and verify the platform APIs plus Pulse Agent telemetry that make up Pulse's infrastructure model."
+        title="Connected systems"
         noPadding
       >
         {headerActions()}

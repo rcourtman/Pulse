@@ -281,10 +281,11 @@ describe('InfrastructureWorkspace', () => {
   it('renders the source manager landing without empty platform sections', async () => {
     renderWorkspace();
 
-    await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
-    expect(
-      screen.getByText(/Add, discover, and verify the platform APIs plus Pulse Agent telemetry/i),
-    ).toBeInTheDocument();
+    // Card title shifted from 'Infrastructure systems' (which duplicated
+    // the page header) to 'Connected systems' which describes the card's
+    // contents distinctly. Card-level description was dropped because it
+    // duplicated the page-level subtitle.
+    await waitFor(() => expect(screen.getByText('Connected systems')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
@@ -330,7 +331,7 @@ describe('InfrastructureWorkspace', () => {
   it('routes first-run actions from the source manager guidance', async () => {
     renderWorkspace();
 
-    await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Connected systems')).toBeInTheDocument());
 
     // Row-level 'Install agent' replaced the global 'Install agents'
     // recommendation button; same routing target.
@@ -989,7 +990,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByRole('button', { name: /^Manage$/i })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
-    expect(screen.getByText('Infrastructure systems')).toBeInTheDocument();
+    expect(screen.getByText('Connected systems')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
   });
 });
