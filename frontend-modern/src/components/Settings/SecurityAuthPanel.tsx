@@ -58,7 +58,6 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
   return (
     <SettingsPanel
       title="Authentication"
-      description="Manage password-based authentication, login visibility, and credential rotation."
       noPadding={showAuthenticationControls()}
       bodyClass={showAuthenticationControls() ? 'divide-y divide-border' : 'space-y-6'}
     >

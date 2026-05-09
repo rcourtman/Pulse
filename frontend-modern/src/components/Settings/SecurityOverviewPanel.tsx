@@ -85,7 +85,6 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
   return (
     <SettingsPanel
       title="Security Overview"
-      description="Review your security posture, authentication boundary, and the next hardening steps for this Pulse instance."
       bodyClass="space-y-6"
     >
       <Show when={props.securityStatusLoading()}>

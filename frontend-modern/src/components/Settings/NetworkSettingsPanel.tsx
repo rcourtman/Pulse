@@ -7,7 +7,6 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
   return (
     <SettingsPanel
       title="Network"
-      description="Configure the public URL, CORS, embedding, and webhook network boundaries."
       noPadding
     >
       <NetworkBoundarySettingsSection {...props} />

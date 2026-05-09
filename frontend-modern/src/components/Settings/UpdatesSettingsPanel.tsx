@@ -90,7 +90,6 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
   return (
     <SettingsPanel
       title={UPDATES_PANEL_COPY.title}
-      description={UPDATES_PANEL_COPY.description}
       noPadding
       bodyClass="divide-y divide-border"
     >
