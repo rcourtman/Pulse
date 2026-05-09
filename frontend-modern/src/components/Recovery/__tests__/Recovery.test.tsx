@@ -335,7 +335,7 @@ describe('Recovery', () => {
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
-    expect(within(inventoryTable).getByText('Protection State')).toBeInTheDocument();
+    expect(within(inventoryTable).getByText('Status')).toBeInTheDocument();
     expect(within(inventoryTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
     expect(within(inventoryTable).queryByText('PLATFORM')).not.toBeInTheDocument();
     expect(inventoryBody?.className).toContain('divide-y');

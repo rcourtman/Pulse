@@ -382,7 +382,7 @@ export const RecoveryProtectedInventorySection: Component<
                     ['type', getRecoveryArtifactColumnLabel('type', 'Item Type')],
                     ['platform', getRecoveryArtifactColumnLabel('platform', 'Platform')],
                     ['lastBackup', 'Latest Point'],
-                    ['outcome', 'Protection State'],
+                    ['outcome', 'Status'],
                   ] as const
                 ).map(([column, label]) => (
                   <TableHead
