@@ -917,6 +917,20 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+The `/api/resources/{id}/operator-state` GET / PUT / DELETE handlers in
+`internal/api/resources_operator_state.go` are the canonical operator
+surface for setting per-resource intent (intentionally offline, never
+auto-remediate, maintenance window, criticality hint). The route lives
+on the same monitoring router (`router_routes_monitoring.go`) as the
+rest of `/api/resources/{id}/...`; method-keyed scope dispatch means GET
+runs under `monitoring:read` while PUT and DELETE require
+`monitoring:write` because they modulate Patrol's behavior on findings
+against the resource. The agent runtime must surface the same
+operator-set state across restarts — persistence is in the
+`resource_operator_state` SQLite table managed by the unified-resources
+store from slice 29 — so a maintenance window or never-auto-remediate
+flag set before a process restart is honored after the agent reloads.
+
 Patrol-finding to unified-finding mirroring in `internal/api/router.go`
 also keeps the will_fix_later wake-up deadline (`Finding.RemindAt`)
 intact across restarts. Both the live wire-up callback and the

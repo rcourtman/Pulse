@@ -578,10 +578,15 @@ and lower-cases the criticality value before persistence. The
 `GetResourceOperatorState`, `SetResourceOperatorState`, and
 `ClearResourceOperatorState`; both the SQLite (table
 `resource_operator_state` keyed on `canonical_id`) and Memory stores
-implement the same upsert + idempotent-clear contract. This slice is
-the foundational shape only — the API surface (GET/PUT/DELETE) and the
-finding-suppression / action-broker integrations land in subsequent
-slices that consume this contract.
+implement the same upsert + idempotent-clear contract. The
+`/api/resources/{id}/operator-state` API surface (GET / PUT / DELETE)
+in `internal/api/resources_operator_state.go` is the operator-facing
+consumer of this contract; the URL canonical_id always wins over the
+body, server-side `setAt` / `setBy` populate from request time and
+authenticated identity, and validation rejections surface a stable
+`operator_state_invalid` error code. Finding-suppression and
+action-broker integrations land in subsequent slices that consume the
+same `ResourceOperatorState` shape.
 
 `actions.go` now owns the canonical action preflight and audit-normalization
 contract. Action plans must carry dry-run availability, safety checks, and

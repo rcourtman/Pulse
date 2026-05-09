@@ -13232,3 +13232,38 @@ func assertJSONSnapshot(t *testing.T, got []byte, want string) {
 		t.Fatalf("json snapshot mismatch\nwant: %s\ngot:  %s", wantCompact.String(), gotCompact.String())
 	}
 }
+
+// TestContract_ResourceOperatorStateUrlCanonicalIDWinsOverBody pins the
+// security-relevant decision that the URL path's canonical_id always
+// wins over any body-supplied value on PUT
+// /api/resources/{id}/operator-state. Without this rule a request
+// authorized to write at /vm:101 could retarget the write at /vm:102
+// through body manipulation, defeating per-resource scoping.
+func TestContract_ResourceOperatorStateUrlCanonicalIDWinsOverBody(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+
+	body := []byte(`{"canonicalId":"vm:999","intentionallyOffline":true}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/resources/vm:101/operator-state", bytes.NewReader(body))
+	h.HandleResourceOperatorState(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var persisted resourceOperatorStateAPI
+	if err := json.Unmarshal(rec.Body.Bytes(), &persisted); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	if persisted.CanonicalID != "vm:101" {
+		t.Errorf("URL canonical_id must override body; got %q (security regression)", persisted.CanonicalID)
+	}
+	// And the resource named in the body must NOT have a state row,
+	// confirming the write didn't bleed across resource scope.
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/api/resources/vm:999/operator-state", nil)
+	h.HandleResourceOperatorState(rec2, req2)
+	if rec2.Code != http.StatusNotFound {
+		t.Errorf("body-supplied canonical_id must not have been persisted; GET vm:999 returned %d", rec2.Code)
+	}
+}

@@ -947,6 +947,17 @@ bypass the API fail-closed execution gate.
 
 ## Current State
 
+The `resource_operator_state` SQLite table introduced by the
+unified-resources store keeps operator-set per-resource intent
+(intentionally offline, never auto-remediate, maintenance window,
+criticality) durably alongside the rest of the unified-resource
+durable state. The `/api/resources/{id}/operator-state` API surface in
+`internal/api/resources_operator_state.go` reads and writes that table
+through the canonical store, so storage / recovery flows that rehydrate
+the unified-resources store also rehydrate operator-set state — a
+maintenance window persists across restarts the same way action audits
+and resource overrides do.
+
 The patrol findings-recovery sync in `internal/api/router.go` also keeps
 the will_fix_later wake-up deadline alongside the rest of the finding's
 durable state when re-hydrating findings from disk into the unified

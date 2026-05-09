@@ -1343,6 +1343,27 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+`/api/resources/{id}/operator-state` is the canonical surface for
+operator-set per-resource intent (intentionally offline, never
+auto-remediate, maintenance window, criticality hint). GET requires
+`monitoring:read` and returns `404` with `{ "error":
+"operator_state_not_set" }` when no entry exists; PUT and DELETE
+require `monitoring:write` because they modulate Patrol's behavior on
+findings against the resource. PUT replaces the entire record (no
+per-field merge); the `canonicalId` taken from the URL path
+authoritatively wins over any value in the request body so a request
+addressed at `/vm:101` cannot retarget the write at a different
+resource through body manipulation. Server populates `setAt` and
+`setBy` from the request time and authenticated identity, ignoring any
+client values to keep the audit attribution honest. Validation
+violations surface as `400` with `{ "error":
+"operator_state_invalid", "message": "..." }` so the frontend can
+branch on the stable error code rather than string-matching the
+message. DELETE is idempotent (`204` whether or not an entry was
+present). The handler dispatches off `r.Method` rather than mounting
+three sibling routes so the URL surface stays a single resource path
+matching the rest of `/api/resources/{id}/...`.
+
 Deploy-job monitored-system volume denials are retired. API routes may still
 accept historical payloads that mention old license-slot terminology for
 migration or diagnostics, but runtime deploy responses must not emit
