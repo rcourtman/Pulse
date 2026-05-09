@@ -54,10 +54,24 @@ export interface ActionAuditApprovalRecord {
   reason?: string;
 }
 
+// ActionVerificationResult mirrors the Go type that records the outcome of
+// the broker's post-dispatch read-after-write check. It is best-effort:
+// when no verification command is derivable for the action class, ran is
+// false and the rest of the fields are empty rather than fabricated.
+export interface ActionVerificationResult {
+  ran: boolean;
+  command?: string;
+  output?: string;
+  success: boolean;
+  ranAt?: string;
+  note?: string;
+}
+
 export interface ActionAuditExecutionResult {
   success: boolean;
   output?: string;
   errorMessage?: string;
+  verification?: ActionVerificationResult;
 }
 
 export interface ActionAuditRecord {
