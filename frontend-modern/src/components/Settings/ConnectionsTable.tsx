@@ -11,10 +11,7 @@ import {
 import type { Connection } from '@/api/connections';
 import type { InfrastructureSystemRow } from './connectionsTableModel';
 import type { ConnectionRowActions } from './useConnectionRowActions';
-import {
-  getInfrastructureEmptyStateDetail,
-  getInfrastructureEmptyStateSummary,
-} from '@/utils/infrastructureOnboardingPresentation';
+import { getInfrastructureEmptyStateSummary } from '@/utils/infrastructureOnboardingPresentation';
 
 export interface ConnectionsTableHeaderAction {
   label: string;
@@ -84,11 +81,28 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
       <Show
         when={props.rows().length > 0}
         fallback={
-          <div class="space-y-2 px-4 py-10 text-center">
-            <div class="text-sm font-medium text-base-content">Start monitoring infrastructure</div>
-            <div class="mx-auto max-w-3xl text-sm text-muted">
-              {getInfrastructureEmptyStateDetail()}
+          <div class="space-y-3 px-4 py-10 text-center">
+            <div class="text-base font-semibold text-base-content">
+              Start monitoring infrastructure
             </div>
+            <div class="mx-auto max-w-3xl text-sm text-muted">
+              Add your first server, cluster, or appliance to begin. Supported sources include
+              Proxmox VE, TrueNAS SCALE, Unraid, network endpoints, and any host running Pulse
+              Agent.
+            </div>
+            <Show when={(props.headerActions ?? []).find((action) => action.tone === 'primary')}>
+              {(primary) => (
+                <div class="pt-2">
+                  <button
+                    type="button"
+                    onClick={primary().onSelect}
+                    class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    {primary().label}
+                  </button>
+                </div>
+              )}
+            </Show>
           </div>
         }
       >

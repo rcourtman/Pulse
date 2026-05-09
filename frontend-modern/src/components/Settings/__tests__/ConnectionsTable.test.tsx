@@ -70,10 +70,28 @@ describe('ConnectionsTable', () => {
     render(() => <ConnectionsTable rows={() => []} />);
 
     expect(screen.getByText('Start monitoring infrastructure')).toBeInTheDocument();
+    // Empty-state copy now leads with the action ('Add your first server,
+    // cluster, or appliance to begin') and lists a curated short set of
+    // supported sources rather than the full enumeration.
     expect(
-      screen.getByText(/Supported source types include VMware vCenter, TrueNAS SCALE/i),
+      screen.getByText(/Add your first server, cluster, or appliance to begin/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('surfaces the primary action inline in the empty state when one is provided', () => {
+    const onSelect = vi.fn();
+    render(() => (
+      <ConnectionsTable
+        rows={() => []}
+        headerActions={[{ label: 'Add infrastructure', tone: 'primary', onSelect }]}
+      />
+    ));
+
+    const button = screen.getAllByRole('button', { name: 'Add infrastructure' });
+    expect(button.length).toBeGreaterThan(0);
+    fireEvent.click(button[button.length - 1]);
+    expect(onSelect).toHaveBeenCalled();
   });
 
   it('renders one row per monitored system with coverage and status labels', () => {
@@ -112,7 +130,12 @@ describe('ConnectionsTable', () => {
       />
     ));
 
-    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
+    // Empty state now also surfaces the primary action inline so the
+    // button appears in both the header and the empty-state body. Click
+    // either; both wire to the same callback.
+    const buttons = screen.getAllByRole('button', { name: /Add connection/i });
+    expect(buttons.length).toBeGreaterThan(0);
+    fireEvent.click(buttons[0]);
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
