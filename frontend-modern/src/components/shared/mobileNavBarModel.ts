@@ -87,6 +87,20 @@ export function getMobileNavAlertBadgeCounts(
   };
 }
 
+export function getMobileNavTabAriaLabel(tab: MobileNavBarUtilityTab): string {
+  const badges = getMobileNavAlertBadgeCounts(tab);
+  if (!badges) return tab.label;
+  const parts: string[] = [];
+  if (badges.critical > 0) {
+    parts.push(`${badges.critical} critical`);
+  }
+  if (badges.warning > 0) {
+    parts.push(`${badges.warning} warning`);
+  }
+  if (parts.length === 0) return tab.label;
+  return `${tab.label}: ${parts.join(', ')}`;
+}
+
 export function getMobileNavTabButtonClass(options: {
   active: boolean;
   enabled?: boolean;

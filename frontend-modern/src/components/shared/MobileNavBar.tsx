@@ -1,6 +1,10 @@
 import { For, Show } from 'solid-js';
 import { type MobileNavBarProps, useMobileNavBarState } from './useMobileNavBarState';
-import { getMobileNavAlertBadgeCounts, getMobileNavTabButtonClass } from './mobileNavBarModel';
+import {
+  getMobileNavAlertBadgeCounts,
+  getMobileNavTabAriaLabel,
+  getMobileNavTabButtonClass,
+} from './mobileNavBarModel';
 
 export type {
   MobileNavBarPlatformTab,
@@ -67,6 +71,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                     data-tab-id={tab.id}
                     onClick={() => mobileNav.handleUtilityClick(tab)}
                     title={tab.tooltip}
+                    aria-label={getMobileNavTabAriaLabel(tab)}
                     class={getMobileNavTabButtonClass({
                       active: props.activeTab() === tab.id,
                     })}
@@ -77,7 +82,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                       </span>
                       <Show when={alertBadges()}>
                         {(badges) => (
-                          <span class="absolute -right-2 -top-1 flex items-center gap-1">
+                          <span aria-hidden="true" class="absolute -right-2 -top-1 flex items-center gap-1">
                             <Show when={badges().critical > 0}>
                               <span class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
                                 {badges().critical}
