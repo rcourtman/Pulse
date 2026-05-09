@@ -43,7 +43,7 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
       const hasNote = Boolean(note && note.trim().length > 0);
 
       const originalDisplayName = getAlertResourceDisplayLabel(node);
-      const friendlyName = getFriendlyAlertNodeName(originalDisplayName, node.policy, clusterName);
+      const friendlyName = getFriendlyAlertNodeName(originalDisplayName, clusterName);
       const rawName = node.name;
       const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
       const guestUrlValue = typeof data?.guestURL === 'string' ? data.guestURL.trim() : '';

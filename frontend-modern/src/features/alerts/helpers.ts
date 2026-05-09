@@ -2,7 +2,7 @@ import type { EmailConfig } from '@/api/notifications';
 import type { Resource, ResourceType } from '@/types/resource';
 import type { RawOverrideConfig, HysteresisThreshold } from '@/types/alerts';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
   MAX_ALERTS_MIN,
   MAX_ALERTS_MAX,
@@ -336,7 +336,12 @@ export const guessNumericId = (value: string): number => {
 
 export const getAlertResourceDisplayLabel = (resource: Resource, fallback?: string): string =>
   (() => {
-    const preferred = getPreferredResourceDisplayName(resource);
+    // Alert threshold tables, override pickers, and incident panels are operator-facing
+    // local UI. Per docs/PRIVACY.md, resource-policy redaction applies before non-local
+    // model requests leave the instance — not to the operator's own browser. Use the
+    // raw infrastructure display name so a Tower-policied row reads "Tower" here, the
+    // same as on /infrastructure and /storage.
+    const preferred = getPreferredInfrastructureDisplayName(resource);
     if (preferred && preferred !== resource.id) {
       return preferred;
     }

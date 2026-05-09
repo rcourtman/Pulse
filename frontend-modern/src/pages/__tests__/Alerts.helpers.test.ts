@@ -173,7 +173,12 @@ describe('normalizeMetricDelayMap', () => {
 });
 
 describe('alert resource display labels', () => {
-  it('uses the governed aiSafeSummary when policy requires redaction', () => {
+  it('returns the raw display name in operator-facing alert UI even when policy requires redaction', () => {
+    // Alert threshold tables, override pickers, and incident panels are local UI for
+    // the operator. Resource-policy redaction is a transmission-boundary policy
+    // (docs/PRIVACY.md): it gates non-local model requests, not the operator's own
+    // browser. The same row that reads "Secret Host" on /infrastructure must read
+    // "Secret Host" here, not "redacted by policy".
     const resource = {
       id: 'resource-1',
       name: 'secret-host',
@@ -189,7 +194,7 @@ describe('alert resource display labels', () => {
       aiSafeSummary: 'redacted by policy',
     } as unknown as Resource;
 
-    expect(getAlertResourceDisplayLabel(resource)).toBe('redacted by policy');
+    expect(getAlertResourceDisplayLabel(resource)).toBe('Secret Host');
   });
 
   it('falls back to the provided alert-specific fallback when needed', () => {

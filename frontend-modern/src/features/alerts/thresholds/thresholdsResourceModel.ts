@@ -1,7 +1,6 @@
 import { unwrap } from 'solid-js/store';
 import { getPreferredResourceHostname } from '@/utils/resourceIdentity';
 
-import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { Resource } from '@/types/resource';
 import {
   getAgentDiscoveryResourceId,
@@ -149,9 +148,8 @@ export const getFriendlyNodeName = (value: string, clusterName?: string): string
 
 export const getFriendlyAlertNodeName = (
   value: string,
-  policy?: Resource['policy'],
   clusterName?: string,
-): string => (requiresGovernedResourceDisplay(policy) ? value : getFriendlyNodeName(value, clusterName));
+): string => getFriendlyNodeName(value, clusterName);
 
 export function buildNodeHeaderMeta(node: Resource) {
   const data = platformData(node);
@@ -160,7 +158,7 @@ export function buildNodeHeaderMeta(node: Resource) {
     (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
 
   const originalDisplayName = getAlertResourceDisplayLabel(node);
-  const friendlyName = getFriendlyAlertNodeName(originalDisplayName, node.policy, clusterName);
+  const friendlyName = getFriendlyAlertNodeName(originalDisplayName, clusterName);
 
   const guestUrlValue = typeof data?.guestURL === 'string' ? data.guestURL.trim() : '';
   const hostValue = typeof data?.host === 'string' ? data.host.trim() : '';

@@ -345,7 +345,11 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(screen.getByTestId('resource-name-h1')).toHaveTextContent('Host 1');
   });
 
-  it('renders governed systems with the policy-aware display label', async () => {
+  it('renders policy-redacted systems with their raw display name (operator-local UI does not redact)', async () => {
+    // Resource-policy redaction is a transmission-boundary policy (docs/PRIVACY.md):
+    // it gates what leaves the instance toward non-local model providers, not the
+    // operator's own browser. The Threshold table must show the same name the
+    // operator sees on /infrastructure.
     setPathname('/alerts/thresholds/systems');
     const host = {
       id: 'h2',
@@ -367,8 +371,8 @@ describe('ThresholdsTable Resource Rendering', () => {
       expect(screen.getByTestId('resource-table-Systems')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-name-h2')).toHaveTextContent('redacted by policy');
-    expect(screen.getByTestId('resource-name-h2')).not.toHaveTextContent('secret-host');
+    expect(screen.getByTestId('resource-name-h2')).toHaveTextContent('Secret Host');
+    expect(screen.getByTestId('resource-name-h2')).not.toHaveTextContent('redacted by policy');
   });
 
   it('renders TrueNAS appliances on the canonical systems tab with their disk surface', async () => {
@@ -431,7 +435,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(screen.getByTestId('resource-name-guest1')).toHaveTextContent('vm1');
   });
 
-  it('renders governed guests with the policy-aware display label', async () => {
+  it('renders policy-redacted guests with their raw display name in operator-local UI', async () => {
     setPathname('/alerts/thresholds/infrastructure');
     const guest = {
       id: 'guest2',
@@ -453,11 +457,11 @@ describe('ThresholdsTable Resource Rendering', () => {
       expect(screen.getByTestId('section-VMs & Containers')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-name-guest2')).toHaveTextContent('redacted by policy');
-    expect(screen.getByTestId('resource-name-guest2')).not.toHaveTextContent('secret-vm-2');
+    expect(screen.getByTestId('resource-name-guest2')).toHaveTextContent('Secret VM 2');
+    expect(screen.getByTestId('resource-name-guest2')).not.toHaveTextContent('redacted by policy');
   });
 
-  it('renders governed guest groups with the policy-aware node header label', async () => {
+  it('renders policy-redacted guest-group node headers with the raw display name', async () => {
     setPathname('/alerts/thresholds/infrastructure');
     const node = {
       id: 'node-governed',
@@ -489,11 +493,15 @@ describe('ThresholdsTable Resource Rendering', () => {
       expect(screen.getByTestId('group-header-0')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('group-header-0')).toHaveTextContent('redacted by policy');
-    expect(screen.getByTestId('group-header-0')).not.toHaveTextContent('secret-node');
+    // Group headers run the same friendly-node normalizer as non-policied nodes
+    // (see "PVE Node 1" -> "PVE" earlier), so "Secret Node" friendly-shortens to
+    // "Secret". The point of this test is that the redacted aiSafeSummary does
+    // NOT replace the node header in operator-local UI.
+    expect(screen.getByTestId('group-header-0')).toHaveTextContent('Secret');
+    expect(screen.getByTestId('group-header-0')).not.toHaveTextContent('redacted by policy');
   });
 
-  it('renders governed storage with the policy-aware display label', async () => {
+  it('renders policy-redacted storage with its raw display name in operator-local UI', async () => {
     setPathname('/alerts/thresholds/infrastructure');
     const storage = {
       id: 'storage1',
@@ -514,11 +522,11 @@ describe('ThresholdsTable Resource Rendering', () => {
       expect(screen.getByTestId('resource-name-storage1')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-name-storage1')).toHaveTextContent('redacted by policy');
-    expect(screen.getByTestId('resource-name-storage1')).not.toHaveTextContent('secret-datastore');
+    expect(screen.getByTestId('resource-name-storage1')).toHaveTextContent('Secret Datastore');
+    expect(screen.getByTestId('resource-name-storage1')).not.toHaveTextContent('redacted by policy');
   });
 
-  it('renders governed docker containers with the policy-aware display label', async () => {
+  it('renders policy-redacted docker containers with their raw display name in operator-local UI', async () => {
     setPathname('/alerts/thresholds/containers');
     const dockerHost = {
       id: 'docker-host-1',
@@ -564,10 +572,10 @@ describe('ThresholdsTable Resource Rendering', () => {
 
     expect(
       screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
-    ).toHaveTextContent('redacted by policy');
+    ).toHaveTextContent('Secret Nginx');
     expect(
       screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
-    ).not.toHaveTextContent('secret-nginx');
+    ).not.toHaveTextContent('redacted by policy');
   });
 
   it('renders TrueNAS app containers under canonical container runtimes without Docker-only controls', async () => {
@@ -616,7 +624,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(screen.queryByText('Swarm service alerts')).not.toBeInTheDocument();
   });
 
-  it('renders governed agent disk node labels with the policy-aware display label', async () => {
+  it('renders policy-redacted agent disk node labels with the raw display name in operator-local UI', async () => {
     setPathname('/alerts/thresholds/systems');
     const host = {
       id: 'agent-governed',
@@ -645,11 +653,11 @@ describe('ThresholdsTable Resource Rendering', () => {
     });
 
     expect(screen.getByTestId('resource-node-agent:agent-governed/disk:var-lib')).toHaveTextContent(
-      'redacted by policy',
+      'Secret Host',
     );
     expect(
       screen.getByTestId('resource-node-agent:agent-governed/disk:var-lib'),
-    ).not.toHaveTextContent('secret-host');
+    ).not.toHaveTextContent('redacted by policy');
   });
 });
 

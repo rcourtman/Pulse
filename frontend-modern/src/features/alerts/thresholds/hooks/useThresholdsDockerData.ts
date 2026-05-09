@@ -32,7 +32,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
     const hosts: TableResource[] = (props.containerRuntimes ?? []).map((host) => {
       const idCandidates = dockerHostOverrideIdCandidates(host);
       const originalName = getAlertResourceDisplayLabel(host);
-      const friendlyName = getFriendlyAlertNodeName(originalName, host.policy);
+      const friendlyName = getFriendlyAlertNodeName(originalName);
       const override = findOverrideByCandidates(overridesMap, idCandidates);
       const resourceId = override?.id || idCandidates[0] || host.id;
       const disableConnectivity = override?.disableConnectivity || false;
@@ -113,7 +113,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
       const dockerHostIds = dockerHostOverrideIdCandidates(host);
       const dockerHostIdForActions = dockerHostIds[0] || host.id;
       const hostLabel = getAlertResourceDisplayLabel(host);
-      const friendlyHostName = getFriendlyAlertNodeName(hostLabel, host.policy);
+      const friendlyHostName = getFriendlyAlertNodeName(hostLabel);
       const hostLabelLower = hostLabel.toLowerCase();
       const friendlyHostNameLower = friendlyHostName.toLowerCase();
       const hostHostname = getPreferredResourceHostname(host);
@@ -230,7 +230,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.containerRuntimes ?? []).forEach((host) => {
       const originalName = getAlertResourceDisplayLabel(host);
-      const friendlyName = getFriendlyAlertNodeName(originalName, host.policy);
+      const friendlyName = getFriendlyAlertNodeName(originalName);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
         rawName: originalName,
