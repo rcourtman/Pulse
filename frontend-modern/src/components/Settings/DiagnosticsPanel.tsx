@@ -15,7 +15,6 @@ export const DiagnosticsPanel: Component = () => {
     <div class="space-y-6">
       <OperationsPanel
         title={DIAGNOSTICS_PANEL_COPY.title}
-        description={DIAGNOSTICS_PANEL_COPY.description}
         action={
           <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
             <Show when={diagnosticsData()}>

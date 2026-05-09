@@ -103,7 +103,6 @@ export default function AuditLogPanel() {
   return (
     <SettingsPanel
       title="Audit Log"
-      description="Persistent, searchable audit events with optional signature verification."
       noPadding
       bodyClass="space-y-6 p-4 sm:p-6"
       action={

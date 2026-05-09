@@ -51,10 +51,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
 
   if (!isAuditLoggingEnabled()) {
     return (
-      <SettingsPanel
-        title="Audit Webhooks"
-        description="Configure real-time delivery of security audit events to external systems."
-      >
+      <SettingsPanel title="Audit Webhooks">
         <Show when={!loading()} fallback={<div class="text-sm text-muted">Loading...</div>}>
           <Card tone="info" padding="md">
             <div class="flex flex-col sm:flex-row items-center gap-4">
@@ -85,7 +82,6 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     <div class="space-y-6">
       <SettingsPanel
         title="Audit Webhooks"
-        description="Configure real-time delivery of security audit events to external systems."
         noPadding
         bodyClass="divide-y divide-border"
       >

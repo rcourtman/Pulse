@@ -22,10 +22,7 @@ export const SystemLogsPanel: Component = () => {
 
   return (
     <div class="space-y-6">
-      <OperationsPanel
-        title={SYSTEM_LOGS_PANEL_COPY.title}
-        description={SYSTEM_LOGS_PANEL_COPY.description}
-      >
+      <OperationsPanel title={SYSTEM_LOGS_PANEL_COPY.title}>
         {/* Controls */}
         <div class="p-4 sm:p-6">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

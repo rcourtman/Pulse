@@ -17,7 +17,6 @@ export const RolesPanel: Component = () => {
     <div class="space-y-6">
       <SettingsPanel
         title="Roles"
-        description="Manage built-in and custom roles with granular permissions."
         action={
           <button
             type="button"
