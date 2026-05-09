@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import type { ProbeCandidate } from '@/api/connections';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
+import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentation';
 import { getInfrastructureAgentHostProfileSupportText } from '@/utils/infrastructureOnboardingPresentation';
 import type { CompletedProbePhase, ConnectionEditorState } from './useConnectionEditor';
 import { CONNECTION_TYPE_LABELS } from './useConnectionEditor';
@@ -61,7 +62,7 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
 
       <Show when={props.state.phase() === 'error' && props.state.errorMessage().length > 0}>
         <div class="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
-          {props.state.errorMessage()}
+          {formatConnectionErrorMessage(props.state.errorMessage()) ?? props.state.errorMessage()}
         </div>
       </Show>
 
