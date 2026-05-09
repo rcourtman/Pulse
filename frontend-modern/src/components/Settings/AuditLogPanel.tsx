@@ -448,7 +448,9 @@ export default function AuditLogPanel() {
                 label: 'Details',
                 hiddenOnMobile: true,
                 render: (event) => (
-                  <span class="text-muted truncate max-w-xs">{event.details || '-'}</span>
+                  <span class="text-muted truncate max-w-xs" title={event.details || ''}>
+                    {event.details || '-'}
+                  </span>
                 ),
               },
               {

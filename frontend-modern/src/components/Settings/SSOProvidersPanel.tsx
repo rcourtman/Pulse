@@ -470,7 +470,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           <Show when={testResult()?.details?.entityId}>
                             <div class="flex gap-2">
                               <dt class="text-muted">Entity ID:</dt>
-                              <dd class="text-base-content truncate">
+                              <dd class="text-base-content truncate" title={testResult()?.details?.entityId}>
                                 {testResult()?.details?.entityId}
                               </dd>
                             </div>
@@ -478,7 +478,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           <Show when={testResult()?.details?.ssoUrl}>
                             <div class="flex gap-2">
                               <dt class="text-muted">SSO URL:</dt>
-                              <dd class="text-base-content truncate">
+                              <dd class="text-base-content truncate" title={testResult()?.details?.ssoUrl}>
                                 {testResult()?.details?.ssoUrl}
                               </dd>
                             </div>
@@ -486,7 +486,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           <Show when={testResult()?.details?.tokenEndpoint}>
                             <div class="flex gap-2">
                               <dt class="text-muted">Token Endpoint:</dt>
-                              <dd class="text-base-content truncate">
+                              <dd class="text-base-content truncate" title={testResult()?.details?.tokenEndpoint}>
                                 {testResult()?.details?.tokenEndpoint}
                               </dd>
                             </div>

@@ -75,7 +75,7 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                           >
                             {diffStatus.label}
                           </span>
-                          <span class="text-base-content truncate">{file.path}</span>
+                          <span class="text-base-content truncate" title={file.path}>{file.path}</span>
                         </div>
                         <span class="text-muted sm:flex-shrink-0">
                           {props.formatDiffStats(file)}
