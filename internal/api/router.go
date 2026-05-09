@@ -2533,6 +2533,9 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 				if record.Result != nil {
 					payload.Success = record.Result.Success
 					payload.ErrorMessage = record.Result.ErrorMessage
+					if v := projectAgentResourceVerification(record.Result.Verification); v != nil {
+						payload.Verification = v
+					}
 				}
 				broadcaster.PublishActionCompleted(payload)
 			})

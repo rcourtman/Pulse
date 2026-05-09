@@ -963,7 +963,12 @@ list) for replay — those are the durable surfaces. The
 canonical record (approval row or action-audit row) has already
 been persisted, so a missed event is recoverable by reading the
 backing endpoint; the stream is a doorbell for recent activity,
-not the source of truth.
+not the source of truth. The verification projection on
+`action.completed` reads from the same persisted
+`ActionAuditRecord.Result.Verification` field that agents would
+recover from /api/actions/{id} after a reconnect — the event
+carries a copy, not the original, so the durable record remains
+the canonical source.
 
 The agent capabilities manifest at `/api/agent/capabilities` is
 read-only and stateless — no persistence is involved. The manifest

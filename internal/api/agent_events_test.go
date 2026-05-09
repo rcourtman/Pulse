@@ -432,3 +432,82 @@ func TestAgentEventActionCompletedKindIsStable(t *testing.T) {
 			AgentEventActionCompleted, "action.completed")
 	}
 }
+
+func TestAgentEventBroadcaster_PublishActionCompletedRoundTripsVerification(t *testing.T) {
+	// The verification block is the agent-stable projection of the
+	// post-execution read-after-write probe. Pin the contract: it
+	// round-trips through the broadcaster with the fields agents
+	// branch on (Ran, Success, Command, Note, RanAt) intact.
+	b := NewAgentEventBroadcaster()
+	events, unsub := b.Subscribe()
+	defer unsub()
+
+	ranAt := time.Now().UTC()
+	b.PublishActionCompleted(AgentEventActionCompletedPayload{
+		ActionID:    "action-verify-1",
+		ResourceID:  "container:web-1",
+		State:       "completed",
+		Success:     true,
+		CompletedAt: ranAt,
+		Verification: &AgentResourceActionVerification{
+			Ran:     true,
+			Success: true,
+			Command: "docker inspect --format '{{.State.Status}}' web-1",
+			RanAt:   ranAt,
+		},
+	})
+
+	select {
+	case event := <-events:
+		payload, ok := event.Payload.(AgentEventActionCompletedPayload)
+		if !ok {
+			t.Fatalf("payload type: got %T", event.Payload)
+		}
+		if payload.Verification == nil {
+			t.Fatal("verification block must round-trip — agents close the certainty loop on this field")
+		}
+		if !payload.Verification.Ran || !payload.Verification.Success {
+			t.Errorf("verification flags lost: ran=%t success=%t", payload.Verification.Ran, payload.Verification.Success)
+		}
+		if payload.Verification.Command == "" {
+			t.Error("verification command must round-trip so agents see what was checked")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for action.completed event")
+	}
+}
+
+func TestAgentEventBroadcaster_PublishActionCompletedAbsentVerificationOmitsField(t *testing.T) {
+	// Refused-before-dispatch failures have no verification result
+	// (verification only runs after a successful execute). The
+	// payload's Verification must surface as omitted (nil) rather
+	// than an empty struct so agents can branch on field presence
+	// to distinguish "no verification attempted" from "verification
+	// ran with empty result".
+	b := NewAgentEventBroadcaster()
+	events, unsub := b.Subscribe()
+	defer unsub()
+
+	b.PublishActionCompleted(AgentEventActionCompletedPayload{
+		ActionID:     "action-refused-1",
+		ResourceID:   "vm:db-1",
+		State:        "failed",
+		Success:      false,
+		ErrorMessage: "resource_remediation_locked: ...",
+		CompletedAt:  time.Now().UTC(),
+		// Verification deliberately unset.
+	})
+
+	select {
+	case event := <-events:
+		payload, ok := event.Payload.(AgentEventActionCompletedPayload)
+		if !ok {
+			t.Fatalf("payload type: got %T", event.Payload)
+		}
+		if payload.Verification != nil {
+			t.Errorf("verification must remain nil for refused dispatches; got %+v", payload.Verification)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for action.completed event")
+	}
+}

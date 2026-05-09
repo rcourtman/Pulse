@@ -13623,6 +13623,65 @@ func TestContract_AgentFleetContextEndpointSurfacesStableShape(t *testing.T) {
 	}
 }
 
+// TestContract_ActionCompletedPayloadCarriesVerification pins that
+// the action.completed SSE payload exposes the verification block
+// — the agent-stable projection of the post-execution probe so
+// agents close the "did it actually work?" loop without a follow-up
+// audit fetch. Drift here forces every agent watching the stream to
+// poll /api/actions/{id} after every dispatch, defeating the
+// substrate's push-notification guarantee for dispatch certainty.
+func TestContract_ActionCompletedPayloadCarriesVerification(t *testing.T) {
+	source, err := os.ReadFile("agent_events.go")
+	if err != nil {
+		t.Fatalf("read agent_events.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "Verification   *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
+		t.Error("AgentEventActionCompletedPayload must carry Verification as a *AgentResourceActionVerification — agents close the certainty loop on this field")
+	}
+}
+
+// TestContract_RouterBridgesVerificationOntoActionCompleted pins
+// that the router-side bridge actually carries the verification
+// projection from record.Result.Verification onto the SSE payload.
+// The payload field exists is one half of the contract; this is the
+// other half — that the bridge populates it when the underlying
+// audit has a verification result.
+func TestContract_RouterBridgesVerificationOntoActionCompleted(t *testing.T) {
+	source, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "if v := projectAgentResourceVerification(record.Result.Verification); v != nil {") {
+		t.Error("router.go must project record.Result.Verification onto the action.completed payload via projectAgentResourceVerification — drift here means verification reaches the audit store but never the SSE stream")
+	}
+	if !strings.Contains(src, "payload.Verification = v") {
+		t.Error("router.go must assign the projected verification onto payload.Verification")
+	}
+}
+
+// TestContract_AgentResourceActionSummaryCarriesVerification pins
+// that the resource-context bundle's recent-actions surface also
+// carries verification, paralleling the SSE payload. Symmetry
+// here matters: an agent should get the same verification fact
+// whether they read the bundle (depth) or watch the doorbell
+// (push). Drift would let one surface ship a feature the other
+// doesn't.
+func TestContract_AgentResourceActionSummaryCarriesVerification(t *testing.T) {
+	source, err := os.ReadFile("agent_resource_context.go")
+	if err != nil {
+		t.Fatalf("read agent_resource_context.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "Verification   *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
+		t.Error("AgentResourceActionSummary must carry Verification so the bundle's recent-actions and the action.completed SSE payload speak the same vocabulary")
+	}
+	if !strings.Contains(src, "func projectAgentResourceVerification(v *unified.ActionVerificationResult)") {
+		t.Error("projectAgentResourceVerification must exist as the shared helper — both the SSE bridge and the bundle's projector route through it so the wire shape cannot drift between surfaces")
+	}
+}
+
 // TestContract_OperatorStateWriteServerPopulatesAttribution pins the
 // audit-honesty contract for the agent surface's only write loop:
 // the PUT handler must populate SetAt and SetBy from the server,

@@ -1368,9 +1368,14 @@ behind `/api/approvals/{id}`, the event is a doorbell),
 Completed, runtime-Failed, or refused-before-dispatch (refusals
 carry the stable error-token prefix `plan_drift:` or
 `resource_remediation_locked:` verbatim on `errorMessage` so agents
-branch on the prefix rather than parsing human text) — and
-`heartbeat` every 15 seconds so an idle connection can confirm
-the stream is alive. Each event carries a monotonic ID so agents
+branch on the prefix rather than parsing human text; successful
+dispatches carry a `verification` block — the agent-stable
+projection of the broker's read-after-write probe — with `ran`,
+`success`, `command`, `note`, `ranAt` so agents close the
+"did it actually work?" loop without a follow-up audit fetch;
+refused dispatches omit `verification` because the probe never
+runs) — and `heartbeat` every 15 seconds so an idle connection
+can confirm the stream is alive. Each event carries a monotonic ID so agents
 can dedupe and reason about ordering. The broadcaster drops events
 for slow subscribers rather than blocking the publish path —
 publishers (the patrol findings runtime, the approval store's
@@ -1485,9 +1490,14 @@ expiresAt — same vocabulary as `approval.pending` SSE events so
 "what's pending right now" and "what just became pending" agree
 on shape), and recent action audits including refused dispatches
 with their stable token prefixes (`resource_remediation_locked:`,
-`plan_drift:`) preserved verbatim. The shape is intentionally
-narrower than the full internal types so agents see a stable
-agent-paradigm contract, decoupled from internal type evolution.
+`plan_drift:`) preserved verbatim and the same agent-stable
+`verification` block the SSE `action.completed` payload carries
+(shared `AgentResourceActionVerification` projection, shared
+`projectAgentResourceVerification` helper) so the bundle's depth
+view and the doorbell speak the same vocabulary on probe outcomes.
+The shape is intentionally narrower than the full internal types
+so agents see a stable agent-paradigm contract, decoupled from
+internal type evolution.
 Active findings come through the `AgentFindingsProvider` adapter
 wired at startup so the api package stays free of an
 `internal/ai` import; the patrol service holds the canonical

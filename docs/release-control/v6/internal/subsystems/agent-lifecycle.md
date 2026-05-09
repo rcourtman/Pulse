@@ -933,7 +933,11 @@ StatusPending and waits on operator decision, `action.completed`
 when an action audit reaches a terminal state (Completed,
 runtime-Failed, or refused-before-dispatch with stable
 `plan_drift:` / `resource_remediation_locked:` error-token
-prefixes preserved verbatim), and a 15-second heartbeat keepalive.
+prefixes preserved verbatim; successful dispatches carry a
+`verification` block — the agent-stable projection of the
+broker's read-after-write probe — so agents close the
+"did it actually work?" loop without polling /api/actions/{id}),
+and a 15-second heartbeat keepalive.
 The broadcaster drops events for slow subscribers rather than
 blocking publishers, so the patrol-finding runtime, the approval
 store's post-create callback, and the executor's post-completion

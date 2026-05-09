@@ -531,6 +531,14 @@ record is persisted. Goroutine dispatch keeps the approval and
 dispatch hot paths independent of consumer drain rate; per-event
 cost is one channel send per subscriber.
 
+The `action.completed` payload's `verification` block is a small
+fixed-shape projection (5 fields, no embedded output) so adding
+it to every successful dispatch event does not materially change
+per-event size. Verification stdout — which can be large for
+some action classes — stays on the audit record and is fetched
+on demand via /api/actions/{id}; the event is the doorbell, not
+the transport for full probe output.
+
 `/api/agent/resource-context/{id}` does at most four reads per
 request: one operator-state SQLite point lookup (already covered by
 the `resource_operator_state` index), one in-memory findings lookup

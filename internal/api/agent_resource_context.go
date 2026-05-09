@@ -31,20 +31,39 @@ type AgentResourceFindingSnapshot struct {
 	LastSeenAt                 string `json:"lastSeenAt,omitempty"`
 }
 
+// AgentResourceActionVerification is the agent-stable projection of
+// the post-execution read-after-write probe the broker runs after
+// every successful dispatch. Carries enough for an agent to close
+// the certainty loop ("did it actually work?") without fetching
+// /api/actions/{id} for full output. `Ran` is the existence bit:
+// false means no verification was attempted (the action class has
+// no derivable check, or the dispatch failed before verification
+// could run). Output is intentionally omitted from the projection
+// — verification stdout can be large; agents that need it follow
+// up via the audit endpoint.
+type AgentResourceActionVerification struct {
+	Ran     bool      `json:"ran"`
+	Success bool      `json:"success"`
+	Command string    `json:"command,omitempty"`
+	Note    string    `json:"note,omitempty"`
+	RanAt   time.Time `json:"ranAt,omitempty"`
+}
+
 // AgentResourceActionSummary is the agent-consumable projection of an
 // action audit record. Includes the refusal-reason prefix tokens
 // (resource_remediation_locked:, plan_drift:) verbatim so agents can
 // branch on them without parsing the human message.
 type AgentResourceActionSummary struct {
-	ID             string    `json:"id"`
-	CapabilityName string    `json:"capabilityName"`
-	Command        string    `json:"command,omitempty"`
-	State          string    `json:"state"`
-	Success        bool      `json:"success"`
-	ErrorMessage   string    `json:"errorMessage,omitempty"`
-	RequestedBy    string    `json:"requestedBy,omitempty"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ID             string                           `json:"id"`
+	CapabilityName string                           `json:"capabilityName"`
+	Command        string                           `json:"command,omitempty"`
+	State          string                           `json:"state"`
+	Success        bool                             `json:"success"`
+	ErrorMessage   string                           `json:"errorMessage,omitempty"`
+	Verification   *AgentResourceActionVerification `json:"verification,omitempty"`
+	RequestedBy    string                           `json:"requestedBy,omitempty"`
+	CreatedAt      time.Time                        `json:"createdAt"`
+	UpdatedAt      time.Time                        `json:"updatedAt"`
 }
 
 // AgentResourceApprovalSummary is the agent-consumable projection of
@@ -489,8 +508,31 @@ func projectAgentResourceActions(
 		if audit.Result != nil {
 			summary.Success = audit.Result.Success
 			summary.ErrorMessage = audit.Result.ErrorMessage
+			if v := projectAgentResourceVerification(audit.Result.Verification); v != nil {
+				summary.Verification = v
+			}
 		}
 		out = append(out, summary)
 	}
 	return out
+}
+
+// projectAgentResourceVerification converts the canonical
+// ActionVerificationResult into the agent-stable projection that
+// both the resource-context bundle and the action.completed SSE
+// payload carry. Returns nil when the source is nil so callers can
+// branch on field presence — absent means "no verification result
+// recorded" (e.g. refused-before-dispatch failures), distinct from
+// "verification was skipped" which surfaces as Ran=false.
+func projectAgentResourceVerification(v *unified.ActionVerificationResult) *AgentResourceActionVerification {
+	if v == nil {
+		return nil
+	}
+	return &AgentResourceActionVerification{
+		Ran:     v.Ran,
+		Success: v.Success,
+		Command: v.Command,
+		Note:    v.Note,
+		RanAt:   v.RanAt,
+	}
 }

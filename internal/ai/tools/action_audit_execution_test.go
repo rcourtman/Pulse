@@ -1197,6 +1197,85 @@ func TestSetOnActionCompleted_FiresOnSuccessfulDispatch(t *testing.T) {
 	}
 }
 
+func TestSetOnActionCompleted_RecordCarriesVerificationResult(t *testing.T) {
+	// Verification is the post-execution read-after-write probe the
+	// broker derives for action classes with a known check command
+	// (systemctl-style service control). Pin the contract: the
+	// callback record's Verification block is populated when the
+	// dispatch class supports it, with the derived command and the
+	// success/failure outcome of running it. Agents reading the
+	// callback (or the SSE event downstream) close the certainty
+	// loop on this field.
+	store := unifiedresources.NewMemoryStore()
+	agentServer := &mockAgentServer{}
+	// First call: the action itself.
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-vrf",
+		mock.MatchedBy(func(p agentexec.ExecuteCommandPayload) bool {
+			return p.Command == "systemctl restart nginx"
+		})).
+		Return(&agentexec.CommandResultPayload{Success: true, Stdout: "", ExitCode: 0}, nil).Once()
+	// Second call: the broker-derived verification probe. The
+	// expected command is `systemctl is-active 'nginx'`.
+	agentServer.On("ExecuteCommand", mock.Anything, "agent-vrf",
+		mock.MatchedBy(func(p agentexec.ExecuteCommandPayload) bool {
+			return strings.HasPrefix(p.Command, "systemctl is-active")
+		})).
+		Return(&agentexec.CommandResultPayload{Success: true, Stdout: "active\n", ExitCode: 0}, nil).Once()
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer:      agentServer,
+		ActionAuditStore: store,
+	})
+	got := make(chan unifiedresources.ActionAuditRecord, 1)
+	executor.SetOnActionCompleted(func(rec unifiedresources.ActionAuditRecord) {
+		got <- rec
+	})
+
+	if _, err := executor.executeCommandWithAudit(
+		context.Background(),
+		"pulse_control",
+		"agent-vrf",
+		"",
+		false,
+		"agent-vrf",
+		agentexec.ExecuteCommandPayload{
+			Command:    "systemctl restart nginx",
+			TargetType: "agent",
+			TargetID:   "agent-vrf",
+		},
+		"pulse_control",
+		"restart nginx",
+	); err != nil {
+		t.Fatalf("executeCommandWithAudit: %v", err)
+	}
+
+	select {
+	case received := <-got:
+		if received.Result == nil {
+			t.Fatal("callback record must carry an ExecutionResult")
+		}
+		if received.Result.Verification == nil {
+			t.Fatal("callback record must carry a Verification block for service-restart actions — drift here breaks the certainty loop on action.completed")
+		}
+		v := received.Result.Verification
+		if !v.Ran {
+			t.Error("Verification.Ran must be true after the broker dispatched the probe")
+		}
+		if !v.Success {
+			t.Errorf("Verification.Success: probe returned exit 0, expected Success=true; got %+v", v)
+		}
+		if !strings.Contains(v.Command, "systemctl is-active") {
+			t.Errorf("Verification.Command must surface the derived probe command; got %q", v.Command)
+		}
+		if v.RanAt.IsZero() {
+			t.Error("Verification.RanAt must be populated so agents can reason about probe freshness")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("post-completion callback did not fire within 2s")
+	}
+	agentServer.AssertExpectations(t)
+}
+
 func TestSetOnActionCompleted_FiresOnPlanDriftRefusal(t *testing.T) {
 	// Plan-drift refusal lands in the audit store as Failed with the
 	// stable `plan_drift:` prefix; the callback must surface that

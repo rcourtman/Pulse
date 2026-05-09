@@ -98,23 +98,28 @@ type AgentEventApprovalPendingPayload struct {
 // AgentEventActionCompletedPayload is the payload shape for
 // action.completed events. Carries the dispatch outcome agents
 // branch on: success/failure, the resource the action ran against,
-// the canonical capability + command, who acted, and any error
-// message. Refused-before-dispatch failures carry the stable
-// error-token prefix (`plan_drift:`, `resource_remediation_locked:`)
-// in ErrorMessage so agents branch on the prefix rather than
-// parsing human text. Full audit detail (lifecycle events,
-// preflight, verification result) stays behind the existing
-// /api/actions/{id} endpoint.
+// the canonical capability + command, who acted, any error
+// message, and the agent-stable verification projection
+// (read-after-write probe outcome) so the agent can close the
+// "did it actually work?" loop without a follow-up audit fetch.
+// Refused-before-dispatch failures carry the stable error-token
+// prefix (`plan_drift:`, `resource_remediation_locked:`) in
+// ErrorMessage so agents branch on the prefix rather than parsing
+// human text; refused dispatches have no Verification by
+// definition (verification only runs after a successful execute).
+// Full audit detail (lifecycle events, preflight, verification
+// stdout) stays behind the existing /api/actions/{id} endpoint.
 type AgentEventActionCompletedPayload struct {
-	ActionID       string    `json:"actionId"`
-	ResourceID     string    `json:"resourceId,omitempty"`
-	CapabilityName string    `json:"capabilityName,omitempty"`
-	Command        string    `json:"command,omitempty"`
-	State          string    `json:"state"`
-	Success        bool      `json:"success"`
-	ErrorMessage   string    `json:"errorMessage,omitempty"`
-	RequestedBy    string    `json:"requestedBy,omitempty"`
-	CompletedAt    time.Time `json:"completedAt"`
+	ActionID       string                           `json:"actionId"`
+	ResourceID     string                           `json:"resourceId,omitempty"`
+	CapabilityName string                           `json:"capabilityName,omitempty"`
+	Command        string                           `json:"command,omitempty"`
+	State          string                           `json:"state"`
+	Success        bool                             `json:"success"`
+	ErrorMessage   string                           `json:"errorMessage,omitempty"`
+	Verification   *AgentResourceActionVerification `json:"verification,omitempty"`
+	RequestedBy    string                           `json:"requestedBy,omitempty"`
+	CompletedAt    time.Time                        `json:"completedAt"`
 }
 
 // AgentEventBroadcaster is a thread-safe pub/sub for AgentEvents. A
