@@ -86,8 +86,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
     <div class="space-y-6">
       {/* Appearance Card */}
       <SettingsPanel
-        title="General"
-        description="Manage appearance, layout, and default monitoring cadence."
+        title="Appearance"
         noPadding
         bodyClass="divide-y divide-border"
       >

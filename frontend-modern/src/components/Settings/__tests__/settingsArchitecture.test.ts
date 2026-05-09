@@ -370,7 +370,7 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps settings copy aligned with Infrastructure as the default workspace', () => {
-    expect(generalSettingsPanelSource).toContain(
+    expect(settingsHeaderMetaSource).toContain(
       'Manage appearance, layout, and default monitoring cadence.',
     );
     expect(generalSettingsPanelSource).not.toContain('Dashboard, Infrastructure');
