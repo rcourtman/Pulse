@@ -1517,6 +1517,15 @@ substrate's stable error envelope (`{"error": "code", "message":
 "..."}`) verbatim through MCP's content-and-isError result so
 agents on the MCP side branch on the same stable codes.
 
+The integration guide for `cmd/pulse-mcp` lives at
+`cmd/pulse-mcp/README.md`. It carries the canonical Claude Desktop
+and Claude Code config snippets, the env-var contract for the API
+token, the published list of tools the manifest currently
+exposes, and the documented limitations (no `subscribe_events`,
+manifest fetched once at startup). External maintainers wiring
+Pulse into their MCP-speaking client read that document, not the
+package source.
+
 `/api/agent/resource-context/{id}` is the agent-consumable bundled
 context endpoint. One read returns the full situated picture of a
 resource — identity, operator-set state (with server-computed
