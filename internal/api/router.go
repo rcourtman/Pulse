@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/adapters"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
@@ -579,6 +580,31 @@ func (r *Router) setupRoutes() {
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	r.aiHandler.SetReadState(r.defaultReadState())
 	r.aiHandler.SetRecoveryManager(recoveryManager)
+	// Bridge approval creation into the agent SSE stream so an agent
+	// holding /api/agent/events open hears about new pending approvals
+	// in real time. The callback is fire-and-forget on the approval
+	// hot path; PublishApprovalPending drops events for slow
+	// subscribers rather than blocking.
+	if r.agentEventBroadcaster != nil {
+		broadcaster := r.agentEventBroadcaster
+		r.aiHandler.SetApprovalCreatedCallback(func(req *approval.ApprovalRequest) {
+			if req == nil {
+				return
+			}
+			broadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{
+				ApprovalID:  req.ID,
+				ResourceID:  req.CanonicalResourceID(),
+				TargetType:  req.TargetType,
+				TargetID:    req.TargetID,
+				TargetName:  req.TargetName,
+				Command:     req.Command,
+				RiskLevel:   string(req.RiskLevel),
+				RequestedBy: req.RequestedBy,
+				RequestedAt: req.RequestedAt,
+				ExpiresAt:   req.ExpiresAt,
+			})
+		})
+	}
 	r.aiHandler.SetControlLevelResolver(func(ctx context.Context, cfg *config.AIConfig) string {
 		return r.aiSettingsHandler.EffectiveControlLevel(ctx, cfg)
 	})

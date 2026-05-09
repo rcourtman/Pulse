@@ -13273,6 +13273,90 @@ func TestContract_AgentEventsStreamPublishesOnFindingCreated(t *testing.T) {
 	}
 }
 
+// TestContract_AgentEventsStreamPublishesOnApprovalPending pins the
+// agent SSE stream's governance-aware producer hook: the approval
+// store's post-create callback must publish an approval.pending
+// event so an agent holding /api/agent/events open hears about new
+// pending approvals in real time without polling. The callback is
+// installed via AIHandler.SetApprovalCreatedCallback so it survives
+// the AIHandler's lazy approval-store rebuilds. Drift here means
+// the only signal an agent has that an operator decision is needed
+// is poll-based — losing the substrate's push-notification
+// guarantee for governance state.
+func TestContract_AgentEventsStreamPublishesOnApprovalPending(t *testing.T) {
+	source, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "r.aiHandler.SetApprovalCreatedCallback(") {
+		t.Error("router.go must install the approval-created callback on AIHandler so the agent SSE stream is wired before the first approval lands")
+	}
+	if !strings.Contains(src, "broadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{") {
+		t.Error("router.go must bridge approval creation into PublishApprovalPending — drift means agents lose the push-notification path for governance state")
+	}
+	if !strings.Contains(src, "ApprovalID:  req.ID") {
+		t.Error("approval.pending payload must carry the approval id so agents can correlate the event with /api/approvals/{id}")
+	}
+	if !strings.Contains(src, "ResourceID:  req.CanonicalResourceID()") {
+		t.Error("approval.pending payload must derive the canonical resourceId via CanonicalResourceID so agents can match it against the rest of Pulse")
+	}
+}
+
+// TestContract_ApprovalStorePostCreateCallback pins the seam the
+// SSE bridge depends on. The approval store must expose a
+// SetOnApprovalCreated setter and CreateApproval must dispatch the
+// callback on its own goroutine after the approval is persisted.
+// Removing or in-lining the callback breaks the bridge silently.
+func TestContract_ApprovalStorePostCreateCallback(t *testing.T) {
+	source, err := os.ReadFile("../ai/approval/store.go")
+	if err != nil {
+		t.Fatalf("read approval/store.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "func (s *Store) SetOnApprovalCreated(cb func(*ApprovalRequest))") {
+		t.Error("approval store must expose SetOnApprovalCreated so the API layer can bridge approval creation into the agent SSE stream")
+	}
+	if !strings.Contains(src, "if cb := s.onApprovalCreated; cb != nil {") {
+		t.Error("CreateApproval must check the post-create callback under lock and dispatch it; drift here drops approval.pending events")
+	}
+	if !strings.Contains(src, "go cb(&snapshot)") {
+		t.Error("post-create callback must run on its own goroutine to keep the approval hot path off any consumer's slowness")
+	}
+}
+
+// TestContract_AgentEventApprovalPendingKindIsStable pins the
+// wire-stable event kind string. Renaming AgentEventApprovalPending
+// breaks every agent that branches on the SSE event-type field; the
+// constant is part of the contract, not an implementation detail.
+func TestContract_AgentEventApprovalPendingKindIsStable(t *testing.T) {
+	source, err := os.ReadFile("agent_events.go")
+	if err != nil {
+		t.Fatalf("read agent_events.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, `AgentEventApprovalPending AgentEventKind = "approval.pending"`) {
+		t.Error("AgentEventApprovalPending must remain bound to the wire-stable string \"approval.pending\" — renaming it breaks every agent that branches on the SSE event type")
+	}
+}
+
+// TestContract_SubscribeEventsCapabilityListsApprovalPending pins
+// the discovery contract: the capabilities manifest must mention
+// approval.pending under subscribe_events so an agent reading the
+// manifest learns the kind exists without out-of-band documentation.
+// Drift here means external agents miss the event entirely because
+// they didn't know to listen for it.
+func TestContract_SubscribeEventsCapabilityListsApprovalPending(t *testing.T) {
+	source, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "approval.pending when a remediation request enters StatusPending") {
+		t.Error("subscribe_events description must mention approval.pending so agents discover the kind through the manifest")
+	}
+}
+
 // TestContract_AgentCapabilitiesManifestVersionIsPinned pins the
 // manifest's version contract: bumping it is reserved for breaking
 // shape changes, additive capabilities ship under the same version.

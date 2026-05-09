@@ -291,6 +291,7 @@ var publicRouteAllowlist = []string{
 var bareRouteAllowlist = []string{
 	"/api/agent-deploy/jobs/",
 	"/api/agent-deploy/preflights/",
+	"/api/agent/capabilities",
 	"/api/agent/version",
 	"/api/agent/ws",
 	"/api/ai/oauth/callback",

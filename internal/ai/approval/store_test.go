@@ -113,6 +113,133 @@ func TestCreateApproval(t *testing.T) {
 	}
 }
 
+func TestSetOnApprovalCreated_FiresAfterCreate(t *testing.T) {
+	// The post-create callback is the seam the API layer uses to
+	// bridge approval creation into the agent SSE stream
+	// (approval.pending events). Pin the contract: the callback fires
+	// once per CreateApproval, sees a fully populated request, and
+	// runs without blocking the caller — fire-and-forget.
+	tmpDir, err := os.MkdirTemp("", "approval-cb-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	got := make(chan *ApprovalRequest, 1)
+	store.SetOnApprovalCreated(func(req *ApprovalRequest) {
+		got <- req
+	})
+
+	req := &ApprovalRequest{
+		ExecutionID: "exec-cb",
+		ToolID:      "tool-cb",
+		Command:     "systemctl restart nginx",
+		TargetType:  "agent",
+		TargetID:    "host-cb",
+		TargetName:  "web-cb",
+		Context:     "callback test",
+	}
+	if err := store.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval: %v", err)
+	}
+
+	select {
+	case received := <-got:
+		if received == nil {
+			t.Fatal("callback received nil request")
+		}
+		if received.ID == "" {
+			t.Error("callback request must have ID populated")
+		}
+		if received.Status != StatusPending {
+			t.Errorf("callback request status = %v, want %v", received.Status, StatusPending)
+		}
+		if received.RequestedAt.IsZero() {
+			t.Error("callback request must have RequestedAt populated")
+		}
+		if received.RiskLevel == "" {
+			t.Error("callback request must have RiskLevel assessed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("post-create callback did not fire within 2s")
+	}
+}
+
+func TestSetOnApprovalCreated_NilCallbackIsSafe(t *testing.T) {
+	// Disabling the callback (or never installing one) must not
+	// break the create path. This is the default state and the most
+	// common shape in tests.
+	tmpDir, err := os.MkdirTemp("", "approval-cb-nil-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+	store.SetOnApprovalCreated(nil)
+
+	req := &ApprovalRequest{
+		ExecutionID: "exec-nil",
+		ToolID:      "tool-nil",
+		Command:     "systemctl restart nginx",
+		TargetType:  "agent",
+		TargetID:    "host-nil",
+		TargetName:  "web-nil",
+		Context:     "nil callback test",
+	}
+	if err := store.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval with nil callback: %v", err)
+	}
+}
+
+func TestApprovalRequest_CanonicalResourceID(t *testing.T) {
+	// CanonicalResourceID is the helper the agent SSE bridge uses to
+	// stamp resourceId on approval.pending events without depending
+	// on a Plan being populated. Pin the format so agents can match
+	// the result against canonical resource ids elsewhere in Pulse.
+	cases := []struct {
+		name string
+		req  *ApprovalRequest
+		want string
+	}{
+		{
+			name: "type and id compose with colon",
+			req:  &ApprovalRequest{TargetType: "container", TargetID: "web-1", TargetName: "web-1"},
+			want: "container:web-1",
+		},
+		{
+			name: "id already canonical passes through",
+			req:  &ApprovalRequest{TargetType: "container", TargetID: "container:web-2"},
+			want: "container:web-2",
+		},
+		{
+			name: "missing id falls back to name",
+			req:  &ApprovalRequest{TargetType: "vm", TargetName: "alpine"},
+			want: "vm:alpine",
+		},
+		{
+			name: "nil receiver returns empty",
+			req:  nil,
+			want: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.req.CanonicalResourceID(); got != tc.want {
+				t.Fatalf("CanonicalResourceID() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCreateApproval_PreservesActionPlanAndContextConfidence(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {

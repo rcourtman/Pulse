@@ -184,6 +184,25 @@ type Store struct {
 	persist        bool
 	saveTimer      *time.Timer
 	savePending    bool
+	// onApprovalCreated fires after a successful CreateApproval, with
+	// the approval already in StatusPending. Wired by the API layer
+	// at startup so the agent SSE stream can publish approval.pending
+	// events. nil is safe — the callback is fire-and-forget. Callers
+	// must not block on it; the store dispatches it on its own
+	// goroutine to keep the approval hot path off any consumer's
+	// slowness.
+	onApprovalCreated func(*ApprovalRequest)
+}
+
+// SetOnApprovalCreated installs a fire-and-forget callback that
+// runs after CreateApproval places the approval in StatusPending.
+// Pass nil to disable. Used by the API layer to bridge approval
+// creation into the agent event stream without coupling the
+// approval store to the api package.
+func (s *Store) SetOnApprovalCreated(cb func(*ApprovalRequest)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onApprovalCreated = cb
 }
 
 // StoreConfig configures the approval store.
@@ -315,6 +334,21 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 		Str("command", truncateCommand(req.Command, 50)).
 		Str("risk", string(req.RiskLevel)).
 		Msg("Created approval request")
+
+	// Fire the post-create callback on its own goroutine. The
+	// approval is already persisted at this point, so the callback
+	// is fire-and-forget — a panic or stall on the consumer side
+	// must not back up the approval hot path. Spawning a goroutine
+	// also avoids any chance of the consumer reentering the store
+	// under our held write lock.
+	if cb := s.onApprovalCreated; cb != nil {
+		// Snapshot the request struct so the consumer reads a
+		// stable view. Subsequent state mutations on the live
+		// pointer happen under s.mu and would otherwise race with
+		// a consumer that reads fields off the goroutine.
+		snapshot := *req
+		go cb(&snapshot)
+	}
 
 	return nil
 }
@@ -981,6 +1015,20 @@ func normalizeApprovalTargetType(targetType string) string {
 
 func isUnsupportedApprovalTargetType(targetType string) bool {
 	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalizeApprovalTargetType(targetType))
+}
+
+// CanonicalResourceID returns the canonical "type:id" resource
+// identifier this approval targets, derived from the approval's
+// (TargetType, TargetID, TargetName) tuple via the same rule the
+// store uses internally when normalizing preflight context. Used by
+// callers that need the resource id without depending on the plan
+// being populated — notably the agent SSE bridge that publishes
+// approval.pending events.
+func (req *ApprovalRequest) CanonicalResourceID() string {
+	if req == nil {
+		return ""
+	}
+	return approvalResourceID(req.TargetType, req.TargetID, req.TargetName)
 }
 
 func approvalResourceID(targetType, targetID, targetName string) string {

@@ -1359,16 +1359,38 @@ that closes the agent-paradigm triangle (discovery + bundled reads +
 push notifications). Agents subscribe once and receive real-time
 notifications: `finding.created` when a new finding is raised
 (suppressed when the finding was auto-dismissed by operator-state),
-and `heartbeat` every 15 seconds so an idle connection can confirm
+`approval.pending` when a remediation request enters
+`StatusPending` and is waiting on operator decision (carries
+`approvalId`, `resourceId`, target tuple, `command`, `riskLevel`,
+`requestedBy`, `requestedAt`, `expiresAt` — full detail stays
+behind `/api/approvals/{id}`, the event is a doorbell), and
+`heartbeat` every 15 seconds so an idle connection can confirm
 the stream is alive. Each event carries a monotonic ID so agents
 can dedupe and reason about ordering. The broadcaster drops events
 for slow subscribers rather than blocking the publish path —
-publishers (the patrol findings runtime, future approval/action
-hooks) cannot stall on consumer slowness. The stream sits behind
-`monitoring:read` and runs through the same auth path as the rest
-of the agent surface; the capabilities manifest declares the stream
-under `subscribe_events` so external agents discover it without
+publishers (the patrol findings runtime, the approval store's
+post-create callback, future action-completion hooks) cannot stall
+on consumer slowness. The stream sits behind `monitoring:read` and
+runs through the same auth path as the rest of the agent surface;
+the capabilities manifest declares the stream under
+`subscribe_events` so external agents discover it without
 out-of-band documentation.
+
+The approval store exposes `SetOnApprovalCreated(cb)` so the API
+layer can install a fire-and-forget callback that runs after every
+successful `CreateApproval`. The callback fires on its own
+goroutine against a snapshot of the request, keeping the approval
+hot path off any consumer's slowness and avoiding any chance of the
+consumer reentering the store under the held write lock. The router
+wires the callback through `AIHandler.SetApprovalCreatedCallback`,
+which both installs the callback on the active store and re-installs
+it whenever `ensureApprovalStore` builds a new store for a different
+data dir. `ApprovalRequest.CanonicalResourceID()` returns the
+canonical `type:id` form the agent SSE bridge stamps on
+`approval.pending` events, derived from `(TargetType, TargetID,
+TargetName)` via the same rule the store uses internally — agents
+match the result against canonical resource ids elsewhere in Pulse
+without depending on a `Plan` being populated.
 
 `/api/agent/capabilities` is the discovery document for Pulse's
 agent surface. The manifest declares each agent-consumable

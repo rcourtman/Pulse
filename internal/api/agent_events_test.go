@@ -260,3 +260,72 @@ func TestHandleAgentEvents_RequiresFlusher(t *testing.T) {
 		t.Fatalf("expected 500 when ResponseWriter does not implement Flusher; got %d", w.statusCode)
 	}
 }
+
+func TestAgentEventBroadcaster_PublishApprovalPendingDelivers(t *testing.T) {
+	// approval.pending is the second event kind the broadcaster
+	// publishes (after finding.created). Pin the contract: kind name,
+	// payload round-trip with the agent-decision-relevant fields,
+	// monotonic id assignment shared across kinds.
+	b := NewAgentEventBroadcaster()
+	events, unsub := b.Subscribe()
+	defer unsub()
+
+	expires := time.Now().Add(5 * time.Minute).UTC()
+	requested := time.Now().UTC()
+	b.PublishApprovalPending(AgentEventApprovalPendingPayload{
+		ApprovalID:  "appr-1",
+		ResourceID:  "container:web-1",
+		TargetType:  "container",
+		TargetID:    "web-1",
+		TargetName:  "web-1",
+		Command:     "docker restart web-1",
+		RiskLevel:   "medium",
+		RequestedBy: "ai:patrol",
+		RequestedAt: requested,
+		ExpiresAt:   expires,
+	})
+
+	select {
+	case event := <-events:
+		if event.Kind != AgentEventApprovalPending {
+			t.Fatalf("kind: got %q want %q", event.Kind, AgentEventApprovalPending)
+		}
+		if event.ID == 0 {
+			t.Error("event id must be assigned")
+		}
+		if event.At.IsZero() {
+			t.Error("event timestamp must be populated")
+		}
+		payload, ok := event.Payload.(AgentEventApprovalPendingPayload)
+		if !ok {
+			t.Fatalf("payload type: got %T want AgentEventApprovalPendingPayload", event.Payload)
+		}
+		if payload.ApprovalID != "appr-1" {
+			t.Errorf("ApprovalID: got %q want %q", payload.ApprovalID, "appr-1")
+		}
+		if payload.ResourceID != "container:web-1" {
+			t.Errorf("ResourceID: got %q want %q", payload.ResourceID, "container:web-1")
+		}
+		if payload.Command != "docker restart web-1" {
+			t.Errorf("Command did not round-trip: got %q", payload.Command)
+		}
+		if payload.RiskLevel != "medium" {
+			t.Errorf("RiskLevel did not round-trip: got %q", payload.RiskLevel)
+		}
+		if !payload.ExpiresAt.Equal(expires) {
+			t.Errorf("ExpiresAt did not round-trip: got %v want %v", payload.ExpiresAt, expires)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for approval.pending event")
+	}
+}
+
+func TestAgentEventApprovalPendingKindIsStable(t *testing.T) {
+	// Pin the wire-stable kind string. Renaming it breaks every agent
+	// that branches on the event type; the constant is part of the
+	// contract, not an implementation detail.
+	if AgentEventApprovalPending != "approval.pending" {
+		t.Fatalf("AgentEventApprovalPending changed: got %q want %q",
+			AgentEventApprovalPending, "approval.pending")
+	}
+}

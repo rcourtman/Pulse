@@ -25,6 +25,15 @@ const (
 	// agent to decide whether to fetch the full situated context.
 	AgentEventFindingCreated AgentEventKind = "finding.created"
 
+	// AgentEventApprovalPending fires when a remediation request enters
+	// StatusPending and is waiting on an operator (or operator-acting
+	// agent) to approve, reject, or cancel. Payload carries the
+	// approval id, the resource it targets, the command, the assessed
+	// risk level, who requested it, and when it expires — enough for
+	// an agent that holds approval authority to decide whether to act,
+	// fetch full context via the approval endpoints, or escalate.
+	AgentEventApprovalPending AgentEventKind = "approval.pending"
+
 	// AgentEventHeartbeat is a keepalive that fires at a fixed
 	// interval. Agents that hold an open SSE connection use it to
 	// confirm the stream is healthy without waiting for a real
@@ -54,6 +63,26 @@ type AgentEventFindingCreatedPayload struct {
 	Severity     string `json:"severity"`
 	Title        string `json:"title"`
 	Category     string `json:"category,omitempty"`
+}
+
+// AgentEventApprovalPendingPayload is the payload shape for
+// approval.pending events. Carries the agent-decision-relevant
+// fields: which approval, against which resource, what command,
+// what risk, who requested it, and when it expires. Full request
+// detail (preflight, plan, raw context) stays behind the existing
+// /api/approvals/{id} endpoint — the event is a doorbell, not the
+// approval itself.
+type AgentEventApprovalPendingPayload struct {
+	ApprovalID  string    `json:"approvalId"`
+	ResourceID  string    `json:"resourceId,omitempty"`
+	TargetType  string    `json:"targetType,omitempty"`
+	TargetID    string    `json:"targetId,omitempty"`
+	TargetName  string    `json:"targetName,omitempty"`
+	Command     string    `json:"command"`
+	RiskLevel   string    `json:"riskLevel"`
+	RequestedBy string    `json:"requestedBy,omitempty"`
+	RequestedAt time.Time `json:"requestedAt"`
+	ExpiresAt   time.Time `json:"expiresAt"`
 }
 
 // AgentEventBroadcaster is a thread-safe pub/sub for AgentEvents. A
@@ -233,6 +262,17 @@ func writeAgentSSEEvent(w http.ResponseWriter, event AgentEvent) {
 func (b *AgentEventBroadcaster) PublishFindingCreated(payload AgentEventFindingCreatedPayload) {
 	b.Publish(AgentEvent{
 		Kind:    AgentEventFindingCreated,
+		Payload: payload,
+	})
+}
+
+// PublishApprovalPending is the convenience publisher the approval
+// store's post-create hook routes through. Wraps the payload in the
+// canonical envelope and forwards to Publish — the broadcaster
+// stamps the timestamp and event id.
+func (b *AgentEventBroadcaster) PublishApprovalPending(payload AgentEventApprovalPendingPayload) {
+	b.Publish(AgentEvent{
+		Kind:    AgentEventApprovalPending,
 		Payload: payload,
 	})
 }

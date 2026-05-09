@@ -591,6 +591,23 @@ call (active maintenance window plus the `IntentionallyOffline`
 flag) so adding new signals later does not multiply round-trips per
 finding.
 
+The approval store exposes `SetOnApprovalCreated(cb)` so the API
+layer can install a fire-and-forget callback that runs after every
+successful `CreateApproval` (the approval is already persisted at
+that point). The callback is invoked on its own goroutine against
+a snapshot of the request, keeping the approval hot path off any
+consumer's slowness and avoiding any chance of the consumer
+reentering the store under the held write lock. This is the seam
+the agent SSE stream uses to publish `approval.pending` events
+without coupling the approval store to the api package.
+`ApprovalRequest.CanonicalResourceID()` is the helper the bridge
+uses to stamp `resourceId` on those events, derived from
+`(TargetType, TargetID, TargetName)` via the same rule the store
+uses internally for preflight context normalization — Plan-less
+approvals (the common shape on the approval hot path) still carry
+a canonical resource id agents can match against the rest of
+Pulse.
+
 The investigation runtime now hands the orchestrator a Finding
 pre-enriched with operator-set state and operational memory.
 `MaybeInvestigateFinding` (in `internal/ai/patrol_findings.go`)

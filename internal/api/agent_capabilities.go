@@ -132,7 +132,7 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 		},
 		{
 			Name:          "subscribe_events",
-			Description:   "Subscribe to the SSE event stream for real-time notifications: finding.created when a new finding is raised, heartbeat every 15s. Long-lived connection; agents listen instead of polling.",
+			Description:   "Subscribe to the SSE event stream for real-time notifications: finding.created when a new finding is raised, approval.pending when a remediation request enters StatusPending and waits on operator decision, heartbeat every 15s. Long-lived connection; agents listen instead of polling.",
 			Category:      "context",
 			Method:        http.MethodGet,
 			Path:          "/api/agent/events",

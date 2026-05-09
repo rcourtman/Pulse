@@ -82,30 +82,35 @@ type patrolRunHandoffProvider func(context.Context, string) (airuntime.PatrolRun
 
 // AIHandler handles all AI endpoints using direct AI integration
 type AIHandler struct {
-	stateMu              sync.RWMutex
-	approvalStoreMu      sync.Mutex
-	mtPersistence        *config.MultiTenantPersistence
-	mtMonitor            *monitoring.MultiTenantMonitor
-	defaultConfig        *config.Config
-	defaultPersistence   AIPersistence
-	hostedMode           bool
-	defaultService       AIService
-	agentServer          *agentexec.Server
-	services             map[string]AIService
-	servicesMu           sync.RWMutex
-	serviceInitMu        sync.RWMutex
-	serviceInit          func(ctx context.Context, svc AIService)
-	defaultMonitor       *monitoring.Monitor
-	unifiedStoreMu       sync.RWMutex
-	unifiedStore         *unified.UnifiedStore
-	unifiedStores        map[string]*unified.UnifiedStore
-	readState            unifiedresources.ReadState
-	recoveryManager      *recoverymanager.Manager
-	approvalStore        *approval.Store
-	approvalStoreDir     string
-	approvalStoreStop    context.CancelFunc
-	controlLevelResolver func(context.Context, *config.AIConfig) string
-	patrolRunProvider    patrolRunHandoffProvider
+	stateMu            sync.RWMutex
+	approvalStoreMu    sync.Mutex
+	mtPersistence      *config.MultiTenantPersistence
+	mtMonitor          *monitoring.MultiTenantMonitor
+	defaultConfig      *config.Config
+	defaultPersistence AIPersistence
+	hostedMode         bool
+	defaultService     AIService
+	agentServer        *agentexec.Server
+	services           map[string]AIService
+	servicesMu         sync.RWMutex
+	serviceInitMu      sync.RWMutex
+	serviceInit        func(ctx context.Context, svc AIService)
+	defaultMonitor     *monitoring.Monitor
+	unifiedStoreMu     sync.RWMutex
+	unifiedStore       *unified.UnifiedStore
+	unifiedStores      map[string]*unified.UnifiedStore
+	readState          unifiedresources.ReadState
+	recoveryManager    *recoverymanager.Manager
+	approvalStore      *approval.Store
+	approvalStoreDir   string
+	approvalStoreStop  context.CancelFunc
+	// approvalCreatedCallback is registered via SetApprovalCreatedCallback
+	// before the first approval store is built. ensureApprovalStore
+	// re-installs it on every freshly created store so multi-tenant
+	// re-keying or data-dir changes keep the agent SSE stream wired.
+	approvalCreatedCallback func(*approval.ApprovalRequest)
+	controlLevelResolver    func(context.Context, *config.AIConfig) string
+	patrolRunProvider       patrolRunHandoffProvider
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -585,6 +590,22 @@ func (h *AIHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	h.mtMonitor = mtm
 }
 
+// SetApprovalCreatedCallback registers a fire-and-forget callback that
+// runs after every successful approval creation. The callback is
+// installed on the active approval store and re-installed on any
+// future store rebuilt by ensureApprovalStore. Pass nil to clear.
+//
+// This is the seam the router uses to bridge approval creation into
+// the agent SSE stream — see AgentEventBroadcaster.PublishApprovalPending.
+func (h *AIHandler) SetApprovalCreatedCallback(cb func(*approval.ApprovalRequest)) {
+	h.approvalStoreMu.Lock()
+	defer h.approvalStoreMu.Unlock()
+	h.approvalCreatedCallback = cb
+	if h.approvalStore != nil {
+		h.approvalStore.SetOnApprovalCreated(cb)
+	}
+}
+
 func (h *AIHandler) ensureApprovalStore(dataDir string) {
 	if strings.TrimSpace(dataDir) == "" {
 		return
@@ -622,6 +643,9 @@ func (h *AIHandler) ensureApprovalStore(dataDir string) {
 	h.approvalStore = approvalStore
 	h.approvalStoreDir = dataDir
 	h.approvalStoreStop = cleanupCancel
+	if h.approvalCreatedCallback != nil {
+		approvalStore.SetOnApprovalCreated(h.approvalCreatedCallback)
+	}
 	log.Info().Str("data_dir", dataDir).Msg("Approval store initialized")
 }
 
