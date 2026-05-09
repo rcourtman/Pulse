@@ -11,6 +11,7 @@ import {
   getPatrolRunHistory,
   getPatrolRunHistoryWithToolCalls,
   getPatrolRunWithToolCalls,
+  type Finding as PatrolFinding,
 } from '@/api/patrol';
 import { apiFetchJSON } from '@/utils/apiClient';
 
@@ -309,5 +310,38 @@ describe('patrol api', () => {
         regressed_at_least_once: 1,
       },
     });
+  });
+
+  it('round-trips remind_at on dismissed-as-will_fix_later patrol findings', async () => {
+    // The backend treats will_fix_later as an operator commitment with a
+    // wake-up deadline (Finding.RemindAt, default 7 days). The TS API client
+    // must mirror remind_at verbatim so the surface can preview the deadline
+    // at dismiss-confirm time and badge the dismissed row with the pending
+    // reminder. Without this round-trip, the deadline is invisible to the
+    // operator until the reminder fires a week later.
+    const willFixLater: PatrolFinding = {
+      id: 'finding-wfl',
+      severity: 'warning',
+      category: 'reliability',
+      resource_id: 'vm-101',
+      resource_name: 'db-01',
+      resource_type: 'vm',
+      title: 'Disk pressure',
+      description: 'Pulse will surface this again on the deadline',
+      detected_at: '2026-05-09T10:00:00Z',
+      last_seen_at: '2026-05-09T10:05:00Z',
+      auto_resolved: false,
+      times_raised: 1,
+      suppressed: false,
+      investigation_attempts: 0,
+      dismissed_reason: 'will_fix_later',
+      remind_at: '2026-05-16T10:00:00Z',
+    };
+    apiFetchJSONMock.mockResolvedValueOnce([willFixLater] as any);
+
+    const findings = await getPatrolFindings();
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.dismissed_reason).toBe('will_fix_later');
+    expect(findings[0]?.remind_at).toBe('2026-05-16T10:00:00Z');
   });
 });

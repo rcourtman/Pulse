@@ -151,6 +151,10 @@ export interface UnifiedFinding {
   snoozedUntil?: string;
   dismissedReason?: string;
   userNote?: string;
+  // remindAt is the will_fix_later wake-up deadline. UI uses it to (a) preview
+  // the deadline at dismiss time and (b) badge dismissed rows with "Reminding
+  // <date>" so the operator sees their pending commitment.
+  remindAt?: string;
   status: 'active' | 'resolved' | 'dismissed' | 'snoozed';
   correlatedFindingIds?: string[];
   remediationPlanId?: string;
@@ -216,6 +220,7 @@ function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number):
     snoozedUntil: item.snoozed_until,
     dismissedReason: item.dismissed_reason,
     userNote: item.user_note,
+    remindAt: item.remind_at,
     status: normalizeFindingStatus(item, now),
     correlatedFindingIds: item.correlated_ids,
     remediationPlanId: item.remediation_id,
@@ -256,6 +261,7 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     snoozedUntil: item.snoozed_until,
     dismissedReason: item.dismissed_reason,
     userNote: item.user_note,
+    remindAt: item.remind_at,
     status: normalizeFindingStatus(item, now),
     investigationSessionId: item.investigation_session_id || '',
     investigationStatus: validateInvestigationStatus(item.investigation_status),

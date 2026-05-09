@@ -142,6 +142,69 @@ describe('aiIntelligenceStore', () => {
     });
   });
 
+  it('promotes remind_at on dismissed-as-will_fix_later patrol findings to camelCase remindAt', async () => {
+    // The store-level UnifiedFinding is what render code consumes; if the
+    // normalizer drops remind_at, the dismiss confirmation panel and the
+    // dismissed-row badge cannot show the operator their pending commitment.
+    // Pin the wiring so the field cannot silently regress in either source.
+    vi.mocked(getPatrolFindings).mockResolvedValueOnce([
+      {
+        id: 'patrol-finding-wfl',
+        severity: 'warning',
+        category: 'reliability',
+        resource_id: 'instance:node:100',
+        resource_name: 'vm-100',
+        resource_type: 'vm',
+        title: 'Disk pressure',
+        description: 'Will fix during the Q3 storage upgrade.',
+        detected_at: '2026-05-09T10:00:00Z',
+        last_seen_at: '2026-05-09T10:05:00Z',
+        auto_resolved: false,
+        times_raised: 2,
+        suppressed: false,
+        investigation_attempts: 0,
+        dismissed_reason: 'will_fix_later',
+        remind_at: '2026-05-16T10:00:00Z',
+      },
+    ]);
+
+    await aiIntelligenceStore.loadPatrolFindings();
+    expect(aiIntelligenceStore.patrolFindings).toHaveLength(1);
+    expect(aiIntelligenceStore.patrolFindings[0]).toMatchObject({
+      id: 'patrol-finding-wfl',
+      dismissedReason: 'will_fix_later',
+      remindAt: '2026-05-16T10:00:00Z',
+    });
+
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
+      findings: [
+        {
+          id: 'unified-finding-wfl',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'reliability',
+          resource_id: 'instance:node:100',
+          resource_name: 'vm-100',
+          resource_type: 'vm',
+          title: 'Disk pressure',
+          description: 'Will fix during the Q3 storage upgrade.',
+          detected_at: '2026-05-09T10:00:00Z',
+          last_seen_at: '2026-05-09T10:05:00Z',
+          times_raised: 2,
+          dismissed_reason: 'will_fix_later',
+          remind_at: '2026-05-16T10:00:00Z',
+        },
+      ],
+    } as never);
+    await aiIntelligenceStore.loadFindings();
+    expect(aiIntelligenceStore.findings).toHaveLength(1);
+    expect(aiIntelligenceStore.findings[0]).toMatchObject({
+      id: 'unified-finding-wfl',
+      dismissedReason: 'will_fix_later',
+      remindAt: '2026-05-16T10:00:00Z',
+    });
+  });
+
   it('loads the canonical intelligence summary', async () => {
     vi.mocked(AIAPI.getIntelligenceSummary).mockResolvedValueOnce({
       timestamp: '2026-03-01T00:00:00Z',

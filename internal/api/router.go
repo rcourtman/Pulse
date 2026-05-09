@@ -1741,6 +1741,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 					UserNote:                   f.UserNote,
 					Suppressed:                 f.Suppressed,
 					TimesRaised:                f.TimesRaised,
+					RemindAt:                   f.RemindAt,
 				}
 				_, isNew := unifiedStore.AddFromAI(uf)
 				return isNew
@@ -1805,6 +1806,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 						UserNote:                   f.UserNote,
 						Suppressed:                 f.Suppressed,
 						TimesRaised:                f.TimesRaised,
+						RemindAt:                   f.RemindAt,
 					}
 					// Copy resolution timestamp if resolved
 					if f.ResolvedAt != nil || f.AutoResolved {

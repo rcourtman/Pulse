@@ -1087,3 +1087,15 @@ escalation still wakes any dismissed finding regardless of reason. The
 `dismiss_finding` LLM tool response surfaces the remind-at date in plain
 language so Patrol's own conversational explanations stay aligned with this
 contract.
+Patrol's findings panel must also surface that commitment to operators on
+the canonical Patrol surface, not only inside the LLM tool response. The
+inline dismiss confirmation must preview the will_fix_later remind-at
+deadline before the operator confirms (and explain the
+`expected_behavior` and `not_an_issue` paths so all three feel
+deliberate), and dismissed-as-`will_fix_later` rows must show the pending
+`Reminding <date>` badge in an amber tone so the operator can see their
+own commitment without expanding the row. The store-level
+`UnifiedFinding.remindAt` field is the canonical source for both
+surfaces; render code reads it from the store, the store normalizer
+promotes it from `remind_at` on both the unified and patrol-direct
+fetch paths.

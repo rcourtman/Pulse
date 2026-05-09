@@ -106,6 +106,36 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('confidence');
   });
 
+  it('previews the will_fix_later remind-at deadline before the operator confirms dismiss', () => {
+    // The backend now treats will_fix_later as a real operational commitment
+    // (Finding.RemindAt, default 7 days), not a silent shut-up. The dismiss
+    // confirmation panel must communicate that to the operator BEFORE they
+    // confirm — otherwise the new behavior is invisible until the reminder
+    // fires a week later. See ai-runtime / patrol-intelligence subsystem
+    // contracts for the three-way dismissal semantics.
+    expect(findingsPanelSource).toContain('formatWillFixLaterRemindDate');
+    expect(findingsPanelSource).toContain("dismissReason() === 'will_fix_later'");
+    expect(findingsPanelSource).toContain('Pulse will stay quiet on this for 7 days');
+    // The other two reasons must also have explanatory copy so all three
+    // dismissal paths feel deliberate, not undifferentiated.
+    expect(findingsPanelSource).toContain("dismissReason() === 'expected_behavior'");
+    expect(findingsPanelSource).toContain("dismissReason() === 'not_an_issue'");
+    expect(findingsPanelSource).toContain('Pulse will keep this finding visible as acknowledged');
+    expect(findingsPanelSource).toContain('Pulse will permanently suppress');
+  });
+
+  it("badges dismissed-as-will_fix_later rows with their pending remind-at deadline", () => {
+    // Once a finding is dismissed as will_fix_later, the row must surface the
+    // pending reminder so the operator knows the commitment exists; otherwise
+    // the only place the deadline lives is the lifecycle log. The amber tone
+    // signals "pending operator action" rather than a generic muted note.
+    expect(findingsPanelSource).toContain(
+      "finding.dismissedReason === 'will_fix_later' && finding.remindAt",
+    );
+    expect(findingsPanelSource).toContain('Reminding {formatTime(finding.remindAt!)}');
+    expect(findingsPanelSource).toContain('text-amber-600 dark:text-amber-400');
+  });
+
   it('renders the operator-facing Impact line between Description and Recommendation', () => {
     // The expanded finding card must surface Finding.Impact directly so
     // detection-time consequence-if-ignored copy reaches the operator on the

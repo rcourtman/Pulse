@@ -1013,7 +1013,22 @@ the canonical monitored-system blocked payload.
    same overwrite pattern as `description`, `impact`, and
    `recommendation`, and the Finding to UnifiedFinding conversion in
    `internal/api/router.go` must copy `f.PreviousResolvedFixSummary`
-   alongside the other operator-facing strings
+   alongside the other operator-facing strings.
+   The same shape also carries an optional `remind_at` timestamp (ISO
+   8601) on both `UnifiedFindingRecord` and Patrol `Finding` shapes. It
+   is populated only when `dismissed_reason === 'will_fix_later'` and
+   represents the wake-up deadline at which the next re-detection clears
+   the dismissal — the operator-facing half of the canonical
+   `Finding.RemindAt` contract. The store normalizer promotes it to
+   camelCase `remindAt` on `UnifiedFinding`, the Finding to
+   UnifiedFinding conversion in `internal/api/router.go` must copy
+   `f.RemindAt`, and the AddFromAI update branch must mirror it
+   (including clearing on remind-at wake or undismiss) so the dedup
+   surface stays consistent with the canonical findings store. The
+   Findings panel must visibly preview the deadline at dismiss-confirm
+   time and badge dismissed-as-will_fix_later rows with the pending
+   remind-at, otherwise the new behavior is invisible until the
+   reminder fires
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

@@ -556,3 +556,79 @@ func TestCategoryMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestUnifiedStore_AddFromAI_MirrorsRemindAt(t *testing.T) {
+	// RemindAt is the will_fix_later wake-up deadline persisted on the
+	// canonical findings store. The unified store mirrors finding state for
+	// the API surface, so AddFromAI must propagate RemindAt on the update
+	// branch — including clearing it on remind-at wake or undismiss —
+	// otherwise dismissed-as-will_fix_later rows on the operator surface
+	// would either show stale reminders or no reminder at all.
+	store := NewUnifiedStore(DefaultAlertToFindingConfig())
+	store.AddFromAI(&UnifiedFinding{
+		ID:           "ai-wfl",
+		Source:       SourceAIPatrol,
+		Severity:     SeverityWarning,
+		Category:     CategoryReliability,
+		ResourceID:   "vm-101",
+		ResourceName: "db-01",
+		ResourceType: "vm",
+		Title:        "Disk pressure",
+		Description:  "Will fix during the Q3 storage upgrade.",
+	})
+
+	// Re-add with the will_fix_later commitment populated; the dedup-merge
+	// path must mirror RemindAt onto the existing record.
+	when := time.Date(2026, 5, 16, 10, 0, 0, 0, time.UTC)
+	store.AddFromAI(&UnifiedFinding{
+		ID:              "ai-wfl",
+		Source:          SourceAIPatrol,
+		Severity:        SeverityWarning,
+		Category:        CategoryReliability,
+		ResourceID:      "vm-101",
+		ResourceName:    "db-01",
+		ResourceType:    "vm",
+		Title:           "Disk pressure",
+		Description:     "Will fix during the Q3 storage upgrade.",
+		DismissedReason: "will_fix_later",
+		RemindAt:        &when,
+	})
+
+	got := store.Get("ai-wfl")
+	if got == nil {
+		t.Fatal("expected finding to exist after merge")
+	}
+	if got.DismissedReason != "will_fix_later" {
+		t.Errorf("expected DismissedReason mirrored, got %q", got.DismissedReason)
+	}
+	if got.RemindAt == nil {
+		t.Fatal("RemindAt must be mirrored onto the existing record")
+	}
+	if !got.RemindAt.Equal(when) {
+		t.Errorf("RemindAt mismatch: got %v want %v", got.RemindAt, when)
+	}
+
+	// Re-add without RemindAt (simulates remind-at wake clearing the
+	// dismissal in the canonical store) — the mirror must clear too,
+	// not preserve the stale deadline.
+	store.AddFromAI(&UnifiedFinding{
+		ID:           "ai-wfl",
+		Source:       SourceAIPatrol,
+		Severity:     SeverityWarning,
+		Category:     CategoryReliability,
+		ResourceID:   "vm-101",
+		ResourceName: "db-01",
+		ResourceType: "vm",
+		Title:        "Disk pressure",
+		Description:  "Reawakened — operator commitment lapsed",
+	})
+	if got = store.Get("ai-wfl"); got == nil {
+		t.Fatal("expected finding to still exist after wake")
+	}
+	if got.RemindAt != nil {
+		t.Errorf("RemindAt must be cleared on wake, got %v", got.RemindAt)
+	}
+	if got.DismissedReason != "" {
+		t.Errorf("DismissedReason must be cleared on wake, got %q", got.DismissedReason)
+	}
+}

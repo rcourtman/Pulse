@@ -43,6 +43,10 @@ export interface Finding {
   user_note?: string;
   times_raised: number;
   suppressed: boolean;
+  // remind_at carries the will_fix_later wake-up deadline; the finding stays
+  // quiet on re-detection until this timestamp passes, then the next
+  // re-detection clears the dismissal and emits a "reminded" lifecycle event.
+  remind_at?: string;
   // Investigation fields (Patrol Autonomy)
   investigation_session_id?: string;
   investigation_status?: InvestigationStatus;

@@ -947,6 +947,13 @@ bypass the API fail-closed execution gate.
 
 ## Current State
 
+The patrol findings-recovery sync in `internal/api/router.go` also keeps
+the will_fix_later wake-up deadline alongside the rest of the finding's
+durable state when re-hydrating findings from disk into the unified
+store. Persisted `Finding.RemindAt` values must round-trip through that
+recovery path so an operator commitment recorded before a process
+restart is not silently dropped when findings reload.
+
 `StorageSummary.tsx`, `StoragePageSummary.tsx`, and `useStoragePageSummary.ts`
 now surface `poolsDegraded` and `disksFailing` health indicators alongside
 pool/disk counts. `RecoverySummary.tsx` gains an aggregate health-state summary

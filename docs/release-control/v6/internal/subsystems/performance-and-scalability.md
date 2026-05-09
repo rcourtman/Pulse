@@ -1245,3 +1245,9 @@ the canonical owners for desktop and mobile workload column sizing. Global CSS
 must not reintroduce competing `.workload-table [data-workload-col=…]` width
 rules or `min-width: max-content` fallbacks that can blow the table out
 horizontally on Firefox or other desktop browsers.
+The same `internal/api/router.go` payload boundary also keeps the
+will_fix_later remind-at deadline scoped to a single optional pointer
+(`*time.Time`) per finding on both API write paths, so adding the
+operational-commitment field does not regress the unified-findings hot
+path with a per-row allocation when the dismissal reason is anything
+other than `will_fix_later`.

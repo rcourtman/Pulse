@@ -1545,3 +1545,12 @@ clearing the dismissal and emitting a `reminded` lifecycle event, and the
 `dismiss_finding` LLM tool response must communicate the remind-at date so
 Patrol's conversational explanations stay aligned with the persisted
 behavior.
+The unified-finding mirror in `internal/ai/unified/alerts.go` also carries
+that same `RemindAt` field so the API surface preserves the will_fix_later
+wake-up deadline across the canonical findings store and the read model.
+The `AddFromAI` dedup-merge path must mirror `RemindAt` onto the existing
+record (including clearing it when a remind-at wake or undismiss has
+already cleared the dismissal in the canonical store), and the TS API
+clients in `frontend-modern/src/api/patrol.ts` and
+`frontend-modern/src/api/ai.ts` must round-trip the `remind_at` field
+verbatim so the operator surface can preview and badge the deadline.

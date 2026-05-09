@@ -463,6 +463,10 @@ export interface UnifiedFindingRecord {
   user_note?: string;
   suppressed?: boolean;
   times_raised?: number;
+  // remind_at carries the will_fix_later wake-up deadline. When dismissed_reason
+  // === 'will_fix_later', the finding stays quiet until this timestamp passes;
+  // afterwards the next re-detection clears the dismissal.
+  remind_at?: string;
   status?: string;
 }
 

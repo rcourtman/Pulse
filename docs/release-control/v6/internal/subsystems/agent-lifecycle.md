@@ -917,6 +917,14 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+Patrol-finding to unified-finding mirroring in `internal/api/router.go`
+also keeps the will_fix_later wake-up deadline (`Finding.RemindAt`)
+intact across restarts. Both the live wire-up callback and the
+persistence-recovery resync must copy `f.RemindAt` onto the unified
+finding so the operator's commitment survives a reboot or process
+restart instead of silently lapsing into the canonical findings store
+without being mirrored on the API surface.
+
 Linux agent privilege hardening is now part of the installer/runtime contract.
 The supported full-telemetry systemd agent may still run as `root`, but
 `cmd/pulse-agent/main.go` must bind health/metrics to loopback by default,

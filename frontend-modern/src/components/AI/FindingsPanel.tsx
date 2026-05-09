@@ -569,6 +569,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const formatTime = (isoString: string) => formatRelativeTime(isoString, { compact: true });
 
+  // Mirror the backend's DefaultWillFixLaterRemindAfter (7 days) so the dismiss
+  // confirmation panel can preview the remind-at date before the operator
+  // confirms. Kept as a helper instead of a constant so the date stays current
+  // each time the panel re-renders.
+  const formatWillFixLaterRemindDate = (): string => {
+    const remindAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    try {
+      return remindAt.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return remindAt.toISOString().slice(0, 10);
+    }
+  };
+
   // Get meaningful resolution reason based on finding type
   const getResolutionReason = (finding: UnifiedFinding): string => {
     const resolvedTime = finding.resolvedAt ? formatTime(finding.resolvedAt) : '';
@@ -749,6 +766,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <Show when={finding.dismissedReason}>
                 <span class="ml-2 text-muted">
                   {' · '}({formatIdentifierLabel(finding.dismissedReason)})
+                </span>
+              </Show>
+              <Show when={finding.dismissedReason === 'will_fix_later' && finding.remindAt}>
+                <span class="ml-2 text-amber-600 dark:text-amber-400" title="Pulse will surface this finding again on this date if it is still tripping.">
+                  {' · '}Reminding {formatTime(finding.remindAt!)}
                 </span>
               </Show>
               <Show when={finding.status === 'snoozed' && finding.snoozedUntil}>
@@ -1151,6 +1173,25 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 Dismiss as: {formatIdentifierLabel(dismissReason())}
               </span>
             </div>
+            <Show when={dismissReason() === 'will_fix_later'}>
+              <p class="text-[11px] text-amber-700 dark:text-amber-300 mb-1.5">
+                Pulse will stay quiet on this for 7 days, then surface it again on{' '}
+                <span class="font-semibold">{formatWillFixLaterRemindDate()}</span>{' '}
+                if it is still happening.
+              </p>
+            </Show>
+            <Show when={dismissReason() === 'expected_behavior'}>
+              <p class="text-[11px] text-muted mb-1.5">
+                Pulse will keep this finding visible as acknowledged but won't re-notify
+                you for it. Severity escalation will still wake it.
+              </p>
+            </Show>
+            <Show when={dismissReason() === 'not_an_issue'}>
+              <p class="text-[11px] text-muted mb-1.5">
+                Pulse will permanently suppress this and similar findings on this resource.
+                Use "Expected" or "Later" if the detection itself is correct.
+              </p>
+            </Show>
             <textarea
               class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
               rows={2}

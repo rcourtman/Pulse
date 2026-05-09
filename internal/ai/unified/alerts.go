@@ -123,6 +123,11 @@ type UnifiedFinding struct {
 	UserNote        string     `json:"user_note,omitempty"`
 	Suppressed      bool       `json:"suppressed"`
 	TimesRaised     int        `json:"times_raised"`
+	// RemindAt is the will_fix_later wake-up deadline. When set, Patrol stays
+	// quiet on re-detection until this time passes; once it passes, the next
+	// re-detection clears the dismissal and emits a "reminded" lifecycle event.
+	// See ai-runtime / patrol-intelligence subsystem contracts.
+	RemindAt *time.Time `json:"remind_at,omitempty"`
 }
 
 type unifiedFindingJSON struct {
@@ -171,6 +176,7 @@ type unifiedFindingJSON struct {
 	UserNote                   string                           `json:"user_note,omitempty"`
 	Suppressed                 bool                             `json:"suppressed"`
 	TimesRaised                int                              `json:"times_raised"`
+	RemindAt                   *time.Time                       `json:"remind_at,omitempty"`
 }
 
 func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
@@ -221,6 +227,7 @@ func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
 		UserNote:                   f.UserNote,
 		Suppressed:                 f.Suppressed,
 		TimesRaised:                f.TimesRaised,
+		RemindAt:                   f.RemindAt,
 	})
 }
 
@@ -276,6 +283,7 @@ func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
 		UserNote:                   payload.UserNote,
 		Suppressed:                 payload.Suppressed,
 		TimesRaised:                payload.TimesRaised,
+		RemindAt:                   payload.RemindAt,
 	}
 	return nil
 }
@@ -667,6 +675,9 @@ func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool
 		existing.DismissedReason = finding.DismissedReason
 		existing.UserNote = finding.UserNote
 		existing.Suppressed = finding.Suppressed
+		// RemindAt mirrors the will_fix_later commitment from the canonical
+		// findings store; allow clearing on remind-at wake or undismiss.
+		existing.RemindAt = finding.RemindAt
 
 		// AI enhancement fields (best-effort merge)
 		if finding.AIContext != "" {
