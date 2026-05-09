@@ -357,9 +357,20 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   );
   const connectedSystemCount = createMemo(() => props.rows().length);
   const discoveredCandidateCount = createMemo(() => props.discoveredNodes().length);
-  const apiOnlySystemCount = createMemo(
-    () => props.rows().filter((row) => rowHasApiCoverage(row) && !rowHasAgentCoverage(row)).length,
+  const apiOnlySystems = createMemo(() =>
+    props.rows().filter((row) => rowHasApiCoverage(row) && !rowHasAgentCoverage(row)),
   );
+  const apiOnlySystemCount = createMemo(() => apiOnlySystems().length);
+  // Names list keeps the descriptive 'Install agents' hint actionable: when
+  // there are 1 or 2 systems missing an agent, surface their names directly
+  // so the user knows exactly which boxes the install applies to.
+  const apiOnlySystemNamesText = createMemo(() => {
+    const names = apiOnlySystems().map((row) => row.name).filter(Boolean);
+    if (names.length === 0) return null;
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    return null;
+  });
   const liveFleetSystemCount = createMemo(
     () =>
       props
@@ -404,10 +415,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     }
 
     if (apiOnlySystemCount() > 0 && props.onAddSource) {
+      const namesText = apiOnlySystemNamesText();
+      const target = namesText ?? formatCount(apiOnlySystemCount(), 'API-backed system');
       return {
         kind: 'agent',
         label: 'Install agents',
-        detail: `Install Pulse Agent on ${formatCount(apiOnlySystemCount(), 'API-backed system')} when you want node-local telemetry such as temperatures, SMART data, and host identity.`,
+        detail: `Install Pulse Agent on ${target} when you want node-local telemetry such as temperatures, SMART data, and host identity.`,
         onClick: () => props.onAddSource?.('agent'),
       };
     }
