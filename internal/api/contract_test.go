@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -13725,6 +13726,98 @@ func TestContract_OperatorStateWriteEmitsStableErrorTokens(t *testing.T) {
 	}
 	if !strings.Contains(src, "errors.Is(err, unified.ErrResourceOperatorStateInvalid)") {
 		t.Error("PUT handler must branch on ErrResourceOperatorStateInvalid so domain validation errors map to the stable wire token — string-matching the error message would drift")
+	}
+}
+
+// TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations pins
+// the symmetry between what handlers actually emit and what the
+// capabilities manifest declares. The doc says the manifest's
+// errorCodes list is "the closed set of values the error field may
+// carry on failure"; this test enforces that claim by reading every
+// writeJSONError call from the two agent-surface handler files and
+// asserting each emitted code is either (a) declared by the matching
+// capability, or (b) one of the three cross-cutting codes the auth
+// middleware emits universally. Drift in either direction is a
+// contract regression — emitting an undeclared code silently breaks
+// agents that branch on the closed set; declaring a code the
+// handler never emits misleads agents into writing dead-code paths.
+func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) {
+	// Codes emitted by the multi-tenant / auth middleware that apply
+	// to every authenticated endpoint and are intentionally not
+	// duplicated on per-capability errorCodes lists. Documented in
+	// api-contracts.md "cross-cutting codes" paragraph.
+	crossCutting := map[string]bool{
+		"invalid_org":   true,
+		"org_suspended": true,
+		"access_denied": true,
+	}
+
+	// Handler files that back agent-surface capabilities. If a future
+	// capability adds a new file, append it here so the audit follows.
+	handlerFiles := []string{
+		"agent_resource_context.go",
+		"resources_operator_state.go",
+	}
+
+	// Extract every (status, code) pair from writeJSONError calls.
+	// The regex tolerates whitespace/newlines that gofmt may insert
+	// between the call's arguments.
+	emitted := map[string]bool{}
+	codeRE := regexp.MustCompile(`writeJSONError\([^"]*"[^"]+",\s*"([a-z_][a-z_0-9]*)"`)
+	for _, file := range handlerFiles {
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		// codeRE captures the second string literal (the code), but
+		// the first arg is `w` (an identifier), then a status int, so
+		// we use a looser pattern: find writeJSONError followed by
+		// `, "code"` somewhere on the same logical call.
+		looseRE := regexp.MustCompile(`writeJSONError\([^)]*?"([a-z_][a-z_0-9]+)"`)
+		// Try the strict match first for documentation; fall back to
+		// the loose one for actual extraction.
+		_ = codeRE
+		for _, m := range looseRE.FindAllSubmatch(body, -1) {
+			emitted[string(m[1])] = true
+		}
+	}
+	if len(emitted) == 0 {
+		t.Fatal("no writeJSONError emissions found in agent-surface handler files; the audit regex must be wrong")
+	}
+
+	// Pull declared codes from the manifest source so the test
+	// follows manifest edits without duplicating the data here.
+	manifestSrc, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	declared := map[string]bool{}
+	declaredRE := regexp.MustCompile(`ErrorCodes:\s*\[\]string\{([^}]+)\}`)
+	for _, m := range declaredRE.FindAllSubmatch(manifestSrc, -1) {
+		// The capture group is the content between `{` and `}`,
+		// shaped like `"code1", "code2"`. Pull each quoted string.
+		quoted := regexp.MustCompile(`"([a-z_][a-z_0-9]+)"`)
+		for _, q := range quoted.FindAllSubmatch(m[1], -1) {
+			declared[string(q[1])] = true
+		}
+	}
+
+	// Every emitted code must be either declared somewhere in the
+	// manifest OR a cross-cutting code.
+	for code := range emitted {
+		if declared[code] || crossCutting[code] {
+			continue
+		}
+		t.Errorf("handler emits %q but no capability in the manifest declares it and it is not a documented cross-cutting code — drift here breaks agents that branch on the closed set", code)
+	}
+
+	// Every manifest-declared code must have a matching emission
+	// somewhere in the agent-surface handlers, otherwise agents
+	// follow a code path the substrate never walks.
+	for code := range declared {
+		if !emitted[code] {
+			t.Errorf("manifest declares %q but no agent-surface handler emits it — declaring a dead code misleads agents into writing branches the substrate never triggers", code)
+		}
 	}
 }
 

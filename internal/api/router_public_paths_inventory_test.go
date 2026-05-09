@@ -120,6 +120,7 @@ var publicPathsAllowlist = []string{
 	"/install.sh",
 	"/install.ps1",
 	"/download/pulse-agent",
+	"/api/agent/capabilities",
 	"/api/agent/version",
 	"/api/agent/ws",
 	"/api/server/info",

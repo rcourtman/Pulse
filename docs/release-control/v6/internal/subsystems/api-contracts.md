@@ -1427,8 +1427,12 @@ capability with stable name (snake_case agent identifier),
 description, category (`context` / `operator-state` / `finding`),
 HTTP method + path, required auth scope, response shape name, and
 the closed set of stable error codes the response may carry. Agents
-fetch this once at startup to learn what's available; future
-MCP-server slices read the manifest to register tools. The manifest
+fetch this once at startup to learn what's available; the
+`cmd/pulse-mcp` adapter reads the manifest to register MCP tools,
+and any future adapter (HTTP-API SDK, Claude-Code custom toolkit,
+etc.) reads the same manifest the same way — manifest-driven
+projection is the substrate's deliberate single source of truth
+for "what can an agent do here?". The manifest
 itself is unauthenticated and cacheable (`Cache-Control: public,
 max-age=300`) — declared in the router's `publicPaths` list so
 the global auth middleware does not gate it; the underlying
@@ -1445,12 +1449,28 @@ behind code changes.
 The agent surface uses one error-envelope shape across every
 endpoint — `{"error": "<stable_code>", "message": "<human>"}` —
 written via `writeJSONError`. Agents branch on the `error` field
-(snake_case stable codes, e.g. `resource_not_found`,
-`operator_state_not_set`, `operator_state_invalid`); the `message`
-field carries human-readable text agents can surface to operators
-without losing the code. The capabilities manifest's `errorCodes`
-list per capability is the closed set of values the `error` field
-may carry on failure; an unmatched value is a contract regression.
+(snake_case stable codes); the `message` field carries
+human-readable text agents can surface to operators without
+losing the code.
+
+There are two layers of stable codes. First, **capability-specific
+codes** are declared per capability in the manifest's `errorCodes`
+list and represent the closed set of failure modes that
+capability's handler emits. Today these are:
+`resource_not_found` (`get_resource_context`),
+`operator_state_not_set` (`get_operator_state`),
+`operator_state_invalid` (`set_operator_state`).
+Adding or renaming one requires both the handler emission and the
+manifest declaration to move together — drift between them is a
+contract regression. Second, **cross-cutting codes** apply to
+every authenticated endpoint and are emitted by the
+multi-tenant / auth middleware rather than any specific
+capability handler: `invalid_org` (400) when the org id resolves
+to garbage, `org_suspended` (403) when the resolved org has been
+suspended, and `access_denied` (403) when the org RBAC denies the
+request. Agents must accept these alongside any capability's
+declared codes; the manifest deliberately does not duplicate them
+on every entry.
 
 The agent substrate is end-to-end exercised by two paired tests in
 `internal/api/agent_substrate_e2e_test.go`. The first test boots
