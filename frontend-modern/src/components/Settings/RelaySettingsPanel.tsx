@@ -18,7 +18,6 @@ import {
   RELAY_PRIMARY_BUTTON_CLASS,
   RELAY_PRIMARY_LINK_CLASS,
   RELAY_READONLY_NOTICE_CLASS,
-  RELAY_SETTINGS_DESCRIPTION,
 } from '@/utils/relayPresentation';
 import { RelayPairingSection } from './RelayPairingSection';
 import {
@@ -32,7 +31,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
   // Relay feature gate
   if (!state.relayEnabled()) {
     return (
-      <SettingsPanel title="Remote Access" description={RELAY_SETTINGS_DESCRIPTION}>
+      <SettingsPanel title="Remote Access">
         <Show when={!state.loading()} fallback={<div class="text-sm ">Loading...</div>}>
           <Card tone="info" padding="md">
             <div class="flex flex-col sm:flex-row items-center gap-4">
@@ -61,7 +60,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
   }
 
   return (
-    <SettingsPanel title="Remote Access" description={RELAY_SETTINGS_DESCRIPTION}>
+    <SettingsPanel title="Remote Access">
       <Show
         when={!state.loading()}
         fallback={<div class="text-sm ">{getSettingsConfigurationLoadingState().text}</div>}

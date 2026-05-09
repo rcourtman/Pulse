@@ -10,7 +10,6 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { PATROL_PATH } from '@/routing/resourceLinks';
 import {
-  AI_SETTINGS_PANEL_DESCRIPTION,
   AI_SETTINGS_PANEL_TITLE,
   getAISettingsLoadingState,
   getAISettingsLoadErrorMessage,
@@ -25,7 +24,6 @@ export const AISettings: Component = () => {
     <>
       <SettingsPanel
         title={AI_SETTINGS_PANEL_TITLE}
-        description={AI_SETTINGS_PANEL_DESCRIPTION}
         action={(() => {
           return (
             <Toggle
