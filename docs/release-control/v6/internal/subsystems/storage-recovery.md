@@ -982,6 +982,15 @@ bundle over existing storage, so storage/recovery flows that
 rehydrate the unified-resources store and the approval store
 already cover everything the agent endpoint surfaces.
 
+The fleet view at `/api/agent/fleet-context` introduces no new
+persistence either — it walks the registry once and reads the same
+durable `resource_operator_state` table per resource, the same
+in-memory findings store, and the same in-memory approval store.
+The recovery posture is identical to the per-resource bundle: when
+the unified-resources store and the approval store rehydrate on
+startup, the fleet view recovers the same situated picture without
+any fleet-specific rehydration step.
+
 The findings runtime reads operator-set state through the same
 durable `resource_operator_state` SQLite table on every
 new-finding-add. Both the time-bounded maintenance window and the

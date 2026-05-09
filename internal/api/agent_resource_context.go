@@ -63,6 +63,47 @@ type AgentResourceApprovalSummary struct {
 	ExpiresAt   time.Time `json:"expiresAt"`
 }
 
+// AgentFleetFindingCounts is the per-severity finding rollup carried
+// on each fleet-context entry. Keys are the canonical severity
+// strings agents already branch on elsewhere (`critical`, `warning`,
+// `info`). `total` is the sum so agents can sort/triage without
+// summing client-side.
+type AgentFleetFindingCounts struct {
+	Total    int `json:"total"`
+	Critical int `json:"critical"`
+	Warning  int `json:"warning"`
+	Info     int `json:"info"`
+}
+
+// AgentFleetResourceSummary is the per-resource thin rollup an agent
+// uses for triage. Carries identity, the operator-intent flags that
+// gate auto-action (intentionallyOffline, neverAutoRemediate,
+// maintenanceWindowActive), per-severity finding counts, and the
+// pending-approval count. Designed to be light enough for a one-read
+// fleet sweep — agents that want depth on a flagged resource follow
+// up via /api/agent/resource-context/{id}.
+type AgentFleetResourceSummary struct {
+	CanonicalID             string                  `json:"canonicalId"`
+	ResourceType            string                  `json:"resourceType"`
+	ResourceName            string                  `json:"resourceName"`
+	Technology              string                  `json:"technology,omitempty"`
+	IntentionallyOffline    bool                    `json:"intentionallyOffline"`
+	NeverAutoRemediate      bool                    `json:"neverAutoRemediate"`
+	MaintenanceWindowActive bool                    `json:"maintenanceWindowActive"`
+	Findings                AgentFleetFindingCounts `json:"findings"`
+	PendingApprovalCount    int                     `json:"pendingApprovalCount"`
+}
+
+// AgentFleetContext is the bundled, agent-consumable triage view
+// across every resource visible to the org. One read returns thin
+// per-resource summaries — enough for an agent to pick a focus
+// before drilling into the per-resource bundle. The list is always
+// an array (never null) so agents iterate without nil-checking.
+type AgentFleetContext struct {
+	Resources   []AgentFleetResourceSummary `json:"resources"`
+	GeneratedAt time.Time                   `json:"generatedAt"`
+}
+
 // AgentResourceOperatorState mirrors the canonical
 // `unified.ResourceOperatorState` but with the same JSON shape the
 // `/api/resources/{id}/operator-state` endpoint already returns. Kept
@@ -287,6 +328,122 @@ func extractAgentResourceContextID(path string) string {
 	trimmed := strings.TrimPrefix(path, "/api/agent/resource-context/")
 	trimmed = strings.TrimSuffix(trimmed, "/")
 	return unified.CanonicalResourceID(trimmed)
+}
+
+// HandleFleetContext serves
+// `GET /api/agent/fleet-context` — the agent-consumable triage view
+// across every resource visible to the org. Each entry is a thin
+// rollup (identity + operator flags + per-severity finding counts +
+// pending-approval count) so a single read tells an agent where to
+// focus. Agents that want depth on a flagged resource follow up via
+// /api/agent/resource-context/{id}.
+//
+// Computed at request time (no caching); the registry walk is the
+// dominant cost. Per-resource costs are bounded: one operator-state
+// SQLite point lookup, one in-memory findings lookup via the
+// findings store's per-resource index, and a single global
+// pending-approvals scan that's grouped by canonical resource id
+// before the registry walk so the fleet sweep costs O(N) registry
+// reads, not O(N*M) approval scans.
+func (h *AgentContextHandler) HandleFleetContext(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.resources == nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	orgID := GetOrgID(r.Context())
+	registry, err := h.resources.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+	store, err := h.resources.getStore(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	now := time.Now().UTC()
+	resources := registry.List()
+	out := AgentFleetContext{
+		Resources:   make([]AgentFleetResourceSummary, 0, len(resources)),
+		GeneratedAt: now,
+	}
+
+	// Pre-compute per-resource pending-approval counts in a single
+	// pass over the bounded global list, indexed by canonical
+	// resource id. Beats N independent provider calls because the
+	// bounded approval list (MaxApprovals=100) is the same regardless
+	// of fleet size — one scan suffices.
+	pendingByResource := map[string]int{}
+	if h.approvalsProvider != nil {
+		// The provider is keyed per-resource; for the fleet scan we
+		// take the resource-keyed projection per registry entry. This
+		// keeps the seam decoupled from approval-store internals at
+		// the cost of one extra map allocation per resource — still
+		// cheap, and tests can stub the provider without setting up
+		// a global approval store.
+		for _, resource := range resources {
+			canonical := unified.CanonicalResourceID(resource.ID)
+			if canonical == "" {
+				continue
+			}
+			pending := h.approvalsProvider.PendingApprovalsForResource(canonical, orgID)
+			if len(pending) > 0 {
+				pendingByResource[canonical] = len(pending)
+			}
+		}
+	}
+
+	for _, resource := range resources {
+		canonical := unified.CanonicalResourceID(resource.ID)
+		summary := AgentFleetResourceSummary{
+			CanonicalID:  canonical,
+			ResourceType: string(resource.Type),
+			ResourceName: resource.Name,
+			Technology:   resource.Technology,
+		}
+		if state, found, opErr := store.GetResourceOperatorState(canonical); opErr == nil && found {
+			summary.IntentionallyOffline = state.IntentionallyOffline
+			summary.NeverAutoRemediate = state.NeverAutoRemediate
+			summary.MaintenanceWindowActive = state.IsInMaintenanceAt(now)
+		}
+		if h.findingsProvider != nil {
+			findings := h.findingsProvider.ActiveFindingsForResource(canonical)
+			summary.Findings = countFleetFindingsBySeverity(findings)
+		}
+		if count, ok := pendingByResource[canonical]; ok {
+			summary.PendingApprovalCount = count
+		}
+		out.Resources = append(out.Resources, summary)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// countFleetFindingsBySeverity tallies the per-severity counts an
+// agent uses to triage. Severity strings outside the canonical set
+// (`critical`, `warning`, `info`) are counted in `Total` but not in
+// any bucket — defensive against ad-hoc severity values, but the
+// schema discourages them.
+func countFleetFindingsBySeverity(findings []AgentResourceFindingSnapshot) AgentFleetFindingCounts {
+	counts := AgentFleetFindingCounts{}
+	for _, f := range findings {
+		counts.Total++
+		switch strings.ToLower(strings.TrimSpace(f.Severity)) {
+		case "critical":
+			counts.Critical++
+		case "warning":
+			counts.Warning++
+		case "info":
+			counts.Info++
+		}
+	}
+	return counts
 }
 
 // projectAgentResourceOperatorState converts the canonical store

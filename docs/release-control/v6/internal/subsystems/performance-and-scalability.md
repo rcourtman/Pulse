@@ -543,6 +543,18 @@ cross-resource scan — the bundle is leveraged for substrate use
 without becoming a per-request hot path that scales with global
 finding volume.
 
+`/api/agent/fleet-context` is O(N) over registry size with bounded
+per-resource cost: one operator-state SQLite point lookup and one
+in-memory findings index lookup per resource, plus one bounded
+pending-approvals lookup per resource against the same store-scan
+ceiling that bounds the per-resource bundle. No action-audit reads
+in the fleet path — the rollup is intentionally light enough to
+serve the "where do I focus?" question without triggering N audit
+queries. Sized for the hundreds-of-resources regime that is
+canonical Pulse fleet scale; agents that need to scan tens of
+thousands of resources should narrow the registry first via the
+existing filtered list endpoints, not the fleet rollup.
+
 The new-finding hot path now consults a per-resource operator-state
 provider when one is wired. The provider call is gated on
 `f.ResourceID != ""` and a non-nil provider so deployments without

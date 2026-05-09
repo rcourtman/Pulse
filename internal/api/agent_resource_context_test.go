@@ -374,6 +374,160 @@ func TestHandleAgentResourceContext_PendingApprovalsEmptyArrayWhenNone(t *testin
 	}
 }
 
+// fleetFixtureHandlers seeds the registry with a multi-resource set
+// so the fleet sweep has something to walk. Mirrors the per-resource
+// fixture but with N resources and an explicit findings/approvals
+// stub for each.
+func fleetFixtureHandlers(t *testing.T, resources []unified.Resource) (*AgentContextHandler, *staticFindingsProvider, *staticApprovalsProvider) {
+	t.Helper()
+	cfg := &config.Config{DataPath: t.TempDir()}
+	rh := NewResourceHandlers(cfg)
+	rh.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: time.Now()},
+		resources: resources,
+	})
+	findings := &staticFindingsProvider{byResource: map[string][]AgentResourceFindingSnapshot{}}
+	approvals := &staticApprovalsProvider{byResource: map[string][]AgentResourceApprovalSummary{}}
+	h := NewAgentContextHandler(rh)
+	h.SetFindingsProvider(findings)
+	h.SetApprovalsProvider(approvals)
+	return h, findings, approvals
+}
+
+func TestHandleAgentFleetContext_RollsUpEveryResource(t *testing.T) {
+	// The fleet view must surface one entry per resource in the
+	// registry so an agent can scan the whole org in one read. Pin
+	// the contract: identity round-trips, count is 1:1 with the
+	// registry, list is always an array (never null).
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+		{ID: "container:web-1", Type: "container", Name: "web-1", Technology: "docker"},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context", nil)
+	h.HandleFleetContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var fleet AgentFleetContext
+	if err := json.NewDecoder(rec.Body).Decode(&fleet); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(fleet.Resources) != 2 {
+		t.Fatalf("Resources len = %d; want 2; body=%s", len(fleet.Resources), rec.Body.String())
+	}
+	byID := map[string]AgentFleetResourceSummary{}
+	for _, s := range fleet.Resources {
+		byID[s.CanonicalID] = s
+	}
+	if got, ok := byID["vm:101"]; !ok || got.ResourceName != "db-01" || got.ResourceType != "vm" {
+		t.Errorf("vm:101 entry missing or wrong: %+v", got)
+	}
+	if got, ok := byID["container:web-1"]; !ok || got.Technology != "docker" {
+		t.Errorf("container:web-1 entry missing or wrong technology: %+v", got)
+	}
+}
+
+func TestHandleAgentFleetContext_CountsFindingsBySeverity(t *testing.T) {
+	// Per-severity finding counts are the headline number agents use
+	// to triage. Pin the contract: counts roll up correctly across
+	// (critical, warning, info) and total is the sum.
+	h, findings, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	findings.byResource["vm:101"] = []AgentResourceFindingSnapshot{
+		{ID: "f1", Severity: "critical"},
+		{ID: "f2", Severity: "warning"},
+		{ID: "f3", Severity: "warning"},
+		{ID: "f4", Severity: "info"},
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context", nil)
+	h.HandleFleetContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d", rec.Code)
+	}
+	var fleet AgentFleetContext
+	if err := json.NewDecoder(rec.Body).Decode(&fleet); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(fleet.Resources) != 1 {
+		t.Fatalf("Resources len = %d; want 1", len(fleet.Resources))
+	}
+	got := fleet.Resources[0].Findings
+	want := AgentFleetFindingCounts{Total: 4, Critical: 1, Warning: 2, Info: 1}
+	if got != want {
+		t.Errorf("findings counts = %+v; want %+v", got, want)
+	}
+}
+
+func TestHandleAgentFleetContext_PropagatesPendingApprovalCount(t *testing.T) {
+	// pendingApprovalCount must reflect the provider's per-resource
+	// count so an agent triaging the fleet sees governance-blocked
+	// resources at a glance.
+	h, _, approvals := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+		{ID: "container:web-1", Type: "container", Name: "web-1"},
+	})
+	approvals.byResource["vm:101"] = []AgentResourceApprovalSummary{
+		{ID: "appr-1"},
+		{ID: "appr-2"},
+	}
+	// container:web-1 has no pending approvals — should surface as 0.
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context", nil)
+	h.HandleFleetContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d", rec.Code)
+	}
+	var fleet AgentFleetContext
+	if err := json.NewDecoder(rec.Body).Decode(&fleet); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	byID := map[string]AgentFleetResourceSummary{}
+	for _, s := range fleet.Resources {
+		byID[s.CanonicalID] = s
+	}
+	if got := byID["vm:101"].PendingApprovalCount; got != 2 {
+		t.Errorf("vm:101 pendingApprovalCount = %d; want 2", got)
+	}
+	if got := byID["container:web-1"].PendingApprovalCount; got != 0 {
+		t.Errorf("container:web-1 pendingApprovalCount = %d; want 0", got)
+	}
+}
+
+func TestHandleAgentFleetContext_EmptyArrayWhenRegistryEmpty(t *testing.T) {
+	// Empty registry must surface as `resources: []`, never null —
+	// agents iterate without nil-checking. This mirrors the
+	// iteration-safe contract the per-resource bundle's sections
+	// already follow.
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context", nil)
+	h.HandleFleetContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"resources":[]`) {
+		t.Errorf("expected resources to surface as empty array; body=%s", body)
+	}
+}
+
+func TestHandleAgentFleetContext_RejectsNonGet(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/agent/fleet-context", nil)
+	h.HandleFleetContext(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status: got %d, want 405", rec.Code)
+	}
+}
+
 func TestExtractAgentResourceContextID(t *testing.T) {
 	cases := []struct {
 		path string

@@ -102,6 +102,15 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 			ErrorCodes:    []string{"resource_not_found"},
 		},
 		{
+			Name:          "get_fleet_context",
+			Description:   "Return a thin per-resource triage rollup across every resource visible to the org — identity, operator flags (intentionallyOffline, neverAutoRemediate, maintenanceWindowActive), per-severity finding counts (total/critical/warning/info), and pending-approval count. One read for 'where do I focus?'; follow up via get_resource_context for depth.",
+			Category:      "context",
+			Method:        http.MethodGet,
+			Path:          "/api/agent/fleet-context",
+			Scope:         "monitoring:read",
+			ResponseShape: "AgentFleetContext",
+		},
+		{
 			Name:          "get_operator_state",
 			Description:   "Read the operator-set state for a resource (intentionally offline, never auto-remediate, maintenance window, criticality).",
 			Category:      "operator-state",

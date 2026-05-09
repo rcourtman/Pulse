@@ -13586,6 +13586,65 @@ func TestContract_GetResourceContextCapabilityListsPendingApprovals(t *testing.T
 	}
 }
 
+// TestContract_AgentFleetContextEndpointSurfacesStableShape pins the
+// agent-paradigm fleet view contract: the endpoint must return a
+// `resources` array (never null) so agents iterate without
+// nil-checking, must initialize per-severity counts as a struct (not
+// a map) so agents branch on stable field names, and must carry the
+// operator-intent flags (intentionallyOffline, neverAutoRemediate,
+// maintenanceWindowActive) that gate auto-action. Drift here would
+// silently break the substrate's "where do I focus?" answer.
+func TestContract_AgentFleetContextEndpointSurfacesStableShape(t *testing.T) {
+	source, err := os.ReadFile("agent_resource_context.go")
+	if err != nil {
+		t.Fatalf("read agent_resource_context.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "Resources:   make([]AgentFleetResourceSummary, 0, len(resources))") {
+		t.Error("AgentFleetContext.Resources must default to a non-nil empty slice — agents iterate without nil-checks")
+	}
+	if !strings.Contains(src, "Resources   []AgentFleetResourceSummary `json:\"resources\"`") {
+		t.Error("AgentFleetContext must carry Resources as a stable []AgentFleetResourceSummary field")
+	}
+	if !strings.Contains(src, "IntentionallyOffline    bool                    `json:\"intentionallyOffline\"`") {
+		t.Error("AgentFleetResourceSummary must carry IntentionallyOffline so agents see operator lock at a glance")
+	}
+	if !strings.Contains(src, "NeverAutoRemediate      bool                    `json:\"neverAutoRemediate\"`") {
+		t.Error("AgentFleetResourceSummary must carry NeverAutoRemediate")
+	}
+	if !strings.Contains(src, "MaintenanceWindowActive bool                    `json:\"maintenanceWindowActive\"`") {
+		t.Error("AgentFleetResourceSummary must carry MaintenanceWindowActive — server pre-computes so agents don't re-evaluate timestamps client-side")
+	}
+	if !strings.Contains(src, "Findings                AgentFleetFindingCounts `json:\"findings\"`") {
+		t.Error("AgentFleetResourceSummary must carry per-severity finding counts as a struct so agents branch on stable field names")
+	}
+	if !strings.Contains(src, "PendingApprovalCount    int                     `json:\"pendingApprovalCount\"`") {
+		t.Error("AgentFleetResourceSummary must carry PendingApprovalCount so agents see governance-blocked resources at a glance")
+	}
+}
+
+// TestContract_GetFleetContextCapabilityListed pins the discovery
+// contract: the capabilities manifest must declare get_fleet_context
+// so an agent reading the manifest learns the fleet view exists and
+// what its response shape is. Drift here means external agents
+// still expect to walk every resource id one-by-one.
+func TestContract_GetFleetContextCapabilityListed(t *testing.T) {
+	source, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, `Name:          "get_fleet_context"`) {
+		t.Error("agent capabilities manifest must declare get_fleet_context — the substrate's triage entry point")
+	}
+	if !strings.Contains(src, `Path:          "/api/agent/fleet-context"`) {
+		t.Error("get_fleet_context must point at /api/agent/fleet-context")
+	}
+	if !strings.Contains(src, `ResponseShape: "AgentFleetContext"`) {
+		t.Error("get_fleet_context response shape must be AgentFleetContext so agents know what to parse")
+	}
+}
+
 // TestContract_FindingsResourceOperatorStateProviderIsWired pins the
 // startup wiring that gives the findings runtime access to
 // per-resource operator-set state via the API layer's adapter. The

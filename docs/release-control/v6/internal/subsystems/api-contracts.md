@@ -1464,6 +1464,26 @@ operator state surfaces as a missing `operatorState` field
 (omitempty), distinguishing "no operator overrides" from
 "all-zero overrides recorded."
 
+`/api/agent/fleet-context` is the agent-consumable triage view
+across every resource visible to the org. One read returns a thin
+per-resource rollup: identity (canonical id, type, name,
+technology), operator-intent flags (`intentionallyOffline`,
+`neverAutoRemediate`, `maintenanceWindowActive` — server-computed
+once at request time so agents don't re-evaluate timestamps
+client-side), per-severity finding counts as the
+`AgentFleetFindingCounts` struct (`total`, `critical`, `warning`,
+`info`), and `pendingApprovalCount`. The `resources` slice is
+always an array (never null) so agents iterate without
+nil-checking; an empty registry surfaces as `resources: []`. The
+endpoint walks the registry once and reuses the same per-resource
+adapters as the per-resource bundle (operator-state via
+`unified.ResourceStore.GetResourceOperatorState`, findings via
+`AgentFindingsProvider`, pending approvals via
+`AgentApprovalsProvider`), so the fleet sweep is the per-resource
+bundle's wiring multiplied by N — no new dependencies. Agents pick
+a focus from the fleet view, then drill into the per-resource
+bundle for depth.
+
 The TS client `frontend-modern/src/api/resourceOperatorState.ts`
 mirrors the canonical Go shape from
 `internal/unifiedresources/resource_operator_state.go` and exposes

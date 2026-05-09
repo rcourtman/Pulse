@@ -963,6 +963,18 @@ canonical approval store at request time and filters by
 canonical resource id and org. The agent runtime keeps both
 providers wired across restarts.
 
+`/api/agent/fleet-context` is the companion triage view: one read
+returns a thin per-resource rollup across every resource visible
+to the org — identity, operator flags
+(`intentionallyOffline`, `neverAutoRemediate`,
+`maintenanceWindowActive`), per-severity finding counts, and
+pending-approval count. Same auth scope (`monitoring:read`) and
+same provider wiring as the per-resource bundle; the fleet sweep
+walks the registry once and reuses the in-memory findings index,
+the bounded approval-store scan, and a per-resource operator-state
+SQLite point lookup. Agents pick "where do I focus?" from the
+fleet view and then drill into the per-resource bundle for depth.
+
 The findings runtime now consumes operator-set per-resource state
 through a provider adapter wired in `internal/api/router.go` at
 startup. The adapter returns a `ResourceOperatorStateProjection`
