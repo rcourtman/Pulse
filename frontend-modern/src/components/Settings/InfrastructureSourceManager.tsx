@@ -524,7 +524,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             </button>
           </Show>
 
-          <div class="ml-auto flex flex-wrap items-center gap-2">
+          {/* Discovery actions are utility-tier: most users never run them.
+              Render as icon-only ghost buttons so they don't compete with
+              the primary '+ Add infrastructure' CTA for visual weight. The
+              full action description lives in title for hover discovery and
+              in aria-label for screen readers; the scanning state still
+              shows a 'Scanning…' label inline so the user gets feedback. */}
+          <div class="ml-auto flex flex-wrap items-center gap-1">
             <Show when={props.onRunDiscovery}>
               <button
                 type="button"
@@ -537,7 +543,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 <RotateCw
                   class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
                 />
-                {props.discoveryScanStatus().scanning ? 'Scanning…' : 'Run discovery'}
+                <Show when={props.discoveryScanStatus().scanning}>
+                  <span>Scanning…</span>
+                </Show>
               </button>
             </Show>
 
@@ -550,7 +558,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 title="Configure which networks and ports Pulse scans for platform APIs, and how often."
               >
                 <SlidersHorizontal class="h-4 w-4" />
-                Discovery settings
               </button>
             </Show>
           </div>

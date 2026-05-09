@@ -466,8 +466,10 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('InfrastructureOperationsController');
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
     expect(infrastructureSourceManagerSource).toContain('Infrastructure systems');
+    // Discovery actions are now icon-only ghost buttons; the human copy
+    // still lives in their title and aria-label attributes.
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
-    expect(infrastructureSourceManagerSource).toContain('Discovery settings');
+    expect(infrastructureSourceManagerSource).toContain('discovery settings');
     expect(monitoredSystemImpactPreviewSource).toContain('getMonitoredSystemImpactPreviewTitle');
     expect(monitoredSystemImpactPreviewSource).toContain(
       'formatMonitoredSystemImpactPreviewSummary',
