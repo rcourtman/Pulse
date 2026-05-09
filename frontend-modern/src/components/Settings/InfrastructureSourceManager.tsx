@@ -60,8 +60,12 @@ interface InfrastructureSourceManagerProps {
 
 const inlineButtonClass =
   'inline-flex min-w-[4.5rem] items-center justify-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
+// Per-section 'Add' shortcuts are demoted to ghost text buttons so the
+// primary '+ Add infrastructure' CTA at the top of the page stays visually
+// dominant. They retain the 1-click shortcut for users adding another node
+// to an existing platform without competing with the primary CTA.
 const addSectionButtonClass =
-  'inline-flex min-w-[4.5rem] items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
+  'inline-flex items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30';
 const utilityToolbarButtonClass =
   'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-transparent px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:border-border hover:bg-surface hover:text-base-content disabled:cursor-not-allowed disabled:opacity-60';
 const workspacePrimaryButtonClass =
@@ -708,7 +712,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         title={group.actionLabel}
                                       >
                                         <Plus class="h-3.5 w-3.5" />
-                                        {group.actionLabel}
+                                        Add
                                       </button>
                                     </Show>
                                   </div>
@@ -1108,7 +1112,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               title={group.actionLabel}
                             >
                               <Plus class="h-3.5 w-3.5" />
-                              {group.actionLabel}
+                              Add
                             </button>
                           </Show>
                         </header>
