@@ -644,9 +644,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       resource: getResource(finding.resourceId),
     });
 
+    const toggleExpanded = () => {
+      if (expandedId() === finding.id) {
+        setExpandedId(null);
+      } else {
+        setExpandedId(finding.id);
+      }
+      props.onFindingClick?.(finding);
+    };
+
     return (
       <div
         id={`finding-${finding.id}`}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expandedId() === finding.id}
+        aria-controls={`finding-${finding.id}-details`}
         class={`p-3 cursor-pointer transition-colors ${
           finding.status === 'active'
             ? finding.acknowledgedAt
@@ -654,13 +667,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               : 'hover:bg-surface-hover'
             : 'opacity-60 bg-surface-alt hover:opacity-80'
         }`}
-        onClick={() => {
-          if (expandedId() === finding.id) {
-            setExpandedId(null);
-          } else {
-            setExpandedId(finding.id);
+        onClick={toggleExpanded}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleExpanded();
           }
-          props.onFindingClick?.(finding);
         }}
       >
         {/* Finding header */}
@@ -954,7 +966,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const manualControls = getFindingManualControlsPresentation(finding);
 
     return (
-      <div class="mt-3 pt-3 border-t border-border-subtle">
+      <div id={`finding-${finding.id}-details`} class="mt-3 pt-3 border-t border-border-subtle">
         <Show when={primaryAction}>
           {(action) => (
             <div class="mb-3">
