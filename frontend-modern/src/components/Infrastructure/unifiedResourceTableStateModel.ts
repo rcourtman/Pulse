@@ -329,7 +329,7 @@ export const getUnifiedResourceTableHeaderLabels = (
       hold: 'Hold',
       nodes: 'Nodes',
       health: 'Health',
-      action: 'Open',
+      action: 'Action',
     };
   }
 
@@ -350,7 +350,7 @@ export const getUnifiedResourceTableHeaderLabels = (
     hold: 'Hold',
     nodes: 'Nodes',
     health: 'Health',
-    action: 'Open',
+    action: 'Action',
   };
 };
 

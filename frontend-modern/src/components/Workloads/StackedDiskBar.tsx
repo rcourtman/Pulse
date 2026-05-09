@@ -108,7 +108,13 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                   </span>
                 </Show>
                 <Show when={presentation().showDiskCount}>
-                  <span class="text-[8px] font-normal text-muted"> [{props.disks?.length}]</span>
+                  <span
+                    class="text-[8px] font-normal text-muted"
+                    title={`${props.disks?.length ?? 0} disks`}
+                  >
+                    {' '}
+                    [{props.disks?.length}]
+                  </span>
                 </Show>
                 {/* Anomaly indicator */}
                 <Show when={presentation().anomalyDescription && presentation().anomalyRatio}>

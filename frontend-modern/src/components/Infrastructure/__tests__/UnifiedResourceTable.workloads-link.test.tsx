@@ -255,8 +255,8 @@ describe('UnifiedResourceTable workloads links', () => {
     // Service Infrastructure dual-table renders the compact column label.
     expect(getByText('Stores')).toBeInTheDocument();
     expect(getByText('Activity')).toBeInTheDocument();
-    // Compact layout uses 'Open' for the action column.
-    expect(getAllByText('Open').length).toBeGreaterThan(0);
+    // Compact layout uses 'Action' for the action column header.
+    expect(getAllByText('Action').length).toBeGreaterThan(0);
     expect(getByText('Queue')).toBeInTheDocument();
     // Compact layout abbreviates Deferred to 'Def'.
     expect(getByText('Def')).toBeInTheDocument();
