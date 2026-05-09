@@ -1625,3 +1625,27 @@ describe('patrolInvestigationContextModel', () => {
     });
   });
 });
+
+describe('Patrol page header IA framing', () => {
+  it('names the proactive trust loop on the canonical Patrol surface', async () => {
+    // The Patrol page header is the most visible piece of operator-facing
+    // copy on the canonical Patrol surface. The IA reframe replaces the
+    // prior passive "verify, review, control" framing with one that names
+    // the loop the page actually owns: investigate, capture evidence,
+    // propose safe fixes under approval. Pin the wording on the canonical
+    // helper from the patrol-intelligence subsystem so a refactor cannot
+    // silently drop the framing or split the tooltip from the description.
+    const { getPatrolPageHeaderMeta, PATROL_PAGE_DESCRIPTION, PATROL_PAGE_TITLE_TOOLTIP } =
+      await import('@/utils/patrolPagePresentation');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('Pulse investigates your infrastructure');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('gathers evidence');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('proposes safe fixes');
+    expect(PATROL_PAGE_DESCRIPTION).toContain('approval policy');
+    expect(PATROL_PAGE_TITLE_TOOLTIP).toBe(PATROL_PAGE_DESCRIPTION);
+    expect(getPatrolPageHeaderMeta()).toMatchObject({
+      title: 'Patrol',
+      description: PATROL_PAGE_DESCRIPTION,
+      titleTooltip: PATROL_PAGE_DESCRIPTION,
+    });
+  });
+});

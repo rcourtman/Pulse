@@ -72,10 +72,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         id="patrol-title"
         description={headerMeta.description}
         title={
-          <span
-            class="inline-flex items-center gap-3"
-            title="Pulse Patrol continuously verifies your infrastructure, surfaces actionable findings, and can automatically fix issues based on your autonomy settings."
-          >
+          <span class="inline-flex items-center gap-3" title={headerMeta.titleTooltip}>
             <PulsePatrolLogo class="w-6 h-6 text-base-content" decorative />
             <span>{headerMeta.title}</span>
           </span>

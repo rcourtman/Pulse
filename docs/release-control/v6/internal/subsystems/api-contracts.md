@@ -1049,7 +1049,16 @@ the canonical monitored-system blocked payload.
    you" instead of generic auto-detection copy, while keeping Patrol's
    own fix outcomes (`fix_verified`, `fix_executed`, `resolved`)
    priority because those describe Pulse's actual remediation rather
-   than mere auto-detection
+   than mere auto-detection.
+   The canonical Patrol page header copy is owned by the
+   patrol-intelligence subsystem and must consume from
+   `frontend-modern/src/utils/patrolPagePresentation.ts`. The
+   `PatrolIntelligenceHeader` shell on the Patrol API surface reads
+   the title, description, and title tooltip from
+   `getPatrolPageHeaderMeta()` rather than carrying inline copy, so the
+   operator-facing framing of what Patrol does (proactive
+   investigation, evidence capture, governed action) stays tied to the
+   contract instead of drifting between hover and inline
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw proposed-fix commands must stay

@@ -1247,6 +1247,14 @@ prompt explain the same operator-facing priority.
 
 ## Current State
 
+The Patrol page header copy lives in a single canonical helper at
+`frontend-modern/src/utils/patrolPagePresentation.ts`. The page-title
+tooltip on `PatrolIntelligenceHeader.tsx` must read from
+`PATROL_PAGE_TITLE_TOOLTIP` exported alongside the description rather
+than carrying an inline copy, so hover and inline never drift apart on
+what Patrol actually does (proactive investigation, evidence capture,
+governed action under operator approval).
+
 `frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
 command guidance targets. Discovery surfaces that need to tell operators where
 to enable command execution or verify `agent:exec` scope must use that helper's

@@ -1133,3 +1133,14 @@ than "auto-resolved" when the operator clicked Mark resolved
 themselves. Patrol-driven fix outcomes keep their existing copy because
 those describe Pulse's actual remediation, which is more specific than
 mere auto-detection.
+The Patrol page header copy must also name the trust loop the surface
+owns end-to-end, not the runtime controls it happens to embed. The
+canonical `PATROL_PAGE_DESCRIPTION` (and the matching
+`PATROL_PAGE_TITLE_TOOLTIP`) state that "Pulse investigates your
+infrastructure, gathers evidence for every finding, and proposes safe
+fixes under your approval policy" — the proactive-intelligence framing
+described in the Pulse Intelligence vision (investigation +
+explanation + governed action). The tooltip on the page-header title
+must read the same string from the canonical helper rather than
+maintaining a parallel copy, so hover and inline never tell different
+stories about what Patrol does.
