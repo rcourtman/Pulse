@@ -200,8 +200,15 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
     Math.max(0, ...spamBuckets().map((row) => row.count)),
   );
 
+  const headingId = () => `pmg-drawer-heading-${resourceId() || 'instance'}`;
+  const drawerLabel = () =>
+    asTrimmedString(props.resourceName) || resourceId() || 'PMG instance';
+
   return (
-    <div class="space-y-3">
+    <section class="space-y-3" aria-labelledby={headingId()}>
+      <h2 id={headingId()} class="sr-only">
+        {drawerLabel()} details
+      </h2>
       <Show when={loadError()}>
         <div role="alert" aria-live="assertive">
           <Card padding="lg" tone="danger">
@@ -505,7 +512,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
           )}
         </Show>
       </Show>
-    </div>
+    </section>
   );
 };
 

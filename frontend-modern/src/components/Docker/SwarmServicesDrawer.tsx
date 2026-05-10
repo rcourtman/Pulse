@@ -180,8 +180,13 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
   );
   const clusterId = createMemo(() => asTrimmedString(swarm()?.clusterId) ?? '');
 
+  const headingId = () => `swarm-services-drawer-heading-${clusterKey() || 'cluster'}`;
+
   return (
-    <div class="space-y-3">
+    <section class="space-y-3" aria-labelledby={headingId()}>
+      <h2 id={headingId()} class="sr-only">
+        {clusterName() || 'Swarm cluster'} services
+      </h2>
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
@@ -337,6 +342,6 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
           <div class="text-xs text-muted">{getSwarmServicesLoadingState().text}</div>
         </Card>
       </Show>
-    </div>
+    </section>
   );
 };

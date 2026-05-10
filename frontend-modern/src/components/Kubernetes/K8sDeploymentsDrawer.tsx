@@ -172,8 +172,13 @@ export const K8sDeploymentsDrawer: Component<{
     );
   };
 
+  const headingId = () => `k8s-deployments-drawer-heading-${clusterName() || 'cluster'}`;
+
   return (
-    <div class="space-y-3">
+    <section class="space-y-3" aria-labelledby={headingId()}>
+      <h2 id={headingId()} class="sr-only">
+        {clusterName() || 'Kubernetes cluster'} deployments
+      </h2>
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
@@ -306,7 +311,7 @@ export const K8sDeploymentsDrawer: Component<{
           <EmptyState {...getK8sDeploymentsLoadingState()} />
         </Card>
       </Show>
-    </div>
+    </section>
   );
 };
 

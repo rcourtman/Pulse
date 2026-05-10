@@ -32,9 +32,13 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     switchTab,
     webInterfaceTargetLabel,
   } = useGuestDrawerState(props);
+  const headingId = () => `guest-drawer-heading-${guestId()}`;
 
   return (
-    <div class="space-y-3">
+    <section class="space-y-3" aria-labelledby={headingId()}>
+      <h2 id={headingId()} class="sr-only">
+        {props.guest.name} details
+      </h2>
       {/* Tabs */}
       <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
         <button
@@ -122,6 +126,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           </Suspense>
         </div>
       )}
-    </div>
+    </section>
   );
 };

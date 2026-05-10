@@ -42,9 +42,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     resource: props.resource,
     resolveResourceLabel: props.resolveResourceLabel,
   });
+  const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
 
   return (
-    <div class="space-y-3">
+    <section class="space-y-3" aria-labelledby={headingId()}>
       <div class="flex items-start justify-between gap-4">
         <div class="space-y-1 min-w-0">
           <div class="flex items-center gap-2">
@@ -54,12 +55,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               ariaLabel={drawer.statusIndicator().label}
               size="sm"
             />
-            <div
-              class="text-sm font-semibold text-base-content truncate"
+            <h2
+              id={headingId()}
+              class="text-sm font-semibold text-base-content truncate m-0"
               title={drawer.displayName()}
             >
               {drawer.displayName()}
-            </div>
+            </h2>
           </div>
           <div class="flex flex-wrap gap-1.5" data-testid="resource-header-badges">
             <For each={drawer.headerBadges()}>
@@ -246,7 +248,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         sources={drawer.mergedSources()}
         onClose={() => drawer.setShowReportModal(false)}
       />
-    </div>
+    </section>
   );
 };
 

@@ -91,8 +91,13 @@ export const K8sNamespacesDrawer: Component<{
     );
   };
 
+  const headingId = () => `k8s-namespaces-drawer-heading-${clusterName() || 'cluster'}`;
+
   return (
-    <div class="space-y-3">
+    <section class="space-y-3" aria-labelledby={headingId()}>
+      <h2 id={headingId()} class="sr-only">
+        {clusterName() || 'Kubernetes cluster'} namespaces
+      </h2>
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
@@ -237,7 +242,7 @@ export const K8sNamespacesDrawer: Component<{
           </Show>
         </Show>
       </Show>
-    </div>
+    </section>
   );
 };
 
