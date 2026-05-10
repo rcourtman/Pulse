@@ -58,7 +58,10 @@ func TestFindingsStore_RedetectionDoesNotAppendHeartbeatLifecycleEvent(t *testin
 	// LastSeenAt should still update, but no new lifecycle events should
 	// be appended (the lifecycle records transitions, not heartbeats).
 	for i := 0; i < 3; i++ {
-		if !store.Add(&Finding{
+		// Add returns false for existing-finding updates (it returns true
+		// only when a new finding is created); the test asserts that
+		// behaviour so a regression in the existing/new branch surfaces.
+		if store.Add(&Finding{
 			ID:           f.ID,
 			ResourceID:   "host-runtime-error",
 			ResourceName: "host-runtime-error",
@@ -67,7 +70,7 @@ func TestFindingsStore_RedetectionDoesNotAppendHeartbeatLifecycleEvent(t *testin
 			Title:        "Provider analysis error",
 			Description:  "Pulse Patrol reached the configured provider, but the provider did not complete the request.",
 		}) {
-			t.Fatalf("expected re-detection %d to update existing finding", i+1)
+			t.Fatalf("expected re-detection %d to update existing (return false), not create new", i+1)
 		}
 	}
 
@@ -78,6 +81,54 @@ func TestFindingsStore_RedetectionDoesNotAppendHeartbeatLifecycleEvent(t *testin
 	if len(got.Lifecycle) != initialLen {
 		t.Fatalf("expected lifecycle length to remain %d after heartbeat re-detections, got %d (events: %+v)",
 			initialLen, len(got.Lifecycle), got.Lifecycle)
+	}
+}
+
+func TestFindingsStore_TransitionDoesNotAlsoEmitGenericLoopStateEvent(t *testing.T) {
+	// Every semantic transition (resolved, auto_resolved, regressed, dismissed,
+	// acknowledged, snoozed, etc.) is emitted by its own caller before
+	// syncLoopStateLocked runs. The loop-state sync used to ALSO emit a
+	// generic "loop_state" event with the same from/to, doubling every row in
+	// the finding's lifecycle drawer. This test locks in: a single transition
+	// produces a single semantic lifecycle event, never a paired "loop_state"
+	// duplicate. (Invalid transitions still emit "loop_transition_violation"
+	// — that's a guard signal, not a duplicate; covered by a separate test.)
+	store := NewFindingsStore()
+	f := &Finding{
+		ID:           "lf-no-loop-state-dup",
+		ResourceID:   "vm-555",
+		ResourceName: "web-555",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		Title:        "Service crashed",
+		Description:  "Service exited unexpectedly",
+	}
+	if !store.Add(f) {
+		t.Fatal("expected first add to create finding")
+	}
+	if !store.Resolve(f.ID, true) {
+		t.Fatal("expected auto-resolve to succeed")
+	}
+
+	got := store.Get(f.ID)
+	if got == nil {
+		t.Fatal("expected finding to exist after auto-resolve")
+	}
+	for _, e := range got.Lifecycle {
+		if e.Type == "loop_state" {
+			t.Fatalf("did not expect a generic loop_state event after a semantic transition; lifecycle: %+v", got.Lifecycle)
+		}
+	}
+	// Sanity: the auto_resolved semantic event is still recorded.
+	foundAutoResolved := false
+	for _, e := range got.Lifecycle {
+		if e.Type == "auto_resolved" {
+			foundAutoResolved = true
+			break
+		}
+	}
+	if !foundAutoResolved {
+		t.Fatalf("expected auto_resolved lifecycle event; got: %+v", got.Lifecycle)
 	}
 }
 

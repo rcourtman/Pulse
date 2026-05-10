@@ -1091,17 +1091,14 @@ func (s *FindingsStore) syncLoopStateLocked(f *Finding) {
 		})
 		return
 	}
-	meta := map[string]string{}
-	if prev != "" {
-		meta["prev"] = prev
-	}
-	if f.LoopState != "" {
-		meta["next"] = f.LoopState
-	}
-	if !isKnownLoopState(f.LoopState) {
-		meta["invalid_next"] = "true"
-	}
-	s.appendLifecycleLocked(f, "loop_state", "", prev, f.LoopState, meta)
+	// Successful loop-state transitions are not recorded as a generic
+	// "loop_state" lifecycle event. Every caller of syncLoopStateLocked
+	// already emits a semantic event for the transition it caused
+	// ("auto_resolved", "regressed", "dismissed", "acknowledged",
+	// "snoozed", etc.) with the same from/to. Emitting an additional
+	// "loop_state" event here just duplicated every row in the finding's
+	// lifecycle drawer. The loop_transition_violation branch above stays:
+	// it's the only signal that a transition was rejected, not a duplicate.
 }
 
 // Add adds or updates a finding
