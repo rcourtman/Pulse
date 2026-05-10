@@ -313,6 +313,19 @@ prompt explain the same operator-facing priority.
    shortcut chip.
 2. Route new top-level settings surfaces through the canonical settings shell
    instead of introducing page-local framing.
+   When a new operator-facing concern is closely related to an
+   existing tab's intent, prefer adding it as a sibling
+   `SettingsPanel` inside that tab's container component over
+   minting a new top-level tab. The agent-integrations surface
+   added in slice 59 follows this pattern:
+   `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
+   ships under the existing API Access tab via
+   `APIAccessPanel.tsx`'s composition, not as its own tab. This
+   keeps the tab inventory bounded, avoids touching
+   `settingsNavigationModel.ts`, the registry, the loaders, and
+   the routing tests for additive sub-surfaces, and presents
+   "tokens + what those tokens unlock" as one operator-facing
+   story.
    Shared shells and primitives that need websocket or dark-mode context must
    consume `frontend-modern/src/contexts/appRuntime.ts`; they must not import
    `frontend-modern/src/App.tsx`, because `App.tsx` owns provider placement

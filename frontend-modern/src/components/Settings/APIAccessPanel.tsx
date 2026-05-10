@@ -3,6 +3,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { API_TOKEN_ACCESS_PANEL_DESCRIPTION } from '@/utils/apiTokenPresentation';
 import { API_TOKEN_SCOPES_DOC_URL } from '@/utils/docsLinks';
 import APITokenManager from './APITokenManager';
+import AgentIntegrationsPanel from './AgentIntegrationsPanel';
 
 interface APIAccessPanelProps {
   currentTokenHint?: string;
@@ -37,6 +38,8 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
         refreshing={props.refreshing}
         canManage={props.canManage}
       />
+
+      <AgentIntegrationsPanel />
     </div>
   );
 };

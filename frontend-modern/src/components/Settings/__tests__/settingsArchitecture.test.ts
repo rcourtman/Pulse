@@ -635,6 +635,19 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('exposes the agent integrations panel under API Access without growing the settings tab inventory', () => {
+    // The agent integrations panel sits as a sibling section
+    // under the existing API Access tab rather than as its own
+    // navigation entry. This pin keeps the operator's mental
+    // model coherent (one tab for machine-driven access:
+    // tokens + what those tokens unlock) and prevents drift
+    // toward fragmenting the agent surface across tabs.
+    expect(apiAccessPanelSource).toContain(
+      "import AgentIntegrationsPanel from './AgentIntegrationsPanel';",
+    );
+    expect(apiAccessPanelSource).toContain('<AgentIntegrationsPanel />');
+  });
+
   it('keeps internal analytics off the user diagnostics boundary', () => {
     expect(diagnosticsResultsPanelSource).not.toContain('Commercial Funnel');
     expect(diagnosticsResultsPanelSource).not.toContain('Infrastructure Onboarding');

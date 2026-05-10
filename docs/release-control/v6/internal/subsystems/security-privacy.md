@@ -278,6 +278,22 @@ helper. Security surfaces may consume compatibility-normalized
 `platformType: 'truenas'` resources, but they must not reintroduce a separate
 `resource.type === 'truenas'` trust path when calculating token usage,
 revocation targets, or operator-facing token ownership.
+The API Access tab now hosts an Agent Integrations section
+(`frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`)
+alongside the existing API Token Manager. The section reads
+`/api/agent/capabilities` at mount and renders the declared
+agent surface (capabilities grouped by category, stable error
+codes, scopes) plus an MCP config snippet generated from the
+deployment's own origin so an operator wiring Claude Desktop or
+Claude Code sees the right base URL automatically. The section
+does NOT introduce a new token-mint flow or auth path: tokens
+still flow through the API Token Manager, and the snippet
+documents the `monitoring:read` / `monitoring:write` scopes the
+agent surface requires. Keeping token minting and agent-surface
+disclosure on the same tab means an operator gets a single
+"machine-driven access" mental model rather than two surfaces
+to reconcile.
+
 That same token-management boundary also reserves token-owner identity for the
 server-authenticated principal. Token-minting helpers must derive
 `owner_user_id` from the authenticated session or caller token and reject any
