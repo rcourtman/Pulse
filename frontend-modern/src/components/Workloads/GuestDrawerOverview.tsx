@@ -39,9 +39,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
     <div>
       <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
         <div class="rounded border border-border bg-surface p-3 shadow-sm">
-          <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+          <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
             System
-          </div>
+          </h3>
           <div class="space-y-1.5 text-[11px]">
             <Show when={props.guest.cpus}>
               <div class="flex items-center justify-between">
@@ -76,9 +76,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
 
         <Show when={props.hasOsInfo || props.ipAddresses.length > 0}>
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+            <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Guest Info
-            </div>
+            </h3>
             <div class="space-y-2">
               <Show when={props.hasOsInfo}>
                 <div class="text-[11px] text-muted truncate" title={props.guestOsSummary}>
@@ -118,9 +118,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
 
         <Show when={props.memoryExtraLines && props.memoryExtraLines.length > 0}>
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+            <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Memory
-            </div>
+            </h3>
             <div class="space-y-1 text-[11px] text-muted">
               <For each={props.memoryExtraLines}>{(line) => <div>{line}</div>}</For>
             </div>
@@ -129,9 +129,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
 
         <Show when={props.guest.lastBackup}>
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+            <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Backup
-            </div>
+            </h3>
             <div class="space-y-1 text-[11px]">
               <Show when={props.backupPresentation}>
                 {(presentation) => (
@@ -152,9 +152,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
 
         <Show when={props.normalizedTags.length > 0}>
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+            <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Tags
-            </div>
+            </h3>
             <div class="flex flex-wrap gap-1">
               <For each={props.normalizedTags}>
                 {(tag) => (
@@ -171,9 +171,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           when={props.hasFilesystemDetails && props.guest.disks && props.guest.disks.length > 0}
         >
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+            <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Filesystems
-            </div>
+            </h3>
             <div class="text-[11px] text-muted">
               <DiskList
                 disks={props.guest.disks || []}
@@ -188,9 +188,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
 
         <Show when={props.hasNetworkInterfaces}>
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+            <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Network
-            </div>
+            </h3>
             <div class="space-y-2">
               <For each={props.networkInterfaces.slice(0, 4)}>
                 {(iface) => {
