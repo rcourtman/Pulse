@@ -1876,3 +1876,21 @@ selection, cost ledger (report_narrative / report_narrative_fleet
 use-cases), and budget gate the report PDF endpoint already
 enforces — there is exactly one canonical synthesis path for both
 surfaces.
+
+The same canonical AI runtime now also records user-chat token
+usage to the cost ledger. `chat.Service.ExecuteStream` was a
+long-standing gap: the agentic loop accumulated token counts via
+stream callbacks and surfaced them in the SSE done envelope, but
+nothing on the server side recorded a `cost.UsageEvent`. Chat is
+the bulk of AI token spend, so the operator AI usage dashboard
+was understating cost dramatically. `recordChatTurnCost` now runs
+after every `loop.ExecuteWithTools` return — success or error,
+since the operator was billed regardless of whether the loop
+produced a clean response. It emits a `cost.UsageEvent` with
+`UseCase="chat"` in the same shape the rest of the runtime uses.
+The store is threaded through `chat.Config.CostStore`, wired by
+the router from the per-tenant `AISettingsHandler.GetAIService`
+via `Service.CostStore()`. `ExecutePatrolStream` deliberately
+does NOT record here — its caller (`patrol_ai.go`) records via
+its own helper, so cost is never double-counted on the
+patrol-via-chat path.
