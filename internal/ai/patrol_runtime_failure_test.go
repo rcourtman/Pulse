@@ -96,6 +96,36 @@ func TestPatrolRuntimeFailureFromError_ClassifiesToolChoiceValueRejected(t *test
 	}
 }
 
+func TestPatrolRuntimeFailureFromError_ClassifiesMalformedToolHistory(t *testing.T) {
+	// Real failure mode that bit Patrol after the DeepSeek tool_choice fix
+	// landed and Patrol started actually executing tool calls: the
+	// patrol-main session was reused across runs, so when one run ended
+	// after the model emitted tool_calls but before all results landed,
+	// the next run inherited orphan tool_calls and the provider rejected
+	// the conversation structure with this exact phrasing.
+	err := errors.New(`agentic patrol failed: provider error: API error (400): An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'. (insufficient tool messages following tool_calls message)`)
+
+	failure := patrolRuntimeFailureFromError(err)
+
+	if failure.Title != "Pulse Patrol: Malformed tool-call conversation history" {
+		t.Fatalf("unexpected title %q", failure.Title)
+	}
+	if failure.Cause != PatrolFailureCauseMalformedToolHistory {
+		t.Fatalf("unexpected cause %q (want %q)", failure.Cause, PatrolFailureCauseMalformedToolHistory)
+	}
+	if !strings.Contains(failure.Description, "tool_calls without matching tool result messages") {
+		t.Fatalf("expected description to explain orphan tool_calls, got %q", failure.Description)
+	}
+	if !strings.Contains(failure.Recommendation, "stateless") {
+		t.Fatalf("expected recommendation to mention statelessness, got %q", failure.Recommendation)
+	}
+	// Same redaction invariant as the rest of the classifier — never
+	// leak the literal upstream parameter names into Evidence.
+	if strings.Contains(failure.Evidence, "tool_call_id") {
+		t.Fatalf("evidence leaked raw provider parameter name: %q", failure.Evidence)
+	}
+}
+
 func TestPatrolRuntimeFailureFromError_ClassifiesGenericToolUnsupported(t *testing.T) {
 	// Generic "tools are not supported" fallback for providers that say
 	// the model truly cannot call tools (not a value-rejection or routing

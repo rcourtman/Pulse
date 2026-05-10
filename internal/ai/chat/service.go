@@ -1906,7 +1906,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		tempLoop.SetBudgetChecker(s.budgetChecker)
 	}
 
-	// Add user message
+	// Add user message to the session for forensics / audit trail.
 	userMsg := Message{
 		ID:        uuid.New().String(),
 		Role:      "user",
@@ -1917,11 +1917,16 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		log.Warn().Err(err).Msg("failed to save patrol user message")
 	}
 
-	// Get messages for context
-	messages, err := sessions.GetMessages(session.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get patrol messages: %w", err)
-	}
+	// Patrol runs are stateless investigations. The "patrol-main" session
+	// reuses the same id across scheduled runs, so loading prior session
+	// history into the agentic loop accumulates broken state: when any
+	// run ends after the model emitted tool_calls but before all tool
+	// results landed (provider error, timeout, context cancellation),
+	// the orphan tool_calls persist and every subsequent run hits
+	// "An assistant message with 'tool_calls' must be followed by tool
+	// messages responding to each 'tool_call_id'." Patrol must see only
+	// this run's user prompt; the session is just a forensic log.
+	messages := []Message{userMsg}
 
 	// Get all tools (patrol runs in autonomous mode)
 	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, true, true)

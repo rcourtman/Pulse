@@ -27,6 +27,7 @@ const (
 	PatrolFailureCauseModelToolSupportUnverified PatrolFailureCause = "model_tool_support_unverified"
 	PatrolFailureCauseToolChoiceRejected         PatrolFailureCause = "tool_choice_rejected"
 	PatrolFailureCauseNoToolCapableEndpoint      PatrolFailureCause = "no_tool_capable_endpoint"
+	PatrolFailureCauseMalformedToolHistory       PatrolFailureCause = "malformed_tool_history"
 	PatrolFailureCauseModelUnavailable           PatrolFailureCause = "model_unavailable"
 	PatrolFailureCauseContextWindowTooSmall      PatrolFailureCause = "context_window_too_small"
 	PatrolFailureCauseProviderBilling            PatrolFailureCause = "provider_billing"

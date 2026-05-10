@@ -100,6 +100,22 @@ func patrolNoToolCapableEndpoint(lower string) bool {
 	return strings.Contains(lower, "no endpoints found") && strings.Contains(lower, "tool")
 }
 
+// patrolMalformedToolHistory reports whether the upstream error indicates
+// Pulse sent a conversation where an assistant message had tool_calls
+// without matching tool result messages for every tool_call_id. Distinct
+// from tool_choice / capability errors: this is a structural mismatch in
+// the message slice Pulse assembled. DeepSeek phrases it as
+// "An assistant message with 'tool_calls' must be followed by tool messages
+// responding to each 'tool_call_id'", OpenAI uses similar wording.
+func patrolMalformedToolHistory(lower string) bool {
+	if !strings.Contains(lower, "tool_call_id") && !strings.Contains(lower, "tool_calls") {
+		return false
+	}
+	return strings.Contains(lower, "must be followed by tool messages") ||
+		strings.Contains(lower, "insufficient tool messages") ||
+		strings.Contains(lower, "responding to each")
+}
+
 func ClassifyPatrolRuntimeFailure(err error) PatrolRuntimeFailureDiagnostic {
 	failure := patrolRuntimeFailureFromError(err)
 	return PatrolRuntimeFailureDiagnostic{
@@ -130,6 +146,12 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	}
 
 	switch {
+	case patrolMalformedToolHistory(lower):
+		failure.Title = "Pulse Patrol: Malformed tool-call conversation history"
+		failure.Summary = "Malformed tool-call conversation history"
+		failure.Cause = PatrolFailureCauseMalformedToolHistory
+		failure.Description = "Pulse Patrol reached the provider, but the conversation it sent had an assistant message containing tool_calls without matching tool result messages for every tool_call_id. The provider rejects this structure. This usually means a previous Patrol run ended after the model emitted tool calls but before all results were captured, leaving orphan tool_calls in persisted state that the next run reused."
+		failure.Recommendation = "Pulse should treat each Patrol run as stateless. If the failure persists across runs, restart Pulse to clear any in-memory session state and report the issue."
 	case patrolToolChoiceValueRejected(lower):
 		failure.Title = "Pulse Patrol: Provider rejected forced tool selection"
 		failure.Summary = "Provider rejected forced tool selection"
@@ -242,6 +264,8 @@ func summarizePatrolRuntimeFailureDetail(raw string) string {
 	}
 	lower := strings.ToLower(raw)
 	switch {
+	case patrolMalformedToolHistory(lower):
+		return "Pulse sent a malformed tool-call conversation. Each Patrol run should be stateless; restart Pulse if the failure persists."
 	case patrolToolChoiceValueRejected(lower):
 		return "Provider rejected Pulse's forced tool selection. Pulse will retry with automatic tool selection on the next Patrol run."
 	case patrolNoToolCapableEndpoint(lower):
