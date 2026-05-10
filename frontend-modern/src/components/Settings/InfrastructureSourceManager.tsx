@@ -798,7 +798,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       <TableCell class="px-3 py-1 align-top">
                                         <Show
                                           when={row.host}
-                                          fallback={<span class="text-xs text-muted" aria-hidden="true">-</span>}
+                                          fallback={<span class="text-xs text-muted" aria-hidden="true">—</span>}
                                         >
                                           <div
                                             class="truncate whitespace-nowrap text-[12px] text-muted"
@@ -812,7 +812,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       <TableCell class="px-3 py-1 align-top">
                                         <Show
                                           when={row.coverageLabels.length > 0}
-                                          fallback={<span class="text-xs text-muted" aria-hidden="true">-</span>}
+                                          fallback={<span class="text-xs text-muted" aria-hidden="true">—</span>}
                                         >
                                           <div
                                             class="whitespace-normal break-words text-[12px] leading-4 text-muted"
@@ -837,7 +837,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 : `${row.agentUpdateCount} agent updates`}
                                             </span>
                                           </Show>
-                                          <span class="whitespace-nowrap text-[12px] text-muted/90">
+                                          <span
+                                            class="whitespace-nowrap text-[12px] text-muted/90"
+                                            title={
+                                              row.isCluster
+                                                ? 'Oldest activity across cluster API and member agents'
+                                                : undefined
+                                            }
+                                          >
                                             {row.lastActivityText}
                                           </span>
                                         </div>
@@ -955,7 +962,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 <Show
                                                   when={member.host}
                                                   fallback={
-                                                    <span class="text-xs text-muted" aria-hidden="true">-</span>
+                                                    <span class="text-xs text-muted" aria-hidden="true">—</span>
                                                   }
                                                 >
                                                   <div
@@ -971,7 +978,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 <Show
                                                   when={member.coverageLabels.length > 0}
                                                   fallback={
-                                                    <span class="text-xs text-muted" aria-hidden="true">-</span>
+                                                    <span class="text-xs text-muted" aria-hidden="true">—</span>
                                                   }
                                                 >
                                                   <div
@@ -1306,7 +1313,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           : `${row.agentUpdateCount} agent updates`}
                                       </span>
                                     </Show>
-                                    <span class="text-[12px] text-muted/90">
+                                    <span
+                                      class="text-[12px] text-muted/90"
+                                      title={
+                                        row.isCluster
+                                          ? 'Oldest activity across cluster API and member agents'
+                                          : undefined
+                                      }
+                                    >
                                       {row.lastActivityText}
                                     </span>
                                     <For each={row.fleetHighlights}>
