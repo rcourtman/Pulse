@@ -609,7 +609,11 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   const focusedLabel = () => {
     const name = focusedWorkloadName();
     if (!name) return undefined;
-    return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
+    return (
+      <span class="text-xs text-muted ml-1.5 truncate" title={name}>
+        &mdash; {name}
+      </span>
+    );
   };
   const renderSyncedReadout = (
     readout: { empty?: boolean; timestamp: number; value: string } | null,
