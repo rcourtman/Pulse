@@ -69,7 +69,9 @@ func truncateToolResultForModel(text string) string {
 	return fmt.Sprintf("%s\n\n---\n[TRUNCATED: %d characters cut. The result was too large. If you need specific details that may have been cut, make a more targeted query (e.g., filter by specific resource or type).]", truncated, truncatedChars)
 }
 
-// convertToProviderMessages converts our messages to provider format.
+// convertToProviderMessages converts our messages to provider format
+// and applies a structural-repair pass for orphan tool_calls. See
+// repairOrphanToolCalls for why this guard exists.
 func convertToProviderMessages(messages []Message) []providers.Message {
 	result := make([]providers.Message, 0, len(messages))
 
@@ -102,7 +104,101 @@ func convertToProviderMessages(messages []Message) []providers.Message {
 		result = append(result, pm)
 	}
 
-	return result
+	return repairOrphanToolCalls(result)
+}
+
+// orphanToolCallRepairMessage is the synthetic tool result content used
+// to fill missing tool_call_id slots in a loaded conversation. Distinct
+// enough that the model recognizes it as a structural placeholder and
+// either retries the call or proceeds without that data.
+const orphanToolCallRepairMessage = "Pulse did not capture a response for this tool call — the previous run was interrupted before this tool completed. Treat the result as missing; either retry the same tool call now or proceed without this data."
+
+// repairOrphanToolCalls scans provider messages for assistant messages
+// whose tool_calls do not have matching tool result messages downstream
+// and inserts synthetic error tool results to satisfy the provider's
+// structural-validity check.
+//
+// Background: providers like DeepSeek and OpenAI require that an
+// assistant message with N tool_calls be followed by N tool messages
+// each carrying a matching tool_call_id. When a multi-turn agentic run
+// ends mid-execution — network drop, ctx timeout, browser crash, an
+// uncaught panic, anything — the persisted session can contain
+// "assistant: [tool_calls A, B, C]" followed by only "tool: A" and "tool:
+// B." The next request that includes this history is rejected with
+//
+//	An assistant message with 'tool_calls' must be followed by tool
+//	messages responding to each 'tool_call_id'.
+//
+// Patrol used to flap on this for 33 days because patrol-main sessions
+// were reused and any prior interruption poisoned every subsequent run.
+// The Patrol fix made those runs stateless (no session history loaded),
+// but Assistant chat sessions are inherently multi-turn and must keep
+// their history. This pass is the safety net for every other surface:
+// any conversation that crosses convertToProviderMessages is repaired
+// to a structurally-valid shape before it reaches the provider.
+//
+// The repair preserves continuity (assistant message stays) and tells
+// the model the missing call was interrupted (is_error=true with an
+// explanation), so the model can retry the same call or proceed.
+func repairOrphanToolCalls(messages []providers.Message) []providers.Message {
+	fulfilled := make(map[string]bool)
+	for _, m := range messages {
+		if m.ToolResult != nil && m.ToolResult.ToolUseID != "" {
+			fulfilled[m.ToolResult.ToolUseID] = true
+		}
+	}
+
+	// Walk in order. After each assistant message with tool_calls,
+	// inject synthetic results for any tool_call_ids that don't already
+	// have a fulfilled result somewhere in the slice.
+	repaired := make([]providers.Message, 0, len(messages))
+	repaired = append(repaired, messages...)
+	for i := 0; i < len(repaired); i++ {
+		m := repaired[i]
+		if len(m.ToolCalls) == 0 {
+			continue
+		}
+		// Collect ids missing a result. Order preserved to match the
+		// assistant message's tool_calls order, which some providers
+		// rely on.
+		var missing []string
+		for _, tc := range m.ToolCalls {
+			if tc.ID == "" {
+				continue
+			}
+			if fulfilled[tc.ID] {
+				continue
+			}
+			missing = append(missing, tc.ID)
+			fulfilled[tc.ID] = true
+		}
+		if len(missing) == 0 {
+			continue
+		}
+		// Insert synthetic results immediately after the assistant
+		// message, in order. This keeps the structural invariant the
+		// provider validates: every tool_call_id has a downstream tool
+		// message.
+		inject := make([]providers.Message, 0, len(missing))
+		for _, id := range missing {
+			inject = append(inject, providers.Message{
+				Role: "user",
+				ToolResult: &providers.ToolResult{
+					ToolUseID: id,
+					Content:   orphanToolCallRepairMessage,
+					IsError:   true,
+				},
+			})
+		}
+		// Splice the synthetic messages in at position i+1.
+		tail := append([]providers.Message{}, repaired[i+1:]...)
+		repaired = append(repaired[:i+1], inject...)
+		repaired = append(repaired, tail...)
+		// Advance i past the injected messages so the next iteration
+		// resumes at the originally-following message.
+		i += len(inject)
+	}
+	return repaired
 }
 
 // compactOldToolResults replaces full tool result content with short summaries
