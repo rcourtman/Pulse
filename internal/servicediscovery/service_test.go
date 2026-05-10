@@ -850,6 +850,51 @@ func TestService_FingerprintCollectionAndDiscoveryWrappers(t *testing.T) {
 	service.collectFingerprints(context.Background())
 }
 
+// Regression: collectFingerprints used to panic-and-recover for every LXC/VM
+// because processFingerprint went through reflect.Value.Interface(), losing
+// addressability so reflect.Call hit a Container-vs-*Container type mismatch.
+// Fingerprints for LXC and VMs silently never landed in the store. This test
+// fails (no rows under the expected keys) if anyone reintroduces that.
+func TestService_CollectFingerprints_LXCAndVM(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		Containers: []Container{
+			{VMID: 100, Name: "lxc-one", Node: "pve1", Status: "running", OSTemplate: "debian-12", CPUs: 2, MaxMemory: 2 << 30},
+			{VMID: 101, Name: "lxc-two", Node: "pve1", Status: "running", OSTemplate: "ubuntu-22", CPUs: 1, MaxMemory: 1 << 30},
+		},
+		VMs: []VM{
+			{VMID: 200, Name: "vm-one", Node: "pve1", Status: "running", OSName: "ubuntu", CPUs: 4, MaxMemory: 4 << 30},
+		},
+	}
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
+
+	service.collectFingerprints(context.Background())
+
+	for _, key := range []string{
+		"system-container:pve1:100",
+		"system-container:pve1:101",
+		"vm:pve1:200",
+	} {
+		fp, err := store.GetFingerprint(key)
+		if err != nil {
+			t.Fatalf("GetFingerprint(%q) error: %v", key, err)
+		}
+		if fp == nil {
+			t.Fatalf("expected fingerprint at %q, got nil — processFingerprint silently dropped it", key)
+		}
+		if fp.Hash == "" {
+			t.Fatalf("fingerprint %q has empty hash", key)
+		}
+	}
+}
+
 func TestService_PromptsAndDiscoveryLoop(t *testing.T) {
 	service := NewService(nil, nil, DefaultConfig())
 

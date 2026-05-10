@@ -1104,14 +1104,19 @@ func (s *Service) processFingerprint(
 		default:
 		}
 
-		item := v.Index(i).Interface()
-		itemVal := reflect.ValueOf(item)
+		// Generators take *Container / *VM. Reach through .Addr() — going via
+		// .Interface() drops addressability and reflect.Call panics on the type
+		// mismatch.
+		elem := v.Index(i)
+		if !elem.CanAddr() {
+			continue
+		}
 
-		node := itemVal.FieldByName("Node").String()
-		name := itemVal.FieldByName("Name").String()
-		vmid := itemVal.FieldByName("VMID").Int()
+		node := elem.FieldByName("Node").String()
+		name := elem.FieldByName("Name").String()
+		vmid := elem.FieldByName("VMID").Int()
 
-		args := []reflect.Value{reflect.ValueOf(node), reflect.ValueOf(item)}
+		args := []reflect.Value{reflect.ValueOf(node), elem.Addr()}
 		newFP := fpFuncVal.Call(args)[0].Interface().(*ContainerFingerprint)
 		fpKey := prefix + node + ":" + newFP.ResourceID
 
