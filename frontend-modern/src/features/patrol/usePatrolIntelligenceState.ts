@@ -140,6 +140,7 @@ export function usePatrolIntelligenceState() {
   const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
+  const [summaryDetailsExpanded, setSummaryDetailsExpanded] = createSignal(false);
   const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<
     'all' | 'active' | 'resolved' | 'approvals' | 'attention' | undefined
   >(undefined);
@@ -953,6 +954,7 @@ export function usePatrolIntelligenceState() {
     setSelectedRun,
     setShowAdvancedSettings,
     setShowInvestigationContext,
+    setSummaryDetailsExpanded,
     setFindingScrollTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {
       findingScrollTimerRef = timer;
     },
@@ -964,6 +966,7 @@ export function usePatrolIntelligenceState() {
     showReadinessBanner,
     showInvestigationContext,
     shouldSurfaceInvestigationContext,
+    summaryDetailsExpanded,
     summaryStats,
     supportingRecentChanges,
     triggerPatrolDisabledReason,

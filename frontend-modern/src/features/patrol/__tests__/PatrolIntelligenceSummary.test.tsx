@@ -407,6 +407,8 @@ function createPatrolState(): PatrolIntelligenceState {
     setActiveTab: vi.fn(),
     setFindingsFilterOverride: vi.fn(),
     setSelectedRun: vi.fn(),
+    setSummaryDetailsExpanded: vi.fn(),
+    summaryDetailsExpanded: () => false,
     summaryStats: () => ({
       criticalFindings: 1,
       warningFindings: 0,

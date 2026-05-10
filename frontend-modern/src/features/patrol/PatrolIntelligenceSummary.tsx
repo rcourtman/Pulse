@@ -4,6 +4,8 @@ import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
+import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
+import ChevronUpIcon from 'lucide-solid/icons/chevron-up';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import PlayIcon from 'lucide-solid/icons/play';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -416,10 +418,28 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                 >
                   {assessment().eyebrow}
                 </span>
-                <span class="inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-base-content shadow-sm">
-                  {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
-                  {Math.round(summary().overall_health.score)}/100
-                </span>
+                <div class="flex items-center gap-2">
+                  <span class="inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-base-content shadow-sm">
+                    {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
+                    {Math.round(summary().overall_health.score)}/100
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="patrol-summary-details-toggle"
+                    aria-expanded={state.summaryDetailsExpanded()}
+                    aria-controls="patrol-summary-details"
+                    onClick={() => state.setSummaryDetailsExpanded((value) => !value)}
+                    class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-muted shadow-sm transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <Show
+                      when={state.summaryDetailsExpanded()}
+                      fallback={<ChevronDownIcon class="h-3.5 w-3.5" aria-hidden="true" />}
+                    >
+                      <ChevronUpIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    </Show>
+                    <span>{state.summaryDetailsExpanded() ? 'Hide details' : 'Show details'}</span>
+                  </button>
+                </div>
               </div>
 
               <div class="px-4 py-4 sm:px-5 sm:py-5">
@@ -510,7 +530,11 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                   </div>
                 </div>
 
-                <div class="mt-5 overflow-hidden rounded-md border border-border-subtle bg-surface-alt/60">
+                <Show when={state.summaryDetailsExpanded()}>
+                <div
+                  id="patrol-summary-details"
+                  class="mt-5 overflow-hidden rounded-md border border-border-subtle bg-surface-alt/60"
+                >
                   <div class="grid divide-y divide-border-subtle lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
                     <div class="p-3">
                       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
@@ -598,6 +622,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                     </div>
                   </div>
                 </div>
+                </Show>
               </div>
             </section>
           )}
@@ -605,7 +630,12 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       </Show>
 
       <Show
-        when={!showRuntimeSummary() && state.intelligenceSummary() && visibleMetrics().length > 0}
+        when={
+          !showRuntimeSummary() &&
+          state.intelligenceSummary() &&
+          visibleMetrics().length > 0 &&
+          state.summaryDetailsExpanded()
+        }
       >
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <For each={visibleMetrics()}>
