@@ -347,6 +347,7 @@ export const LabeledFilterSelect: Component<LabeledFilterSelectProps> = (props) 
         {...selectProps}
         ref={selectRef}
         value={local.value}
+        aria-label={selectProps['aria-label'] ?? local.label}
         class={`${filterSelectClass} ${local.selectClass ?? ''}`.trim()}
       >
         {local.children}
