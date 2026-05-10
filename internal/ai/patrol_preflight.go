@@ -102,6 +102,11 @@ func (s *Service) TriggerPatrolPreflightAsync(provider, model string) {
 // classified into the result's Cause / Summary / Recommendation fields
 // the same way runtime Patrol failures are, so the caller can render a
 // single response shape for every outcome.
+//
+// cost-recording-exempt: connectivity/tool-call self-test, not user
+// workload. Operator-triggered preflight is observability-shaped, not
+// billed-feature-shaped, and should not pollute the AI usage dashboard.
+// This is the only intentional exception to the cost-recording audit.
 func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, model string) PatrolPreflightResult {
 	started := time.Now()
 

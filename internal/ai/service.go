@@ -1678,6 +1678,7 @@ func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (
 	s.mu.RLock()
 	provider := s.provider
 	cfg := s.cfg
+	costStore := s.costStore
 	s.mu.RUnlock()
 
 	if provider == nil {
@@ -1719,9 +1720,34 @@ func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (
 		chatReq = sanitizer(chatReq)
 	}
 
+	useCase := strings.TrimSpace(req.UseCase)
+	if useCase == "" {
+		useCase = "quick_analysis"
+	}
+
 	resp, err := provider.Chat(ctx, chatReq)
 	if err != nil {
 		return "", fmt.Errorf("Pulse Assistant analysis failed: %w", err)
+	}
+
+	// Record token usage in the operator-facing cost ledger so quick
+	// analysis (alert auto-resolve, etc.) shows up alongside chat and
+	// patrol spend. Recording happens before the empty-content guard
+	// because the operator was billed regardless.
+	if costStore != nil {
+		providerName, _ := config.ParseModelString(model)
+		if providerName == "" {
+			providerName = provider.Name()
+		}
+		costStore.Record(cost.UsageEvent{
+			Timestamp:     time.Now(),
+			Provider:      providerName,
+			RequestModel:  model,
+			ResponseModel: resp.Model,
+			UseCase:       useCase,
+			InputTokens:   resp.InputTokens,
+			OutputTokens:  resp.OutputTokens,
+		})
 	}
 
 	if resp.Content == "" {
