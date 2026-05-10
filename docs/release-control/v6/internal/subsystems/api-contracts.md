@@ -1447,11 +1447,15 @@ error codes are, what category each belongs to) cannot drift
 behind code changes.
 
 The agent surface uses one error-envelope shape across every
-endpoint — `{"error": "<stable_code>", "message": "<human>"}` —
-written via `writeJSONError`. Agents branch on the `error` field
+endpoint — `{"error": "<stable_code>", "message": "<human>",
+"details"?: {"<field>": "<reason>"}}` — written via
+`writeJSONError` (no details) or `writeJSONErrorWithDetails`
+(with field-level reasons). Agents branch on the `error` field
 (snake_case stable codes); the `message` field carries
 human-readable text agents can surface to operators without
-losing the code.
+losing the code; the optional `details` map carries field-level
+failure reasons on validation errors so agents do not parse
+human text to identify which field went wrong.
 
 There are two layers of stable codes. First, **capability-specific
 codes** are declared per capability in the manifest's `errorCodes`
@@ -1637,6 +1641,46 @@ message. DELETE is idempotent (`204` whether or not an entry was
 present). The handler dispatches off `r.Method` rather than mounting
 three sibling routes so the URL surface stays a single resource path
 matching the rest of `/api/resources/{id}/...`.
+
+The action governance loop at `/api/actions/plan`,
+`/api/actions/{id}/decision`, and `/api/actions/{id}/execute` is
+the canonical write surface for capability invocations against a
+resource. All three require the `ai:execute` scope, which is
+distinct from `monitoring:write` because action governance is the
+governed-execution dimension of the substrate. The handlers emit
+the agent-stable error envelope (`{"error": "<code>", "message":
+"...", "details": {...}}`), matching the rest of the agent
+surface, so an agent that branches on the `error` field across
+read, write, and action capabilities sees the same envelope
+shape everywhere. The `details` map is optional and carries
+field-level reasons on validation failures (e.g.
+`{"resourceId": "resource id is required"}`) so agents do not
+need to parse human text to know which field went wrong. The
+manifest's per-capability `errorCodes` lists declare the closed
+set: `plan_action` carries `invalid_action_request`,
+`resource_not_found`, `capability_not_found`; `decide_action`
+carries `missing_id`, `invalid_id`, `invalid_action_decision`,
+`action_not_found`, `action_not_pending`, `action_plan_expired`;
+`execute_action` carries `missing_id`, `invalid_id`,
+`invalid_action_execution`, `action_not_found`,
+`action_not_approved`, `action_already_executing`,
+`action_execution_final`, `action_dry_run_only`,
+`action_executor_unavailable`. 5xx internal-failure codes
+(audit-store outages, encode failures) are not declared per
+capability; agents branch on 5xx generically.
+
+The action endpoints do not introduce new routes. The same paths
+that the frontend has historically called (zero current frontend
+consumers, verified) now back the manifest entries; the
+substrate's "manifest projection is cheap" promise has a
+documented footnote that bringing an existing endpoint into the
+agent surface may require migrating its error envelope from the
+platform-wide `APIError` shape to the agent-stable shape. That
+migration was the slice 58 work for these three handlers; future
+agent-surface additions on existing endpoints will pay the same
+cost. The trade-off is intentional: the agent surface keeps a
+single envelope contract rather than carrying a wrapper layer to
+translate per capability.
 
 Deploy-job monitored-system volume denials are retired. API routes may still
 accept historical payloads that mention old license-slot terminology for

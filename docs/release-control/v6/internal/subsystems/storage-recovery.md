@@ -975,6 +975,17 @@ read-only and stateless — no persistence is involved. The manifest
 is hand-authored in `internal/api/agent_capabilities.go`; storage
 flows are not affected.
 
+The action governance loop endpoints (`/api/actions/plan`,
+`/api/actions/{id}/decision`, `/api/actions/{id}/execute`) joined
+the agent surface but introduce no new persistence. Plan, decide,
+and execute all write to the same `ActionAuditRecord` /
+`ActionLifecycleEvent` durable storage the action audit store
+already manages; the only delta is the wire shape returned to
+clients on error (now the agent-stable envelope rather than the
+platform-wide `APIError` shape). Recovery posture is identical:
+when the action audit store rehydrates on startup, the action
+endpoints recover the same lifecycle records they always did.
+
 The agent-consumable bundled context endpoint
 `/api/agent/resource-context/{id}` reads the same durable
 `resource_operator_state` table and `action_audits` table through the

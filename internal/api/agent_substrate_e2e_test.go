@@ -433,3 +433,143 @@ func stringSliceContains(haystack []string, needle string) bool {
 	}
 	return false
 }
+
+// TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope is the
+// end-to-end contract proof for the action surface joining the
+// agent manifest. The three action endpoints (plan/decide/execute)
+// previously emitted the platform-wide APIError shape (stable code
+// under `code`, human under `error`); after the slice-58 refactor
+// they emit the agent-stable envelope (stable code under `error`,
+// human under `message`) so an agent that branched on the agent
+// surface sees identical envelope semantics across read, write,
+// and action capabilities.
+//
+// The test covers three error paths through the actual HTTP
+// boundary, one per endpoint:
+//
+//   - plan_action with a missing resourceId surfaces
+//     invalid_action_request under the agent-stable `error` key
+//     and includes a `details` map naming the field that failed.
+//   - decide_action against a non-existent action id surfaces
+//     action_not_found.
+//   - execute_action against a non-existent action id surfaces
+//     action_not_found.
+//
+// Each error path also asserts the message is non-empty so agents
+// surfacing copy to humans get something readable, and that the
+// APIError-shape fields (`code`, `status_code`, `timestamp`) do
+// NOT appear, since their presence would mean the refactor
+// regressed.
+func TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope(t *testing.T) {
+	rawToken := "agent-substrate-action-e2e.12345678"
+	record := newTokenRecord(t, rawToken,
+		[]string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	// First verify the manifest declares the three action
+	// capabilities, since the substrate's promise is that the
+	// envelope an agent encounters matches what the manifest's
+	// errorCodes list documents.
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/capabilities", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("capabilities GET: status = %d", rec.Code)
+	}
+	var manifest AgentCapabilitiesManifest
+	if err := json.NewDecoder(rec.Body).Decode(&manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	byName := map[string]AgentCapability{}
+	for _, c := range manifest.Capabilities {
+		byName[c.Name] = c
+	}
+	for _, want := range []string{"plan_action", "decide_action", "execute_action"} {
+		cap, ok := byName[want]
+		if !ok {
+			t.Fatalf("manifest missing %q capability", want)
+		}
+		if cap.Category != "action" {
+			t.Errorf("%s: category = %q, want \"action\"", want, cap.Category)
+		}
+		if cap.Scope != "ai:execute" {
+			t.Errorf("%s: scope = %q, want \"ai:execute\"", want, cap.Scope)
+		}
+		if len(cap.ErrorCodes) == 0 {
+			t.Errorf("%s: must declare at least one stable errorCode", want)
+		}
+	}
+
+	// --- 1. plan_action: invalid request body lands under the
+	// stable invalid_action_request code with a details map. ---
+	planCap := byName["plan_action"]
+	body := strings.NewReader(`{"resourceId": "", "capabilityName": "restart"}`)
+	req = httptest.NewRequest(http.MethodPost, planCap.Path, body)
+	req.Header.Set("X-API-Token", rawToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("plan_action invalid: status = %d, want 400, body = %s", rec.Code, rec.Body.String())
+	}
+	assertAgentStableEnvelope(t, "plan_action", rec.Body.String(), "invalid_action_request")
+	if !stringSliceContains(planCap.ErrorCodes, "invalid_action_request") {
+		t.Errorf("manifest plan_action.ErrorCodes must declare invalid_action_request; got %v", planCap.ErrorCodes)
+	}
+
+	// --- 2. decide_action against a non-existent action id. ---
+	decideCap := byName["decide_action"]
+	decidePath := strings.Replace(decideCap.Path, "{actionId}", "act_does_not_exist_xyz", 1)
+	body = strings.NewReader(`{"outcome": "approved"}`)
+	req = httptest.NewRequest(http.MethodPost, decidePath, body)
+	req.Header.Set("X-API-Token", rawToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("decide_action unknown: status = %d, want 404, body = %s", rec.Code, rec.Body.String())
+	}
+	assertAgentStableEnvelope(t, "decide_action", rec.Body.String(), "action_not_found")
+
+	// --- 3. execute_action against a non-existent action id. ---
+	executeCap := byName["execute_action"]
+	executePath := strings.Replace(executeCap.Path, "{actionId}", "act_does_not_exist_xyz", 1)
+	req = httptest.NewRequest(http.MethodPost, executePath, strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("execute_action unknown: status = %d, want 404, body = %s", rec.Code, rec.Body.String())
+	}
+	assertAgentStableEnvelope(t, "execute_action", rec.Body.String(), "action_not_found")
+}
+
+// assertAgentStableEnvelope is the inverse APIError-shape check: it
+// asserts the response body uses the agent-stable envelope (stable
+// code under `error`, human under `message`) and explicitly does
+// NOT carry the legacy APIError fields (`code`, `status_code`,
+// `timestamp`). Drift back to APIError would mean the slice-58
+// refactor regressed, and an agent that read `error` for the
+// stable code would silently get human text instead.
+func assertAgentStableEnvelope(t *testing.T, label, body, wantCode string) {
+	t.Helper()
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(body), &envelope); err != nil {
+		t.Fatalf("%s: response body is not JSON: %v\nbody=%s", label, err, body)
+	}
+	gotCode, _ := envelope["error"].(string)
+	if gotCode != wantCode {
+		t.Errorf("%s: error code = %q, want %q (envelope=%s)", label, gotCode, wantCode, body)
+	}
+	gotMsg, _ := envelope["message"].(string)
+	if strings.TrimSpace(gotMsg) == "" {
+		t.Errorf("%s: message must be non-empty so agents can surface human text; envelope=%s", label, body)
+	}
+	for _, legacy := range []string{"code", "status_code", "timestamp"} {
+		if _, has := envelope[legacy]; has {
+			t.Errorf("%s: envelope must not carry legacy APIError field %q after agent-stable refactor; envelope=%s", label, legacy, body)
+		}
+	}
+}

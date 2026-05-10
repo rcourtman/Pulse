@@ -30,13 +30,21 @@ rollup across the whole org: identity, operator flags, per-severity
 finding counts, pending-approval count. One read for "where do I
 focus?", with the per-resource bundle for follow-up depth.
 
-**Write.** The operator-state intent loop
+**Write.** Two write surfaces. The operator-state intent loop
 (`/api/resources/{id}/operator-state`) lets an agent record
-per-resource commitments (intentionally offline, never auto-remediate,
-maintenance window, criticality). The server populates attribution so
-client values cannot spoof who-did-it. Validation failures emit the
-`operator_state_invalid` stable code; reads on unset resources emit
-`operator_state_not_set`.
+per-resource commitments (intentionally offline, never
+auto-remediate, maintenance window, criticality). The action
+governance loop (`/api/actions/plan`, `/api/actions/{id}/decision`,
+`/api/actions/{id}/execute`) lets an agent plan, approve, and
+execute capability invocations against a resource through the
+canonical audit store. The server populates attribution so client
+values cannot spoof who-did-it. Validation failures emit the
+`operator_state_invalid` and `invalid_action_request` stable
+codes; lifecycle conflicts on the action loop emit
+`action_not_pending`, `action_not_approved`,
+`action_already_executing`, `action_execution_final`, and
+`action_dry_run_only` so agents branch on the conflict rather
+than retrying blindly.
 
 **Push.** `/api/agent/events` is an SSE stream that fires
 `finding.created`, `approval.pending`, and `action.completed` events
@@ -70,20 +78,27 @@ manifest-driven:
 
 ## What it does not do yet
 
-- The substrate does not yet expose the governed action-execution
-  surface (`/api/actions/plan`, `/api/actions/{id}/decision`,
-  `/api/actions/{id}/execute`) as agent-stable manifest entries.
-  Those handlers exist and are wired through the action audit store,
-  but they emit a different error envelope from the agent surface
-  (`APIError` shape: stable code under `code`, human message under
-  `error`) versus the agent-stable shape (stable code under `error`,
-  human under `message`). Adding them to the manifest as-is would
-  force agents to remember which envelope each capability uses.
-  Resolving that mismatch is a focused slice of its own. Until then,
-  action governance flows through the existing approval store and
-  the `action.completed` push channel: the AI service plans, an
-  operator (or operator-acting agent) approves, the substrate emits
-  the event.
+- Real-world consumer feedback. The substrate ships with two
+  reference adapters (HTTP and MCP) and end-to-end contract tests,
+  but no external integration has been load-bearing on it yet.
+  Until somebody wires `pulse-mcp` into Claude Desktop or builds
+  against the agent surface from a custom client, the next
+  meaningful work item is whatever friction usage surfaces, not
+  more substrate plumbing.
+
+- A user-facing surface inside Pulse for managing agent
+  integrations. Today the agent surface is invisible to the
+  operator running Pulse: there is no Settings panel listing the
+  declared capabilities, no "generate MCP config snippet" button,
+  no token template that says "create token for agent
+  integration." Adding those is what makes the substrate real for
+  humans, not just for agents.
+
+- A distribution path for `pulse-mcp`. Today an integrator must
+  clone the repo and `go build`. A release artifact (Homebrew
+  formula, Docker image, signed binary) would turn integration
+  from "build from source" into "install Pulse, copy this
+  config."
 
 ## Provable claims
 

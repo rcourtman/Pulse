@@ -12420,19 +12420,28 @@ func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusConflict, rec.Body.String())
 	}
-	var apiErr APIError
-	if err := json.Unmarshal(rec.Body.Bytes(), &apiErr); err != nil {
+	// The action endpoints now emit the agent-stable error
+	// envelope (slice 58 refactor): the stable code lives under
+	// the top-level `error` field and the human message lives
+	// under `message`. The previous APIError shape (code under
+	// `code`, message under `error`) is gone for these handlers
+	// because they joined the agent surface.
+	var envelope struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode dry-run execution error: %v", err)
 	}
 	payload := struct {
-		Status int `json:"status"`
-		Error  struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}{Status: rec.Code}
-	payload.Error.Code = apiErr.Code
-	payload.Error.Message = apiErr.ErrorMessage
+		Status   int    `json:"status"`
+		ErrorKey string `json:"error"`
+		Message  string `json:"message"`
+	}{
+		Status:   rec.Code,
+		ErrorKey: envelope.Error,
+		Message:  envelope.Message,
+	}
 
 	got, err := json.Marshal(payload)
 	if err != nil {
@@ -12440,10 +12449,8 @@ func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 	}
 	const want = `{
 		"status":409,
-		"error":{
-			"code":"action_dry_run_only",
-			"message":"Action plan is dry-run only and cannot be executed"
-		}
+		"error":"action_dry_run_only",
+		"message":"Action plan is dry-run only and cannot be executed"
 	}`
 	assertJSONSnapshot(t, got, want)
 
@@ -13771,28 +13778,55 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 	handlerFiles := []string{
 		"agent_resource_context.go",
 		"resources_operator_state.go",
+		"actions.go",
 	}
 
-	// Extract every (status, code) pair from writeJSONError calls.
-	// The regex tolerates whitespace/newlines that gofmt may insert
-	// between the call's arguments.
+	// Codes the action handlers emit that are deliberately NOT in
+	// the per-capability manifest entries: 5xx internal-failure
+	// codes (audit-store outages, encode failures) and codes that
+	// surface from edge paths the manifest declares against a
+	// different capability. Agents branch on 5xx generically; they
+	// don't need the specific token. Whitelisted here so the
+	// emit/declare audit doesn't false-positive on them.
+	internalOnlyCodes := map[string]bool{
+		"action_audit_unavailable":        true,
+		"action_audit_persist_failed":     true,
+		"action_plan_failed":              true,
+		"action_plan_encode_failed":       true,
+		"action_audit_query_failed":       true,
+		"action_decision_persist_failed":  true,
+		"action_decision_encode_failed":   true,
+		"action_decision_failed":          true,
+		"action_execution_persist_failed": true,
+		"action_execution_encode_failed":  true,
+		"action_execution_failed":         true,
+		"action_not_executing":            true,
+		"resource_registry_unavailable":   true,
+	}
+
+	// Extract every emitted code from writeJSONError /
+	// writeJSONErrorWithDetails calls. The regex tolerates
+	// whitespace/newlines that gofmt may insert between the call's
+	// arguments and matches both function names since they share
+	// the same envelope contract.
 	emitted := map[string]bool{}
-	codeRE := regexp.MustCompile(`writeJSONError\([^"]*"[^"]+",\s*"([a-z_][a-z_0-9]*)"`)
 	for _, file := range handlerFiles {
 		body, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatalf("read %s: %v", file, err)
 		}
-		// codeRE captures the second string literal (the code), but
-		// the first arg is `w` (an identifier), then a status int, so
-		// we use a looser pattern: find writeJSONError followed by
-		// `, "code"` somewhere on the same logical call.
-		looseRE := regexp.MustCompile(`writeJSONError\([^)]*?"([a-z_][a-z_0-9]+)"`)
-		// Try the strict match first for documentation; fall back to
-		// the loose one for actual extraction.
-		_ = codeRE
+		// Match the second string literal (the code) on
+		// writeJSONError(w, status, "code", ...) or
+		// writeJSONErrorWithDetails(w, status, "code", ...). The
+		// first arg `w` is an identifier, then a status int or
+		// http.StatusXxx selector, so the regex skips past those.
+		looseRE := regexp.MustCompile(`writeJSONError(?:WithDetails)?\([^)]*?"([a-z_][a-z_0-9]+)"`)
 		for _, m := range looseRE.FindAllSubmatch(body, -1) {
-			emitted[string(m[1])] = true
+			code := string(m[1])
+			if internalOnlyCodes[code] {
+				continue
+			}
+			emitted[code] = true
 		}
 	}
 	if len(emitted) == 0 {

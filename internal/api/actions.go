@@ -56,13 +56,13 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionPlanRequestBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
 			"body": "request body must be a valid ActionRequest JSON object",
 		})
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
 			"body": "request body must contain one JSON object",
 		})
 		return
@@ -70,7 +70,7 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 
 	req.ResourceID = unified.CanonicalResourceID(req.ResourceID)
 	if req.ResourceID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
 			"resourceId": "resource id is required",
 		})
 		return
@@ -79,13 +79,13 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 	orgID := GetOrgID(r.Context())
 	registry, err := h.buildRegistry(orgID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "resource_registry_unavailable", sanitizeErrorForClient(err, "Resource registry unavailable"), nil)
+		writeJSONError(w, http.StatusInternalServerError, "resource_registry_unavailable", sanitizeErrorForClient(err, "Resource registry unavailable"))
 		return
 	}
 
 	resource, ok := registry.Get(req.ResourceID)
 	if !ok || resource == nil {
-		writeErrorResponse(w, http.StatusNotFound, "resource_not_found", "Resource not found", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusNotFound, "resource_not_found", "Resource not found", map[string]string{
 			"resourceId": req.ResourceID,
 		})
 		return
@@ -98,34 +98,34 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 			if validationErr.Field != "" {
 				details[validationErr.Field] = validationErr.Message
 			}
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", details)
+			writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", details)
 			return
 		}
 		if errors.Is(err, actionplanner.ErrCapabilityNotFound) {
-			writeErrorResponse(w, http.StatusNotFound, "capability_not_found", "Capability not found on resource", map[string]string{
+			writeJSONErrorWithDetails(w, http.StatusNotFound, "capability_not_found", "Capability not found on resource", map[string]string{
 				"resourceId":     req.ResourceID,
 				"capabilityName": req.CapabilityName,
 			})
 			return
 		}
-		writeErrorResponse(w, http.StatusInternalServerError, "action_plan_failed", sanitizeErrorForClient(err, "Action planning failed"), nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_plan_failed", sanitizeErrorForClient(err, "Action planning failed"))
 		return
 	}
 
 	req = normalizeActionRequestForAudit(req)
 	store, err := h.getStore(orgID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available", nil)
+		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
 		return
 	}
 	if err := persistActionPlanAudit(store, req, plan); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "action_audit_persist_failed", sanitizeErrorForClient(err, "Failed to persist action audit"), nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_audit_persist_failed", sanitizeErrorForClient(err, "Failed to persist action audit"))
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(plan); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "action_plan_encode_failed", "Failed to encode action plan", nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_plan_encode_failed", "Failed to encode action plan")
 	}
 }
 
@@ -204,11 +204,11 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 
 	actionID := strings.TrimSpace(r.PathValue("id"))
 	if actionID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Missing action ID", nil)
+		writeJSONError(w, http.StatusBadRequest, "missing_id", "Missing action ID")
 		return
 	}
 	if !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format", nil)
+		writeJSONError(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format")
 		return
 	}
 
@@ -216,13 +216,13 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionDecisionRequestBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&decision); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
 			"body": "request body must be a valid action decision JSON object",
 		})
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
 			"body": "request body must contain one JSON object",
 		})
 		return
@@ -230,7 +230,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	decision.Outcome = unified.ApprovalOutcome(strings.TrimSpace(string(decision.Outcome)))
 	decision.Reason = strings.TrimSpace(decision.Reason)
 	if decision.Outcome != unified.OutcomeApproved && decision.Outcome != unified.OutcomeRejected {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
 			"outcome": "outcome must be approved or rejected",
 		})
 		return
@@ -239,16 +239,16 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	orgID := GetOrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available", nil)
+		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
 		return
 	}
 	record, ok, err := store.GetActionAudit(actionID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit", nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
 		return
 	}
 	if !ok {
-		writeErrorResponse(w, http.StatusNotFound, "action_not_found", "Action not found", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusNotFound, "action_not_found", "Action not found", map[string]string{
 			"actionId": actionID,
 		})
 		return
@@ -273,7 +273,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 			writeActionDecisionApplyError(w, err)
 			return
 		}
-		writeErrorResponse(w, http.StatusInternalServerError, "action_decision_persist_failed", sanitizeErrorForClient(err, "Failed to persist action decision"), nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_decision_persist_failed", sanitizeErrorForClient(err, "Failed to persist action decision"))
 		return
 	}
 
@@ -288,7 +288,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		Approval: responseApproval,
 		Audit:    updated,
 	}); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "action_decision_encode_failed", "Failed to encode action decision", nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_decision_encode_failed", "Failed to encode action decision")
 	}
 }
 
@@ -300,11 +300,11 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 
 	actionID := strings.TrimSpace(r.PathValue("id"))
 	if actionID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Missing action ID", nil)
+		writeJSONError(w, http.StatusBadRequest, "missing_id", "Missing action ID")
 		return
 	}
 	if !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format", nil)
+		writeJSONError(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format")
 		return
 	}
 
@@ -313,13 +313,13 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&execution); err != nil {
 		if !errors.Is(err, io.EOF) {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_action_execution", "Invalid action execution request", map[string]string{
+			writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_execution", "Invalid action execution request", map[string]string{
 				"body": "request body must be a valid action execution JSON object",
 			})
 			return
 		}
 	} else if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_execution", "Invalid action execution request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_execution", "Invalid action execution request", map[string]string{
 			"body": "request body must contain one JSON object",
 		})
 		return
@@ -329,16 +329,16 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	orgID := GetOrgID(r.Context())
 	store, err := h.getStore(orgID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available", nil)
+		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
 		return
 	}
 	record, ok, err := store.GetActionAudit(actionID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit", nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
 		return
 	}
 	if !ok {
-		writeErrorResponse(w, http.StatusNotFound, "action_not_found", "Action not found", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusNotFound, "action_not_found", "Action not found", map[string]string{
 			"actionId": actionID,
 		})
 		return
@@ -354,7 +354,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		startEvent.Message = "Action execution started: " + execution.Reason
 	}
 	if h.actionExecutor == nil {
-		writeErrorResponse(w, http.StatusNotImplemented, "action_executor_unavailable", "No action executor is configured for this API instance", nil)
+		writeJSONError(w, http.StatusNotImplemented, "action_executor_unavailable", "No action executor is configured for this API instance")
 		return
 	}
 	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
@@ -383,7 +383,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		Result:   completed.Result,
 		Audit:    completed,
 	}); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "action_execution_encode_failed", "Failed to encode action execution", nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_execution_encode_failed", "Failed to encode action execution")
 	}
 }
 
@@ -402,34 +402,34 @@ func actionDecisionActor(h *ResourceHandlers, r *http.Request) string {
 func writeActionDecisionApplyError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, unified.ErrInvalidApprovalOutcome):
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
 			"outcome": "outcome must be approved or rejected",
 		})
 	case errors.Is(err, unified.ErrActionNotPending):
-		writeErrorResponse(w, http.StatusConflict, "action_not_pending", "Action is not pending approval", nil)
+		writeJSONError(w, http.StatusConflict, "action_not_pending", "Action is not pending approval")
 	case errors.Is(err, unified.ErrActionPlanExpired):
-		writeErrorResponse(w, http.StatusConflict, "action_plan_expired", "Action plan has expired", nil)
+		writeJSONError(w, http.StatusConflict, "action_plan_expired", "Action plan has expired")
 	default:
-		writeErrorResponse(w, http.StatusInternalServerError, "action_decision_failed", sanitizeErrorForClient(err, "Action decision failed"), nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_decision_failed", sanitizeErrorForClient(err, "Action decision failed"))
 	}
 }
 
 func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, unified.ErrActionNotApproved):
-		writeErrorResponse(w, http.StatusConflict, "action_not_approved", "Action is not approved for execution", nil)
+		writeJSONError(w, http.StatusConflict, "action_not_approved", "Action is not approved for execution")
 	case errors.Is(err, unified.ErrActionAlreadyExecuting):
-		writeErrorResponse(w, http.StatusConflict, "action_already_executing", "Action is already executing", nil)
+		writeJSONError(w, http.StatusConflict, "action_already_executing", "Action is already executing")
 	case errors.Is(err, unified.ErrActionExecutionFinal):
-		writeErrorResponse(w, http.StatusConflict, "action_execution_final", "Action execution is already final", nil)
+		writeJSONError(w, http.StatusConflict, "action_execution_final", "Action execution is already final")
 	case errors.Is(err, unified.ErrActionNotExecuting):
-		writeErrorResponse(w, http.StatusConflict, "action_not_executing", "Action is not executing", nil)
+		writeJSONError(w, http.StatusConflict, "action_not_executing", "Action is not executing")
 	case errors.Is(err, unified.ErrActionPlanExpired):
-		writeErrorResponse(w, http.StatusConflict, "action_plan_expired", "Action plan has expired", nil)
+		writeJSONError(w, http.StatusConflict, "action_plan_expired", "Action plan has expired")
 	case errors.Is(err, unified.ErrActionDryRunOnly):
-		writeErrorResponse(w, http.StatusConflict, "action_dry_run_only", "Action plan is dry-run only and cannot be executed", nil)
+		writeJSONError(w, http.StatusConflict, "action_dry_run_only", "Action plan is dry-run only and cannot be executed")
 	default:
-		writeErrorResponse(w, http.StatusInternalServerError, "action_execution_failed", sanitizeErrorForClient(err, "Action execution failed"), nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_execution_failed", sanitizeErrorForClient(err, "Action execution failed"))
 	}
 }
 
@@ -443,6 +443,6 @@ func writeActionExecutionPersistError(w http.ResponseWriter, err error) {
 		errors.Is(err, unified.ErrActionDryRunOnly):
 		writeActionExecutionApplyError(w, err)
 	default:
-		writeErrorResponse(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(err, "Failed to persist action execution"), nil)
+		writeJSONError(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(err, "Failed to persist action execution"))
 	}
 }

@@ -211,14 +211,43 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// writeJSONError writes a JSON error response.
+// writeJSONError writes the agent-stable error envelope.
+//
+// The shape is `{"error": "<stable_code>", "message": "<human>"}`,
+// in contrast to the platform-wide APIError envelope written by
+// writeErrorResponse (where the stable code lives under `code` and
+// `error` carries the human message). Agent-surface endpoints emit
+// this shape so external agents can branch on the `error` field
+// without remembering which envelope a given capability uses.
 func writeJSONError(w http.ResponseWriter, status int, code, message string) {
+	writeJSONErrorWithDetails(w, status, code, message, nil)
+}
+
+// writeJSONErrorWithDetails extends writeJSONError with an optional
+// `details` map for field-level failure reasons. When non-empty, the
+// envelope grows a third top-level `details` field so agents see
+// structured per-field reasons (e.g. which body field failed
+// validation) without parsing the human message. Empty/nil details
+// preserve the two-field shape so the contract for callers that
+// don't pass details stays unchanged.
+//
+// Used by the action endpoints (actions.go) where the platform-wide
+// writeErrorResponse calls historically passed a details map; the
+// agent-stable envelope now carries the same information at the
+// matching key. The pattern lets future agent-surface endpoints
+// adopt structured field reasons without growing yet another
+// envelope shape.
+func writeJSONErrorWithDetails(w http.ResponseWriter, status int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{
+	body := map[string]any{
 		"error":   code,
 		"message": message,
-	})
+	}
+	if len(details) > 0 {
+		body["details"] = details
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // Helper to get OrgID from context

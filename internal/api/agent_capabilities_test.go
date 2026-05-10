@@ -102,6 +102,7 @@ func TestAgentCapabilitiesManifest_CategoriesAreClosed(t *testing.T) {
 		"context":        true,
 		"operator-state": true,
 		"finding":        true,
+		"action":         true,
 	}
 	for _, cap := range agentCapabilitiesManifest.Capabilities {
 		if !allowed[cap.Category] {

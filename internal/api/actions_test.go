@@ -324,7 +324,7 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	if retryRec.Code != http.StatusConflict {
 		t.Fatalf("retry decision status = %d, body=%s", retryRec.Code, retryRec.Body.String())
 	}
-	if !strings.Contains(retryRec.Body.String(), `"code":"action_not_pending"`) {
+	if !strings.Contains(retryRec.Body.String(), `"error":"action_not_pending"`) {
 		t.Fatalf("retry decision body = %s", retryRec.Body.String())
 	}
 }
@@ -498,7 +498,7 @@ func TestHandleExecuteActionWithoutExecutorLeavesApprovedAuditUnchanged(t *testi
 	if executeRec.Code != http.StatusNotImplemented {
 		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
 	}
-	if !strings.Contains(executeRec.Body.String(), `"code":"action_executor_unavailable"`) {
+	if !strings.Contains(executeRec.Body.String(), `"error":"action_executor_unavailable"`) {
 		t.Fatalf("execute body = %s", executeRec.Body.String())
 	}
 
@@ -564,7 +564,7 @@ func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 	if executeRec.Code != http.StatusConflict {
 		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
 	}
-	if !strings.Contains(executeRec.Body.String(), `"code":"action_dry_run_only"`) {
+	if !strings.Contains(executeRec.Body.String(), `"error":"action_dry_run_only"`) {
 		t.Fatalf("execute body = %s", executeRec.Body.String())
 	}
 	if executor.calls != 0 {
@@ -670,7 +670,7 @@ func TestHandlePlanActionRejectsMissingCapability(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"code":"capability_not_found"`) {
+	if !strings.Contains(rec.Body.String(), `"error":"capability_not_found"`) {
 		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}
 }

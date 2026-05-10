@@ -987,6 +987,16 @@ able to introspect Pulse to learn how to ask for one. The
 underlying capabilities the manifest declares keep their own auth
 scopes — the public posture applies only to discovery itself.
 
+The action governance loop (`/api/actions/plan`,
+`/api/actions/{id}/decision`, `/api/actions/{id}/execute`) joined
+the agent surface via the manifest under a new `action` category,
+gated by the `ai:execute` scope (distinct from `monitoring:write`
+because action governance is the governed-execution dimension).
+The handlers were migrated from the platform-wide `APIError`
+envelope to the agent-stable `{"error", "message", "details"?}`
+shape so the substrate keeps a single envelope contract across
+read, write, and action capabilities.
+
 The findings runtime now consumes operator-set per-resource state
 through a provider adapter wired in `internal/api/router.go` at
 startup. The adapter returns a `ResourceOperatorStateProjection`
