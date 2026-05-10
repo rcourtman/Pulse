@@ -372,7 +372,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                       <Show
                         when={!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()}
                       >
-                        <div class="pl-1 text-[11px] text-slate-500">
+                        <div class="pl-1 text-[11px] text-muted">
                           Investigation and safe remediation workflows are not enabled on this plan.
                         </div>
                       </Show>

@@ -95,7 +95,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                         <div class="rounded-md border border-border bg-surface-alt px-3 py-2 space-y-2">
                           <div class="flex items-center gap-2 text-xs font-semibold text-base-content">
                             <span>{clusterName()} Cluster</span>
-                            <span class="ml-auto text-[0.65rem] font-normal text-slate-500">
+                            <span class="ml-auto text-[0.65rem] font-normal text-muted">
                               {clusterEndpoints().length} nodes
                             </span>
                           </div>

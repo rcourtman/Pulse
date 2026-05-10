@@ -207,11 +207,11 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                     />
 
                     <Show when={config.helperText}>
-                      <p class="text-xs text-slate-500">{config.helperText}</p>
+                      <p class="text-xs text-muted">{config.helperText}</p>
                     </Show>
 
                     <div class="flex items-center justify-between">
-                      <p class="text-xs text-slate-500">
+                      <p class="text-xs text-muted">
                         <a
                           href={config.actionLinkHref}
                           target="_blank"

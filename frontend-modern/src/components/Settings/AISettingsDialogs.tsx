@@ -126,7 +126,7 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                       placeholder={setupProviderConfig().placeholder}
                       class="w-full px-3 py-2 border border-border rounded-md bg-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <p class="text-xs text-slate-500 mt-1.5">
+                    <p class="text-xs text-muted mt-1.5">
                       <a
                         href={setupProviderConfig().actionLinkHref}
                         target="_blank"
@@ -150,7 +150,7 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                     placeholder="http://localhost:11434"
                     class="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <p class="text-xs text-slate-500 mt-1.5">
+                  <p class="text-xs text-muted mt-1.5">
                     Ollama runs locally - no API key needed
                   </p>
                 </div>

@@ -191,7 +191,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
           fallback={
             <div class="p-8 text-center text-slate-400">
               <p class="text-sm">{getResourcePickerEmptyState(false).title}</p>
-              <p class="text-xs mt-1 text-slate-500">
+              <p class="text-xs mt-1 text-muted">
                 {getResourcePickerEmptyState(false).description}
               </p>
             </div>
@@ -259,7 +259,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                         >
                           {getPreferredInfrastructureDisplayName(resource)}
                         </div>
-                        <div class="text-xs text-slate-500 sm:truncate break-all" title={resource.id}>
+                        <div class="text-xs text-muted sm:truncate break-all" title={resource.id}>
                           {resource.id}
                         </div>
                         <div class="mt-1 flex flex-wrap items-center gap-1 sm:hidden">
@@ -275,7 +275,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                               )}
                             </For>
                             <Show when={(resource.tags?.length ?? 0) > 2}>
-                              <span class="text-xs text-slate-500">
+                              <span class="text-xs text-muted">
                                 +{(resource.tags?.length ?? 0) - 2}
                               </span>
                             </Show>
@@ -301,7 +301,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                             )}
                           </For>
                           <Show when={(resource.tags?.length ?? 0) > 2}>
-                            <span class="text-xs text-slate-500">
+                            <span class="text-xs text-muted">
                               +{(resource.tags?.length ?? 0) - 2}
                             </span>
                           </Show>
@@ -336,7 +336,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             </button>
           </Show>
         </div>
-        <span class="text-xs sm:text-sm text-slate-500">
+        <span class="text-xs sm:text-sm text-muted">
           {props.selected().length} selected
           <Show when={props.selected().length >= maxSelection()}>
             <span class="text-amber-400 ml-1">(max)</span>

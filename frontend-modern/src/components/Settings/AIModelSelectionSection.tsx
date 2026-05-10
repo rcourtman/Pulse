@@ -184,7 +184,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
         <div class="flex items-center justify-between mb-1">
           <label class={labelClass()}>
             Shared Default Model
-            {state.modelsLoading() && <span class="ml-2 text-xs text-slate-500">(loading...)</span>}
+            {state.modelsLoading() && <span class="ml-2 text-xs text-muted">(loading...)</span>}
           </label>
           <button
             type="button"
