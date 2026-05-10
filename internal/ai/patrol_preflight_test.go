@@ -203,6 +203,89 @@ func TestRunPatrolToolPreflight_NoModelSelected(t *testing.T) {
 	}
 }
 
+func TestRunPatrolToolPreflight_PopulatesCacheOnSuccessAndFailure(t *testing.T) {
+	// Cache must reflect the most recent preflight outcome regardless of
+	// whether it succeeded, soft-warned, or failed — that's what powers
+	// the "last verified" indicator on the settings page.
+	called := 0
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		called++
+		if called == 1 {
+			// First call: green path
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"x","model":"gpt-4o-mini","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"verify_pulse_patrol","arguments":"{\"ok\":true}"}}]}}]}`))
+			return
+		}
+		// Second call: provider error
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"deepseek-reasoner does not support this tool_choice"}}`))
+	})
+	defer h.close()
+
+	// Cache is empty before any preflight runs.
+	cached, recordedAt := h.svc.CachedPatrolPreflight()
+	if cached != nil {
+		t.Fatalf("expected empty cache before first preflight, got %+v", cached)
+	}
+	if !recordedAt.IsZero() {
+		t.Fatalf("expected zero recorded time before first preflight, got %v", recordedAt)
+	}
+
+	// First run records the success path.
+	first := h.svc.RunPatrolToolPreflight(context.Background(), "", "")
+	if !first.Success {
+		t.Fatalf("expected first preflight to succeed, got %+v", first)
+	}
+	cached, recordedAt = h.svc.CachedPatrolPreflight()
+	if cached == nil || !cached.Success || !cached.ToolCallObserved {
+		t.Fatalf("cache did not capture success path, got %+v", cached)
+	}
+	if recordedAt.IsZero() {
+		t.Fatalf("expected non-zero recorded time after first preflight")
+	}
+	firstRecorded := recordedAt
+
+	// Second run records the failure path, superseding the first cache entry.
+	second := h.svc.RunPatrolToolPreflight(context.Background(), "", "")
+	if second.Success {
+		t.Fatalf("expected second preflight to fail, got %+v", second)
+	}
+	cached, recordedAt = h.svc.CachedPatrolPreflight()
+	if cached == nil || cached.Success {
+		t.Fatalf("cache did not capture failure path, got %+v", cached)
+	}
+	if cached.Cause != PatrolFailureCauseToolChoiceRejected {
+		t.Fatalf("cache did not preserve classified cause, got %q", cached.Cause)
+	}
+	if !recordedAt.After(firstRecorded) {
+		t.Fatalf("expected recorded time to advance, got %v -> %v", firstRecorded, recordedAt)
+	}
+}
+
+func TestCachedPatrolPreflight_ReturnsDefensiveCopy(t *testing.T) {
+	// Mutating the returned result must not corrupt the cache.
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"x","model":"gpt-4o-mini","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"verify_pulse_patrol","arguments":"{\"ok\":true}"}}]}}]}`))
+	})
+	defer h.close()
+
+	_ = h.svc.RunPatrolToolPreflight(context.Background(), "", "")
+	cached, _ := h.svc.CachedPatrolPreflight()
+	if cached == nil {
+		t.Fatalf("expected cached result")
+	}
+	cached.Success = false
+	cached.Title = "tampered"
+
+	// Re-read should still show the original successful result.
+	again, _ := h.svc.CachedPatrolPreflight()
+	if !again.Success || again.Title == "tampered" {
+		t.Fatalf("cache returned mutable reference: original=%+v, re-read=%+v", cached, again)
+	}
+}
+
 func TestRunPatrolToolPreflight_RequestShapeIncludesVerifyTool(t *testing.T) {
 	// Locks the preflight request shape so a future refactor can't
 	// silently strip the tool definition or tool_choice (which would

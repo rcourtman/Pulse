@@ -244,6 +244,18 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).not.toContain('fetch(\'/api/ai/patrol/preflight');
   });
 
+  it('hydrates the Patrol preflight panel from the cached settings snapshot', () => {
+    // The cached preflight outcome arrives on /api/settings/ai as
+    // patrol_preflight; loadSettings and updateSettings must project it
+    // back into the inline result panel so the "last verified" state
+    // survives page reloads without forcing a re-click.
+    expect(aiSettingsStateSource).toContain('hydratePatrolPreflightFromSettings');
+    expect(aiSettingsStateSource).toContain('patrol_preflight');
+    expect(aiSettingsStateSource).toContain('recorded_at_unix');
+    expect(aiModelSelectionSectionSource).toContain('formatRecordedAt');
+    expect(aiModelSelectionSectionSource).toContain('last verified');
+  });
+
   it('keeps contextual settings feature gates free of retired commercial telemetry wrappers', () => {
     for (const source of [
       agentProfilesPanelSource,

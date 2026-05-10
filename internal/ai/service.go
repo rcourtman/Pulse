@@ -218,6 +218,11 @@ type Service struct {
 
 	modelsCache modelsCache
 
+	// patrolPreflightCache holds the most recent preflight result for the
+	// configured Patrol provider+model so operators can see when tools
+	// were last verified without re-running the call.
+	patrolPreflightCache patrolPreflightCache
+
 	// License checker for Pro feature gating
 	licenseChecker LicenseChecker
 }

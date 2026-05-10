@@ -894,7 +894,7 @@ the canonical monitored-system blocked payload.
 
 ## Completion Obligations
 
-1. Update contract tests when payloads change, including admin verification endpoints such as `POST /api/ai/patrol/preflight` whose response shape (`tool_call_observed`, `duration_ms`, classified `cause`/`summary`/`recommendation`) is part of the canonical Patrol diagnostic surface
+1. Update contract tests when payloads change, including admin verification endpoints such as `POST /api/ai/patrol/preflight` whose response shape (`tool_call_observed`, `duration_ms`, classified `cause`/`summary`/`recommendation`, plus `recorded_at`/`recorded_at_unix` for the cached snapshot) is part of the canonical Patrol diagnostic surface, and the `patrol_preflight` snapshot field on `/api/settings/ai` that hydrates the Verify Patrol panel on page load
 2. Update frontend API types in the same slice
 3. Route runtime changes through the explicit API-contract proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Update this contract when canonical payload ownership changes

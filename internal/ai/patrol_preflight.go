@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -41,6 +42,41 @@ type PatrolPreflightResult struct {
 // outside preflight has no operational meaning.
 const patrolPreflightToolName = "verify_pulse_patrol"
 
+// patrolPreflightCache holds the most recent PatrolPreflightResult plus
+// the wall-clock time it was recorded. Surfaced through the AI settings
+// response so the UI can render a "last verified" indicator without
+// requiring operators to re-run preflight on every page load.
+type patrolPreflightCache struct {
+	mu         sync.RWMutex
+	result     *PatrolPreflightResult
+	recordedAt time.Time
+}
+
+// CachedPatrolPreflight returns the most recent preflight result and the
+// time it was recorded, or nil + zero time if preflight has never run on
+// this Service instance.
+func (s *Service) CachedPatrolPreflight() (*PatrolPreflightResult, time.Time) {
+	s.patrolPreflightCache.mu.RLock()
+	defer s.patrolPreflightCache.mu.RUnlock()
+	if s.patrolPreflightCache.result == nil {
+		return nil, time.Time{}
+	}
+	// Return a defensive copy so callers can't mutate the cache.
+	clone := *s.patrolPreflightCache.result
+	return &clone, s.patrolPreflightCache.recordedAt
+}
+
+// recordPatrolPreflight stores the result in the cache. Called after
+// every RunPatrolToolPreflight invocation so the most recent outcome is
+// always observable, including failures.
+func (s *Service) recordPatrolPreflight(result PatrolPreflightResult, at time.Time) {
+	s.patrolPreflightCache.mu.Lock()
+	defer s.patrolPreflightCache.mu.Unlock()
+	clone := result
+	s.patrolPreflightCache.result = &clone
+	s.patrolPreflightCache.recordedAt = at
+}
+
 // RunPatrolToolPreflight performs a one-shot tool-call round-trip against
 // the configured Patrol provider+model, or against the overrides supplied
 // in providerName / model. Both override arguments are optional: empty
@@ -66,6 +102,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Summary = "Pulse Assistant settings could not be loaded"
 		result.Recommendation = "Confirm Pulse settings persistence is healthy, then re-run preflight."
 		result.DurationMs = time.Since(started).Milliseconds()
+		s.recordPatrolPreflight(result, time.Now())
 		return result
 	}
 	if !cfg.Enabled {
@@ -74,6 +111,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Summary = "Pulse Assistant is not enabled"
 		result.Recommendation = "Enable Pulse Assistant in Assistant & Patrol settings, then re-run preflight."
 		result.DurationMs = time.Since(started).Milliseconds()
+		s.recordPatrolPreflight(result, time.Now())
 		return result
 	}
 
@@ -87,6 +125,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Summary = "Patrol has no model selected"
 		result.Recommendation = "Select a Patrol model in Assistant & Patrol settings, then re-run preflight."
 		result.DurationMs = time.Since(started).Milliseconds()
+		s.recordPatrolPreflight(result, time.Now())
 		return result
 	}
 
@@ -109,6 +148,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 	if err != nil {
 		applyPatrolPreflightDiagnostic(&result, err)
 		result.DurationMs = time.Since(started).Milliseconds()
+		s.recordPatrolPreflight(result, time.Now())
 		return result
 	}
 
@@ -146,6 +186,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 
 	if err != nil {
 		applyPatrolPreflightDiagnostic(&result, err)
+		s.recordPatrolPreflight(result, time.Now())
 		return result
 	}
 
@@ -155,6 +196,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Cause = PatrolFailureCauseNone
 		result.Title = "Pulse Patrol: Preflight succeeded"
 		result.Summary = "Provider accepted the preflight request and the model emitted a tool call."
+		s.recordPatrolPreflight(result, time.Now())
 		return result
 	}
 
@@ -166,6 +208,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 	result.Title = "Pulse Patrol: Model did not emit a tool call during preflight"
 	result.Summary = "Provider accepted the preflight request but the model did not emit a tool call. Patrol may still work in practice."
 	result.Recommendation = "Trigger a real Patrol run to confirm tool calling. If that fails, switch to a model with stronger tool-following behaviour."
+	s.recordPatrolPreflight(result, time.Now())
 	return result
 }
 

@@ -55,6 +55,28 @@ describe('runPatrolPreflight', () => {
     expect(result.cause).toBe('tool_choice_rejected');
   });
 
+  it('round-trips the recorded_at fields used to render the "last verified" indicator', async () => {
+    // Pulse caches preflight outcomes server-side and surfaces them
+    // through /api/settings/ai. The same response shape is also
+    // returned from the live POST so the inline result panel can render
+    // a "last verified" timestamp without forking shapes.
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      success: true,
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      tool_call_observed: true,
+      duration_ms: 1948,
+      message: 'Provider accepted the preflight request and the model emitted a tool call.',
+      recorded_at: '2026-05-10T13:54:11Z',
+      recorded_at_unix: 1778421251,
+    });
+
+    const result = await runPatrolPreflight();
+
+    expect(result.recorded_at).toBe('2026-05-10T13:54:11Z');
+    expect(result.recorded_at_unix).toBe(1778421251);
+  });
+
   it('exposes the soft-warning shape when the model accepted the request but did not call the tool', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       success: false,

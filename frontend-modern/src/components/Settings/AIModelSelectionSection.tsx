@@ -59,6 +59,19 @@ const PatrolPreflightControl: Component<{ state: AISettingsState }> = (controlPr
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
+  const formatRecordedAt = (unix?: number) => {
+    if (!unix) return '';
+    const ageMs = Date.now() - unix * 1000;
+    if (ageMs < 0 || !Number.isFinite(ageMs)) return '';
+    if (ageMs < 60_000) return 'just now';
+    const minutes = Math.floor(ageMs / 60_000);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
   return (
     <div class="mt-2 flex flex-col gap-2">
       <div class="flex items-center justify-between gap-2">
@@ -91,11 +104,16 @@ const PatrolPreflightControl: Component<{ state: AISettingsState }> = (controlPr
             <Show when={r().recommendation}>
               <p class="text-[11px] mt-1 opacity-90">{r().recommendation}</p>
             </Show>
-            <Show when={r().provider || r().model}>
+            <Show when={r().provider || r().model || r().recorded_at_unix}>
               <p class="text-[11px] mt-1 opacity-70">
                 {r().provider}
                 {r().provider && r().model ? ' · ' : ''}
                 {r().model}
+                <Show when={r().recorded_at_unix}>
+                  {(r().provider || r().model ? ' · ' : '') +
+                    'last verified ' +
+                    formatRecordedAt(r().recorded_at_unix)}
+                </Show>
               </p>
             </Show>
           </div>

@@ -247,6 +247,33 @@ export const useAISettingsState = () => {
   const [patrolPreflightResult, setPatrolPreflightResult] =
     createSignal<PatrolPreflightResponse | null>(null);
 
+  // hydratePatrolPreflightFromSettings projects the cached preflight
+  // snapshot from /api/settings/ai into the same response shape the
+  // manual Verify Patrol button writes, so the inline result panel can
+  // render the most-recent outcome on page load without forcing a
+  // re-click. Returns null when preflight has never run on the
+  // current Pulse instance.
+  const hydratePatrolPreflightFromSettings = (data: AISettingsType | null) => {
+    const snapshot = data?.patrol_preflight;
+    if (!snapshot) {
+      setPatrolPreflightResult(null);
+      return;
+    }
+    setPatrolPreflightResult({
+      success: snapshot.success,
+      provider: snapshot.provider,
+      model: snapshot.model,
+      tool_call_observed: snapshot.tool_call_observed,
+      duration_ms: snapshot.duration_ms,
+      message: snapshot.title || snapshot.summary || '',
+      cause: snapshot.cause,
+      summary: snapshot.summary,
+      recommendation: snapshot.recommendation,
+      recorded_at: snapshot.recorded_at,
+      recorded_at_unix: snapshot.recorded_at_unix,
+    });
+  };
+
   const [showSetupModal, setShowSetupModal] = createSignal(false);
   const [setupProvider, setSetupProvider] = createSignal<AIProvider>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
@@ -599,6 +626,7 @@ export const useAISettingsState = () => {
       setSettings(data);
       resetForm(data);
       syncModelCatalogForSettings(data);
+      hydratePatrolPreflightFromSettings(data);
       void runProviderPreflight(data);
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
@@ -609,6 +637,7 @@ export const useAISettingsState = () => {
       setModelsError('');
       setProviderHealth(createInitialProviderHealth());
       setPreflightLastCheckedAt(null);
+      setPatrolPreflightResult(null);
     } finally {
       setLoading(false);
     }
@@ -663,6 +692,7 @@ export const useAISettingsState = () => {
       setForm('enabled', true);
       resetForm(updated);
       syncModelCatalogForSettings(updated);
+      hydratePatrolPreflightFromSettings(updated);
       void runProviderPreflight(updated);
       handleCloseSetupModal();
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
@@ -898,6 +928,7 @@ export const useAISettingsState = () => {
       setSettings(updated);
       resetForm(updated);
       syncModelCatalogForSettings(updated);
+      hydratePatrolPreflightFromSettings(updated);
       void runProviderPreflight(updated);
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
         updated.patrol_readiness,

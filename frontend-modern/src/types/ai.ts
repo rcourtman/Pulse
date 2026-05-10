@@ -77,6 +77,25 @@ export interface AISettings {
 
   // Current Pulse Patrol runtime readiness for this settings snapshot
   patrol_readiness?: PatrolReadiness;
+  // Most recent Patrol tool-call preflight result, recorded by Pulse so
+  // the UI can render a "last verified" indicator without forcing
+  // operators to re-run preflight on every page load. Absent when
+  // preflight has never run on this Pulse instance.
+  patrol_preflight?: PatrolPreflightSnapshot;
+}
+
+export interface PatrolPreflightSnapshot {
+  success: boolean;
+  provider?: string;
+  model?: string;
+  tool_call_observed: boolean;
+  duration_ms: number;
+  cause?: string;
+  title?: string;
+  summary?: string;
+  recommendation?: string;
+  recorded_at: string;
+  recorded_at_unix: number;
 }
 
 export interface AISettingsUpdateRequest {

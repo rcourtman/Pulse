@@ -676,6 +676,11 @@ export interface PatrolPreflightResponse {
   description?: string;
   recommendation?: string;
   action?: string;
+  // Wall-clock time when this preflight was recorded by Pulse. Present
+  // on hydrated cached state from /api/settings/ai; the live POST
+  // response also returns these fields when populated server-side.
+  recorded_at?: string;
+  recorded_at_unix?: number;
 }
 
 export interface PatrolPreflightRequest {

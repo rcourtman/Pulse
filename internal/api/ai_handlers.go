@@ -2253,6 +2253,27 @@ type AISettingsResponse struct {
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
 	// Current Patrol runtime readiness after this settings snapshot is applied.
 	PatrolReadiness *PatrolReadinessResponse `json:"patrol_readiness,omitempty"`
+	// Most recent Patrol tool-call preflight outcome, surfaced so the UI
+	// can render a "last verified" indicator without forcing operators
+	// to re-click Verify Patrol on every page load. nil when preflight
+	// has never run on this service instance.
+	PatrolPreflight *PatrolPreflightSnapshot `json:"patrol_preflight,omitempty"`
+}
+
+// PatrolPreflightSnapshot is the API-shaped projection of the cached
+// PatrolPreflightResult plus the wall-clock time it was recorded.
+type PatrolPreflightSnapshot struct {
+	Success          bool   `json:"success"`
+	Provider         string `json:"provider,omitempty"`
+	Model            string `json:"model,omitempty"`
+	ToolCallObserved bool   `json:"tool_call_observed"`
+	DurationMs       int64  `json:"duration_ms"`
+	Cause            string `json:"cause,omitempty"`
+	Title            string `json:"title,omitempty"`
+	Summary          string `json:"summary,omitempty"`
+	Recommendation   string `json:"recommendation,omitempty"`
+	RecordedAt       string `json:"recorded_at"`
+	RecordedAtUnix   int64  `json:"recorded_at_unix"`
 }
 
 func EmptyAISettingsResponse() AISettingsResponse {
@@ -2443,6 +2464,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		ProtectedGuests:        settings.GetProtectedGuests(),
 		DiscoveryEnabled:       settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
+		PatrolPreflight:        cachedPatrolPreflightSnapshot(aiService),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -2841,10 +2863,37 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		DiscoveryEnabled:       settings.DiscoveryEnabled,
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
 		PatrolReadiness:        ptrToPatrolReadiness(patrolReadiness),
+		PatrolPreflight:        cachedPatrolPreflightSnapshot(aiService),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write AI settings update response")
+	}
+}
+
+// cachedPatrolPreflightSnapshot projects the AI Service's cached
+// preflight result onto the API's wire shape. Returns nil when no
+// preflight has run on this service instance.
+func cachedPatrolPreflightSnapshot(aiService *ai.Service) *PatrolPreflightSnapshot {
+	if aiService == nil {
+		return nil
+	}
+	result, recordedAt := aiService.CachedPatrolPreflight()
+	if result == nil || recordedAt.IsZero() {
+		return nil
+	}
+	return &PatrolPreflightSnapshot{
+		Success:          result.Success,
+		Provider:         result.Provider,
+		Model:            result.Model,
+		ToolCallObserved: result.ToolCallObserved,
+		DurationMs:       result.DurationMs,
+		Cause:            string(result.Cause),
+		Title:            result.Title,
+		Summary:          result.Summary,
+		Recommendation:   result.Recommendation,
+		RecordedAt:       recordedAt.UTC().Format(time.RFC3339),
+		RecordedAtUnix:   recordedAt.Unix(),
 	}
 }
 
