@@ -886,10 +886,15 @@ prompt explain the same operator-facing priority.
    example the Verify Patrol button in
    `AIModelSelectionSection.tsx`, which must drive the typed
    `runPatrolPreflight` client through `useAISettingsState.ts` rather
-   than inlining fetch calls in the section component, and which must
-   hydrate its result panel from the `patrol_preflight` snapshot on
+   than inlining fetch calls in the section component, must hydrate
+   its result panel from the `patrol_preflight` snapshot on
    `/api/settings/ai` so the "last verified" state survives page
-   reloads without forcing a re-click)
+   reloads without forcing a re-click, must pass the form's pending
+   `patrolModel` as the model override so the click tests the
+   operator's unsaved dropdown selection rather than whatever was
+   previously saved, and must surface a stale-cache warning when the
+   form's selection differs from the cached result's model so the
+   green badge cannot silently mislead)
 2. Keep top-level settings surfaces routed through the canonical settings shell
    and maintain both `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
    plus `tests/integration/tests/15-settings-shell-consistency.spec.ts`

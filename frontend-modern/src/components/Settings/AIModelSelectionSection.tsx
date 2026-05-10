@@ -11,13 +11,34 @@ interface AIModelSelectionSectionProps {
   state: AISettingsState;
 }
 
+const stripModelProvider = (modelId: string) => {
+  const trimmed = modelId.trim();
+  const colon = trimmed.indexOf(':');
+  return colon === -1 ? trimmed : trimmed.slice(colon + 1);
+};
+
 const PatrolPreflightControl: Component<{ state: AISettingsState }> = (controlProps) => {
   const { state } = controlProps;
   const result = state.patrolPreflightResult;
 
+  // The cached result may be for a model the operator already moved away
+  // from in the form (e.g. they changed the dropdown but haven't clicked
+  // Verify Patrol yet). When that happens, surface a hint so the green
+  // "verified" badge doesn't silently mislead. The backend reads the
+  // form's pending patrolModel on Verify Patrol click, so refreshing
+  // resolves the staleness.
+  const pendingFormModel = () => stripModelProvider(state.form.patrolModel || '');
+  const cachedResultModel = () => result()?.model?.trim() || '';
+  const isStaleAgainstFormSelection = () => {
+    const pending = pendingFormModel();
+    const cached = cachedResultModel();
+    return pending !== '' && cached !== '' && pending !== cached;
+  };
+
   const tone = () => {
     const r = result();
     if (!r) return 'idle';
+    if (isStaleAgainstFormSelection()) return 'warning';
     if (r.success) return 'success';
     if (r.cause === 'model_tool_support_unverified') return 'warning';
     return 'error';
@@ -39,6 +60,9 @@ const PatrolPreflightControl: Component<{ state: AISettingsState }> = (controlPr
   const headline = () => {
     const r = result();
     if (!r) return '';
+    if (isStaleAgainstFormSelection()) {
+      return `Verified result is for ${cachedResultModel()}, your current selection is ${pendingFormModel()}`;
+    }
     if (r.success) {
       return 'Tool calling verified';
     }
@@ -51,6 +75,9 @@ const PatrolPreflightControl: Component<{ state: AISettingsState }> = (controlPr
   const detail = () => {
     const r = result();
     if (!r) return '';
+    if (isStaleAgainstFormSelection()) {
+      return 'Click Verify Patrol to test the pending selection.';
+    }
     return r.summary || r.message || '';
   };
 

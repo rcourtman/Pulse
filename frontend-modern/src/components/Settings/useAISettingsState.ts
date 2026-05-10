@@ -595,10 +595,16 @@ export const useAISettingsState = () => {
   // runPatrolToolPreflight verifies the configured Patrol provider+model
   // can actually call tools end-to-end. Distinct from runProviderPreflight,
   // which only confirms each provider's model catalog is reachable.
+  //
+  // Passes the form's pending patrolModel as a model override so clicking
+  // Verify Patrol after changing the dropdown actually tests the operator's
+  // pending selection, not whatever was previously saved. Empty form value
+  // means "use the shared default" — the backend handles the fallback.
   const runPatrolToolPreflight = async () => {
     setPatrolPreflightRunning(true);
     try {
-      const result = await runPatrolPreflight();
+      const pendingModel = form.patrolModel.trim();
+      const result = await runPatrolPreflight(pendingModel ? { model: pendingModel } : {});
       setPatrolPreflightResult(result);
     } catch (error) {
       const message =

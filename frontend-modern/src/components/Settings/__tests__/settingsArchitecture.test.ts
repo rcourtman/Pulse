@@ -256,6 +256,27 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain('last verified');
   });
 
+  it('passes the form\'s pending patrolModel to runPatrolPreflight so Verify Patrol tests the unsaved selection', () => {
+    // Without this, clicking Verify Patrol after changing the model
+    // dropdown silently tested the previously-saved model and the
+    // operator would believe their pending selection was verified.
+    expect(aiSettingsStateSource).toContain('form.patrolModel');
+    expect(aiSettingsStateSource).toContain('pendingModel');
+    expect(aiSettingsStateSource).toContain('runPatrolPreflight(pendingModel ? { model: pendingModel } : {})');
+  });
+
+  it('flags the inline preflight panel as stale when the cached result is for a different model than the form\'s current selection', () => {
+    // Cache may hold a green result for the previously-saved model
+    // while the operator has changed the dropdown. Show a warning-tone
+    // panel with copy that names both models so the green badge
+    // doesn't silently mislead.
+    expect(aiModelSelectionSectionSource).toContain('isStaleAgainstFormSelection');
+    expect(aiModelSelectionSectionSource).toContain('pendingFormModel');
+    expect(aiModelSelectionSectionSource).toContain('cachedResultModel');
+    expect(aiModelSelectionSectionSource).toContain('Verified result is for');
+    expect(aiModelSelectionSectionSource).toContain('Click Verify Patrol to test the pending selection');
+  });
+
   it('keeps contextual settings feature gates free of retired commercial telemetry wrappers', () => {
     for (const source of [
       agentProfilesPanelSource,
