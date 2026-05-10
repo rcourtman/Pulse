@@ -1855,3 +1855,24 @@ the report PDF endpoint already uses. Reporting therefore expands
 from an export-shaped feature into a first-class capability
 Assistant can compose with — the underlying engine surface stays
 unchanged.
+
+That follow-up has now landed. `chat.Config` carries three optional
+fields (`ReportNarrator`, `ReportFleetNarrator`,
+`ReportFindingsProvider`) which are threaded through to
+`tools.ExecutorConfig` and stored on `PulseToolExecutor`. The
+`pulse_summarize` tool reads them when building requests so the
+engine sees a populated narrator when the tenant's AI service is
+configured. The router installs a `SetReportNarratorResolver`
+closure on the chat handler that mirrors the reporting handler's
+pattern: it asks the AISettingsHandler for the per-tenant
+`ai.Service` and, when that service has `Enabled=true`, returns it
+as the implementation for all three roles (Service satisfies
+`reporting.Narrator`, `reporting.FleetNarrator`, and
+`reporting.FindingsProvider` already). An unconfigured tenant still
+sees the heuristic fallback — the tool never errors on missing AI,
+matching the report PDF's graceful-degradation posture. AI-narrated
+chat synthesis therefore uses the same provider, sanitizer, model
+selection, cost ledger (report_narrative / report_narrative_fleet
+use-cases), and budget gate the report PDF endpoint already
+enforces — there is exactly one canonical synthesis path for both
+surfaces.
