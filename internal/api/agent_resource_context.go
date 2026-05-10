@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -515,6 +516,61 @@ func projectAgentResourceActions(
 		out = append(out, summary)
 	}
 	return out
+}
+
+// pendingApprovalsForResourceFromStore is the named, testable form
+// of the AgentApprovalsProvider closure the router wires at
+// startup. Given an approval store, a canonical resource id, and
+// an org id, it returns every still-pending approval that
+// (a) belongs to the org via approval.BelongsToOrg, and
+// (b) targets exactly the requested resource via
+//
+//	ApprovalRequest.CanonicalResourceID.
+//
+// Both filters apply: an approval that matches one but not the
+// other is excluded so cross-org and cross-resource leaks are
+// impossible at the substrate boundary. Returns nil for an empty
+// store, an empty resource id, or no matches; an empty non-nil
+// slice would imply "no matches" too but the bundle handler
+// normalizes nil to []AgentResourceApprovalSummary{} so the wire
+// shape is always an array.
+func pendingApprovalsForResourceFromStore(store approvalsPendingProvider, resourceID, orgID string) []AgentResourceApprovalSummary {
+	if store == nil || strings.TrimSpace(resourceID) == "" {
+		return nil
+	}
+	pending := store.GetPendingApprovals()
+	if len(pending) == 0 {
+		return nil
+	}
+	out := make([]AgentResourceApprovalSummary, 0, len(pending))
+	for _, req := range pending {
+		if req == nil {
+			continue
+		}
+		if !approval.BelongsToOrg(req, orgID) {
+			continue
+		}
+		if req.CanonicalResourceID() != resourceID {
+			continue
+		}
+		out = append(out, AgentResourceApprovalSummary{
+			ID:          req.ID,
+			Command:     req.Command,
+			RiskLevel:   string(req.RiskLevel),
+			RequestedBy: req.RequestedBy,
+			RequestedAt: req.RequestedAt,
+			ExpiresAt:   req.ExpiresAt,
+		})
+	}
+	return out
+}
+
+// approvalsPendingProvider is the minimal accessor surface the
+// pending-approvals bundle filter depends on. The production
+// implementation is *approval.Store; the interface keeps the
+// function unit-testable without bringing the whole store up.
+type approvalsPendingProvider interface {
+	GetPendingApprovals() []*approval.ApprovalRequest
 }
 
 // projectAgentResourceVerification converts the canonical

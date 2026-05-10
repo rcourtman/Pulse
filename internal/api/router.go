@@ -420,35 +420,7 @@ func (r *Router) setupRoutes() {
 	// the wrong org.
 	r.agentContextHandler.SetApprovalsProvider(agentApprovalsProviderFunc(
 		func(resourceID, orgID string) []AgentResourceApprovalSummary {
-			store := approval.GetStore()
-			if store == nil || strings.TrimSpace(resourceID) == "" {
-				return nil
-			}
-			pending := store.GetPendingApprovals()
-			if len(pending) == 0 {
-				return nil
-			}
-			out := make([]AgentResourceApprovalSummary, 0, len(pending))
-			for _, req := range pending {
-				if req == nil {
-					continue
-				}
-				if !approval.BelongsToOrg(req, orgID) {
-					continue
-				}
-				if req.CanonicalResourceID() != resourceID {
-					continue
-				}
-				out = append(out, AgentResourceApprovalSummary{
-					ID:          req.ID,
-					Command:     req.Command,
-					RiskLevel:   string(req.RiskLevel),
-					RequestedBy: req.RequestedBy,
-					RequestedAt: req.RequestedAt,
-					ExpiresAt:   req.ExpiresAt,
-				})
-			}
-			return out
+			return pendingApprovalsForResourceFromStore(approval.GetStore(), resourceID, orgID)
 		},
 	))
 	r.agentEventBroadcaster = NewAgentEventBroadcaster()

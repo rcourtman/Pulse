@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -525,6 +526,120 @@ func TestHandleAgentFleetContext_RejectsNonGet(t *testing.T) {
 	h.HandleFleetContext(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status: got %d, want 405", rec.Code)
+	}
+}
+
+// pendingApprovalsForResourceFromStore is the named seam the
+// router-side AgentApprovalsProvider closure delegates to. The
+// next four tests pin the substrate's tenant- and
+// resource-isolation property: every approval the bundle returns
+// must match BOTH the requested org AND the requested resource.
+// Cross-org or cross-resource leaks at this seam would let an
+// agent with one org's token see approvals targeting another org's
+// infrastructure, which is the multi-tenant property the rest of
+// Pulse depends on.
+
+// newApprovalsTestStore builds an in-memory approval store seeded
+// with the given approvals. Used as the fixture for each isolation
+// test below.
+func newApprovalsTestStore(t *testing.T, approvals ...*approval.ApprovalRequest) *approval.Store {
+	t.Helper()
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DefaultTimeout:     5 * time.Minute,
+		DisablePersistence: true,
+	})
+	if err != nil {
+		t.Fatalf("approval.NewStore: %v", err)
+	}
+	for _, req := range approvals {
+		if err := store.CreateApproval(req); err != nil {
+			t.Fatalf("CreateApproval(%s): %v", req.ID, err)
+		}
+	}
+	return store
+}
+
+func TestPendingApprovalsForResource_FiltersByOrg(t *testing.T) {
+	// Two orgs each have a pending approval against the same
+	// canonical resource id. The filter must return only the org
+	// that matches.
+	orgA := &approval.ApprovalRequest{
+		ID: "appr-org-a", OrgID: "org-a",
+		Command: "systemctl restart nginx", TargetType: "agent", TargetID: "host-1", TargetName: "host-1",
+	}
+	orgB := &approval.ApprovalRequest{
+		ID: "appr-org-b", OrgID: "org-b",
+		Command: "systemctl restart nginx", TargetType: "agent", TargetID: "host-1", TargetName: "host-1",
+	}
+	store := newApprovalsTestStore(t, orgA, orgB)
+
+	gotA := pendingApprovalsForResourceFromStore(store, "agent:host-1", "org-a")
+	if len(gotA) != 1 || gotA[0].ID != "appr-org-a" {
+		t.Errorf("org-a query must return only org-a's approval; got %+v", gotA)
+	}
+	gotB := pendingApprovalsForResourceFromStore(store, "agent:host-1", "org-b")
+	if len(gotB) != 1 || gotB[0].ID != "appr-org-b" {
+		t.Errorf("org-b query must return only org-b's approval; got %+v", gotB)
+	}
+}
+
+func TestPendingApprovalsForResource_FiltersByResource(t *testing.T) {
+	// Same org, two approvals against different resources. The
+	// filter must return only the one matching the requested
+	// canonical resource id, never both.
+	a := &approval.ApprovalRequest{
+		ID: "appr-vm-101", OrgID: "org-a",
+		Command: "systemctl restart nginx", TargetType: "vm", TargetID: "101", TargetName: "vm-101",
+	}
+	b := &approval.ApprovalRequest{
+		ID: "appr-vm-202", OrgID: "org-a",
+		Command: "systemctl restart nginx", TargetType: "vm", TargetID: "202", TargetName: "vm-202",
+	}
+	store := newApprovalsTestStore(t, a, b)
+
+	got := pendingApprovalsForResourceFromStore(store, "vm:101", "org-a")
+	if len(got) != 1 || got[0].ID != "appr-vm-101" {
+		t.Errorf("vm:101 query must return only that resource's approval; got %+v", got)
+	}
+}
+
+func TestPendingApprovalsForResource_LegacyEmptyOrgIsDefaultOnly(t *testing.T) {
+	// Approvals without OrgID set are treated as default-org per
+	// approval.BelongsToOrg. Pin that legacy approvals do not leak
+	// into a non-default org's bundle, and that the default-org
+	// query sees them.
+	legacy := &approval.ApprovalRequest{
+		ID:      "appr-legacy",
+		Command: "systemctl restart nginx", TargetType: "agent", TargetID: "host-1", TargetName: "host-1",
+		// OrgID intentionally empty.
+	}
+	store := newApprovalsTestStore(t, legacy)
+
+	gotDefault := pendingApprovalsForResourceFromStore(store, "agent:host-1", "default")
+	if len(gotDefault) != 1 {
+		t.Errorf("default org must see legacy approvals; got %d", len(gotDefault))
+	}
+	gotOther := pendingApprovalsForResourceFromStore(store, "agent:host-1", "org-other")
+	if len(gotOther) != 0 {
+		t.Errorf("non-default org must NOT see legacy approvals; got %+v", gotOther)
+	}
+}
+
+func TestPendingApprovalsForResource_EmptyInputsReturnNil(t *testing.T) {
+	// Nil store, empty resource id, and an empty store all return
+	// nil. The bundle handler normalizes nil to []
+	// AgentResourceApprovalSummary{} so the wire shape stays an
+	// array; this function only owns the "no data" case.
+	if got := pendingApprovalsForResourceFromStore(nil, "vm:101", "org-a"); got != nil {
+		t.Errorf("nil store must return nil; got %+v", got)
+	}
+	store := newApprovalsTestStore(t)
+	if got := pendingApprovalsForResourceFromStore(store, "", "org-a"); got != nil {
+		t.Errorf("empty resource id must return nil; got %+v", got)
+	}
+	if got := pendingApprovalsForResourceFromStore(store, "vm:none", "org-a"); got != nil {
+		t.Errorf("empty store must return nil; got %+v", got)
 	}
 }
 

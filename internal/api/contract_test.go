@@ -13550,23 +13550,37 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 // shows up as an empty array even when there ARE pending approvals,
 // silently breaking the substrate's "everything an agent needs in
 // one read" contract for the governance dimension.
+//
+// The wire-up has two halves: router.go installs the provider with
+// a closure that delegates to a named function in
+// agent_resource_context.go, and that function applies the org and
+// resource filters. Both halves are pinned here so a refactor that
+// moves the filter logic still passes the test only if the
+// resulting code preserves the safety properties.
 func TestContract_AgentResourceContextWiresApprovalsProvider(t *testing.T) {
-	source, err := os.ReadFile("router.go")
+	router, err := os.ReadFile("router.go")
 	if err != nil {
 		t.Fatalf("read router.go: %v", err)
 	}
-	src := string(source)
-	if !strings.Contains(src, "r.agentContextHandler.SetApprovalsProvider(agentApprovalsProviderFunc(") {
+	if !strings.Contains(string(router), "r.agentContextHandler.SetApprovalsProvider(agentApprovalsProviderFunc(") {
 		t.Error("router.go must wire the approvals provider on the agent context handler so the bundle's pendingApprovals section is populated")
 	}
-	if !strings.Contains(src, "store := approval.GetStore()") {
-		t.Error("router.go must resolve the approval store at request time so multi-tenant store rebuilds stay honored")
+	if !strings.Contains(string(router), "pendingApprovalsForResourceFromStore(approval.GetStore(), resourceID, orgID)") {
+		t.Error("router.go must delegate to pendingApprovalsForResourceFromStore so the request-time store lookup and the filter logic stay together and stay testable")
 	}
-	if !strings.Contains(src, "if !approval.BelongsToOrg(req, orgID)") {
-		t.Error("router.go must scope pending approvals via BelongsToOrg so cross-tenant requests don't leak into a resource-context bundle")
+
+	bundle, err := os.ReadFile("agent_resource_context.go")
+	if err != nil {
+		t.Fatalf("read agent_resource_context.go: %v", err)
 	}
-	if !strings.Contains(src, "if req.CanonicalResourceID() != resourceID") {
-		t.Error("router.go must filter pending approvals by CanonicalResourceID so the bundle only carries approvals targeting the requested resource")
+	if !strings.Contains(string(bundle), "func pendingApprovalsForResourceFromStore(") {
+		t.Error("agent_resource_context.go must define pendingApprovalsForResourceFromStore as the named, testable filter — drift here breaks the cross-org / cross-resource isolation pins")
+	}
+	if !strings.Contains(string(bundle), "if !approval.BelongsToOrg(req, orgID)") {
+		t.Error("the named filter must scope pending approvals via BelongsToOrg so cross-tenant requests don't leak into a resource-context bundle")
+	}
+	if !strings.Contains(string(bundle), "if req.CanonicalResourceID() != resourceID") {
+		t.Error("the named filter must filter pending approvals by CanonicalResourceID so the bundle only carries approvals targeting the requested resource")
 	}
 }
 
