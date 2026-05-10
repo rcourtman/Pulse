@@ -1729,3 +1729,33 @@ copy `f.AutoResolved` on both the live wire-up callback and the
 persistence-recovery resync, so the frontend can honestly attribute who
 closed the loop instead of flattening every resolution into a generic
 "resolved" state.
+
+The same canonical AI runtime now also owns the report-narrative surface.
+`internal/ai.Service` implements `pkg/reporting.Narrator` and
+`pkg/reporting.FindingsProvider` directly through `report_narrator.go` and
+`report_findings.go` so the reporting engine can request an AI-generated
+executive summary without depending on AI-internal types. The narrator is a
+single-turn, no-tools call that reuses the canonical provider abstraction
+already powering Patrol and Assistant; the request sanitizer, model
+selection (`PatrolModel` preferred, falling back to `GetChatModel()`), cost
+budget enforcement (`enforceBudget("report_narrative")`), and provider
+factory must be the same shared seams used by `QuickAnalysis`, not a
+parallel report-only provider stack. The structured report payload sent to
+the model is denormalised through `buildReportNarratorPayload` so reporting
+package types do not leak into the prompt surface, and the response is
+parsed through `parseReportNarratorResponse` which tolerates an optional
+`json` code fence the model may emit despite the no-fences instruction.
+Severity normalisation maps the model's free-form output back onto the
+narrative bullet severity set the renderer understands (`ok`, `info`,
+`warning`, `critical`); unknown values default to `info` rather than
+silently rendering as muted. Both interfaces fail closed: a nil provider,
+parse failure, empty narrative, or context cancellation returns an error
+so the reporting engine falls back to the deterministic heuristic
+narrator. The findings provider filters the patrol findings store by
+resource ID and lifecycle overlap with the report window via
+`findingOverlapsWindow`, and truncates to `reportFindingsLimit` (25)
+sorted entries so retrospective summaries stay within a predictable
+prompt budget. Reporting is therefore an additive consumer of AI
+runtime, not a new ownership boundary, and the narrator/findings
+surfaces inherit the same governance the rest of the canonical AI
+runtime already enforces.
