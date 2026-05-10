@@ -213,3 +213,74 @@ func TestReconcileStaleFindings_NoSeededFindings(t *testing.T) {
 		t.Fatalf("expected 0 auto-resolved findings when no seeded IDs, got %d", resolved)
 	}
 }
+
+// Category gate: only performance and capacity findings (continuous current-state
+// metrics) may be auto-resolved from absence. Reliability, backup, security, and
+// general findings represent events or persistent states and must stay active
+// until explicitly resolved — silent absence-based auto-resolve there caused
+// bogus auto_resolved → re-detected → regressed cycles that polluted the trust
+// strip and inflated the regression counter.
+func TestReconcileStaleFindings_SkipsNonCurrentStateCategories(t *testing.T) {
+	nonEligible := []struct {
+		name     string
+		category FindingCategory
+	}{
+		{"reliability", FindingCategoryReliability},
+		{"backup", FindingCategoryBackup},
+		{"security", FindingCategorySecurity},
+		{"general", FindingCategoryGeneral},
+	}
+	for _, tc := range nonEligible {
+		t.Run(string(tc.category), func(t *testing.T) {
+			f := &Finding{
+				ID:           "find-" + string(tc.category),
+				Severity:     FindingSeverityWarning,
+				Category:     tc.category,
+				ResourceID:   "vm-100",
+				ResourceName: "web",
+				Title:        "Some persistent event",
+				DetectedAt:   time.Now().Add(-1 * time.Hour),
+			}
+			p := newTestPatrolWithFindings([]*Finding{f})
+
+			resolved := p.reconcileStaleFindings(
+				nil,            // not re-reported
+				nil,            // not explicitly resolved
+				[]string{f.ID}, // seeded
+				false,          // run succeeded
+			)
+
+			if resolved != 0 {
+				t.Fatalf("expected 0 auto-resolved findings for category %s, got %d", tc.category, resolved)
+			}
+			stored := p.findings.Get(f.ID)
+			if stored == nil {
+				t.Fatal("finding should still exist in store")
+			}
+			if stored.ResolvedAt != nil {
+				t.Fatalf("category %s finding must NOT be auto-resolved from absence; resolved at %s", tc.category, stored.ResolvedAt)
+			}
+		})
+	}
+}
+
+func TestCategorySupportsStaleAutoResolve(t *testing.T) {
+	cases := []struct {
+		category FindingCategory
+		want     bool
+	}{
+		{FindingCategoryPerformance, true},
+		{FindingCategoryCapacity, true},
+		{FindingCategoryReliability, false},
+		{FindingCategoryBackup, false},
+		{FindingCategorySecurity, false},
+		{FindingCategoryGeneral, false},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.category), func(t *testing.T) {
+			if got := CategorySupportsStaleAutoResolve(tc.category); got != tc.want {
+				t.Fatalf("CategorySupportsStaleAutoResolve(%s) = %v, want %v", tc.category, got, tc.want)
+			}
+		})
+	}
+}

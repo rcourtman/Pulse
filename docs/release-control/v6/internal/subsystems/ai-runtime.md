@@ -580,6 +580,28 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
+Stale-finding auto-resolve (`reconcileStaleFindings` in
+`internal/ai/patrol_ai.go`) is gated on the category whitelist exposed by
+`CategorySupportsStaleAutoResolve` in `internal/ai/findings.go`. Only
+`performance` and `capacity` findings — continuous current-state metric
+thresholds where the most recent successful scan's observation is
+authoritative — may be auto-resolved from absence in the LLM's report.
+`reliability`, `backup`, `security`, and `general` findings represent
+discrete events or persistent states; the LLM not re-mentioning a failed
+backup task, a service that crashed, or a vulnerability that was found
+is not evidence that the underlying issue has cleared. Those categories
+must stay active until explicitly resolved either by the LLM calling
+`patrol_resolve_finding` with evidence or by operator action through the
+governed findings store. Lifecycle events recorded by `findings.go` must
+not introduce duplicate generic transition rows: the canonical
+`syncLoopStateLocked` records `loop_transition_violation` only when a
+transition is rejected, and otherwise leaves the semantic event
+(`auto_resolved`, `regressed`, `dismissed`, `acknowledged`, `snoozed`,
+`reminded`, `suppression_lifted`, etc.) as the single audit row for the
+transition. Re-detections of an already-active finding update
+`TimesRaised` and `LastSeenAt` only — they must not append a `detected`
+lifecycle event, because a heartbeat is not a transition.
+
 The findings store now consults a `ResourceOperatorStateProvider`
 during the new-finding path. The interface lives in `internal/ai` to
 avoid an import cycle with `internal/unifiedresources`; the API layer

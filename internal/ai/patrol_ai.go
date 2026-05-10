@@ -3755,8 +3755,17 @@ func seedFormatTimeAgo(now, t time.Time) string {
 // in seed context but were neither re-reported nor explicitly resolved during the run.
 // This handles the case where the LLM doesn't reliably use patrol_resolve_finding.
 //
-// Safety: only called after successful full patrols (not scoped), and only for findings
-// that were in the seed context (the LLM had the opportunity to re-report them).
+// Safety:
+//   - only called after successful full patrols (not scoped), and only for findings
+//     that were in the seed context (the LLM had the opportunity to re-report them);
+//   - only acts on finding categories where "absence of re-report = condition cleared"
+//     is a sound model. See CategorySupportsStaleAutoResolve: performance and capacity
+//     are continuous metric thresholds, so the most recent successful scan's absence
+//     of trip is authoritative. Reliability/backup/security/general represent discrete
+//     events or persistent states — the LLM not re-mentioning a failed backup task or
+//     a security vulnerability does not mean the issue has been addressed, and silent
+//     auto-resolve there produced bogus auto_resolved → re-detected → regressed
+//     cycles that inflated the trust strip and the regression counter.
 func (p *PatrolService) reconcileStaleFindings(reportedIDs, resolvedIDs, seededFindingIDs []string, runHadErrors bool) int {
 	if runHadErrors {
 		return 0
@@ -3783,6 +3792,20 @@ func (p *PatrolService) reconcileStaleFindings(reportedIDs, resolvedIDs, seededF
 		if reported[id] || resolved[id] {
 			continue
 		}
+		// Category gate: only continuous current-state categories are safe to
+		// auto-resolve from absence. Event/persistent categories stay active
+		// until explicitly resolved.
+		finding := p.findings.Get(id)
+		if finding == nil {
+			continue
+		}
+		if !CategorySupportsStaleAutoResolve(finding.Category) {
+			log.Debug().
+				Str("finding_id", id).
+				Str("category", string(finding.Category)).
+				Msg("AI Patrol: skipping stale auto-resolve — category not eligible (event/persistent finding)")
+			continue
+		}
 		// Only resolve if still active
 		if ok := p.findings.ResolveWithReason(id, "No longer detected by patrol"); ok {
 			count++
@@ -3797,6 +3820,7 @@ func (p *PatrolService) reconcileStaleFindings(reportedIDs, resolvedIDs, seededF
 
 			log.Info().
 				Str("finding_id", id).
+				Str("category", string(finding.Category)).
 				Msg("AI Patrol: Auto-resolved stale finding (not re-reported by patrol)")
 		}
 	}

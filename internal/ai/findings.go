@@ -45,6 +45,34 @@ const (
 	FindingCategoryGeneral     FindingCategory = "general"
 )
 
+// CategorySupportsStaleAutoResolve reports whether a finding category
+// represents a continuous current-state condition that Patrol can soundly
+// auto-resolve from absence in a successful run. Only `performance` and
+// `capacity` qualify: those are metric thresholds (CPU above X, disk above
+// Y) where the most recent scan's observation is authoritative — if the
+// threshold isn't tripped now, the condition has cleared.
+//
+// All other categories represent discrete events or persistent states:
+// `reliability` (a service that crashed, a restart loop), `backup` (a
+// backup task that failed), `security` (a vulnerability that was found),
+// and `general` (catch-all). For these, absence in a Patrol report only
+// means the LLM didn't re-mention the finding — it does not mean the
+// underlying issue has been addressed. Auto-resolving them on absence
+// produced false `auto_resolved` events that the next run re-detected as
+// regressions, inflating the regression counter and polluting the trust
+// strip with fictional "auto-resolved" credit.
+//
+// Such findings stay active until explicitly resolved — either by the LLM
+// calling `patrol_resolve_finding` with evidence, or by operator action.
+func CategorySupportsStaleAutoResolve(category FindingCategory) bool {
+	switch category {
+	case FindingCategoryPerformance, FindingCategoryCapacity:
+		return true
+	default:
+		return false
+	}
+}
+
 // DismissReasonWillFixLater marks a finding as "I will fix this later" — an
 // operational commitment with an implicit deadline. See Finding.RemindAt.
 const DismissReasonWillFixLater = "will_fix_later"
