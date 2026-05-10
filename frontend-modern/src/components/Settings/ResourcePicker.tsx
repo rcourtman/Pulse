@@ -353,6 +353,8 @@ export function ResourcePicker(props: ResourcePickerProps) {
                 <button
                   class="p-0.5 rounded hover:bg-blue-500 transition-colors"
                   onClick={() => removeSelected(item.id)}
+                  aria-label={`Remove ${item.name}`}
+                  title={`Remove ${item.name}`}
                 >
                   <X size={12} />
                 </button>

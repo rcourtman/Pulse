@@ -42,6 +42,8 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
           <button
             type="button"
             onClick={props.onClose}
+            aria-label="Close role editor"
+            title="Close"
             class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
           >
             <X class="w-5 h-5" />
@@ -132,6 +134,8 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                       type="button"
                       onClick={() => props.onRemovePermission(index())}
                       disabled={props.formPermissions.length <= 1}
+                      aria-label="Remove permission"
+                      title="Remove permission"
                       class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
                     >
                       <Trash2 class="w-4 h-4" />
