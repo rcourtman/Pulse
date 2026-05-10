@@ -77,6 +77,7 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 		persistence: config.NewConfigPersistence(cfg.DataPath),
 	}
 	router.initializeBootstrapToken()
+	InitPersistentAuthStores(dataDir)
 
 	tokenPath := filepath.Join(cfg.DataPath, bootstrapTokenFilename)
 	bootstrapToken, _, _, err := bootstrap.Load(cfg.DataPath)
@@ -98,16 +99,16 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 		t.Fatalf("expected 401 unauthorized without bootstrap token, got %d (%s)", rr.Code, rr.Body.String())
 	}
 
+	// Remote IP without a bootstrap token is rejected — loopback is the only
+	// no-token fallback.
 	authLimiter.Reset("198.51.100.80")
 
-	reqWith := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
-	reqWith.RemoteAddr = "198.51.100.80:54321"
-	reqWith.Header.Set(bootstrapTokenHeader, bootstrapToken)
-
-	rrWith := httptest.NewRecorder()
-	handler(rrWith, reqWith)
-	if rrWith.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 forbidden for remote quick setup even with valid bootstrap token, got %d (%s)", rrWith.Code, rrWith.Body.String())
+	reqRemoteNoToken := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
+	reqRemoteNoToken.RemoteAddr = "198.51.100.80:54321"
+	rrRemoteNoToken := httptest.NewRecorder()
+	handler(rrRemoteNoToken, reqRemoteNoToken)
+	if rrRemoteNoToken.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 forbidden for remote quick setup without bootstrap token, got %d (%s)", rrRemoteNoToken.Code, rrRemoteNoToken.Body.String())
 	}
 
 	authLimiter.Reset("127.0.0.1")

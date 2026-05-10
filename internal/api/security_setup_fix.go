@@ -201,14 +201,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 
 		if !authorized && !authConfigured {
-			if !isDirectLoopbackRequest(req) {
-				log.Warn().
-					Str("ip", clientIP).
-					Msg("Rejected initial quick setup outside direct loopback")
-				http.Error(w, "Initial security setup is only available from localhost until authentication is configured", http.StatusForbidden)
-				return
-			}
-
 			if r.bootstrapTokenHash == "" {
 				log.Error().Msg("Bootstrap setup token unavailable; refusing unauthenticated quick setup")
 				http.Error(w, "Bootstrap token unavailable; restart Pulse or inspect data directory", http.StatusServiceUnavailable)
@@ -220,7 +212,23 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 				providedToken = strings.TrimSpace(setupRequest.SetupToken)
 			}
 
+			// The bootstrap token is the security boundary for initial setup:
+			// only callers with filesystem access to the data dir can read it.
+			// A valid token authorizes setup from any origin so users running
+			// Pulse in a Proxmox LXC (the common case) can complete setup from
+			// their workstation browser. Without a token, only direct loopback
+			// can finish setup — that lane preserves the legacy console flow.
 			if providedToken == "" {
+				if !isDirectLoopbackRequest(req) {
+					log.Warn().
+						Str("ip", clientIP).
+						Msg("Rejected initial quick setup: no bootstrap token from non-loopback origin")
+					errorMsg := "Initial security setup requires the bootstrap token when accessed outside localhost. Retrieve it from the host:\n\n" +
+						"Docker: docker exec <container> /app/pulse bootstrap-token\n" +
+						"Bare metal: pulse bootstrap-token"
+					http.Error(w, errorMsg, http.StatusForbidden)
+					return
+				}
 				errorMsg := "Bootstrap setup token required. Retrieve it from the host:\n\n" +
 					"Docker: docker exec <container> /app/pulse bootstrap-token\n" +
 					"Bare metal: pulse bootstrap-token"

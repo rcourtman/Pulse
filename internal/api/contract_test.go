@@ -8898,67 +8898,94 @@ func TestContract_QuickSecuritySetupBootstrapRetrievalGuidance(t *testing.T) {
 	}
 }
 
-func TestContract_QuickSecuritySetupValidBootstrapTokenRemainsLoopbackOnly(t *testing.T) {
-	resetPersistentAuthStoresForTests()
-	t.Cleanup(resetPersistentAuthStoresForTests)
-
-	tempDir := t.TempDir()
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-	}
-	router := &Router{
-		config:      cfg,
-		persistence: config.NewConfigPersistence(cfg.DataPath),
-	}
-	router.initializeBootstrapToken()
-	InitPersistentAuthStores(tempDir)
-
-	bootstrapToken, _, _, err := loadOrCreateBootstrapToken(tempDir)
-	if err != nil {
-		t.Fatalf("loadOrCreateBootstrapToken: %v", err)
-	}
-
-	handler := handleQuickSecuritySetupFixed(router)
+// A valid bootstrap token authorizes quick setup from any origin — the token
+// is the security boundary, and it's only readable by callers with filesystem
+// access to the Pulse data directory. The loopback-only path remains for the
+// no-token fallback (legacy console flow).
+func TestContract_QuickSecuritySetupValidBootstrapTokenAuthorizesAnyOrigin(t *testing.T) {
 	body := `{"username":"bootstrap","password":"StrongPass!1","apiToken":"` + strings.Repeat("aa", 32) + `"}`
 
-	remoteReq := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
-	remoteReq.RemoteAddr = "198.51.100.41:54321"
-	remoteReq.Header.Set(bootstrapTokenHeader, bootstrapToken)
-	remoteRec := httptest.NewRecorder()
-
-	authLimiter.Reset("198.51.100.41")
-	handler(remoteRec, remoteReq)
-
-	if remoteRec.Code != http.StatusForbidden {
-		t.Fatalf("remote quick setup status = %d, want 403 (%s)", remoteRec.Code, remoteRec.Body.String())
-	}
-	if got := remoteRec.Body.String(); !strings.Contains(strings.ToLower(got), "localhost") {
-		t.Fatalf("remote quick setup guidance = %q, want localhost-only message", got)
-	}
-
-	loopbackReq := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
-	loopbackReq.RemoteAddr = "127.0.0.1:54321"
-	loopbackReq.Header.Set(bootstrapTokenHeader, bootstrapToken)
-	loopbackRec := httptest.NewRecorder()
-
-	authLimiter.Reset("127.0.0.1")
-	handler(loopbackRec, loopbackReq)
-
-	if loopbackRec.Code != http.StatusOK {
-		t.Fatalf("loopback quick setup status = %d, want 200 (%s)", loopbackRec.Code, loopbackRec.Body.String())
-	}
-
-	foundSessionCookie := false
-	for _, cookie := range loopbackRec.Result().Cookies() {
-		if cookie.Name == cookieNameSession || cookie.Name == cookieNameSessionSecure {
-			foundSessionCookie = true
-			break
+	newHandler := func(t *testing.T) (http.HandlerFunc, string) {
+		t.Helper()
+		tempDir := t.TempDir()
+		cfg := &config.Config{
+			DataPath:   tempDir,
+			ConfigPath: tempDir,
 		}
+		router := &Router{
+			config:      cfg,
+			persistence: config.NewConfigPersistence(cfg.DataPath),
+		}
+		router.initializeBootstrapToken()
+		InitPersistentAuthStores(tempDir)
+
+		token, _, _, err := loadOrCreateBootstrapToken(tempDir)
+		if err != nil {
+			t.Fatalf("loadOrCreateBootstrapToken: %v", err)
+		}
+		return handleQuickSecuritySetupFixed(router), token
 	}
-	if !foundSessionCookie {
-		t.Fatal("expected loopback quick setup to issue a session cookie")
-	}
+
+	t.Run("remote IP with valid bootstrap token succeeds", func(t *testing.T) {
+		handler, token := newHandler(t)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
+		req.RemoteAddr = "198.51.100.41:54321"
+		req.Header.Set(bootstrapTokenHeader, token)
+		rec := httptest.NewRecorder()
+
+		authLimiter.Reset("198.51.100.41")
+		handler(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("remote quick setup with bootstrap token status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+		}
+
+		foundSessionCookie := false
+		for _, cookie := range rec.Result().Cookies() {
+			if cookie.Name == cookieNameSession || cookie.Name == cookieNameSessionSecure {
+				foundSessionCookie = true
+				break
+			}
+		}
+		if !foundSessionCookie {
+			t.Fatal("expected remote quick setup with bootstrap token to issue a session cookie")
+		}
+	})
+
+	t.Run("remote IP without bootstrap token is rejected with bootstrap guidance", func(t *testing.T) {
+		handler, _ := newHandler(t)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
+		req.RemoteAddr = "198.51.100.41:54321"
+		rec := httptest.NewRecorder()
+
+		authLimiter.Reset("198.51.100.41")
+		handler(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("remote quick setup without bootstrap token status = %d, want 403 (%s)", rec.Code, rec.Body.String())
+		}
+		if got := rec.Body.String(); !strings.Contains(strings.ToLower(got), "bootstrap") {
+			t.Fatalf("remote no-token rejection guidance = %q, want bootstrap-token message", got)
+		}
+	})
+
+	t.Run("loopback IP with valid bootstrap token succeeds", func(t *testing.T) {
+		handler, token := newHandler(t)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
+		req.RemoteAddr = "127.0.0.1:54321"
+		req.Header.Set(bootstrapTokenHeader, token)
+		rec := httptest.NewRecorder()
+
+		authLimiter.Reset("127.0.0.1")
+		handler(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("loopback quick setup status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+		}
+	})
 }
 
 func TestContract_ResetFirstRunSecurityResponseJSONSnapshot(t *testing.T) {
