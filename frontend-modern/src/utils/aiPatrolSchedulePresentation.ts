@@ -4,7 +4,7 @@ export interface PatrolScheduleOption {
 }
 
 export const PATROL_SCHEDULE_PRESETS: readonly PatrolScheduleOption[] = [
-  { value: 0, label: 'Disabled' },
+  { value: 0, label: 'Off' },
   { value: 10, label: '10 min' },
   { value: 15, label: '15 min' },
   { value: 30, label: '30 min' },

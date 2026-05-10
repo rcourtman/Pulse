@@ -7,7 +7,7 @@ import {
 
 describe('aiPatrolSchedulePresentation', () => {
   it('returns canonical patrol schedule presets', () => {
-    expect(PATROL_SCHEDULE_PRESETS).toContainEqual({ value: 0, label: 'Disabled' });
+    expect(PATROL_SCHEDULE_PRESETS).toContainEqual({ value: 0, label: 'Off' });
     expect(PATROL_SCHEDULE_PRESETS).toContainEqual({ value: 360, label: '6 hours' });
   });
 
