@@ -805,6 +805,39 @@ func (s *SessionStore) GetMessages(id string) ([]Message, error) {
 	return data.Messages, nil
 }
 
+// TrimMessages keeps at most keepMostRecent messages in the session,
+// dropping older ones. Used for sessions like patrol-main that are
+// reused indefinitely across scheduled runs and would otherwise grow
+// unbounded — at the default 3-hour Patrol cadence with ~20 messages
+// per run, the file grew to 16 MB / 3,593 messages before this bound
+// existed, and every AddMessage was rewriting the whole file to disk.
+//
+// keepMostRecent <= 0 is treated as a no-op so callers can disable the
+// bound by passing 0 when they want full retention (e.g. user-driven
+// chat sessions where conversation history is the product).
+func (s *SessionStore) TrimMessages(id string, keepMostRecent int) error {
+	if keepMostRecent <= 0 {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return err
+	}
+	if len(data.Messages) <= keepMostRecent {
+		return nil
+	}
+	start := len(data.Messages) - keepMostRecent
+	trimmed := make([]Message, keepMostRecent)
+	copy(trimmed, data.Messages[start:])
+	data.Messages = trimmed
+	data.UpdatedAt = time.Now()
+	return s.writeSession(*data)
+}
+
 // AddMessage adds a message to a session
 func (s *SessionStore) AddMessage(id string, msg Message) error {
 	s.mu.Lock()

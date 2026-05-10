@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,6 +103,68 @@ func TestSessionStore(t *testing.T) {
 		retrieved, err := store.EnsureSession("fixed-id")
 		assert.NoError(t, err)
 		assert.Equal(t, sessionFixed.ID, retrieved.ID)
+	})
+
+	t.Run("TrimMessages keeps the most recent N", func(t *testing.T) {
+		// Patrol-main session was reused across every scheduled run
+		// and grew to 16 MB / 3,593 messages within a month. Without
+		// a per-session bound, the file rewrites on every AddMessage
+		// got linearly more expensive. TrimMessages caps the slice to
+		// the most recent N messages so the on-disk footprint stays
+		// bounded and the I/O cost per write stays flat.
+		session, err := store.EnsureSession("trim-test")
+		require.NoError(t, err)
+		for i := 0; i < 50; i++ {
+			require.NoError(t, store.AddMessage(session.ID, Message{
+				Role:    "user",
+				Content: fmt.Sprintf("message-%d", i),
+			}))
+		}
+
+		// Trim to the last 10 — must drop messages 0..39 and keep 40..49.
+		require.NoError(t, store.TrimMessages(session.ID, 10))
+		got, err := store.GetMessages(session.ID)
+		require.NoError(t, err)
+		require.Len(t, got, 10)
+		assert.Equal(t, "message-40", got[0].Content)
+		assert.Equal(t, "message-49", got[9].Content)
+	})
+
+	t.Run("TrimMessages is a no-op below threshold", func(t *testing.T) {
+		// When the session already has fewer messages than the cap,
+		// no rewrite should happen and no messages should be lost.
+		session, err := store.EnsureSession("trim-noop")
+		require.NoError(t, err)
+		for i := 0; i < 5; i++ {
+			require.NoError(t, store.AddMessage(session.ID, Message{
+				Role:    "user",
+				Content: fmt.Sprintf("msg-%d", i),
+			}))
+		}
+		require.NoError(t, store.TrimMessages(session.ID, 200))
+		got, err := store.GetMessages(session.ID)
+		require.NoError(t, err)
+		require.Len(t, got, 5)
+	})
+
+	t.Run("TrimMessages with non-positive keep is a no-op", func(t *testing.T) {
+		// keepMostRecent <= 0 must not silently truncate the entire
+		// session — that would be a footgun. Callers can disable the
+		// cap explicitly by passing 0 for user-driven chat sessions
+		// where full history is the product.
+		session, err := store.EnsureSession("trim-zero")
+		require.NoError(t, err)
+		for i := 0; i < 3; i++ {
+			require.NoError(t, store.AddMessage(session.ID, Message{
+				Role:    "user",
+				Content: fmt.Sprintf("zero-%d", i),
+			}))
+		}
+		require.NoError(t, store.TrimMessages(session.ID, 0))
+		require.NoError(t, store.TrimMessages(session.ID, -5))
+		got, err := store.GetMessages(session.ID)
+		require.NoError(t, err)
+		require.Len(t, got, 3)
 	})
 }
 

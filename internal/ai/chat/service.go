@@ -2029,6 +2029,20 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		}
 	}
 
+	// Patrol-main is reused across every scheduled run (the
+	// stateless-input contract means we never load it back into the
+	// agentic loop, but we still write to it for the Pulse Assistant
+	// sidebar's forensic view). Without a cap, the file grew to 16 MB /
+	// 3,593 messages within a month and every AddMessage rewrote the
+	// whole file to disk. Cap at the most recent ~two Patrol runs'
+	// worth of messages — enough for the sidebar to show recent
+	// activity, far short of unbounded growth. The canonical forensic
+	// log is the PatrolRunRecord history, not this session.
+	const maxPatrolSessionMessages = 200
+	if err := sessions.TrimMessages(session.ID, maxPatrolSessionMessages); err != nil {
+		log.Warn().Err(err).Msg("failed to trim patrol session messages")
+	}
+
 	// Collect content from result messages
 	var contentBuilder strings.Builder
 	for _, msg := range resultMessages {
