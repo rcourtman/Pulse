@@ -253,7 +253,7 @@ const buildRow = (
   const coverageLabels = isCluster
     ? coverageLabelsFor(componentConnections).filter((label) => label !== hostTelemetryLabel)
     : coverageLabelsFor(componentConnections);
-  const source: InfrastructureSourceKind = isCluster ? 'api' : sourceFor(componentConnections);
+  const source: InfrastructureSourceKind = sourceFor(componentConnections);
   const subtitle = isCluster
     ? `Cluster · ${members.length} ${members.length === 1 ? 'node' : 'nodes'}`
     : subtitleFor(componentConnections, primaryConnection);
