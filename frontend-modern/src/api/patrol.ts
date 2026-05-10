@@ -647,3 +647,54 @@ export async function triggerPatrolRun(): Promise<{ success: boolean; message: s
     method: 'POST',
   });
 }
+
+/**
+ * Response shape for POST /api/ai/patrol/preflight.
+ *
+ * The preflight runs a one-shot tool-call round-trip against the
+ * configured (or overridden) Patrol provider+model so operators can
+ * verify tool calling actually works before relying on the scheduled
+ * cadence. Distinct from the per-provider /api/ai/test endpoints,
+ * which only list models.
+ *
+ * - success: provider call succeeded AND the model emitted a tool call.
+ * - tool_call_observed: whether the model emitted a tool call. False
+ *   with success=false means the request failed; false with
+ *   success=false and cause=model_tool_support_unverified means the
+ *   provider accepted the request but the model did not call the tool
+ *   (a soft warning — Patrol may still work in practice).
+ */
+export interface PatrolPreflightResponse {
+  success: boolean;
+  provider?: string;
+  model?: string;
+  tool_call_observed: boolean;
+  duration_ms: number;
+  message: string;
+  cause?: string;
+  summary?: string;
+  description?: string;
+  recommendation?: string;
+  action?: string;
+}
+
+export interface PatrolPreflightRequest {
+  provider?: string;
+  model?: string;
+}
+
+/**
+ * Verify that the configured Patrol provider+model can actually call tools.
+ *
+ * Pass `provider` and/or `model` to override the configured Patrol
+ * selection (useful when previewing a new model before saving).
+ */
+export async function runPatrolPreflight(
+  body: PatrolPreflightRequest = {},
+): Promise<PatrolPreflightResponse> {
+  return apiFetchJSON<PatrolPreflightResponse>('/api/ai/patrol/preflight', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}

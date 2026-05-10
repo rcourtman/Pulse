@@ -600,6 +600,7 @@ var allRouteAllowlist = []string{
 	"/api/ai/patrol/findings",
 	"/api/ai/patrol/history",
 	"/api/ai/patrol/run",
+	"/api/ai/patrol/preflight",
 	"/api/ai/patrol/acknowledge",
 	"/api/ai/patrol/dismiss",
 	"/api/ai/patrol/findings/note",

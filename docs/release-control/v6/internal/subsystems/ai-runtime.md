@@ -108,7 +108,7 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Completion Obligations
 
-1. Update this contract when canonical AI runtime or transport entry points move, including transport-level provider request-shape changes such as DeepSeek `tool_choice` coercion, and runtime-failure classification splits (for example separating forced tool selection rejection, no tool-capable endpoint, and generic model-level lack of tool support into distinct causes)
+1. Update this contract when canonical AI runtime or transport entry points move, including transport-level provider request-shape changes such as DeepSeek `tool_choice` coercion, runtime-failure classification splits (for example separating forced tool selection rejection, no tool-capable endpoint, and generic model-level lack of tool support into distinct causes), and Patrol-specific verification surfaces such as `POST /api/ai/patrol/preflight` that exercise the full chat-completions path with a minimal tool definition rather than only listing models
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes
    Patrol runtime failures are part of that runtime contract: provider, model,

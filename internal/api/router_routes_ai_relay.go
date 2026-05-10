@@ -111,6 +111,10 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// SECURITY: AI Patrol read endpoints - require ai:execute scope
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetFindingsHistory)))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleForcePatrol)))
+	// Patrol tool-call preflight: one-shot verification that the configured Patrol
+	// provider+model actually supports tool calling. Distinct from /api/ai/test
+	// (which only lists models) so a green test cannot mask a 100%-failing Patrol.
+	r.mux.HandleFunc("/api/ai/patrol/preflight", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandlePatrolPreflight)))
 	// SECURITY: AI Patrol mutation endpoints - require ai:execute scope to prevent low-privilege tokens from
 	// dismissing, suppressing, or otherwise hiding findings. This prevents attackers from blinding AI Patrol.
 	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRoutePatrolAcknowledge, r.aiSettingsHandler.HandleAcknowledgeFinding)))

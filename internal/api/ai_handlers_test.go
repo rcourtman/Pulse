@@ -2876,3 +2876,74 @@ func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, approval.StatusPending, denyApp.Status)
 }
+
+// ========================================
+// HandlePatrolPreflight tests
+// ========================================
+
+func TestAISettingsHandler_PatrolPreflight_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/preflight", nil)
+	rec := httptest.NewRecorder()
+	handler.HandlePatrolPreflight(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestAISettingsHandler_PatrolPreflight_AssistantDisabled(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = false
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/preflight", nil)
+	rec := httptest.NewRecorder()
+	handler.HandlePatrolPreflight(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Success          bool   `json:"success"`
+		Cause            string `json:"cause"`
+		Message          string `json:"message"`
+		ToolCallObserved bool   `json:"tool_call_observed"`
+		DurationMs       int64  `json:"duration_ms"`
+		Action           string `json:"action"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.False(t, resp.ToolCallObserved)
+	assert.Equal(t, string(ai.PatrolFailureCauseAssistantDisabled), resp.Cause)
+	assert.Equal(t, "open_provider_settings", resp.Action)
+}
+
+func TestAISettingsHandler_PatrolPreflight_RejectsInvalidProviderName(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/preflight",
+		bytes.NewReader([]byte(`{"provider":"../etc/passwd"}`)))
+	rec := httptest.NewRecorder()
+	handler.HandlePatrolPreflight(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}

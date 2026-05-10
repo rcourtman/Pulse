@@ -5491,6 +5491,103 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// aiPatrolPreflightResponse is the JSON shape returned by
+// HandlePatrolPreflight. It mirrors aiProviderTestResponse for the
+// classified-error fields and adds two preflight-specific signals:
+// ToolCallObserved (whether the model emitted a tool call) and
+// DurationMs (round-trip latency, useful for spotting slow providers).
+type aiPatrolPreflightResponse struct {
+	Success          bool   `json:"success"`
+	Provider         string `json:"provider,omitempty"`
+	Model            string `json:"model,omitempty"`
+	ToolCallObserved bool   `json:"tool_call_observed"`
+	DurationMs       int64  `json:"duration_ms"`
+	Message          string `json:"message"`
+	Cause            string `json:"cause,omitempty"`
+	Summary          string `json:"summary,omitempty"`
+	Description      string `json:"description,omitempty"`
+	Recommendation   string `json:"recommendation,omitempty"`
+	Action           string `json:"action,omitempty"`
+}
+
+type aiPatrolPreflightRequest struct {
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
+}
+
+// HandlePatrolPreflight runs a one-shot tool-call round-trip against the
+// configured (or overridden) Patrol provider+model so operators can
+// verify tool calling actually works before relying on Patrol's
+// scheduled cadence (POST /api/ai/patrol/preflight).
+//
+// This is distinct from POST /api/ai/test/{provider}, which only lists
+// models and therefore can pass while Patrol fails 100% of runs (the
+// failure mode that bit Pulse for 33 days before the DeepSeek fix
+// landed).
+func (h *AISettingsHandler) HandlePatrolPreflight(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
+		return
+	}
+
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writePatrolServiceUnavailableResponse(w)
+		return
+	}
+
+	// Optional body: override the provider and/or model. Empty body is
+	// allowed and means "use the configured Patrol provider+model".
+	var body aiPatrolPreflightRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"error":"Invalid JSON body"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if body.Provider != "" {
+		if len(body.Provider) > 64 || !isValidProviderName(body.Provider) {
+			http.Error(w, `{"error":"Invalid provider name"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if len(body.Model) > 256 {
+		http.Error(w, `{"error":"Model id too long"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Tight timeout: preflight is a single round-trip, not a Patrol pass.
+	// 30s matches the per-provider connection-test budget; in practice
+	// this completes in well under 10s for any healthy provider.
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	preflight := aiService.RunPatrolToolPreflight(ctx, body.Provider, body.Model)
+
+	response := aiPatrolPreflightResponse{
+		Success:          preflight.Success && preflight.ToolCallObserved,
+		Provider:         preflight.Provider,
+		Model:            preflight.Model,
+		ToolCallObserved: preflight.ToolCallObserved,
+		DurationMs:       preflight.DurationMs,
+		Message:          preflight.Summary,
+		Cause:            string(preflight.Cause),
+		Summary:          preflight.Description,
+		Recommendation:   preflight.Recommendation,
+	}
+	if !response.Success {
+		response.Action = "open_provider_settings"
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write Patrol preflight response")
+	}
+}
+
 // HandleAcknowledgeFinding acknowledges a finding (POST /api/ai/patrol/acknowledge)
 // This marks the finding as seen but keeps it visible (dimmed). Auto-resolve removes it when condition clears.
 // This matches alert acknowledgement behavior for UI consistency.

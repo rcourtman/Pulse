@@ -762,7 +762,7 @@ bypass the API fail-closed execution gate.
 
 ## Completion Obligations
 
-1. Update this contract when canonical storage or recovery entry points move
+1. Update this contract when canonical storage or recovery entry points move. Routes added under the shared `internal/api/` extension point that are clearly outside storage/recovery ownership (for example `POST /api/ai/patrol/preflight`, owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem.
 2. Keep recovery store/runtime changes aligned with the storage and recovery frontend proofs in `registry.json`
 3. Tighten guardrails when legacy storage or recovery presentation paths are removed
 4. Preserve the dependency split: API payload ownership stays in `api-contracts`, settings shell ownership stays in `frontend-primitives`, and canonical resource truth stays in `unified-resources`
