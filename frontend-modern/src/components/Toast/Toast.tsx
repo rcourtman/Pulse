@@ -101,8 +101,13 @@ export const Toast: Component<ToastProps> = (props) => {
     }
   });
 
+  const isAlert = () => props.toast.type === 'error' || props.toast.type === 'warning';
+
   return (
     <div
+      role={isAlert() ? 'alert' : 'status'}
+      aria-live={isAlert() ? 'assertive' : 'polite'}
+      aria-atomic="true"
       class={`transform transition-all duration-500 ease-out ${
         show() ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'
       } animate-slide-in-card`}
@@ -111,8 +116,8 @@ export const Toast: Component<ToastProps> = (props) => {
         class={`
            bg-surface
           border border-border
-          px-4 py-3 sm:px-5 sm:py-4 rounded-md shadow-sm 
-          flex items-center gap-3 sm:gap-4 
+          px-4 py-3 sm:px-5 sm:py-4 rounded-md shadow-sm
+          flex items-center gap-3 sm:gap-4
           min-w-[300px] max-w-[400px] sm:min-w-[320px] sm:max-w-[500px]
         `}
       >
@@ -195,7 +200,11 @@ export const ToastContainer: Component = () => {
 
   return (
     <Portal>
-      <div class="fixed bottom-4 right-4 z-[9999] space-y-2 max-w-sm">
+      <div
+        role="region"
+        aria-label="Notifications"
+        class="fixed bottom-4 right-4 z-[9999] space-y-2 max-w-sm"
+      >
         <For each={toasts()}>{(toast) => <Toast toast={toast} onRemove={removeToast} />}</For>
       </div>
     </Portal>
