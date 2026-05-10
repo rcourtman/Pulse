@@ -36,7 +36,7 @@ export function buildEmailConfigPayload(config: UIEmailConfig): EmailConfig {
     username: config.username,
     password: config.password,
     from: config.from,
-    to: config.to,
+    to: config.to.map((entry) => entry.trim()).filter((entry) => entry.length > 0),
     tls: config.tls,
     startTLS: config.startTLS,
   } as EmailConfig;

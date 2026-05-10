@@ -27,6 +27,29 @@ describe('alertDestinationsModel', () => {
     );
   });
 
+  it('trims and drops empty recipient lines when building the email payload', () => {
+    expect(
+      buildEmailConfigPayload({
+        enabled: true,
+        provider: 'smtp',
+        server: 'smtp.internal',
+        port: 587,
+        username: 'ops@example.com',
+        password: '',
+        from: 'pulse@example.com',
+        // Raw lines as they would be while the user is mid-edit in the
+        // textarea — whitespace, empties, trailing newline.
+        to: ['alice@test.com', '', '  charlie@test.com  ', ''],
+        tls: true,
+        startTLS: true,
+        replyTo: '',
+        maxRetries: 3,
+        retryDelay: 60,
+        rateLimit: 0,
+      }).to,
+    ).toEqual(['alice@test.com', 'charlie@test.com']);
+  });
+
   it('builds outbound email and apprise payloads from UI state', () => {
     expect(
       buildEmailConfigPayload({

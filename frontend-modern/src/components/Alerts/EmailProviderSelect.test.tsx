@@ -341,7 +341,7 @@ describe('EmailProviderSelect', () => {
     expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ username: 'me@test.com' }));
   });
 
-  it('parses recipients textarea into array', async () => {
+  it('splits recipients textarea into one entry per line, preserving raw text', async () => {
     render(() => (
       <EmailProviderSelect
         config={makeConfig({ to: [] })}
@@ -356,17 +356,20 @@ describe('EmailProviderSelect', () => {
       target: { value: 'alice@test.com\nbob@test.com\n\n  charlie@test.com  ' },
     });
 
+    // Raw lines pass through during edit — whitespace and empty lines are
+    // preserved so the textarea cursor doesn't fight the user. Cleanup
+    // happens in buildEmailConfigPayload at save.
     expect(onChangeMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        to: ['alice@test.com', 'bob@test.com', 'charlie@test.com'],
+        to: ['alice@test.com', 'bob@test.com', '', '  charlie@test.com  '],
       }),
     );
   });
 
-  it('filters empty lines from recipients', async () => {
+  it('keeps a trailing empty line while the user is mid-type (regression for #1462)', async () => {
     render(() => (
       <EmailProviderSelect
-        config={makeConfig({ to: [] })}
+        config={makeConfig({ to: ['alice@test.com'] })}
         onChange={onChangeMock}
         onTest={onTestMock}
       />
@@ -374,11 +377,14 @@ describe('EmailProviderSelect', () => {
 
     const textarea = document.querySelector('textarea') as HTMLTextAreaElement;
     expect(textarea).toBeTruthy();
-    fireEvent.input(textarea, {
-      target: { value: '\n\n  \n' },
-    });
 
-    expect(onChangeMock).toHaveBeenCalledWith(expect.objectContaining({ to: [] }));
+    // Simulates pressing Enter at the end of line 1 — previously filtered out,
+    // which made line 2 impossible to type into.
+    fireEvent.input(textarea, { target: { value: 'alice@test.com\n' } });
+
+    expect(onChangeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ to: ['alice@test.com', ''] }),
+    );
   });
 
   // --- Advanced Options ---

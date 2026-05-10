@@ -188,11 +188,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         <textarea
           value={props.config.to.join('\n')}
           onInput={(e) => {
-            const recipients = e.currentTarget.value
-              .split('\n')
-              .map((entry) => entry.trim())
-              .filter((entry) => entry.length > 0);
-            props.onChange({ ...props.config, to: recipients });
+            // Keep raw lines while editing — trimming/filtering on every
+            // keystroke ate empty trailing lines and stripped typed
+            // whitespace, so users couldn't type past line 1. Empty
+            // entries are filtered in buildEmailConfigPayload at save.
+            props.onChange({ ...props.config, to: e.currentTarget.value.split('\n') });
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
