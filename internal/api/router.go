@@ -32,6 +32,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
@@ -665,6 +666,22 @@ func (r *Router) setupRoutes() {
 			return nil, nil, nil
 		}
 		return svc, svc, svc
+	})
+	// Wire the per-tenant cost store into chat sessions so user-chat
+	// token usage flows into the same operator-facing dashboard the
+	// rest of the AI runtime uses (patrol, discovery,
+	// report-narrative). No Enabled gate — even when chat ran briefly
+	// while AI was being configured, those tokens were billed and
+	// should be visible.
+	r.aiHandler.SetCostStoreResolver(func(ctx context.Context) *cost.Store {
+		if r.aiSettingsHandler == nil {
+			return nil
+		}
+		svc := r.aiSettingsHandler.GetAIService(ctx)
+		if svc == nil {
+			return nil
+		}
+		return svc.CostStore()
 	})
 
 	// AI-powered infrastructure discovery handlers

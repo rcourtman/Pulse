@@ -16,6 +16,7 @@ import (
 	airuntime "github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -122,6 +123,14 @@ type AIHandler struct {
 	// return heuristic narrative. The ctx must carry the tenant org
 	// via GetOrgID — same convention the reporting handler uses.
 	reportNarratorResolver func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
+
+	// costStoreResolver returns the per-tenant cost store so chat
+	// sessions can record user-chat token usage to the same ledger
+	// patrol, discovery, and report-narrative spend already flow
+	// through. Wired by the router from AISettingsHandler.GetAIService.
+	// A nil return causes chat to skip recording — operator sees no
+	// chat spend in the dashboard but no error either.
+	costStoreResolver func(ctx context.Context) *cost.Store
 }
 
 // SetReportNarratorResolver wires the optional per-tenant
@@ -142,6 +151,24 @@ func (h *AIHandler) resolveReportNarrator(ctx context.Context) (reporting.Narrat
 		return nil, nil, nil
 	}
 	return h.reportNarratorResolver(ctx)
+}
+
+// SetCostStoreResolver wires the optional per-tenant cost store
+// resolver. When unset (or when the resolver returns nil), chat
+// sessions skip cost recording — useful for tests and for self-hosted
+// deployments where the operator hasn't enabled cost tracking.
+func (h *AIHandler) SetCostStoreResolver(resolver func(ctx context.Context) *cost.Store) {
+	if h == nil {
+		return
+	}
+	h.costStoreResolver = resolver
+}
+
+func (h *AIHandler) resolveCostStore(ctx context.Context) *cost.Store {
+	if h == nil || h.costStoreResolver == nil {
+		return nil
+	}
+	return h.costStoreResolver(ctx)
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -506,6 +533,7 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 	}
 
 	chatCfg.ReportNarrator, chatCfg.ReportFleetNarrator, chatCfg.ReportFindingsProvider = h.resolveReportNarrator(tenantCtx)
+	chatCfg.CostStore = h.resolveCostStore(tenantCtx)
 
 	svc := newChatService(chatCfg)
 	if err := svc.Start(ctx); err != nil {
@@ -742,6 +770,7 @@ func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) erro
 	}
 
 	chatCfg.ReportNarrator, chatCfg.ReportFleetNarrator, chatCfg.ReportFindingsProvider = h.resolveReportNarrator(serviceCtx)
+	chatCfg.CostStore = h.resolveCostStore(serviceCtx)
 
 	svc := newChatService(chatCfg)
 	if err := svc.Start(ctx); err != nil {

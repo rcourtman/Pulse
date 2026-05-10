@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -87,6 +88,16 @@ type Config struct {
 	ReportNarrator         reporting.Narrator
 	ReportFleetNarrator    reporting.FleetNarrator
 	ReportFindingsProvider reporting.FindingsProvider
+
+	// Optional cost store. When set, ExecuteStream records a
+	// cost.UsageEvent after each chat turn so user-chat token usage
+	// appears in the operator dashboard alongside patrol, discovery,
+	// and report-narrative spend. Absent value means "don't record"
+	// — useful for tests and for callers that bring their own ledger.
+	// ExecutePatrolStream intentionally does NOT record here; its
+	// caller (patrol_ai.go) records via its own helper so cost is
+	// never double-counted on the patrol-via-chat path.
+	CostStore *cost.Store
 }
 
 // Service provides direct AI chat without external sidecar
@@ -112,6 +123,11 @@ type Service struct {
 	budgetChecker           func() error // Optional mid-run budget enforcement
 	orgID                   string
 	controlLevelResolver    func(*config.AIConfig) string
+
+	// costStore receives a cost.UsageEvent after each ExecuteStream
+	// turn so user-chat token usage is visible in the operator
+	// dashboard. Nil means "don't record".
+	costStore *cost.Store
 
 	activeMu           sync.RWMutex
 	activeExecutions   map[string]map[*AgenticLoop]struct{}
@@ -171,6 +187,7 @@ func NewService(cfg Config) *Service {
 		executor:             executor,
 		orgID:                strings.TrimSpace(cfg.OrgID),
 		controlLevelResolver: cfg.ControlLevelResolver,
+		costStore:            cfg.CostStore,
 		activeExecutions:     make(map[string]map[*AgenticLoop]struct{}),
 		questionExecutions:   make(map[string]*AgenticLoop),
 	}
@@ -243,6 +260,44 @@ func (s *Service) unregisterActiveLoop(sessionID string, loop *AgenticLoop) {
 			delete(s.questionExecutions, questionID)
 		}
 	}
+}
+
+// recordChatTurnCost records a cost.UsageEvent for a completed (or
+// failed) user-chat agentic turn. Uses the totals accumulated by the
+// loop's stream callbacks so the recorded numbers match what the
+// frontend sees in the SSE done event. No-op when the cost store is
+// not configured or when the loop consumed zero tokens (an early
+// failure before the first turn completed). UseCase is "chat" — the
+// canonical taxonomy noted on cost.UsageEvent.UseCase.
+func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel string) {
+	if s == nil || loop == nil {
+		return
+	}
+	s.mu.RLock()
+	store := s.costStore
+	s.mu.RUnlock()
+	if store == nil {
+		return
+	}
+	inputTokens := loop.GetTotalInputTokens()
+	outputTokens := loop.GetTotalOutputTokens()
+	if inputTokens == 0 && outputTokens == 0 {
+		return
+	}
+	providerName := ""
+	if requestModel != "" {
+		if idx := strings.Index(requestModel, ":"); idx > 0 {
+			providerName = strings.ToLower(requestModel[:idx])
+		}
+	}
+	store.Record(cost.UsageEvent{
+		Timestamp:    time.Now(),
+		Provider:     providerName,
+		RequestModel: requestModel,
+		UseCase:      "chat",
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+	})
 }
 
 func (s *Service) registerQuestionLoop(questionID string, loop *AgenticLoop) {
@@ -811,6 +866,15 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("result_messages", len(resultMessages)).
 		Err(err).
 		Msg("[ChatService] Agentic loop returned")
+
+	// Record cost regardless of error — the operator was billed for
+	// whatever tokens the loop consumed before terminating. Without
+	// this, every user chat turn was invisible in the AI usage
+	// dashboard despite chat being the bulk of token spend.
+	// ExecutePatrolStream uses a separate tempLoop and its caller
+	// (patrol_ai.go) records cost via its own helper, so no double-
+	// recording on the patrol-via-chat path.
+	s.recordChatTurnCost(loop, selectedModel)
 
 	if err != nil {
 		// Still save any messages we got

@@ -670,6 +670,16 @@ func (s *Service) GetAIConfig() *config.AIConfig {
 	return s.cfg
 }
 
+// CostStore returns the underlying usage cost store handle so callers
+// that own a Service can record cost events directly. Returned value
+// may be nil when persistence/initialization failed during NewService.
+// Consumers must nil-check before recording.
+func (s *Service) CostStore() *cost.Store {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.costStore
+}
+
 // GetCostSummary returns usage rollups for the last N days.
 func (s *Service) GetCostSummary(days int) cost.Summary {
 	s.mu.RLock()
