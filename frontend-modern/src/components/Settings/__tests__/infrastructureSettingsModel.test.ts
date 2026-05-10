@@ -42,7 +42,7 @@ describe('filterRepresentedDiscoveredServers', () => {
           {
             id: 'node-pi',
             name: 'pi',
-            subtitle: 'API contact',
+            subtitle: 'Primary node',
             source: 'agent',
             host: 'https://pi:8006',
             hostAliases: ['pi', '192.168.0.2'],

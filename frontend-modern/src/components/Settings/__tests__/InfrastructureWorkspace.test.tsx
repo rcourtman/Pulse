@@ -562,7 +562,7 @@ describe('InfrastructureWorkspace', () => {
           {
             id: 'node-pi',
             name: 'pi',
-            subtitle: 'API contact',
+            subtitle: 'Primary node',
             source: 'agent',
             host: 'https://pi:8006',
             hostAliases: ['pi', '192.168.0.2'],
@@ -936,7 +936,7 @@ describe('InfrastructureWorkspace', () => {
           {
             id: 'node-delly',
             name: 'delly',
-            subtitle: 'API contact',
+            subtitle: 'Primary node',
             source: 'agent',
             host: 'https://delly:8006',
             coverageLabels: ['Host telemetry'],
@@ -970,7 +970,7 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('homelab')).toBeInTheDocument());
     expect(screen.getByText('Cluster · 2 nodes')).toBeInTheDocument();
-    expect(screen.getByText('API contact')).toBeInTheDocument();
+    expect(screen.getByText('Primary node')).toBeInTheDocument();
     expect(screen.getAllByText('Agent').length).toBeGreaterThan(0);
     expect(screen.getByText('delly')).toBeInTheDocument();
     expect(screen.getByText('minipc')).toBeInTheDocument();

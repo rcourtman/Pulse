@@ -176,7 +176,7 @@ interface ClusterRollup {
 }
 
 const memberSubtitleFor = (member: ConnectionSystemMember): string =>
-  member.primary ? 'API contact' : 'Cluster member';
+  member.primary ? 'Primary node' : 'Cluster member';
 
 const buildMemberRow = (
   member: ConnectionSystemMember,
@@ -188,7 +188,7 @@ const buildMemberRow = (
   const agentConnection = member.agentConnectionId
     ? connectionsByID.get(member.agentConnectionId)
     : undefined;
-  const source: InfrastructureSourceKind = agentConnection ? 'agent' : 'unknown';
+  const source: InfrastructureSourceKind = agentConnection ? 'agent' : 'api';
   const state = moreSevereState(member.state, agentConnection?.state);
   const presentation = STATE_PRESENTATION[state] ?? STATE_PRESENTATION.pending;
   const lastSeen =

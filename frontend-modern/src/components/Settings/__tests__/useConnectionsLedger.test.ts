@@ -175,7 +175,7 @@ describe('useConnectionsLedger', () => {
       {
         id: 'node-delly',
         name: 'delly',
-        subtitle: 'API contact',
+        subtitle: 'Primary node',
         source: 'agent',
         host: 'https://delly:8006',
         hostAliases: ['delly', '192.168.0.10'],
