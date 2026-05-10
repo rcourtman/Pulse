@@ -232,6 +232,15 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 		}
 		if err := defaultAIService.LoadConfig(); err != nil {
 			log.Warn().Err(err).Msg("Failed to load AI config on startup")
+		} else if aiSettingsUpdateRequiresPatrolPreflight(nil, defaultAIService.GetConfig()) {
+			// Seed the Patrol preflight cache on startup so the UI's
+			// "last verified" indicator is populated on first load after
+			// a Pulse restart, without forcing operators to save
+			// settings or click Verify Patrol just to recover the
+			// observability they had before the restart. The dispatch
+			// is async with its own timeout, so it cannot block boot.
+			log.Info().Msg("Auto-seeding Patrol preflight cache for startup observability")
+			defaultAIService.TriggerPatrolPreflightAsync("", "")
 		}
 	}
 	handler.defaultAIService = defaultAIService

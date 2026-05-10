@@ -743,7 +743,7 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Completion Obligations
 
-1. Update this contract when agent lifecycle ownership changes. Routes added under the shared `internal/api/` extension point that are clearly outside lifecycle ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, and the auto-trigger preflight dispatch on settings save — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem.
+1. Update this contract when agent lifecycle ownership changes. Routes added under the shared `internal/api/` extension point that are clearly outside lifecycle ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, the auto-trigger preflight dispatch on settings save, and the startup-seed dispatch in `NewAISettingsHandler` — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem.
 2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
 3. Update runtime and settings tests in the same slice when lifecycle behavior changes.
 4. Keep host-agent test hooks, command-client factories, and timing overrides

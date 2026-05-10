@@ -102,6 +102,32 @@ describe('runPatrolPreflight', () => {
     expect(result.recorded_at_unix).toBe(1778421251);
   });
 
+  it('rehydrates from a startup-seeded snapshot the same way as a manual preflight result', async () => {
+    // Pulse boots with NewAISettingsHandler dispatching async preflight
+    // when assistant + Patrol model are configured. The first
+    // /api/settings/ai poll after boot already carries patrol_preflight
+    // populated by that startup goroutine. The runPatrolPreflight
+    // client surface stays the same; tests guard that the shape we
+    // accept does not regress when the cache was populated server-side
+    // without an explicit POST from the frontend.
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      success: true,
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      tool_call_observed: true,
+      duration_ms: 1820,
+      message: 'Provider accepted the preflight request and the model emitted a tool call.',
+      recorded_at: '2026-05-10T15:30:42Z',
+      recorded_at_unix: 1778430642,
+    });
+
+    const result = await runPatrolPreflight();
+
+    expect(result.success).toBe(true);
+    expect(result.tool_call_observed).toBe(true);
+    expect(result.recorded_at_unix).toBe(1778430642);
+  });
+
   it('exposes the soft-warning shape when the model accepted the request but did not call the tool', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       success: false,

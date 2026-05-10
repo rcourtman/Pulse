@@ -2924,6 +2924,29 @@ func TestAISettingsUpdateRequiresPatrolPreflight(t *testing.T) {
 			want: true,
 		},
 		{
+			// Same predicate also drives the startup-seed path in
+			// NewAISettingsHandler — passing nil for the prior config
+			// represents "no in-memory cache yet, just booted." When
+			// the loaded config has assistant + Patrol model, we should
+			// preflight to populate the cache before the first
+			// /api/settings/ai poll arrives so the UI's "last verified"
+			// indicator is not blank after every restart.
+			name: "startup seed (no prior cache, assistant enabled with patrol model) → trigger",
+			old:  nil,
+			new:  enabled("deepseek:deepseek-v4-flash", "sk-loaded-from-disk"),
+			want: true,
+		},
+		{
+			// Startup-seed must NOT fire when assistant is disabled —
+			// otherwise we'd write a misleading "Pulse Assistant is not
+			// enabled" entry into the cache for an operator who simply
+			// hasn't enabled assistant yet.
+			name: "startup seed when assistant disabled → skip",
+			old:  nil,
+			new:  &config.AIConfig{Enabled: false, PatrolModel: "deepseek:deepseek-v4-flash"},
+			want: false,
+		},
+		{
 			name: "assistant just enabled → trigger",
 			old:  &config.AIConfig{Enabled: false, PatrolModel: "deepseek:deepseek-v4-flash", DeepSeekAPIKey: "sk-same"},
 			new:  enabled("deepseek:deepseek-v4-flash", "sk-same"),
