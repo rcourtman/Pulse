@@ -77,6 +77,31 @@ describe('runPatrolPreflight', () => {
     expect(result.recorded_at_unix).toBe(1778421251);
   });
 
+  it('handles auto-triggered preflight outcomes with the same shape as manual ones', async () => {
+    // The backend dispatches auto-preflight in the background after a
+    // settings save when the Patrol model or its provider key changes.
+    // The cached result then shows up on /api/settings/ai with the
+    // same shape this client uses for manual preflight, so the UI can
+    // render it through one code path. Verify the recorded_at fields
+    // on a successful auto-trigger result round-trip cleanly.
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      success: true,
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      tool_call_observed: true,
+      duration_ms: 1948,
+      message: 'Provider accepted the preflight request and the model emitted a tool call.',
+      recorded_at: '2026-05-10T13:54:11Z',
+      recorded_at_unix: 1778421251,
+    });
+
+    const result = await runPatrolPreflight();
+
+    expect(result.success).toBe(true);
+    expect(result.tool_call_observed).toBe(true);
+    expect(result.recorded_at_unix).toBe(1778421251);
+  });
+
   it('exposes the soft-warning shape when the model accepted the request but did not call the tool', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       success: false,

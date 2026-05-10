@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -284,6 +285,45 @@ func TestCachedPatrolPreflight_ReturnsDefensiveCopy(t *testing.T) {
 	if !again.Success || again.Title == "tampered" {
 		t.Fatalf("cache returned mutable reference: original=%+v, re-read=%+v", cached, again)
 	}
+}
+
+func TestTriggerPatrolPreflightAsync_PopulatesCacheInBackground(t *testing.T) {
+	// The settings save handler dispatches preflight via this entrypoint
+	// so the save response isn't blocked on a 5-10s LLM round-trip.
+	// Verify the goroutine actually populates the cache and the caller
+	// returns immediately.
+	called := make(chan struct{}, 1)
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"x","model":"gpt-4o-mini","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"verify_pulse_patrol","arguments":"{\"ok\":true}"}}]}}]}`))
+		select {
+		case called <- struct{}{}:
+		default:
+		}
+	})
+	defer h.close()
+
+	h.svc.TriggerPatrolPreflightAsync("", "")
+
+	// Caller does not block — wait for the background goroutine to hit
+	// the test server.
+	select {
+	case <-called:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("async preflight did not invoke provider within 5s")
+	}
+
+	// Cache must populate eventually after the goroutine finishes.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		cached, _ := h.svc.CachedPatrolPreflight()
+		if cached != nil && cached.Success && cached.ToolCallObserved {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	cached, _ := h.svc.CachedPatrolPreflight()
+	t.Fatalf("expected async preflight to populate cache with green result, got %+v", cached)
 }
 
 func TestRunPatrolToolPreflight_RequestShapeIncludesVerifyTool(t *testing.T) {

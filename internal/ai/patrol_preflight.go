@@ -77,6 +77,21 @@ func (s *Service) recordPatrolPreflight(result PatrolPreflightResult, at time.Ti
 	s.patrolPreflightCache.recordedAt = at
 }
 
+// TriggerPatrolPreflightAsync runs RunPatrolToolPreflight in the
+// background so callers (notably the settings save handler) don't block
+// on a 5-10 second LLM round-trip. The result populates the preflight
+// cache and the next /api/settings/ai poll surfaces it through the
+// patrol_preflight snapshot. The 30s timeout matches the manual
+// preflight handler so a stuck provider can't pin the goroutine
+// indefinitely.
+func (s *Service) TriggerPatrolPreflightAsync(provider, model string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.RunPatrolToolPreflight(ctx, provider, model)
+	}()
+}
+
 // RunPatrolToolPreflight performs a one-shot tool-call round-trip against
 // the configured Patrol provider+model, or against the overrides supplied
 // in providerName / model. Both override arguments are optional: empty

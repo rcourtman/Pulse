@@ -2878,6 +2878,105 @@ func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {
 }
 
 // ========================================
+// aiSettingsUpdateRequiresPatrolPreflight tests
+// ========================================
+
+func TestAISettingsUpdateRequiresPatrolPreflight(t *testing.T) {
+	t.Parallel()
+
+	enabled := func(model, key string) *config.AIConfig {
+		return &config.AIConfig{
+			Enabled:        true,
+			PatrolModel:    model,
+			DeepSeekAPIKey: key,
+		}
+	}
+	disabled := func() *config.AIConfig {
+		return &config.AIConfig{Enabled: false, PatrolModel: "deepseek:deepseek-v4-flash"}
+	}
+
+	cases := []struct {
+		name string
+		old  *config.AIConfig
+		new  *config.AIConfig
+		want bool
+	}{
+		{
+			name: "nil new → skip",
+			new:  nil,
+			want: false,
+		},
+		{
+			name: "new disabled → skip",
+			old:  enabled("deepseek:deepseek-v4-flash", "sk-old"),
+			new:  disabled(),
+			want: false,
+		},
+		{
+			name: "new enabled with no patrol model → skip",
+			new:  &config.AIConfig{Enabled: true, PatrolModel: ""},
+			want: false,
+		},
+		{
+			name: "first save (no prior config) → trigger",
+			old:  nil,
+			new:  enabled("deepseek:deepseek-v4-flash", "sk-new"),
+			want: true,
+		},
+		{
+			name: "assistant just enabled → trigger",
+			old:  &config.AIConfig{Enabled: false, PatrolModel: "deepseek:deepseek-v4-flash", DeepSeekAPIKey: "sk-same"},
+			new:  enabled("deepseek:deepseek-v4-flash", "sk-same"),
+			want: true,
+		},
+		{
+			name: "patrol model changed → trigger",
+			old:  enabled("deepseek:deepseek-v4-flash", "sk-same"),
+			new:  enabled("deepseek:deepseek-v4-pro", "sk-same"),
+			want: true,
+		},
+		{
+			name: "API key for patrol model's provider changed → trigger",
+			old:  enabled("deepseek:deepseek-v4-flash", "sk-old"),
+			new:  enabled("deepseek:deepseek-v4-flash", "sk-new"),
+			want: true,
+		},
+		{
+			name: "nothing relevant changed → skip",
+			old:  enabled("deepseek:deepseek-v4-flash", "sk-same"),
+			new:  enabled("deepseek:deepseek-v4-flash", "sk-same"),
+			want: false,
+		},
+		{
+			name: "unrelated provider key changed → skip",
+			old: &config.AIConfig{
+				Enabled:        true,
+				PatrolModel:    "deepseek:deepseek-v4-flash",
+				DeepSeekAPIKey: "sk-same",
+				OpenAIAPIKey:   "sk-openai-old",
+			},
+			new: &config.AIConfig{
+				Enabled:        true,
+				PatrolModel:    "deepseek:deepseek-v4-flash",
+				DeepSeekAPIKey: "sk-same",
+				OpenAIAPIKey:   "sk-openai-new",
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := aiSettingsUpdateRequiresPatrolPreflight(tc.old, tc.new)
+			if got != tc.want {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// ========================================
 // HandlePatrolPreflight tests
 // ========================================
 

@@ -1674,6 +1674,42 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.ClearOllamaPassword != nil
 }
 
+// aiSettingsUpdateRequiresPatrolPreflight reports whether the settings
+// transition from oldCfg to newCfg warrants an automatic Patrol
+// tool-call preflight. We only auto-preflight when the configuration
+// that affects Patrol's transport actually moved, so routine settings
+// saves (theme, control level, discovery toggles, etc.) don't burn
+// provider tokens or add 5-10s of latency to every save.
+//
+// Triggers preflight when:
+//   - assistant is now enabled and a Patrol model is selected, AND
+//   - either the Patrol model changed, the new patrol model's provider
+//     API key changed, OR there was no prior config (first save).
+func aiSettingsUpdateRequiresPatrolPreflight(oldCfg, newCfg *config.AIConfig) bool {
+	if newCfg == nil || !newCfg.Enabled {
+		return false
+	}
+	newPatrolModel := strings.TrimSpace(newCfg.GetPatrolModel())
+	if newPatrolModel == "" {
+		return false
+	}
+	if oldCfg == nil {
+		return true
+	}
+	if !oldCfg.Enabled {
+		return true
+	}
+	oldPatrolModel := strings.TrimSpace(oldCfg.GetPatrolModel())
+	if oldPatrolModel != newPatrolModel {
+		return true
+	}
+	provider, _ := config.ParseModelString(newPatrolModel)
+	if provider == "" {
+		return false
+	}
+	return oldCfg.GetAPIKeyForProvider(provider) != newCfg.GetAPIKeyForProvider(provider)
+}
+
 func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
 	return req.Enabled != nil ||
 		req.Model != nil ||
@@ -2513,6 +2549,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings = config.NewDefaultAIConfig()
 	}
 
+	// Snapshot the pre-mutation config so we can detect Patrol-affecting
+	// changes after save and decide whether to auto-trigger preflight.
+	// Shallow copy is fine — the detection helper only reads scalar
+	// fields (Enabled, PatrolModel, API keys).
+	originalSettings := *settings
+
 	// Parse request
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req AISettingsUpdateRequest
@@ -2786,6 +2828,16 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Update alert-triggered analyzer if available
 	if analyzer := h.GetAIService(r.Context()).GetAlertTriggeredAnalyzer(); analyzer != nil {
 		analyzer.SetEnabled(settings.AlertTriggeredAnalysis)
+	}
+
+	// Auto-trigger Patrol tool-call preflight when the change actually
+	// moved the Patrol transport (model swap or new key for the model's
+	// provider). Runs in the background so the save response isn't
+	// blocked; the cached result surfaces on the next /api/settings/ai
+	// poll via patrol_preflight. Routine saves that don't touch Patrol
+	// transport skip this entirely so they don't burn provider tokens.
+	if aiSettingsUpdateRequiresPatrolPreflight(&originalSettings, settings) {
+		h.GetAIService(r.Context()).TriggerPatrolPreflightAsync("", "")
 	}
 
 	// Trigger AI chat service restart when provider-affecting settings change.
