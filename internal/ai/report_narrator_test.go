@@ -1,10 +1,13 @@
 package ai
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
@@ -165,6 +168,94 @@ func TestBuildReportNarratorPayload_OmitsEmptySections(t *testing.T) {
 	}
 	if len(payload.Alerts) != 0 || len(payload.Findings) != 0 || len(payload.Disks) != 0 || len(payload.Storage) != 0 {
 		t.Errorf("expected empty collections, got %#v", payload)
+	}
+}
+
+func TestNarrate_RecordsCostEvent(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, Model: "anthropic:claude-test"}
+	svc.provider = &mockProvider{
+		chatFunc: func(_ context.Context, _ providers.ChatRequest) (*providers.ChatResponse, error) {
+			return &providers.ChatResponse{
+				Content: `{
+                                  "health_status": "HEALTHY",
+                                  "health_message": "Quiet",
+                                  "executive_summary": "All clear.",
+                                  "observations": [{"text": "CPU steady at 30%", "severity": "ok"}],
+                                  "recommendations": ["Carry on"],
+                                  "period_comparison": ""
+                                }`,
+				Model:        "anthropic:claude-test",
+				InputTokens:  120,
+				OutputTokens: 45,
+			}, nil
+		},
+	}
+
+	in := reporting.NarrativeInput{
+		ResourceType: "node",
+		ResourceID:   "pve1",
+		Period: reporting.TimeRange{
+			Start: time.Now().Add(-time.Hour),
+			End:   time.Now(),
+		},
+		MetricStats: map[string]reporting.MetricStats{
+			"cpu": {Avg: 30, Max: 40},
+		},
+	}
+
+	if _, err := svc.Narrate(context.Background(), in); err != nil {
+		t.Fatalf("Narrate: %v", err)
+	}
+
+	events := svc.ListCostEvents(1)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 cost event, got %d", len(events))
+	}
+	ev := events[0]
+	if ev.UseCase != reportNarratorUseCase {
+		t.Errorf("UseCase = %q, want %q", ev.UseCase, reportNarratorUseCase)
+	}
+	if ev.InputTokens != 120 || ev.OutputTokens != 45 {
+		t.Errorf("tokens = (%d, %d), want (120, 45)", ev.InputTokens, ev.OutputTokens)
+	}
+	if ev.TargetType != "node" || ev.TargetID != "pve1" {
+		t.Errorf("target = (%q, %q), want (node, pve1)", ev.TargetType, ev.TargetID)
+	}
+	if ev.Provider != "anthropic" {
+		t.Errorf("Provider = %q, want anthropic", ev.Provider)
+	}
+}
+
+func TestNarrate_RecordsCostEvenOnParseFailure(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, Model: "anthropic:claude-test"}
+	svc.provider = &mockProvider{
+		chatFunc: func(_ context.Context, _ providers.ChatRequest) (*providers.ChatResponse, error) {
+			return &providers.ChatResponse{
+				Content:      "not json",
+				Model:        "anthropic:claude-test",
+				InputTokens:  100,
+				OutputTokens: 10,
+			}, nil
+		},
+	}
+
+	in := reporting.NarrativeInput{ResourceType: "node", ResourceID: "pve1"}
+	if _, err := svc.Narrate(context.Background(), in); err == nil {
+		t.Fatal("expected parse error, got nil")
+	}
+
+	events := svc.ListCostEvents(1)
+	if len(events) != 1 {
+		t.Fatalf("failed parse should still record cost (provider was billed); got %d events", len(events))
+	}
+	if events[0].InputTokens != 100 || events[0].OutputTokens != 10 {
+		t.Errorf("tokens = (%d, %d), want (100, 10)", events[0].InputTokens, events[0].OutputTokens)
 	}
 }
 

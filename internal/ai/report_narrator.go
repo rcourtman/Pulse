@@ -6,11 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
+
+// reportNarratorUseCase is the cost-ledger label for AI-narrated report
+// generations. Operators see this value in the AI usage dashboard so
+// report-narrative spend is distinguishable from chat or patrol.
+const reportNarratorUseCase = "report_narrative"
 
 // reportNarratorMaxTokens caps the response budget for narrative generation.
 // The output is short prose plus a small JSON envelope, so a tight ceiling
@@ -150,6 +158,7 @@ func (s *Service) Narrate(ctx context.Context, in reporting.NarrativeInput) (rep
 	s.mu.RLock()
 	provider := s.provider
 	cfg := s.cfg
+	costStore := s.costStore
 	s.mu.RUnlock()
 
 	if provider == nil {
@@ -165,7 +174,7 @@ func (s *Service) Narrate(ctx context.Context, in reporting.NarrativeInput) (rep
 		}
 	}
 
-	if err := s.enforceBudget("report_narrative"); err != nil {
+	if err := s.enforceBudget(reportNarratorUseCase); err != nil {
 		return reporting.Narrative{}, err
 	}
 
@@ -192,6 +201,29 @@ func (s *Service) Narrate(ctx context.Context, in reporting.NarrativeInput) (rep
 	if err != nil {
 		return reporting.Narrative{}, fmt.Errorf("provider chat: %w", err)
 	}
+
+	// Record token usage in the operator-facing cost ledger so AI-narrated
+	// report generation shows up in the AI usage dashboard alongside chat
+	// and patrol spend. Recording happens regardless of whether the
+	// response parses, so failed-but-billed calls are still visible.
+	if costStore != nil {
+		providerName, _ := config.ParseModelString(model)
+		if providerName == "" {
+			providerName = provider.Name()
+		}
+		costStore.Record(cost.UsageEvent{
+			Timestamp:     time.Now(),
+			Provider:      providerName,
+			RequestModel:  model,
+			ResponseModel: resp.Model,
+			UseCase:       reportNarratorUseCase,
+			InputTokens:   resp.InputTokens,
+			OutputTokens:  resp.OutputTokens,
+			TargetType:    in.ResourceType,
+			TargetID:      in.ResourceID,
+		})
+	}
+
 	content := strings.TrimSpace(resp.Content)
 	if content == "" {
 		return reporting.Narrative{}, errors.New("provider returned empty narrative")
