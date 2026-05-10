@@ -151,6 +151,7 @@ export function AppLayout(props: AppLayoutProps) {
   const brandMotionActive = createMemo(() => props.connectionStatus().tone === 'healthy');
 
   const [headerVisible, setHeaderVisible] = createSignal(true);
+  const [skipLinkFocused, setSkipLinkFocused] = createSignal(false);
   let headerEl: HTMLDivElement | undefined;
   let headerHideTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -427,6 +428,21 @@ export function AppLayout(props: AppLayoutProps) {
     <div
       class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-20 lg:pb-0' : ''}`}
     >
+      {/* Skip-to-content link: visually hidden until focused, then
+          appears as a button at the top-left. Lets keyboard users
+          jump past the chrome straight into the page content. */}
+      <a
+        href="#main"
+        onFocus={() => setSkipLinkFocused(true)}
+        onBlur={() => setSkipLinkFocused(false)}
+        class={
+          skipLinkFocused()
+            ? 'absolute left-2 top-2 z-[100] rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-lg outline outline-2 outline-offset-2 outline-white'
+            : 'sr-only'
+        }
+      >
+        Skip to main content
+      </a>
       <Show when={kioskMode()}>
         <div
           class="fixed top-0 left-0 right-0 z-40 h-4 bg-transparent"
