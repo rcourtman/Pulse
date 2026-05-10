@@ -1,5 +1,6 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Dialog } from '@/components/shared/Dialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
@@ -10,6 +11,7 @@ import {
   getAPITokenDockerPodmanUsageTitle,
 } from '@/utils/apiTokenPresentation';
 import { useAPITokenManagerState } from './useAPITokenManagerState';
+import type { APITokenRecord } from '@/types/api';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
@@ -19,6 +21,7 @@ interface APITokenManagerProps {
 }
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
+  const [tokenToRevoke, setTokenToRevoke] = createSignal<APITokenRecord | null>(null);
   const {
     API_SCOPE_LABELS,
     API_TOKEN_SCOPES_DOC_URL,
@@ -399,7 +402,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 align: 'right',
                 render: (token) => (
                   <button
-                    onClick={() => handleDelete(token)}
+                    onClick={() => setTokenToRevoke(token)}
                     disabled={!canManage()}
                     class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
                   >
@@ -557,6 +560,46 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           Scope reference
         </a>
       </Card>
+
+      {/* Revoke confirmation modal — token deletion is irreversible
+          and breaks any agents/integrations relying on the token,
+          so guard the action behind an explicit confirm. */}
+      <Show when={tokenToRevoke()}>
+        <Dialog
+          isOpen={true}
+          onClose={() => setTokenToRevoke(null)}
+          panelClass="max-w-md"
+          ariaLabel="Revoke API token"
+        >
+          <div class="w-full p-6">
+            <h3 class="text-lg font-semibold text-base-content mb-2">Revoke API token?</h3>
+            <p class="text-sm text-muted mb-4">
+              This permanently revokes <span class="font-medium text-base-content">{tokenToRevoke()!.name || tokenToRevoke()!.id}</span>. Any
+              agents, scripts, or integrations using it will stop authenticating until you issue and configure a replacement token.
+            </p>
+            <div class="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setTokenToRevoke(null)}
+                class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const token = tokenToRevoke();
+                  setTokenToRevoke(null);
+                  if (token) void handleDelete(token);
+                }}
+                class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Revoke token
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      </Show>
     </div>
   );
 };

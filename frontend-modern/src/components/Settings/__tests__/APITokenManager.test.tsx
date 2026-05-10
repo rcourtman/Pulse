@@ -9,6 +9,7 @@ import {
   DOCKER_MANAGE_SCOPE,
   DOCKER_REPORT_SCOPE,
 } from '@/constants/apiScopes';
+import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import { APITokenManager } from '../APITokenManager';
 
 const listTokensMock = vi.fn();
@@ -97,6 +98,23 @@ const makeResource = (overrides: Partial<Resource> = {}): Resource => ({
   lastSeen: Date.now(),
   tags: [],
   ...overrides,
+});
+
+describe('APITokenManager security surface', () => {
+  // The API Access tab is the canonical security surface for
+  // operator-controlled machine access. Tokens minted here are
+  // the credential the agent integrations panel directs operators
+  // to use for MCP / HTTP agent wiring. Pin that the agent
+  // integrations panel sits on this same tab so the security
+  // story stays coherent: minting a token and seeing what an
+  // agent does with it live side-by-side, not split across tabs.
+  it('hosts the agent integrations panel on the same security surface as token management', () => {
+    expect(apiAccessPanelSource).toContain(
+      "import AgentIntegrationsPanel from './AgentIntegrationsPanel';",
+    );
+    expect(apiAccessPanelSource).toContain('<AgentIntegrationsPanel />');
+    expect(apiAccessPanelSource).toContain('<APITokenManager');
+  });
 });
 
 describe('APITokenManager', () => {
@@ -265,6 +283,10 @@ describe('APITokenManager', () => {
     expect(within(row as HTMLTableRowElement).getByText('Agent reporting')).toBeInTheDocument();
 
     fireEvent.click(within(row as HTMLTableRowElement).getByRole('button', { name: 'Revoke' }));
+
+    // Confirm modal opens — click "Revoke token" to actually trigger the delete.
+    const confirmBtn = await screen.findByRole('button', { name: 'Revoke token' });
+    fireEvent.click(confirmBtn);
 
     await waitFor(() => {
       expect(deleteTokenMock).toHaveBeenCalledWith('token-runtime');
