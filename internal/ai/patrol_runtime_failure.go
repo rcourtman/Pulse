@@ -75,6 +75,31 @@ type PatrolRuntimeFailureDiagnostic struct {
 	Recommendation string
 }
 
+// patrolToolChoiceValueRejected reports whether the upstream error indicates
+// the provider rejected the specific tool_choice value Pulse sent (for
+// example, "deepseek-reasoner does not support this tool_choice"). This is
+// distinct from the model truly lacking tool support: the model accepts
+// tools but not the requested coercion.
+func patrolToolChoiceValueRejected(lower string) bool {
+	if !strings.Contains(lower, "tool_choice") {
+		return false
+	}
+	return strings.Contains(lower, "does not support this tool_choice") ||
+		strings.Contains(lower, "tool_choice is not supported") ||
+		strings.Contains(lower, "tool_choice value is not supported") ||
+		strings.Contains(lower, "invalid tool_choice") ||
+		strings.Contains(lower, "unsupported tool_choice")
+}
+
+// patrolNoToolCapableEndpoint reports whether the upstream error indicates
+// the provider has no available endpoint that supports tools for the
+// selected model. OpenRouter surfaces this as "No endpoints found that
+// support tool use" when account-level provider or data-policy filters
+// exclude every tool-capable route.
+func patrolNoToolCapableEndpoint(lower string) bool {
+	return strings.Contains(lower, "no endpoints found") && strings.Contains(lower, "tool")
+}
+
 func ClassifyPatrolRuntimeFailure(err error) PatrolRuntimeFailureDiagnostic {
 	failure := patrolRuntimeFailureFromError(err)
 	return PatrolRuntimeFailureDiagnostic{
@@ -105,10 +130,21 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	}
 
 	switch {
+	case patrolToolChoiceValueRejected(lower):
+		failure.Title = "Pulse Patrol: Provider rejected forced tool selection"
+		failure.Summary = "Provider rejected forced tool selection"
+		failure.Cause = PatrolFailureCauseToolChoiceRejected
+		failure.Description = "Pulse Patrol reached the provider and the model accepts tools, but the provider rejected the specific tool-selection coercion Pulse sent. This usually means the routed model accepts tools yet does not honour a request to force a particular tool, only automatic selection."
+		failure.Recommendation = "Pulse will retry with automatic tool selection on the next Patrol run. If the failure persists, switch Patrol to a different model or provider where forced tool selection is accepted, or report the model in question."
+	case patrolNoToolCapableEndpoint(lower):
+		failure.Title = "Pulse Patrol: No tool-capable provider endpoint available"
+		failure.Summary = "No tool-capable provider endpoint available"
+		failure.Cause = PatrolFailureCauseNoToolCapableEndpoint
+		failure.Description = "Pulse Patrol reached the provider, but the provider reports no available endpoint that supports tool calling for the selected model. For OpenRouter this typically reflects account-level provider or data-policy filters that exclude every tool-capable route, leaving only routes that do not support tools."
+		failure.Recommendation = "Review provider routing and privacy filters (for OpenRouter, the Privacy / Data Policy settings and per-model allowed providers), broaden the allowed providers, or switch Patrol to a model with broader tool support."
 	case strings.Contains(lower, "tool_choice") ||
 		strings.Contains(lower, "tool calling") ||
-		strings.Contains(lower, "tools are not supported") ||
-		strings.Contains(lower, "no endpoints found") && strings.Contains(lower, "tool"):
+		strings.Contains(lower, "tools are not supported"):
 		failure.Title = "Pulse Patrol: Selected model does not support Patrol tools"
 		failure.Summary = "Selected model does not support Patrol tools"
 		failure.Cause = PatrolFailureCauseModelUnsupportedTools
@@ -206,10 +242,13 @@ func summarizePatrolRuntimeFailureDetail(raw string) string {
 	}
 	lower := strings.ToLower(raw)
 	switch {
+	case patrolToolChoiceValueRejected(lower):
+		return "Provider rejected Pulse's forced tool selection. Pulse will retry with automatic tool selection on the next Patrol run."
+	case patrolNoToolCapableEndpoint(lower):
+		return "Provider has no tool-capable endpoint for the selected model. Review provider routing or privacy filters."
 	case strings.Contains(lower, "tool_choice") ||
 		strings.Contains(lower, "tool calling") ||
-		strings.Contains(lower, "tools are not supported") ||
-		strings.Contains(lower, "no endpoints found") && strings.Contains(lower, "tool"):
+		strings.Contains(lower, "tools are not supported"):
 		return "Provider rejected Patrol tool calls. Choose a Patrol model and endpoint with tool-call support."
 	case strings.Contains(lower, "reasoning_content"):
 		return "Provider rejected Patrol reasoning state. Retry with a provider route that supports the selected model's reasoning and tool protocol."

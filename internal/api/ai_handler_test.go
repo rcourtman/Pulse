@@ -822,7 +822,7 @@ func TestHandleChat_RehydratesPatrolRunHandoffContextFromBackend(t *testing.T) {
 			assert.Contains(t, reqArg.HandoffContext, "Source: Pulse Patrol run history")
 			assert.Contains(t, reqArg.HandoffContext, "Run ID: run-runtime-error")
 			assert.Contains(t, reqArg.HandoffContext, "Runtime Failure: Selected model does not support Patrol tools")
-			assert.Contains(t, reqArg.HandoffContext, "Provider rejected Patrol tool calls")
+			assert.Contains(t, reqArg.HandoffContext, "no tool-capable endpoint")
 			assert.Contains(t, reqArg.HandoffContext, "Patrol Analysis: Visible runtime summary.")
 			assert.NotContains(t, reqArg.HandoffContext, "browser-authored stale context")
 			assert.NotContains(t, reqArg.HandoffContext, "provider trace")

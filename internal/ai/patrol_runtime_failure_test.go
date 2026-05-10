@@ -41,28 +41,74 @@ func TestPatrolRuntimeFailureFromError_PopulatesImpactForAllCauses(t *testing.T)
 	}
 }
 
-func TestPatrolRuntimeFailureFromError_ClassifiesToolCallingUnsupported(t *testing.T) {
+func TestPatrolRuntimeFailureFromError_ClassifiesNoToolCapableEndpoint(t *testing.T) {
+	// OpenRouter surfaces this when account-level provider/data filters
+	// exclude every tool-capable route for the selected model.
 	err := errors.New(`agentic patrol failed: API error (404): {"error":{"message":"No endpoints found that support the provided 'tool_choice' value."}}`)
+
+	failure := patrolRuntimeFailureFromError(err)
+
+	if failure.Title != "Pulse Patrol: No tool-capable provider endpoint available" {
+		t.Fatalf("unexpected title %q", failure.Title)
+	}
+	if failure.Summary != "No tool-capable provider endpoint available" {
+		t.Fatalf("unexpected summary %q", failure.Summary)
+	}
+	if failure.Cause != PatrolFailureCauseNoToolCapableEndpoint {
+		t.Fatalf("unexpected cause %q", failure.Cause)
+	}
+	if !strings.Contains(failure.Recommendation, "routing") && !strings.Contains(failure.Recommendation, "filters") {
+		t.Fatalf("expected recommendation to mention routing/filters, got %q", failure.Recommendation)
+	}
+	if strings.Contains(failure.Evidence, "tool_choice") || strings.Contains(failure.Evidence, "No endpoints found") {
+		t.Fatalf("evidence leaked raw provider detail: %q", failure.Evidence)
+	}
+	if !strings.Contains(failure.Evidence, "no tool-capable endpoint") {
+		t.Fatalf("expected evidence to keep safe classified detail, got %q", failure.Evidence)
+	}
+}
+
+func TestPatrolRuntimeFailureFromError_ClassifiesToolChoiceValueRejected(t *testing.T) {
+	// Direct DeepSeek path: provider accepts tools but rejects forced
+	// tool_choice. Pre-fix this misclassified as "model does not support
+	// tools" and pointed operators at the wrong remediation.
+	err := errors.New(`agentic patrol failed: provider error: API error (400): deepseek-reasoner does not support this tool_choice`)
+
+	failure := patrolRuntimeFailureFromError(err)
+
+	if failure.Title != "Pulse Patrol: Provider rejected forced tool selection" {
+		t.Fatalf("unexpected title %q", failure.Title)
+	}
+	if failure.Summary != "Provider rejected forced tool selection" {
+		t.Fatalf("unexpected summary %q", failure.Summary)
+	}
+	if failure.Cause != PatrolFailureCauseToolChoiceRejected {
+		t.Fatalf("unexpected cause %q", failure.Cause)
+	}
+	if !strings.Contains(failure.Recommendation, "automatic tool selection") {
+		t.Fatalf("expected recommendation to mention automatic tool selection, got %q", failure.Recommendation)
+	}
+	if strings.Contains(failure.Evidence, "deepseek-reasoner") || strings.Contains(failure.Evidence, "API error (400)") {
+		t.Fatalf("evidence leaked raw provider detail: %q", failure.Evidence)
+	}
+	if !strings.Contains(failure.Evidence, "rejected") {
+		t.Fatalf("expected evidence to keep safe classified detail, got %q", failure.Evidence)
+	}
+}
+
+func TestPatrolRuntimeFailureFromError_ClassifiesGenericToolUnsupported(t *testing.T) {
+	// Generic "tools are not supported" fallback for providers that say
+	// the model truly cannot call tools (not a value-rejection or routing
+	// problem).
+	err := errors.New(`API error (400): tools are not supported by this model family`)
 
 	failure := patrolRuntimeFailureFromError(err)
 
 	if failure.Title != "Pulse Patrol: Selected model does not support Patrol tools" {
 		t.Fatalf("unexpected title %q", failure.Title)
 	}
-	if failure.Summary != "Selected model does not support Patrol tools" {
-		t.Fatalf("unexpected summary %q", failure.Summary)
-	}
 	if failure.Cause != PatrolFailureCauseModelUnsupportedTools {
 		t.Fatalf("unexpected cause %q", failure.Cause)
-	}
-	if !strings.Contains(failure.Recommendation, "supports tool calling") {
-		t.Fatalf("expected recommendation to mention tool calling, got %q", failure.Recommendation)
-	}
-	if strings.Contains(failure.Evidence, "tool_choice") || strings.Contains(failure.Evidence, "No endpoints found") {
-		t.Fatalf("evidence leaked raw provider detail: %q", failure.Evidence)
-	}
-	if !strings.Contains(failure.Evidence, "Provider rejected Patrol tool calls") {
-		t.Fatalf("expected evidence to keep safe classified detail, got %q", failure.Evidence)
 	}
 }
 
@@ -205,13 +251,13 @@ func TestRunPatrolRecordsStructuredRuntimeFailure(t *testing.T) {
 	if len(runs) != 1 {
 		t.Fatalf("expected one patrol run, got %d", len(runs))
 	}
-	if runs[0].ErrorSummary != "Selected model does not support Patrol tools" {
+	if runs[0].ErrorSummary != "No tool-capable provider endpoint available" {
 		t.Fatalf("expected structured run error summary, got %q", runs[0].ErrorSummary)
 	}
 	if strings.Contains(runs[0].ErrorDetail, "tool_choice") || strings.Contains(runs[0].ErrorDetail, "No endpoints found") {
 		t.Fatalf("run error detail leaked raw provider message: %q", runs[0].ErrorDetail)
 	}
-	if !strings.Contains(runs[0].ErrorDetail, "Provider rejected Patrol tool calls") {
+	if !strings.Contains(runs[0].ErrorDetail, "no tool-capable endpoint") {
 		t.Fatalf("expected run error detail to preserve safe classified detail, got %q", runs[0].ErrorDetail)
 	}
 
@@ -219,10 +265,10 @@ func TestRunPatrolRecordsStructuredRuntimeFailure(t *testing.T) {
 	if finding == nil {
 		t.Fatal("expected Patrol runtime finding")
 	}
-	if finding.Title != "Pulse Patrol: Selected model does not support Patrol tools" {
+	if finding.Title != "Pulse Patrol: No tool-capable provider endpoint available" {
 		t.Fatalf("unexpected runtime finding title %q", finding.Title)
 	}
-	if finding.FailureCause != string(PatrolFailureCauseModelUnsupportedTools) {
+	if finding.FailureCause != string(PatrolFailureCauseNoToolCapableEndpoint) {
 		t.Fatalf("unexpected runtime finding cause %q", finding.FailureCause)
 	}
 }
@@ -245,7 +291,7 @@ func TestPatrolRunRecordJSONNormalizesRuntimeFailureDetail(t *testing.T) {
 			t.Fatalf("marshaled run leaked raw provider detail %q: %s", raw, text)
 		}
 	}
-	if !strings.Contains(text, "Provider rejected Patrol tool calls") {
+	if !strings.Contains(text, "rejected") {
 		t.Fatalf("expected safe classified detail in marshaled run, got %s", text)
 	}
 }

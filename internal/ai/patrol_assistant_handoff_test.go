@@ -52,7 +52,7 @@ func TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext(t *testing.T) {
 		"Run Type: Scoped run",
 		"Trigger: Alert fired",
 		"Runtime Failure: Selected model does not support Patrol tools",
-		"Provider rejected Patrol tool calls",
+		"no tool-capable endpoint",
 		"Patrol Analysis: Visible runtime summary.",
 		"Operator Boundary:",
 	} {
