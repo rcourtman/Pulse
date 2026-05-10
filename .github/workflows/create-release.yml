@@ -908,9 +908,32 @@ jobs:
               release_upload_with_retry "${TAG}" "${bare_agent}" --clobber
             fi
           done
+          for bare_mcp in \
+            release/pulse-mcp-linux-amd64 \
+            release/pulse-mcp-linux-arm64 \
+            release/pulse-mcp-linux-armv7 \
+            release/pulse-mcp-linux-armv6 \
+            release/pulse-mcp-linux-386 \
+            release/pulse-mcp-darwin-amd64 \
+            release/pulse-mcp-darwin-arm64 \
+            release/pulse-mcp-freebsd-amd64 \
+            release/pulse-mcp-freebsd-arm64 \
+            release/pulse-mcp-windows-amd64.exe \
+            release/pulse-mcp-windows-arm64.exe \
+            release/pulse-mcp-windows-386.exe; do
+            if [ -f "${bare_mcp}" ]; then
+              release_upload_with_retry "${TAG}" "${bare_mcp}" --clobber
+            fi
+          done
           release_upload_with_retry "${TAG}" release/install.sh --clobber
           if [ -f release/install.ps1 ]; then
             release_upload_with_retry "${TAG}" release/install.ps1 --clobber
+          fi
+          if [ -f release/install-mcp.sh ]; then
+            release_upload_with_retry "${TAG}" release/install-mcp.sh --clobber
+          fi
+          if [ -f release/install-mcp.ps1 ]; then
+            release_upload_with_retry "${TAG}" release/install-mcp.ps1 --clobber
           fi
           release_upload_with_retry "${TAG}" release/install-docker.sh --clobber
           release_upload_with_retry "${TAG}" release/pulse-auto-update.sh --clobber

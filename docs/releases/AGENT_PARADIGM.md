@@ -24,9 +24,13 @@ Patrol or Assistant has.
   config snippet pre-filled with the deployment's own URL, so
   wiring an agent is copy, paste, and add a token.
 
-- **Drivable from Claude.** A new `pulse-mcp` server adapter
-  ships in the Pulse repo (`cmd/pulse-mcp/`). Wire it into
-  Claude Desktop or Claude Code per
+- **Drivable from Claude in one command.** A new `pulse-mcp`
+  server adapter ships in the Pulse repo (`cmd/pulse-mcp/`)
+  with a published distribution path. Install from the Pulse
+  GitHub Release using the one-line installer:
+  `curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh | bash`
+  (or the matching `install-mcp.ps1` PowerShell installer on
+  Windows). Wire it into Claude Desktop or Claude Code per
   [`cmd/pulse-mcp/README.md`](../../cmd/pulse-mcp/README.md) and
   Pulse's tools appear natively. Each MCP tool is one entry in
   the canonical capabilities manifest; adding a capability on
@@ -93,16 +97,23 @@ Patrol or Assistant has.
 
 ## What it does not do yet
 
-- **No published distribution path for `pulse-mcp`.** The
-  binary builds from source today (`go build ./cmd/pulse-mcp`).
-  A signed release artifact (Homebrew formula, Docker image,
-  GitHub Release binary) is the natural next step for cutting
-  the install story to "one command."
+- **No notarization on macOS.** The first launch of
+  `pulse-mcp` on macOS shows a Gatekeeper warning. The
+  README documents the right-click-Open or
+  `xattr -d com.apple.quarantine` bypass; SHA256 verification
+  is preserved through the installer. Notarization is a
+  natural follow-up if usage signal points at this as a
+  friction point.
+- **No Homebrew tap or core formula.** The one-line installer
+  fetches from GitHub Releases directly. Homebrew is a layer
+  that can sit on top of this foundation when audience scale
+  warrants the ongoing maintenance.
 - **Real-world consumer feedback is the gating signal for
-  what's next.** The substrate ships with end-to-end tests
-  and two reference adapters, but no external integration has
-  been load-bearing on it yet. The next meaningful work item
-  is whatever friction first usage surfaces.
+  what's next.** The substrate ships with end-to-end tests,
+  two reference adapters, and a published distribution path,
+  but no external integration has been load-bearing on it yet.
+  The next meaningful work item is whatever friction first
+  usage surfaces.
 
 ## Audit trail
 

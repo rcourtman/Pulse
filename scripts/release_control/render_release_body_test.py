@@ -165,6 +165,33 @@ Old metadata section.
         self.assertIn("live auth-env watcher teardown", release_notes)
         self.assertIn("join live config watcher goroutines", changelog)
 
+    def test_agent_paradigm_release_notes_blurb_documents_distribution_path(self) -> None:
+        """The agent-paradigm source draft must keep its honest scope:
+        an integrator reading the blurb sees a published distribution
+        path (the install-mcp script + GitHub Release binaries) when
+        the work lands, not the earlier "build from source" wording.
+
+        Pin the blurb's stable touchstones so a future edit that
+        accidentally regresses the install story (e.g. swaps the
+        one-line installer for "clone the repo" again) fails this
+        test instead of shipping silently into a release.
+        """
+        repo_root = Path(__file__).resolve().parents[2]
+        blurb = (repo_root / "docs/releases/AGENT_PARADIGM.md").read_text(encoding="utf-8")
+
+        self.assertIn("install-mcp.sh", blurb, "blurb must reference the published install script")
+        self.assertIn("/api/agent/capabilities", blurb)
+        self.assertIn("cmd/pulse-mcp", blurb)
+        self.assertIn("cmd/agent-probe", blurb)
+        # The four-axis frame is the substrate's load-bearing claim;
+        # if any axis name drifts in the blurb, agents reading
+        # release notes will look for a different surface than what
+        # ships.
+        self.assertIn("Discovery", blurb)
+        self.assertIn("Read", blurb)
+        self.assertIn("Write", blurb)
+        self.assertIn("Push", blurb)
+
 
 if __name__ == "__main__":
     unittest.main()

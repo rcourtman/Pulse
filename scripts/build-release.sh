@@ -147,6 +147,32 @@ for i in "${!agent_build_order[@]}"; do
         ./cmd/pulse-agent
 done
 
+# Build pulse-mcp (Model Context Protocol adapter) for the same
+# multi-OS matrix as the unified agent. The MCP server runs on
+# the integrator's machine (Mac, Windows, Linux desktop) and
+# speaks stdio to a local MCP client like Claude Desktop, so it
+# needs the full desktop-OS matrix even though the Pulse server
+# itself only ships for Linux. The binary takes no version
+# ldflags: it reads the manifest from whichever Pulse instance
+# it points at, so its own build identity is intentionally minimal.
+echo "Building pulse-mcp for all platforms..."
+mcp_build_order=("${agent_build_order[@]}")
+mcp_build_envs=("${agent_build_envs[@]}")
+
+for i in "${!mcp_build_order[@]}"; do
+    target="${mcp_build_order[$i]}"
+    build_env="${mcp_build_envs[$i]}"
+    output_path="$BUILD_DIR/pulse-mcp-$target"
+    if [[ "$target" == windows-* ]]; then
+        output_path="${output_path}.exe"
+    fi
+
+    env $build_env go build \
+        "${release_go_build_args[@]}" \
+        -o "$output_path" \
+        ./cmd/pulse-mcp
+done
+
 # Build for different architectures (server + agents)
 build_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386)
 build_envs=(
@@ -324,6 +350,26 @@ zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/puls
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-agent-windows-386.exe"
 
+# Package standalone pulse-mcp binaries (all platforms). Mirrors
+# the pulse-agent packaging shape exactly so the release-asset
+# upload step does not need per-binary special cases.
+# Linux
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-linux-amd64.tar.gz" -C "$BUILD_DIR" pulse-mcp-linux-amd64
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-linux-arm64.tar.gz" -C "$BUILD_DIR" pulse-mcp-linux-arm64
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-linux-armv7.tar.gz" -C "$BUILD_DIR" pulse-mcp-linux-armv7
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-linux-armv6.tar.gz" -C "$BUILD_DIR" pulse-mcp-linux-armv6
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-linux-386.tar.gz" -C "$BUILD_DIR" pulse-mcp-linux-386
+# Darwin
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-mcp-darwin-amd64
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-mcp-darwin-arm64
+# FreeBSD
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-freebsd-amd64.tar.gz" -C "$BUILD_DIR" pulse-mcp-freebsd-amd64
+tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-freebsd-arm64.tar.gz" -C "$BUILD_DIR" pulse-mcp-freebsd-arm64
+# Windows (zip archives with version in filename)
+zip -j "$RELEASE_DIR/pulse-mcp-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-mcp-windows-amd64.exe"
+zip -j "$RELEASE_DIR/pulse-mcp-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-mcp-windows-arm64.exe"
+zip -j "$RELEASE_DIR/pulse-mcp-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-mcp-windows-386.exe"
+
 # Also copy bare binaries for /releases/latest/download/ redirect compatibility
 # These allow LXC/barebone installs to redirect to GitHub without needing versioned URLs
 echo "Copying bare binaries to release directory for redirect compatibility..."
@@ -337,6 +383,22 @@ cp "$BUILD_DIR/pulse-agent-windows-arm64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-windows-386.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-freebsd-amd64" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-freebsd-arm64" "$RELEASE_DIR/"
+
+# Copy bare pulse-mcp binaries for /releases/latest/download/ redirect
+# compatibility. The install-mcp.sh installer fetches these directly from
+# the GitHub Releases endpoint without needing a versioned URL.
+cp "$BUILD_DIR/pulse-mcp-linux-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-linux-arm64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-linux-armv7" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-linux-armv6" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-linux-386" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-darwin-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-darwin-arm64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-windows-amd64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-windows-arm64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-windows-386.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-freebsd-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-mcp-freebsd-arm64" "$RELEASE_DIR/"
 
 # Copy Windows, macOS, and FreeBSD binaries into universal tarball for /download/ endpoint
 echo "Adding Windows, macOS, and FreeBSD binaries to universal tarball..."
@@ -383,6 +445,8 @@ cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$RELEASE_DIR/install.sh"
 [ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$RELEASE_DIR/install.ps1"
 cp scripts/install-docker.sh "$RELEASE_DIR/"
 cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
+cp scripts/install-mcp.sh "$RELEASE_DIR/install-mcp.sh"
+[ -f scripts/install-mcp.ps1 ] && cp scripts/install-mcp.ps1 "$RELEASE_DIR/install-mcp.ps1"
 
 pulse_release_generate_packet_sbom "${RELEASE_DIR}" "${RELEASE_PACKET_SBOM}"
 mapfile -t checksum_files < <(pulse_release_collect_checksum_files "${RELEASE_DIR}")

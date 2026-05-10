@@ -743,6 +743,83 @@ func TestReleaseAssetCommonRejectsUnexpectedUpdateSigningPublicKey(t *testing.T)
 	}
 }
 
+// TestBuildReleasePackagesPulseMcpForAllPlatforms pins the
+// distribution path for pulse-mcp: each Pulse release must build
+// the MCP adapter for the same multi-OS matrix as the unified
+// agent and emit per-platform tarballs/zips, bare binaries (for
+// /releases/latest/download/ redirect compatibility), and the
+// install-mcp.sh script into RELEASE_DIR. Drift in any of those
+// strings means an integrator following the published install
+// path hits a 404 on the release endpoint instead of a working
+// binary.
+func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "build-release.sh"))
+	if err != nil {
+		t.Fatalf("read build-release.sh: %v", err)
+	}
+	script := string(content)
+
+	required := []string{
+		// Build loop wires through ./cmd/pulse-mcp.
+		`-o "$output_path" \
+        ./cmd/pulse-mcp`,
+		// Per-platform packaging follows the pulse-agent shape
+		// exactly so the upload step's glob does not need
+		// special cases.
+		`tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-linux-amd64.tar.gz" -C "$BUILD_DIR" pulse-mcp-linux-amd64`,
+		`tar -czf "$RELEASE_DIR/pulse-mcp-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-mcp-darwin-arm64`,
+		`zip -j "$RELEASE_DIR/pulse-mcp-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-mcp-windows-amd64.exe"`,
+		// Bare-binary copies for the /releases/latest/download/
+		// redirect that install-mcp.sh fetches by default.
+		`cp "$BUILD_DIR/pulse-mcp-linux-amd64" "$RELEASE_DIR/"`,
+		`cp "$BUILD_DIR/pulse-mcp-darwin-amd64" "$RELEASE_DIR/"`,
+		`cp "$BUILD_DIR/pulse-mcp-darwin-arm64" "$RELEASE_DIR/"`,
+		`cp "$BUILD_DIR/pulse-mcp-windows-amd64.exe" "$RELEASE_DIR/"`,
+		// The installer scripts themselves must reach
+		// RELEASE_DIR so the GitHub Releases asset upload can
+		// publish them as the canonical curl-pipe-bash entry
+		// point.
+		`cp scripts/install-mcp.sh "$RELEASE_DIR/install-mcp.sh"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("build-release.sh missing pulse-mcp distribution wiring: %s", needle)
+		}
+	}
+
+	// install-mcp.sh and install-mcp.ps1 must both exist as
+	// shipped scripts; the build pipeline references them, so
+	// missing-file drift breaks release builds rather than
+	// quietly ships an installer that 404s.
+	if _, err := os.Stat(repoFile("scripts", "install-mcp.sh")); err != nil {
+		t.Fatalf("scripts/install-mcp.sh missing: %v", err)
+	}
+	if _, err := os.Stat(repoFile("scripts", "install-mcp.ps1")); err != nil {
+		t.Fatalf("scripts/install-mcp.ps1 missing: %v", err)
+	}
+
+	// install-mcp.sh's install-dir resolution and SHA256
+	// verification are load-bearing: dropping either silently
+	// turns the installer into "curl | bash with no integrity
+	// check," which is the failure mode the hook is here to
+	// prevent. Pin the touchstones.
+	mcpScript, err := os.ReadFile(repoFile("scripts", "install-mcp.sh"))
+	if err != nil {
+		t.Fatalf("read install-mcp.sh: %v", err)
+	}
+	for _, needle := range []string{
+		`detect_platform()`,
+		`choose_install_dir()`,
+		`PULSE_MCP_NO_VERIFY`,
+		`checksums.txt`,
+		`sha256 mismatch`,
+	} {
+		if !strings.Contains(string(mcpScript), needle) {
+			t.Fatalf("install-mcp.sh missing required helper or guard: %s", needle)
+		}
+	}
+}
+
 func repoFile(parts ...string) string {
 	root := filepath.Join("..", "..")
 	segments := append([]string{root}, parts...)

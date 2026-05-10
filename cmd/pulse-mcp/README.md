@@ -10,11 +10,56 @@ Pulse's hand-authored capabilities manifest at `/api/agent/capabilities`.
 Adding a capability there extends this server automatically. There is no
 hardcoded tool list to keep in sync.
 
-## Quick start
+## Install
 
-### 1. Build
+Three ways to get the binary, in order of friction.
 
-From the repo root:
+### 1. One-line installer (recommended)
+
+```sh
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh | bash
+```
+
+Detects your platform, downloads the matching binary from the latest
+Pulse release, verifies SHA256, and places it at `~/.local/bin/pulse-mcp`
+(or `/usr/local/bin/pulse-mcp` if `~/.local/bin` is not writable).
+Override the install location with `PULSE_MCP_BIN_DIR=/some/path` or
+the version with `PULSE_MCP_VERSION=v6.0.0-rc.5`.
+
+Windows (PowerShell):
+
+```powershell
+irm https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.ps1 | iex
+```
+
+### 2. Download from a GitHub Release
+
+Pick the binary that matches your platform from the Pulse release assets:
+
+- `pulse-mcp-darwin-arm64`, `pulse-mcp-darwin-amd64` for macOS
+- `pulse-mcp-linux-amd64`, `pulse-mcp-linux-arm64`, `pulse-mcp-linux-armv7` for Linux
+- `pulse-mcp-windows-amd64.exe` for Windows
+- (full matrix on the release page)
+
+`chmod +x` it on Unix, drop it on your `PATH`. SHA256 sums for every
+binary are in `checksums.txt` on the same release.
+
+On macOS the first launch may show a Gatekeeper warning ("cannot be
+opened because the developer cannot be verified"). Either right-click
+the binary and pick Open the first time, or run
+`xattr -d com.apple.quarantine pulse-mcp` to clear the quarantine flag.
+Notarization is intentionally skipped for v1; the install-script path
+above downloads the same unsigned binary.
+
+### 3. Build from source
+
+If you have Go installed:
+
+```sh
+go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mcp@latest
+```
+
+Or from a Pulse repo checkout:
 
 ```sh
 go build -o pulse-mcp ./cmd/pulse-mcp
@@ -22,6 +67,13 @@ go build -o pulse-mcp ./cmd/pulse-mcp
 
 Drop the binary somewhere on your `PATH` (or reference its full path in
 the config snippets below).
+
+## Quick start
+
+### 1. Get the binary
+
+Use any of the install paths above. The rest of this guide assumes
+`pulse-mcp` is on your `PATH`.
 
 ### 2. Mint an API token
 

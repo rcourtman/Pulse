@@ -147,7 +147,10 @@ export const AgentIntegrationsPanel: Component = () => {
             </Show>
           </div>
           <p class="text-xs text-muted">
-            Drop this block into{' '}
+            First, install <code class="font-mono">pulse-mcp</code>. The fastest path:{' '}
+            <code class="font-mono">curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh | bash</code>{' '}
+            (or <code class="font-mono">irm .../install-mcp.ps1 | iex</code> on Windows). Then drop
+            this block into{' '}
             <code class="font-mono">~/Library/Application Support/Claude/claude_desktop_config.json</code>{' '}
             (Claude Desktop) or your project's <code class="font-mono">.mcp.json</code> (Claude
             Code). Mint a token below with <code class="font-mono">monitoring:read</code> (and{' '}

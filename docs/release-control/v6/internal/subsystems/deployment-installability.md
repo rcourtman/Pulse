@@ -65,39 +65,42 @@ server-side update execution surfaces.
 41. `install.sh`
 42. `scripts/install.ps1`
 43. `scripts/install.sh`
-44. `scripts/pulse-auto-update.sh`
-45. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
-46. `scripts/release_control/record_rc_to_ga_rehearsal.py`
-47. `scripts/release_control/release_promotion_policy_support.py`
-48. `scripts/release_control/resolve_release_promotion.py`
-49. `scripts/release_ldflags.sh`
-50. `scripts/run_cloud_public_signup_smoke.sh`
-51. `scripts/run_demo_public_browser_smoke.sh`
-52. `scripts/demo_public_browser_smoke.cjs`
-53. `scripts/run_hosted_staging_smoke.sh`
-54. `scripts/trigger-release-dry-run.sh`
-55. `scripts/trigger-release.sh`
-56. `scripts/toggle-mock.sh`
-57. `deploy/helm/pulse/`
-58. `tests/integration/playwright.config.ts`
-59. `tests/integration/QUICK_START.md`
-60. `tests/integration/README.md`
-61. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
-62. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
-63. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
-64. `tests/integration/scripts/hosted-tenant-runtime.mjs`
-65. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
-66. `tests/integration/scripts/managed-dev-runtime.mjs`
-67. `tests/integration/scripts/relay-mobile-token-helper.go`
-68. `tests/integration/tests/helpers.ts`
-69. `tests/integration/tests/runtime-defaults.ts`
-70. `docker-compose.yml`
-71. `scripts/install-docker.sh`
-72. `scripts/validate-published-release.sh`
-73. `scripts/validate-release.sh`
-74. `scripts/release_asset_common.sh`
-75. `scripts/backfill-release-assets.sh`
-76. `.github/workflows/backfill-release-assets.yml`
+44. `scripts/install-mcp.sh`
+45. `scripts/install-mcp.ps1`
+46. `cmd/pulse-mcp/`
+47. `scripts/pulse-auto-update.sh`
+48. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
+49. `scripts/release_control/record_rc_to_ga_rehearsal.py`
+50. `scripts/release_control/release_promotion_policy_support.py`
+51. `scripts/release_control/resolve_release_promotion.py`
+52. `scripts/release_ldflags.sh`
+53. `scripts/run_cloud_public_signup_smoke.sh`
+54. `scripts/run_demo_public_browser_smoke.sh`
+55. `scripts/demo_public_browser_smoke.cjs`
+56. `scripts/run_hosted_staging_smoke.sh`
+57. `scripts/trigger-release-dry-run.sh`
+58. `scripts/trigger-release.sh`
+59. `scripts/toggle-mock.sh`
+60. `deploy/helm/pulse/`
+61. `tests/integration/playwright.config.ts`
+62. `tests/integration/QUICK_START.md`
+63. `tests/integration/README.md`
+64. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
+65. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
+66. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
+67. `tests/integration/scripts/hosted-tenant-runtime.mjs`
+68. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
+69. `tests/integration/scripts/managed-dev-runtime.mjs`
+70. `tests/integration/scripts/relay-mobile-token-helper.go`
+71. `tests/integration/tests/helpers.ts`
+72. `tests/integration/tests/runtime-defaults.ts`
+73. `docker-compose.yml`
+74. `scripts/install-docker.sh`
+75. `scripts/validate-published-release.sh`
+76. `scripts/validate-release.sh`
+77. `scripts/release_asset_common.sh`
+78. `scripts/backfill-release-assets.sh`
+79. `.github/workflows/backfill-release-assets.yml`
 
 ## Shared Boundaries
 
@@ -732,6 +735,30 @@ release artifacts. `scripts/install.sh`, `scripts/install.ps1`,
 `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 define supported deployment entry points and update behavior, even when the
 shell and Windows installers also sit on the shared agent-lifecycle boundary.
+
+`scripts/install-mcp.sh` and `scripts/install-mcp.ps1` extend the
+installer family with a fourth entry point: a stdio MCP server
+adapter (`cmd/pulse-mcp/`) that integrators run on their own
+machine to drive Pulse from Claude Desktop, Claude Code, or other
+MCP-speaking clients. The installers fetch a published
+`pulse-mcp-<os>-<arch>` binary from the latest GitHub Release,
+verify SHA256 against the same `checksums.txt` the rest of the
+release uses, and place the binary at `~/.local/bin/pulse-mcp`
+(Unix) or `$LOCALAPPDATA\pulse-mcp\pulse-mcp.exe` (Windows). The
+binary takes no version ldflags because it reads the manifest
+from the Pulse instance it points at. `scripts/build-release.sh`
+builds `pulse-mcp` for the same multi-OS matrix as the unified
+agent (linux-amd64/arm64/armv7/armv6/386, darwin-amd64/arm64,
+freebsd-amd64/arm64, windows-amd64/arm64/386), packages
+per-platform tarballs and zips into `RELEASE_DIR`, and the
+`.github/workflows/create-release.yml` upload step attaches both
+the bare binaries and the install scripts as release assets so
+`https://github.com/rcourtman/Pulse/releases/latest/download/pulse-mcp-<os>-<arch>`
+and `.../install-mcp.sh` are stable redirect targets the
+installers consume. macOS notarization is intentionally skipped
+for v1: the README documents the Gatekeeper bypass and the
+install-script flow downloads the same unsigned binary, with the
+audit trail of SHA256 verification preserved.
 That same installer boundary now owns instance identity for side-by-side server
 installs too: the root `install.sh`, generated update helper, and
 `scripts/pulse-auto-update.sh` must preserve an explicitly selected service
