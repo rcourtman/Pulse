@@ -203,13 +203,15 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
   return (
     <div class="space-y-3">
       <Show when={loadError()}>
-        <Card padding="lg" tone="danger">
-          <EmptyState
-            title={PMG_DETAILS_FAILURE_STATE_TITLE}
-            description={loadError()}
-            tone="danger"
-          />
-        </Card>
+        <div role="alert" aria-live="assertive">
+          <Card padding="lg" tone="danger">
+            <EmptyState
+              title={PMG_DETAILS_FAILURE_STATE_TITLE}
+              description={loadError()}
+              tone="danger"
+            />
+          </Card>
+        </div>
       </Show>
       <Show
         when={!resource.loading}

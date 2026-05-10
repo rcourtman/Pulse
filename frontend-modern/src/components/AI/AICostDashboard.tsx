@@ -347,7 +347,11 @@ export const AICostDashboard: Component = () => {
         </Show>
 
         <Show when={loadError() && summary()}>
-          <div class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100">
+          <div
+            role="alert"
+            aria-live="polite"
+            class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100"
+          >
             <div class="truncate">Couldn’t refresh. Showing last loaded data. {loadError()}</div>
             <button
               type="button"
