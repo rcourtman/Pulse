@@ -4424,3 +4424,17 @@ Detection and severity classification are owned by Patrol; the
 report narrators summarize Patrol's work and must not function as
 parallel classifiers, so the report PDF cannot become a back-door
 detection surface that diverges from Patrol's findings store.
+The reporting engine also exposes two non-rendering entry points
+on its `Engine` interface — `NarrativeFor(req MetricReportRequest)
+(*Narrative, error)` and `FleetNarrativeFor(req MultiReportRequest)
+(*FleetNarrative, error)` — that return the structured narrative
+without invoking the PDF or CSV output stage. These are the seams
+Pulse Assistant tools and other programmatic consumers use to reach
+the same retrospective synthesis the report carries, in a form they
+can present in chat or another non-export context. Both run the
+same query path, the same narrator resolution, and the same
+fail-closed-to-heuristic fallback as their rendering counterparts;
+they differ only in skipping the fpdf/csv stage. Test stubs
+implementing the Engine interface must implement these methods so
+the contract is honoured across the entire interface surface, not
+just the export-shaped subset.
