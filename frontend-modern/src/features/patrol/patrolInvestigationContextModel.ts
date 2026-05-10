@@ -35,6 +35,19 @@ import {
   getPatrolRunKindLabel,
   getPatrolRunStatusPresentation,
 } from '@/utils/patrolRunPresentation';
+import { formatRelativeTime } from '@/utils/format';
+
+// formatBriefingTimestamp renders a timestamp in a way that's readable for
+// both the operator (who sees the briefing copy in the Assistant drawer)
+// and the LLM (which receives the same string as part of the handoff
+// context). Relative time satisfies both: humans read it naturally, and
+// LLMs interpret "22 mins ago" just as well as a raw ISO timestamp. The
+// precise timestamp is still available in the structured handoff fields
+// that flow alongside the briefing copy for any caller that needs it.
+function formatBriefingTimestamp(value: string | undefined): string {
+  if (!value) return '';
+  return formatRelativeTime(value, { compact: false, emptyText: '' });
+}
 
 export interface PatrolInvestigationContextSummaryInput {
   recentChangesCount?: number | null;
@@ -2119,8 +2132,8 @@ function formatAssessmentFindingContextLine(
           normalizeNonNegativeCount(finding.regressionCount) === 1 ? '' : 's'
         }`
       : undefined,
-    normalizeText(finding.lastRegressionAt)
-      ? `last regression ${normalizeText(finding.lastRegressionAt)}`
+    formatBriefingTimestamp(normalizeText(finding.lastRegressionAt))
+      ? `last regression ${formatBriefingTimestamp(normalizeText(finding.lastRegressionAt))}`
       : undefined,
   ];
   const recordParts = [
@@ -2187,8 +2200,8 @@ function buildPatrolAssistantFindingModelContext(
           normalizeNonNegativeCount(input.regressionCount) === 1 ? '' : 's'
         }`
       : undefined,
-    normalizeText(input.lastRegressionAt)
-      ? `last regression ${normalizeText(input.lastRegressionAt)}`
+    formatBriefingTimestamp(normalizeText(input.lastRegressionAt))
+      ? `last regression ${formatBriefingTimestamp(normalizeText(input.lastRegressionAt))}`
       : undefined,
   ].filter(isNonEmptyString);
   const nextStepAction = normalizePatrolAssistantNextStepAction(input.nextStepAction);
@@ -2624,14 +2637,23 @@ function buildPatrolAssistantAttentionReason(
     parts.push(`raised ${timesRaised} times`);
   }
 
-  const lastRegressionAt = normalizeText(input.lastRegressionAt);
+  const lastRegressionAt = formatBriefingTimestamp(normalizeText(input.lastRegressionAt));
   if (lastRegressionAt) {
     parts.push(`last regression ${lastRegressionAt}`);
   }
 
-  const loopState = formatIdentifierLabel(input.loopState)?.toLowerCase();
-  if (loopState) {
-    parts.push(`loop ${loopState}`);
+  // Only surface loop state when it differs from the default "detected".
+  // Loop=detected means "Patrol detected it, no investigation in flight"
+  // which is the trivial state for any active finding; rendering "loop
+  // detected" in the Attention line adds noise without information. Keep
+  // the loop signal only when it indicates a non-default investigation
+  // posture ("awaiting approval", "remediation failed", etc.).
+  const rawLoopState = normalizeText(input.loopState).toLowerCase();
+  if (rawLoopState && rawLoopState !== 'detected') {
+    const loopLabel = formatIdentifierLabel(input.loopState)?.toLowerCase();
+    if (loopLabel) {
+      parts.push(`loop ${loopLabel}`);
+    }
   }
 
   const rawRecord = input.investigationRecord;

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { RemediationPlan } from '@/api/ai';
 import type { PatrolRunRecord } from '@/api/patrol';
 
@@ -1250,6 +1250,13 @@ describe('patrolInvestigationContextModel', () => {
   });
 
   it('builds a drawer briefing for Assistant handoff without exposing raw commands', () => {
+    // Pin "now" so the relative-time formatting in the briefing
+    // (`last regression {relative}`) is deterministic against the
+    // fixed fixture timestamp two hours earlier. Restored after.
+    const pinnedNow = new Date('2026-05-06T14:06:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(pinnedNow);
+
     const approvalRequestedAt = new Date(Date.now() - 60_000).toISOString();
     const approvalExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
 
@@ -1303,7 +1310,7 @@ describe('patrolInvestigationContextModel', () => {
       subject: 'High CPU usage on web-server',
       statusLabel: 'Completed · Fix Queued · High confidence',
       detailLines: [
-        'Attention: active critical finding; regressed 2 times; last regression 2026-05-06T12:06:00Z; loop awaiting approval; approval approval-1; live approval pending; destructive proposed fix; fix queued for governed review',
+        'Attention: active critical finding; regressed 2 times; last regression 2 hours ago; loop awaiting approval; approval approval-1; live approval pending; destructive proposed fix; fix queued for governed review',
         'Backup job saturated CPU.',
         'Approve a controlled restart after the backup completes.',
         `Decision: review live governed approval approval-1 before execution; approval pending; target web-server; expires ${approvalExpiresAt}; requested ${approvalRequestedAt}; proposed fix fix-1; risk high; destructive true`,
@@ -1320,6 +1327,7 @@ describe('patrolInvestigationContextModel', () => {
       ],
     });
     expect(JSON.stringify(briefing)).not.toContain('systemctl restart workload.service');
+    vi.useRealTimers();
   });
 
   it('builds remediation plan Assistant handoff context without exposing raw commands', () => {
