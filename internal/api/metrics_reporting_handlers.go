@@ -60,8 +60,27 @@ func normalizeReportResourceType(raw string) (string, error) {
 
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
-	mtMonitor       *monitoring.MultiTenantMonitor
-	recoveryManager *recoverymanager.Manager
+	mtMonitor        *monitoring.MultiTenantMonitor
+	recoveryManager  *recoverymanager.Manager
+	narratorResolver func(ctx context.Context) (reporting.Narrator, reporting.FindingsProvider)
+}
+
+// SetNarratorResolver wires an optional resolver that returns the per-tenant
+// AI narrator and Patrol findings provider for a request. When unset, or
+// when the resolver returns nil, reports use the deterministic heuristic
+// narrator and skip findings enrichment.
+func (h *ReportingHandlers) SetNarratorResolver(resolver func(ctx context.Context) (reporting.Narrator, reporting.FindingsProvider)) {
+	if h == nil {
+		return
+	}
+	h.narratorResolver = resolver
+}
+
+func (h *ReportingHandlers) resolveNarrator(ctx context.Context) (reporting.Narrator, reporting.FindingsProvider) {
+	if h == nil || h.narratorResolver == nil {
+		return nil, nil
+	}
+	return h.narratorResolver(ctx)
 }
 
 func performanceReportDefinition() reporting.PerformanceReportDefinition {
@@ -456,6 +475,11 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	if snapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), orgID); ok {
 		h.enrichReportRequest(r.Context(), orgID, &req, snapshot, start, end)
 	}
+
+	// Wire the per-tenant AI narrator and Patrol findings provider when
+	// configured. Both are nil-safe at the engine layer; absence falls
+	// back to the heuristic narrator with no findings section.
+	req.Narrator, req.FindingsProvider = h.resolveNarrator(r.Context())
 
 	data, contentType, err := engine.Generate(req)
 	if err != nil {

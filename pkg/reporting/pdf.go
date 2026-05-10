@@ -2,9 +2,11 @@ package reporting
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-pdf/fpdf"
@@ -243,6 +245,17 @@ func (g *PDFGenerator) writeExecutiveSummary(pdf *fpdf.Fpdf, data *ReportData) {
 
 	pdf.SetY(pdf.GetY() + 15)
 
+	// AI-generated executive prose, rendered between the deterministic
+	// health card and the deterministic Quick Stats table. Only shown when
+	// the narrator (AI or heuristic) supplied prose; the heuristic narrator
+	// leaves this empty so existing reports look unchanged when AI is off.
+	if data.Narrative != nil && strings.TrimSpace(data.Narrative.ExecutiveSummary) != "" {
+		pdf.SetFont("Arial", "", 10)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.MultiCell(cardWidth, 5, data.Narrative.ExecutiveSummary, "", "L", false)
+		pdf.Ln(3)
+	}
+
 	// Quick Stats - simple table format (avoids fpdf positioning bugs)
 	pdf.SetFont("Arial", "B", 11)
 	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
@@ -379,6 +392,29 @@ func (g *PDFGenerator) writeExecutiveSummary(pdf *fpdf.Fpdf, data *ReportData) {
 		}
 	}
 
+	// Period-over-period comparison. The AI narrator populates this when
+	// the engine supplied prior-window stats; the heuristic narrator leaves
+	// it empty.
+	if data.Narrative != nil {
+		comparison := strings.TrimSpace(data.Narrative.PeriodComparison)
+		if comparison != "" {
+			pdf.Ln(5)
+			pdf.SetFont("Arial", "B", 11)
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			pdf.CellFormat(0, 8, "Period-over-period changes", "", 1, "L", false, 0, "")
+			pdf.Ln(2)
+			pdf.SetFont("Arial", "", 9)
+			pdf.MultiCell(pageWidth-40, 5, comparison, "", "L", false)
+		}
+		disclaimer := strings.TrimSpace(data.Narrative.Disclaimer)
+		if disclaimer != "" {
+			pdf.Ln(4)
+			pdf.SetFont("Arial", "I", 8)
+			pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+			pdf.MultiCell(pageWidth-40, 4, disclaimer, "", "L", false)
+		}
+	}
+
 	pdf.Ln(10)
 }
 
@@ -389,147 +425,55 @@ type observation struct {
 	color [3]int
 }
 
-// generateObservations analyzes the data and generates key observations
+// generateObservations returns the observation bullets for the executive
+// summary. When data.Narrative is set (AI-generated or pre-computed
+// heuristic), its bullets are used directly. Otherwise the heuristic
+// narrator is invoked synchronously.
 func (g *PDFGenerator) generateObservations(data *ReportData) []observation {
-	var obs []observation
-
-	// Analyze CPU
-	if stats, ok := data.Summary.ByMetric["cpu"]; ok {
-		if stats.Max > 90 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("CPU peaked at %.1f%% - potential capacity constraint", stats.Max),
-				color: colorDanger,
-			})
-		} else if stats.Avg < 20 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("CPU averaging %.1f%% - resource is underutilized", stats.Avg),
-				color: colorAccent,
-			})
-		} else {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("CPU usage normal (avg %.1f%%, max %.1f%%)", stats.Avg, stats.Max),
-				color: colorAccent,
-			})
-		}
-	}
-
-	// Analyze Memory
-	if stats, ok := data.Summary.ByMetric["memory"]; ok {
-		if stats.Avg > 85 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("Memory consistently high at %.1f%% avg - consider scaling", stats.Avg),
-				color: colorDanger,
-			})
-		} else if stats.Max > 95 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("Memory peaked at %.1f%% - near capacity", stats.Max),
-				color: colorWarning,
-			})
-		} else {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("Memory usage healthy (avg %.1f%%)", stats.Avg),
-				color: colorAccent,
-			})
-		}
-	}
-
-	// Analyze Disk
-	diskKey := "disk"
-	if _, hasDisk := data.Summary.ByMetric["disk"]; !hasDisk {
-		if _, hasUsage := data.Summary.ByMetric["usage"]; hasUsage {
-			diskKey = "usage"
-		}
-	}
-	if stats, ok := data.Summary.ByMetric[diskKey]; ok {
-		if stats.Avg > 85 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("Disk at %.1f%% - plan capacity expansion", stats.Avg),
-				color: colorDanger,
-			})
-		} else if stats.Avg > 70 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("Disk at %.1f%% - monitor growth trend", stats.Avg),
-				color: colorWarning,
-			})
-		} else {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("Disk usage acceptable at %.1f%%", stats.Avg),
-				color: colorAccent,
-			})
-		}
-	}
-
-	// Alert summary
-	resolved := 0
-	for _, alert := range data.Alerts {
-		if alert.ResolvedTime != nil {
-			resolved++
-		}
-	}
-	if resolved > 0 {
-		obs = append(obs, observation{
-			icon:  "-",
-			text:  fmt.Sprintf("%d alerts were triggered and resolved during this period", resolved),
-			color: colorSecondary,
-		})
-	}
-
-	// Physical disk health check (WearLevel = SSD life remaining, 100% = healthy, 0% = end of life)
-	for _, disk := range data.Disks {
-		if disk.WearLevel > 0 && disk.WearLevel <= 10 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("CRITICAL: Disk %s has only %d%% life remaining - replace immediately", disk.Device, disk.WearLevel),
-				color: colorDanger,
-			})
-		} else if disk.WearLevel > 0 && disk.WearLevel <= 30 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("Disk %s has %d%% life remaining - plan replacement", disk.Device, disk.WearLevel),
-				color: colorWarning,
-			})
-		}
-		// Check disk health
-		if disk.Health == "FAILED" {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("CRITICAL: Disk %s SMART health check FAILED", disk.Device),
-				color: colorDanger,
-			})
-		}
-	}
-
-	// Uptime observation
-	if data.Resource != nil && data.Resource.Uptime > 0 {
-		uptimeDays := data.Resource.Uptime / 86400
-		if uptimeDays > 90 {
-			obs = append(obs, observation{
-				icon:  "-",
-				text:  fmt.Sprintf("System uptime: %d days - consider scheduling maintenance", uptimeDays),
-				color: colorWarning,
-			})
-		}
-	}
-
-	// If no observations, add a default one
-	if len(obs) == 0 {
-		obs = append(obs, observation{
+	bullets := narrativeBulletsForRender(data)
+	if len(bullets) == 0 {
+		return []observation{{
 			icon:  "-",
 			text:  "Insufficient data for detailed analysis",
 			color: colorTextMuted,
+		}}
+	}
+	out := make([]observation, 0, len(bullets))
+	for _, b := range bullets {
+		out = append(out, observation{
+			icon:  "-",
+			text:  b.Text,
+			color: bulletColor(b.Severity),
 		})
 	}
+	return out
+}
 
-	return obs
+func narrativeBulletsForRender(data *ReportData) []NarrativeBullet {
+	if data == nil {
+		return nil
+	}
+	if data.Narrative != nil && len(data.Narrative.Observations) > 0 {
+		return data.Narrative.Observations
+	}
+	in := narrativeInputFromReport(data, nil, nil)
+	out, _ := HeuristicNarrator{}.Narrate(context.Background(), in)
+	return out.Observations
+}
+
+func bulletColor(severity string) [3]int {
+	switch severity {
+	case NarrativeSeverityCritical:
+		return colorDanger
+	case NarrativeSeverityWarning:
+		return colorWarning
+	case NarrativeSeverityInfo:
+		return colorSecondary
+	case NarrativeSeverityOK:
+		return colorAccent
+	default:
+		return colorTextMuted
+	}
 }
 
 // calculateTrend compares first half to second half of data points
@@ -566,78 +510,19 @@ func (g *PDFGenerator) calculateTrend(data *ReportData, metricType string) strin
 	return "(stable)"
 }
 
-// generateRecommendations creates actionable recommendations based on data
+// generateRecommendations returns the recommendations list for the executive
+// summary. When data.Narrative is set, its recommendations are returned
+// directly. Otherwise the heuristic narrator is invoked synchronously. The
+// criticalAlerts and warningAlerts arguments are retained for callers but
+// are derived from data.Alerts inside the heuristic narrator.
 func (g *PDFGenerator) generateRecommendations(data *ReportData, criticalAlerts, warningAlerts int) []string {
-	var recs []string
-
-	// Critical disk health - highest priority (WearLevel = life remaining, 100% = healthy)
-	for _, disk := range data.Disks {
-		if disk.WearLevel > 0 && disk.WearLevel <= 10 {
-			recs = append(recs, fmt.Sprintf("Replace disk %s immediately (only %d%% life remaining)", disk.Device, disk.WearLevel))
-		} else if disk.WearLevel > 0 && disk.WearLevel <= 30 {
-			recs = append(recs, fmt.Sprintf("Schedule replacement for disk %s within 3-6 months (%d%% life remaining)", disk.Device, disk.WearLevel))
-		}
-		if disk.Health == "FAILED" {
-			recs = append(recs, fmt.Sprintf("Investigate and replace disk %s - SMART health check failed", disk.Device))
-		}
+	_, _ = criticalAlerts, warningAlerts
+	if data != nil && data.Narrative != nil && len(data.Narrative.Recommendations) > 0 {
+		return data.Narrative.Recommendations
 	}
-
-	// Critical alerts need attention
-	if criticalAlerts > 0 {
-		recs = append(recs, "Investigate and resolve critical alerts immediately")
-	}
-
-	// High resource usage
-	if stats, ok := data.Summary.ByMetric["memory"]; ok {
-		if stats.Avg > 85 {
-			recs = append(recs, "Consider adding memory or optimizing memory-intensive workloads")
-		}
-	}
-	if stats, ok := data.Summary.ByMetric["cpu"]; ok {
-		if stats.Max > 90 {
-			recs = append(recs, "Review CPU-intensive processes during peak usage periods")
-		}
-	}
-
-	// Disk space
-	diskKey := "disk"
-	if _, ok := data.Summary.ByMetric["disk"]; !ok {
-		diskKey = "usage"
-	}
-	if stats, ok := data.Summary.ByMetric[diskKey]; ok {
-		if stats.Avg > 85 {
-			recs = append(recs, "Clean up disk space or expand storage capacity")
-		}
-	}
-
-	// Storage pool warnings
-	for _, storage := range data.Storage {
-		if storage.UsagePerc >= 90 {
-			recs = append(recs, fmt.Sprintf("Expand storage pool '%s' (currently at %.0f%% capacity)", storage.Name, storage.UsagePerc))
-		}
-	}
-
-	// Long uptime
-	if data.Resource != nil && data.Resource.Uptime > 0 {
-		uptimeDays := data.Resource.Uptime / 86400
-		if uptimeDays > 90 {
-			recs = append(recs, "Schedule maintenance window to apply pending updates and reboot")
-		}
-	}
-
-	// Underutilization suggestion
-	if stats, ok := data.Summary.ByMetric["cpu"]; ok {
-		if stats.Avg < 10 && len(recs) == 0 {
-			recs = append(recs, "System is underutilized - consider consolidating workloads")
-		}
-	}
-
-	// Default good state message
-	if len(recs) == 0 {
-		recs = append(recs, "No immediate action required - continue monitoring")
-	}
-
-	return recs
+	in := narrativeInputFromReport(data, nil, nil)
+	out, _ := HeuristicNarrator{}.Narrate(context.Background(), in)
+	return out.Recommendations
 }
 
 // getStatColor returns color based on percentage value

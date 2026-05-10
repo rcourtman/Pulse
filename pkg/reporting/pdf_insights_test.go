@@ -67,6 +67,11 @@ func TestGenerateRecommendations(t *testing.T) {
 		}},
 		Storage: []StorageInfo{{Name: "local", UsagePerc: 95}},
 		Disks:   []DiskInfo{{Device: "sda", WearLevel: 5, Health: "FAILED"}},
+		Alerts: []AlertInfo{
+			{Level: "critical", Type: "cpu", Message: "high cpu"},
+			{Level: "critical", Type: "memory", Message: "high memory"},
+			{Level: "warning", Type: "disk", Message: "disk pressure"},
+		},
 		Resource: &ResourceInfo{
 			Uptime: 100 * 86400,
 		},

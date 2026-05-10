@@ -1,6 +1,7 @@
 package reporting
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,6 +10,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
 )
+
+// narrativeTimeout caps how long the engine waits for an external narrator
+// (typically an LLM-backed implementation). On timeout the engine falls
+// back to the heuristic narrator so a report is always returned.
+const narrativeTimeout = 30 * time.Second
 
 // ReportEngine implements the reporting.Engine interface with
 // full CSV and PDF generation capabilities.
@@ -162,11 +168,19 @@ func (e *ReportEngine) Generate(req MetricReportRequest) (data []byte, contentTy
 		return nil, "", fmt.Errorf("failed to query metrics: %w", err)
 	}
 
+	// Build narrative interpretation. If req.Narrator is supplied (typically
+	// an LLM-backed implementation) it is invoked with a bounded timeout;
+	// nil/error/timeout falls back to the heuristic narrator. The prior
+	// period is queried with the same window length offset back so deltas
+	// can be expressed when the narrator wants them.
+	e.attachNarrative(reportData, req)
+
 	log.Debug().
 		Str("resourceType", reportData.ResourceType).
 		Str("resourceID", req.ResourceID).
 		Str("format", string(req.Format)).
 		Int("dataPoints", reportData.TotalPoints).
+		Str("narrativeSource", narrativeSource(reportData)).
 		Msg("Generating report")
 
 	switch req.Format {
@@ -209,6 +223,13 @@ type ReportData struct {
 	Backups  []BackupInfo
 	Storage  []StorageInfo
 	Disks    []DiskInfo
+
+	// Interpretation layer (optional). When set, the renderer prefers these
+	// over recomputing heuristic observations/recommendations inline. The
+	// engine populates Narrative when the request supplies a Narrator.
+	Narrative   *Narrative
+	PriorPeriod *PriorPeriodInput
+	Findings    []FindingSummary
 }
 
 // MetricDataPoint represents a single data point in a report.
@@ -420,6 +441,84 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 	}
 
 	return data, contentType, nil
+}
+
+// attachNarrative populates reportData.PriorPeriod, Findings and Narrative
+// using req.Narrator (when supplied). Always populates Narrative — falling
+// back to the heuristic narrator on nil/error/timeout — so the renderer
+// has a single source of truth.
+func (e *ReportEngine) attachNarrative(reportData *ReportData, req MetricReportRequest) {
+	if reportData == nil {
+		return
+	}
+
+	prior := e.priorPeriodFor(req)
+	reportData.PriorPeriod = prior
+
+	var findings []FindingSummary
+	if req.FindingsProvider != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), narrativeTimeout)
+		findings = req.FindingsProvider.FindingsForReport(ctx, req.ResourceID, req.Start, req.End)
+		cancel()
+	}
+	reportData.Findings = findings
+
+	input := narrativeInputFromReport(reportData, prior, findings)
+
+	if req.Narrator == nil {
+		out, _ := HeuristicNarrator{}.Narrate(context.Background(), input)
+		out.Source = NarrativeSourceHeuristic
+		reportData.Narrative = &out
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), narrativeTimeout)
+	defer cancel()
+	out := narrate(ctx, req.Narrator, input)
+	reportData.Narrative = &out
+}
+
+// priorPeriodFor returns aggregate stats for the comparable prior window
+// (same length, ending at req.Start). Returns nil when the window is empty
+// or the metrics store has no data for the prior range.
+func (e *ReportEngine) priorPeriodFor(req MetricReportRequest) *PriorPeriodInput {
+	store := e.getMetricsStore()
+	if store == nil {
+		return nil
+	}
+	duration := req.End.Sub(req.Start)
+	if duration <= 0 {
+		return nil
+	}
+	priorEnd := req.Start
+	priorStart := priorEnd.Add(-duration)
+	priorReq := req
+	priorReq.Start = priorStart
+	priorReq.End = priorEnd
+	priorReq.Title = ""
+	priorReq.Resource = nil
+	priorReq.Alerts = nil
+	priorReq.Backups = nil
+	priorReq.Storage = nil
+	priorReq.Disks = nil
+	priorReq.Narrator = nil
+	priorReq.FindingsProvider = nil
+
+	priorData, err := e.queryMetrics(priorReq)
+	if err != nil || priorData == nil || len(priorData.Summary.ByMetric) == 0 {
+		return nil
+	}
+	return &PriorPeriodInput{
+		Period:      TimeRange{Start: priorStart, End: priorEnd},
+		MetricStats: priorData.Summary.ByMetric,
+	}
+}
+
+func narrativeSource(data *ReportData) string {
+	if data == nil || data.Narrative == nil {
+		return ""
+	}
+	return data.Narrative.Source
 }
 
 // GetResourceTypeDisplayName returns a human-readable name for resource types.

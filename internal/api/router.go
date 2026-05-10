@@ -60,6 +60,7 @@ import (
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	metricstore "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
 
@@ -587,6 +588,28 @@ func (r *Router) setupRoutes() {
 		hostMetadataHandler.Store(),
 	)
 	r.aiSettingsHandler.SetMetadataProvider(metadataProvider)
+
+	// Wire the per-tenant AI narrator and Patrol findings provider into
+	// reporting. The AI service implements both reporting.Narrator and
+	// reporting.FindingsProvider; when not configured for the tenant the
+	// engine falls back to the heuristic narrator with no findings section.
+	if r.reportingHandlers != nil {
+		settings := r.aiSettingsHandler
+		r.reportingHandlers.SetNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FindingsProvider) {
+			if settings == nil {
+				return nil, nil
+			}
+			svc := settings.GetAIService(ctx)
+			if svc == nil {
+				return nil, nil
+			}
+			cfg := svc.GetAIConfig()
+			if cfg == nil || !cfg.Enabled {
+				return nil, nil
+			}
+			return svc, svc
+		})
+	}
 
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)

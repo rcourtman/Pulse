@@ -28,6 +28,14 @@ type MetricReportRequest struct {
 	Backups  []BackupInfo  // Backup information for VMs/containers
 	Storage  []StorageInfo // Storage pools (for nodes)
 	Disks    []DiskInfo    // Physical disk health (for nodes)
+
+	// Optional narrative interpretation. When Narrator is non-nil the
+	// engine builds a NarrativeInput from the queried report data and asks
+	// it to produce the executive summary; on error or nil it falls back to
+	// the heuristic narrator. Findings are passed through to NarrativeInput
+	// so a narrator can reference Patrol activity in the period.
+	Narrator         Narrator
+	FindingsProvider FindingsProvider
 }
 
 // ResourceInfo contains details about the resource being reported on
