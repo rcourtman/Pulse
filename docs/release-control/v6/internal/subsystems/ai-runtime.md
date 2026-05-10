@@ -1759,3 +1759,21 @@ prompt budget. Reporting is therefore an additive consumer of AI
 runtime, not a new ownership boundary, and the narrator/findings
 surfaces inherit the same governance the rest of the canonical AI
 runtime already enforces.
+
+The same canonical AI runtime now also owns the fleet-level report
+narrative through `report_fleet_narrator.go`. `Service` implements
+`pkg/reporting.FleetNarrator` with its own use-case label
+(`report_narrative_fleet`) so fleet vs single-resource spend is
+distinguishable in the cost ledger, and so the budget gate
+(`enforceBudget`) and dashboard taxonomy can address the two
+separately. The fleet payload is denormalised through
+`buildReportFleetPayload` into compact per-resource rows plus a
+fleet-wide aggregate so prompt cost scales linearly with fleet
+size without exploding token usage. The same fail-closed invariant
+holds: nil provider, parse failure, empty narrative, or context
+cancellation returns an error so the reporting engine falls back to
+`HeuristicFleetNarrator`. Single-resource report narration is
+deliberately not propagated through the multi-report path; a
+50-resource fleet report performs exactly one AI call (the fleet
+narrator) rather than 51 (one per resource plus a fleet-level
+summary).

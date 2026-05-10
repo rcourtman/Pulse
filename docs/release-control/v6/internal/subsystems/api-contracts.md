@@ -4389,10 +4389,25 @@ narrator must fail closed: nil provider, parse failure, timeout, or
 empty response causes the engine to fall back to the heuristic
 narrative without surfacing the AI failure to the caller, so reporting
 is never blocked by AI availability.
-Multi-resource fleet reports (`engine.GenerateMulti`) intentionally
-remain heuristic-only at this transport layer: a fleet narrative is a
-distinct contract shape from a single-resource narrative, and the
-narrator surface in `MetricReportRequest` does not propagate through
-`MultiReportRequest`. Adding fleet-level AI narrative is a future
-contract delta and must extend the multi-report request shape
-explicitly rather than reusing the per-resource narrator hook.
+Multi-resource fleet reports (`engine.GenerateMulti`) now also carry an
+optional fleet-level narrative through a distinct
+`pkg/reporting.FleetNarrator` interface, kept separate from the
+single-resource `Narrator` because the input shape is different (one
+cross-resource view rather than one resource's stats with a prior
+window). `MultiReportRequest` gains optional `FleetNarrator`,
+`Narrator`, and `FindingsProvider` fields; `MultiReportData` gains
+`FleetNarrative *FleetNarrative` populated by the engine before
+rendering. Per-resource narratives are intentionally not produced on
+the multi path: a 50-resource fleet report would otherwise trigger 50
+AI calls. Synthesis lives in the single fleet-level call instead.
+The fleet PDF renders the FleetNarrative in the fleet summary cover
+when present, replacing the legacy "Highest CPU / Most alerts"
+heuristic bullets. The narrative section owns: an executive prose
+paragraph, a `Resources to investigate` outlier list (named
+resources, severity-coloured), a `Cross-cutting patterns` section,
+recommendations, an optional period-comparison paragraph, and a
+provenance footer when `Source` is `ai`. The deterministic resource
+summary table (resource, type, status, avg CPU/memory/disk, alert
+count) remains rendered from the same per-resource aggregates
+above the narrative section, so every named outlier is verifiable
+against the table immediately below it.
