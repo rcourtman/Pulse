@@ -38,6 +38,22 @@ func (s *stubReportingEngine) GenerateMulti(req reporting.MultiReportRequest) ([
 	return s.data, s.contentType, nil
 }
 
+func (s *stubReportingEngine) NarrativeFor(req reporting.MetricReportRequest) (*reporting.Narrative, error) {
+	s.lastReq = req
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &reporting.Narrative{Source: reporting.NarrativeSourceHeuristic}, nil
+}
+
+func (s *stubReportingEngine) FleetNarrativeFor(req reporting.MultiReportRequest) (*reporting.FleetNarrative, error) {
+	s.lastMulti = req
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &reporting.FleetNarrative{Source: reporting.NarrativeSourceHeuristic}, nil
+}
+
 func TestReportingHandlers_MethodNotAllowed(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/api/reporting", nil)

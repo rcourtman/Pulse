@@ -16,6 +16,16 @@ func (f *fakeEngine) GenerateMulti(req MultiReportRequest) ([]byte, string, erro
 	return []byte("ok"), "text/plain", nil
 }
 
+func (f *fakeEngine) NarrativeFor(req MetricReportRequest) (*Narrative, error) {
+	f.called = true
+	return &Narrative{Source: NarrativeSourceHeuristic}, nil
+}
+
+func (f *fakeEngine) FleetNarrativeFor(req MultiReportRequest) (*FleetNarrative, error) {
+	f.called = true
+	return &FleetNarrative{Source: NarrativeSourceHeuristic}, nil
+}
+
 func TestSetGetEngine(t *testing.T) {
 	engine := &fakeEngine{}
 	SetEngine(engine)

@@ -91,8 +91,18 @@ func TestEngineGenerate_UsesSuppliedNarrator(t *testing.T) {
 		Format:       FormatPDF,
 		Narrator:     stub,
 	}
-	if _, _, err := engine.Generate(req); err != nil {
-		t.Fatalf("Generate: %v", err)
+	// Metrics writes are buffered; retry until the narrator sees stats.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		stub.seen = NarrativeInput{}
+		stub.called = false
+		if _, _, err := engine.Generate(req); err != nil {
+			t.Fatalf("Generate: %v", err)
+		}
+		if _, ok := stub.seen.MetricStats["cpu"]; ok {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	if !stub.called {
 		t.Fatal("narrator was not invoked")
@@ -236,6 +246,126 @@ func TestEngineGenerate_FindingsProviderInvoked(t *testing.T) {
 	}
 	if len(stub.seen.Findings) != 1 || stub.seen.Findings[0].Title != "Patrol caught a thing" {
 		t.Fatalf("Findings not threaded to narrator: %#v", stub.seen.Findings)
+	}
+}
+
+// TestEngineNarrativeFor_ReturnsStructuredNarrativeWithoutRendering
+// verifies the non-rendering entry point used by Pulse Assistant tools:
+// it must produce a Narrative grounded in the queried metrics without
+// running the PDF or CSV generator.
+func TestEngineNarrativeFor_ReturnsStructuredNarrativeWithoutRendering(t *testing.T) {
+	store := newReportingMetricsStore(t)
+	defer store.Close()
+
+	now := time.Now()
+	nodeID := "node-narrate-1"
+	for i := 0; i < 12; i++ {
+		ts := now.Add(time.Duration(-60+i*5) * time.Minute)
+		store.Write("node", nodeID, "cpu", 55.0, ts)
+	}
+	store.Flush()
+
+	engine := NewReportEngine(EngineConfig{MetricsStore: store})
+	req := MetricReportRequest{
+		ResourceType: "node",
+		ResourceID:   nodeID,
+		Start:        now.Add(-2 * time.Hour),
+		End:          now.Add(time.Minute),
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	var narrative *Narrative
+	for time.Now().Before(deadline) {
+		var err error
+		narrative, err = engine.NarrativeFor(req)
+		if err != nil {
+			t.Fatalf("NarrativeFor: %v", err)
+		}
+		if narrative != nil && len(narrative.Observations) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if narrative == nil {
+		t.Fatal("expected non-nil narrative")
+	}
+	if narrative.Source != NarrativeSourceHeuristic {
+		t.Errorf("Source = %q, want heuristic (no narrator supplied)", narrative.Source)
+	}
+	if len(narrative.Observations) == 0 {
+		t.Error("expected at least one observation from the heuristic narrator")
+	}
+}
+
+// TestEngineFleetNarrativeFor_ReturnsStructuredFleetNarrativeWithoutRendering
+// is the multi-resource counterpart.
+func TestEngineFleetNarrativeFor_ReturnsStructuredFleetNarrativeWithoutRendering(t *testing.T) {
+	store := newReportingMetricsStore(t)
+	defer store.Close()
+
+	now := time.Now()
+	for _, nodeID := range []string{"node-fleet-a", "node-fleet-b"} {
+		for i := 0; i < 6; i++ {
+			ts := now.Add(time.Duration(-30+i*5) * time.Minute)
+			store.Write("node", nodeID, "cpu", 60.0, ts)
+		}
+	}
+	store.Flush()
+
+	engine := NewReportEngine(EngineConfig{MetricsStore: store})
+	req := MultiReportRequest{
+		Title: "Fleet narrative test",
+		Start: now.Add(-1 * time.Hour),
+		End:   now.Add(time.Minute),
+		Resources: []MetricReportRequest{
+			{ResourceType: "node", ResourceID: "node-fleet-a"},
+			{ResourceType: "node", ResourceID: "node-fleet-b"},
+		},
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	var fleet *FleetNarrative
+	for time.Now().Before(deadline) {
+		var err error
+		fleet, err = engine.FleetNarrativeFor(req)
+		if err != nil {
+			t.Fatalf("FleetNarrativeFor: %v", err)
+		}
+		if fleet != nil && fleet.HealthStatus != "" {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if fleet == nil {
+		t.Fatal("expected non-nil fleet narrative")
+	}
+	if fleet.Source != NarrativeSourceHeuristic {
+		t.Errorf("Source = %q, want heuristic", fleet.Source)
+	}
+}
+
+// TestEngineFleetNarrativeFor_NoResourcesReturnsError verifies the
+// non-rendering fleet entry point matches GenerateMulti's error contract
+// when zero resources are requested.
+func TestEngineFleetNarrativeFor_NoResourcesReturnsError(t *testing.T) {
+	store := newReportingMetricsStore(t)
+	defer store.Close()
+	engine := NewReportEngine(EngineConfig{MetricsStore: store})
+	now := time.Now()
+	req := MultiReportRequest{
+		Start:     now.Add(-1 * time.Hour),
+		End:       now,
+		Resources: nil,
+	}
+	if _, err := engine.FleetNarrativeFor(req); err == nil {
+		t.Fatal("expected error when no resources are requested")
+	}
+}
+
+// TestEngineFleetNarrativeFor_NoMetricsStoreReturnsError covers the
+// guard at the top of the entry point.
+func TestEngineFleetNarrativeFor_NoMetricsStoreReturnsError(t *testing.T) {
+	engine := NewReportEngine(EngineConfig{})
+	if _, err := engine.FleetNarrativeFor(MultiReportRequest{}); err == nil {
+		t.Fatal("expected error when metrics store is nil")
 	}
 }
 

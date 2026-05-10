@@ -564,6 +564,81 @@ func (e *ReportEngine) attachFleetNarrative(multiData *MultiReportData, req Mult
 	multiData.FleetNarrative = &out
 }
 
+// NarrativeFor returns the structured narrative for a single-resource
+// report request without rendering PDF or CSV. This is the entry point
+// non-rendering callers (e.g. the Assistant chat session) use when they
+// want the same retrospective synthesis the report PDF carries but in a
+// form they can present in chat. Same query path, same narrator
+// resolution, same fail-closed-to-heuristic fallback as Generate; just
+// no fpdf/csv output stage.
+func (e *ReportEngine) NarrativeFor(req MetricReportRequest) (*Narrative, error) {
+	if e.getMetricsStore() == nil {
+		return nil, fmt.Errorf("metrics store not initialized")
+	}
+	reportData, err := e.queryMetrics(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query metrics: %w", err)
+	}
+	e.attachNarrative(reportData, req)
+	if reportData.Narrative == nil {
+		return nil, fmt.Errorf("narrative generation produced no result")
+	}
+	return reportData.Narrative, nil
+}
+
+// FleetNarrativeFor returns the structured fleet narrative for a
+// multi-resource report request without rendering. Same shape as
+// NarrativeFor for the single-resource path. Returns an error if no
+// resource queries succeed; otherwise returns the narrative even if a
+// subset of resources failed (the narrator is given what loaded, and
+// the failed-resource list is logged at warn level by queryMetrics).
+func (e *ReportEngine) FleetNarrativeFor(req MultiReportRequest) (*FleetNarrative, error) {
+	if e.getMetricsStore() == nil {
+		return nil, fmt.Errorf("metrics store not initialized")
+	}
+	multiData := &MultiReportData{
+		Title:       req.Title,
+		Start:       req.Start,
+		End:         req.End,
+		GeneratedAt: time.Now(),
+	}
+	if multiData.Title == "" {
+		multiData.Title = "Fleet Performance Report"
+	}
+	var successCount int
+	for _, resReq := range req.Resources {
+		resReq.Start = req.Start
+		resReq.End = req.End
+		resReq.MetricType = req.MetricType
+		if resReq.Narrator == nil {
+			resReq.Narrator = req.Narrator
+		}
+		if resReq.FindingsProvider == nil {
+			resReq.FindingsProvider = req.FindingsProvider
+		}
+		reportData, queryErr := e.queryMetrics(resReq)
+		if queryErr != nil {
+			log.Warn().
+				Str("resourceType", resReq.ResourceType).
+				Str("resourceID", resReq.ResourceID).
+				Err(queryErr).
+				Msg("Skipping resource in fleet narrative: failed to query metrics")
+			continue
+		}
+		multiData.Resources = append(multiData.Resources, reportData)
+		multiData.TotalPoints += reportData.TotalPoints
+		successCount++
+	}
+	if successCount == 0 {
+		return nil, fmt.Errorf("all resources failed to query metrics")
+	}
+	e.attachFleetNarrative(multiData, req)
+	if multiData.FleetNarrative == nil {
+		return nil, fmt.Errorf("fleet narrative generation produced no result")
+	}
+	return multiData.FleetNarrative, nil
+}
+
 // GetResourceTypeDisplayName returns a human-readable name for resource types.
 func GetResourceTypeDisplayName(resourceType string) string {
 	switch CanonicalResourceType(resourceType) {

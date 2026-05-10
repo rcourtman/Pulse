@@ -152,9 +152,15 @@ type MultiReportData struct {
 
 // Engine defines the interface for report generation.
 // This allows the enterprise version to provide PDF/CSV generation.
+//
+// NarrativeFor and FleetNarrativeFor return the structured narrative
+// without rendering, for callers that want the synthesis layer in a
+// non-PDF form (Pulse Assistant tool calls, programmatic consumers).
 type Engine interface {
 	Generate(req MetricReportRequest) (data []byte, contentType string, err error)
 	GenerateMulti(req MultiReportRequest) (data []byte, contentType string, err error)
+	NarrativeFor(req MetricReportRequest) (*Narrative, error)
+	FleetNarrativeFor(req MultiReportRequest) (*FleetNarrative, error)
 }
 
 var (
