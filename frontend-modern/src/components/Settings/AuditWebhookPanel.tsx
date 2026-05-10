@@ -1,10 +1,11 @@
-import { For, Show, type Component } from 'solid-js';
+import { For, Show, createSignal, type Component } from 'solid-js';
 import Shield from 'lucide-solid/icons/shield';
 import Globe from 'lucide-solid/icons/globe';
 import Plus from 'lucide-solid/icons/plus';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import ExternalLink from 'lucide-solid/icons/external-link';
 import { Card } from '@/components/shared/Card';
+import { Dialog } from '@/components/shared/Dialog';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formControl } from '@/components/shared/Form';
@@ -26,6 +27,7 @@ interface AuditWebhookPanelProps {
 }
 
 export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
+  const [urlToRemove, setUrlToRemove] = createSignal<string | null>(null);
   const {
     canManage,
     handleAddWebhook,
@@ -114,7 +116,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                       </span>
                     </div>
                     <button
-                      onClick={() => handleRemoveWebhook(url)}
+                      onClick={() => setUrlToRemove(url)}
                       disabled={!canManage()}
                       class="p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
                       title="Remove webhook endpoint"
@@ -169,6 +171,48 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
           </div>
         </div>
       </Card>
+
+      {/* Remove confirmation modal — webhook removal stops audit
+          deliveries to that endpoint, so guard the action behind
+          an explicit confirm. */}
+      <Show when={urlToRemove()}>
+        <Dialog
+          isOpen={true}
+          onClose={() => setUrlToRemove(null)}
+          panelClass="max-w-md"
+          ariaLabel="Remove audit webhook"
+        >
+          <div class="w-full p-6">
+            <h3 class="text-lg font-semibold text-base-content mb-2">Remove audit webhook?</h3>
+            <p class="text-sm text-muted mb-4">
+              This stops audit events from being delivered to{' '}
+              <span class="font-medium text-base-content break-all">{urlToRemove()}</span>. Any
+              external receiver using this URL will stop receiving Pulse audit traffic. You can
+              add the URL back later if needed.
+            </p>
+            <div class="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setUrlToRemove(null)}
+                class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const url = urlToRemove();
+                  setUrlToRemove(null);
+                  if (url) void handleRemoveWebhook(url);
+                }}
+                class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Remove webhook
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      </Show>
     </div>
   );
 };
