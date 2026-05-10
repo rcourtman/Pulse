@@ -17,7 +17,37 @@ import (
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
+	"github.com/rs/zerolog/log"
 )
+
+// rangeLabel maps a [start, end) window to one of the operator-facing
+// catalog ranges (24h / 7d / 30d) when the duration matches within an
+// hour, falling back to a freeform "<hours>h" string otherwise. The
+// label is logged on every report generation so usage telemetry can be
+// grouped without parsing the timestamps.
+func rangeLabel(start, end time.Time) string {
+	if start.IsZero() || end.IsZero() || !end.After(start) {
+		return ""
+	}
+	duration := end.Sub(start)
+	switch {
+	case absDuration(duration-24*time.Hour) <= time.Hour:
+		return "24h"
+	case absDuration(duration-7*24*time.Hour) <= time.Hour:
+		return "7d"
+	case absDuration(duration-30*24*time.Hour) <= time.Hour:
+		return "30d"
+	default:
+		return fmt.Sprintf("%dh", int(duration.Hours()))
+	}
+}
+
+func absDuration(d time.Duration) time.Duration {
+	if d < 0 {
+		return -d
+	}
+	return d
+}
 
 // validResourceID matches safe resource identifiers (includes colon for guest IDs like "instance:node:vmid")
 var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
@@ -491,6 +521,25 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Telemetry: structured event line per generation so usage can be
+	// audited without parsing handler timing or response bodies. Logged
+	// at info so it surfaces in default-level operator logs and so an
+	// agent grepping transcripts can group by event/org/format/range
+	// without needing a separate metrics pipeline.
+	log.Info().
+		Str("event", "reporting.single.generated").
+		Str("org_id", orgID).
+		Str("resource_type", resourceType).
+		Str("metric_type", metricType).
+		Str("format", string(format)).
+		Str("range", rangeLabel(start, end)).
+		Bool("ai_configured", narrator != nil).
+		Bool("findings_configured", findings != nil).
+		Int("bytes", len(data)).
+		Time("window_start", start).
+		Time("window_end", end).
+		Msg("Reporting: single-resource report generated")
+
 	w.Header().Set("Content-Type", contentType)
 	// Build safe filename - sanitize resourceID to prevent header injection
 	safeResourceID := sanitizeFilename(resourceID)
@@ -874,6 +923,23 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		writeErrorResponse(w, http.StatusInternalServerError, "generation_failed", "Failed to generate multi-resource report", nil)
 		return
 	}
+
+	// Telemetry: same shape as the single-resource path so usage of
+	// the two report shapes can be compared. resource_count is the
+	// caller's requested set (engine may skip individual resources on
+	// query failure; this number is the upper bound).
+	log.Info().
+		Str("event", "reporting.fleet.generated").
+		Str("org_id", orgID).
+		Str("format", string(format)).
+		Str("range", rangeLabel(start, end)).
+		Int("resource_count", len(multiReq.Resources)).
+		Bool("ai_configured", fleetNarrator != nil).
+		Bool("findings_configured", findings != nil).
+		Int("bytes", len(data)).
+		Time("window_start", start).
+		Time("window_end", end).
+		Msg("Reporting: fleet report generated")
 
 	w.Header().Set("Content-Type", contentType)
 	filename := definition.MultiAttachmentFilename(time.Now().UTC(), format)

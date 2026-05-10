@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
+	"github.com/rs/zerolog/log"
 )
 
 // registerSummarizeTools registers the pulse_summarize tool which
@@ -170,6 +171,21 @@ func (e *PulseToolExecutor) summarizeResource(
 		return NewErrorResult(fmt.Errorf("narrative generation produced no result")), nil
 	}
 
+	// Telemetry: structured event line per summarize invocation so
+	// chat-side reporting usage can be audited alongside report-PDF
+	// generation. Same event-name convention as the API handlers.
+	log.Info().
+		Str("event", "reporting.summarize.invoked").
+		Str("org_id", e.orgID).
+		Str("action", "resource").
+		Str("resource_type", canonicalType).
+		Str("narrative_source", narrative.Source).
+		Bool("ai_configured", e.reportNarrator != nil).
+		Bool("findings_configured", e.reportFindingsProvider != nil).
+		Time("window_start", start).
+		Time("window_end", end).
+		Msg("Reporting: pulse_summarize invoked")
+
 	return NewJSONResult(summarizeResourceResponse{
 		OK:              true,
 		Action:          "resource",
@@ -272,6 +288,19 @@ func (e *PulseToolExecutor) summarizeFleet(
 	if narrative == nil {
 		return NewErrorResult(fmt.Errorf("fleet narrative generation produced no result")), nil
 	}
+
+	log.Info().
+		Str("event", "reporting.summarize.invoked").
+		Str("org_id", e.orgID).
+		Str("action", "fleet").
+		Str("resource_type", canonicalDefault).
+		Int("resource_count", len(ids)).
+		Str("narrative_source", narrative.Source).
+		Bool("ai_configured", e.reportFleetNarrator != nil).
+		Bool("findings_configured", e.reportFindingsProvider != nil).
+		Time("window_start", start).
+		Time("window_end", end).
+		Msg("Reporting: pulse_summarize invoked")
 
 	return NewJSONResult(summarizeFleetResponse{
 		OK:              true,
