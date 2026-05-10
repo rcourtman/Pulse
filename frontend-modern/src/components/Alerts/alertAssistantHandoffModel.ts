@@ -2,6 +2,7 @@ import type { Alert } from '@/types/api';
 import type { AIChatContext } from '@/stores/aiChat';
 import { getCanonicalAlertId } from '@/features/alerts/identity';
 import { formatAlertValue } from '@/utils/alertFormatters';
+import { isMetricAlertType } from '@/utils/alerts';
 import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
 
 interface BuildAlertAssistantHandoffInput {
@@ -24,8 +25,15 @@ export function buildAlertAssistantHandoff({
 }: BuildAlertAssistantHandoffInput): AlertAssistantHandoff {
   const alertIdentifier = getCanonicalAlertId(alert);
   const durationText = formatAlertDuration(alert.startTime, now);
-  const currentValue = formatAlertValue(alert.value, alert.type);
-  const thresholdValue = formatAlertValue(alert.threshold, alert.type);
+  // State alerts (powered-off, unreachable, container-state, etc.) are
+  // binary or enumerated conditions, not threshold crossings. Backend
+  // sends value=0 and threshold=0 for those; rendering "current 0.0% /
+  // threshold 0.0%" in operator-facing copy is misleading default-zero
+  // noise. Suppress those fields and rely on alert.type + alert.message
+  // to convey what's wrong.
+  const hasMetricValues = isMetricAlertType(alert.type);
+  const currentValue = hasMetricValues ? formatAlertValue(alert.value, alert.type) : '';
+  const thresholdValue = hasMetricValues ? formatAlertValue(alert.threshold, alert.type) : '';
   const nodeLabel = alert.node ? alert.nodeDisplayName || alert.node : '';
   const levelLabel = formatAlertLevel(alert.level);
   const targetType = resolveAlertTargetType({
@@ -47,20 +55,32 @@ export function buildAlertAssistantHandoff({
     levelLabel,
   });
 
-  const prompt = `Investigate this ${alert.level.toUpperCase()} alert:
-
-**Resource:** ${alert.resourceName}
-**Alert Type:** ${alert.type}
-**Current Value:** ${currentValue}
-**Threshold:** ${thresholdValue}
-**Duration:** ${durationText}
-${nodeLabel ? `**Node:** ${nodeLabel}` : ''}
-
-Please:
-1. Identify the root cause
-2. Check related metrics
-3. Suggest specific remediation steps
-4. Ask for operator approval before running any diagnostic command or change`;
+  const promptLines = [
+    `Investigate this ${alert.level.toUpperCase()} alert:`,
+    ``,
+    `**Resource:** ${alert.resourceName}`,
+    `**Alert Type:** ${alert.type}`,
+  ];
+  if (hasMetricValues) {
+    promptLines.push(`**Current Value:** ${currentValue}`);
+    promptLines.push(`**Threshold:** ${thresholdValue}`);
+  }
+  promptLines.push(`**Duration:** ${durationText}`);
+  if (nodeLabel) promptLines.push(`**Node:** ${nodeLabel}`);
+  if (alert.message) promptLines.push(`**Message:** ${alert.message}`);
+  promptLines.push(``);
+  promptLines.push(`Please:`);
+  promptLines.push(`1. Identify the root cause`);
+  if (hasMetricValues) {
+    promptLines.push(`2. Check related metrics`);
+    promptLines.push(`3. Suggest specific remediation steps`);
+    promptLines.push(`4. Ask for operator approval before running any diagnostic command or change`);
+  } else {
+    promptLines.push(`2. Check what changed recently for this resource (state events, recent commands, related alerts)`);
+    promptLines.push(`3. Suggest specific remediation steps`);
+    promptLines.push(`4. Ask for operator approval before running any diagnostic command or change`);
+  }
+  const prompt = promptLines.join('\n');
 
   return {
     prompt,
@@ -83,7 +103,9 @@ Please:
         subject: `${levelLabel} ${alert.type} on ${alert.resourceName}`,
         statusLabel: `${levelLabel} alert · Active ${durationText}`,
         detailLines: [
-          `Current value ${currentValue}; threshold ${thresholdValue}`,
+          hasMetricValues
+            ? `Current value ${currentValue}; threshold ${thresholdValue}`
+            : undefined,
           nodeLabel ? `Node: ${nodeLabel}` : undefined,
           alert.message ? `Message: ${alert.message}` : undefined,
         ].filter((line): line is string => Boolean(line)),
