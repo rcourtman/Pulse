@@ -1,4 +1,4 @@
-import { JSX, Show, splitProps } from 'solid-js';
+import { JSX, Show, createEffect, splitProps } from 'solid-js';
 import { useKioskMode } from '@/hooks/useKioskMode';
 
 type PageHeaderProps = {
@@ -25,6 +25,18 @@ export function PageHeader(props: PageHeaderProps) {
   ]);
 
   const kioskMode = useKioskMode();
+
+  // When the page header title is a plain string, mirror it into
+  // document.title so browser tabs and screen-reader page-title
+  // announcements identify the specific surface (e.g. "Alert History"
+  // or "General") instead of just the top-level tab name set by
+  // AppLayout. Non-string titles (rich JSX) fall back to whatever
+  // AppLayout already set.
+  createEffect(() => {
+    if (typeof local.title === 'string' && local.title.trim()) {
+      document.title = `${local.title.trim()} · Pulse`;
+    }
+  });
 
   return (
     <Show when={!kioskMode()}>
