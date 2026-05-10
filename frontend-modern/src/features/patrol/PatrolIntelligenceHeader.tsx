@@ -189,20 +189,19 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         })()}
       </Show>
 
-      <div class="rounded-md border border-border bg-surface px-4 py-3">
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center gap-2 bg-surface-hover px-3 py-1.5 rounded-md border border-border">
-            <TogglePrimitive
-              checked={state.patrolEnabledLocal()}
-              disabled={state.isTogglingPatrol()}
-              onToggle={state.handleTogglePatrol}
-              size="sm"
-              ariaLabel="Toggle Patrol"
-            />
-            <span class="text-sm font-medium text-base-content">{runtimePresentation().label}</span>
-          </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <TogglePrimitive
+            checked={state.patrolEnabledLocal()}
+            disabled={state.isTogglingPatrol()}
+            onToggle={state.handleTogglePatrol}
+            size="sm"
+            ariaLabel="Toggle Patrol"
+          />
+          <span class="text-sm font-medium text-base-content">{runtimePresentation().label}</span>
+        </div>
 
-          <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+        <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
             <button
               onClick={() => state.handleRunPatrol()}
               disabled={
@@ -545,7 +544,6 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }
