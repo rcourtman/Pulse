@@ -468,3 +468,263 @@ func TestServer_StreamSSEOnceTranslatesEventsToNotifications(t *testing.T) {
 		t.Errorf("notification params must round-trip the SSE data field; got %s", body)
 	}
 }
+
+// TestServer_ToolsCallSendsPutBodyForWriteCapabilities pins the
+// write path the existing tools/call test (read-side, GET only)
+// did not cover: when an agent calls a non-GET/DELETE capability
+// like set_operator_state, the bridge must (a) substitute the
+// path placeholder, (b) marshal the supplied body into the
+// request body, (c) set Content-Type: application/json, and
+// (d) return the upstream success body in the MCP content block
+// with isError=false. Drift in any of those would either drop
+// the agent's data on the floor or surface success as failure
+// (and vice versa).
+func TestServer_ToolsCallSendsPutBodyForWriteCapabilities(t *testing.T) {
+	type captured struct {
+		method      string
+		path        string
+		token       string
+		contentType string
+		body        string
+	}
+	var got captured
+	mu := sync.Mutex{}
+	pulse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		got.method = r.Method
+		got.path = r.URL.Path
+		got.token = r.Header.Get("X-API-Token")
+		got.contentType = r.Header.Get("Content-Type")
+		if r.Body != nil {
+			b, _ := io.ReadAll(r.Body)
+			got.body = string(b)
+		}
+		// Mirror Pulse's PUT response: 200 with the canonical
+		// state shape, including server-populated attribution
+		// (setAt) the client cannot spoof.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"canonicalId":"vm:101","intentionallyOffline":true,"setAt":"2026-05-10T10:00:00Z","setBy":"agent:test-token"}`))
+	}))
+	defer pulse.Close()
+
+	s := &mcpServer{
+		baseURL: pulse.URL,
+		token:   "write-test-token",
+		manifest: &agentCapabilitiesManifest{
+			Version: "v1",
+			Capabilities: []agentCapability{
+				{
+					Name:             "set_operator_state",
+					Path:             "/api/resources/{resourceId}/operator-state",
+					Method:           http.MethodPut,
+					Scope:            "monitoring:write",
+					RequestBodyShape: "ResourceOperatorStateInput",
+					ErrorCodes:       []string{"operator_state_invalid"},
+				},
+			},
+		},
+		http: pulse.Client(),
+	}
+
+	params, _ := json.Marshal(map[string]any{
+		"name": "set_operator_state",
+		"arguments": map[string]any{
+			"resourceId": "vm:101",
+			"body": map[string]any{
+				"intentionallyOffline": true,
+				"note":                 "decommissioned for hardware refresh",
+			},
+		},
+	})
+	resp := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "tools/call",
+		Params:  params,
+	})
+	if resp.Error != nil {
+		t.Fatalf("tools/call: rpc error = %+v", resp.Error)
+	}
+
+	// Upstream request shape.
+	if got.method != http.MethodPut {
+		t.Errorf("upstream method = %q, want PUT", got.method)
+	}
+	if got.path != "/api/resources/vm:101/operator-state" {
+		t.Errorf("upstream path = %q; placeholder must be substituted with the resourceId arg", got.path)
+	}
+	if got.token != "write-test-token" {
+		t.Errorf("upstream X-API-Token = %q, want write-test-token", got.token)
+	}
+	if got.contentType != "application/json" {
+		t.Errorf("upstream Content-Type = %q, want application/json", got.contentType)
+	}
+
+	// The body must carry the agent-supplied JSON object verbatim.
+	// We don't pin exact whitespace because json.Marshal is free
+	// to reorder map keys, but the field-value pairs must all be
+	// present and parseable.
+	var sentBody map[string]any
+	if err := json.Unmarshal([]byte(got.body), &sentBody); err != nil {
+		t.Fatalf("upstream body must be parseable JSON; got %q (%v)", got.body, err)
+	}
+	if sentBody["intentionallyOffline"] != true {
+		t.Errorf("upstream body must round-trip intentionallyOffline=true; got %v", sentBody["intentionallyOffline"])
+	}
+	if sentBody["note"] != "decommissioned for hardware refresh" {
+		t.Errorf("upstream body must round-trip note verbatim; got %v", sentBody["note"])
+	}
+
+	// MCP result shape: 2xx upstream becomes isError=false with
+	// the upstream body in a text content block.
+	result, _ := resp.Result.(map[string]any)
+	if result["isError"] != false {
+		t.Errorf("2xx upstream must surface as isError=false; got %v", result["isError"])
+	}
+	content, _ := result["content"].([]map[string]any)
+	if len(content) != 1 {
+		t.Fatalf("content len = %d, want 1", len(content))
+	}
+	text, _ := content[0]["text"].(string)
+	if !strings.Contains(text, `"canonicalId":"vm:101"`) {
+		t.Errorf("MCP content must carry upstream response body; got %q", text)
+	}
+	// Server-populated attribution must reach the agent so it
+	// can see WHO the substrate recorded the write under (not the
+	// supplied token, but the resolved actor id).
+	if !strings.Contains(text, `"setBy":"agent:test-token"`) {
+		t.Errorf("MCP content must surface server-populated setBy field; got %q", text)
+	}
+}
+
+// TestServer_ToolsCallTopLevelArgsMakeUpRequestBody pins the
+// flexibility on the body argument: when an agent passes the
+// body fields at the top level of arguments (no nested "body"
+// key), the bridge collects everything other than path
+// placeholders into the request body. This is the shape MCP
+// clients tend to generate when they read the input schema as
+// "object with these fields"; the bridge must accept both shapes
+// so neither "body": {...} wrappers NOR top-level fields fail.
+func TestServer_ToolsCallTopLevelArgsMakeUpRequestBody(t *testing.T) {
+	var captured string
+	pulse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		captured = string(b)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer pulse.Close()
+
+	s := &mcpServer{
+		baseURL: pulse.URL,
+		token:   "test",
+		manifest: &agentCapabilitiesManifest{
+			Capabilities: []agentCapability{
+				{
+					Name:   "acknowledge_finding",
+					Path:   "/api/ai/patrol/acknowledge",
+					Method: http.MethodPost,
+				},
+			},
+		},
+		http: pulse.Client(),
+	}
+
+	params, _ := json.Marshal(map[string]any{
+		"name": "acknowledge_finding",
+		"arguments": map[string]any{
+			// No "body" key — fields are top-level.
+			"finding_id": "f-123",
+		},
+	})
+	resp := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "tools/call",
+		Params:  params,
+	})
+	if resp.Error != nil {
+		t.Fatalf("tools/call: rpc error = %+v", resp.Error)
+	}
+
+	var sent map[string]any
+	if err := json.Unmarshal([]byte(captured), &sent); err != nil {
+		t.Fatalf("captured body must be parseable JSON; got %q", captured)
+	}
+	if sent["finding_id"] != "f-123" {
+		t.Errorf("top-level finding_id must reach the upstream body; got %v", sent["finding_id"])
+	}
+}
+
+// TestServer_ToolsCallTopLevelArgsExcludesPathPlaceholders pins
+// the disambiguation rule when both a path placeholder and a
+// body field happen to be present at the top level of arguments:
+// the placeholder value goes ONLY in the URL, never duplicated
+// into the request body. Otherwise an agent that follows the
+// auto-derived schema (which lists path placeholders as
+// properties) would accidentally send {"resourceId": "vm:101",
+// ...} as the PUT body and confuse a server that doesn't expect
+// canonicalId duplication.
+func TestServer_ToolsCallTopLevelArgsExcludesPathPlaceholders(t *testing.T) {
+	type captured struct {
+		path string
+		body string
+	}
+	var got captured
+	pulse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.path = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		got.body = string(b)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer pulse.Close()
+
+	s := &mcpServer{
+		baseURL: pulse.URL,
+		token:   "test",
+		manifest: &agentCapabilitiesManifest{
+			Capabilities: []agentCapability{
+				{
+					Name:   "set_operator_state",
+					Path:   "/api/resources/{resourceId}/operator-state",
+					Method: http.MethodPut,
+				},
+			},
+		},
+		http: pulse.Client(),
+	}
+
+	params, _ := json.Marshal(map[string]any{
+		"name": "set_operator_state",
+		"arguments": map[string]any{
+			"resourceId":           "vm:101",
+			"intentionallyOffline": true,
+		},
+	})
+	resp := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "tools/call",
+		Params:  params,
+	})
+	if resp.Error != nil {
+		t.Fatalf("tools/call: rpc error = %+v", resp.Error)
+	}
+
+	if got.path != "/api/resources/vm:101/operator-state" {
+		t.Errorf("path-placeholder substitution failed; got %q", got.path)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal([]byte(got.body), &sent); err != nil {
+		t.Fatalf("body must be JSON; got %q", got.body)
+	}
+	if _, has := sent["resourceId"]; has {
+		t.Errorf("path placeholder must NOT be duplicated into the body; got %v", sent)
+	}
+	if sent["intentionallyOffline"] != true {
+		t.Errorf("non-placeholder fields must reach the body; got %v", sent)
+	}
+}
