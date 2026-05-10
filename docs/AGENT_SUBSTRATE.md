@@ -61,20 +61,29 @@ manifest-driven:
   and Pulse's tools appear natively. The adapter projects each
   manifest capability into one MCP tool with auto-derived input
   schema; adding capabilities to Pulse extends the MCP surface
-  without changes in the adapter.
+  without changes in the adapter. Run with `--emit-notifications`
+  to also translate Pulse's SSE events (`finding.created`,
+  `approval.pending`, `action.completed`) into JSON-RPC
+  notifications on the stdio channel so autonomous MCP-bound agents
+  can react to push events without holding a separate HTTP
+  connection.
 
 ## What it does not do yet
 
-- The MCP adapter does not project the SSE event stream as MCP
-  notifications. Agents that need real-time push consume the SSE
-  stream directly via HTTP.
-
 - The substrate does not yet expose the governed action-execution
-  surface (`/api/actions/plan`, `/api/actions/{id}/execute`) as
-  agent-stable manifest entries. Action governance flows through the
-  existing approval store and the `action.completed` push channel;
-  direct agent-driven execution is the natural next slice if you
-  want to pick this back up.
+  surface (`/api/actions/plan`, `/api/actions/{id}/decision`,
+  `/api/actions/{id}/execute`) as agent-stable manifest entries.
+  Those handlers exist and are wired through the action audit store,
+  but they emit a different error envelope from the agent surface
+  (`APIError` shape: stable code under `code`, human message under
+  `error`) versus the agent-stable shape (stable code under `error`,
+  human under `message`). Adding them to the manifest as-is would
+  force agents to remember which envelope each capability uses.
+  Resolving that mismatch is a focused slice of its own. Until then,
+  action governance flows through the existing approval store and
+  the `action.completed` push channel: the AI service plans, an
+  operator (or operator-acting agent) approves, the substrate emits
+  the event.
 
 ## Provable claims
 

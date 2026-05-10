@@ -78,9 +78,39 @@ Add the server to your project's `.mcp.json` (or your user-level config):
 | ---- | ------- | ------- |
 | `--base-url` | `http://localhost:7655` | Pulse instance to talk to |
 | `--token-env` | `PULSE_API_TOKEN` | Env var holding the API token |
+| `--emit-notifications` | `false` | Translate Pulse SSE events into JSON-RPC notifications on stdout |
 
 The token is always read from an environment variable, never a flag, so
 it does not appear in process listings.
+
+### About `--emit-notifications`
+
+When enabled, the server opens a long-lived connection to
+`/api/agent/events` after `initialize` and writes a JSON-RPC
+notification on stdout for every non-transport event:
+
+```json
+{ "jsonrpc": "2.0", "method": "notifications/finding.created", "params": { ... } }
+{ "jsonrpc": "2.0", "method": "notifications/approval.pending",  "params": { ... } }
+{ "jsonrpc": "2.0", "method": "notifications/action.completed",  "params": { ... } }
+```
+
+The `params` object is the SSE event's `data` payload verbatim, so an
+agent that already knows the substrate's wire shape sees identical
+content to what an HTTP SSE consumer would. Transport plumbing
+(`stream.connected`, `heartbeat`) is filtered out.
+
+It is off by default because not every MCP client surfaces
+server-initiated notifications. Enable it when wiring an autonomous
+agent that processes the JSON-RPC stream programmatically. Claude
+Desktop today does not surface arbitrary `notifications/*` methods
+in the chat UI; if your client falls in that category, leave the
+flag off and consume the SSE stream directly.
+
+When `--emit-notifications` is on, the `initialize` response
+advertises the supported event kinds under
+`capabilities.experimental.pulseNotifications.kinds`. Clients that
+don't understand the experimental block ignore it silently.
 
 ## What the tools do
 
@@ -140,12 +170,14 @@ call.
 
 ## Known limitations
 
-- **No `subscribe_events`.** SSE streaming does not fit the MCP
+- **No `subscribe_events` tool.** SSE streaming does not fit the MCP
   request/response tool shape, so the adapter does not expose the
-  `/api/agent/events` stream. Agents that need real-time push (finding
-  created, approval pending, action completed) consume the SSE stream
-  directly via HTTP. A future version may layer this onto MCP
-  notifications.
+  `/api/agent/events` stream as a callable tool. Agents that want
+  real-time push have two options: consume the SSE stream directly
+  via HTTP (works with any MCP client), or run with
+  `--emit-notifications` so the bridge translates SSE events into
+  JSON-RPC notifications on the stdio channel (requires a client
+  that processes server-initiated notifications).
 
 - **Manifest is fetched once.** The server fetches `/api/agent/
   capabilities` at startup and does not refresh during the process

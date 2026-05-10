@@ -129,6 +129,7 @@ var pathPlaceholderRE = regexp.MustCompile(`\{([a-zA-Z][a-zA-Z0-9]*)\}`)
 func main() {
 	baseURL := flag.String("base-url", "http://localhost:7655", "Pulse base URL")
 	tokenEnv := flag.String("token-env", "PULSE_API_TOKEN", "Env var holding the Pulse API token")
+	emitNotifications := flag.Bool("emit-notifications", false, "Translate Pulse SSE events into JSON-RPC notifications on stdout. Off by default because not every MCP client surfaces server-initiated notifications; enable when wiring an autonomous agent that processes the JSON-RPC stream.")
 	flag.Parse()
 
 	log.SetOutput(os.Stderr)
@@ -147,10 +148,11 @@ func main() {
 	log.Printf("fetched manifest %s with %d capabilities from %s", manifest.Version, len(manifest.Capabilities), *baseURL)
 
 	server := &mcpServer{
-		baseURL:  *baseURL,
-		token:    token,
-		manifest: manifest,
-		http:     &http.Client{Timeout: 30 * time.Second},
+		baseURL:           *baseURL,
+		token:             token,
+		manifest:          manifest,
+		http:              &http.Client{Timeout: 30 * time.Second},
+		emitNotifications: *emitNotifications,
 	}
 	server.serve(os.Stdin, os.Stdout)
 }
@@ -159,17 +161,29 @@ func main() {
 // URL and token, the manifest fetched at startup, and the HTTP
 // client used to call Pulse.
 type mcpServer struct {
-	baseURL  string
-	token    string
-	manifest *agentCapabilitiesManifest
-	http     *http.Client
-	mu       sync.Mutex // guards stdout writes
+	baseURL           string
+	token             string
+	manifest          *agentCapabilitiesManifest
+	http              *http.Client
+	mu                sync.Mutex // guards stdout writes
+	emitNotifications bool
+	// notificationsOnce ensures the SSE consumer goroutine starts
+	// at most once per process — `initialize` may be called more
+	// than once if a client reconnects, but we only need one
+	// consumer per stdio session.
+	notificationsOnce sync.Once
+	// out is the writer used for both responses and notifications.
+	// Captured the first time `serve` is called so the SSE consumer
+	// can write notifications to the same channel without an extra
+	// argument-passing dance.
+	out io.Writer
 }
 
 // serve is the stdio loop: read line-delimited JSON-RPC requests
 // from `in`, dispatch, write responses to `out`. Each request is on
 // its own line; blank lines are ignored; EOF stops the server.
 func (s *mcpServer) serve(in io.Reader, out io.Writer) {
+	s.out = out
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 64*1024), 1<<22) // up to 4 MB per message
 	for scanner.Scan() {
@@ -208,6 +222,15 @@ func (s *mcpServer) dispatch(ctx context.Context, req *jsonRPCRequest) jsonRPCRe
 	switch req.Method {
 	case "initialize":
 		resp.Result = s.handleInitialize()
+		// Start the SSE-to-notifications bridge once per process,
+		// only if the operator opted in. Spawned after the
+		// initialize response is queued so the client sees the
+		// handshake reply before any notification arrives.
+		if s.emitNotifications {
+			s.notificationsOnce.Do(func() {
+				go s.consumeSSEEvents(context.Background())
+			})
+		}
 	case "tools/list":
 		resp.Result = s.handleToolsList()
 	case "tools/call":
@@ -229,14 +252,33 @@ func (s *mcpServer) dispatch(ctx context.Context, req *jsonRPCRequest) jsonRPCRe
 }
 
 // handleInitialize returns the MCP server's capabilities. Tools
-// are the only category we expose; resources, prompts, and
-// sampling are intentionally not advertised.
+// are the only request/response category we expose. When the
+// operator opts in via --emit-notifications, the server also
+// publishes server-initiated notifications translated from
+// Pulse's SSE event stream; resources, prompts, and sampling
+// remain intentionally unadvertised.
 func (s *mcpServer) handleInitialize() any {
+	caps := map[string]any{
+		"tools": map[string]any{},
+	}
+	// MCP advertises notifications via experimental/extension
+	// keys today. We use a clearly-namespaced "experimental"
+	// block so clients that don't understand it ignore it
+	// silently rather than erroring on unknown keys.
+	if s.emitNotifications {
+		caps["experimental"] = map[string]any{
+			"pulseNotifications": map[string]any{
+				"kinds": []string{
+					"finding.created",
+					"approval.pending",
+					"action.completed",
+				},
+			},
+		}
+	}
 	return map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities": map[string]any{
-			"tools": map[string]any{},
-		},
+		"capabilities":    caps,
 		"serverInfo": map[string]any{
 			"name":    "pulse-mcp",
 			"version": "0.1.0",
@@ -444,6 +486,112 @@ func pathParamSet(path string) map[string]bool {
 		set[m[1]] = true
 	}
 	return set
+}
+
+// consumeSSEEvents opens a long-lived SSE connection to Pulse's
+// /api/agent/events stream and translates each non-keepalive event
+// into a JSON-RPC notification on stdout. Notifications use the
+// MCP convention `notifications/<event-kind>` (e.g.
+// `notifications/finding.created`) so MCP clients that route on
+// method names can dispatch directly.
+//
+// The function is meant to run for the lifetime of the stdio
+// session; it returns only on context cancellation or unrecoverable
+// stream errors. On a recoverable error (network blip, server
+// restart), it backs off briefly and reconnects so the bridge
+// stays up across the kinds of stream stalls the MCP server's
+// idle-tolerance budget already accepts on the substrate side.
+func (s *mcpServer) consumeSSEEvents(ctx context.Context) {
+	url := s.baseURL + "/api/agent/events"
+	backoff := time.Second
+	for ctx.Err() == nil {
+		if err := s.streamSSEOnce(ctx, url); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			log.Printf("SSE bridge: %v (reconnecting in %s)", err, backoff)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
+			continue
+		}
+		// Clean exit (e.g. server closed the stream); reset the
+		// backoff so the next reconnect is immediate.
+		backoff = time.Second
+	}
+}
+
+// streamSSEOnce opens one SSE connection and reads events until
+// the connection drops or the context is cancelled. Each parsed
+// event becomes a JSON-RPC notification; the initial
+// stream.connected event is skipped (it's a synchronization marker
+// from the server, not an agent-actionable event).
+func (s *mcpServer) streamSSEOnce(ctx context.Context, url string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-API-Token", s.token)
+	req.Header.Set("Accept", "text/event-stream")
+	// Bypass the s.http client's Timeout — the SSE stream is
+	// long-lived; ctx is the right cancellation signal.
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("subscribe: status %d", resp.StatusCode)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 64*1024), 1<<22)
+
+	var event, data string
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case strings.HasPrefix(line, "event: "):
+			event = strings.TrimPrefix(line, "event: ")
+		case strings.HasPrefix(line, "data: "):
+			data = strings.TrimPrefix(line, "data: ")
+		case line == "":
+			s.maybeEmitNotification(event, data)
+			event, data = "", ""
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// maybeEmitNotification turns a parsed SSE record into a JSON-RPC
+// notification, filtering out keepalives and the connect marker
+// that aren't agent-actionable. The notification's params is the
+// raw JSON of the SSE data field, so the receiver gets the same
+// payload the substrate publishes.
+func (s *mcpServer) maybeEmitNotification(event, data string) {
+	if event == "" || data == "" {
+		return
+	}
+	// Skip events that are pure transport plumbing — agents
+	// branching on event kind don't care about these.
+	if event == "stream.connected" || event == "heartbeat" {
+		return
+	}
+	var params json.RawMessage = []byte(data)
+	notification := jsonRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "notifications/" + event,
+		Params:  params,
+	}
+	s.writeJSON(s.out, notification)
 }
 
 // fetchManifest pulls the capabilities manifest from Pulse. This

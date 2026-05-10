@@ -308,3 +308,163 @@ func TestServer_NotificationGetsNoResponse(t *testing.T) {
 		t.Errorf("notification produced output; want silent. got: %s", out.String())
 	}
 }
+
+// TestServer_InitializeAdvertisesNotificationsCapabilityWhenEnabled
+// pins the discovery contract for the SSE bridge: when
+// --emit-notifications is on, the initialize response advertises
+// the kinds an MCP client can expect under
+// experimental.pulseNotifications.kinds. Drift in either
+// direction (advertising when disabled, or omitting when enabled)
+// breaks client expectations about whether to wait for pushes.
+func TestServer_InitializeAdvertisesNotificationsCapabilityWhenEnabled(t *testing.T) {
+	t.Run("disabled by default", func(t *testing.T) {
+		s := &mcpServer{manifest: &agentCapabilitiesManifest{}}
+		result := s.handleInitialize().(map[string]any)
+		caps := result["capabilities"].(map[string]any)
+		if _, ok := caps["experimental"]; ok {
+			t.Error("initialize must NOT advertise pulseNotifications when --emit-notifications is off")
+		}
+	})
+
+	t.Run("advertised when enabled", func(t *testing.T) {
+		s := &mcpServer{manifest: &agentCapabilitiesManifest{}, emitNotifications: true}
+		result := s.handleInitialize().(map[string]any)
+		caps := result["capabilities"].(map[string]any)
+		exp, ok := caps["experimental"].(map[string]any)
+		if !ok {
+			t.Fatal("initialize must advertise experimental block when --emit-notifications is on")
+		}
+		pn, ok := exp["pulseNotifications"].(map[string]any)
+		if !ok {
+			t.Fatal("experimental block must contain pulseNotifications descriptor")
+		}
+		kinds, ok := pn["kinds"].([]string)
+		if !ok || len(kinds) == 0 {
+			t.Fatalf("pulseNotifications.kinds must list the SSE event kinds; got %v", pn["kinds"])
+		}
+		want := map[string]bool{"finding.created": false, "approval.pending": false, "action.completed": false}
+		for _, k := range kinds {
+			if _, exists := want[k]; exists {
+				want[k] = true
+			}
+		}
+		for k, seen := range want {
+			if !seen {
+				t.Errorf("pulseNotifications.kinds missing %q", k)
+			}
+		}
+	})
+}
+
+// TestServer_MaybeEmitNotificationFiltersTransportEvents pins that
+// the bridge skips events that are pure transport plumbing
+// (stream.connected, heartbeat). Forwarding those would surface
+// noise an agent has no useful action on, and would teach
+// downstream code to filter them client-side instead of trusting
+// the substrate's "doorbell, not transport" intent.
+func TestServer_MaybeEmitNotificationFiltersTransportEvents(t *testing.T) {
+	cases := []struct {
+		name         string
+		event, data  string
+		shouldEmit   bool
+		methodPrefix string
+	}{
+		{"finding.created passes through", "finding.created", `{"findingId":"f1"}`, true, "notifications/finding.created"},
+		{"approval.pending passes through", "approval.pending", `{"approvalId":"a1"}`, true, "notifications/approval.pending"},
+		{"action.completed passes through", "action.completed", `{"actionId":"x1"}`, true, "notifications/action.completed"},
+		{"stream.connected is filtered", "stream.connected", `{}`, false, ""},
+		{"heartbeat is filtered", "heartbeat", "", false, ""},
+		{"empty event is filtered", "", `{"x":1}`, false, ""},
+		{"empty data is filtered", "finding.created", "", false, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := &bytes.Buffer{}
+			s := &mcpServer{out: out}
+			s.maybeEmitNotification(tc.event, tc.data)
+			if tc.shouldEmit {
+				if out.Len() == 0 {
+					t.Fatalf("expected notification on stdout for %q; got nothing", tc.event)
+				}
+				body := out.String()
+				if !strings.Contains(body, `"method":"`+tc.methodPrefix+`"`) {
+					t.Errorf("expected method %q; got %s", tc.methodPrefix, body)
+				}
+				if !strings.Contains(body, `"jsonrpc":"2.0"`) {
+					t.Errorf("notification must be JSON-RPC 2.0; got %s", body)
+				}
+				// Notifications must NOT carry an id field per
+				// JSON-RPC 2.0 spec — clients that see an id treat
+				// the message as a request and may try to respond.
+				if strings.Contains(body, `"id":`) {
+					t.Errorf("notification must omit the id field; got %s", body)
+				}
+			} else {
+				if out.Len() != 0 {
+					t.Errorf("expected silence for %q event; got %s", tc.event, out.String())
+				}
+			}
+		})
+	}
+}
+
+// TestServer_StreamSSEOnceTranslatesEventsToNotifications is the
+// integration test for the bridge: spin up a fake SSE server
+// emitting the substrate's wire format, point the consumer at it,
+// and assert each non-transport event lands as a JSON-RPC
+// notification on the configured out writer.
+func TestServer_StreamSSEOnceTranslatesEventsToNotifications(t *testing.T) {
+	sseBody := strings.Join([]string{
+		"event: stream.connected",
+		"data: {}",
+		"",
+		"event: finding.created",
+		"data: {\"findingId\":\"f1\",\"severity\":\"critical\"}",
+		"",
+		"event: heartbeat",
+		"",
+		"event: action.completed",
+		"data: {\"actionId\":\"x1\",\"success\":true}",
+		"",
+	}, "\n") + "\n"
+
+	pulse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-API-Token") != "test-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(sseBody))
+	}))
+	defer pulse.Close()
+
+	out := &bytes.Buffer{}
+	s := &mcpServer{
+		baseURL: pulse.URL,
+		token:   "test-token",
+		http:    pulse.Client(),
+		out:     out,
+	}
+	if err := s.streamSSEOnce(context.Background(), pulse.URL+"/api/agent/events"); err != nil {
+		t.Fatalf("streamSSEOnce: %v", err)
+	}
+
+	body := out.String()
+	if !strings.Contains(body, `"method":"notifications/finding.created"`) {
+		t.Errorf("missing finding.created notification; got %s", body)
+	}
+	if !strings.Contains(body, `"method":"notifications/action.completed"`) {
+		t.Errorf("missing action.completed notification; got %s", body)
+	}
+	if strings.Contains(body, "stream.connected") {
+		t.Errorf("stream.connected must be filtered out as transport plumbing; got %s", body)
+	}
+	if strings.Contains(body, `"method":"notifications/heartbeat"`) {
+		t.Errorf("heartbeat must be filtered out; got %s", body)
+	}
+	// The payload data must round-trip verbatim so agents see the
+	// substrate's wire shape unchanged.
+	if !strings.Contains(body, `"findingId":"f1"`) {
+		t.Errorf("notification params must round-trip the SSE data field; got %s", body)
+	}
+}

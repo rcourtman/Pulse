@@ -1516,6 +1516,16 @@ over stdio with line-delimited framing, and preserves the
 substrate's stable error envelope (`{"error": "code", "message":
 "..."}`) verbatim through MCP's content-and-isError result so
 agents on the MCP side branch on the same stable codes.
+Optionally, with `--emit-notifications`, the adapter also
+subscribes to `/api/agent/events` and translates each
+non-transport SSE event into a JSON-RPC notification on stdout
+(`notifications/finding.created`, `notifications/approval.pending`,
+`notifications/action.completed`); the notification's `params` is
+the SSE `data` payload verbatim so MCP-bound autonomous agents
+react to pushes without holding a separate HTTP connection. The
+flag is off by default because not every MCP client surfaces
+server-initiated notifications; transport plumbing
+(`stream.connected`, `heartbeat`) is filtered.
 
 The integration guide for `cmd/pulse-mcp` lives at
 `cmd/pulse-mcp/README.md`. It carries the canonical Claude Desktop
