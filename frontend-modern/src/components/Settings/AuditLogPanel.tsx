@@ -350,7 +350,11 @@ export default function AuditLogPanel() {
       </Show>
 
       <Show when={error()}>
-        <div class="p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300">
+        <div
+          role="alert"
+          aria-live="assertive"
+          class="p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300"
+        >
           {error()}
         </div>
       </Show>

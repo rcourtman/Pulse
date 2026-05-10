@@ -296,7 +296,11 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
 
           {/* Error Message */}
           <Show when={error()}>
-            <div class="flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800">
+            <div
+              role="alert"
+              aria-live="assertive"
+              class="flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800"
+            >
               <AlertCircle class="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
               <p class="text-sm text-red-700 dark:text-red-300">{error()}</p>
             </div>

@@ -759,7 +759,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     class="w-full h-24 px-2 py-1.5 text-xs border border-border rounded bg-surface text-base-content focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                   <Show when={saveError()}>
-                    <p class="text-xs text-red-600 dark:text-red-400">{saveError()}</p>
+                    <p
+                      role="alert"
+                      aria-live="assertive"
+                      class="text-xs text-red-600 dark:text-red-400"
+                    >
+                      {saveError()}
+                    </p>
                   </Show>
                   <div class="flex gap-2">
                     <button
