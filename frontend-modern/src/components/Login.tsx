@@ -529,6 +529,8 @@ const LoginForm: Component<{
 
             <Show when={error()}>
               <div
+                role="alert"
+                aria-live="assertive"
                 class={`rounded-md p-4 ${
                   error().includes('locked')
                     ? 'bg-orange-50 dark:bg-orange-900'
