@@ -117,6 +117,8 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           <label class={labelClass()}>{ALERT_EMAIL_SMTP_PORT_LABEL}</label>
           <input
             type="number"
+            min="1"
+            max="65535"
             value={props.config.port || ''}
             onInput={(e) => {
               const value = e.currentTarget.value;
@@ -243,6 +245,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 </label>
                 <input
                   type="number"
+                  min="1"
                   value={props.config.rateLimit || 60}
                   onInput={(e) =>
                     props.onChange({ ...props.config, rateLimit: parseInt(e.currentTarget.value) })
