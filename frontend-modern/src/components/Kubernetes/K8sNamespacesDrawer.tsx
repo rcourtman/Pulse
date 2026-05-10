@@ -130,9 +130,11 @@ export const K8sNamespacesDrawer: Component<{
         <Show
           when={!loadError()}
           fallback={
-            <Card padding="lg" tone="danger">
-              <EmptyState {...getK8sNamespacesFailureState(loadError())} tone="danger" />
-            </Card>
+            <div role="alert" aria-live="assertive">
+              <Card padding="lg" tone="danger">
+                <EmptyState {...getK8sNamespacesFailureState(loadError())} tone="danger" />
+              </Card>
+            </div>
           }
         >
           <Show

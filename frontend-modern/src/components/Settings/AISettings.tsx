@@ -54,7 +54,11 @@ export const AISettings: Component = () => {
           </Show>
 
           <Show when={!state.loading() && state.loadError()}>
-            <div class="flex items-center justify-between gap-3 p-4 sm:p-6 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
+            <div
+              role="alert"
+              aria-live="assertive"
+              class="flex items-center justify-between gap-3 p-4 sm:p-6 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800"
+            >
               <div class="flex items-center gap-2 text-sm text-red-700 dark:text-red-300">
                 <svg
                   class="h-4 w-4 flex-shrink-0"
