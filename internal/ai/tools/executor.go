@@ -1071,4 +1071,7 @@ func (e *PulseToolExecutor) registerTools() {
 	// patrol_report_finding, patrol_resolve_finding, patrol_get_findings
 	// These are always registered but only functional when patrolFindingCreator is set.
 	e.registerPatrolTools()
+
+	// pulse_summarize - retrospective synthesis for one resource or a fleet
+	e.registerSummarizeTools()
 }
