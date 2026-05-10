@@ -580,6 +580,21 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
+Patrol deterministic signal extraction (`internal/ai/patrol_signals.go`)
+does not mirror the Alerts surface. The `pulse_alerts` tool output is
+intentionally absent from the signal switch in `DetectSignals` — alerts
+already have their own canonical surface, lifecycle, and operator
+acknowledgement model, and the `SignalActiveAlert` mirror path has
+been removed. Mirroring previously double-counted (every alert was
+also a Patrol "Active alert detected" finding), dragged the health
+score down for issues the operator already knew about, and produced
+bogus `auto_resolved` → re-detected → regressed cycles when the LLM
+explicitly resolved the mirrored finding while the underlying alert
+kept firing. Patrol's job, per its own system prompt, is to surface
+issues alerts cannot — trends, capacity risks, misconfigurations,
+reliability gaps, cross-resource correlations. The Alerts page is
+the canonical surface for currently-firing alerts.
+
 The overall health score (`calculateOverallHealth` in
 `internal/ai/intelligence.go`) tiers the "recent Patrol errors" coverage
 factor by the ratio of errored runs to relevant runs in the scoring

@@ -996,8 +996,6 @@ func signalKey(s DetectedSignal) string {
 		return "backup-failed"
 	case SignalBackupStale:
 		return "backup-stale"
-	case SignalActiveAlert:
-		return "active-alert"
 	case SignalGuestUnreachable:
 		return "guest-unreachable"
 	default:
@@ -1019,8 +1017,6 @@ func signalTitle(s DetectedSignal) string {
 		return "Backup failed"
 	case SignalBackupStale:
 		return "Backup is stale"
-	case SignalActiveAlert:
-		return "Active alert detected"
 	case SignalGuestUnreachable:
 		return fmt.Sprintf("Guest unreachable: %s", s.ResourceName)
 	default:
@@ -1042,8 +1038,6 @@ func defaultRecommendationForSignal(s DetectedSignal) string {
 		return "Review backup logs and fix the underlying error, then rerun the backup."
 	case SignalBackupStale:
 		return "Ensure backups are scheduled and completing successfully; run a new backup."
-	case SignalActiveAlert:
-		return "Investigate the active alert and resolve the underlying issue."
 	case SignalGuestUnreachable:
 		return "Investigate why this guest is not responding to ping. Check network configuration, firewall rules, or whether the guest has crashed."
 	default:

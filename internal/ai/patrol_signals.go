@@ -78,7 +78,6 @@ const (
 	SignalHighDisk         SignalType = "high_disk"
 	SignalBackupFailed     SignalType = "backup_failed"
 	SignalBackupStale      SignalType = "backup_stale"
-	SignalActiveAlert      SignalType = "active_alert"
 	SignalGuestUnreachable SignalType = "guest_unreachable"
 )
 
@@ -128,8 +127,14 @@ func detectSignalsFromToolCall(tc *ToolCallRecord, thresholds SignalThresholds) 
 		signals = append(signals, detectStorageSignals(tc, thresholds)...)
 	case "pulse_metrics":
 		signals = append(signals, detectMetricsSignals(tc, thresholds)...)
-	case "pulse_alerts":
-		signals = append(signals, detectAlertSignals(tc)...)
+		// pulse_alerts intentionally has no deterministic signal extraction.
+		// Patrol's job is to find issues alerts cannot — duplicating the
+		// alert list into Patrol findings was double-counting (alerts
+		// already have their own lifecycle, surface, and acknowledgement
+		// model) and produced regression cycles when the LLM resolved the
+		// mirrored finding while the underlying alert kept firing. The
+		// Alerts page is the canonical surface for currently-firing
+		// alerts; Patrol should stay quiet here.
 	}
 
 	return signals
@@ -683,59 +688,6 @@ func detectMetricsSignals(tc *ToolCallRecord, thresholds SignalThresholds) []Det
 				ToolCallID:        tc.ID,
 			})
 		}
-	}
-
-	return signals
-}
-
-// --- Alert signals ---
-
-// alertList is the minimal struct for parsing alert list output.
-type alertList struct {
-	Alerts []struct {
-		ID           string `json:"id"`
-		ResourceID   string `json:"resource_id"`
-		ResourceName string `json:"resource_name"`
-		Type         string `json:"type"`
-		Severity     string `json:"severity"`
-		Message      string `json:"message"`
-	} `json:"alerts"`
-}
-
-func detectAlertSignals(tc *ToolCallRecord) []DetectedSignal {
-	inputAction := extractInputField(tc.Input, "action")
-	if inputAction != "list" {
-		return nil
-	}
-
-	var signals []DetectedSignal
-	var data alertList
-	if err := json.Unmarshal([]byte(tc.Output), &data); err != nil {
-		if !tryParseEmbeddedJSON(tc.Output, &data) {
-			log.Debug().Err(err).Str("tool", tc.ToolName).Msg("patrol_signals: failed to parse alerts output")
-			return nil
-		}
-	}
-
-	for _, alert := range data.Alerts {
-		sevLower := strings.ToLower(alert.Severity)
-		if sevLower != "critical" && sevLower != "warning" {
-			continue
-		}
-
-		resourceType := inferFindingResourceType(alert.ResourceID, alert.ResourceName)
-
-		signals = append(signals, DetectedSignal{
-			SignalType:        SignalActiveAlert,
-			ResourceID:        alert.ResourceID,
-			ResourceName:      alert.ResourceName,
-			ResourceType:      resourceType,
-			SuggestedSeverity: sevLower,
-			Category:          string(FindingCategoryGeneral),
-			Summary:           "Active " + sevLower + " alert: " + alert.Message,
-			Evidence:          truncateEvidence(tc.Output),
-			ToolCallID:        tc.ID,
-		})
 	}
 
 	return signals

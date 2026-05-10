@@ -332,11 +332,19 @@ func TestDetectSignals_BackupsStaleFromSummaries(t *testing.T) {
 	}
 }
 
-func TestDetectSignals_ActiveAlert(t *testing.T) {
+// TestDetectSignals_DoesNotMirrorAlerts locks in the decision that Patrol
+// does not duplicate the Alerts surface. pulse_alerts is intentionally not
+// in the deterministic signal extraction switch — alerts have their own
+// canonical surface, lifecycle, and acknowledgement model. Mirroring them
+// as Patrol findings double-counted, drained the health score, and
+// produced bogus auto_resolved → re-detected cycles when the LLM
+// resolved the mirrored finding while the underlying alert kept firing.
+func TestDetectSignals_DoesNotMirrorAlerts(t *testing.T) {
 	output, _ := json.Marshal(map[string]interface{}{
 		"alerts": []map[string]interface{}{
 			{"id": "a1", "resource_id": "node1", "resource_name": "pve1", "severity": "critical", "message": "Node offline"},
-			{"id": "a2", "resource_id": "vm100", "resource_name": "web", "severity": "info", "message": "Minor issue"},
+			{"id": "a2", "resource_id": "vm100", "resource_name": "web", "severity": "warning", "message": "High CPU"},
+			{"id": "a3", "resource_id": "vm200", "resource_name": "db", "severity": "info", "message": "Minor issue"},
 		},
 	})
 
@@ -351,14 +359,8 @@ func TestDetectSignals_ActiveAlert(t *testing.T) {
 	}
 
 	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
-	if len(signals) != 1 {
-		t.Fatalf("expected 1 signal (only critical/warning alerts), got %d", len(signals))
-	}
-	if signals[0].SignalType != SignalActiveAlert {
-		t.Errorf("expected SignalActiveAlert, got %s", signals[0].SignalType)
-	}
-	if signals[0].SuggestedSeverity != "critical" {
-		t.Errorf("expected critical severity pass-through, got %s", signals[0].SuggestedSeverity)
+	if len(signals) != 0 {
+		t.Fatalf("expected no signals from pulse_alerts output (alerts must not be mirrored as Patrol findings), got %d: %+v", len(signals), signals)
 	}
 }
 
