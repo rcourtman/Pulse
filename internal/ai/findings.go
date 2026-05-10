@@ -861,6 +861,31 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 			if normalizeLoadedFinding(f) {
 				normalizedLoadedState = true
 			}
+			// One-shot retirement of legacy alert-mirror findings. The
+			// deterministic detectAlertSignals → SignalActiveAlert path
+			// has been removed; any active "Active alert detected"
+			// finding still persisted from an earlier build is a stale
+			// mirror of an alert that already owns its own canonical
+			// surface. Retire it on load with a clear reason so the
+			// trust strip, regression counter, and health score stop
+			// reflecting the duplicate. Idempotent — after the first
+			// load with this code, no findings match the pattern.
+			if isLegacyAlertMirrorFinding(f) {
+				now := time.Now()
+				prevLoopState := f.LoopState
+				f.ResolvedAt = &now
+				f.AutoResolved = true
+				f.ResolveReason = "Patrol no longer mirrors alerts; the Alerts page is the canonical surface for currently-firing alerts."
+				f.syncLoopState()
+				f.Lifecycle = append(f.Lifecycle, FindingLifecycleEvent{
+					At:      now,
+					Type:    "auto_resolved",
+					Message: f.ResolveReason,
+					From:    prevLoopState,
+					To:      f.LoopState,
+				})
+				normalizedLoadedState = true
+			}
 			// Ensure derived fields are consistent after load.
 			f.syncLoopState()
 			s.findings[id] = f
@@ -875,6 +900,29 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 		}
 	}
 	return nil
+}
+
+// isLegacyAlertMirrorFinding reports whether the finding looks like an
+// active "Active alert detected" finding produced by the now-removed
+// detectAlertSignals → SignalActiveAlert deterministic emitter. The title
+// is the only surface that ever produced exactly this string, so matching
+// on it is safe even without source/category checks; the additional
+// checks tighten the match to avoid retiring a hypothetical operator-
+// authored finding with the same name.
+func isLegacyAlertMirrorFinding(f *Finding) bool {
+	if f == nil || f.ResolvedAt != nil {
+		return false
+	}
+	if f.Title != "Active alert detected" {
+		return false
+	}
+	if f.Source != "ai-analysis" {
+		return false
+	}
+	if f.Category != FindingCategoryGeneral {
+		return false
+	}
+	return true
 }
 
 // scheduleSave schedules a debounced save operation

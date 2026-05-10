@@ -123,6 +123,108 @@ func TestFindingsStore_SetPersistence_NormalizesRegressedAcknowledgementState(t 
 	}
 }
 
+func TestFindingsStore_SetPersistence_RetiresLegacyAlertMirrorFindings(t *testing.T) {
+	store := NewFindingsStore()
+	store.saveDebounce = 5 * time.Millisecond
+	now := time.Now()
+	saved := make(chan map[string]*Finding, 1)
+
+	p := &recordingPersistence{
+		findings: map[string]*Finding{
+			// Active "Active alert detected" finding from the removed
+			// SignalActiveAlert path — must be retired on load.
+			"legacy-mirror": {
+				ID:         "legacy-mirror",
+				Severity:   FindingSeverityWarning,
+				ResourceID: "vm-100",
+				Title:      "Active alert detected",
+				Source:     "ai-analysis",
+				Category:   FindingCategoryGeneral,
+				LastSeenAt: now,
+			},
+			// Distinct finding with matching title but different source —
+			// should NOT be retired (defensive: never retire something we
+			// can't positively identify as the alert-mirror artifact).
+			"foreign-title-match": {
+				ID:         "foreign-title-match",
+				Severity:   FindingSeverityWarning,
+				ResourceID: "vm-200",
+				Title:      "Active alert detected",
+				Source:     "operator",
+				Category:   FindingCategoryGeneral,
+				LastSeenAt: now,
+			},
+			// Different finding — must remain active untouched.
+			"unrelated": {
+				ID:         "unrelated",
+				Severity:   FindingSeverityCritical,
+				ResourceID: "vm-300",
+				Title:      "Disk nearly full",
+				Source:     "ai-analysis",
+				Category:   FindingCategoryCapacity,
+				LastSeenAt: now,
+			},
+		},
+		saved: saved,
+	}
+
+	if err := store.SetPersistence(p); err != nil {
+		t.Fatalf("SetPersistence failed: %v", err)
+	}
+
+	mirror := store.Get("legacy-mirror")
+	if mirror == nil {
+		t.Fatal("expected legacy mirror finding to load")
+	}
+	if mirror.ResolvedAt == nil {
+		t.Fatal("legacy mirror finding must be retired (ResolvedAt set) on load")
+	}
+	if !mirror.AutoResolved {
+		t.Fatal("legacy mirror finding must be marked AutoResolved")
+	}
+	if mirror.ResolveReason == "" {
+		t.Fatal("legacy mirror finding must carry a retirement reason")
+	}
+	if mirror.IsActive() {
+		t.Fatal("legacy mirror finding must not stay active")
+	}
+	foundAutoResolvedEvent := false
+	for _, e := range mirror.Lifecycle {
+		if e.Type == "auto_resolved" {
+			foundAutoResolvedEvent = true
+			break
+		}
+	}
+	if !foundAutoResolvedEvent {
+		t.Fatal("legacy mirror retirement must append an auto_resolved lifecycle event")
+	}
+
+	foreign := store.Get("foreign-title-match")
+	if foreign == nil {
+		t.Fatal("expected foreign-title-match to load")
+	}
+	if foreign.ResolvedAt != nil {
+		t.Fatalf("foreign-title-match must not be retired by the alert-mirror migration; resolved at %s", foreign.ResolvedAt)
+	}
+
+	unrelated := store.Get("unrelated")
+	if unrelated == nil {
+		t.Fatal("expected unrelated finding to load")
+	}
+	if unrelated.ResolvedAt != nil {
+		t.Fatal("unrelated finding must not be retired")
+	}
+
+	select {
+	case persisted := <-saved:
+		if persisted["legacy-mirror"].ResolvedAt == nil {
+			t.Fatal("retired mirror state must be persisted back")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for retirement save")
+	}
+}
+
 func TestFindingsStore_scheduleSave_NoPersistence(t *testing.T) {
 	store := NewFindingsStore()
 

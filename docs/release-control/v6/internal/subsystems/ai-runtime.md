@@ -593,7 +593,13 @@ explicitly resolved the mirrored finding while the underlying alert
 kept firing. Patrol's job, per its own system prompt, is to surface
 issues alerts cannot — trends, capacity risks, misconfigurations,
 reliability gaps, cross-resource correlations. The Alerts page is
-the canonical surface for currently-firing alerts.
+the canonical surface for currently-firing alerts. To retire the
+alert-mirror findings already persisted from an earlier build,
+`FindingsStore.SetPersistence` runs a one-shot pass on load that
+auto-resolves any active finding matching the legacy signature
+(title `"Active alert detected"`, source `ai-analysis`, category
+`general`) with a clear retirement reason; the pass is idempotent
+and self-cleaning.
 
 The overall health score (`calculateOverallHealth` in
 `internal/ai/intelligence.go`) tiers the "recent Patrol errors" coverage
