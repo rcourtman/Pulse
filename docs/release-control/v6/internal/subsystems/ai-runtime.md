@@ -627,19 +627,24 @@ assessment surface warns the operator that coverage is incomplete or
 recent runs failed, which previously happened whenever one successful
 manual run sat among many failed startup runs.
 
-Stale-finding auto-resolve (`reconcileStaleFindings` in
-`internal/ai/patrol_ai.go`) is gated on the category whitelist exposed by
-`CategorySupportsStaleAutoResolve` in `internal/ai/findings.go`. Only
-`performance` and `capacity` findings — continuous current-state metric
-thresholds where the most recent successful scan's observation is
-authoritative — may be auto-resolved from absence in the LLM's report.
-`reliability`, `backup`, `security`, and `general` findings represent
-discrete events or persistent states; the LLM not re-mentioning a failed
-backup task, a service that crashed, or a vulnerability that was found
-is not evidence that the underlying issue has cleared. Those categories
-must stay active until explicitly resolved either by the LLM calling
-`patrol_resolve_finding` with evidence or by operator action through the
-governed findings store. Lifecycle events recorded by `findings.go` must
+Absence-based auto-resolve paths in `internal/ai/patrol_ai.go` are
+all gated on the category whitelist exposed by
+`CategorySupportsStaleAutoResolve` in `internal/ai/findings.go`. Two
+paths use the gate: `reconcileStaleFindings` (auto-resolves findings
+the LLM didn't re-mention in a successful run) and the
+resource-absent branch inside the seed-prompt builder (auto-resolves
+findings whose resource isn't in the current global inventory
+snapshot). Only `performance` and `capacity` findings — continuous
+current-state metric thresholds where the most recent successful
+scan's observation is authoritative — may be auto-resolved from
+absence. `reliability`, `backup`, `security`, and `general` findings
+represent discrete events or persistent states; the LLM not
+re-mentioning a failed backup task or a single inventory snapshot
+missing a container (transient agent reconnect, container churn,
+refresh gap) is not evidence that the underlying issue has cleared.
+Those categories must stay active until explicitly resolved either
+by the LLM calling `patrol_resolve_finding` with evidence or by
+operator action through the governed findings store. Lifecycle events recorded by `findings.go` must
 not introduce duplicate generic transition rows: the canonical
 `syncLoopStateLocked` records `loop_transition_violation` only when a
 transition is rejected, and otherwise leaves the semantic event
@@ -1830,3 +1835,23 @@ finding, alert, or threshold breach. This keeps the report
 narrative honestly retrospective on Patrol's work and prevents
 silent shadow-classification competing with Patrol's detection
 rules.
+
+The same reporting synthesis layer is now exposed to Pulse
+Assistant as a first-class chat tool, `pulse_summarize`. The tool
+wraps the engine's `NarrativeFor` and `FleetNarrativeFor` entry
+points (single-resource and fleet modes selected by an `action`
+parameter) so an operator can ask "what's been happening with
+pve1 this week" or "where should I look across my fleet" and get
+a structured retrospective answer in chat rather than having to
+generate, download, and read a PDF. The tool is read-only (no
+approval gate, no control-level requirement) and returns a JSON
+envelope carrying the narrative source, health status, observations
+or outliers, recommendations, and provenance disclaimer. v1 always
+returns heuristic narrative; the AI narrator wiring through the
+chat session is a focused follow-up that adds `Narrator`,
+`FleetNarrator`, and `FindingsProvider` plumbing to the executor
+configuration so the tool inherits the same per-tenant AI service
+the report PDF endpoint already uses. Reporting therefore expands
+from an export-shaped feature into a first-class capability
+Assistant can compose with — the underlying engine surface stays
+unchanged.
