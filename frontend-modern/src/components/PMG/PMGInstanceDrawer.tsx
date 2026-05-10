@@ -238,7 +238,14 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
               <Card padding="lg">
                 <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0">
-                    <div class="text-sm font-semibold text-base-content truncate">
+                    <div
+                      class="text-sm font-semibold text-base-content truncate"
+                      title={
+                        asTrimmedString(props.resourceName) ||
+                        resource()?.name ||
+                        drawerPresentation.defaultResourceName
+                      }
+                    >
                       {asTrimmedString(props.resourceName) ||
                         resource()?.name ||
                         drawerPresentation.defaultResourceName}
