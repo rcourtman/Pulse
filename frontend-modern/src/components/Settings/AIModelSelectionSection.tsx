@@ -11,6 +11,100 @@ interface AIModelSelectionSectionProps {
   state: AISettingsState;
 }
 
+const PatrolPreflightControl: Component<{ state: AISettingsState }> = (controlProps) => {
+  const { state } = controlProps;
+  const result = state.patrolPreflightResult;
+
+  const tone = () => {
+    const r = result();
+    if (!r) return 'idle';
+    if (r.success) return 'success';
+    if (r.cause === 'model_tool_support_unverified') return 'warning';
+    return 'error';
+  };
+
+  const toneClasses = () => {
+    switch (tone()) {
+      case 'success':
+        return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300';
+      case 'warning':
+        return 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300';
+      case 'error':
+        return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300';
+      default:
+        return '';
+    }
+  };
+
+  const headline = () => {
+    const r = result();
+    if (!r) return '';
+    if (r.success) {
+      return 'Tool calling verified';
+    }
+    if (r.cause === 'model_tool_support_unverified') {
+      return 'Provider accepted the request but the model did not call the tool';
+    }
+    return r.message || 'Patrol preflight failed';
+  };
+
+  const detail = () => {
+    const r = result();
+    if (!r) return '';
+    return r.summary || r.message || '';
+  };
+
+  const formatDuration = (ms: number) => {
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  };
+
+  return (
+    <div class="mt-2 flex flex-col gap-2">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-[11px] text-muted">
+          Verify that this Patrol model can actually call tools — different from{' '}
+          <span class="font-medium">Run Preflight</span>, which only checks each provider's
+          connection.
+        </p>
+        <button
+          type="button"
+          onClick={() => void state.runPatrolToolPreflight()}
+          disabled={state.patrolPreflightRunning() || state.saving()}
+          class="inline-flex min-h-9 items-center rounded-md px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50 whitespace-nowrap"
+        >
+          {state.patrolPreflightRunning() ? 'Verifying...' : 'Verify Patrol'}
+        </button>
+      </div>
+      <Show when={result()}>
+        {(r) => (
+          <div class={`rounded border px-3 py-2 ${toneClasses()}`}>
+            <div class="flex items-baseline justify-between gap-2">
+              <p class="text-xs font-medium">{headline()}</p>
+              <Show when={r().duration_ms > 0}>
+                <span class="text-[11px] opacity-80">{formatDuration(r().duration_ms)}</span>
+              </Show>
+            </div>
+            <Show when={detail()}>
+              <p class="text-[11px] mt-1 opacity-90">{detail()}</p>
+            </Show>
+            <Show when={r().recommendation}>
+              <p class="text-[11px] mt-1 opacity-90">{r().recommendation}</p>
+            </Show>
+            <Show when={r().provider || r().model}>
+              <p class="text-[11px] mt-1 opacity-70">
+                {r().provider}
+                {r().provider && r().model ? ' · ' : ''}
+                {r().model}
+              </p>
+            </Show>
+          </div>
+        )}
+      </Show>
+    </div>
+  );
+};
+
 export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = (props) => {
   const { state } = props;
   const modelLabel = (modelId: string) => {
@@ -277,6 +371,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                   dropdownClass={pickerDropdownClass}
                 />
               </Show>
+              <PatrolPreflightControl state={state} />
             </div>
           </div>
         </Show>

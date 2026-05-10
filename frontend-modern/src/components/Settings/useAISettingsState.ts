@@ -2,6 +2,7 @@ import { createMemo, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
+import { runPatrolPreflight, type PatrolPreflightResponse } from '@/api/patrol';
 import {
   AI_PROVIDERS,
   createInitialProviderHealth,
@@ -242,6 +243,9 @@ export const useAISettingsState = () => {
   );
   const [preflightRunning, setPreflightRunning] = createSignal(false);
   const [preflightLastCheckedAt, setPreflightLastCheckedAt] = createSignal<number | null>(null);
+  const [patrolPreflightRunning, setPatrolPreflightRunning] = createSignal(false);
+  const [patrolPreflightResult, setPatrolPreflightResult] =
+    createSignal<PatrolPreflightResponse | null>(null);
 
   const [showSetupModal, setShowSetupModal] = createSignal(false);
   const [setupProvider, setSetupProvider] = createSignal<AIProvider>('anthropic');
@@ -558,6 +562,32 @@ export const useAISettingsState = () => {
       setPreflightLastCheckedAt(Date.now());
     } finally {
       setPreflightRunning(false);
+    }
+  };
+
+  // runPatrolToolPreflight verifies the configured Patrol provider+model
+  // can actually call tools end-to-end. Distinct from runProviderPreflight,
+  // which only confirms each provider's model catalog is reachable.
+  const runPatrolToolPreflight = async () => {
+    setPatrolPreflightRunning(true);
+    try {
+      const result = await runPatrolPreflight();
+      setPatrolPreflightResult(result);
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Pulse could not run the Patrol tool-call preflight.';
+      setPatrolPreflightResult({
+        success: false,
+        tool_call_observed: false,
+        duration_ms: 0,
+        message,
+        summary:
+          'Pulse could not reach the preflight endpoint. Check that the backend is running and you have settings-write permission.',
+      });
+    } finally {
+      setPatrolPreflightRunning(false);
     }
   };
 
@@ -1074,6 +1104,8 @@ export const useAISettingsState = () => {
     loadSettings,
     modelsError,
     modelsLoading,
+    patrolPreflightResult,
+    patrolPreflightRunning,
     preflightLastCheckedAt,
     preflightRunning,
     providerHealth,
@@ -1081,6 +1113,7 @@ export const useAISettingsState = () => {
     providerTestResult,
     resetForm,
     runProviderPreflight,
+    runPatrolToolPreflight,
     saving,
     selectedChatSession,
     selectedSessionId,

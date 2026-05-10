@@ -868,7 +868,12 @@ prompt explain the same operator-facing priority.
 
 ## Completion Obligations
 
-1. Update guardrail tests when new shared primitives are added
+1. Update guardrail tests when new shared primitives are added, including
+   new Settings controls that drive backend verification surfaces (for
+   example the Verify Patrol button in
+   `AIModelSelectionSection.tsx`, which must drive the typed
+   `runPatrolPreflight` client through `useAISettingsState.ts` rather
+   than inlining fetch calls in the section component)
 2. Keep top-level settings surfaces routed through the canonical settings shell
    and maintain both `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
    plus `tests/integration/tests/15-settings-shell-consistency.spec.ts`

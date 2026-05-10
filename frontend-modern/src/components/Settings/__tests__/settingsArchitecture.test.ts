@@ -227,6 +227,23 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsStateSource).not.toContain('OpenRouter returned 401');
   });
 
+  it('keeps Patrol tool-call preflight wired through the canonical settings state', () => {
+    // The Verify Patrol button must drive the canonical
+    // /api/ai/patrol/preflight endpoint via the typed runPatrolPreflight
+    // client and surface the result through state, not via inline fetch
+    // calls in the section component.
+    expect(aiSettingsStateSource).toContain('runPatrolPreflight');
+    expect(aiSettingsStateSource).toContain('runPatrolToolPreflight');
+    expect(aiSettingsStateSource).toContain('patrolPreflightResult');
+    expect(aiSettingsStateSource).toContain('patrolPreflightRunning');
+    expect(aiModelSelectionSectionSource).toContain('PatrolPreflightControl');
+    expect(aiModelSelectionSectionSource).toContain('runPatrolToolPreflight');
+    // The amber soft-warning tone is the operator's signal that the
+    // provider accepted the request but the model did not call the tool.
+    expect(aiModelSelectionSectionSource).toContain('model_tool_support_unverified');
+    expect(aiModelSelectionSectionSource).not.toContain('fetch(\'/api/ai/patrol/preflight');
+  });
+
   it('keeps contextual settings feature gates free of retired commercial telemetry wrappers', () => {
     for (const source of [
       agentProfilesPanelSource,
