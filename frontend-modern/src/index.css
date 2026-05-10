@@ -75,7 +75,7 @@
     --color-border-subtle: theme('colors.slate.100');
     --color-border-base: theme('colors.slate.200');
     --color-text-base: theme('colors.slate.900');
-    --color-text-muted: theme('colors.slate.500');
+    --color-text-muted: theme('colors.slate.600');
     --color-summary-row-bg: rgba(14, 165, 233, 0.05);
     --color-summary-row-bg-hover: rgba(14, 165, 233, 0.08);
     --color-summary-row-border: rgba(14, 165, 233, 0.16);
