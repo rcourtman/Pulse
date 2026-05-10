@@ -601,14 +601,20 @@ auto-resolves any active finding matching the legacy signature
 `general`) with a clear retirement reason; the pass is idempotent
 and self-cleaning. The same load pass also resets the
 `RegressionCount` and clears `LastRegressionAt` on any active
-finding whose lifecycle contains an `auto_resolved` event with one
-of the two known bogus-signature reasons ("No longer detected by
-patrol", "Resource no longer exists in infrastructure"), because
-the counter was inflated by the absence-based auto-resolve paths
-that have since been gated or removed. The reset appends a
-`regression_counter_reset` lifecycle event so the migration only
-fires once per finding; genuine recurrences from then on accrue
-cleanly.
+finding whose lifecycle contains an `auto_resolved` event **when
+the finding's category is not eligible for stale-auto-resolve**
+(i.e. anything other than `performance` or `capacity`). For
+event/persistent categories there is no legitimate absence-driven
+resolution path: an `auto_resolved` event there came either from
+one of the now-gated absence paths (legacy reason strings still
+recognized) or from the LLM `patrol_resolve_finding` tool
+(empty-message via `Resolve(_, true)`) which has repeatedly
+misjudged findings backed by still-active conditions and reverted
+through a regression on the next run. The reset appends a
+`regression_counter_reset` lifecycle event so the migration is
+idempotent; genuine recurrences from then on accrue cleanly.
+Performance/capacity findings retain their counter because the
+metric-cleared resolution model is sound there.
 
 The overall health score (`calculateOverallHealth` in
 `internal/ai/intelligence.go`) tiers the "recent Patrol errors" coverage

@@ -232,10 +232,14 @@ func TestFindingsStore_SetPersistence_ResetsRegressionCounterPollutedByBogusCycl
 	lastRegress := now.Add(-30 * time.Minute)
 	saved := make(chan map[string]*Finding, 1)
 
-	withBogusCycle := &Finding{
-		ID:               "with-bogus",
+	// Non-eligible category (backup) + auto_resolved on lifecycle + active
+	// + regression count > 0 → reset. The auto_resolved messages cover
+	// both the empty-message LLM-tool path and the legacy bogus-signature
+	// reasons.
+	withLLMCycle := &Finding{
+		ID:               "with-llm-cycle",
 		Severity:         FindingSeverityWarning,
-		ResourceID:       "vm-bogus",
+		ResourceID:       "vm-llm",
 		Title:            "Backup failed",
 		Source:           "ai-analysis",
 		Category:         FindingCategoryBackup,
@@ -244,31 +248,67 @@ func TestFindingsStore_SetPersistence_ResetsRegressionCounterPollutedByBogusCycl
 		LastRegressionAt: &lastRegress,
 		Lifecycle: []FindingLifecycleEvent{
 			{At: now.Add(-3 * time.Hour), Type: "detected"},
-			{At: now.Add(-2 * time.Hour), Type: "auto_resolved", Message: "No longer detected by patrol"},
-			{At: now.Add(-90 * time.Minute), Type: "regressed", Message: "Finding re-detected after resolution"},
-			{At: now.Add(-60 * time.Minute), Type: "auto_resolved", Message: "Resource no longer exists in infrastructure"},
-			{At: lastRegress, Type: "regressed", Message: "Finding re-detected after resolution"},
+			// Empty message → Resolve(_, true), the LLM patrol_resolve_finding tool.
+			{At: now.Add(-2 * time.Hour), Type: "auto_resolved"},
+			{At: now.Add(-90 * time.Minute), Type: "regressed"},
+			{At: now.Add(-60 * time.Minute), Type: "auto_resolved"},
+			{At: lastRegress, Type: "regressed"},
 		},
 	}
 
-	withRealCycle := &Finding{
-		ID:               "with-real",
+	withLegacyReasonCycle := &Finding{
+		ID:               "with-legacy-reason",
 		Severity:         FindingSeverityWarning,
-		ResourceID:       "vm-real",
-		Title:            "High CPU usage",
+		ResourceID:       "vm-legacy",
+		Title:            "Service crashed",
 		Source:           "ai-analysis",
-		Category:         FindingCategoryPerformance,
+		Category:         FindingCategoryReliability,
+		LastSeenAt:       now,
+		RegressionCount:  3,
+		LastRegressionAt: &lastRegress,
+		Lifecycle: []FindingLifecycleEvent{
+			{At: now.Add(-3 * time.Hour), Type: "detected"},
+			{At: now.Add(-2 * time.Hour), Type: "auto_resolved", Message: "No longer detected by patrol"},
+			{At: lastRegress, Type: "regressed"},
+		},
+	}
+
+	// Eligible category (capacity) — the absence-driven resolution model
+	// is sound here, so the counter is trustworthy and must be preserved
+	// even if auto_resolved events appear on the lifecycle.
+	withEligibleCategory := &Finding{
+		ID:               "with-eligible",
+		Severity:         FindingSeverityWarning,
+		ResourceID:       "vm-eligible",
+		Title:            "Disk nearly full",
+		Source:           "ai-analysis",
+		Category:         FindingCategoryCapacity,
 		LastSeenAt:       now,
 		RegressionCount:  2,
 		LastRegressionAt: &lastRegress,
 		Lifecycle: []FindingLifecycleEvent{
 			{At: now.Add(-2 * time.Hour), Type: "detected"},
-			// An LLM-driven explicit resolve (empty message via Resolve(_,true)
-			// is NOT one of the bogus-signature reasons) — the regression
-			// counter that follows reflects a legitimate recurrence and
-			// must be preserved.
 			{At: now.Add(-90 * time.Minute), Type: "auto_resolved"},
-			{At: lastRegress, Type: "regressed", Message: "Finding re-detected after resolution"},
+			{At: lastRegress, Type: "regressed"},
+		},
+	}
+
+	// Active finding on a non-eligible category but no auto_resolved
+	// event in lifecycle — counter is genuine, preserve it.
+	withoutAutoResolve := &Finding{
+		ID:               "without-auto",
+		Severity:         FindingSeverityWarning,
+		ResourceID:       "vm-clean",
+		Title:            "Service crashed",
+		Source:           "ai-analysis",
+		Category:         FindingCategoryReliability,
+		LastSeenAt:       now,
+		RegressionCount:  1,
+		LastRegressionAt: &lastRegress,
+		Lifecycle: []FindingLifecycleEvent{
+			{At: now.Add(-2 * time.Hour), Type: "detected"},
+			{At: now.Add(-90 * time.Minute), Type: "resolved"},
+			{At: lastRegress, Type: "regressed"},
 		},
 	}
 
@@ -283,18 +323,19 @@ func TestFindingsStore_SetPersistence_ResetsRegressionCounterPollutedByBogusCycl
 		RegressionCount:  4,
 		LastRegressionAt: &lastRegress,
 		Lifecycle: []FindingLifecycleEvent{
-			{At: now.Add(-3 * time.Hour), Type: "auto_resolved", Message: "No longer detected by patrol"},
+			{At: now.Add(-3 * time.Hour), Type: "auto_resolved"},
 			{At: now.Add(-2 * time.Hour), Type: "regression_counter_reset"},
-			// Genuine regressions accrued after the migration must be kept.
 			{At: now.Add(-90 * time.Minute), Type: "regressed"},
 		},
 	}
 
 	p := &recordingPersistence{
 		findings: map[string]*Finding{
-			withBogusCycle.ID:  withBogusCycle,
-			withRealCycle.ID:   withRealCycle,
-			alreadyMigrated.ID: alreadyMigrated,
+			withLLMCycle.ID:          withLLMCycle,
+			withLegacyReasonCycle.ID: withLegacyReasonCycle,
+			withEligibleCategory.ID:  withEligibleCategory,
+			withoutAutoResolve.ID:    withoutAutoResolve,
+			alreadyMigrated.ID:       alreadyMigrated,
 		},
 		saved: saved,
 	}
@@ -303,31 +344,41 @@ func TestFindingsStore_SetPersistence_ResetsRegressionCounterPollutedByBogusCycl
 		t.Fatalf("SetPersistence failed: %v", err)
 	}
 
-	bogus := store.Get("with-bogus")
-	if bogus.RegressionCount != 0 {
-		t.Fatalf("expected polluted regression counter reset to 0, got %d", bogus.RegressionCount)
-	}
-	if bogus.LastRegressionAt != nil {
-		t.Fatal("expected LastRegressionAt cleared on reset")
-	}
-	foundResetEvent := false
-	for _, e := range bogus.Lifecycle {
-		if e.Type == "regression_counter_reset" {
-			foundResetEvent = true
-			break
+	for _, id := range []string{"with-llm-cycle", "with-legacy-reason"} {
+		f := store.Get(id)
+		if f == nil {
+			t.Fatalf("expected finding %s to load", id)
+		}
+		if f.RegressionCount != 0 {
+			t.Fatalf("%s: expected counter reset to 0, got %d", id, f.RegressionCount)
+		}
+		if f.LastRegressionAt != nil {
+			t.Fatalf("%s: expected LastRegressionAt cleared", id)
+		}
+		reset := false
+		for _, e := range f.Lifecycle {
+			if e.Type == "regression_counter_reset" {
+				reset = true
+				break
+			}
+		}
+		if !reset {
+			t.Fatalf("%s: expected regression_counter_reset lifecycle event", id)
 		}
 	}
-	if !foundResetEvent {
-		t.Fatal("expected regression_counter_reset lifecycle event on the migrated finding")
-	}
 
-	real := store.Get("with-real")
-	if real.RegressionCount != 2 {
-		t.Fatalf("finding without bogus signature must keep its regression counter; got %d", real.RegressionCount)
-	}
-	for _, e := range real.Lifecycle {
-		if e.Type == "regression_counter_reset" {
-			t.Fatal("finding without bogus signature must not gain a reset event")
+	for _, id := range []string{"with-eligible", "without-auto"} {
+		f := store.Get(id)
+		if f == nil {
+			t.Fatalf("expected finding %s to load", id)
+		}
+		if f.RegressionCount == 0 {
+			t.Fatalf("%s: counter must not be reset; was reset to 0", id)
+		}
+		for _, e := range f.Lifecycle {
+			if e.Type == "regression_counter_reset" {
+				t.Fatalf("%s: must not gain a reset event", id)
+			}
 		}
 	}
 

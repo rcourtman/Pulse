@@ -926,20 +926,33 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 	return nil
 }
 
-// findingHasBogusAutoResolveCycle reports whether the finding's lifecycle
-// contains evidence of the absence-based auto_resolve pattern that was
-// removed in the b44d5892f category gate and the alert-mirror rip. The
-// signature is an `auto_resolved` lifecycle event whose message matches
-// one of the two reasons the legacy absence paths stamped:
+// findingHasBogusAutoResolveCycle reports whether the finding's
+// RegressionCount was inflated by an unreliable auto_resolve cycle.
 //
-//   - "No longer detected by patrol" — emitted by reconcileStaleFindings
-//     when the LLM didn't re-mention a seeded finding in a successful run
-//   - "Resource no longer exists in infrastructure" — emitted when a
-//     finding's resource was missing from the current inventory snapshot
+// For event/persistent categories (reliability, backup, security,
+// general) there is no legitimate absence-driven resolution path — the
+// underlying condition is a discrete event or persistent state that
+// only clears on manual operator action or on a verified fix
+// (lifecycle event type "verification_passed"). Any `auto_resolved`
+// event on such a finding came from either:
 //
-// Either reason on an active finding means at least one prior regression
-// was driven by the system fighting itself, not by a genuine recurrence,
-// so the cumulative counter is no longer trustworthy.
+//   - One of the two now-gated absence paths (message
+//     "No longer detected by patrol" or "Resource no longer exists
+//     in infrastructure"), or
+//   - An LLM `patrol_resolve_finding` tool call (empty message,
+//     produced by Resolve(_, true)), which the LLM has repeatedly
+//     misjudged for findings backed by still-active conditions.
+//
+// In every observed instance, those auto_resolutions were reverted by
+// a regressed event within hours when the underlying condition was
+// re-detected — the system fighting itself. So once the lifecycle
+// shows any auto_resolved on a non-eligible category and the finding
+// is currently active again with a regression count, the counter is
+// no longer a trustworthy signal and should be reset.
+//
+// For performance/capacity findings (eligible-category) we don't
+// touch the counter: those categories have a legitimate
+// metric-cleared resolution path and the absence model is sound.
 func findingHasBogusAutoResolveCycle(f *Finding) bool {
 	if f == nil {
 		return false
@@ -947,25 +960,22 @@ func findingHasBogusAutoResolveCycle(f *Finding) bool {
 	if f.RegressionCount == 0 {
 		return false
 	}
-	bogus := false
+	if CategorySupportsStaleAutoResolve(f.Category) {
+		return false
+	}
+	hasAutoResolve := false
 	for _, e := range f.Lifecycle {
 		if e.Type == "regression_counter_reset" {
-			// Already migrated — must not be re-applied even if other
-			// auto_resolved events in the same lifecycle match the bogus
-			// signature. Genuine regressions accrued after the reset
-			// stand on their own and the counter is now trustworthy.
+			// Already migrated — must not be re-applied. Genuine
+			// regressions that accrued after the reset stand on their
+			// own and the counter is now trustworthy.
 			return false
 		}
-		if e.Type != "auto_resolved" {
-			continue
-		}
-		switch e.Message {
-		case "No longer detected by patrol",
-			"Resource no longer exists in infrastructure":
-			bogus = true
+		if e.Type == "auto_resolved" {
+			hasAutoResolve = true
 		}
 	}
-	return bogus
+	return hasAutoResolve
 }
 
 // isLegacyAlertMirrorFinding reports whether the finding looks like an
