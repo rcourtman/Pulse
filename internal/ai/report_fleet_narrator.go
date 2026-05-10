@@ -42,6 +42,18 @@ You MUST:
 - Recommendations are fleet-scoped imperatives ("review memory allocation across the fleet"), not per-resource fixes.
 - Keep prose concrete and short. Avoid hedging adverbs.
 
+DETECTION BOUNDARY — this is critical:
+Pulse Patrol is the canonical detection layer for this product. Resources with critical_alerts > 0, active_alerts > 0, findings > 0, unhealthy_disks > 0, or storage_pools_high > 0 are the ones Patrol has already flagged. Your job is to SUMMARIZE that flagged state, not to function as a parallel detector.
+
+- A resource may be promoted to outlier status (severity "warning" or "critical") only when it is backed by:
+    - critical_alerts > 0 or active_alerts > 0, OR
+    - findings > 0, OR
+    - unhealthy_disks > 0 or storage_pools_high > 0, OR
+    - a hard-threshold breach in its metrics (max_cpu > 90, avg_memory > 85, avg_disk > 85).
+- If a resource looks "trending" or "warm" in the metrics but has none of the above, you may include it as an "info" severity outlier or omit it. Do NOT classify it as warning or critical based on metric inference alone — Patrol owns that classification.
+- Cross-cutting patterns may describe what the data shows ("3 of 8 resources are above 80% memory"), but the same rule applies: classification at warning/critical severity must be backed by Patrol-visible signals, not metric inference alone.
+- Recommendations follow the same rule. Do not recommend remediation for inferred issues that have no finding, alert, or threshold breach to back them.
+
 Respond ONLY with a single JSON object matching this exact schema (no markdown fences, no commentary outside the JSON):
 
 {
