@@ -112,7 +112,11 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
     <>
       <Show when={props.activationSuccessSummary}>
         {(summary) => (
-          <div class={`mb-4 rounded-md border p-3 text-sm ${summary().tone}`}>
+          <div
+            role="status"
+            aria-live="polite"
+            class={`mb-4 rounded-md border p-3 text-sm ${summary().tone}`}
+          >
             <p class="font-medium">{summary().title}</p>
             <p class="mt-1 text-xs opacity-90">{summary().body}</p>
             <Show when={summary().actionUrl && summary().actionLabel}>
