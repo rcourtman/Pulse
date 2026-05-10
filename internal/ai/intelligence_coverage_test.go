@@ -899,6 +899,101 @@ func TestIntelligence_GetResourceIntelligence_WithAllSubsystems(t *testing.T) {
 	}
 }
 
+// TestIntelligence_GetSummary_RecoversAfterTrailingSuccessfulFullRuns
+// guards the recovery-suppression introduced after the
+// malformed-history Patrol bug: when a Patrol-affecting bug causes a
+// run of errors and the fix lands, three consecutive successful full
+// runs at the END of the recent-runs window should drop the error
+// penalty entirely so the health score reflects current reality. Before
+// this, fixing a bug kept the assessment depressed for ~9 hours while
+// the historical errors aged out of the trailing-10 ratio.
+func TestIntelligence_GetSummary_RecoversAfterTrailingSuccessfulFullRuns(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	runHistory := NewPatrolRunHistoryStore(20)
+	now := time.Now()
+
+	// Six older errored full runs.
+	for i := 0; i < 6; i++ {
+		runHistory.Add(PatrolRunRecord{
+			ID:               fmt.Sprintf("error-%d", i),
+			Type:             "full",
+			CompletedAt:      now.Add(-time.Duration(20-i) * time.Hour),
+			ErrorCount:       1,
+			Status:           "error",
+			ResourcesChecked: 1,
+		})
+	}
+	// Three trailing successful full runs (the "fix landed" sequence).
+	for i := 0; i < 3; i++ {
+		runHistory.Add(PatrolRunRecord{
+			ID:               fmt.Sprintf("success-%d", i),
+			Type:             "full",
+			CompletedAt:      now.Add(-time.Duration(6-i*2) * time.Hour),
+			ErrorCount:       0,
+			Status:           "issues_found",
+			ResourcesChecked: 50,
+			NewFindings:      1,
+		})
+	}
+	intel.SetRunHistoryStore(runHistory)
+
+	summary := intel.GetSummary()
+	for _, factor := range summary.OverallHealth.Factors {
+		if factor.Category == "coverage" {
+			t.Fatalf("expected coverage factor to be suppressed after trailing successes, got %+v", factor)
+		}
+	}
+	if strings.Contains(summary.OverallHealth.Prediction, "encountered errors") {
+		t.Fatalf("expected prediction to not mention historical errors after recovery, got %q", summary.OverallHealth.Prediction)
+	}
+}
+
+// TestIntelligence_GetSummary_KeepsPenaltyWhenRecoveryIncomplete guards
+// the inverse: two trailing successes after errors isn't yet "recovered"
+// — the threshold is three. This prevents premature trust restoration
+// from a transient single-run recovery.
+func TestIntelligence_GetSummary_KeepsPenaltyWhenRecoveryIncomplete(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	runHistory := NewPatrolRunHistoryStore(20)
+	now := time.Now()
+
+	for i := 0; i < 6; i++ {
+		runHistory.Add(PatrolRunRecord{
+			ID:               fmt.Sprintf("error-%d", i),
+			Type:             "full",
+			CompletedAt:      now.Add(-time.Duration(15-i) * time.Hour),
+			ErrorCount:       1,
+			Status:           "error",
+			ResourcesChecked: 1,
+		})
+	}
+	// Only two trailing successful runs — not yet a clean recovery.
+	for i := 0; i < 2; i++ {
+		runHistory.Add(PatrolRunRecord{
+			ID:               fmt.Sprintf("success-%d", i),
+			Type:             "full",
+			CompletedAt:      now.Add(-time.Duration(4-i*2) * time.Hour),
+			ErrorCount:       0,
+			Status:           "issues_found",
+			ResourcesChecked: 50,
+			NewFindings:      1,
+		})
+	}
+	intel.SetRunHistoryStore(runHistory)
+
+	summary := intel.GetSummary()
+	foundCoverage := false
+	for _, factor := range summary.OverallHealth.Factors {
+		if factor.Category == "coverage" {
+			foundCoverage = true
+			break
+		}
+	}
+	if !foundCoverage {
+		t.Fatal("expected coverage penalty to remain when trailing successes are below the recovery threshold")
+	}
+}
+
 func TestIntelligence_GetResourceIntelligence_KnowledgeFallback(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	knowledgeStore, _ := knowledge.NewStore(t.TempDir())

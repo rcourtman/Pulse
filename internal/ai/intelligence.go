@@ -1092,6 +1092,26 @@ func summarizeRecentPatrolCoverage(
 		}
 	}
 
+	// Count trailing successful full Patrol runs starting from the most
+	// recent (relevant is newest-first per GetAll), skipping non-full
+	// runs. When Pulse has recovered from a run of errors — N
+	// consecutive successful full runs at the leading edge of the
+	// window — the score should reflect current reality, not drag stale
+	// failures forward. Without this, fixing a Patrol-affecting bug
+	// keeps the grade depressed for ~9 hours (the time it takes 3
+	// scheduled runs at 3-hour cadence to age out the failures).
+	trailingFullSuccesses := 0
+	for _, r := range relevant {
+		if !isFullPatrolRun(r) {
+			continue
+		}
+		if isSuccessfulFullPatrolRun(r) {
+			trailingFullSuccesses++
+			continue
+		}
+		break
+	}
+
 	limitedActivityLabel := describeLimitedPatrolActivity(relevant)
 
 	switch {
@@ -1114,6 +1134,19 @@ func summarizeRecentPatrolCoverage(
 			impact:      20,
 		}, true
 	case recentErrors > 0:
+		// Recovery suppression: if Pulse has had a clean stretch of
+		// consecutive successful full Patrol runs at the END of the
+		// window, the score should reflect current reality rather than
+		// drag forward stale failures. Three successful full runs is
+		// roughly a 9-hour window at the default 3-hour cadence — long
+		// enough that "we've genuinely stabilized" beats "we still
+		// have errors in the recent-10 ratio." Without this, fixing a
+		// Patrol-affecting bug kept the assessment depressed for hours
+		// after the actual problem was resolved.
+		const recoveredTrailingSuccessThreshold = 3
+		if trailingFullSuccesses >= recoveredTrailingSuccessThreshold {
+			return patrolCoverageFactor{}, false
+		}
 		// Tier the impact by error ratio so the score actually reflects how
 		// unreliable recent runs have been. The previous flat 10-point impact
 		// could not separate "1 error in 10 runs" (mostly healthy) from
