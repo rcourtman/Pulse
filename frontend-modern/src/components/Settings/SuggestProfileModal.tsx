@@ -238,9 +238,11 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
           <button
             type="button"
             onClick={props.onClose}
+            aria-label="Close profile suggestion dialog"
+            title="Close"
             class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
           >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"

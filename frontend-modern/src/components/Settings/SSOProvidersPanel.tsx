@@ -531,6 +531,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => setTestResult(null)}
+                      aria-label="Dismiss test result"
+                      title="Dismiss"
                       class="text-slate-400 hover:text-base-content"
                     >
                       <X class="w-4 h-4" />
@@ -687,6 +689,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={() => setShowMetadataPreview(false)}
+                aria-label="Close metadata preview"
+                title="Close"
                 class="text-slate-400 hover:text-base-content"
               >
                 <X class="w-5 h-5" />

@@ -257,6 +257,8 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     </h4>
                     <button
                       onClick={() => state.setShowAdvancedSettings(false)}
+                      aria-label="Close patrol configuration"
+                      title="Close"
                       class="p-1 rounded-md hover:text-base-content hover:bg-surface-hover transition-colors"
                     >
                       <XIcon class="w-4 h-4" />

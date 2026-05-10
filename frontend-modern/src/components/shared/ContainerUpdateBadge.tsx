@@ -168,6 +168,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
               e.stopPropagation();
             }}
             disabled={state.isButtonDisabled()}
+            aria-label={state.buttonTooltip() || state.buttonLabel()}
             data-prevent-toggle
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();

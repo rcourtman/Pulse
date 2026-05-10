@@ -50,11 +50,13 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
             <h2 class="text-xl font-semibold text-base-content">Confirm Update</h2>
             <button
               onClick={handleClose}
+              aria-label="Close confirmation"
+              title="Close"
               class=" hover:text-base-content"
               disabled={props.isApplying}
               type="button"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"

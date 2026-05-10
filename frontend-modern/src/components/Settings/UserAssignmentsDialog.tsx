@@ -40,6 +40,8 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
           <button
             type="button"
             onClick={props.onClose}
+            aria-label="Close user assignments"
+            title="Close"
             class="p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
           >
             <X class="w-5 h-5" />
