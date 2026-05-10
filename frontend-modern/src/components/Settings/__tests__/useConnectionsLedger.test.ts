@@ -162,7 +162,7 @@ describe('useConnectionsLedger', () => {
       ownerType: 'pve',
       name: 'homelab',
       subtitle: 'Cluster · 2 nodes',
-      source: 'api',
+      source: 'both',
       host: undefined,
       isCluster: true,
       coverageLabels: ['VMs', 'Containers', 'Storage', 'Backups'],
