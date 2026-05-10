@@ -388,12 +388,20 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 		multiData.Title = "Fleet Performance Report"
 	}
 
-	// Query metrics for each resource
+	// Query metrics for each resource. When the multi-report request
+	// supplies a per-resource Narrator or FindingsProvider, propagate
+	// them so each per-resource report carries its own narrative.
 	var successCount int
 	for _, resReq := range req.Resources {
 		resReq.Start = req.Start
 		resReq.End = req.End
 		resReq.MetricType = req.MetricType
+		if resReq.Narrator == nil {
+			resReq.Narrator = req.Narrator
+		}
+		if resReq.FindingsProvider == nil {
+			resReq.FindingsProvider = req.FindingsProvider
+		}
 
 		reportData, queryErr := e.queryMetrics(resReq)
 		if queryErr != nil {
@@ -405,6 +413,13 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 			continue
 		}
 
+		// Per-resource narrative is intentionally skipped on the multi
+		// path: a fleet PDF aggregates 50 resources, and running an AI
+		// call per resource would be cost-hostile and slow. The single
+		// fleet-level call carries the summary instead.
+		_ = resReq.Narrator
+		_ = resReq.FindingsProvider
+
 		multiData.Resources = append(multiData.Resources, reportData)
 		multiData.TotalPoints += reportData.TotalPoints
 		successCount++
@@ -413,6 +428,12 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 	if successCount == 0 {
 		return nil, "", fmt.Errorf("all resources failed to query metrics")
 	}
+
+	// Build fleet-level narrative. If req.FleetNarrator is supplied
+	// (typically AI-backed) it is invoked with a bounded timeout;
+	// nil/error/timeout falls back to the heuristic fleet narrator so
+	// the fleet PDF always has narrative content.
+	e.attachFleetNarrative(multiData, req)
 
 	log.Debug().
 		Int("resources", successCount).
@@ -519,6 +540,28 @@ func narrativeSource(data *ReportData) string {
 		return ""
 	}
 	return data.Narrative.Source
+}
+
+// attachFleetNarrative populates multiData.FleetNarrative using
+// req.FleetNarrator (when supplied). Always populates so the renderer
+// has a single source of truth for the fleet summary section.
+func (e *ReportEngine) attachFleetNarrative(multiData *MultiReportData, req MultiReportRequest) {
+	if multiData == nil {
+		return
+	}
+	input := buildFleetNarrativeInput(multiData)
+
+	if req.FleetNarrator == nil {
+		out, _ := HeuristicFleetNarrator{}.NarrateFleet(context.Background(), input)
+		out.Source = NarrativeSourceHeuristic
+		multiData.FleetNarrative = &out
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), narrativeTimeout)
+	defer cancel()
+	out := narrateFleet(ctx, req.FleetNarrator, input)
+	multiData.FleetNarrative = &out
 }
 
 // GetResourceTypeDisplayName returns a human-readable name for resource types.

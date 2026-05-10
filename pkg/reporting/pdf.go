@@ -1873,7 +1873,17 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 
 	pdf.Ln(8)
 
-	// Fleet Observations
+	// Fleet narrative section. When data.FleetNarrative is set (AI or
+	// heuristic) it owns the prose, outlier list, patterns, and
+	// recommendations rendered here. The legacy highest-CPU /
+	// most-alerts bullets are rendered as a fallback when no narrative
+	// has been attached, preserving the prior multi-report behaviour
+	// for callers that bypass the engine wiring.
+	if data.FleetNarrative != nil {
+		writeFleetNarrativeSection(pdf, data.FleetNarrative)
+		return
+	}
+
 	pdf.SetFont("Arial", "B", 11)
 	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
 	pdf.CellFormat(0, 8, "Fleet Observations", "", 1, "L", false, 0, "")
@@ -1903,6 +1913,102 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 		pdf.Circle(pdf.GetX()+3, pdf.GetY()+3, 2, "F")
 		pdf.SetX(pdf.GetX() + 8)
 		pdf.CellFormat(0, 6, "No active alerts across the fleet", "", 1, "L", false, 0, "")
+	}
+}
+
+// writeFleetNarrativeSection renders the fleet-level narrative produced
+// by either the heuristic or AI fleet narrator. Layout mirrors the
+// single-resource executive summary but is scoped to fleet semantics:
+// outliers point at named resources, patterns describe cross-cutting
+// trends, and the period-comparison and provenance footers keep the
+// AI/heuristic distinction visible.
+func writeFleetNarrativeSection(pdf *fpdf.Fpdf, fn *FleetNarrative) {
+	if fn == nil {
+		return
+	}
+	pageWidth, _ := pdf.GetPageSize()
+	bodyWidth := pageWidth - 40
+
+	if summary := strings.TrimSpace(fn.ExecutiveSummary); summary != "" {
+		pdf.SetFont("Arial", "", 10)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.MultiCell(bodyWidth, 5, summary, "", "L", false)
+		pdf.Ln(3)
+	}
+
+	if len(fn.Outliers) > 0 {
+		pdf.SetFont("Arial", "B", 11)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 8, "Resources to investigate", "", 1, "L", false, 0, "")
+		pdf.Ln(2)
+		pdf.SetFont("Arial", "", 10)
+		for _, o := range fn.Outliers {
+			color := bulletColor(o.Severity)
+			pdf.SetFillColor(color[0], color[1], color[2])
+			pdf.Circle(pdf.GetX()+3, pdf.GetY()+3, 2, "F")
+			pdf.SetX(pdf.GetX() + 8)
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			label := o.ResourceName
+			if label == "" {
+				label = o.ResourceID
+			}
+			pdf.CellFormat(0, 6, fmt.Sprintf("%s — %s", label, o.Reason), "", 1, "L", false, 0, "")
+			pdf.Ln(1)
+		}
+	}
+
+	if len(fn.Patterns) > 0 {
+		pdf.Ln(3)
+		pdf.SetFont("Arial", "B", 11)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 8, "Cross-cutting patterns", "", 1, "L", false, 0, "")
+		pdf.Ln(2)
+		pdf.SetFont("Arial", "", 10)
+		for _, b := range fn.Patterns {
+			color := bulletColor(b.Severity)
+			pdf.SetFillColor(color[0], color[1], color[2])
+			pdf.Circle(pdf.GetX()+3, pdf.GetY()+3, 2, "F")
+			pdf.SetX(pdf.GetX() + 8)
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			pdf.CellFormat(0, 6, b.Text, "", 1, "L", false, 0, "")
+			pdf.Ln(1)
+		}
+	}
+
+	if len(fn.Recommendations) > 0 {
+		pdf.Ln(3)
+		pdf.SetFont("Arial", "B", 11)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 8, "Recommended Actions", "", 1, "L", false, 0, "")
+		pdf.Ln(2)
+		pdf.SetFont("Arial", "", 9)
+		for i, rec := range fn.Recommendations {
+			if i >= 5 {
+				break
+			}
+			pdf.SetTextColor(colorSecondary[0], colorSecondary[1], colorSecondary[2])
+			pdf.CellFormat(6, 5, fmt.Sprintf("%d.", i+1), "", 0, "L", false, 0, "")
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			pdf.CellFormat(0, 5, rec, "", 1, "L", false, 0, "")
+			pdf.Ln(1)
+		}
+	}
+
+	if comparison := strings.TrimSpace(fn.PeriodComparison); comparison != "" {
+		pdf.Ln(3)
+		pdf.SetFont("Arial", "B", 11)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 8, "Period-over-period changes", "", 1, "L", false, 0, "")
+		pdf.Ln(2)
+		pdf.SetFont("Arial", "", 9)
+		pdf.MultiCell(bodyWidth, 5, comparison, "", "L", false)
+	}
+
+	if disclaimer := strings.TrimSpace(fn.Disclaimer); disclaimer != "" {
+		pdf.Ln(4)
+		pdf.SetFont("Arial", "I", 8)
+		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+		pdf.MultiCell(bodyWidth, 4, disclaimer, "", "L", false)
 	}
 }
 

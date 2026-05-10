@@ -122,6 +122,16 @@ type MultiReportRequest struct {
 	End        time.Time
 	Title      string
 	MetricType string
+
+	// Optional fleet-level narrative interpretation. When FleetNarrator is
+	// non-nil the engine builds a FleetNarrativeInput from the queried
+	// per-resource report data and asks it to produce the cross-resource
+	// summary; on error or nil it falls back to the heuristic fleet
+	// narrator. FindingsProvider, when set, is consulted per-resource so
+	// patrol findings can flow into per-resource narratives.
+	FleetNarrator    FleetNarrator
+	Narrator         Narrator
+	FindingsProvider FindingsProvider
 }
 
 // MultiReportData holds the data for multi-resource report generation.
@@ -132,6 +142,12 @@ type MultiReportData struct {
 	GeneratedAt time.Time
 	Resources   []*ReportData // Reuse existing ReportData per resource
 	TotalPoints int
+
+	// Fleet-level narrative interpretation, populated by the engine when
+	// the request supplies a FleetNarrator (or always populated with the
+	// heuristic fallback). The renderer prefers this over recomputing
+	// observations inline.
+	FleetNarrative *FleetNarrative
 }
 
 // Engine defines the interface for report generation.

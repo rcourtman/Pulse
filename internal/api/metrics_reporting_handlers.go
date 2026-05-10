@@ -62,23 +62,24 @@ func normalizeReportResourceType(raw string) (string, error) {
 type ReportingHandlers struct {
 	mtMonitor        *monitoring.MultiTenantMonitor
 	recoveryManager  *recoverymanager.Manager
-	narratorResolver func(ctx context.Context) (reporting.Narrator, reporting.FindingsProvider)
+	narratorResolver func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
 }
 
-// SetNarratorResolver wires an optional resolver that returns the per-tenant
-// AI narrator and Patrol findings provider for a request. When unset, or
-// when the resolver returns nil, reports use the deterministic heuristic
-// narrator and skip findings enrichment.
-func (h *ReportingHandlers) SetNarratorResolver(resolver func(ctx context.Context) (reporting.Narrator, reporting.FindingsProvider)) {
+// SetNarratorResolver wires an optional resolver that returns the
+// per-tenant AI narrator, fleet narrator, and Patrol findings provider
+// for a request. When unset, or when the resolver returns nil, reports
+// use the deterministic heuristic narrators and skip findings
+// enrichment.
+func (h *ReportingHandlers) SetNarratorResolver(resolver func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)) {
 	if h == nil {
 		return
 	}
 	h.narratorResolver = resolver
 }
 
-func (h *ReportingHandlers) resolveNarrator(ctx context.Context) (reporting.Narrator, reporting.FindingsProvider) {
+func (h *ReportingHandlers) resolveNarrator(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 	if h == nil || h.narratorResolver == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	return h.narratorResolver(ctx)
 }
@@ -478,8 +479,11 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 
 	// Wire the per-tenant AI narrator and Patrol findings provider when
 	// configured. Both are nil-safe at the engine layer; absence falls
-	// back to the heuristic narrator with no findings section.
-	req.Narrator, req.FindingsProvider = h.resolveNarrator(r.Context())
+	// back to the heuristic narrator with no findings section. Single-
+	// resource reports do not use the FleetNarrator.
+	narrator, _, findings := h.resolveNarrator(r.Context())
+	req.Narrator = narrator
+	req.FindingsProvider = findings
 
 	data, contentType, err := engine.Generate(req)
 	if err != nil {
@@ -855,6 +859,15 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 
 		multiReq.Resources = append(multiReq.Resources, req)
 	}
+
+	// Wire the per-tenant fleet narrator and Patrol findings provider
+	// when configured. The single-resource Narrator is intentionally
+	// not propagated to the multi path: a fleet PDF would otherwise
+	// trigger one AI call per resource. The fleet narrator handles
+	// cross-resource synthesis in a single call instead.
+	_, fleetNarrator, findings := h.resolveNarrator(r.Context())
+	multiReq.FleetNarrator = fleetNarrator
+	multiReq.FindingsProvider = findings
 
 	data, contentType, err := engine.GenerateMulti(multiReq)
 	if err != nil {
