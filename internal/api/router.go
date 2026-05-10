@@ -646,6 +646,26 @@ func (r *Router) setupRoutes() {
 	r.aiHandler.SetServiceInitializer(func(ctx context.Context, service AIService) {
 		r.wireAIChatDependenciesForService(ctx, service)
 	})
+	// Wire the per-tenant report-narrator resolver into the chat
+	// handler so the pulse_summarize tool can produce AI-narrated
+	// synthesis using the same Service that powers the report PDF
+	// endpoint. The AI service implements all three interfaces; an
+	// unconfigured tenant returns nil and the tool falls back to
+	// heuristic narrative.
+	r.aiHandler.SetReportNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+		if r.aiSettingsHandler == nil {
+			return nil, nil, nil
+		}
+		svc := r.aiSettingsHandler.GetAIService(ctx)
+		if svc == nil {
+			return nil, nil, nil
+		}
+		cfg := svc.GetAIConfig()
+		if cfg == nil || !cfg.Enabled {
+			return nil, nil, nil
+		}
+		return svc, svc, svc
+	})
 
 	// AI-powered infrastructure discovery handlers
 	// Note: The actual service is wired up later via SetDiscoveryService

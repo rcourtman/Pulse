@@ -23,6 +23,7 @@ import (
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
 
@@ -111,6 +112,36 @@ type AIHandler struct {
 	approvalCreatedCallback func(*approval.ApprovalRequest)
 	controlLevelResolver    func(context.Context, *config.AIConfig) string
 	patrolRunProvider       patrolRunHandoffProvider
+
+	// reportNarratorResolver returns the per-tenant report-narration
+	// interfaces (single-resource, fleet, findings) for chat sessions
+	// so the pulse_summarize tool can produce AI-narrated synthesis
+	// using the same provider, sanitizer, budget gate, and cost ledger
+	// the report PDF endpoint already uses. Wired by the router from
+	// AISettingsHandler.GetAIService; absent values cause the tool to
+	// return heuristic narrative. The ctx must carry the tenant org
+	// via GetOrgID — same convention the reporting handler uses.
+	reportNarratorResolver func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
+}
+
+// SetReportNarratorResolver wires the optional per-tenant
+// report-narrator resolver. When unset (or when the resolver returns
+// nil), chat sessions construct their tool executor without report
+// narrators and pulse_summarize falls back to heuristic narrative.
+func (h *AIHandler) SetReportNarratorResolver(
+	resolver func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider),
+) {
+	if h == nil {
+		return
+	}
+	h.reportNarratorResolver = resolver
+}
+
+func (h *AIHandler) resolveReportNarrator(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+	if h == nil || h.reportNarratorResolver == nil {
+		return nil, nil, nil
+	}
+	return h.reportNarratorResolver(ctx)
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -474,6 +505,8 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		}
 	}
 
+	chatCfg.ReportNarrator, chatCfg.ReportFleetNarrator, chatCfg.ReportFindingsProvider = h.resolveReportNarrator(tenantCtx)
+
 	svc := newChatService(chatCfg)
 	if err := svc.Start(ctx); err != nil {
 		log.Error().Str("orgID", orgID).Err(err).Msg("Failed to start AI service for tenant")
@@ -707,6 +740,8 @@ func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) erro
 	if recoveryManager != nil {
 		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(recoveryManager, orgID)
 	}
+
+	chatCfg.ReportNarrator, chatCfg.ReportFleetNarrator, chatCfg.ReportFindingsProvider = h.resolveReportNarrator(serviceCtx)
 
 	svc := newChatService(chatCfg)
 	if err := svc.Start(ctx); err != nil {

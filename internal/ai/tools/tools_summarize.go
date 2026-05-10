@@ -155,10 +155,12 @@ func (e *PulseToolExecutor) summarizeResource(
 	}
 
 	req := reporting.MetricReportRequest{
-		ResourceType: canonicalType,
-		ResourceID:   resourceID,
-		Start:        start,
-		End:          end,
+		ResourceType:     canonicalType,
+		ResourceID:       resourceID,
+		Start:            start,
+		End:              end,
+		Narrator:         e.reportNarrator,
+		FindingsProvider: e.reportFindingsProvider,
 	}
 	narrative, err := engine.NarrativeFor(req)
 	if err != nil {
@@ -255,10 +257,13 @@ func (e *PulseToolExecutor) summarizeFleet(
 	}
 
 	req := reporting.MultiReportRequest{
-		Title:     "Fleet summary",
-		Start:     start,
-		End:       end,
-		Resources: resources,
+		Title:            "Fleet summary",
+		Start:            start,
+		End:              end,
+		Resources:        resources,
+		FleetNarrator:    e.reportFleetNarrator,
+		Narrator:         e.reportNarrator,
+		FindingsProvider: e.reportFindingsProvider,
 	}
 	narrative, err := engine.FleetNarrativeFor(req)
 	if err != nil {

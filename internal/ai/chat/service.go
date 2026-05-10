@@ -19,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
 
@@ -78,6 +79,14 @@ type Config struct {
 	// Stored config may say autonomous, but runtime execution must use the
 	// entitlement-clamped level.
 	ControlLevelResolver func(*config.AIConfig) string
+
+	// Optional report-narration providers for the pulse_summarize tool.
+	// When the per-tenant AI service is configured the API layer passes
+	// it here for all three roles; when unconfigured the tool returns
+	// heuristic narrative.
+	ReportNarrator         reporting.Narrator
+	ReportFleetNarrator    reporting.FleetNarrator
+	ReportFindingsProvider reporting.FindingsProvider
 }
 
 // Service provides direct AI chat without external sidecar
@@ -138,6 +147,9 @@ func NewService(cfg Config) *Service {
 		AgentServer:            agentServer,
 		RecoveryPointsProvider: cfg.RecoveryPointsProvider,
 		OrgID:                  cfg.OrgID,
+		ReportNarrator:         cfg.ReportNarrator,
+		ReportFleetNarrator:    cfg.ReportFleetNarrator,
+		ReportFindingsProvider: cfg.ReportFindingsProvider,
 	}
 
 	if cfg.AIConfig != nil {

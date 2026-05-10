@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
 
@@ -486,6 +487,19 @@ type ExecutorConfig struct {
 	ControlLevel    ControlLevel
 	ProtectedGuests []string // VMIDs that AI cannot control
 	OrgID           string   // Tenant/org scope for approval records
+
+	// Optional report-narration providers, used by the pulse_summarize
+	// tool to produce AI-narrated synthesis in chat. When the per-tenant
+	// AI service is configured these are the same interfaces it exposes
+	// to the reporting handler for PDF generation. Absent values cause
+	// the tool to return heuristic narrative instead — identical to
+	// what the report PDF carries when no AI is configured. Defined
+	// here (rather than as separate setters) so chat.Config can wire
+	// them at session construction time alongside the rest of the
+	// executor's providers.
+	ReportNarrator         reporting.Narrator
+	ReportFleetNarrator    reporting.FleetNarrator
+	ReportFindingsProvider reporting.FindingsProvider
 }
 
 // PulseToolExecutor implements ToolExecutor for Pulse-specific tools
@@ -566,6 +580,14 @@ type PulseToolExecutor struct {
 	patrolFindingCreatorMu sync.RWMutex
 	patrolFindingCreator   PatrolFindingCreator
 
+	// Report-narration providers, used by pulse_summarize when the
+	// per-tenant AI service is configured. Absent values cause the tool
+	// to fall back to heuristic narrative — identical to the report PDF
+	// behaviour when AI is unconfigured.
+	reportNarrator         reporting.Narrator
+	reportFleetNarrator    reporting.FleetNarrator
+	reportFindingsProvider reporting.FindingsProvider
+
 	// Tool registry
 	registry *ToolRegistry
 }
@@ -621,6 +643,9 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		controlLevel:               cfg.ControlLevel,
 		protectedGuests:            cfg.ProtectedGuests,
 		orgID:                      normalizeExecutorOrgID(cfg.OrgID),
+		reportNarrator:             cfg.ReportNarrator,
+		reportFleetNarrator:        cfg.ReportFleetNarrator,
+		reportFindingsProvider:     cfg.ReportFindingsProvider,
 		registry:                   NewToolRegistry(),
 	}
 
@@ -698,6 +723,9 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		isAutonomous:               e.isAutonomous,
 		orgID:                      e.orgID,
 		telemetryCallback:          e.telemetryCallback,
+		reportNarrator:             e.reportNarrator,
+		reportFleetNarrator:        e.reportFleetNarrator,
+		reportFindingsProvider:     e.reportFindingsProvider,
 		registry:                   e.registry,
 	}
 	clone.patrolFindingCreator = e.GetPatrolFindingCreator()

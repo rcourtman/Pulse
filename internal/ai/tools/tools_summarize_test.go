@@ -230,6 +230,158 @@ func TestSummarizeTool_FleetEnforcesMaxResources(t *testing.T) {
 	}
 }
 
+// stubReportNarrator implements reporting.Narrator with a recorded
+// invocation so the test can assert the tool delegates to it.
+type stubReportNarrator struct {
+	called   bool
+	seen     reporting.NarrativeInput
+	response reporting.Narrative
+}
+
+func (s *stubReportNarrator) Narrate(_ context.Context, in reporting.NarrativeInput) (reporting.Narrative, error) {
+	s.called = true
+	s.seen = in
+	return s.response, nil
+}
+
+type stubFleetReportNarrator struct {
+	called   bool
+	seen     reporting.FleetNarrativeInput
+	response reporting.FleetNarrative
+}
+
+func (s *stubFleetReportNarrator) NarrateFleet(_ context.Context, in reporting.FleetNarrativeInput) (reporting.FleetNarrative, error) {
+	s.called = true
+	s.seen = in
+	return s.response, nil
+}
+
+func TestSummarizeTool_UsesReportNarratorWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	store, err := metrics.NewStore(metrics.StoreConfig{
+		DBPath:          filepath.Join(dir, "metrics.db"),
+		WriteBufferSize: 10,
+		FlushInterval:   50 * time.Millisecond,
+		RetentionRaw:    24 * time.Hour,
+		RetentionMinute: 7 * 24 * time.Hour,
+		RetentionHourly: 30 * 24 * time.Hour,
+		RetentionDaily:  90 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("metrics store: %v", err)
+	}
+	defer store.Close()
+	engine := reporting.NewReportEngine(reporting.EngineConfig{MetricsStore: store})
+	prev := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	defer reporting.SetEngine(prev)
+
+	narrator := &stubReportNarrator{
+		response: reporting.Narrative{
+			Source:        reporting.NarrativeSourceAI,
+			HealthStatus:  "HEALTHY",
+			HealthMessage: "AI says fine",
+			Observations: []reporting.NarrativeBullet{
+				{Text: "AI bullet", Severity: reporting.NarrativeSeverityOK},
+			},
+			Recommendations: []string{"Continue monitoring"},
+		},
+	}
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		ReportNarrator: narrator,
+	})
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action":        "resource",
+		"resource_type": "node",
+		"resource_id":   "node-with-narrator",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error: %+v", res.Content)
+	}
+	if !narrator.called {
+		t.Fatal("expected narrator to be invoked")
+	}
+	var parsed summarizeResourceResponse
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if parsed.NarrativeSource != reporting.NarrativeSourceAI {
+		t.Errorf("NarrativeSource = %q, want ai", parsed.NarrativeSource)
+	}
+	if parsed.HealthMessage != "AI says fine" {
+		t.Errorf("HealthMessage = %q, want AI says fine", parsed.HealthMessage)
+	}
+	if len(parsed.Observations) != 1 || parsed.Observations[0].Text != "AI bullet" {
+		t.Errorf("Observations = %#v", parsed.Observations)
+	}
+}
+
+func TestSummarizeTool_FleetUsesFleetNarratorWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	store, err := metrics.NewStore(metrics.StoreConfig{
+		DBPath:          filepath.Join(dir, "metrics.db"),
+		WriteBufferSize: 10,
+		FlushInterval:   50 * time.Millisecond,
+		RetentionRaw:    24 * time.Hour,
+		RetentionMinute: 7 * 24 * time.Hour,
+		RetentionHourly: 30 * 24 * time.Hour,
+		RetentionDaily:  90 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("metrics store: %v", err)
+	}
+	defer store.Close()
+	engine := reporting.NewReportEngine(reporting.EngineConfig{MetricsStore: store})
+	prev := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	defer reporting.SetEngine(prev)
+
+	fleet := &stubFleetReportNarrator{
+		response: reporting.FleetNarrative{
+			Source:           reporting.NarrativeSourceAI,
+			HealthStatus:     "WARNING",
+			HealthMessage:    "Memory creeping up",
+			ExecutiveSummary: "AI fleet summary text",
+			Outliers: []reporting.FleetOutlier{
+				{ResourceID: "node-a", ResourceName: "alpha", Reason: "Memory at 92%", Severity: reporting.NarrativeSeverityWarning},
+			},
+			Recommendations: []string{"Review memory allocation"},
+		},
+	}
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		ReportFleetNarrator: fleet,
+	})
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action":        "fleet",
+		"resource_type": "node",
+		"resource_ids":  "node-a,node-b",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error: %+v", res.Content)
+	}
+	if !fleet.called {
+		t.Fatal("expected fleet narrator to be invoked")
+	}
+	var parsed summarizeFleetResponse
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if parsed.NarrativeSource != reporting.NarrativeSourceAI {
+		t.Errorf("NarrativeSource = %q, want ai", parsed.NarrativeSource)
+	}
+	if len(parsed.Outliers) != 1 || parsed.Outliers[0].ResourceName != "alpha" {
+		t.Errorf("Outliers = %#v", parsed.Outliers)
+	}
+}
+
 func TestSummarizeRangeWindow(t *testing.T) {
 	cases := map[string]time.Duration{
 		"24h":     24 * time.Hour,
