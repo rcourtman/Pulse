@@ -971,14 +971,53 @@ func (a *patrolFindingCreatorAdapter) actionabilityResourceMetrics() (map[string
 }
 
 func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) error {
+	finding := a.patrol.findings.Get(findingID)
+	if finding == nil {
+		return fmt.Errorf("finding %s not found or already resolved", findingID)
+	}
+
 	scopedResources := patrolRuntimeKnownResources(a.snap)
 	if len(scopedResources) > 0 {
-		finding := a.patrol.findings.Get(findingID)
-		if finding == nil {
-			return fmt.Errorf("finding %s not found or already resolved", findingID)
-		}
 		if !scopedResources[finding.ResourceID] && !scopedResources[finding.ResourceName] {
 			return fmt.Errorf("finding %s is outside the current patrol scope", findingID)
+		}
+	}
+
+	// Event/persistent categories (backup, reliability, security, general)
+	// must not be auto-resolved on absence — see the contract at
+	// findings.go:CategorySupportsStaleAutoResolve. Before today's gate,
+	// the LLM could call patrol_resolve_finding for a backup-failed finding
+	// because its current investigation didn't surface a fresh failure
+	// signal, and the next run's detector would re-detect the same
+	// unresolved task. The "Backup failed" finding flapped 10x in a day
+	// before this gate landed.
+	//
+	// For these categories, when a deterministic verifier exists for the
+	// finding's key, run it before honoring the LLM's resolve. If the
+	// verifier says the failure signal is still present, reject — the
+	// underlying issue hasn't actually cleared. If the verifier confirms
+	// the signal is gone, the LLM's resolve is grounded in real evidence.
+	// Findings without a verifier fall through to the current trust-the-LLM
+	// behavior to avoid regressing categories we haven't built verifiers
+	// for yet.
+	if !CategorySupportsStaleAutoResolve(finding.Category) && a.patrol.hasDeterministicVerifierForKey(finding.Key) {
+		verifyCtx, verifyCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer verifyCancel()
+		verified, verifyErr := a.patrol.VerifyFixResolved(verifyCtx, finding.ResourceID, finding.ResourceType, finding.Key, findingID)
+		if verifyErr != nil {
+			log.Warn().
+				Err(verifyErr).
+				Str("finding_id", findingID).
+				Str("category", string(finding.Category)).
+				Str("key", finding.Key).
+				Msg("AI Patrol: deterministic verifier inconclusive on resolve attempt; allowing resolve")
+		} else if !verified {
+			log.Info().
+				Str("finding_id", findingID).
+				Str("category", string(finding.Category)).
+				Str("key", finding.Key).
+				Msg("AI Patrol: rejected LLM resolve — deterministic verifier still detects the failure signal")
+			return fmt.Errorf("cannot resolve %s: the failure signal is still present according to deterministic verification. Fix the underlying issue and re-run, do not resolve based on absence in the current investigation", findingID)
 		}
 	}
 
@@ -1514,6 +1553,20 @@ func (p *PatrolService) verifyFixDeterministically(
 		return p.verifyBySignals(ctx, executor, sigThresholds, key, guestID, "")
 	default:
 		return false, fmt.Errorf("%w: no deterministic verifier for key=%q (finding_id=%s)", aicontracts.ErrVerificationUnknown, key, findingID)
+	}
+}
+
+// hasDeterministicVerifierForKey reports whether a deterministic
+// verifier exists for the given finding key. Used by ResolveFinding to
+// decide whether an LLM-driven resolve attempt on an event/persistent
+// category finding can be grounded in deterministic evidence. Keep this
+// list aligned with the switch in verifyFixDeterministically.
+func (p *PatrolService) hasDeterministicVerifierForKey(key string) bool {
+	switch key {
+	case "smart-failure", "backup-failed":
+		return true
+	default:
+		return false
 	}
 }
 

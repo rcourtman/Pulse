@@ -1122,3 +1122,81 @@ func TestPatrolFindingCreatorAdapter_ResolveFinding_RejectsOutOfScopeFinding(t *
 		t.Fatalf("expected in-scope resolve to succeed, got %v", err)
 	}
 }
+
+func TestPatrolService_HasDeterministicVerifierForKey(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	// Keys with deterministic verifiers (mirrors the switch in
+	// verifyFixDeterministically). Keep this test in lockstep with that
+	// switch — the gate in ResolveFinding depends on the two staying
+	// aligned.
+	for _, key := range []string{"smart-failure", "backup-failed"} {
+		if !ps.hasDeterministicVerifierForKey(key) {
+			t.Errorf("hasDeterministicVerifierForKey(%q) = false, want true", key)
+		}
+	}
+	for _, key := range []string{"", "unknown-key", "cpu-high", "node-offline", "service-restart"} {
+		if ps.hasDeterministicVerifierForKey(key) {
+			t.Errorf("hasDeterministicVerifierForKey(%q) = true, want false", key)
+		}
+	}
+}
+
+func TestPatrolFindingCreatorAdapter_ResolveFinding_SkipsVerifierForCategoriesThatSupportStaleAutoResolve(t *testing.T) {
+	// Performance category supports stale-auto-resolve by contract, so
+	// the LLM can resolve it freely. The new gate must not engage for
+	// these categories — even if a deterministic verifier existed for
+	// the key, the contract permits resolve on absence.
+	ps := NewPatrolService(nil, nil)
+	finding := &Finding{
+		ID:           "perf-1",
+		Key:          "cpu-high", // no deterministic verifier anyway
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "node-1",
+		ResourceName: "pve-1",
+		ResourceType: "node",
+		Title:        "CPU sustained high",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(finding)
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, newPatrolRuntimeState(models.StateSnapshot{}))
+	if err := adapter.ResolveFinding(finding.ID, "no longer hot"); err != nil {
+		t.Fatalf("expected resolve to succeed for performance category, got %v", err)
+	}
+	if stored := ps.findings.Get(finding.ID); stored == nil || stored.ResolvedAt == nil {
+		t.Fatalf("expected finding to be resolved, got %+v", stored)
+	}
+}
+
+func TestPatrolFindingCreatorAdapter_ResolveFinding_FallsThroughWhenNoVerifierAvailable(t *testing.T) {
+	// Reliability category does NOT support stale-auto-resolve, but
+	// "node-offline" has no deterministic verifier. The gate must fall
+	// through to current trust-the-LLM behavior rather than blocking
+	// resolves for every event/persistent category we haven't built a
+	// verifier for yet.
+	ps := NewPatrolService(nil, nil)
+	finding := &Finding{
+		ID:           "rel-1",
+		Key:          "node-offline",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		ResourceID:   "node-1",
+		ResourceName: "pve-1",
+		ResourceType: "node",
+		Title:        "Node offline",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(finding)
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, newPatrolRuntimeState(models.StateSnapshot{}))
+	if err := adapter.ResolveFinding(finding.ID, "node is back online"); err != nil {
+		t.Fatalf("expected resolve to succeed when no verifier is registered, got %v", err)
+	}
+	if stored := ps.findings.Get(finding.ID); stored == nil || stored.ResolvedAt == nil {
+		t.Fatalf("expected finding to be resolved, got %+v", stored)
+	}
+}
