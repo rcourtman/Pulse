@@ -128,6 +128,38 @@ describe('runPatrolPreflight', () => {
     expect(result.recorded_at_unix).toBe(1778430642);
   });
 
+  it('keeps the response shape stable for cached snapshots regardless of whether the cache holds a success or failure', async () => {
+    // The Patrol page reads patrol_readiness from /api/settings/ai
+    // (now populated on GET as well as PUT). Pulse plugs the cached
+    // preflight result into the "tools" check there, but the
+    // /api/ai/patrol/preflight response itself stays single-shape so
+    // the same client decoder works for both manual and cache-driven
+    // surfaces. Verify the failure shape's required fields don't
+    // regress.
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      success: false,
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      tool_call_observed: false,
+      duration_ms: 312,
+      message: 'Provider rejected forced tool selection',
+      cause: 'tool_choice_rejected',
+      summary:
+        'Pulse Patrol reached the provider and the model accepts tools, but the provider rejected the specific tool-selection coercion Pulse sent.',
+      recommendation:
+        'Pulse will retry with automatic tool selection on the next Patrol run.',
+      recorded_at: '2026-05-10T15:30:42Z',
+      recorded_at_unix: 1778430642,
+    });
+
+    const result = await runPatrolPreflight();
+
+    expect(result.success).toBe(false);
+    expect(result.cause).toBe('tool_choice_rejected');
+    expect(result.recommendation).toContain('automatic tool selection');
+    expect(result.recorded_at_unix).toBe(1778430642);
+  });
+
   it('exposes the soft-warning shape when the model accepted the request but did not call the tool', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       success: false,

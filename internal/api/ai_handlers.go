@@ -2510,6 +2510,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		DiscoveryEnabled:       settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
 		PatrolPreflight:        cachedPatrolPreflightSnapshot(aiService),
+		PatrolReadiness:        ptrToPatrolReadiness(h.buildPatrolReadiness(ctx, aiService, h.getPatrolService(ctx) != nil)),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -5102,14 +5103,75 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 	}
 	addCheck("model", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol model", "Patrol has a model selected from a configured provider.", "")
 
-	toolStatus, toolCause, toolMessage := ai.PatrolToolReadinessForModel(provider, model)
-	toolAction := ""
-	if toolStatus != patrolReadinessReady {
-		toolAction = "open_provider_settings"
-	}
+	toolStatus, toolCause, toolMessage, toolAction := resolvePatrolToolsCheck(aiService, provider, model)
 	addCheck("tools", toolStatus, toolCause, "Patrol tools", toolMessage, toolAction)
 
 	return summarizePatrolReadiness(provider, model, checks)
+}
+
+// resolvePatrolToolsCheck grounds the "Patrol tools" readiness check in
+// actual evidence when the preflight cache holds a recent result for
+// the configured provider+model. The cache is populated by
+// (a) auto-trigger on settings save when transport changes,
+// (b) startup-seed when assistant + patrol model are configured, and
+// (c) manual Verify Patrol clicks. When no cached evidence is
+// available, fall back to the static `PatrolToolReadinessForModel`
+// classifier so the check still has a meaningful baseline.
+func resolvePatrolToolsCheck(aiService *ai.Service, provider, model string) (status string, cause ai.PatrolFailureCause, message, action string) {
+	staticStatus, staticCause, staticMessage := ai.PatrolToolReadinessForModel(provider, model)
+	staticAction := ""
+	if staticStatus != patrolReadinessReady {
+		staticAction = "open_provider_settings"
+	}
+
+	if aiService == nil {
+		return staticStatus, staticCause, staticMessage, staticAction
+	}
+	cached, recordedAt := aiService.CachedPatrolPreflight()
+	if cached == nil || recordedAt.IsZero() {
+		return staticStatus, staticCause, staticMessage, staticAction
+	}
+	// Cache only carries the most recent result regardless of which
+	// model was tested, so a mismatch means the configured model
+	// hasn't been preflighted yet. Fall back to static.
+	_, bareModel := config.ParseModelString(model)
+	if !strings.EqualFold(cached.Provider, provider) || cached.Model != bareModel {
+		return staticStatus, staticCause, staticMessage, staticAction
+	}
+
+	age := formatPatrolPreflightAge(time.Since(recordedAt))
+	if cached.Success && cached.ToolCallObserved {
+		return patrolReadinessReady, ai.PatrolFailureCauseNone,
+			fmt.Sprintf("Tool calling verified %s against %s.", age, bareModel), ""
+	}
+	// Cached failure or soft warning — surface the classified summary
+	// so the Patrol page reads the same diagnostic the operator would
+	// see on the AI settings preflight panel.
+	resolvedStatus := patrolReadinessNotReady
+	if cached.Cause == ai.PatrolFailureCauseModelToolSupportUnverified {
+		resolvedStatus = patrolReadinessWarning
+	}
+	msg := strings.TrimSpace(cached.Summary)
+	if msg == "" {
+		msg = strings.TrimSpace(cached.Title)
+	}
+	if msg == "" {
+		msg = staticMessage
+	}
+	return resolvedStatus, cached.Cause, fmt.Sprintf("%s (last preflight %s).", msg, age), "open_provider_settings"
+}
+
+func formatPatrolPreflightAge(age time.Duration) string {
+	switch {
+	case age < time.Minute:
+		return "just now"
+	case age < time.Hour:
+		return fmt.Sprintf("%dm ago", int(age.Minutes()))
+	case age < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(age.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(age.Hours()/24))
+	}
 }
 
 func summarizePatrolReadiness(provider, model string, checks []PatrolReadinessCheck) PatrolReadinessResponse {

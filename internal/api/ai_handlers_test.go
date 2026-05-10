@@ -3000,6 +3000,37 @@ func TestAISettingsUpdateRequiresPatrolPreflight(t *testing.T) {
 }
 
 // ========================================
+// formatPatrolPreflightAge tests
+// ========================================
+
+func TestFormatPatrolPreflightAge(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		age  time.Duration
+		want string
+	}{
+		{age: 0, want: "just now"},
+		{age: 30 * time.Second, want: "just now"},
+		{age: 59 * time.Second, want: "just now"},
+		{age: 1 * time.Minute, want: "1m ago"},
+		{age: 5 * time.Minute, want: "5m ago"},
+		{age: 59 * time.Minute, want: "59m ago"},
+		{age: 1 * time.Hour, want: "1h ago"},
+		{age: 12 * time.Hour, want: "12h ago"},
+		{age: 23 * time.Hour, want: "23h ago"},
+		{age: 24 * time.Hour, want: "1d ago"},
+		{age: 72 * time.Hour, want: "3d ago"},
+	}
+	for _, tc := range cases {
+		got := formatPatrolPreflightAge(tc.age)
+		if got != tc.want {
+			t.Errorf("formatPatrolPreflightAge(%v) = %q, want %q", tc.age, got, tc.want)
+		}
+	}
+}
+
+// ========================================
 // HandlePatrolPreflight tests
 // ========================================
 
