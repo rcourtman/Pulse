@@ -273,7 +273,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 ) : run.existing_findings > 0 ? (
                   <>
                     No new issues, but <strong>{run.existing_findings}</strong> existing issue
-                    {run.existing_findings !== 1 ? 's' : ''} remain.
+                    {run.existing_findings !== 1 ? 's remain' : ' remains'}.
                   </>
                 ) : !hasFindingsSnapshot ? (
                   <span class="text-blue-600 dark:text-blue-400">

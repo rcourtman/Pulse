@@ -378,6 +378,41 @@ describe('RunHistoryEntry', () => {
     expect(screen.queryByText(/^All clear$/)).not.toBeInTheDocument();
   });
 
+  it('uses singular verb agreement when a single existing issue remains', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-existing-issue-singular',
+          existing_findings: 1,
+          status: 'issues_found',
+          findings_summary: 'One existing issue remains',
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          (element.textContent?.includes('No new issues, but 1 existing issue remains.') ?? false),
+      ),
+    ).toBeInTheDocument();
+    // Guard against the regression: the prior wording was "1 existing issue remain."
+    expect(
+      screen.queryByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          (element.textContent?.includes('existing issue remain.') ?? false) &&
+          !(element.textContent?.includes('remains.') ?? false),
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it('surfaces deterministic triage runs that skipped the llm', () => {
     render(() => (
       <RunHistoryEntry
